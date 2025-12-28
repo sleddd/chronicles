@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["auth", "public"]
+}
+
+// ============================================
+// AUTH SCHEMA - Shared authentication tables
+// ============================================
+
+/// User accounts for authentication (stored in auth schema)
+model Account {
+  id                      String    @id @default(cuid())
+  email                   String    @unique
+  passwordHash            String    // bcrypt hash for authentication
+  salt                    String    // random salt for encryption key derivation
+  encryptedMasterKey      String?   // master key encrypted with password-derived KEK
+  encryptedMasterKeyWithRecovery String? // master key encrypted with recovery key
+  recoveryKeySalt         String?   // salt for recovery key derivation
+  schemaName              String    // e.g., "chronicles_x7k9m2_1"
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  sessions                Session[]
+
+  @@map("accounts")
+  @@schema("auth")
+}
+
+/// Sessions table (database-backed sessions for immediate revocation)
+model Session {
+  id            String    @id @default(cuid())
+  sessionToken  String    @unique @db.VarChar(64)  // SHA-256 hash of token
+  accountId     String
+  deviceInfo    String?   // Browser/device identifier
+  ipAddress     String?   // Last known IP
+  userAgent     String?
+  lastActiveAt  DateTime  @default(now())
+  expiresAt     DateTime  // 30 days from creation
+  revokedAt     DateTime? // NULL = active, non-NULL = revoked
+  revokedReason String?   // "password_change" | "admin_action" | "user_logout"
+  createdAt     DateTime  @default(now())
+
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([sessionToken])
+  @@index([expiresAt])
+  @@map("sessions")
+  @@schema("auth")
+}
+
+/// Schema counter for unique schema name generation
+model SchemaCounter {
+  id            Int       @id @default(1)
+  currentNumber Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+
+  @@map("schema_counter")
+  @@schema("auth")
+}

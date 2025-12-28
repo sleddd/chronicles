@@ -1,7 +1,7 @@
-# Chronicles - Encrypted Bullet Journal App
+# Chronicles - Encrypted Journal App
 
 ## Project Overview
-Build a comprehensive Next.js bullet journal application with client-side encryption where users can create journal entries (text, images, links) organized by topics/tags. Entries are encrypted with a key derived from the user's password, ensuring only they can decrypt their data.
+Build a comprehensive Next.js journal application with client-side encryption where users can create journal entries (text, images, links) organized by topics/tags. Entries are encrypted with a key derived from the user's password, ensuring only they can decrypt their data.
 
 ### Key Features Summary
 📝 **Quick Note-Taking**: Fast 200-character entries (expandable for creative writing)

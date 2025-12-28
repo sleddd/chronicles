@@ -175,34 +175,79 @@ docker-compose up -d
 
 ### 1.5. Create Multi-Schema Prisma Setup
 
-**Task:** Define `public.users` schema and setup Prisma.
+**Task:** Define auth schema and setup Prisma.
 
 **Create `prisma/schema.prisma`:**
 ```prisma
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public"]
+  schemas  = ["auth"]
 }
 
-// Global users table (authentication only)
-model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String   // bcrypt hash for authentication
-  salt          String   // random salt for encryption key derivation
-  schemaName    String   // e.g., "user_abc123"
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// ============================================
+// AUTH SCHEMA - Shared authentication tables
+// ============================================
 
-  @@map("users")
-  @@schema("public")
+// Accounts table (authentication only)
+model Account {
+  id                              String    @id @default(cuid())
+  email                           String    @unique
+  passwordHash                    String    // bcrypt hash for authentication
+  encryptedMasterKey              String    // Master key wrapped with KEK
+  encryptedMasterKeyWithRecovery  String?   // Master key wrapped with recovery key
+  salt                            String    // For KEK derivation
+  recoveryKeySalt                 String?   // For recovery key derivation
+  schemaName                      String    // e.g., "chronicles_x7k9m2_1"
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  sessions                        Session[]
+
+  @@map("accounts")
+  @@schema("auth")
+}
+
+// Sessions table (database-backed sessions for immediate revocation)
+model Session {
+  id            String    @id @default(cuid())
+  sessionToken  String    @unique @db.VarChar(64)  // SHA-256 hash of token
+  accountId     String
+  deviceInfo    String?   // Browser/device identifier
+  ipAddress     String?   // Last known IP
+  userAgent     String?
+  lastActiveAt  DateTime  @default(now())
+  expiresAt     DateTime  // 30 days from creation
+  revokedAt     DateTime? // NULL = active, non-NULL = revoked
+  revokedReason String?   // "password_change" | "admin_action" | "user_logout"
+  createdAt     DateTime  @default(now())
+
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([sessionToken])
+  @@index([expiresAt])
+  @@map("sessions")
+  @@schema("auth")
+}
+
+// Schema counter for unique schema name generation
+model SchemaCounter {
+  id            Int       @id @default(1)
+  currentNumber Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+
+  @@map("schema_counter")
+  @@schema("auth")
 }
 ```
+
+> **Note:** The `auth` schema contains shared authentication tables. Each user gets their own isolated schema (e.g., `chronicles_x7k9m2_1`) for their data, created dynamically at registration. User data tables (topics, entries, custom_fields) are created via raw SQL in schemaManager.ts.
 
 **Initialize Prisma:**
 ```bash
@@ -224,69 +269,136 @@ npx prisma migrate dev --name init_public_users
 **Create `src/lib/db/schemaManager.ts`:**
 ```typescript
 import { Pool } from 'pg';
+import crypto from 'crypto';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
 /**
+ * Generate unique schema name: chronicles_<random_6_char>_<auto_increment>
+ */
+async function generateSchemaName(client: any): Promise<string> {
+  const randomPrefix = crypto.randomBytes(3).toString('hex'); // 6 chars
+
+  // Atomic counter increment
+  const result = await client.query(`
+    UPDATE auth.schema_counter
+    SET "currentNumber" = "currentNumber" + 1, "updatedAt" = NOW()
+    WHERE id = 1
+    RETURNING "currentNumber"
+  `);
+
+  const counter = result.rows[0]?.currentNumber || 1;
+  return `chronicles_${randomPrefix}_${counter}`;
+}
+
+/**
  * Create a new PostgreSQL schema for a user
  */
-export async function createUserSchema(userId: string): Promise<string> {
-  const schemaName = `user_${userId}`;
+export async function createUserSchema(): Promise<string> {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
+    const schemaName = await generateSchemaName(client);
+
     // Create schema
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
 
-    // Create tables in user schema
+    // Create topics table (encrypted names with SSE tokens)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."topics" (
+        id TEXT PRIMARY KEY,
+        "encryptedName" TEXT NOT NULL,
+        iv TEXT NOT NULL,
+        "nameToken" TEXT UNIQUE NOT NULL,
+        color TEXT NOT NULL DEFAULT '#6366f1',
+        icon TEXT
+      );
+    `);
+
+    // Create entries table (core content with customType)
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}"."entries" (
         id TEXT PRIMARY KEY,
+        "topicId" TEXT REFERENCES "${schemaName}"."topics"(id),
         "encryptedContent" TEXT NOT NULL,
         iv TEXT NOT NULL,
-        "topicId" TEXT NOT NULL,
-        "entryDate" TIMESTAMP NOT NULL,
-        "isExpandedWriting" BOOLEAN NOT NULL DEFAULT false,
-        "isCompleted" BOOLEAN NOT NULL DEFAULT false,
-        "isAutoMigrating" BOOLEAN NOT NULL DEFAULT false,
+        "searchTokens" TEXT[] DEFAULT '{}',
+        "customType" TEXT,
+        "entryDate" DATE NOT NULL,
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
 
+    // Create custom_fields table (WordPress-style metadata)
     await client.query(`
-      CREATE TABLE IF NOT EXISTS "${schemaName}"."topics" (
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."custom_fields" (
         id TEXT PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        color TEXT NOT NULL DEFAULT '#6366f1',
-        icon TEXT,
-        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "entryId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "encryptedData" TEXT NOT NULL,
+        iv TEXT NOT NULL
+      );
+    `);
+
+    // Create entry_relationships table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."entry_relationships" (
+        id TEXT PRIMARY KEY,
+        "entryId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "relatedToId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "relationshipType" TEXT NOT NULL,
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
 
+    // Create user_settings table
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}"."user_settings" (
         id TEXT PRIMARY KEY,
-        "medicalTrackingEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "medicalTopicsEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "goalsTrackingEnabled" BOOLEAN NOT NULL DEFAULT true,
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // Create shared_entries table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."shared_entries" (
+        id TEXT PRIMARY KEY,
+        "entryId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "shareToken" TEXT UNIQUE NOT NULL,
+        "expiresAt" TIMESTAMP,
+        "viewCount" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
 
     // Add indexes for performance
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_entries_date
-      ON "${schemaName}"."entries"("entryDate");
+      CREATE INDEX IF NOT EXISTS idx_entries_date ON "${schemaName}"."entries"("entryDate");
     `);
-
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_entries_topic
-      ON "${schemaName}"."entries"("topicId");
+      CREATE INDEX IF NOT EXISTS idx_entries_topic ON "${schemaName}"."entries"("topicId");
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_entries_custom_type ON "${schemaName}"."entries"("customType");
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_entries_date_type ON "${schemaName}"."entries"("entryDate", "customType");
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_entries_search_tokens ON "${schemaName}"."entries" USING GIN("searchTokens");
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_custom_fields_entry ON "${schemaName}"."custom_fields"("entryId");
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_shared_token ON "${schemaName}"."shared_entries"("shareToken");
     `);
 
     await client.query('COMMIT');
@@ -301,31 +413,35 @@ export async function createUserSchema(userId: string): Promise<string> {
 
 /**
  * Seed default topics for a new user
+ * Note: Topic names must be encrypted client-side before calling this
+ * This seeds with pre-encrypted default topics
  */
-export async function seedDefaultTopics(schemaName: string): Promise<void> {
+export async function seedDefaultTopics(
+  schemaName: string,
+  encryptedTopics: Array<{
+    id: string;
+    encryptedName: string;
+    iv: string;
+    nameToken: string;
+    color: string;
+    icon: string;
+  }>
+): Promise<void> {
   const client = await pool.connect();
 
   try {
-    const topics = [
-      { id: 'topic_idea', name: 'idea', color: '#3b82f6', icon: '💡', isDefault: true },
-      { id: 'topic_research', name: 'research', color: '#8b5cf6', icon: '📚', isDefault: true },
-      { id: 'topic_event', name: 'event', color: '#10b981', icon: '📅', isDefault: true },
-      { id: 'topic_meeting', name: 'meeting', color: '#f59e0b', icon: '👥', isDefault: true },
-      { id: 'topic_task', name: 'task', color: '#ef4444', icon: '✅', isDefault: true },
-    ];
-
-    for (const topic of topics) {
+    for (const topic of encryptedTopics) {
       await client.query(`
-        INSERT INTO "${schemaName}"."topics" (id, name, color, icon, "isDefault", "createdAt")
-        VALUES ($1, $2, $3, $4, $5, NOW())
-        ON CONFLICT (name) DO NOTHING
-      `, [topic.id, topic.name, topic.color, topic.icon, topic.isDefault]);
+        INSERT INTO "${schemaName}"."topics" (id, "encryptedName", iv, "nameToken", color, icon)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT ("nameToken") DO NOTHING
+      `, [topic.id, topic.encryptedName, topic.iv, topic.nameToken, topic.color, topic.icon]);
     }
 
     // Create default user settings
     await client.query(`
-      INSERT INTO "${schemaName}"."user_settings" (id, "medicalTrackingEnabled", "createdAt", "updatedAt")
-      VALUES ('settings_default', false, NOW(), NOW())
+      INSERT INTO "${schemaName}"."user_settings" (id, "medicalTopicsEnabled", "goalsTrackingEnabled", "createdAt", "updatedAt")
+      VALUES ('settings_default', false, true, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
   } finally {
@@ -334,7 +450,7 @@ export async function seedDefaultTopics(schemaName: string): Promise<void> {
 }
 
 /**
- * Delete a user schema (for cleanup/testing)
+ * Delete a user schema (for account deletion)
  */
 export async function deleteUserSchema(schemaName: string): Promise<void> {
   const client = await pool.connect();
@@ -347,10 +463,11 @@ export async function deleteUserSchema(schemaName: string): Promise<void> {
 ```
 
 **Acceptance Criteria:**
-- Can call `createUserSchema(userId)` successfully
-- User schema created with all tables
-- Can call `seedDefaultTopics(schemaName)` successfully
-- 5 default topics inserted
+- Can call `createUserSchema()` successfully
+- Schema name generated with random prefix + counter
+- User schema created with all tables: topics, entries, custom_fields, entry_relationships, user_settings, shared_entries
+- All indexes created for performance
+- Can call `seedDefaultTopics(schemaName, encryptedTopics)` with client-encrypted topic data
 
 ---
 
@@ -394,26 +511,32 @@ export function getUserSchemaName(userId: string): string {
 
 **Critical Files Created:**
 - ✅ `package.json` - Project dependencies
-- ✅ `prisma/schema.prisma` - Database schema (public.users)
-- ✅ `src/lib/db/schemaManager.ts` - Schema creation utilities
+- ✅ `prisma/schema.prisma` - Auth schema (accounts, sessions, schema_counter)
+- ✅ `src/lib/db/schemaManager.ts` - User schema creation with all tables
 - ✅ `src/lib/db/prisma.ts` - Prisma client singleton
 - ✅ `.env.local` - Environment configuration
 - ✅ `next.config.js` - Next.js configuration
 - ✅ `tailwind.config.ts` - Tailwind CSS configuration
 
+**User Schema Tables Created:**
+- `topics` - encryptedName, iv, nameToken, color, icon
+- `entries` - topicId, encryptedContent, iv, searchTokens, customType, entryDate
+- `custom_fields` - entryId, encryptedData, iv
+- `entry_relationships` - entryId, relatedToId, relationshipType
+- `user_settings` - medicalTopicsEnabled, goalsTrackingEnabled
+- `shared_entries` - entryId, shareToken, expiresAt, viewCount
+
 **Acceptance Test:**
 ```typescript
 // Test script to verify Phase 1
-import { createUserSchema, seedDefaultTopics } from '@/lib/db/schemaManager';
+import { createUserSchema } from '@/lib/db/schemaManager';
 
-const testUserId = 'test123';
-const schemaName = await createUserSchema(testUserId);
+const schemaName = await createUserSchema();
 console.log(`Created schema: ${schemaName}`);
+// e.g., "chronicles_a1b2c3_1"
 
-await seedDefaultTopics(schemaName);
-console.log('Seeded default topics');
-
-// Verify topics exist (use raw query or psql)
+// Verify tables exist (use psql)
+// \dt chronicles_a1b2c3_1.*
 ```
 
 ---
@@ -430,10 +553,27 @@ console.log('Seeded default topics');
 ```typescript
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/db/prisma';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+// Helper to hash session token
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// Helper to parse device info from User-Agent
+function parseDeviceInfo(userAgent: string): string {
+  if (userAgent.includes('Mobile')) return 'Mobile';
+  if (userAgent.includes('Chrome')) return 'Chrome Browser';
+  if (userAgent.includes('Firefox')) return 'Firefox Browser';
+  if (userAgent.includes('Safari')) return 'Safari Browser';
+  return 'Unknown Device';
+}
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -441,7 +581,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           throw new Error('Email and password required');
         }
@@ -472,7 +612,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: {
-    strategy: 'jwt',
+    strategy: 'database',  // Database sessions for immediate revocation
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
@@ -481,31 +621,40 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.schemaName = user.schemaName;
-      }
-      return token;
-    },
-    async session({ session, token }) {
+    async session({ session, user }) {
+      // With database sessions, user comes from DB not token
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.schemaName = token.schemaName as string;
+        session.user.id = user.id;
+        session.user.schemaName = user.schemaName;
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ session }) {
+      // Mark session as revoked in database on logout
+      if (session?.sessionToken) {
+        await prisma.session.update({
+          where: { sessionToken: hashToken(session.sessionToken) },
+          data: {
+            revokedAt: new Date(),
+            revokedReason: 'user_logout',
+          },
+        });
+      }
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
 ```
 
+> **Note:** Database sessions enable immediate session revocation. Every request validates the session against the database, checking `revokedAt IS NULL`. This adds ~1 DB query per request but provides instant logout and security event handling.
+
 **Create types for NextAuth:**
 
 **`src/types/next-auth.d.ts`:**
 ```typescript
 import 'next-auth';
-import 'next-auth/jwt';
 
 declare module 'next-auth' {
   interface User {
@@ -520,16 +669,12 @@ declare module 'next-auth' {
       email: string;
       schemaName: string;
     };
-  }
-}
-
-declare module 'next-auth/jwt' {
-  interface JWT {
-    id: string;
-    schemaName: string;
+    sessionToken?: string;  // Available for revocation
   }
 }
 ```
+
+> **Note:** With database sessions, JWT types are not needed. The session is fetched from the database on each request.
 
 **Acceptance Criteria:**
 - NextAuth configuration complete
@@ -722,7 +867,279 @@ export async function POST(request: NextRequest) {
 
 ---
 
-### 2.5. Create Registration Page
+### 2.5. Build Session Management API Endpoints
+
+**Task:** Create API endpoints for session management (list, revoke).
+
+**Create `src/lib/auth/validateSession.ts`:**
+```typescript
+import { prisma } from '@/lib/db/prisma';
+import crypto from 'crypto';
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+export async function validateSession(sessionToken: string) {
+  const hashedToken = hashToken(sessionToken);
+
+  const session = await prisma.session.findUnique({
+    where: { sessionToken: hashedToken },
+    include: { account: true },
+  });
+
+  if (!session) return null;
+  if (session.revokedAt) return null;  // Session was revoked
+  if (session.expiresAt < new Date()) return null;  // Session expired
+
+  // Update last active timestamp
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { lastActiveAt: new Date() },
+  });
+
+  return session;
+}
+```
+
+**Create `src/app/api/sessions/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { prisma } from '@/lib/db/prisma';
+
+// GET /api/sessions - List all active sessions for current user
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const sessions = await prisma.session.findMany({
+    where: {
+      accountId: session.user.id,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: {
+      id: true,
+      deviceInfo: true,
+      ipAddress: true,
+      lastActiveAt: true,
+      createdAt: true,
+    },
+    orderBy: { lastActiveAt: 'desc' },
+  });
+
+  // Mark current session
+  const currentSessionId = session.sessionToken;
+  const enrichedSessions = sessions.map((s) => ({
+    ...s,
+    isCurrent: s.id === currentSessionId,
+  }));
+
+  return NextResponse.json({ sessions: enrichedSessions });
+}
+```
+
+**Create `src/app/api/sessions/[id]/revoke/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { prisma } from '@/lib/db/prisma';
+
+// POST /api/sessions/[id]/revoke - Revoke a specific session
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Verify the session belongs to this user
+  const targetSession = await prisma.session.findFirst({
+    where: {
+      id: params.id,
+      accountId: session.user.id,
+    },
+  });
+
+  if (!targetSession) {
+    return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+  }
+
+  await prisma.session.update({
+    where: { id: params.id },
+    data: {
+      revokedAt: new Date(),
+      revokedReason: 'user_revoked',
+    },
+  });
+
+  return NextResponse.json({ success: true, message: 'Session revoked' });
+}
+```
+
+**Create `src/app/api/sessions/revoke-all/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { prisma } from '@/lib/db/prisma';
+
+// POST /api/sessions/revoke-all - Revoke all sessions except current
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const result = await prisma.session.updateMany({
+    where: {
+      accountId: session.user.id,
+      id: { not: session.sessionToken }, // Keep current session
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+      revokedReason: 'user_revoked_all',
+    },
+  });
+
+  return NextResponse.json({
+    success: true,
+    revokedCount: result.count,
+    message: `${result.count} session(s) revoked`,
+  });
+}
+```
+
+**Acceptance Criteria:**
+- `GET /api/sessions` returns list of active sessions
+- `POST /api/sessions/[id]/revoke` revokes specific session
+- `POST /api/sessions/revoke-all` revokes all except current
+- Revoked sessions cannot be used for authentication
+
+---
+
+### 2.6. Build Password Change Endpoint
+
+**Task:** Create password change API that revokes all other sessions.
+
+**Create `src/app/api/user/change-password/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { prisma } from '@/lib/db/prisma';
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password required'),
+  newPassword: z
+    .string()
+    .min(12, 'Password must be at least 12 characters')
+    .regex(/[A-Z]/, 'Must contain uppercase letter')
+    .regex(/[a-z]/, 'Must contain lowercase letter')
+    .regex(/[0-9]/, 'Must contain number'),
+  newEncryptedMasterKey: z.string().min(1, 'Encrypted master key required'),
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const validatedData = changePasswordSchema.parse(body);
+
+    // Fetch current account
+    const account = await prisma.account.findUnique({
+      where: { id: session.user.id },
+    });
+
+    if (!account) {
+      return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(
+      validatedData.currentPassword,
+      account.passwordHash
+    );
+
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { error: 'Current password is incorrect' },
+        { status: 401 }
+      );
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(validatedData.newPassword, 10);
+
+    // Update account with new password and re-encrypted master key
+    await prisma.account.update({
+      where: { id: session.user.id },
+      data: {
+        passwordHash: newPasswordHash,
+        encryptedMasterKey: validatedData.newEncryptedMasterKey,
+      },
+    });
+
+    // SECURITY: Revoke ALL other sessions (immediate logout everywhere)
+    const currentSessionToken = session.sessionToken;
+    await prisma.session.updateMany({
+      where: {
+        accountId: session.user.id,
+        sessionToken: { not: currentSessionToken },
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'password_change',
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Password changed. All other sessions have been logged out.',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
+    console.error('Password change error:', error);
+    return NextResponse.json(
+      { error: 'Failed to change password' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+> **Security Note:** On password change, all sessions except the current one are immediately revoked. The client must re-encrypt the master key with the new password-derived KEK and send the new `encryptedMasterKey` in the request.
+
+**Acceptance Criteria:**
+- Password change requires current password verification
+- New password must meet strength requirements
+- Client re-encrypts master key with new password before sending
+- All other sessions are revoked immediately on password change
+- Current session remains valid
+
+---
+
+### 2.7. Create Registration Page
 
 **Task:** Build registration UI with password warning.
 
@@ -788,7 +1205,7 @@ export default function RegisterPage() {
         <div>
           <h2 className="text-3xl font-bold text-center">Create Account</h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Chronicles - Encrypted Bullet Journal
+            Chronicles - Encrypted Journal
           </p>
         </div>
 
@@ -969,7 +1386,7 @@ export default function LoginPage() {
         <div>
           <h2 className="text-3xl font-bold text-center">Sign In</h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Chronicles - Encrypted Bullet Journal
+            Chronicles - Encrypted Journal
           </p>
         </div>
 
@@ -1098,10 +1515,15 @@ export const config = {
 ### Phase 2 Summary
 
 **Critical Files Created:**
-- ✅ `src/lib/auth/authOptions.ts` - NextAuth configuration
+- ✅ `src/lib/auth/authOptions.ts` - NextAuth configuration (database sessions)
+- ✅ `src/lib/auth/validateSession.ts` - Session validation utility
 - ✅ `src/app/api/auth/[...nextauth]/route.ts` - Auth API handlers
 - ✅ `src/app/api/user/register/route.ts` - Registration endpoint
 - ✅ `src/app/api/user/salt/route.ts` - Salt retrieval endpoint
+- ✅ `src/app/api/user/change-password/route.ts` - Password change with session revocation
+- ✅ `src/app/api/sessions/route.ts` - List active sessions
+- ✅ `src/app/api/sessions/[id]/revoke/route.ts` - Revoke specific session
+- ✅ `src/app/api/sessions/revoke-all/route.ts` - Revoke all sessions
 - ✅ `src/app/(auth)/register/page.tsx` - Registration UI
 - ✅ `src/app/(auth)/login/page.tsx` - Login UI
 - ✅ `src/middleware.ts` - Route protection
@@ -1116,6 +1538,9 @@ export const config = {
 5. Sign in with credentials
 6. Verify redirect to dashboard (/)
 7. Try accessing dashboard without auth → redirected to /login
+8. View active sessions at /settings/security
+9. Revoke a session from another device → that device is logged out immediately
+10. Change password → all other sessions are revoked immediately
 ```
 
 ---
@@ -1401,7 +1826,7 @@ import SessionProvider from '@/components/providers/SessionProvider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Chronicles - Encrypted Bullet Journal',
+  title: 'Chronicles - Encrypted Journal',
   description: 'Privacy-first encrypted journaling',
 };
 
@@ -1618,74 +2043,1935 @@ export default function DashboardLayout({
 
 ---
 
-**Due to character limits, I'll now mark this phase complete and continue with the remaining phases in a summary format.**
+## Phase 4: Topics System (Week 2)
+
+**High-level Goal:** Implement encrypted topics with SSE lookup tokens for server-side search.
+
+> **Architecture Note:** Topics use encrypted names with HMAC tokens (nameToken) for server-side lookup. The server never sees plaintext topic names.
+
+### 4.1. Topics Data Model
+
+**Topics** are stored with:
+- `encryptedName` - AES-GCM encrypted topic name
+- `iv` - Initialization vector for the encryption
+- `nameToken` - HMAC-SHA256 hash for server-side lookup
+- `color` - Hex color (plaintext, not sensitive)
+- `icon` - Icon identifier (plaintext, not sensitive)
+
+**Client-side operations:**
+1. Generate HMAC token: `HMAC-SHA256(masterKey, "topic name")`
+2. Encrypt topic name: `AES-GCM(masterKey, "topic name")`
+3. Send both to server for storage
+
+**Server-side lookup:**
+1. Client sends HMAC token for search
+2. Server matches against `nameToken` column
+3. Server returns encrypted data
+4. Client decrypts for display
+
+---
+
+### 4.2. Build Topics API Endpoints
+
+**Task:** Create CRUD endpoints for topics with encrypted names.
+
+**Create `src/app/api/topics/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+import { z } from 'zod';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const createTopicSchema = z.object({
+  encryptedName: z.string(),
+  iv: z.string(),
+  nameToken: z.string(),
+  color: z.string().default('#6366f1'),
+  icon: z.string().optional(),
+});
+
+// GET /api/topics - List all topics
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT * FROM "${session.user.schemaName}"."topics"
+      ORDER BY "encryptedName"
+    `);
+
+    return NextResponse.json({ topics: result.rows });
+  } finally {
+    client.release();
+  }
+}
+
+// POST /api/topics - Create new topic
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const validatedData = createTopicSchema.parse(body);
+
+    const client = await pool.connect();
+    try {
+      const topicId = `topic_${Date.now()}`;
+
+      const result = await client.query(
+        `INSERT INTO "${session.user.schemaName}"."topics"
+        (id, "encryptedName", iv, "nameToken", color, icon)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *`,
+        [
+          topicId,
+          validatedData.encryptedName,
+          validatedData.iv,
+          validatedData.nameToken,
+          validatedData.color,
+          validatedData.icon || null,
+        ]
+      );
+
+      return NextResponse.json({ topic: result.rows[0] }, { status: 201 });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+```
+
+**Create `src/app/api/topics/[id]/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// GET /api/topics/[id] - Get single topic
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT * FROM "${session.user.schemaName}"."topics" WHERE id = $1`,
+      [params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Topic not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ topic: result.rows[0] });
+  } finally {
+    client.release();
+  }
+}
+
+// PUT /api/topics/[id] - Update topic
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query(
+      `UPDATE "${session.user.schemaName}"."topics"
+      SET "encryptedName" = COALESCE($1, "encryptedName"),
+          iv = COALESCE($2, iv),
+          "nameToken" = COALESCE($3, "nameToken"),
+          color = COALESCE($4, color),
+          icon = COALESCE($5, icon)
+      WHERE id = $6
+      RETURNING *`,
+      [
+        body.encryptedName,
+        body.iv,
+        body.nameToken,
+        body.color,
+        body.icon,
+        params.id,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Topic not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ topic: result.rows[0] });
+  } finally {
+    client.release();
+  }
+}
+
+// DELETE /api/topics/[id] - Delete topic
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    // Check if topic has entries
+    const entriesCheck = await client.query(
+      `SELECT COUNT(*) FROM "${session.user.schemaName}"."entries" WHERE "topicId" = $1`,
+      [params.id]
+    );
+
+    if (parseInt(entriesCheck.rows[0].count) > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete topic with entries. Move or delete entries first.' },
+        { status: 400 }
+      );
+    }
+
+    const result = await client.query(
+      `DELETE FROM "${session.user.schemaName}"."topics" WHERE id = $1 RETURNING id`,
+      [params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Topic not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: 'Topic deleted successfully' });
+  } finally {
+    client.release();
+  }
+}
+```
+
+**Create `src/app/api/topics/lookup/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// POST /api/topics/lookup - Find topic by nameToken
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { nameToken } = await request.json();
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query(
+      `SELECT * FROM "${session.user.schemaName}"."topics" WHERE "nameToken" = $1`,
+      [nameToken]
+    );
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ topic: null });
+    }
+
+    return NextResponse.json({ topic: result.rows[0] });
+  } finally {
+    client.release();
+  }
+}
+```
+
+**Acceptance Criteria:**
+- Can GET all topics (encrypted names returned)
+- Can POST new topic with encryptedName, iv, nameToken
+- Can PUT update topic (re-encrypted name + new nameToken)
+- Can DELETE topic (only if no entries attached)
+- Can lookup topic by nameToken for SSE search
+
+---
+
+### 4.3. Create Topic HMAC Token Generation
+
+**Task:** Create client-side utilities for topic token generation.
+
+**Create `src/lib/crypto/topicTokens.ts`:**
+```typescript
+/**
+ * Generate HMAC-SHA256 token for topic name lookup
+ */
+export async function generateTopicToken(
+  topicName: string,
+  key: CryptoKey
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(topicName.toLowerCase().trim());
+
+  // Import key for HMAC
+  const hmacKey = await window.crypto.subtle.importKey(
+    'raw',
+    await window.crypto.subtle.exportKey('raw', key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await window.crypto.subtle.sign('HMAC', hmacKey, data);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+```
+
+**Acceptance Criteria:**
+- Same topic name + same key = same token (deterministic)
+- Different topic names = different tokens
+- Tokens are one-way (cannot reverse to get topic name)
+
+---
+
+### 4.4. Build Topics Sidebar Component
+
+**Task:** Create sidebar UI for topic selection with decryption.
+
+**Create `src/components/topics/TopicsSidebar.tsx`:**
+```typescript
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+
+interface Topic {
+  id: string;
+  encryptedName: string;
+  iv: string;
+  nameToken: string;
+  color: string;
+  icon: string | null;
+}
+
+interface Props {
+  selectedTopicId: string | null;
+  onSelectTopic: (topicId: string | null) => void;
+}
+
+export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [decryptedNames, setDecryptedNames] = useState<Map<string, string>>(new Map());
+  const { decryptData, isKeyReady } = useEncryption();
+
+  useEffect(() => {
+    fetchTopics();
+  }, []);
+
+  useEffect(() => {
+    if (isKeyReady && topics.length > 0) {
+      decryptTopicNames();
+    }
+  }, [topics, isKeyReady]);
+
+  const fetchTopics = async () => {
+    const response = await fetch('/api/topics');
+    const data = await response.json();
+    setTopics(data.topics);
+  };
+
+  const decryptTopicNames = async () => {
+    const names = new Map<string, string>();
+    for (const topic of topics) {
+      try {
+        const name = await decryptData(topic.encryptedName, topic.iv);
+        names.set(topic.id, name);
+      } catch (error) {
+        names.set(topic.id, 'Decryption failed');
+      }
+    }
+    setDecryptedNames(names);
+  };
+
+  return (
+    <div className="w-64 bg-gray-50 border-r h-full p-4">
+      <h2 className="text-lg font-semibold mb-4">Topics</h2>
+
+      {/* All entries option */}
+      <button
+        onClick={() => onSelectTopic(null)}
+        className={`w-full text-left px-3 py-2 rounded mb-2 ${
+          selectedTopicId === null ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-gray-100'
+        }`}
+      >
+        All Entries
+      </button>
+
+      {/* Topic list */}
+      <div className="space-y-1">
+        {topics.map((topic) => (
+          <button
+            key={topic.id}
+            onClick={() => onSelectTopic(topic.id)}
+            className={`w-full text-left px-3 py-2 rounded flex items-center gap-2 ${
+              selectedTopicId === topic.id ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-gray-100'
+            }`}
+          >
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: topic.color }}
+            />
+            <span>{decryptedNames.get(topic.id) || 'Decrypting...'}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Add topic button */}
+      <button className="w-full mt-4 text-sm text-indigo-600 hover:text-indigo-800">
+        + Add Topic
+      </button>
+    </div>
+  );
+}
+```
+
+**Acceptance Criteria:**
+- Topics list from API
+- Topic names decrypted client-side
+- Can select topic to filter entries
+- Topic color displayed
+- Can add new topic
+
+---
+
+### 4.5. Create Add Topic Modal
+
+**Task:** Create modal for adding new topics with encryption.
+
+**Create `src/components/topics/AddTopicModal.tsx`:**
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+import { generateTopicToken } from '@/lib/crypto/topicTokens';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onTopicAdded: () => void;
+}
+
+const COLORS = [
+  '#6366f1', '#ec4899', '#10b981', '#f59e0b',
+  '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4',
+];
+
+export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(COLORS[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { encryptData, isKeyReady } = useEncryption();
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !isKeyReady) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Get the raw key for HMAC
+      const { encryptionKey } = useEncryption.getState();
+
+      // Encrypt topic name
+      const { ciphertext: encryptedName, iv } = await encryptData(name);
+
+      // Generate nameToken for SSE lookup
+      const nameToken = await generateTopicToken(name, encryptionKey!);
+
+      // Create topic
+      const response = await fetch('/api/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          encryptedName,
+          iv,
+          nameToken,
+          color,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create topic');
+      }
+
+      setName('');
+      onTopicAdded();
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+        <h2 className="text-xl font-bold mb-4">Add New Topic</h2>
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Topic Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="e.g., Work, Personal, Health"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Color
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={`w-8 h-8 rounded-full ${
+                    color === c ? 'ring-2 ring-offset-2 ring-indigo-500' : ''
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="mb-4 text-sm text-red-600">{error}</div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !name.trim()}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+            >
+              {loading ? 'Creating...' : 'Create Topic'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+```
+
+**Acceptance Criteria:**
+- Can enter topic name
+- Can select color
+- Topic name encrypted before sending to server
+- nameToken (HMAC) generated for SSE lookup
+- Topic appears in sidebar after creation
+
+---
+
+### Phase 4 Summary
+
+**Critical Files Created:**
+- ✅ `src/app/api/topics/route.ts` - Topics CRUD
+- ✅ `src/app/api/topics/[id]/route.ts` - Single topic operations
+- ✅ `src/app/api/topics/lookup/route.ts` - SSE token lookup
+- ✅ `src/lib/crypto/topicTokens.ts` - HMAC token generation
+- ✅ `src/components/topics/TopicsSidebar.tsx` - Topics list UI
+- ✅ `src/components/topics/AddTopicModal.tsx` - Create topic UI
+
+**Acceptance Test:**
+```
+1. Create new topic "Work"
+2. Verify encrypted in database (encryptedName not readable)
+3. Verify nameToken stored for lookup
+4. Topic appears in sidebar (decrypted client-side)
+5. Create another topic "Personal"
+6. Search by nameToken returns correct topic
+7. Can update topic name (new encryption + new token)
+8. Cannot delete topic with entries
+```
+
+---
+
+## Phase 5: Split-Screen Journal UI (Week 2-3)
+
+**High-level Goal:** Build the main journal interface with quick and expanded entry modes.
+
+> **Architecture Note:** Entries use `encryptedContent` for the journal text, `customType` for entry type routing (null for regular entries, 'task' for tasks, etc.), and `custom_fields` for type-specific metadata.
+
+### 5.1. Entries Data Model
+
+**Regular Journal Entries:**
+- `customType = null`
+- `encryptedContent` = journal text
+- `searchTokens` = HMAC tokens for SSE search
+- No custom_fields needed
+
+**Task Entries:**
+- `customType = 'task'`
+- `encryptedContent` = task description
+- Custom fields:
+  - `{ fieldKey: 'isCompleted', value: false }`
+  - `{ fieldKey: 'isAutoMigrating', value: true }`
+
+---
+
+### 5.2. Build Entries API Endpoints
+
+**Task:** Create CRUD endpoints for entries with custom_fields.
+
+**Create `src/app/api/entries/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+import { z } from 'zod';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const createEntrySchema = z.object({
+  topicId: z.string().optional(),
+  encryptedContent: z.string(),
+  iv: z.string(),
+  searchTokens: z.array(z.string()).optional(),
+  customType: z.string().nullable().optional(),
+  entryDate: z.string(),
+  customFields: z.array(z.object({
+    encryptedData: z.string(),
+    iv: z.string(),
+  })).optional(),
+});
+
+// GET /api/entries - List entries with filters
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const topicId = searchParams.get('topicId');
+  const date = searchParams.get('date');
+  const customType = searchParams.get('customType');
+  const searchToken = searchParams.get('searchToken');
+
+  const client = await pool.connect();
+  try {
+    let query = `
+      SELECT e.*, json_agg(cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
+      FROM "${session.user.schemaName}"."entries" e
+      LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (topicId) {
+      query += ` AND e."topicId" = $${paramIndex++}`;
+      params.push(topicId);
+    }
+
+    if (date) {
+      query += ` AND e."entryDate" = $${paramIndex++}`;
+      params.push(date);
+    }
+
+    if (customType) {
+      query += ` AND e."customType" = $${paramIndex++}`;
+      params.push(customType);
+    }
+
+    if (searchToken) {
+      query += ` AND $${paramIndex++} = ANY(e."searchTokens")`;
+      params.push(searchToken);
+    }
+
+    query += ` GROUP BY e.id ORDER BY e."entryDate" DESC, e."createdAt" DESC`;
+
+    const result = await client.query(query, params);
+    return NextResponse.json({ entries: result.rows });
+  } finally {
+    client.release();
+  }
+}
+
+// POST /api/entries - Create new entry
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const validatedData = createEntrySchema.parse(body);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const entryId = `entry_${Date.now()}`;
+
+      const entryResult = await client.query(
+        `INSERT INTO "${session.user.schemaName}"."entries"
+        (id, "topicId", "encryptedContent", iv, "searchTokens", "customType", "entryDate", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        RETURNING *`,
+        [
+          entryId,
+          validatedData.topicId || null,
+          validatedData.encryptedContent,
+          validatedData.iv,
+          validatedData.searchTokens || [],
+          validatedData.customType || null,
+          validatedData.entryDate,
+        ]
+      );
+
+      // Create custom_fields if provided
+      if (validatedData.customFields) {
+        for (let i = 0; i < validatedData.customFields.length; i++) {
+          const cf = validatedData.customFields[i];
+          await client.query(
+            `INSERT INTO "${session.user.schemaName}"."custom_fields"
+            (id, "entryId", "encryptedData", iv)
+            VALUES ($1, $2, $3, $4)`,
+            [`cf_${entryId}_${i}`, entryId, cf.encryptedData, cf.iv]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      return NextResponse.json({ entry: entryResult.rows[0] }, { status: 201 });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+```
+
+**Create `src/app/api/entries/[id]/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// GET /api/entries/[id] - Get single entry
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT e.*, json_agg(cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
+      FROM "${session.user.schemaName}"."entries" e
+      LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+      WHERE e.id = $1
+      GROUP BY e.id
+    `, [params.id]);
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ entry: result.rows[0] });
+  } finally {
+    client.release();
+  }
+}
+
+// PUT /api/entries/[id] - Update entry
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Update entry
+    const entryResult = await client.query(
+      `UPDATE "${session.user.schemaName}"."entries"
+      SET "encryptedContent" = COALESCE($1, "encryptedContent"),
+          iv = COALESCE($2, iv),
+          "searchTokens" = COALESCE($3, "searchTokens"),
+          "topicId" = COALESCE($4, "topicId"),
+          "updatedAt" = NOW()
+      WHERE id = $5
+      RETURNING *`,
+      [
+        body.encryptedContent,
+        body.iv,
+        body.searchTokens,
+        body.topicId,
+        params.id,
+      ]
+    );
+
+    if (entryResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+    }
+
+    // Update custom_fields if provided
+    if (body.customFields) {
+      await client.query(
+        `DELETE FROM "${session.user.schemaName}"."custom_fields" WHERE "entryId" = $1`,
+        [params.id]
+      );
+
+      for (let i = 0; i < body.customFields.length; i++) {
+        const cf = body.customFields[i];
+        await client.query(
+          `INSERT INTO "${session.user.schemaName}"."custom_fields"
+          (id, "entryId", "encryptedData", iv)
+          VALUES ($1, $2, $3, $4)`,
+          [`cf_${params.id}_${i}`, params.id, cf.encryptedData, cf.iv]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return NextResponse.json({ entry: entryResult.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// DELETE /api/entries/[id] - Delete entry
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    // custom_fields cascade delete via ON DELETE CASCADE
+    const result = await client.query(
+      `DELETE FROM "${session.user.schemaName}"."entries" WHERE id = $1 RETURNING id`,
+      [params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: 'Entry deleted successfully' });
+  } finally {
+    client.release();
+  }
+}
+```
+
+**Acceptance Criteria:**
+- Can GET entries with filters (topicId, date, customType, searchToken)
+- Can POST entry with encrypted content + optional custom_fields
+- Can PUT update entry content and custom_fields
+- Can DELETE entry (cascades to custom_fields)
+
+---
+
+### 5.3. Create Search Token Generation
+
+**Task:** Create client-side utilities for search token generation.
+
+**Create `src/lib/crypto/searchTokens.ts`:**
+```typescript
+/**
+ * Tokenize text into searchable keywords
+ */
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length >= 3)
+    .filter((word, index, arr) => arr.indexOf(word) === index); // unique
+}
+
+/**
+ * Generate HMAC-SHA256 tokens for each keyword
+ */
+export async function generateSearchTokens(
+  content: string,
+  key: CryptoKey
+): Promise<string[]> {
+  const keywords = tokenize(content);
+  const tokens: string[] = [];
+
+  // Import key for HMAC
+  const hmacKey = await window.crypto.subtle.importKey(
+    'raw',
+    await window.crypto.subtle.exportKey('raw', key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  for (const keyword of keywords) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(keyword);
+    const signature = await window.crypto.subtle.sign('HMAC', hmacKey, data);
+    tokens.push(btoa(String.fromCharCode(...new Uint8Array(signature))));
+  }
+
+  return tokens;
+}
+
+/**
+ * Generate search token for a single search term
+ */
+export async function generateSearchToken(
+  searchTerm: string,
+  key: CryptoKey
+): Promise<string> {
+  const hmacKey = await window.crypto.subtle.importKey(
+    'raw',
+    await window.crypto.subtle.exportKey('raw', key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(searchTerm.toLowerCase().trim());
+  const signature = await window.crypto.subtle.sign('HMAC', hmacKey, data);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+```
+
+**Acceptance Criteria:**
+- Tokenizes content into keywords (3+ chars, unique)
+- Generates HMAC token for each keyword
+- Same keyword + same key = same token
+- Can generate single search token for queries
+
+---
+
+### 5.4. Build Split-Screen Layout
+
+**Task:** Create main journal interface with left/right panels.
+
+**Create `src/components/journal/JournalLayout.tsx`:**
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { TopicsSidebar } from '@/components/topics/TopicsSidebar';
+import { EntriesList } from '@/components/journal/EntriesList';
+import { EntryEditor } from '@/components/journal/EntryEditor';
+
+export function JournalLayout() {
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
+
+  return (
+    <div className="flex h-screen">
+      {/* Topics Sidebar */}
+      <TopicsSidebar
+        selectedTopicId={selectedTopicId}
+        onSelectTopic={setSelectedTopicId}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex">
+        {/* Left Panel - Entries List */}
+        <div className="w-1/2 border-r overflow-auto">
+          <EntriesList
+            topicId={selectedTopicId}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            selectedEntryId={selectedEntryId}
+            onSelectEntry={setSelectedEntryId}
+          />
+        </div>
+
+        {/* Right Panel - Entry Editor */}
+        <div className="w-1/2 overflow-auto">
+          <EntryEditor
+            entryId={selectedEntryId}
+            topicId={selectedTopicId}
+            date={selectedDate}
+            onEntrySaved={() => {
+              // Refresh entries list
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+**Acceptance Criteria:**
+- Three-panel layout (sidebar + list + editor)
+- Topic selection filters entries
+- Date selection for entries
+- Entry selection loads into editor
+
+---
+
+### 5.5. Build Entries List Component
+
+**Task:** Create entries list with quick entry mode.
+
+**Create `src/components/journal/EntriesList.tsx`:**
+```typescript
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+
+interface Entry {
+  id: string;
+  encryptedContent: string;
+  iv: string;
+  customType: string | null;
+  entryDate: string;
+  custom_fields: any[];
+}
+
+interface Props {
+  topicId: string | null;
+  selectedDate: string;
+  onDateChange: (date: string) => void;
+  selectedEntryId: string | null;
+  onSelectEntry: (entryId: string | null) => void;
+}
+
+export function EntriesList({
+  topicId,
+  selectedDate,
+  onDateChange,
+  selectedEntryId,
+  onSelectEntry,
+}: Props) {
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [decryptedEntries, setDecryptedEntries] = useState<Map<string, string>>(new Map());
+  const [quickEntry, setQuickEntry] = useState('');
+  const { encryptData, decryptData, isKeyReady } = useEncryption();
+
+  useEffect(() => {
+    fetchEntries();
+  }, [topicId, selectedDate]);
+
+  useEffect(() => {
+    if (isKeyReady && entries.length > 0) {
+      decryptEntries();
+    }
+  }, [entries, isKeyReady]);
+
+  const fetchEntries = async () => {
+    const params = new URLSearchParams();
+    if (topicId) params.set('topicId', topicId);
+    if (selectedDate) params.set('date', selectedDate);
+
+    const response = await fetch(`/api/entries?${params}`);
+    const data = await response.json();
+    setEntries(data.entries);
+  };
+
+  const decryptEntries = async () => {
+    const decrypted = new Map<string, string>();
+    for (const entry of entries) {
+      try {
+        const content = await decryptData(entry.encryptedContent, entry.iv);
+        // Show preview (first 100 chars)
+        decrypted.set(entry.id, content.slice(0, 100) + (content.length > 100 ? '...' : ''));
+      } catch (error) {
+        decrypted.set(entry.id, 'Decryption failed');
+      }
+    }
+    setDecryptedEntries(decrypted);
+  };
+
+  const handleQuickEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickEntry.trim() || !isKeyReady) return;
+
+    const { ciphertext, iv } = await encryptData(quickEntry);
+
+    await fetch('/api/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        encryptedContent: ciphertext,
+        iv,
+        topicId,
+        entryDate: selectedDate,
+      }),
+    });
+
+    setQuickEntry('');
+    fetchEntries();
+  };
+
+  return (
+    <div className="p-4">
+      {/* Date Picker */}
+      <div className="mb-4">
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => onDateChange(e.target.value)}
+          className="px-3 py-2 border rounded-md"
+        />
+      </div>
+
+      {/* Quick Entry */}
+      <form onSubmit={handleQuickEntry} className="mb-4">
+        <input
+          type="text"
+          value={quickEntry}
+          onChange={(e) => setQuickEntry(e.target.value)}
+          placeholder="Quick entry... (press Enter)"
+          className="w-full px-3 py-2 border rounded-md"
+        />
+      </form>
+
+      {/* Entries List */}
+      <div className="space-y-2">
+        {entries.map((entry) => (
+          <div
+            key={entry.id}
+            onClick={() => onSelectEntry(entry.id)}
+            className={`p-3 border rounded-md cursor-pointer ${
+              selectedEntryId === entry.id ? 'bg-indigo-50 border-indigo-300' : 'hover:bg-gray-50'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              {entry.customType === 'task' && (
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Task</span>
+              )}
+            </div>
+            <p className="text-sm text-gray-700">
+              {decryptedEntries.get(entry.id) || 'Decrypting...'}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+**Acceptance Criteria:**
+- Entries list filtered by topic and date
+- Quick entry mode (single line, Enter to submit)
+- Entries decrypted client-side
+- Entry preview (first 100 chars)
+- Click to select entry for editing
+
+---
+
+### 5.6. Build Entry Editor Component
+
+**Task:** Create rich text editor for expanded entry mode.
+
+**Create `src/components/journal/EntryEditor.tsx`:**
+```typescript
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+import { generateSearchTokens } from '@/lib/crypto/searchTokens';
+
+interface Props {
+  entryId: string | null;
+  topicId: string | null;
+  date: string;
+  onEntrySaved: () => void;
+}
+
+export function EntryEditor({ entryId, topicId, date, onEntrySaved }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { encryptData, decryptData, isKeyReady } = useEncryption();
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: '',
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px]',
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (entryId && isKeyReady) {
+      loadEntry();
+    } else if (!entryId) {
+      editor?.commands.setContent('');
+    }
+  }, [entryId, isKeyReady]);
+
+  const loadEntry = async () => {
+    if (!entryId) return;
+    setLoading(true);
+
+    try {
+      const response = await fetch(`/api/entries/${entryId}`);
+      const { entry } = await response.json();
+
+      const content = await decryptData(entry.encryptedContent, entry.iv);
+      editor?.commands.setContent(content);
+    } catch (error) {
+      console.error('Failed to load entry:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editor || !isKeyReady) return;
+    setSaving(true);
+
+    try {
+      const content = editor.getHTML();
+      const { encryptionKey } = useEncryption.getState();
+
+      // Encrypt content
+      const { ciphertext, iv } = await encryptData(content);
+
+      // Generate search tokens
+      const plainText = editor.getText();
+      const searchTokens = await generateSearchTokens(plainText, encryptionKey!);
+
+      if (entryId) {
+        // Update existing entry
+        await fetch(`/api/entries/${entryId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            encryptedContent: ciphertext,
+            iv,
+            searchTokens,
+          }),
+        });
+      } else {
+        // Create new entry
+        await fetch('/api/entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            encryptedContent: ciphertext,
+            iv,
+            searchTokens,
+            topicId,
+            entryDate: date,
+          }),
+        });
+      }
+
+      onEntrySaved();
+    } catch (error) {
+      console.error('Failed to save entry:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-4">Loading entry...</div>;
+  }
+
+  return (
+    <div className="p-4">
+      <div className="mb-4 flex justify-between items-center">
+        <h2 className="text-lg font-semibold">
+          {entryId ? 'Edit Entry' : 'New Entry'}
+        </h2>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+
+      <div className="border rounded-md p-4">
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}
+```
+
+**Acceptance Criteria:**
+- TipTap rich text editor
+- Loads and decrypts existing entry
+- Creates new entry if no entryId
+- Encrypts content before saving
+- Generates search tokens from plaintext
+
+---
+
+### Phase 5 Summary
+
+**Critical Files Created:**
+- ✅ `src/app/api/entries/route.ts` - Entries CRUD
+- ✅ `src/app/api/entries/[id]/route.ts` - Single entry operations
+- ✅ `src/lib/crypto/searchTokens.ts` - SSE token generation
+- ✅ `src/components/journal/JournalLayout.tsx` - Main layout
+- ✅ `src/components/journal/EntriesList.tsx` - Entries list + quick entry
+- ✅ `src/components/journal/EntryEditor.tsx` - Rich text editor
+
+**Acceptance Test:**
+```
+1. Open journal page
+2. Select topic from sidebar
+3. Select date
+4. Create quick entry (Enter to submit)
+5. Entry appears in list (decrypted)
+6. Click entry to edit
+7. Edit in rich text editor
+8. Save entry (re-encrypted + new search tokens)
+9. Search for keyword → finds entry via token
+```
+
+---
+
+## Phase 6: Task Auto-Migration System (Week 3)
+
+**High-level Goal:** Implement automatic migration of incomplete tasks to current date.
+
+> **Architecture Note:** Tasks are entries with `customType = 'task'`. Task metadata (isCompleted, isAutoMigrating) stored in custom_fields.
+
+### 6.1. Task Entry Structure
+
+**Task Entries:**
+- `customType = 'task'`
+- `encryptedContent` = task description
+- Custom fields:
+  - `{ fieldKey: 'isCompleted', value: false }`
+  - `{ fieldKey: 'isAutoMigrating', value: true }`
+
+---
+
+### 6.2. Build Task-Specific API Endpoints
+
+**Task:** Create endpoints for task management.
+
+**Create `src/app/api/tasks/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// GET /api/tasks - Get all tasks (or filter by completion status)
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const date = searchParams.get('date');
+  const includeCompleted = searchParams.get('includeCompleted') === 'true';
+
+  const client = await pool.connect();
+  try {
+    let query = `
+      SELECT e.*, json_agg(cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
+      FROM "${session.user.schemaName}"."entries" e
+      LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+      WHERE e."customType" = 'task'
+    `;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (date) {
+      query += ` AND e."entryDate" = $${paramIndex++}`;
+      params.push(date);
+    }
+
+    query += ` GROUP BY e.id ORDER BY e."createdAt" ASC`;
+
+    const result = await client.query(query, params);
+    return NextResponse.json({ tasks: result.rows });
+  } finally {
+    client.release();
+  }
+}
+
+// POST /api/tasks - Create new task
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const taskId = `task_${Date.now()}`;
+
+    // Create entry with customType = 'task'
+    const entryResult = await client.query(
+      `INSERT INTO "${session.user.schemaName}"."entries"
+      (id, "topicId", "encryptedContent", iv, "customType", "entryDate", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, 'task', $5, NOW(), NOW())
+      RETURNING *`,
+      [taskId, body.topicId || null, body.encryptedContent, body.iv, body.entryDate]
+    );
+
+    // Create custom_fields for task metadata
+    for (let i = 0; i < body.customFields.length; i++) {
+      const cf = body.customFields[i];
+      await client.query(
+        `INSERT INTO "${session.user.schemaName}"."custom_fields"
+        (id, "entryId", "encryptedData", iv)
+        VALUES ($1, $2, $3, $4)`,
+        [`cf_${taskId}_${i}`, taskId, cf.encryptedData, cf.iv]
+      );
+    }
+
+    await client.query('COMMIT');
+    return NextResponse.json({ task: entryResult.rows[0] }, { status: 201 });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+```
+
+**Create `src/app/api/tasks/[id]/complete/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// POST /api/tasks/[id]/complete - Toggle task completion
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  // body.customFields contains updated isCompleted field (encrypted)
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Verify task exists
+    const taskCheck = await client.query(
+      `SELECT id FROM "${session.user.schemaName}"."entries" WHERE id = $1 AND "customType" = 'task'`,
+      [params.id]
+    );
+
+    if (taskCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    // Update custom_fields with new completion status
+    await client.query(
+      `DELETE FROM "${session.user.schemaName}"."custom_fields" WHERE "entryId" = $1`,
+      [params.id]
+    );
+
+    for (let i = 0; i < body.customFields.length; i++) {
+      const cf = body.customFields[i];
+      await client.query(
+        `INSERT INTO "${session.user.schemaName}"."custom_fields"
+        (id, "entryId", "encryptedData", iv)
+        VALUES ($1, $2, $3, $4)`,
+        [`cf_${params.id}_${i}`, params.id, cf.encryptedData, cf.iv]
+      );
+    }
+
+    // Update entry timestamp
+    await client.query(
+      `UPDATE "${session.user.schemaName}"."entries" SET "updatedAt" = NOW() WHERE id = $1`,
+      [params.id]
+    );
+
+    await client.query('COMMIT');
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+```
+
+**Acceptance Criteria:**
+- Can GET tasks by date
+- Can POST new task with encrypted content + custom_fields
+- Can toggle task completion (update custom_fields)
+
+---
+
+### 6.3. Build Auto-Migration Endpoint
+
+**Task:** Create endpoint that migrates incomplete auto-migrating tasks.
+
+**Create `src/app/api/tasks/migrate/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// POST /api/tasks/migrate - Migrate incomplete auto-migrating tasks
+// Note: This endpoint returns tasks that need migration
+// Client decrypts, filters by isCompleted=false && isAutoMigrating=true, then updates entryDate
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { taskIds, newDate } = await request.json();
+  // taskIds = array of task IDs that client determined need migration
+  // newDate = today's date
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    for (const taskId of taskIds) {
+      await client.query(
+        `UPDATE "${session.user.schemaName}"."entries"
+        SET "entryDate" = $1, "updatedAt" = NOW()
+        WHERE id = $2 AND "customType" = 'task'`,
+        [newDate, taskId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return NextResponse.json({
+      success: true,
+      migratedCount: taskIds.length,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+```
+
+**Acceptance Criteria:**
+- Client fetches all tasks before today
+- Client decrypts custom_fields to find isCompleted=false && isAutoMigrating=true
+- Client sends taskIds to migrate endpoint
+- Server updates entryDate to today
+
+---
+
+### 6.4. Build Task Migration Hook
+
+**Task:** Create client-side hook for auto-migration on login.
+
+**Create `src/lib/hooks/useTaskMigration.ts`:**
+```typescript
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+
+export function useTaskMigration() {
+  const [migrating, setMigrating] = useState(false);
+  const [migratedCount, setMigratedCount] = useState(0);
+  const { decryptData, isKeyReady } = useEncryption();
+
+  useEffect(() => {
+    if (isKeyReady) {
+      runMigration();
+    }
+  }, [isKeyReady]);
+
+  const runMigration = async () => {
+    setMigrating(true);
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      // Fetch all tasks (server returns all tasks, we filter client-side)
+      const response = await fetch('/api/tasks');
+      const { tasks } = await response.json();
+
+      // Filter tasks that need migration
+      const tasksToMigrate: string[] = [];
+
+      for (const task of tasks) {
+        // Skip tasks already on today or future
+        if (task.entryDate >= today) continue;
+
+        // Decrypt custom_fields to check isCompleted and isAutoMigrating
+        let isCompleted = false;
+        let isAutoMigrating = true;
+
+        for (const cf of task.custom_fields || []) {
+          if (!cf) continue;
+          try {
+            const fieldData = JSON.parse(await decryptData(cf.encryptedData, cf.iv));
+            if (fieldData.fieldKey === 'isCompleted') isCompleted = fieldData.value;
+            if (fieldData.fieldKey === 'isAutoMigrating') isAutoMigrating = fieldData.value;
+          } catch (e) {
+            console.error('Failed to decrypt custom field:', e);
+          }
+        }
+
+        // Migrate if incomplete and auto-migrating is enabled
+        if (!isCompleted && isAutoMigrating) {
+          tasksToMigrate.push(task.id);
+        }
+      }
+
+      if (tasksToMigrate.length > 0) {
+        // Send migration request
+        const migrateResponse = await fetch('/api/tasks/migrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskIds: tasksToMigrate,
+            newDate: today,
+          }),
+        });
+
+        const result = await migrateResponse.json();
+        setMigratedCount(result.migratedCount);
+      }
+    } catch (error) {
+      console.error('Task migration failed:', error);
+    } finally {
+      setMigrating(false);
+    }
+  };
+
+  return { migrating, migratedCount };
+}
+```
+
+**Acceptance Criteria:**
+- Runs automatically on login when key is ready
+- Fetches all tasks and decrypts custom_fields client-side
+- Identifies incomplete auto-migrating tasks before today
+- Sends migration request to update entryDate
+- Reports count of migrated tasks
+
+---
+
+### 6.5. Build Tasks UI Component
+
+**Task:** Create task list UI with completion toggles.
+
+**Create `src/components/tasks/TasksList.tsx`:**
+```typescript
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+
+interface Task {
+  id: string;
+  encryptedContent: string;
+  iv: string;
+  entryDate: string;
+  custom_fields: any[];
+}
+
+interface DecryptedTask {
+  content: string;
+  isCompleted: boolean;
+  isAutoMigrating: boolean;
+}
+
+interface Props {
+  date: string;
+  topicId: string | null;
+}
+
+export function TasksList({ date, topicId }: Props) {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [decryptedTasks, setDecryptedTasks] = useState<Map<string, DecryptedTask>>(new Map());
+  const { encryptData, decryptData, isKeyReady } = useEncryption();
+
+  useEffect(() => {
+    fetchTasks();
+  }, [date, topicId]);
+
+  useEffect(() => {
+    if (isKeyReady && tasks.length > 0) {
+      decryptTasks();
+    }
+  }, [tasks, isKeyReady]);
+
+  const fetchTasks = async () => {
+    const params = new URLSearchParams({ date });
+    const response = await fetch(`/api/tasks?${params}`);
+    const data = await response.json();
+    setTasks(data.tasks);
+  };
+
+  const decryptTasks = async () => {
+    const decrypted = new Map<string, DecryptedTask>();
+    for (const task of tasks) {
+      try {
+        const content = await decryptData(task.encryptedContent, task.iv);
+
+        let isCompleted = false;
+        let isAutoMigrating = true;
+
+        for (const cf of task.custom_fields || []) {
+          if (!cf) continue;
+          const fieldData = JSON.parse(await decryptData(cf.encryptedData, cf.iv));
+          if (fieldData.fieldKey === 'isCompleted') isCompleted = fieldData.value;
+          if (fieldData.fieldKey === 'isAutoMigrating') isAutoMigrating = fieldData.value;
+        }
+
+        decrypted.set(task.id, { content, isCompleted, isAutoMigrating });
+      } catch (error) {
+        decrypted.set(task.id, { content: 'Decryption failed', isCompleted: false, isAutoMigrating: false });
+      }
+    }
+    setDecryptedTasks(decrypted);
+  };
+
+  const toggleCompletion = async (taskId: string) => {
+    const decrypted = decryptedTasks.get(taskId);
+    if (!decrypted) return;
+
+    const newIsCompleted = !decrypted.isCompleted;
+
+    // Encrypt updated custom_fields
+    const customFields = [
+      { encryptedData: '', iv: '' },
+      { encryptedData: '', iv: '' },
+    ];
+
+    const field1 = await encryptData(JSON.stringify({ fieldKey: 'isCompleted', value: newIsCompleted }));
+    customFields[0] = { encryptedData: field1.ciphertext, iv: field1.iv };
+
+    const field2 = await encryptData(JSON.stringify({ fieldKey: 'isAutoMigrating', value: decrypted.isAutoMigrating }));
+    customFields[1] = { encryptedData: field2.ciphertext, iv: field2.iv };
+
+    await fetch(`/api/tasks/${taskId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customFields }),
+    });
+
+    // Update local state
+    setDecryptedTasks(new Map(decryptedTasks.set(taskId, { ...decrypted, isCompleted: newIsCompleted })));
+  };
+
+  return (
+    <div className="space-y-2">
+      {tasks.map((task) => {
+        const decrypted = decryptedTasks.get(task.id);
+        return (
+          <div
+            key={task.id}
+            className="flex items-center gap-3 p-3 border rounded-md"
+          >
+            <input
+              type="checkbox"
+              checked={decrypted?.isCompleted || false}
+              onChange={() => toggleCompletion(task.id)}
+              className="h-5 w-5 text-indigo-600 rounded"
+            />
+            <span className={decrypted?.isCompleted ? 'line-through text-gray-400' : ''}>
+              {decrypted?.content || 'Decrypting...'}
+            </span>
+            {decrypted?.isAutoMigrating && !decrypted?.isCompleted && (
+              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded ml-auto">
+                Auto-migrate
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+**Acceptance Criteria:**
+- Tasks list filtered by date
+- Tasks decrypted client-side
+- Checkbox toggles completion status
+- Completed tasks show strikethrough
+- Auto-migrating indicator badge
+
+---
+
+### Phase 6 Summary
+
+**Critical Files Created:**
+- ✅ `src/app/api/tasks/route.ts` - Tasks CRUD
+- ✅ `src/app/api/tasks/[id]/complete/route.ts` - Toggle completion
+- ✅ `src/app/api/tasks/migrate/route.ts` - Auto-migration endpoint
+- ✅ `src/lib/hooks/useTaskMigration.ts` - Client-side migration
+- ✅ `src/components/tasks/TasksList.tsx` - Tasks UI
+
+**Acceptance Test:**
+```
+1. Create task on Monday with auto-migrate enabled
+2. Leave task incomplete
+3. Login on Tuesday
+4. Task automatically moves to Tuesday
+5. Complete task on Tuesday
+6. Login on Wednesday
+7. Completed task stays on Tuesday (no migration)
+```
+
+---
 
 ## Phase 7: Goals Tracking System (Week 3-4)
 
 **High-level Goal:** Implement goals and milestones tracking with progress visualization.
 
-### 7.1. Add Goals and Milestones Database Tables
+> **Architecture Note:** Goals and milestones use the WordPress-style `entries` + `custom_fields` model. Goals are entries with `customType = 'goal'`, milestones are entries with `customType = 'milestone'`. They are linked via `entry_relationships`. No separate tables needed.
 
-**Task:** Update schema manager to include goals and milestones tables in user schemas.
+### 7.1. Goals Data Model
 
-**Update `src/lib/db/schemaManager.ts`:**
-```typescript
-// Add after topics table creation
-await client.query(`
-  CREATE TABLE IF NOT EXISTS "${schemaName}"."goals" (
-    id TEXT PRIMARY KEY,
-    "encryptedTitle" TEXT NOT NULL,
-    "encryptedDescription" TEXT NOT NULL,
-    iv TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('short_term', 'long_term')),
-    status TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'in_progress', 'completed', 'archived', 'abandoned')),
-    "targetDate" TIMESTAMP,
-    "progressPercentage" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-    "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
-  );
-`);
+**Goals** are entries with:
+- `customType = 'goal'`
+- `encryptedContent` = goal title/description
+- Custom fields:
+  - `{ fieldKey: 'type', value: 'short_term' | 'long_term' }`
+  - `{ fieldKey: 'status', value: 'not_started' | 'in_progress' | 'completed' | 'archived' | 'abandoned' }`
+  - `{ fieldKey: 'targetDate', value: '2025-12-31' }`
+  - `{ fieldKey: 'progressPercentage', value: 66 }` (auto-calculated from milestones)
 
-await client.query(`
-  CREATE TABLE IF NOT EXISTS "${schemaName}"."milestones" (
-    id TEXT PRIMARY KEY,
-    "goalId" TEXT NOT NULL REFERENCES "${schemaName}"."goals"(id) ON DELETE CASCADE,
-    "encryptedTitle" TEXT NOT NULL,
-    "encryptedDescription" TEXT,
-    iv TEXT NOT NULL,
-    "isCompleted" BOOLEAN NOT NULL DEFAULT false,
-    "completedAt" TIMESTAMP,
-    "orderIndex" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-    "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
-  );
-`);
+**Milestones** are entries with:
+- `customType = 'milestone'`
+- `encryptedContent` = milestone title/description
+- Custom fields:
+  - `{ fieldKey: 'orderIndex', value: 1 }`
+  - `{ fieldKey: 'isCompleted', value: false }`
+  - `{ fieldKey: 'completedAt', value: '2025-01-15T10:30:00Z' }`
 
-// Add indexes
-await client.query(`
-  CREATE INDEX IF NOT EXISTS idx_goals_type ON "${schemaName}"."goals"(type);
-`);
-
-await client.query(`
-  CREATE INDEX IF NOT EXISTS idx_goals_status ON "${schemaName}"."goals"(status);
-`);
-
-await client.query(`
-  CREATE INDEX IF NOT EXISTS idx_milestones_goal ON "${schemaName}"."milestones"("goalId");
-`);
-```
+**Goal ↔ Milestone Link:**
+- `entry_relationships` table with `relationshipType = 'goal_milestone'`
+- `entryId` = milestone ID, `relatedToId` = goal ID
 
 **Acceptance Criteria:**
-- Goals table created in user schemas
-- Milestones table created with foreign key to goals
-- Indexes created for performance
-- Type and status constraints enforced
+- Goals stored as entries with customType = 'goal'
+- Milestones stored as entries with customType = 'milestone'
+- Linked via entry_relationships
+- All field values encrypted in custom_fields
 
 ---
 
 ### 7.2. Build Goals API Endpoints
 
-**Task:** Create CRUD endpoints for goals.
+**Task:** Create CRUD endpoints for goals using entries + custom_fields.
 
 **Create `src/app/api/goals/route.ts`:**
 ```typescript
@@ -1698,11 +3984,13 @@ import { z } from 'zod';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const createGoalSchema = z.object({
-  encryptedTitle: z.string(),
-  encryptedDescription: z.string(),
+  encryptedContent: z.string(),
   iv: z.string(),
-  type: z.enum(['short_term', 'long_term']),
-  targetDate: z.string().datetime().optional(),
+  searchTokens: z.array(z.string()).optional(),
+  customFields: z.array(z.object({
+    encryptedData: z.string(),
+    iv: z.string(),
+  })),
 });
 
 // GET /api/goals - List all goals
@@ -1712,34 +4000,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const type = searchParams.get('type'); // Filter by type
-  const status = searchParams.get('status'); // Filter by status
-
   const client = await pool.connect();
   try {
-    let query = `SELECT * FROM "${session.user.schemaName}"."goals"`;
-    const params: any[] = [];
-    const conditions: string[] = [];
+    // Get all entries with customType = 'goal'
+    const entriesResult = await client.query(`
+      SELECT e.*, json_agg(cf.*) as custom_fields
+      FROM "${session.user.schemaName}"."entries" e
+      LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+      WHERE e."customType" = 'goal'
+      GROUP BY e.id
+      ORDER BY e."createdAt" DESC
+    `);
 
-    if (type) {
-      conditions.push(`type = $${params.length + 1}`);
-      params.push(type);
-    }
-
-    if (status) {
-      conditions.push(`status = $${params.length + 1}`);
-      params.push(status);
-    }
-
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-
-    query += ' ORDER BY "createdAt" DESC';
-
-    const result = await client.query(query, params);
-    return NextResponse.json({ goals: result.rows });
+    return NextResponse.json({ goals: entriesResult.rows });
   } finally {
     client.release();
   }
@@ -1758,22 +4031,41 @@ export async function POST(request: NextRequest) {
 
     const client = await pool.connect();
     try {
-      const result = await client.query(
-        `INSERT INTO "${session.user.schemaName}"."goals"
-        (id, "encryptedTitle", "encryptedDescription", iv, type, "targetDate", "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      await client.query('BEGIN');
+
+      const goalId = `goal_${Date.now()}`;
+
+      // Create entry with customType = 'goal'
+      const entryResult = await client.query(
+        `INSERT INTO "${session.user.schemaName}"."entries"
+        (id, "encryptedContent", iv, "searchTokens", "customType", "entryDate", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, 'goal', CURRENT_DATE, NOW(), NOW())
         RETURNING *`,
         [
-          `goal_${Date.now()}`,
-          validatedData.encryptedTitle,
-          validatedData.encryptedDescription,
+          goalId,
+          validatedData.encryptedContent,
           validatedData.iv,
-          validatedData.type,
-          validatedData.targetDate || null,
+          validatedData.searchTokens || [],
         ]
       );
 
-      return NextResponse.json({ goal: result.rows[0] }, { status: 201 });
+      // Create custom_fields for goal metadata (type, status, targetDate, progressPercentage)
+      for (let i = 0; i < validatedData.customFields.length; i++) {
+        const cf = validatedData.customFields[i];
+        await client.query(
+          `INSERT INTO "${session.user.schemaName}"."custom_fields"
+          (id, "entryId", "encryptedData", iv)
+          VALUES ($1, $2, $3, $4)`,
+          [`cf_${goalId}_${i}`, goalId, cf.encryptedData, cf.iv]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      return NextResponse.json({ goal: entryResult.rows[0] }, { status: 201 });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     } finally {
       client.release();
     }
@@ -1795,7 +4087,7 @@ import { Pool } from 'pg';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// GET /api/goals/[id] - Get single goal
+// GET /api/goals/[id] - Get single goal with milestones
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -1807,22 +4099,30 @@ export async function GET(
 
   const client = await pool.connect();
   try {
-    const goalResult = await client.query(
-      `SELECT * FROM "${session.user.schemaName}"."goals" WHERE id = $1`,
-      [params.id]
-    );
+    // Get goal entry with custom_fields
+    const goalResult = await client.query(`
+      SELECT e.*, json_agg(cf.*) as custom_fields
+      FROM "${session.user.schemaName}"."entries" e
+      LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+      WHERE e.id = $1 AND e."customType" = 'goal'
+      GROUP BY e.id
+    `, [params.id]);
 
     if (goalResult.rows.length === 0) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
     }
 
-    // Fetch milestones for this goal
-    const milestonesResult = await client.query(
-      `SELECT * FROM "${session.user.schemaName}"."milestones"
-      WHERE "goalId" = $1
-      ORDER BY "orderIndex" ASC`,
-      [params.id]
-    );
+    // Fetch milestones for this goal via entry_relationships
+    const milestonesResult = await client.query(`
+      SELECT m.*, json_agg(cf.*) as custom_fields
+      FROM "${session.user.schemaName}"."entries" m
+      JOIN "${session.user.schemaName}"."entry_relationships" er
+        ON er."entryId" = m.id AND er."relationshipType" = 'goal_milestone'
+      LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = m.id
+      WHERE er."relatedToId" = $1 AND m."customType" = 'milestone'
+      GROUP BY m.id
+      ORDER BY m."createdAt" ASC
+    `, [params.id]);
 
     return NextResponse.json({
       goal: goalResult.rows[0],
@@ -1833,66 +4133,7 @@ export async function GET(
   }
 }
 
-// PUT /api/goals/[id] - Update goal
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const client = await pool.connect();
-
-  try {
-    const updates: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
-
-    // Allow updating specific fields
-    if (body.status !== undefined) {
-      updates.push(`status = $${paramIndex++}`);
-      values.push(body.status);
-    }
-
-    if (body.progressPercentage !== undefined) {
-      updates.push(`"progressPercentage" = $${paramIndex++}`);
-      values.push(body.progressPercentage);
-    }
-
-    if (body.targetDate !== undefined) {
-      updates.push(`"targetDate" = $${paramIndex++}`);
-      values.push(body.targetDate);
-    }
-
-    if (updates.length === 0) {
-      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-    }
-
-    updates.push(`"updatedAt" = NOW()`);
-    values.push(params.id);
-
-    const result = await client.query(
-      `UPDATE "${session.user.schemaName}"."goals"
-      SET ${updates.join(', ')}
-      WHERE id = $${paramIndex}
-      RETURNING *`,
-      values
-    );
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ goal: result.rows[0] });
-  } finally {
-    client.release();
-  }
-}
-
-// DELETE /api/goals/[id] - Delete goal
+// DELETE /api/goals/[id] - Delete goal (and its milestones)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -1904,16 +4145,33 @@ export async function DELETE(
 
   const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
+    // Delete milestones linked to this goal
+    await client.query(`
+      DELETE FROM "${session.user.schemaName}"."entries"
+      WHERE id IN (
+        SELECT er."entryId" FROM "${session.user.schemaName}"."entry_relationships" er
+        WHERE er."relatedToId" = $1 AND er."relationshipType" = 'goal_milestone'
+      )
+    `, [params.id]);
+
+    // Delete the goal entry
     const result = await client.query(
-      `DELETE FROM "${session.user.schemaName}"."goals" WHERE id = $1 RETURNING id`,
+      `DELETE FROM "${session.user.schemaName}"."entries" WHERE id = $1 AND "customType" = 'goal' RETURNING id`,
       [params.id]
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
     }
 
+    await client.query('COMMIT');
     return NextResponse.json({ message: 'Goal deleted successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }
@@ -1921,19 +4179,18 @@ export async function DELETE(
 ```
 
 **Acceptance Criteria:**
-- Can GET all goals (with type/status filters)
-- Can POST new goal with encrypted data
-- Can GET single goal with milestones
-- Can PUT to update goal status/progress
-- Can DELETE goal (cascades to milestones)
+- Can GET all goals with their custom_fields
+- Can POST new goal as entry with customType='goal' + custom_fields
+- Can GET single goal with milestones (via entry_relationships)
+- Can DELETE goal (cascades to milestones via entry_relationships)
 
 ---
 
 ### 7.3. Build Milestones API Endpoints
 
-**Task:** Create endpoints for milestone management.
+**Task:** Create endpoints for milestone management using entries + custom_fields.
 
-**Create `src/app/api/goals/[id]/milestones/route.ts`:**
+**Create `src/app/api/goals/[goalId]/milestones/route.ts`:**
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -1944,16 +4201,18 @@ import { z } from 'zod';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const createMilestoneSchema = z.object({
-  encryptedTitle: z.string(),
-  encryptedDescription: z.string().optional(),
+  encryptedContent: z.string(),
   iv: z.string(),
-  orderIndex: z.number().int().min(0),
+  customFields: z.array(z.object({
+    encryptedData: z.string(),
+    iv: z.string(),
+  })),
 });
 
-// POST /api/goals/[id]/milestones - Create milestone
+// POST /api/goals/[goalId]/milestones - Create milestone linked to goal
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { goalId: string } }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -1966,32 +4225,53 @@ export async function POST(
 
     const client = await pool.connect();
     try {
+      await client.query('BEGIN');
+
       // Verify goal exists
       const goalCheck = await client.query(
-        `SELECT id FROM "${session.user.schemaName}"."goals" WHERE id = $1`,
-        [params.id]
+        `SELECT id FROM "${session.user.schemaName}"."entries" WHERE id = $1 AND "customType" = 'goal'`,
+        [params.goalId]
       );
 
       if (goalCheck.rows.length === 0) {
         return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
       }
 
-      const result = await client.query(
-        `INSERT INTO "${session.user.schemaName}"."milestones"
-        (id, "goalId", "encryptedTitle", "encryptedDescription", iv, "orderIndex", "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      const milestoneId = `milestone_${Date.now()}`;
+
+      // Create milestone as entry with customType = 'milestone'
+      const entryResult = await client.query(
+        `INSERT INTO "${session.user.schemaName}"."entries"
+        (id, "encryptedContent", iv, "customType", "entryDate", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, 'milestone', CURRENT_DATE, NOW(), NOW())
         RETURNING *`,
-        [
-          `milestone_${Date.now()}`,
-          params.id,
-          validatedData.encryptedTitle,
-          validatedData.encryptedDescription || '',
-          validatedData.iv,
-          validatedData.orderIndex,
-        ]
+        [milestoneId, validatedData.encryptedContent, validatedData.iv]
       );
 
-      return NextResponse.json({ milestone: result.rows[0] }, { status: 201 });
+      // Create custom_fields for milestone (orderIndex, isCompleted)
+      for (let i = 0; i < validatedData.customFields.length; i++) {
+        const cf = validatedData.customFields[i];
+        await client.query(
+          `INSERT INTO "${session.user.schemaName}"."custom_fields"
+          (id, "entryId", "encryptedData", iv)
+          VALUES ($1, $2, $3, $4)`,
+          [`cf_${milestoneId}_${i}`, milestoneId, cf.encryptedData, cf.iv]
+        );
+      }
+
+      // Link milestone to goal via entry_relationships
+      await client.query(
+        `INSERT INTO "${session.user.schemaName}"."entry_relationships"
+        (id, "entryId", "relatedToId", "relationshipType", "createdAt")
+        VALUES ($1, $2, $3, 'goal_milestone', NOW())`,
+        [`rel_${milestoneId}`, milestoneId, params.goalId]
+      );
+
+      await client.query('COMMIT');
+      return NextResponse.json({ milestone: entryResult.rows[0] }, { status: 201 });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     } finally {
       client.release();
     }
@@ -2006,7 +4286,14 @@ export async function POST(
 
 **Create `src/app/api/goals/[goalId]/milestones/[milestoneId]/route.ts`:**
 ```typescript
-// PUT to toggle completion
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// PUT to update milestone custom_fields (completion status, etc.)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { goalId: string; milestoneId: string } }
@@ -2017,58 +4304,51 @@ export async function PUT(
   }
 
   const body = await request.json();
+  // body.customFields = [{ encryptedData, iv }] for updated fields
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    // Toggle milestone completion
-    const milestoneResult = await client.query(
-      `UPDATE "${session.user.schemaName}"."milestones"
-      SET "isCompleted" = $1, "completedAt" = $2, "updatedAt" = NOW()
-      WHERE id = $3 AND "goalId" = $4
-      RETURNING *`,
-      [
-        body.isCompleted,
-        body.isCompleted ? new Date().toISOString() : null,
-        params.milestoneId,
-        params.goalId,
-      ]
-    );
+    // Verify milestone exists and is linked to goal
+    const milestoneCheck = await client.query(`
+      SELECT m.id FROM "${session.user.schemaName}"."entries" m
+      JOIN "${session.user.schemaName}"."entry_relationships" er
+        ON er."entryId" = m.id AND er."relationshipType" = 'goal_milestone'
+      WHERE m.id = $1 AND er."relatedToId" = $2 AND m."customType" = 'milestone'
+    `, [params.milestoneId, params.goalId]);
 
-    if (milestoneResult.rows.length === 0) {
+    if (milestoneCheck.rows.length === 0) {
       await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });
     }
 
-    // Recalculate goal progress
-    const progressResult = await client.query(
-      `SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN "isCompleted" = true THEN 1 ELSE 0 END) as completed
-      FROM "${session.user.schemaName}"."milestones"
-      WHERE "goalId" = $1`,
-      [params.goalId]
+    // Delete old custom_fields and insert new ones
+    await client.query(
+      `DELETE FROM "${session.user.schemaName}"."custom_fields" WHERE "entryId" = $1`,
+      [params.milestoneId]
     );
 
-    const { total, completed } = progressResult.rows[0];
-    const progressPercentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const newStatus = progressPercentage === 100 ? 'completed' : 'in_progress';
+    for (let i = 0; i < body.customFields.length; i++) {
+      const cf = body.customFields[i];
+      await client.query(
+        `INSERT INTO "${session.user.schemaName}"."custom_fields"
+        (id, "entryId", "encryptedData", iv)
+        VALUES ($1, $2, $3, $4)`,
+        [`cf_${params.milestoneId}_${i}`, params.milestoneId, cf.encryptedData, cf.iv]
+      );
+    }
 
-    // Update goal progress
+    // Update milestone entry timestamp
     await client.query(
-      `UPDATE "${session.user.schemaName}"."goals"
-      SET "progressPercentage" = $1, status = $2, "updatedAt" = NOW()
-      WHERE id = $3`,
-      [progressPercentage, newStatus, params.goalId]
+      `UPDATE "${session.user.schemaName}"."entries" SET "updatedAt" = NOW() WHERE id = $1`,
+      [params.milestoneId]
     );
 
     await client.query('COMMIT');
 
-    return NextResponse.json({
-      milestone: milestoneResult.rows[0],
-      goalProgress: progressPercentage,
-    });
+    // Note: Goal progress recalculation happens client-side after decrypting all milestone custom_fields
+    return NextResponse.json({ success: true, milestoneId: params.milestoneId });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -2079,16 +4359,16 @@ export async function PUT(
 ```
 
 **Acceptance Criteria:**
-- Can create milestone for goal
-- Can update milestone completion status
-- Goal progress recalculates automatically
-- Goal status updates to 'completed' when 100%
+- Can create milestone as entry with customType='milestone' + custom_fields
+- Milestone linked to goal via entry_relationships
+- Can update milestone custom_fields (isCompleted, completedAt)
+- Goal progress calculated client-side from decrypted milestone custom_fields
 
 ---
 
 ### 7.4. Build Goals Dashboard Component
 
-**Task:** Create UI for viewing all goals.
+**Task:** Create UI for viewing all goals using entries + custom_fields.
 
 **Create `src/components/goals/GoalsDashboard.tsx`:**
 ```typescript
@@ -2097,21 +4377,32 @@ export async function PUT(
 import { useEffect, useState } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 
+interface CustomField {
+  id: string;
+  encryptedData: string;
+  iv: string;
+}
+
 interface Goal {
   id: string;
-  encryptedTitle: string;
-  encryptedDescription: string;
+  encryptedContent: string;
   iv: string;
+  customType: 'goal';
+  custom_fields: CustomField[];
+  createdAt: string;
+}
+
+interface DecryptedGoal {
+  content: string;
   type: 'short_term' | 'long_term';
   status: string;
   targetDate: string | null;
   progressPercentage: number;
-  createdAt: string;
 }
 
 export function GoalsDashboard() {
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [decryptedGoals, setDecryptedGoals] = useState<Map<string, { title: string; description: string }>>(new Map());
+  const [decryptedGoals, setDecryptedGoals] = useState<Map<string, DecryptedGoal>>(new Map());
   const [activeTab, setActiveTab] = useState<'short_term' | 'long_term'>('short_term');
   const { decryptData, isKeyReady } = useEncryption();
 
@@ -2126,24 +4417,48 @@ export function GoalsDashboard() {
   }, [goals, isKeyReady]);
 
   const fetchGoals = async () => {
-    const response = await fetch(`/api/goals?type=${activeTab}`);
+    const response = await fetch('/api/goals');
     const data = await response.json();
     setGoals(data.goals);
   };
 
   const decryptGoals = async () => {
-    const decrypted = new Map();
+    const decrypted = new Map<string, DecryptedGoal>();
     for (const goal of goals) {
       try {
-        const title = await decryptData(goal.encryptedTitle, goal.iv);
-        const description = await decryptData(goal.encryptedDescription, goal.iv);
-        decrypted.set(goal.id, { title, description });
+        // Decrypt content
+        const content = await decryptData(goal.encryptedContent, goal.iv);
+
+        // Decrypt each custom_field to get type, status, targetDate, progressPercentage
+        let type: 'short_term' | 'long_term' = 'short_term';
+        let status = 'not_started';
+        let targetDate = null;
+        let progressPercentage = 0;
+
+        for (const cf of goal.custom_fields || []) {
+          if (!cf) continue;
+          const fieldData = JSON.parse(await decryptData(cf.encryptedData, cf.iv));
+          switch (fieldData.fieldKey) {
+            case 'type': type = fieldData.value; break;
+            case 'status': status = fieldData.value; break;
+            case 'targetDate': targetDate = fieldData.value; break;
+            case 'progressPercentage': progressPercentage = fieldData.value; break;
+          }
+        }
+
+        decrypted.set(goal.id, { content, type, status, targetDate, progressPercentage });
       } catch (error) {
         console.error('Decryption failed for goal:', goal.id);
       }
     }
     setDecryptedGoals(decrypted);
   };
+
+  // Filter goals by type (client-side after decryption)
+  const filteredGoals = goals.filter(goal => {
+    const decrypted = decryptedGoals.get(goal.id);
+    return decrypted?.type === activeTab;
+  });
 
   return (
     <div className="p-6">
@@ -2172,36 +4487,33 @@ export function GoalsDashboard() {
 
       {/* Goals Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {goals.map((goal) => {
+        {filteredGoals.map((goal) => {
           const decrypted = decryptedGoals.get(goal.id);
           return (
             <div key={goal.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
               <h3 className="text-lg font-semibold mb-2">
-                {decrypted?.title || 'Decrypting...'}
+                {decrypted?.content || 'Decrypting...'}
               </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                {decrypted?.description || ''}
-              </p>
 
               {/* Progress Bar */}
               <div className="mb-2">
                 <div className="flex justify-between text-sm mb-1">
                   <span>Progress</span>
-                  <span>{goal.progressPercentage}%</span>
+                  <span>{decrypted?.progressPercentage || 0}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
                     className="bg-indigo-600 h-2 rounded-full transition-all"
-                    style={{ width: `${goal.progressPercentage}%` }}
+                    style={{ width: `${decrypted?.progressPercentage || 0}%` }}
                   />
                 </div>
               </div>
 
               {/* Meta Info */}
               <div className="flex justify-between text-xs text-gray-500 mt-4">
-                <span className="capitalize">{goal.status.replace('_', ' ')}</span>
-                {goal.targetDate && (
-                  <span>Due: {new Date(goal.targetDate).toLocaleDateString()}</span>
+                <span className="capitalize">{decrypted?.status?.replace('_', ' ') || 'Loading...'}</span>
+                {decrypted?.targetDate && (
+                  <span>Due: {new Date(decrypted.targetDate).toLocaleDateString()}</span>
                 )}
               </div>
             </div>
