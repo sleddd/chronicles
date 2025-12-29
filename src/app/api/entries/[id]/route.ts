@@ -30,7 +30,35 @@ export async function GET(
       return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ entry: result.rows[0] });
+    const entry = result.rows[0];
+
+    // For goals, include full milestone entries
+    if (entry.customType === 'goal') {
+      const milestonesResult = await client.query(`
+        SELECT e.*, json_agg(cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
+        FROM "${session.user.schemaName}"."entries" e
+        LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+        WHERE e.id IN (
+          SELECT "entryId" FROM "${session.user.schemaName}"."entry_relationships"
+          WHERE "relatedToId" = $1 AND "relationshipType" = 'goal_milestone'
+        )
+        GROUP BY e.id
+        ORDER BY e."createdAt" ASC
+      `, [id]);
+      entry.milestones = milestonesResult.rows;
+    }
+
+    // For milestones, include linked goal IDs
+    if (entry.customType === 'milestone') {
+      const goalsResult = await client.query(`
+        SELECT "relatedToId" as "goalId"
+        FROM "${session.user.schemaName}"."entry_relationships"
+        WHERE "entryId" = $1 AND "relationshipType" = 'goal_milestone'
+      `, [id]);
+      entry.goalIds = goalsResult.rows.map(row => row.goalId);
+    }
+
+    return NextResponse.json({ entry });
   } finally {
     client.release();
   }
@@ -73,6 +101,14 @@ export async function PUT(
     if ('topicId' in body) {
       updates.push(`"topicId" = $${paramIndex++}`);
       values.push(body.topicId);
+    }
+    if (body.entryDate !== undefined) {
+      updates.push(`"entryDate" = $${paramIndex++}`);
+      values.push(body.entryDate);
+    }
+    if (body.customType !== undefined) {
+      updates.push(`"customType" = $${paramIndex++}`);
+      values.push(body.customType);
     }
 
     updates.push(`"updatedAt" = NOW()`);

@@ -34,8 +34,10 @@ export async function GET(request: NextRequest) {
 
   const client = await pool.connect();
   try {
+    // Base query with custom fields
     let query = `
-      SELECT e.*, json_agg(cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
+      SELECT e.*,
+        json_agg(DISTINCT cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
       FROM "${session.user.schemaName}"."entries" e
       LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
       WHERE 1=1
@@ -66,6 +68,60 @@ export async function GET(request: NextRequest) {
     query += ` GROUP BY e.id ORDER BY e."entryDate" DESC, e."createdAt" DESC`;
 
     const result = await client.query(query, params);
+
+    // For goals and milestones, fetch relationships
+    if (customType === 'goal' || customType === 'milestone') {
+      const entryIds = result.rows.map(row => row.id);
+
+      if (entryIds.length > 0) {
+        if (customType === 'goal') {
+          // For goals, get linked milestone IDs
+          const relResult = await client.query(
+            `SELECT "relatedToId" as "goalId", "entryId" as "milestoneId"
+             FROM "${session.user.schemaName}"."entry_relationships"
+             WHERE "relatedToId" = ANY($1) AND "relationshipType" = 'goal_milestone'`,
+            [entryIds]
+          );
+
+          // Create a map of goalId -> milestoneIds
+          const goalMilestones: Record<string, string[]> = {};
+          for (const rel of relResult.rows) {
+            if (!goalMilestones[rel.goalId]) {
+              goalMilestones[rel.goalId] = [];
+            }
+            goalMilestones[rel.goalId].push(rel.milestoneId);
+          }
+
+          // Add milestoneIds to each goal entry
+          for (const entry of result.rows) {
+            entry.milestoneIds = goalMilestones[entry.id] || [];
+          }
+        } else if (customType === 'milestone') {
+          // For milestones, get linked goal IDs
+          const relResult = await client.query(
+            `SELECT "entryId" as "milestoneId", "relatedToId" as "goalId"
+             FROM "${session.user.schemaName}"."entry_relationships"
+             WHERE "entryId" = ANY($1) AND "relationshipType" = 'goal_milestone'`,
+            [entryIds]
+          );
+
+          // Create a map of milestoneId -> goalIds
+          const milestoneGoals: Record<string, string[]> = {};
+          for (const rel of relResult.rows) {
+            if (!milestoneGoals[rel.milestoneId]) {
+              milestoneGoals[rel.milestoneId] = [];
+            }
+            milestoneGoals[rel.milestoneId].push(rel.goalId);
+          }
+
+          // Add goalIds to each milestone entry
+          for (const entry of result.rows) {
+            entry.goalIds = milestoneGoals[entry.id] || [];
+          }
+        }
+      }
+    }
+
     return NextResponse.json({ entries: result.rows });
   } finally {
     client.release();

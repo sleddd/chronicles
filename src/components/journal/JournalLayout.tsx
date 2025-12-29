@@ -4,10 +4,14 @@ import { useState, useCallback, useEffect } from 'react';
 import { EntriesList } from '@/components/journal/EntriesList';
 import { EntryEditor } from '@/components/journal/EntryEditor';
 import { useTimezone } from '@/lib/hooks/useTimezone';
+import { useTaskMigration } from '@/lib/hooks/useTaskMigration';
 
 export function JournalLayout() {
   const { today, loading: timezoneLoading } = useTimezone();
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+
+  // Activate task auto-migration on app load and at midnight
+  useTaskMigration(today);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [refreshKey, setRefreshKey] = useState(0);
 
