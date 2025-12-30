@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
 import { Pool as PgPool } from 'pg';
@@ -9,29 +8,48 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function getConnectionString(): string {
-  const connectionString = process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL;
+function getAccelerateUrl(): string | undefined {
+  // PRISMA_DATABASE_URL is the Accelerate proxy URL
+  const url = process.env.PRISMA_DATABASE_URL;
+  if (url && (url.includes('prisma://') || url.includes('prisma-data.net'))) {
+    return url;
+  }
+  return undefined;
+}
+
+function getDirectConnectionString(): string {
+  // DATABASE_URL is the direct Neon/PostgreSQL connection
+  const connectionString = process.env.DATABASE_URL || process.env.PRISMA_DATABASE_URL;
   if (!connectionString) {
     throw new Error('Database connection string not found');
   }
   return connectionString;
 }
 
-function isNeonDatabase(): boolean {
-  const connectionString = getConnectionString();
+function isNeonDatabase(connectionString: string): boolean {
   return connectionString.includes('neon.tech') || connectionString.includes('neon.database');
 }
 
 function createPrismaClient() {
-  const connectionString = getConnectionString();
+  const accelerateUrl = getAccelerateUrl();
 
-  // Use Neon adapter for Neon databases (Vercel)
-  if (isNeonDatabase()) {
-    // Configure Neon for serverless with WebSocket support
+  // Use Prisma Accelerate if available (Prisma Postgres)
+  if (accelerateUrl) {
+    return new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    });
+  }
+
+  // For local development or direct connections
+  const connectionString = getDirectConnectionString();
+
+  // Use Neon serverless for Neon databases
+  if (isNeonDatabase(connectionString)) {
     neonConfig.webSocketConstructor = ws;
-    neonConfig.poolQueryViaFetch = true; // Use HTTP fetch for better serverless performance
-
-    const adapter = new PrismaNeon({ connectionString });
+    neonConfig.poolQueryViaFetch = true;
+    const pool = new NeonPool({ connectionString });
+    const { PrismaNeon } = require('@prisma/adapter-neon');
+    const adapter = new PrismaNeon(pool);
     return new PrismaClient({
       adapter,
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
@@ -58,12 +76,12 @@ export function getUserSchemaName(accountId: string): string {
 }
 
 function createQueryPool(): NeonPool | PgPool {
-  const connectionString = process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL || process.env.PRISMA_DATABASE_URL;
   if (!connectionString) {
     throw new Error('Database connection string not found');
   }
 
-  if (isNeonDatabase()) {
+  if (isNeonDatabase(connectionString)) {
     return new NeonPool({ connectionString });
   }
   return new PgPool({ connectionString });

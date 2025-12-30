@@ -4,10 +4,20 @@ import crypto from 'crypto';
 import ws from 'ws';
 
 function getConnectionString(): string {
-  const connectionString = process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL;
+  // For raw SQL queries, we need the direct database connection (not Accelerate proxy)
+  // DATABASE_URL = direct Neon connection
+  // PRISMA_DATABASE_URL = Accelerate proxy (can't use for raw SQL)
+  const connectionString = process.env.DATABASE_URL;
+
   if (!connectionString) {
-    throw new Error('Database connection string not found');
+    throw new Error('DATABASE_URL not found. Raw SQL queries require a direct database connection.');
   }
+
+  // If we somehow got an Accelerate URL, we can't use it for raw queries
+  if (connectionString.includes('prisma://') || connectionString.includes('prisma-data.net')) {
+    throw new Error('DATABASE_URL must be a direct PostgreSQL connection, not an Accelerate proxy URL.');
+  }
+
   return connectionString;
 }
 
