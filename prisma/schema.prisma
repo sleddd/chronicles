@@ -1,11 +1,13 @@
-generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters", "multiSchema"]
-}
-
+// Define database connection via the `DATABASE_URL` env var
 datasource db {
   provider = "postgresql"
   schemas  = ["public", "auth"]
+}
+
+// Define custom output path for generated Prisma Client
+generator client {
+  provider = "prisma-client"
+  output   = "/app/generated/prisma-client"
 }
 // ============================================
 // AUTH SCHEMA - Shared authentication tables
