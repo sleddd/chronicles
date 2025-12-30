@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { withAccelerate } from '@prisma/extension-accelerate';
 import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
 import { Pool as PgPool } from 'pg';
 import ws from 'ws';
@@ -9,45 +8,26 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function getAccelerateUrl(): string | undefined {
-  // PRISMA_DATABASE_URL is the Accelerate proxy URL (starts with prisma://)
-  const url = process.env.PRISMA_DATABASE_URL;
-  if (url && (url.startsWith('prisma://') || url.startsWith('prisma+postgres://'))) {
-    return url;
-  }
-  return undefined;
-}
-
-function getDirectConnectionString(): string {
-  // DATABASE_URL is the direct Neon/PostgreSQL connection
-  const connectionString = process.env.DATABASE_URL || process.env.PRISMA_DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('Database connection string not found');
-  }
-  return connectionString;
-}
-
 function isNeonDatabase(connectionString: string): boolean {
   return connectionString.includes('neon.tech') || connectionString.includes('neon.database');
 }
 
 function createPrismaClient(): PrismaClient {
-  const accelerateUrl = getAccelerateUrl();
+  // Debug logging for production troubleshooting
+  console.log('[Prisma] DATABASE_URL format:', process.env.DATABASE_URL?.substring(0, 20) + '...');
 
-  // Use Prisma Accelerate if available (Prisma Postgres)
-  // Prisma 7 requires accelerateUrl to be passed explicitly
-  if (accelerateUrl) {
-    return new PrismaClient({
-      accelerateUrl,
-      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    }).$extends(withAccelerate()) as unknown as PrismaClient;
+  // Use direct DATABASE_URL connection (bypassing Accelerate due to timeout issues)
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL not found');
   }
 
-  // For local development or direct connections
-  const connectionString = getDirectConnectionString();
+  console.log('[Prisma] Using direct connection');
 
   // Use Neon serverless for Neon databases
   if (isNeonDatabase(connectionString)) {
+    console.log('[Prisma] Detected Neon database, using NeonPool with @prisma/adapter-neon');
     neonConfig.webSocketConstructor = ws;
     neonConfig.poolQueryViaFetch = true;
     const pool = new NeonPool({ connectionString });
@@ -60,6 +40,7 @@ function createPrismaClient(): PrismaClient {
   }
 
   // Use pg adapter for local PostgreSQL (Prisma 7 requires an adapter)
+  console.log('[Prisma] Using local PostgreSQL with @prisma/adapter-pg');
   const pool = new PgPool({ connectionString });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({
@@ -79,12 +60,14 @@ export function getUserSchemaName(accountId: string): string {
 }
 
 function createQueryPool(): NeonPool | PgPool {
-  const connectionString = process.env.DATABASE_URL || process.env.PRISMA_DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error('Database connection string not found');
+    throw new Error('DATABASE_URL not found');
   }
 
   if (isNeonDatabase(connectionString)) {
+    neonConfig.webSocketConstructor = ws;
+    neonConfig.poolQueryViaFetch = true;
     return new NeonPool({ connectionString });
   }
   return new PgPool({ connectionString });
