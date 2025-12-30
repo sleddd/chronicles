@@ -54,16 +54,16 @@ export function JournalLayout({ initialEntryId }: Props) {
   }
 
   return (
-    <div className="flex flex-row h-full bg-white">
+    <div className="flex flex-row h-full bg-white min-h-0">
       {/* Entries list - collapses on mobile when editor expanded */}
       <div
-        className={`border-r bg-gray-50 overflow-auto transition-all duration-300 ${
+        className={`border-r bg-gray-50 transition-all duration-300 min-h-0 ${
           isEditorCollapsed
             ? 'flex-1 md:w-1/3 md:flex-none'
             : 'w-0 md:w-1/3 overflow-hidden'
         }`}
       >
-        <div className={`${isEditorCollapsed ? 'block' : 'hidden md:block'}`}>
+        <div className={`h-full overflow-hidden ${isEditorCollapsed ? 'block' : 'hidden md:block'}`}>
           <EntriesList
             key={refreshKey}
             selectedDate={selectedDate}

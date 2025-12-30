@@ -341,7 +341,7 @@ export function EntriesList({
   };
 
   return (
-    <div className="p-4 bg-gray-50 h-full flex flex-col">
+    <div className="p-4 bg-gray-50 h-full flex flex-col min-h-0">
       {/* Collapsible Mini Calendar */}
       <div className="mb-4 bg-white border rounded-lg overflow-hidden">
         <button
@@ -526,7 +526,7 @@ export function EntriesList({
       </form>
 
       {/* Entries List */}
-      <div className="flex-1 overflow-auto space-y-2">
+      <div className="flex-1 overflow-auto space-y-2 min-h-0">
         {viewMode === 'date' ? (
           // Date view - flat list
           <>

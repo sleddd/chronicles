@@ -26,7 +26,7 @@ export default async function Home({ searchParams }: PageProps) {
     <div className="h-screen flex flex-col bg-white">
       <Header />
       <PasswordReentryModal />
-      <div className="flex-1 overflow-hidden bg-white">
+      <div className="flex-1 overflow-hidden bg-white min-h-0">
         <JournalLayout key={isNewEntry ? 'new' : initialEntryId || 'default'} initialEntryId={initialEntryId} />
       </div>
     </div>
