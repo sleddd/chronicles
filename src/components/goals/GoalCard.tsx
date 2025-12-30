@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface CustomField {
   id: string;
@@ -37,8 +40,6 @@ interface Props {
   customFields: CustomField[] | null;
   milestones: Milestone[];
   onUnlinkMilestone: (goalId: string, milestoneId: string) => void;
-  onGoalClick: (goalId: string) => void;
-  isSelected?: boolean;
 }
 
 export function GoalCard({
@@ -48,13 +49,38 @@ export function GoalCard({
   customFields,
   milestones,
   onUnlinkMilestone,
-  onGoalClick,
-  isSelected,
 }: Props) {
+  const router = useRouter();
   const { decryptData, isKeyReady } = useEncryption();
   const [title, setTitle] = useState<string>('');
   const [goalFields, setGoalFields] = useState<GoalCustomFields | null>(null);
   const [decryptedMilestones, setDecryptedMilestones] = useState<DecryptedMilestone[]>([]);
+  const [milestonesExpanded, setMilestonesExpanded] = useState(false);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: goalId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleEditGoal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/?entry=${goalId}`);
+  };
+
+  const handleEditMilestone = (e: React.MouseEvent, milestoneId: string) => {
+    e.stopPropagation();
+    router.push(`/?entry=${milestoneId}`);
+  };
 
   const decryptGoal = useCallback(async () => {
     if (!isKeyReady) return;
@@ -150,11 +176,11 @@ export function GoalCard({
   const calculatedProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const displayProgress = goalFields?.progressPercentage ?? calculatedProgress;
 
-  const getStatusColor = () => {
+  const getStatusColor = (): { className: string; style?: React.CSSProperties } => {
     switch (goalFields?.status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'archived': return 'bg-gray-100 text-gray-600';
-      default: return 'bg-blue-100 text-blue-800';
+      case 'completed': return { className: '', style: { backgroundColor: '#e0f2f2', color: '#158f8f' } };
+      case 'archived': return { className: 'bg-gray-100 text-gray-600' };
+      default: return { className: 'bg-teal-100 text-teal-800' };
     }
   };
 
@@ -168,24 +194,49 @@ export function GoalCard({
 
   return (
     <div
-      onClick={() => onGoalClick(goalId)}
-      className={`p-4 border rounded-lg bg-white cursor-pointer transition-all ${
-        isSelected ? 'ring-2 ring-indigo-500 border-indigo-300' : 'hover:border-gray-400 hover:shadow-sm'
-      }`}
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 border rounded-lg bg-white hover:border-gray-400 hover:shadow-sm transition-all ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
       <div className="flex items-start justify-between mb-2">
-        <h3 className="font-medium text-gray-900 flex-1">{title || 'Loading...'}</h3>
-        <div className="flex gap-2 ml-2">
+        <div className="flex items-center gap-2 flex-1">
+          {/* Drag handle */}
+          <button
+            type="button"
+            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none"
+            {...attributes}
+            {...listeners}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm8-12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
+            </svg>
+          </button>
+          <h3 className="font-medium text-gray-900 flex-1">{title || 'Loading...'}</h3>
+        </div>
+        <div className="flex items-center gap-2 ml-2">
           {getTypeLabel() && (
-            <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+            <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">
               {getTypeLabel()}
             </span>
           )}
           {goalFields?.status && (
-            <span className={`text-xs px-2 py-0.5 rounded capitalize ${getStatusColor()}`}>
+            <span
+              className={`text-xs px-2 py-0.5 rounded capitalize ${getStatusColor().className}`}
+              style={getStatusColor().style}
+            >
               {goalFields.status}
             </span>
           )}
+          <button
+            type="button"
+            onClick={handleEditGoal}
+            className="p-1 text-gray-400 hover:text-teal-600 transition-colors"
+            title="Edit goal"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -197,8 +248,8 @@ export function GoalCard({
         </div>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
-            className="h-full bg-indigo-500 transition-all duration-300"
-            style={{ width: `${displayProgress}%` }}
+            className="h-full transition-all duration-300"
+            style={{ backgroundColor: '#1aaeae', width: `${displayProgress}%` }}
           />
         </div>
       </div>
@@ -213,35 +264,56 @@ export function GoalCard({
       {/* Milestones */}
       {decryptedMilestones.length > 0 && (
         <div className="border-t pt-3 mt-2">
-          <div className="text-xs font-medium text-gray-500 mb-2">
+          <button
+            type="button"
+            onClick={() => setMilestonesExpanded(!milestonesExpanded)}
+            className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 w-full"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${milestonesExpanded ? 'rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
             Milestones ({completedCount}/{totalCount})
-          </div>
-          <div className="space-y-1.5">
-            {decryptedMilestones.map((milestone) => (
-              <div
-                key={milestone.id}
-                className="flex items-center gap-2 text-sm"
-              >
-                <span className={milestone.isCompleted ? 'text-green-600' : 'text-gray-400'}>
-                  {milestone.isCompleted ? '✓' : '○'}
-                </span>
-                <span className={`flex-1 ${milestone.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
-                  {milestone.content}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUnlinkMilestone(goalId, milestone.id);
-                  }}
-                  className="text-gray-400 hover:text-red-500 text-xs px-1"
-                  title="Unlink milestone"
+          </button>
+          {milestonesExpanded && (
+            <div className="space-y-1.5 mt-2">
+              {decryptedMilestones.map((milestone) => (
+                <div
+                  key={milestone.id}
+                  className="flex items-center gap-2 text-sm"
                 >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
+                  <span className={`flex-1 ${milestone.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
+                    {milestone.content}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleEditMilestone(e, milestone.id)}
+                    className="text-gray-400 hover:text-teal-600 transition-colors p-0.5"
+                    title="Edit milestone"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnlinkMilestone(goalId, milestone.id);
+                    }}
+                    className="text-gray-400 hover:text-red-500 text-xs px-1"
+                    title="Unlink milestone"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

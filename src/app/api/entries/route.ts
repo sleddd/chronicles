@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
   const date = searchParams.get('date');
   const customType = searchParams.get('customType');
   const searchToken = searchParams.get('searchToken');
+  const all = searchParams.get('all') === 'true';
 
   const client = await pool.connect();
   try {
@@ -50,7 +51,8 @@ export async function GET(request: NextRequest) {
       params.push(topicId);
     }
 
-    if (date) {
+    // Only filter by date if not fetching all entries
+    if (date && !all) {
       query += ` AND e."entryDate" = $${paramIndex++}`;
       params.push(date);
     }

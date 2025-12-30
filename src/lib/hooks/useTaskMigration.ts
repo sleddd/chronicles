@@ -25,7 +25,7 @@ export function useTaskMigration(today: string) {
   const { isKeyReady, decryptData } = useEncryption();
   const midnightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasMigratedRef = useRef(false);
-  const scheduleNextMidnightRef = useRef<() => void>();
+  const scheduleNextMidnightRef = useRef<() => void>(() => {});
 
   const migrateIncompleteTasks = useCallback(async () => {
     if (!isKeyReady || !today) return;

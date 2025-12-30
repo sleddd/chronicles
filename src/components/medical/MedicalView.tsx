@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { MedicationsTab } from './MedicationsTab';
 import { ScheduleTab } from './ScheduleTab';
 import { FoodTab } from './FoodTab';
@@ -18,8 +19,20 @@ interface Props {
   selectedDate: string;
 }
 
+const validTabs: TabKey[] = ['medications', 'schedule', 'food', 'symptoms', 'reporting'];
+
 export function MedicalView({ selectedDate }: Props) {
-  const [activeTab, setActiveTab] = useState<TabKey>('medications');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const initialTab = validTabs.includes(tabParam as TabKey) ? (tabParam as TabKey) : 'medications';
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+
+  // Update active tab when URL param changes
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam as TabKey)) {
+      setActiveTab(tabParam as TabKey);
+    }
+  }, [tabParam]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const tabs: Tab[] = [
@@ -62,7 +75,7 @@ export function MedicalView({ selectedDate }: Props) {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'text-indigo-600 border-b-2 border-indigo-600 -mb-px'
+                  ? 'text-teal-600 border-b-2 border-teal-600 -mb-px'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >

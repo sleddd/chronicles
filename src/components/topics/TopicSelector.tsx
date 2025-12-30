@@ -194,19 +194,16 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
   return (
     <div className="relative" ref={dropdownRef}>
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-gray-700">Topic:</label>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 flex items-center gap-2 min-w-[150px] justify-between"
+          className="px-3 py-1.5 text-sm rounded-md bg-white hover:bg-gray-50 flex items-center gap-2"
         >
-          <span className="flex items-center gap-2">
-            {selectedTopic && (
-              <TopicIcon iconName={selectedTopic.icon} color={selectedTopic.color} size="sm" />
-            )}
-            <span className={selectedTopicName ? 'text-gray-900' : 'text-gray-500'}>
-              {selectedTopicName || 'None'}
-            </span>
+          {selectedTopic && (
+            <TopicIcon iconName={selectedTopic.icon} color={selectedTopic.color} size="sm" />
+          )}
+          <span className={selectedTopicName ? 'text-gray-900' : 'text-gray-500'}>
+            {selectedTopicName || 'None'}
           </span>
           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -225,7 +222,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                     setIsOpen(false);
                   }}
                   className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 ${
-                    !selectedTopicId ? 'bg-indigo-50 text-indigo-700' : 'text-gray-900'
+                    !selectedTopicId ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
                   }`}
                 >
                   None
@@ -238,7 +235,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                       setIsOpen(false);
                     }}
                     className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 flex items-center gap-2 ${
-                      selectedTopicId === topic.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-900'
+                      selectedTopicId === topic.id ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
                     }`}
                   >
                     <TopicIcon iconName={topic.icon} color={topic.color} size="sm" />
@@ -249,7 +246,8 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
               <div className="p-2">
                 <button
                   onClick={() => setShowManage(true)}
-                  className="w-full text-left px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50 rounded"
+                  style={{ color: '#1aaeae' }}
                 >
                   Manage Topics...
                 </button>
@@ -283,7 +281,10 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                   <button
                     onClick={handleAddTopic}
                     disabled={isAdding || !newTopicName.trim()}
-                    className="px-2 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400"
+                    className="px-2 py-1 text-sm text-white rounded disabled:bg-gray-400"
+                    style={{ backgroundColor: (isAdding || !newTopicName.trim()) ? undefined : '#1aaeae' }}
+                    onMouseOver={(e) => { if (!isAdding && newTopicName.trim()) e.currentTarget.style.backgroundColor = '#158f8f'; }}
+                    onMouseOut={(e) => { if (!isAdding && newTopicName.trim()) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
                   >
                     Add
                   </button>

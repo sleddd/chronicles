@@ -30,17 +30,33 @@ interface ScheduledDose {
   time: string;
 }
 
+interface DoseLog {
+  id: string;
+  medicationId: string;
+  scheduledTime: string;
+  date: string;
+  status: 'taken' | 'skipped' | 'pending';
+  takenAt?: string;
+}
+
 interface Props {
   selectedDate: string;
   refreshKey: number;
   onDataChange: () => void;
 }
 
-export function ScheduleTab({ selectedDate, refreshKey }: Props) {
+export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChange }: Props) {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduledDoses, setScheduledDoses] = useState<ScheduledDose[]>([]);
+  const [doseLogs, setDoseLogs] = useState<Record<string, DoseLog>>({});
+  const [viewDate, setViewDate] = useState(initialDate);
   const { decryptData, isKeyReady } = useEncryption();
+
+  // Update viewDate when initialDate changes (e.g., from parent component)
+  useEffect(() => {
+    setViewDate(initialDate);
+  }, [initialDate]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -49,12 +65,26 @@ export function ScheduleTab({ selectedDate, refreshKey }: Props) {
       const medResponse = await fetch('/api/entries?customType=medication');
       const medData = await medResponse.json();
       setMedications(medData.entries || []);
+
+      // Fetch dose logs for selected date
+      const logsResponse = await fetch(`/api/medications/doses?date=${viewDate}`);
+      const logsData = await logsResponse.json();
+
+      // Create a map of logs keyed by medicationId-scheduledTime
+      // Note: PostgreSQL TIME type returns "HH:MM:SS", so normalize to "HH:MM"
+      const logsMap: Record<string, DoseLog> = {};
+      for (const log of logsData.logs || []) {
+        const normalizedTime = log.scheduledTime.substring(0, 5); // "08:00:00" -> "08:00"
+        const key = `${log.medicationId}-${normalizedTime}`;
+        logsMap[key] = log;
+      }
+      setDoseLogs(logsMap);
     } catch (error) {
       console.error('Failed to fetch schedule data:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewDate]);
 
   const buildSchedule = useCallback(async () => {
     if (!isKeyReady || medications.length === 0) return;
@@ -111,6 +141,60 @@ export function ScheduleTab({ selectedDate, refreshKey }: Props) {
     buildSchedule();
   }, [buildSchedule]);
 
+  const [savingDose, setSavingDose] = useState<string | null>(null);
+
+  const handleCheckDose = async (dose: ScheduledDose, checked: boolean) => {
+    const key = `${dose.medicationId}-${dose.time}`;
+    const newStatus = checked ? 'taken' : 'pending';
+
+    setSavingDose(key);
+
+    try {
+      // Format local time as a simple string (e.g., "7:45 PM")
+      const now = new Date();
+      const localTimeStr = newStatus === 'taken'
+        ? now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+        : null;
+
+      const response = await fetch('/api/medications/doses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          medicationId: dose.medicationId,
+          scheduledTime: dose.time,
+          date: viewDate,
+          status: newStatus,
+          takenAt: localTimeStr,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Normalize the returned log's scheduledTime to match our key format
+        const normalizedLog = {
+          ...data.log,
+          scheduledTime: data.log.scheduledTime.substring(0, 5),
+        };
+        setDoseLogs(prev => ({
+          ...prev,
+          [key]: normalizedLog,
+        }));
+        onDataChange();
+      } else {
+        console.error('Failed to update dose status:', await response.text());
+      }
+    } catch (error) {
+      console.error('Failed to update dose status:', error);
+    } finally {
+      setSavingDose(null);
+    }
+  };
+
+  const getDoseStatus = (dose: ScheduledDose): 'taken' | 'skipped' | 'pending' => {
+    const key = `${dose.medicationId}-${dose.time}`;
+    return doseLogs[key]?.status || 'pending';
+  };
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours, 10);
@@ -118,6 +202,11 @@ export function ScheduleTab({ selectedDate, refreshKey }: Props) {
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
   };
+
+  // Calculate progress
+  const totalDoses = scheduledDoses.length;
+  const completedDoses = scheduledDoses.filter(dose => getDoseStatus(dose) === 'taken').length;
+  const progressPercent = totalDoses > 0 ? Math.round((completedDoses / totalDoses) * 100) : 0;
 
   // Group doses by time
   const dosesByTime = scheduledDoses.reduce((acc, dose) => {
@@ -133,6 +222,25 @@ export function ScheduleTab({ selectedDate, refreshKey }: Props) {
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
+
+  // Date navigation helpers
+  const navigateDate = (days: number) => {
+    const date = new Date(viewDate + 'T12:00:00');
+    date.setDate(date.getDate() + days);
+    setViewDate(date.toISOString().split('T')[0]);
+  };
+
+  const goToToday = () => {
+    setViewDate(initialDate);
+  };
+
+  const isToday = viewDate === initialDate;
+
+  const formatTakenTime = (takenAt: string) => {
+    // takenAt is already stored as a formatted local time string (e.g., "7:45 PM")
+    return takenAt;
+  };
+
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
@@ -142,14 +250,79 @@ export function ScheduleTab({ selectedDate, refreshKey }: Props) {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-900">Daily Schedule</h2>
-        <span className="text-gray-600">{formatDateDisplay(selectedDate)}</span>
+    <div className="px-8 py-4 pb-12 bg-white">
+
+      {/* Date Navigation */}
+      <div className="flex items-center justify-between mb-4 p-3">
+        <button
+          type="button"
+          onClick={() => navigateDate(-1)}
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          title="Previous day"
+        >
+          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <div className="flex items-center gap-3">
+          <span className="text-gray-900 font-medium">{formatDateDisplay(viewDate)}</span>
+          {!isToday && (
+            <button
+              type="button"
+              onClick={goToToday}
+              className="text-xs px-2 py-1 bg-teal-100 text-teal-700 rounded hover:bg-teal-200 transition-colors"
+            >
+              Today
+            </button>
+          )}
+          {isToday && (
+            <span className="text-xs px-2 py-1 bg-teal-100 text-teal-700 rounded">
+              Today
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigateDate(1)}
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          title="Next day"
+        >
+          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
+      {/* Progress Bar */}
+      {totalDoses > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">Daily Progress</span>
+            <span className="text-sm text-gray-600">
+              {completedDoses} of {totalDoses} doses taken ({progressPercent}%)
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500 ease-out"
+              style={{
+                width: `${progressPercent}%`,
+                backgroundColor: progressPercent === 100 ? '#22c55e' : '#1aaeae',
+              }}
+            />
+          </div>
+          {progressPercent === 100 && (
+            <p className="text-sm mt-2 font-medium" style={{ color: '#1aaeae' }}>
+              All medications taken for today!
+            </p>
+          )}
+        </div>
+      )}
+
       <p className="text-sm text-gray-500 mb-4">
-        This shows your daily medication schedule based on active medications.
+        Click the circle to mark a medication as taken for this day.
       </p>
 
       {scheduledDoses.length === 0 ? (
@@ -165,18 +338,55 @@ export function ScheduleTab({ selectedDate, refreshKey }: Props) {
                 <span className="font-medium text-gray-700">{formatTime(time)}</span>
               </div>
               <div className="divide-y">
-                {doses.map((dose, index) => (
-                  <div key={`${dose.medicationId}-${time}-${index}`} className="px-4 py-3 flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center">
-                      <span className="text-xs text-gray-400">💊</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-900">
-                        {dose.medicationName} {dose.dosage}
+                {doses.map((dose, index) => {
+                  const status = getDoseStatus(dose);
+                  const key = `${dose.medicationId}-${dose.time}`;
+                  const log = doseLogs[key];
+                  const isTaken = status === 'taken';
+                  const isSaving = savingDose === key;
+                  return (
+                    <div
+                      key={`${dose.medicationId}-${time}-${index}`}
+                      className="w-full px-4 py-3 flex items-center gap-3 transition-colors"
+                      style={isTaken ? { backgroundColor: '#f7f7f7' } : undefined}
+                    >
+                      {/* Round checkbox */}
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => handleCheckDose(dose, !isTaken)}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${isSaving ? 'opacity-50' : ''} ${!isTaken ? 'bg-white border-gray-300 hover:border-teal-400' : ''}`}
+                        style={isTaken ? { backgroundColor: '#1aaeae', borderColor: '#1aaeae' } : undefined}
+                        aria-label={isTaken ? 'Mark as not taken' : 'Mark as taken'}
+                      >
+                        {isTaken && (
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <span
+                          className={`font-medium ${isTaken ? 'line-through' : 'text-gray-900'}`}
+                          style={isTaken ? { color: '#158f8f' } : undefined}
+                        >
+                          {dose.medicationName} {dose.dosage}
+                        </span>
+                        {isTaken && log?.takenAt && (
+                          <span className="ml-2 text-xs" style={{ color: '#1aaeae' }}>
+                            (taken at {formatTakenTime(log.takenAt)})
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${isTaken ? '' : 'bg-gray-100 text-gray-500'}`}
+                        style={isTaken ? { backgroundColor: '#e0f2f2', color: '#158f8f' } : undefined}
+                      >
+                        {isSaving ? 'Saving...' : isTaken ? 'Taken' : 'Pending'}
                       </span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}

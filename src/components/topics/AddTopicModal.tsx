@@ -78,7 +78,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-teal-500 focus:border-teal-500"
               placeholder="e.g., Work, Personal, Health"
             />
           </div>
@@ -94,7 +94,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
                   type="button"
                   onClick={() => setColor(c)}
                   className={`w-8 h-8 rounded-full ${
-                    color === c ? 'ring-2 ring-offset-2 ring-indigo-500' : ''
+                    color === c ? 'ring-2 ring-offset-2 ring-teal-500' : ''
                   }`}
                   style={{ backgroundColor: c }}
                 />
@@ -117,7 +117,10 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+              className="px-4 py-2 text-white rounded-md disabled:bg-gray-400"
+              style={{ backgroundColor: (loading || !name.trim()) ? undefined : '#1aaeae' }}
+              onMouseOver={(e) => { if (!loading && name.trim()) e.currentTarget.style.backgroundColor = '#158f8f'; }}
+              onMouseOut={(e) => { if (!loading && name.trim()) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
             >
               {loading ? 'Creating...' : 'Create Topic'}
             </button>

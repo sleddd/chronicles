@@ -42,6 +42,7 @@ const TIMEZONES = [
 export function SettingsPanel() {
   const { data: session } = useSession();
   const { isKeyReady } = useEncryption();
+  const [showHowToUse, setShowHowToUse] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -294,7 +295,7 @@ export function SettingsPanel() {
     <div className="max-w-2xl mx-auto p-6 bg-white min-h-full">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
-        <Link href="/" className="text-sm text-indigo-600 hover:text-indigo-800">
+        <Link href="/" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
           Back to Journal
         </Link>
       </div>
@@ -309,6 +310,167 @@ export function SettingsPanel() {
               <p className="font-medium text-gray-900">{session?.user?.email}</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* How to Use Section */}
+      <section className="mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">How to Use Chronicles</h2>
+        <div className="bg-white border rounded-lg">
+          <button
+            onClick={() => setShowHowToUse(!showHowToUse)}
+            className="w-full p-4 flex items-center justify-between text-left"
+          >
+            <div>
+              <p className="font-medium text-gray-900">Getting Started Guide</p>
+              <p className="text-sm text-gray-500">Learn how to use Chronicles effectively</p>
+            </div>
+            <svg
+              className={`w-5 h-5 text-gray-400 transition-transform ${showHowToUse ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showHowToUse && (
+            <div className="px-4 pb-4 space-y-6 text-sm text-gray-700 border-t">
+              {/* Philosophy */}
+              <div className="pt-4">
+                <h3 className="font-semibold text-gray-900 mb-2">The Philosophy</h3>
+                <p className="mb-2">
+                  Chronicles is designed as a simple daily log. The goal is to capture the key moments
+                  of your day briefly (10-15 minutes), then use topics to organize and find them later.
+                </p>
+                <p className="text-amber-700 bg-amber-50 p-2 rounded">
+                  <strong>Important:</strong> You can only add entries for today or edit past entries.
+                  Future dates cannot have entries. This keeps Chronicles focused as a record of what
+                  happened, not a planning tool.
+                </p>
+              </div>
+
+              {/* Topics */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Topics</h3>
+                <p className="mb-2">Topics categorize your entries like tags or folders.</p>
+                <p className="mb-2"><strong>To create a topic:</strong></p>
+                <ol className="list-decimal list-inside space-y-1 ml-2 mb-3">
+                  <li>Click &quot;Browse Topics&quot; in the sidebar</li>
+                  <li>Click &quot;+ Add Topic&quot;</li>
+                  <li>Enter a name, choose an icon and color</li>
+                  <li>Click &quot;Create Topic&quot;</li>
+                </ol>
+                <p className="mb-2"><strong>Built-in topics with special features:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Task</strong> - Todo items with completion tracking and auto-migration</li>
+                  <li><strong>Goal</strong> - Long-term objectives with milestone progress</li>
+                  <li><strong>Milestone</strong> - Checkpoints within goals</li>
+                  <li><strong>Medication</strong> - Medication schedules and dose tracking</li>
+                  <li><strong>Food</strong> - Meal logging with ingredients</li>
+                  <li><strong>Symptom</strong> - Health symptom tracking with severity</li>
+                  <li><strong>Event</strong> - Calendar events with date/time/location</li>
+                  <li><strong>Meeting</strong> - Meetings with attendees and agenda</li>
+                </ul>
+              </div>
+
+              {/* Entries */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Entries</h3>
+                <p className="mb-2"><strong>Creating an entry:</strong></p>
+                <ol className="list-decimal list-inside space-y-1 ml-2 mb-3">
+                  <li>Select a topic from the sidebar</li>
+                  <li>Type your content in the editor</li>
+                  <li>Use the toolbar for formatting</li>
+                  <li>Press <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Enter</kbd> or click Save</li>
+                </ol>
+                <p className="mb-2"><strong>Entry features:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Expand Entry</strong> - Default limit is 200 characters. Check &quot;Expand entry&quot; for longer notes.</li>
+                  <li><strong>Bookmark</strong> - Mark important entries for quick access in Favorites</li>
+                  <li><strong>Share</strong> - Generate a secure public link to share an entry</li>
+                </ul>
+                <p className="mt-2 text-gray-500">
+                  Tip: <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Shift+Enter</kbd> creates a new line without saving.
+                </p>
+              </div>
+
+              {/* Tasks */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Tasks</h3>
+                <p className="mb-2">Tasks are actionable items with special options:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Completed</strong> - Check when done</li>
+                  <li><strong>Auto-migrate</strong> - Uncompleted tasks automatically move to today at midnight</li>
+                  <li><strong>Link to Milestones</strong> - Connect tasks to milestones to track goal progress</li>
+                </ul>
+              </div>
+
+              {/* Goals & Milestones */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Goals &amp; Milestones</h3>
+                <p className="mb-2"><strong>Goals</strong> are larger objectives with:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
+                  <li><strong>Type</strong> - Short-term or Long-term</li>
+                  <li><strong>Status</strong> - Active, Completed, or Archived</li>
+                  <li><strong>Target Date</strong> - Optional deadline</li>
+                  <li><strong>Progress</strong> - Automatically calculated from milestones</li>
+                </ul>
+                <p className="mb-2"><strong>Milestones</strong> are checkpoints within goals:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
+                  <li>Link milestones to one or more goals</li>
+                  <li>Link tasks to milestones to track progress</li>
+                  <li>Goal progress updates as milestones are completed</li>
+                </ul>
+                <p className="text-gray-500">
+                  The Goals view lets you see all goals, drag to reorder priorities, and track progress at a glance.
+                </p>
+              </div>
+
+              {/* Medical Tracking */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Medical Tracking</h3>
+                <p className="mb-2">Enable medical features in the Features section below to track:</p>
+                <p className="mb-2"><strong>Medications:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
+                  <li>Set dosage, frequency, and schedule times</li>
+                  <li>Log doses when taken</li>
+                  <li>View today&apos;s medication schedule</li>
+                </ul>
+                <p className="mb-2"><strong>Food:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
+                  <li>Log meals with meal type and time</li>
+                  <li>Track ingredients for correlation analysis</li>
+                </ul>
+                <p className="mb-2"><strong>Symptoms:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
+                  <li>Track severity (1-10 scale)</li>
+                  <li>Log time and duration</li>
+                  <li>Use reporting to find patterns with food and medications</li>
+                </ul>
+              </div>
+
+              {/* Calendar & Views */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Views</h3>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Calendar</strong> - Monthly overview of all entries. Click any day to view entries.</li>
+                  <li><strong>Goals</strong> - Manage goals with drag-and-drop priority ordering</li>
+                  <li><strong>Medical</strong> - Dashboard for medications, doses, food, symptoms, and reports</li>
+                  <li><strong>Favorites</strong> - Quick access to bookmarked entries</li>
+                </ul>
+              </div>
+
+              {/* Encryption Notice */}
+              <div className="bg-teal-50 p-3 rounded border border-teal-200">
+                <p className="text-teal-800">
+                  <strong>Your data is encrypted</strong> in your browser before being sent to the server.
+                  Only you can read your entries. If you lose your password, your data cannot be recovered.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -360,7 +522,8 @@ export function SettingsPanel() {
               </div>
               <button
                 onClick={() => setShowChangePassword(!showChangePassword)}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
+                className="text-sm hover:underline"
+                style={{ color: '#1aaeae' }}
               >
                 {showChangePassword ? 'Cancel' : 'Change'}
               </button>
@@ -410,7 +573,10 @@ export function SettingsPanel() {
                 <button
                   type="submit"
                   disabled={isChangingPassword}
-                  className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+                  className="px-4 py-2 text-white text-sm rounded-md disabled:bg-gray-400"
+                  style={{ backgroundColor: isChangingPassword ? undefined : '#1aaeae' }}
+                  onMouseOver={(e) => { if (!isChangingPassword) e.currentTarget.style.backgroundColor = '#158f8f'; }}
+                  onMouseOut={(e) => { if (!isChangingPassword) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
                 >
                   {isChangingPassword ? 'Changing...' : 'Update Password'}
                 </button>
@@ -427,7 +593,8 @@ export function SettingsPanel() {
               </div>
               <button
                 onClick={handleShowSessions}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
+                className="text-sm hover:underline"
+                style={{ color: '#1aaeae' }}
               >
                 {showSessions ? 'Refresh' : 'View'}
               </button>
@@ -502,8 +669,9 @@ export function SettingsPanel() {
                     onClick={() => handleToggleFeature(featureKey)}
                     disabled={isToggling || !isKeyReady}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      isEnabled ? 'bg-indigo-600' : 'bg-gray-200'
+                      isEnabled ? '' : 'bg-gray-200'
                     } ${(isToggling || !isKeyReady) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    style={isEnabled ? { backgroundColor: '#1aaeae' } : undefined}
                   >
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -530,7 +698,8 @@ export function SettingsPanel() {
             <button
               onClick={handleSeedTopics}
               disabled={seedingTopics || !isKeyReady}
-              className="px-4 py-2 text-sm text-indigo-600 border border-indigo-300 rounded-md hover:bg-indigo-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+              className="px-4 py-2 text-sm border rounded-md hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+              style={{ color: seedingTopics || !isKeyReady ? undefined : '#1aaeae', borderColor: seedingTopics || !isKeyReady ? undefined : '#1aaeae' }}
             >
               {seedingTopics ? 'Adding...' : 'Add Default Topics'}
             </button>

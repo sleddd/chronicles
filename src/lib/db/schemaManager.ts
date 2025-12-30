@@ -109,13 +109,75 @@ export async function createUserSchema(): Promise<string> {
     `);
 
     // Create shared_entries table (for sharing entries via link)
+    // NOTE: plaintextContent stores DECRYPTED content - shared entries are PUBLIC
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}"."shared_entries" (
         id TEXT PRIMARY KEY,
         "entryId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
         "shareToken" TEXT UNIQUE NOT NULL,
+        "plaintextContent" TEXT NOT NULL,
         "expiresAt" TIMESTAMP,
         "viewCount" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // Create calendar_events table (for calendar integration)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."calendar_events" (
+        id TEXT PRIMARY KEY,
+        "encryptedTitle" TEXT NOT NULL,
+        "titleIv" TEXT NOT NULL,
+        "encryptedDescription" TEXT,
+        "descriptionIv" TEXT,
+        "startDate" DATE NOT NULL,
+        "startTime" TIME,
+        "endDate" DATE,
+        "endTime" TIME,
+        "isAllDay" BOOLEAN NOT NULL DEFAULT false,
+        "recurrenceRule" TEXT,
+        "color" TEXT NOT NULL DEFAULT '#6366f1',
+        "linkedEntryId" TEXT REFERENCES "${schemaName}"."entries"(id) ON DELETE SET NULL,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // Create medication_dose_logs table (for tracking taken medications)
+    // takenAt is stored as a formatted local time string (e.g., "7:45 PM")
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."medication_dose_logs" (
+        id TEXT PRIMARY KEY,
+        "medicationId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "scheduledTime" TIME NOT NULL,
+        "takenAt" TEXT,
+        "date" DATE NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // Create favorites table (for favorite entries)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."favorites" (
+        id TEXT PRIMARY KEY,
+        "entryId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE("entryId")
+      )
+    `);
+
+    // Create entry_images table (for image uploads)
+    // Note: encryptedData is stored on filesystem, not in database
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}"."entry_images" (
+        id TEXT PRIMARY KEY,
+        "entryId" TEXT REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+        "encryptedFilename" TEXT NOT NULL,
+        "filenameIv" TEXT NOT NULL,
+        "dataIv" TEXT NOT NULL,
+        "mimeType" TEXT NOT NULL,
+        "size" INTEGER NOT NULL,
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
@@ -157,6 +219,38 @@ export async function createUserSchema(): Promise<string> {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_shared_expires
       ON "${schemaName}"."shared_entries"("expiresAt")
+    `);
+
+    // Calendar events indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_calendar_start_date
+      ON "${schemaName}"."calendar_events"("startDate")
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_calendar_date_range
+      ON "${schemaName}"."calendar_events"("startDate", "endDate")
+    `);
+
+    // Medication dose logs indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_dose_logs_date
+      ON "${schemaName}"."medication_dose_logs"("date")
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_dose_logs_medication
+      ON "${schemaName}"."medication_dose_logs"("medicationId", "date")
+    `);
+
+    // Favorites indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_favorites_entry
+      ON "${schemaName}"."favorites"("entryId")
+    `);
+
+    // Entry images indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_entry_images_entry
+      ON "${schemaName}"."entry_images"("entryId")
     `);
 
     await client.query('COMMIT');
@@ -241,6 +335,281 @@ export async function schemaExists(schemaName: string): Promise<boolean> {
       [schemaName]
     );
     return result.rows.length > 0;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Migrate shared_entries table to add plaintextContent column
+ * This is needed for existing users who created schemas before this column was added
+ */
+export async function migrateSharedEntriesTable(schemaName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    // Check if column exists
+    const columnCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = $1
+        AND table_name = 'shared_entries'
+        AND column_name = 'plaintextContent'
+    `, [schemaName]);
+
+    if (columnCheck.rows.length === 0) {
+      // Add the column - existing shares will have NULL until updated
+      await client.query(`
+        ALTER TABLE "${schemaName}"."shared_entries"
+        ADD COLUMN IF NOT EXISTS "plaintextContent" TEXT
+      `);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Migrate entry_images table (create if not exists, or drop encryptedData column if exists)
+ * This is needed for existing users who created schemas before this table was added
+ * Note: encryptedData is now stored on filesystem, not in database
+ */
+export async function migrateEntryImagesTable(schemaName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    // Check if table exists
+    const tableCheck = await client.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = $1
+        AND table_name = 'entry_images'
+    `, [schemaName]);
+
+    if (tableCheck.rows.length === 0) {
+      // Create the table (encryptedData stored on filesystem, not in DB)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}"."entry_images" (
+          id TEXT PRIMARY KEY,
+          "entryId" TEXT REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+          "encryptedFilename" TEXT NOT NULL,
+          "filenameIv" TEXT NOT NULL,
+          "dataIv" TEXT NOT NULL,
+          "mimeType" TEXT NOT NULL,
+          "size" INTEGER NOT NULL,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      // Create index
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_entry_images_entry
+        ON "${schemaName}"."entry_images"("entryId")
+      `);
+    } else {
+      // Table exists - check if it has the old encryptedData column and drop it
+      try {
+        const columnCheck = await client.query(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = $1
+            AND table_name = 'entry_images'
+            AND column_name = 'encryptedData'
+        `, [schemaName]);
+
+        if (columnCheck.rows.length > 0) {
+          // Drop the encryptedData column (data is now stored on filesystem)
+          await client.query(`
+            ALTER TABLE "${schemaName}"."entry_images"
+            DROP COLUMN IF EXISTS "encryptedData"
+          `);
+        }
+      } catch (alterError) {
+        // Ignore errors when dropping column - table might be in use
+        console.error('Error dropping encryptedData column:', alterError);
+      }
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Migrate favorites table (create if not exists)
+ * This is needed for existing users who created schemas before this table was added
+ */
+export async function migrateFavoritesTable(schemaName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    // Check if table exists
+    const tableCheck = await client.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = $1
+        AND table_name = 'favorites'
+    `, [schemaName]);
+
+    if (tableCheck.rows.length === 0) {
+      // Create the table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}"."favorites" (
+          id TEXT PRIMARY KEY,
+          "entryId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+          UNIQUE("entryId")
+        )
+      `);
+
+      // Create index
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_favorites_entry
+        ON "${schemaName}"."favorites"("entryId")
+      `);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Migrate medication_dose_logs table (create if not exists, or alter takenAt column type)
+ * This is needed for existing users who created schemas before this table was added
+ * takenAt is stored as a formatted local time string (e.g., "7:45 PM")
+ */
+export async function migrateMedicationDoseLogsTable(schemaName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    // Check if table exists
+    const tableCheck = await client.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = $1
+        AND table_name = 'medication_dose_logs'
+    `, [schemaName]);
+
+    if (tableCheck.rows.length === 0) {
+      // Create the table with takenAt as TEXT
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}"."medication_dose_logs" (
+          id TEXT PRIMARY KEY,
+          "medicationId" TEXT NOT NULL REFERENCES "${schemaName}"."entries"(id) ON DELETE CASCADE,
+          "scheduledTime" TIME NOT NULL,
+          "takenAt" TEXT,
+          "date" DATE NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'pending',
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      // Create indexes
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_dose_logs_date
+        ON "${schemaName}"."medication_dose_logs"("date")
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_dose_logs_medication
+        ON "${schemaName}"."medication_dose_logs"("medicationId", "date")
+      `);
+    } else {
+      // Table exists - check if takenAt needs to be altered from TIMESTAMP to TEXT
+      const columnCheck = await client.query(`
+        SELECT data_type
+        FROM information_schema.columns
+        WHERE table_schema = $1
+          AND table_name = 'medication_dose_logs'
+          AND column_name = 'takenAt'
+      `, [schemaName]);
+
+      if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type !== 'text') {
+        // Alter column type from TIMESTAMP to TEXT
+        await client.query(`
+          ALTER TABLE "${schemaName}"."medication_dose_logs"
+          ALTER COLUMN "takenAt" TYPE TEXT
+        `);
+      }
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Migrate calendar_events table (create if not exists)
+ * This is needed for existing users who created schemas before this table was added
+ */
+export async function migrateCalendarEventsTable(schemaName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    // Check if table exists
+    const tableCheck = await client.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = $1
+        AND table_name = 'calendar_events'
+    `, [schemaName]);
+
+    if (tableCheck.rows.length === 0) {
+      // Create the table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}"."calendar_events" (
+          id TEXT PRIMARY KEY,
+          "encryptedTitle" TEXT NOT NULL,
+          "titleIv" TEXT NOT NULL,
+          "encryptedDescription" TEXT,
+          "descriptionIv" TEXT,
+          "startDate" DATE NOT NULL,
+          "startTime" TIME,
+          "endDate" DATE,
+          "endTime" TIME,
+          "isAllDay" BOOLEAN NOT NULL DEFAULT false,
+          "recurrenceRule" TEXT,
+          "color" TEXT NOT NULL DEFAULT '#6366f1',
+          "linkedEntryId" TEXT REFERENCES "${schemaName}"."entries"(id) ON DELETE SET NULL,
+          "encryptedLocation" TEXT,
+          "locationIv" TEXT,
+          "encryptedAddress" TEXT,
+          "addressIv" TEXT,
+          "encryptedPhone" TEXT,
+          "phoneIv" TEXT,
+          "encryptedNotes" TEXT,
+          "notesIv" TEXT,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      // Create indexes
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_calendar_start_date
+        ON "${schemaName}"."calendar_events"("startDate")
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_calendar_date_range
+        ON "${schemaName}"."calendar_events"("startDate", "endDate")
+      `);
+    } else {
+      // Table exists, check for and add new columns if missing
+      const columnCheck = await client.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = $1
+          AND table_name = 'calendar_events'
+          AND column_name = 'encryptedLocation'
+      `, [schemaName]);
+
+      if (columnCheck.rows.length === 0) {
+        // Add the new columns for location, address, phone, notes
+        await client.query(`
+          ALTER TABLE "${schemaName}"."calendar_events"
+          ADD COLUMN IF NOT EXISTS "encryptedLocation" TEXT,
+          ADD COLUMN IF NOT EXISTS "locationIv" TEXT,
+          ADD COLUMN IF NOT EXISTS "encryptedAddress" TEXT,
+          ADD COLUMN IF NOT EXISTS "addressIv" TEXT,
+          ADD COLUMN IF NOT EXISTS "encryptedPhone" TEXT,
+          ADD COLUMN IF NOT EXISTS "phoneIv" TEXT,
+          ADD COLUMN IF NOT EXISTS "encryptedNotes" TEXT,
+          ADD COLUMN IF NOT EXISTS "notesIv" TEXT
+        `);
+      }
+    }
   } finally {
     client.release();
   }

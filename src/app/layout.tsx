@@ -17,8 +17,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chronicles - Encrypted Journal",
+  title: "Chronicles",
   description: "Privacy-first encrypted journaling",
+  icons: {
+    icon: "/chronicles-favicon.ico",
+  },
 };
 
 export default async function RootLayout({

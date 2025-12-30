@@ -135,7 +135,7 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
                 type="checkbox"
                 checked={selectedGoalIds.has(goal.id)}
                 onChange={() => toggleGoal(goal.id)}
-                className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
               />
               <span className="text-sm text-gray-700">
                 {decryptedGoals.get(goal.id) || 'Loading...'}
@@ -158,7 +158,10 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+          className="px-3 py-1.5 text-sm text-white rounded-md disabled:bg-gray-400"
+          style={{ backgroundColor: saving ? undefined : '#1aaeae' }}
+          onMouseOver={(e) => { if (!saving) e.currentTarget.style.backgroundColor = '#158f8f'; }}
+          onMouseOut={(e) => { if (!saving) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
         >
           {saving ? 'Saving...' : 'Save Links'}
         </button>
@@ -246,7 +249,7 @@ export function MilestoneGoalSelector({
             type="checkbox"
             checked={selectedGoalIds.includes(goal.id)}
             onChange={() => toggleGoal(goal.id)}
-            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+            className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
           />
           <span className="text-sm text-gray-700">
             {decryptedGoals.get(goal.id) || 'Loading...'}

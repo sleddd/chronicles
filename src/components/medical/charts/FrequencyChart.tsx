@@ -8,7 +8,7 @@ interface Props {
   color?: string;
 }
 
-export function FrequencyChart({ data, title, color = 'bg-indigo-500' }: Props) {
+export function FrequencyChart({ data, title, color = 'bg-teal-500' }: Props) {
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">

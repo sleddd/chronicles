@@ -60,7 +60,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
       <button
         onClick={() => onSelectTopic(null)}
         className={`w-full text-left px-3 py-2 rounded mb-2 ${
-          selectedTopicId === null ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-gray-100'
+          selectedTopicId === null ? 'bg-teal-100 text-teal-700' : 'hover:bg-gray-100'
         }`}
       >
         All Entries
@@ -72,7 +72,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
             key={topic.id}
             onClick={() => onSelectTopic(topic.id)}
             className={`w-full text-left px-3 py-2 rounded flex items-center gap-2 ${
-              selectedTopicId === topic.id ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-gray-100'
+              selectedTopicId === topic.id ? 'bg-teal-100 text-teal-700' : 'hover:bg-gray-100'
             }`}
           >
             <span
@@ -86,7 +86,8 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
 
       <button
         onClick={() => setShowAddModal(true)}
-        className="w-full mt-4 text-sm text-indigo-600 hover:text-indigo-800"
+        className="w-full mt-4 text-sm hover:underline"
+        style={{ color: '#1aaeae' }}
       >
         + Add Topic
       </button>

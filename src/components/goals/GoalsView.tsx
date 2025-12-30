@@ -3,6 +3,21 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { GoalCard } from './GoalCard';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
 
 interface CustomField {
   id: string;
@@ -29,22 +44,28 @@ interface Goal {
 interface DecryptedGoalFields {
   type?: 'short_term' | 'long_term';
   status?: 'active' | 'completed' | 'archived';
+  priority?: number;
 }
 
 type TabFilter = 'active' | 'short_term' | 'long_term' | 'all';
 
-interface Props {
-  onGoalSelect: (goalId: string | null) => void;
-  selectedGoalId: string | null;
-  refreshKey?: number;
-}
-
-export function GoalsView({ onGoalSelect, selectedGoalId, refreshKey }: Props) {
+export function GoalsView() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabFilter>('active');
   const [decryptedGoalFields, setDecryptedGoalFields] = useState<Map<string, DecryptedGoalFields>>(new Map());
-  const { decryptData, isKeyReady } = useEncryption();
+  const { decryptData, encryptData, isKeyReady } = useEncryption();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const fetchGoals = useCallback(async () => {
     setLoading(true);
@@ -90,6 +111,7 @@ export function GoalsView({ onGoalSelect, selectedGoalId, refreshKey }: Props) {
           const parsed = JSON.parse(decrypted);
           if (parsed.fieldKey === 'type') fields.type = parsed.value;
           if (parsed.fieldKey === 'status') fields.status = parsed.value;
+          if (parsed.fieldKey === 'priority') fields.priority = parsed.value;
         } catch {
           // Skip failed fields
         }
@@ -102,7 +124,7 @@ export function GoalsView({ onGoalSelect, selectedGoalId, refreshKey }: Props) {
 
   useEffect(() => {
     fetchGoals();
-  }, [fetchGoals, refreshKey]);
+  }, [fetchGoals]);
 
   useEffect(() => {
     decryptGoalFields();
@@ -140,7 +162,68 @@ export function GoalsView({ onGoalSelect, selectedGoalId, refreshKey }: Props) {
       default:
         return true;
     }
+  }).sort((a, b) => {
+    const priorityA = decryptedGoalFields.get(a.id)?.priority ?? Infinity;
+    const priorityB = decryptedGoalFields.get(b.id)?.priority ?? Infinity;
+    return priorityA - priorityB;
   });
+
+  // Handle drag end for reordering
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id || !isKeyReady) return;
+
+    const oldIndex = filteredGoals.findIndex((g) => g.id === active.id);
+    const newIndex = filteredGoals.findIndex((g) => g.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Reorder the goals array
+    const reorderedGoals = arrayMove(filteredGoals, oldIndex, newIndex);
+
+    // Update goals state optimistically
+    setGoals((prevGoals) => {
+      const filteredIds = new Set(filteredGoals.map((g) => g.id));
+      const otherGoals = prevGoals.filter((g) => !filteredIds.has(g.id));
+      return [...reorderedGoals, ...otherGoals];
+    });
+
+    // Update decrypted fields with new priorities
+    setDecryptedGoalFields((prev) => {
+      const newMap = new Map(prev);
+      reorderedGoals.forEach((goal, index) => {
+        const existing = newMap.get(goal.id) || {};
+        newMap.set(goal.id, { ...existing, priority: index });
+      });
+      return newMap;
+    });
+
+    // Update priorities on server
+    try {
+      const priorities = await Promise.all(
+        reorderedGoals.map(async (goal, index) => {
+          const data = JSON.stringify({ fieldKey: 'priority', value: index });
+          const { ciphertext, iv } = await encryptData(data);
+          return {
+            goalId: goal.id,
+            encryptedData: ciphertext,
+            iv,
+          };
+        })
+      );
+
+      await fetch('/api/goals/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priorities }),
+      });
+    } catch (error) {
+      console.error('Failed to save goal order:', error);
+      // Refetch on error to restore correct order
+      fetchGoals();
+    }
+  };
 
   const tabs: { key: TabFilter; label: string }[] = [
     { key: 'active', label: 'Active' },
@@ -170,7 +253,7 @@ export function GoalsView({ onGoalSelect, selectedGoalId, refreshKey }: Props) {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'text-indigo-600 border-b-2 border-indigo-600 -mb-px'
+                  ? 'text-teal-600 border-b-2 border-teal-600 -mb-px'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -189,29 +272,32 @@ export function GoalsView({ onGoalSelect, selectedGoalId, refreshKey }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredGoals.map((goal) => (
-            <GoalCard
-              key={goal.id}
-              goalId={goal.id}
-              encryptedContent={goal.encryptedContent}
-              iv={goal.iv}
-              customFields={goal.custom_fields}
-              milestones={goal.milestones || []}
-              onUnlinkMilestone={handleUnlinkMilestone}
-              onGoalClick={onGoalSelect}
-              isSelected={selectedGoalId === goal.id}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredGoals.map((g) => g.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredGoals.map((goal) => (
+                <GoalCard
+                  key={goal.id}
+                  goalId={goal.id}
+                  encryptedContent={goal.encryptedContent}
+                  iv={goal.iv}
+                  customFields={goal.custom_fields}
+                  milestones={goal.milestones || []}
+                  onUnlinkMilestone={handleUnlinkMilestone}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
-      <button
-        onClick={() => onGoalSelect(null)}
-        className="w-full mt-6 py-3 text-sm text-indigo-600 hover:text-indigo-800 border border-dashed border-indigo-300 rounded-lg bg-white hover:bg-indigo-50 transition-colors"
-      >
-        + New Goal
-      </button>
     </div>
   );
 }

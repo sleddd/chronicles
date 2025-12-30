@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 
 interface CustomField {
@@ -39,10 +40,15 @@ const MEAL_TYPES = [
 ] as const;
 
 export function FoodTab({ selectedDate, refreshKey }: Props) {
+  const router = useRouter();
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [decryptedEntries, setDecryptedEntries] = useState<Map<string, { name: string; fields: DecryptedFoodFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+
+  const handleEditFood = (entryId: string) => {
+    router.push(`/?entry=${entryId}`);
+  };
 
   const fetchFoodEntries = useCallback(async () => {
     setLoading(true);
@@ -129,7 +135,7 @@ export function FoodTab({ selectedDate, refreshKey }: Props) {
   }
 
   return (
-    <div className="p-4">
+    <div className="px-8 py-4 pb-12">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">Food Log</h2>
         <span className="text-gray-600">{formatDateDisplay(selectedDate)}</span>
@@ -162,13 +168,25 @@ export function FoodTab({ selectedDate, refreshKey }: Props) {
 
                     return (
                       <div key={entry.id} className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">{data?.name || 'Loading...'}</span>
-                          {data?.fields.consumedAt && (
-                            <span className="text-sm text-gray-500">
-                              ({formatTime(data.fields.consumedAt)})
-                            </span>
-                          )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">{data?.name || 'Loading...'}</span>
+                            {data?.fields.consumedAt && (
+                              <span className="text-sm text-gray-500">
+                                ({formatTime(data.fields.consumedAt)})
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleEditFood(entry.id)}
+                            className="p-1 text-gray-400 hover:text-teal-600 transition-colors"
+                            title="Edit food entry"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
                         </div>
                         {data?.fields.ingredients && data.fields.ingredients.length > 0 && (
                           <p className="text-sm text-gray-600 mt-1">

@@ -4,6 +4,7 @@ import { createUserSchema } from '@/lib/db/schemaManager';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email format'),
@@ -15,12 +16,47 @@ const registerSchema = z.object({
     .regex(/[0-9]/, 'Password must contain at least one number'),
 });
 
+// Email whitelist - comma-separated list from environment variable
+function isEmailWhitelisted(email: string): boolean {
+  const whitelist = process.env.REGISTRATION_WHITELIST;
+  if (!whitelist) {
+    // If no whitelist is set, block all registrations
+    return false;
+  }
+  const allowedEmails = whitelist.split(',').map((e) => e.trim().toLowerCase());
+  return allowedEmails.includes(email.toLowerCase());
+}
+
 export async function POST(request: NextRequest) {
+  // Rate limiting by IP
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  const rateLimit = checkRateLimit(`register:${ip}`, RATE_LIMITS.register);
+
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many registration attempts. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString(),
+        },
+      }
+    );
+  }
+
   try {
     const body = await request.json();
 
     // Validate input
     const validatedData = registerSchema.parse(body);
+
+    // Check if email is whitelisted
+    if (!isEmailWhitelisted(validatedData.email)) {
+      return NextResponse.json(
+        { error: 'Registration is currently by invitation only' },
+        { status: 403 }
+      );
+    }
 
     // Check if user exists
     const existingUser = await prisma.account.findUnique({

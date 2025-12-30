@@ -1,4 +1,17 @@
 /**
+ * Convert Uint8Array to base64 string (handles large arrays without stack overflow)
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const CHUNK_SIZE = 0x8000; // 32KB chunks
+  let result = '';
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, i + CHUNK_SIZE);
+    result += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(result);
+}
+
+/**
  * Encrypt plaintext using AES-GCM
  */
 export async function encrypt(
@@ -20,9 +33,7 @@ export async function encrypt(
     plaintextBuffer
   );
 
-  const ciphertext = btoa(
-    String.fromCharCode(...new Uint8Array(ciphertextBuffer))
-  );
+  const ciphertext = uint8ArrayToBase64(new Uint8Array(ciphertextBuffer));
   const ivBase64 = btoa(String.fromCharCode(...iv));
 
   return {

@@ -48,7 +48,7 @@ export async function GET(
       entry.milestones = milestonesResult.rows;
     }
 
-    // For milestones, include linked goal IDs
+    // For milestones, include linked goal IDs and linked tasks
     if (entry.customType === 'milestone') {
       const goalsResult = await client.query(`
         SELECT "relatedToId" as "goalId"
@@ -56,6 +56,20 @@ export async function GET(
         WHERE "entryId" = $1 AND "relationshipType" = 'goal_milestone'
       `, [id]);
       entry.goalIds = goalsResult.rows.map(row => row.goalId);
+
+      // Include full task entries linked to this milestone
+      const tasksResult = await client.query(`
+        SELECT e.*, json_agg(cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
+        FROM "${session.user.schemaName}"."entries" e
+        LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
+        WHERE e.id IN (
+          SELECT "entryId" FROM "${session.user.schemaName}"."entry_relationships"
+          WHERE "relatedToId" = $1 AND "relationshipType" = 'milestone_task'
+        )
+        GROUP BY e.id
+        ORDER BY e."createdAt" ASC
+      `, [id]);
+      entry.tasks = tasksResult.rows;
     }
 
     return NextResponse.json({ entry });

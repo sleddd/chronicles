@@ -102,7 +102,8 @@ export function ReportingTab({ refreshKey }: Props) {
       const decryptedSymptoms: DecryptedSymptom[] = [];
       for (const symptom of (report.symptoms || []) as RawEntry[]) {
         try {
-          const name = await decryptData(symptom.encryptedContent, symptom.iv);
+          const rawName = await decryptData(symptom.encryptedContent, symptom.iv);
+          const name = rawName.replace(/<[^>]*>/g, '').trim();
           let severity = 5;
           let occurredAt = new Date().toISOString();
 
@@ -136,7 +137,8 @@ export function ReportingTab({ refreshKey }: Props) {
       const decryptedFood: DecryptedFood[] = [];
       for (const foodItem of (report.food || []) as RawEntry[]) {
         try {
-          const name = await decryptData(foodItem.encryptedContent, foodItem.iv);
+          const rawName = await decryptData(foodItem.encryptedContent, foodItem.iv);
+          const name = rawName.replace(/<[^>]*>/g, '').trim();
           let consumedAt = new Date().toISOString();
           let ingredients: string[] = [];
 
@@ -172,7 +174,8 @@ export function ReportingTab({ refreshKey }: Props) {
       // First decrypt medication names
       for (const med of (report.medications || []) as RawEntry[]) {
         try {
-          const name = await decryptData(med.encryptedContent, med.iv);
+          const rawName = await decryptData(med.encryptedContent, med.iv);
+          const name = rawName.replace(/<[^>]*>/g, '').trim();
           medicationsMap.set(med.id, name);
         } catch {
           medicationsMap.set(med.id, 'Unknown');
@@ -253,9 +256,10 @@ export function ReportingTab({ refreshKey }: Props) {
                   onClick={() => setPeriod(p)}
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                     period === p
-                      ? 'bg-indigo-600 text-white'
+                      ? 'text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
+                  style={period === p ? { backgroundColor: '#1aaeae' } : undefined}
                 >
                   {p === 'week' ? 'Week' : p === 'month' ? 'Month' : p === 'year' ? 'Year' : 'Custom'}
                 </button>
@@ -271,7 +275,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-3 py-1.5 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  className="px-3 py-1.5 border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
                 />
               </div>
               <div>
@@ -280,7 +284,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-3 py-1.5 border rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  className="px-3 py-1.5 border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
                 />
               </div>
             </>
@@ -289,7 +293,10 @@ export function ReportingTab({ refreshKey }: Props) {
           <button
             onClick={handleGenerateReport}
             disabled={loading}
-            className="px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:bg-gray-400 transition-colors"
+            className="px-4 py-1.5 text-white text-sm rounded-md disabled:bg-gray-400 transition-colors"
+            style={{ backgroundColor: loading ? undefined : '#1aaeae' }}
+            onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#158f8f'; }}
+            onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
           >
             {loading ? 'Loading...' : 'Generate Report'}
           </button>
@@ -305,7 +312,7 @@ export function ReportingTab({ refreshKey }: Props) {
           {/* Summary Stats */}
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border p-4 text-center">
-              <div className="text-3xl font-bold text-indigo-600">{symptoms.length}</div>
+              <div className="text-3xl font-bold text-teal-600">{symptoms.length}</div>
               <div className="text-sm text-gray-600">Symptoms Logged</div>
             </div>
             <div className="bg-white rounded-lg border p-4 text-center">

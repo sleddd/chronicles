@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 
 interface CustomField {
@@ -41,11 +42,16 @@ const FREQUENCY_LABELS: Record<string, string> = {
 };
 
 export function MedicationsTab({ refreshKey }: Props) {
+  const router = useRouter();
   const [medications, setMedications] = useState<Medication[]>([]);
   const [loading, setLoading] = useState(true);
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [decryptedMedications, setDecryptedMedications] = useState<Map<string, { name: string; fields: DecryptedMedicationFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+
+  const handleEditMedication = (medicationId: string) => {
+    router.push(`/?entry=${medicationId}`);
+  };
 
   const fetchMedications = useCallback(async () => {
     setLoading(true);
@@ -123,7 +129,7 @@ export function MedicationsTab({ refreshKey }: Props) {
   }
 
   return (
-    <div className="p-4">
+    <div className="px-8 py-4 pb-12">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">My Medications</h2>
         <div className="flex items-center gap-4">
@@ -132,7 +138,7 @@ export function MedicationsTab({ refreshKey }: Props) {
               type="checkbox"
               checked={showActiveOnly}
               onChange={(e) => setShowActiveOnly(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
             />
             Active only
           </label>
@@ -181,6 +187,16 @@ export function MedicationsTab({ refreshKey }: Props) {
                       <p className="text-xs text-gray-400 mt-2">Started: {data.fields.startDate}</p>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleEditMedication(med.id)}
+                    className="p-1 text-gray-400 hover:text-teal-600 transition-colors ml-2"
+                    title="Edit medication"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             );
