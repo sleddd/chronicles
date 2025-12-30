@@ -1,13 +1,12 @@
-// Define database connection via the `DATABASE_URL` env var
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
-// Define custom output path for generated Prisma Client
-generator client {
-  provider = "prisma-client-js"
-  output   = "/app/generated/prisma-client"
+datasource db {
+  provider  = "postgresql"
+  url       = env("PRISMA_DATABASE_URL")
+  directUrl = env("POSTGRES_URL")
 }
 
 // ============================================
