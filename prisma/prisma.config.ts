@@ -1,12 +1,18 @@
 import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
+const databaseUrl = process.env.PRISMA_DATABASE_URL
+
+if (!databaseUrl) {
+  throw new Error('PRISMA_DATABASE_URL is not defined')
+}
+
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
   },
   datasource: {
-    url: process.env.PRISMA_DATABASE_URL,
+    url: databaseUrl,
   },
 })
