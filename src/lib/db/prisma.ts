@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaClient as PrismaClientEdge } from '@prisma/client/edge';
+import { withAccelerate } from '@prisma/extension-accelerate';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
 import { Pool as PgPool } from 'pg';
@@ -6,31 +8,55 @@ import ws from 'ws';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  pool: PgPool | NeonPool | undefined;
 };
+
+function isAccelerateUrl(connectionString: string): boolean {
+  return connectionString.startsWith('prisma://');
+}
 
 function isNeonDatabase(connectionString: string): boolean {
   return connectionString.includes('neon.tech') || connectionString.includes('neon.database');
 }
 
-function createPrismaClient(): PrismaClient {
-  // Debug logging for production troubleshooting
-  console.log('[Prisma] DATABASE_URL format:', process.env.DATABASE_URL?.substring(0, 20) + '...');
+function getOrCreatePool(connectionString: string): PgPool | NeonPool {
+  if (globalForPrisma.pool) {
+    return globalForPrisma.pool;
+  }
 
-  // Use direct DATABASE_URL connection (bypassing Accelerate due to timeout issues)
+  if (isNeonDatabase(connectionString)) {
+    neonConfig.webSocketConstructor = ws;
+    neonConfig.poolQueryViaFetch = true;
+    globalForPrisma.pool = new NeonPool({ connectionString });
+  } else {
+    // Enable SSL for remote PostgreSQL connections (e.g., Prisma Accelerate's underlying DB)
+    globalForPrisma.pool = new PgPool({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+    });
+  }
+
+  return globalForPrisma.pool;
+}
+
+function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
     throw new Error('DATABASE_URL not found');
   }
 
-  console.log('[Prisma] Using direct connection');
+  // Use Prisma Accelerate for prisma:// URLs (edge runtime)
+  if (isAccelerateUrl(connectionString)) {
+    console.log('[Prisma] Using Prisma Accelerate');
+    return new PrismaClientEdge().$extends(withAccelerate()) as unknown as PrismaClient;
+  }
+
+  const pool = getOrCreatePool(connectionString);
 
   // Use Neon serverless for Neon databases
   if (isNeonDatabase(connectionString)) {
     console.log('[Prisma] Detected Neon database, using NeonPool with @prisma/adapter-neon');
-    neonConfig.webSocketConstructor = ws;
-    neonConfig.poolQueryViaFetch = true;
-    const pool = new NeonPool({ connectionString });
     const { PrismaNeon } = require('@prisma/adapter-neon');
     const adapter = new PrismaNeon(pool);
     return new PrismaClient({
@@ -41,8 +67,7 @@ function createPrismaClient(): PrismaClient {
 
   // Use pg adapter for local PostgreSQL (Prisma 7 requires an adapter)
   console.log('[Prisma] Using local PostgreSQL with @prisma/adapter-pg');
-  const pool = new PgPool({ connectionString });
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg(pool as PgPool);
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
@@ -59,18 +84,12 @@ export function getUserSchemaName(accountId: string): string {
   return `user_${accountId}`;
 }
 
-function createQueryPool(): NeonPool | PgPool {
+function getQueryPool(): NeonPool | PgPool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('DATABASE_URL not found');
   }
-
-  if (isNeonDatabase(connectionString)) {
-    neonConfig.webSocketConstructor = ws;
-    neonConfig.poolQueryViaFetch = true;
-    return new NeonPool({ connectionString });
-  }
-  return new PgPool({ connectionString });
+  return getOrCreatePool(connectionString);
 }
 
 export async function queryUserSchema<T>(
@@ -78,7 +97,7 @@ export async function queryUserSchema<T>(
   query: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  const pool = createQueryPool();
+  const pool = getQueryPool();
 
   const client = await pool.connect();
   try {
@@ -86,10 +105,10 @@ export async function queryUserSchema<T>(
     return result.rows as T[];
   } finally {
     client.release();
-    pool.end();
+    // Don't close the pool - it's shared globally
   }
 }
 
 export function createUserPool(): NeonPool | PgPool {
-  return createQueryPool();
+  return getQueryPool();
 }

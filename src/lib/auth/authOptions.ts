@@ -25,42 +25,27 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials, req) {
-        console.log('[Auth Debug] Starting authorization');
-
+      async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          console.log('[Auth Debug] Missing email or password');
           throw new Error('Email and password required');
         }
-
-        console.log('[Auth Debug] Looking up account for:', credentials.email);
 
         const account = await prisma.account.findUnique({
           where: { email: credentials.email },
         });
 
         if (!account) {
-          console.log('[Auth Debug] No account found for email:', credentials.email);
           throw new Error('No user found with this email');
         }
-
-        console.log('[Auth Debug] Account found, id:', account.id);
-        console.log('[Auth Debug] Password hash exists:', !!account.passwordHash);
-        console.log('[Auth Debug] Password hash length:', account.passwordHash?.length);
 
         const isValidPassword = await bcrypt.compare(
           credentials.password,
           account.passwordHash
         );
 
-        console.log('[Auth Debug] Password comparison result:', isValidPassword);
-
         if (!isValidPassword) {
-          console.log('[Auth Debug] Password invalid for account:', account.id);
           throw new Error('Invalid password');
         }
-
-        console.log('[Auth Debug] Login successful for:', account.email);
 
         return {
           id: account.id,
