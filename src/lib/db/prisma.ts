@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { withAccelerate } from '@prisma/extension-accelerate';
 import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
 import { Pool as PgPool } from 'pg';
 import ws from 'ws';
@@ -9,9 +10,9 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function getAccelerateUrl(): string | undefined {
-  // PRISMA_DATABASE_URL is the Accelerate proxy URL
+  // PRISMA_DATABASE_URL is the Accelerate proxy URL (starts with prisma://)
   const url = process.env.PRISMA_DATABASE_URL;
-  if (url && (url.includes('prisma://') || url.includes('prisma-data.net'))) {
+  if (url && (url.startsWith('prisma://') || url.startsWith('prisma+postgres://'))) {
     return url;
   }
   return undefined;
@@ -30,14 +31,16 @@ function isNeonDatabase(connectionString: string): boolean {
   return connectionString.includes('neon.tech') || connectionString.includes('neon.database');
 }
 
-function createPrismaClient() {
+function createPrismaClient(): PrismaClient {
   const accelerateUrl = getAccelerateUrl();
 
   // Use Prisma Accelerate if available (Prisma Postgres)
+  // Prisma 7 requires accelerateUrl to be passed explicitly
   if (accelerateUrl) {
     return new PrismaClient({
+      accelerateUrl,
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    });
+    }).$extends(withAccelerate()) as unknown as PrismaClient;
   }
 
   // For local development or direct connections
