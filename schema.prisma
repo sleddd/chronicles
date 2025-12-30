@@ -4,10 +4,9 @@ datasource db {
   schemas  = ["public", "auth"]
 }
 
-// Define custom output path for generated Prisma Client
+// Generate Prisma Client
 generator client {
-  provider = "prisma-client"
-  output   = "/app/generated/prisma-client"
+  provider = "prisma-client-js"
 }
 // ============================================
 // AUTH SCHEMA - Shared authentication tables
