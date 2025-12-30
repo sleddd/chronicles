@@ -1,6 +1,7 @@
 import { Pool as NeonPool, PoolClient as NeonPoolClient, neonConfig } from '@neondatabase/serverless';
 import { Pool as PgPool, PoolClient as PgPoolClient } from 'pg';
 import crypto from 'crypto';
+import ws from 'ws';
 
 function getConnectionString(): string {
   const connectionString = process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL;
@@ -22,10 +23,9 @@ function createPool(): NeonPool | PgPool {
   const connectionString = getConnectionString();
 
   if (isNeonDatabase()) {
-    // Configure Neon for serverless
-    neonConfig.useSecureWebSocket = true;
-    neonConfig.pipelineTLS = false;
-    neonConfig.pipelineConnect = false;
+    // Configure Neon for serverless with WebSocket support
+    neonConfig.webSocketConstructor = ws;
+    neonConfig.poolQueryViaFetch = true;
     return new NeonPool({ connectionString });
   }
 

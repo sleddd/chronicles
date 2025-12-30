@@ -3,6 +3,7 @@ import { PrismaNeon } from '@prisma/adapter-neon';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
 import { Pool as PgPool } from 'pg';
+import ws from 'ws';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -26,9 +27,9 @@ function createPrismaClient() {
 
   // Use Neon adapter for Neon databases (Vercel)
   if (isNeonDatabase()) {
-    neonConfig.useSecureWebSocket = true;
-    neonConfig.pipelineTLS = false;
-    neonConfig.pipelineConnect = false;
+    // Configure Neon for serverless with WebSocket support
+    neonConfig.webSocketConstructor = ws;
+    neonConfig.poolQueryViaFetch = true; // Use HTTP fetch for better serverless performance
 
     const adapter = new PrismaNeon({ connectionString });
     return new PrismaClient({
