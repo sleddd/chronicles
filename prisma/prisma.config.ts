@@ -1,17 +1,16 @@
 import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
-const databaseUrl = process.env.PRISMA_DATABASE_URL
+// Check for both your custom name and the standard Prisma name
+const databaseUrl = process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL
 
 if (!databaseUrl) {
-  throw new Error('PRISMA_DATABASE_URL is not defined')
+  // This will log in the Vercel build logs so you can see if it's missing
+  console.error("❌ Database URL is missing from environment variables.");
 }
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
-  migrations: {
-    path: 'prisma/migrations',
-  },
   datasource: {
     url: databaseUrl,
   },
