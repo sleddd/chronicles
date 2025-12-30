@@ -1,9 +1,39 @@
-import { Pool, PoolClient } from 'pg';
+import { Pool as NeonPool, PoolClient as NeonPoolClient, neonConfig } from '@neondatabase/serverless';
+import { Pool as PgPool, PoolClient as PgPoolClient } from 'pg';
 import crypto from 'crypto';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+function getConnectionString(): string {
+  const connectionString = process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('Database connection string not found');
+  }
+  return connectionString;
+}
+
+function isNeonDatabase(): boolean {
+  const connectionString = getConnectionString();
+  return connectionString.includes('neon.tech') || connectionString.includes('neon.database');
+}
+
+// Use appropriate pool based on database type
+type PoolClient = NeonPoolClient | PgPoolClient;
+
+function createPool(): NeonPool | PgPool {
+  const connectionString = getConnectionString();
+
+  if (isNeonDatabase()) {
+    // Configure Neon for serverless
+    neonConfig.useSecureWebSocket = true;
+    neonConfig.pipelineTLS = false;
+    neonConfig.pipelineConnect = false;
+    return new NeonPool({ connectionString });
+  }
+
+  // Standard pg Pool for local PostgreSQL
+  return new PgPool({ connectionString });
+}
+
+const pool = createPool();
 
 /**
  * Generate unique schema name: chronicles_<random_6_char>_<auto_increment>
@@ -618,6 +648,6 @@ export async function migrateCalendarEventsTable(schemaName: string): Promise<vo
 /**
  * Get pool for direct queries (useful for testing)
  */
-export function getPool(): Pool {
+export function getPool(): NeonPool | PgPool {
   return pool;
 }

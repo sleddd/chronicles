@@ -220,24 +220,119 @@ export function SettingsPanel() {
       return;
     }
 
+    if (!isKeyReady) {
+      setPasswordError('Encryption key not available. Please re-enter your password.');
+      return;
+    }
+
     setIsChangingPassword(true);
 
     try {
-      const response = await fetch('/api/user/change-password', {
+      // Get the current encryption key from the store
+      const { encryptionKey, decryptData } = useEncryption.getState();
+      if (!encryptionKey) {
+        throw new Error('Encryption key not available');
+      }
+
+      // Get the user's salt for key derivation
+      const saltResponse = await fetch('/api/user/salt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: session?.user?.email }),
+      });
+
+      if (!saltResponse.ok) {
+        throw new Error('Failed to get salt for key derivation');
+      }
+
+      const { salt } = await saltResponse.json();
+
+      // Derive new key from new password
+      const { deriveKey } = await import('@/lib/crypto/keyDerivation');
+      const newKey = await deriveKey(newPassword, salt);
+
+      // Fetch all encrypted data
+      setPasswordSuccess('Fetching encrypted data...');
+      const dataResponse = await fetch('/api/user/reencrypt');
+      if (!dataResponse.ok) {
+        throw new Error('Failed to fetch encrypted data');
+      }
+
+      const { entries, topics, customFields } = await dataResponse.json();
+
+      // Import encryption functions
+      const { encrypt, decrypt } = await import('@/lib/crypto/encryption');
+
+      // Re-encrypt all entries
+      setPasswordSuccess(`Re-encrypting ${entries.length} entries...`);
+      const reencryptedEntries = await Promise.all(
+        entries.map(async (entry: { id: string; encryptedContent: string; iv: string }) => {
+          try {
+            // Decrypt with old key
+            const decrypted = await decrypt(entry.encryptedContent, entry.iv, encryptionKey);
+            // Re-encrypt with new key
+            const { ciphertext, iv } = await encrypt(decrypted, newKey);
+            return { id: entry.id, encryptedContent: ciphertext, iv };
+          } catch (err) {
+            console.error(`Failed to re-encrypt entry ${entry.id}:`, err);
+            throw new Error(`Failed to re-encrypt entry: ${entry.id}`);
+          }
+        })
+      );
+
+      // Re-encrypt all topics
+      setPasswordSuccess(`Re-encrypting ${topics.length} topics...`);
+      const reencryptedTopics = await Promise.all(
+        topics.map(async (topic: { id: string; encryptedName: string; iv: string }) => {
+          try {
+            const decrypted = await decrypt(topic.encryptedName, topic.iv, encryptionKey);
+            const { ciphertext, iv } = await encrypt(decrypted, newKey);
+            return { id: topic.id, encryptedName: ciphertext, iv };
+          } catch (err) {
+            console.error(`Failed to re-encrypt topic ${topic.id}:`, err);
+            throw new Error(`Failed to re-encrypt topic: ${topic.id}`);
+          }
+        })
+      );
+
+      // Re-encrypt all custom fields
+      setPasswordSuccess(`Re-encrypting ${customFields.length} custom fields...`);
+      const reencryptedCustomFields = await Promise.all(
+        customFields.map(async (cf: { id: string; encryptedData: string; iv: string }) => {
+          try {
+            const decrypted = await decrypt(cf.encryptedData, cf.iv, encryptionKey);
+            const { ciphertext, iv } = await encrypt(decrypted, newKey);
+            return { id: cf.id, encryptedData: ciphertext, iv };
+          } catch (err) {
+            console.error(`Failed to re-encrypt custom field ${cf.id}:`, err);
+            throw new Error(`Failed to re-encrypt custom field: ${cf.id}`);
+          }
+        })
+      );
+
+      // Send all re-encrypted data to server
+      setPasswordSuccess('Saving re-encrypted data...');
+      const response = await fetch('/api/user/reencrypt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currentPassword,
           newPassword,
+          entries: reencryptedEntries,
+          topics: reencryptedTopics,
+          customFields: reencryptedCustomFields,
         }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to change password');
+        throw new Error(data.error || 'Failed to save re-encrypted data');
       }
 
-      setPasswordSuccess('Password changed successfully. You will be signed out.');
+      const result = await response.json();
+      setPasswordSuccess(
+        `Password changed! Re-encrypted ${result.entriesUpdated} entries, ${result.topicsUpdated} topics. Signing out...`
+      );
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -245,7 +340,7 @@ export function SettingsPanel() {
       // Sign out after password change
       setTimeout(() => {
         signOut({ callbackUrl: '/login' });
-      }, 2000);
+      }, 3000);
     } catch (error) {
       setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
     } finally {
