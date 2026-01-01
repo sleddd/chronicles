@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { LegacyKeyMigration } from '@/components/auth/LegacyKeyMigration';
 
 export function EncryptionProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
@@ -30,5 +31,10 @@ export function EncryptionProvider({ children }: { children: React.ReactNode }) 
     }
   }, [status, clearKey]);
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <LegacyKeyMigration />
+    </>
+  );
 }

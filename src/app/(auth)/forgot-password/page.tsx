@@ -9,9 +9,12 @@ import {
   unwrapMasterKey,
   wrapMasterKey,
   parseRecoveryKeyFromDisplay,
+  generateRecoveryKey,
+  generateSalt,
+  formatRecoveryKeyForDisplay,
 } from '@/lib/crypto/keyDerivation';
 
-type RecoveryStep = 'email' | 'recovery' | 'newPassword' | 'success';
+type RecoveryStep = 'email' | 'recovery' | 'newPassword' | 'showNewRecoveryKey' | 'success';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -33,6 +36,11 @@ export default function ForgotPasswordPage() {
 
   // Master key recovered from recovery key
   const [masterKey, setMasterKey] = useState<CryptoKey | null>(null);
+
+  // New recovery key to show after password reset
+  const [newRecoveryKeyDisplay, setNewRecoveryKeyDisplay] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +127,13 @@ export default function ForgotPasswordPage() {
       // Wrap the master key with the new password key
       const wrappedWithNewPassword = await wrapMasterKey(masterKey, newPasswordKey);
 
-      // Send to server
+      // Generate a NEW recovery key (rotate after use)
+      const newRecoveryKey = generateRecoveryKey();
+      const newRecoveryKeySalt = generateSalt();
+      const newRecoveryDerivedKey = await deriveKeyFromRecoveryKey(newRecoveryKey, newRecoveryKeySalt);
+      const wrappedWithNewRecovery = await wrapMasterKey(masterKey, newRecoveryDerivedKey);
+
+      // Send to server with new recovery key
       const response = await fetch('/api/user/recover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,6 +142,10 @@ export default function ForgotPasswordPage() {
           newPassword,
           encryptedMasterKey: wrappedWithNewPassword.encryptedKey,
           masterKeyIv: wrappedWithNewPassword.iv,
+          // New recovery key data
+          encryptedMasterKeyWithRecovery: wrappedWithNewRecovery.encryptedKey,
+          recoveryKeyIv: wrappedWithNewRecovery.iv,
+          recoveryKeySalt: newRecoveryKeySalt,
         }),
       });
 
@@ -139,11 +157,31 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      setStep('success');
+      // Show the new recovery key to the user
+      setNewRecoveryKeyDisplay(formatRecoveryKeyForDisplay(newRecoveryKey));
+      setStep('showNewRecoveryKey');
     } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyRecoveryKey = async () => {
+    try {
+      await navigator.clipboard.writeText(newRecoveryKeyDisplay);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = newRecoveryKeyDisplay;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
     }
   };
 
@@ -318,15 +356,77 @@ export default function ForgotPasswordPage() {
           </form>
         )}
 
+        {step === 'showNewRecoveryKey' && (
+          <div className="mt-8 space-y-6">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <p className="text-sm font-medium text-green-800">Password reset successful!</p>
+              </div>
+              <p className="text-sm text-green-700">
+                Your recovery key has been rotated for security. Save your new key below.
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border-2 border-amber-500 rounded-lg p-4">
+              <p className="text-sm font-bold text-amber-800 mb-2">SAVE YOUR NEW RECOVERY KEY</p>
+              <p className="text-sm text-amber-700">
+                Your old recovery key no longer works. This new key is the <strong>ONLY WAY</strong> to recover your account if you forget your password again.
+              </p>
+            </div>
+
+            <div className="bg-gray-100 rounded-lg p-4">
+              <p className="text-xs text-gray-500 mb-2 text-center">Your New Recovery Key:</p>
+              <div className="font-mono text-sm text-center bg-white border border-gray-300 rounded p-3 break-all select-all">
+                {newRecoveryKeyDisplay}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyRecoveryKey}
+                className="mt-3 w-full px-4 py-2 text-sm text-white rounded-md"
+                style={{ backgroundColor: copied ? '#059669' : '#1aaeae' }}
+              >
+                {copied ? 'Copied!' : 'Copy to Clipboard'}
+              </button>
+            </div>
+
+            <div className="border-t pt-4">
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 text-teal-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  I have saved my new recovery key in a secure location
+                </span>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setStep('success')}
+              disabled={!confirmed}
+              className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white disabled:bg-gray-400"
+              style={{ backgroundColor: confirmed ? '#1aaeae' : undefined }}
+            >
+              Continue to Login
+            </button>
+          </div>
+        )}
+
         {step === 'success' && (
           <div className="mt-8 space-y-6 text-center">
             <div className="bg-green-50 border border-green-200 rounded-lg p-6">
               <svg className="w-12 h-12 text-green-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <h2 className="text-lg font-medium text-green-800 mb-2">Password Reset Successful!</h2>
+              <h2 className="text-lg font-medium text-green-800 mb-2">You&apos;re All Set!</h2>
               <p className="text-sm text-green-700">
-                Your password has been reset. You can now log in with your new password.
+                Your password has been reset and your recovery key has been updated. You can now log in with your new password.
               </p>
             </div>
 

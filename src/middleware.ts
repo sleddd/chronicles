@@ -55,6 +55,6 @@ export const config = {
   matcher: [
     // Protect all routes except public ones
     // Note: Static files (*.png, *.ico, *.svg, etc.) are excluded to allow access on login/register pages
-    '/((?!api/auth|api/user/register|api/user/salt|api/share|share|login|register|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.ico$|.*\\.svg$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.webp$).*)',
+    '/((?!api/auth|api/user/register|api/user/salt|api/user/recover|api/share|share|login|register|forgot-password|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.ico$|.*\\.svg$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.webp$).*)',
   ],
 };

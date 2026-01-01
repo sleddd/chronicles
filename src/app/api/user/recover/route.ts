@@ -15,6 +15,10 @@ const recoverSchema = z.object({
   // These are the re-wrapped master key with the new password
   encryptedMasterKey: z.string(),
   masterKeyIv: z.string(),
+  // New recovery key (rotated for security)
+  encryptedMasterKeyWithRecovery: z.string(),
+  recoveryKeyIv: z.string(),
+  recoveryKeySalt: z.string(),
 });
 
 // POST /api/user/recover - Reset password using recovery key
@@ -70,12 +74,15 @@ export async function POST(request: NextRequest) {
     // Hash the new password
     const passwordHash = await bcrypt.hash(validatedData.newPassword, 10);
 
-    // Update the account with new password hash and re-wrapped master key
+    // Update the account with new password hash, re-wrapped master key, and new recovery key
     await prisma.account.update({
       where: { id: account.id },
       data: {
         passwordHash,
         encryptedMasterKey: `${validatedData.encryptedMasterKey}:${validatedData.masterKeyIv}`,
+        // Store new rotated recovery key
+        encryptedMasterKeyWithRecovery: `${validatedData.encryptedMasterKeyWithRecovery}:${validatedData.recoveryKeyIv}`,
+        recoveryKeySalt: validatedData.recoveryKeySalt,
       },
     });
 

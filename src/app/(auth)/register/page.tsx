@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { RecoveryKeyDisplay } from '@/components/auth/RecoveryKeyDisplay';
+import { useEncryption } from '@/lib/hooks/useEncryption';
+import { seedDefaultTopics } from '@/lib/topics/seedDefaultTopics';
 import {
   generateMasterKey,
   generateRecoveryKey,
@@ -137,7 +139,19 @@ export default function RegisterPage() {
         return;
       }
 
-      // Step 8: Show recovery key to user
+      // Step 8: Store master key in Zustand and sessionStorage for immediate use
+      useEncryption.setState({ encryptionKey: masterKey, isKeyReady: true });
+      try {
+        const jwk = await window.crypto.subtle.exportKey('jwk', masterKey);
+        sessionStorage.setItem('chronicles_session_key', JSON.stringify(jwk));
+      } catch (storageErr) {
+        console.error('Failed to store key in session:', storageErr);
+      }
+
+      // Step 9: Seed default topics for new user
+      await seedDefaultTopics(masterKey);
+
+      // Step 10: Show recovery key to user
       setRecoveryKeyDisplay(formatRecoveryKeyForDisplay(recoveryKey));
       setStep('showRecoveryKey');
       setLoading(false);

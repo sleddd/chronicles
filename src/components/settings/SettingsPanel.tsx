@@ -64,6 +64,10 @@ export function SettingsPanel() {
   const [seedingTopics, setSeedingTopics] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
 
+  // Export state
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<string | null>(null);
+
   // Feature settings
   const [featureSettings, setFeatureSettings] = useState<FeatureSettings>({
     foodEnabled: false,
@@ -204,6 +208,120 @@ export function SettingsPanel() {
       setSeedResult('Failed to create default topics. Check console for details.');
     } finally {
       setSeedingTopics(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (!isKeyReady) {
+      setExportResult('Encryption key not ready. Please refresh and re-enter your password.');
+      return;
+    }
+
+    setExporting(true);
+    setExportResult(null);
+
+    try {
+      const { encryptionKey } = useEncryption.getState();
+      if (!encryptionKey) {
+        throw new Error('No encryption key');
+      }
+
+      const { decrypt } = await import('@/lib/crypto/encryption');
+
+      // Fetch all entries
+      setExportResult('Fetching entries...');
+      const entriesResponse = await fetch('/api/entries?all=true');
+      if (!entriesResponse.ok) {
+        throw new Error('Failed to fetch entries');
+      }
+      const entriesData = await entriesResponse.json();
+      const entries = entriesData.entries || [];
+
+      // Fetch all topics for name lookup
+      const topicsResponse = await fetch('/api/topics');
+      if (!topicsResponse.ok) {
+        throw new Error('Failed to fetch topics');
+      }
+      const topicsData = await topicsResponse.json();
+      const topics = topicsData.topics || [];
+
+      // Decrypt topics to build a lookup map
+      setExportResult('Decrypting topics...');
+      const topicNames: Record<string, string> = {};
+      for (const topic of topics) {
+        try {
+          const decryptedName = await decrypt(topic.encryptedName, topic.iv, encryptionKey);
+          topicNames[topic.id] = decryptedName;
+        } catch {
+          topicNames[topic.id] = 'Unknown Topic';
+        }
+      }
+
+      // Decrypt entries and build CSV rows
+      setExportResult(`Decrypting ${entries.length} entries...`);
+      const csvRows: string[][] = [];
+
+      // Header row
+      csvRows.push(['Date', 'Topic', 'Type', 'Content', 'Created At']);
+
+      for (const entry of entries) {
+        try {
+          const decryptedContent = await decrypt(entry.encryptedContent, entry.iv, encryptionKey);
+
+          // Strip HTML tags for plain text
+          const plainText = decryptedContent
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .trim();
+
+          const topicName = entry.topicId ? (topicNames[entry.topicId] || 'Unknown') : 'No Topic';
+          const entryType = entry.customType || 'entry';
+          const entryDate = entry.entryDate;
+          const createdAt = new Date(entry.createdAt).toISOString();
+
+          csvRows.push([entryDate, topicName, entryType, plainText, createdAt]);
+        } catch (err) {
+          console.error(`Failed to decrypt entry ${entry.id}:`, err);
+          csvRows.push([entry.entryDate, 'Error', entry.customType || 'entry', 'Decryption failed', '']);
+        }
+      }
+
+      // Convert to CSV string with proper escaping
+      const csvContent = csvRows.map(row =>
+        row.map(cell => {
+          // Escape double quotes by doubling them
+          const escaped = String(cell).replace(/"/g, '""');
+          // Wrap in quotes if contains comma, newline, or quotes
+          if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('"')) {
+            return `"${escaped}"`;
+          }
+          return escaped;
+        }).join(',')
+      ).join('\n');
+
+      // Create and download the file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `chronicles-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setExportResult(`Successfully exported ${entries.length} entries!`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      setExportResult(error instanceof Error ? error.message : 'Export failed');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -792,26 +910,52 @@ export function SettingsPanel() {
       {/* Data Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Data</h2>
-        <div className="bg-white border rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Default Topics</p>
-              <p className="text-sm text-gray-500">Create default journal topics if missing</p>
+        <div className="bg-white border rounded-lg divide-y">
+          {/* Default Topics */}
+          <div className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">Default Topics</p>
+                <p className="text-sm text-gray-500">Create default journal topics if missing</p>
+              </div>
+              <button
+                onClick={handleSeedTopics}
+                disabled={seedingTopics || !isKeyReady}
+                className="px-4 py-2 text-sm border rounded-md hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+                style={{ color: seedingTopics || !isKeyReady ? undefined : '#1aaeae', borderColor: seedingTopics || !isKeyReady ? undefined : '#1aaeae' }}
+              >
+                {seedingTopics ? 'Adding...' : 'Add Default Topics'}
+              </button>
             </div>
-            <button
-              onClick={handleSeedTopics}
-              disabled={seedingTopics || !isKeyReady}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
-              style={{ color: seedingTopics || !isKeyReady ? undefined : '#1aaeae', borderColor: seedingTopics || !isKeyReady ? undefined : '#1aaeae' }}
-            >
-              {seedingTopics ? 'Adding...' : 'Add Default Topics'}
-            </button>
+            {seedResult && (
+              <p className={`mt-3 text-sm ${seedResult.includes('Successfully') || seedResult.includes('created') ? 'text-green-600' : seedResult.includes('already') ? 'text-gray-600' : 'text-red-600'}`}>
+                {seedResult}
+              </p>
+            )}
           </div>
-          {seedResult && (
-            <p className={`mt-3 text-sm ${seedResult.includes('successfully') ? 'text-green-600' : seedResult.includes('already') ? 'text-gray-600' : 'text-red-600'}`}>
-              {seedResult}
-            </p>
-          )}
+
+          {/* Export Entries */}
+          <div className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">Export Entries</p>
+                <p className="text-sm text-gray-500">Download all entries as a decrypted CSV file</p>
+              </div>
+              <button
+                onClick={handleExportCSV}
+                disabled={exporting || !isKeyReady}
+                className="px-4 py-2 text-sm border rounded-md hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+                style={{ color: exporting || !isKeyReady ? undefined : '#1aaeae', borderColor: exporting || !isKeyReady ? undefined : '#1aaeae' }}
+              >
+                {exporting ? 'Exporting...' : 'Export to CSV'}
+              </button>
+            </div>
+            {exportResult && (
+              <p className={`mt-3 text-sm ${exportResult.includes('Successfully') ? 'text-green-600' : exportResult.includes('...') ? 'text-gray-600' : 'text-red-600'}`}>
+                {exportResult}
+              </p>
+            )}
+          </div>
         </div>
       </section>
 

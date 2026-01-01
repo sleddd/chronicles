@@ -36,8 +36,8 @@ export async function deriveKey(
       name: 'AES-GCM',
       length: 256,
     },
-    true, // extractable for HMAC key derivation
-    ['encrypt', 'decrypt']
+    true, // extractable for key wrapping and export
+    ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']
   );
 
   return key;

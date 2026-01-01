@@ -43,3 +43,6 @@ next-env.d.ts
 
 # uploaded files (encrypted user images)
 /uploads
+
+# admin/dev scripts
+/scripts
