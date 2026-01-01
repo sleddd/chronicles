@@ -1,8 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { signIn } from 'next-auth/react';
+import { RecoveryKeyDisplay } from '@/components/auth/RecoveryKeyDisplay';
+import {
+  generateMasterKey,
+  generateRecoveryKey,
+  generateSalt,
+  deriveKey,
+  deriveKeyFromRecoveryKey,
+  wrapMasterKey,
+  formatRecoveryKeyForDisplay,
+} from '@/lib/crypto/keyDerivation';
+import {
+  validatePasswordStrength,
+  getStrengthColor,
+  getStrengthPercentage,
+} from '@/lib/passwordStrength';
+
+type RegistrationStep = 'form' | 'settingUp' | 'showRecoveryKey';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -14,6 +32,11 @@ export default function RegisterPage() {
   const [showTerms, setShowTerms] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<RegistrationStep>('form');
+  const [recoveryKeyDisplay, setRecoveryKeyDisplay] = useState('');
+
+  // Password strength calculation
+  const passwordStrength = useMemo(() => validatePasswordStrength(password), [password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +44,12 @@ export default function RegisterPage() {
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+
+    // Check password strength
+    if (!passwordStrength.valid) {
+      setError(passwordStrength.message || 'Password is too weak');
       return;
     }
 
@@ -37,6 +66,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      // Step 1: Register the user
       const response = await fetch('/api/user/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,16 +77,113 @@ export default function RegisterPage() {
 
       if (!response.ok) {
         setError(data.error || 'Registration failed');
+        setLoading(false);
         return;
       }
 
-      router.push('/login?registered=true');
-    } catch {
+      // Step 2: Sign in to get a session (needed to store keys)
+      setStep('settingUp');
+      const signInResult = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (!signInResult?.ok) {
+        setError('Registration succeeded but login failed. Please try logging in.');
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Generate master key and recovery key (client-side)
+      const masterKey = await generateMasterKey();
+      const recoveryKey = generateRecoveryKey();
+      const recoveryKeySalt = generateSalt();
+
+      // Step 4: Get the user's salt from the registration response or fetch it
+      const saltResponse = await fetch('/api/user/salt');
+      const saltData = await saltResponse.json();
+
+      if (!saltResponse.ok) {
+        setError('Failed to retrieve encryption salt');
+        setLoading(false);
+        return;
+      }
+
+      // Step 5: Derive wrapping keys from password and recovery key
+      const passwordKey = await deriveKey(password, saltData.salt);
+      const recoveryDerivedKey = await deriveKeyFromRecoveryKey(recoveryKey, recoveryKeySalt);
+
+      // Step 6: Wrap master key with both keys
+      const wrappedWithPassword = await wrapMasterKey(masterKey, passwordKey);
+      const wrappedWithRecovery = await wrapMasterKey(masterKey, recoveryDerivedKey);
+
+      // Step 7: Store wrapped keys on server
+      const setupResponse = await fetch('/api/user/setup-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          encryptedMasterKey: wrappedWithPassword.encryptedKey,
+          masterKeyIv: wrappedWithPassword.iv,
+          encryptedMasterKeyWithRecovery: wrappedWithRecovery.encryptedKey,
+          recoveryKeyIv: wrappedWithRecovery.iv,
+          recoveryKeySalt: recoveryKeySalt,
+        }),
+      });
+
+      if (!setupResponse.ok) {
+        setError('Failed to set up encryption keys');
+        setLoading(false);
+        return;
+      }
+
+      // Step 8: Show recovery key to user
+      setRecoveryKeyDisplay(formatRecoveryKeyForDisplay(recoveryKey));
+      setStep('showRecoveryKey');
+      setLoading(false);
+    } catch (err) {
+      console.error('Registration error:', err);
       setError('An unexpected error occurred');
-    } finally {
       setLoading(false);
     }
   };
+
+  const handleRecoveryKeyConfirmed = () => {
+    router.push('/');
+  };
+
+  // Show recovery key after successful registration
+  if (step === 'showRecoveryKey') {
+    return (
+      <RecoveryKeyDisplay
+        recoveryKey={recoveryKeyDisplay}
+        onConfirmed={handleRecoveryKeyConfirmed}
+      />
+    );
+  }
+
+  // Show setting up screen
+  if (step === 'settingUp') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md text-center">
+          <div className="flex flex-col items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/chronicles-logo.png"
+              alt="Chronicles"
+              className="h-20 w-auto mb-6"
+            />
+          </div>
+          <div className="animate-pulse">
+            <div className="inline-block w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <h2 className="text-lg font-medium text-gray-900">Setting up your secure account...</h2>
+            <p className="text-sm text-gray-500 mt-2">Generating encryption keys</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -100,6 +227,36 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
               />
+              {/* Password strength indicator */}
+              {password && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-600">Password strength:</span>
+                    <span
+                      className="font-medium capitalize"
+                      style={{ color: getStrengthColor(passwordStrength.strength) }}
+                    >
+                      {passwordStrength.strength}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full transition-all duration-300"
+                      style={{
+                        width: `${getStrengthPercentage(passwordStrength.entropy)}%`,
+                        backgroundColor: getStrengthColor(passwordStrength.strength),
+                      }}
+                    />
+                  </div>
+                  {passwordStrength.suggestions.length > 0 && (
+                    <ul className="mt-1 text-xs text-gray-500 list-disc pl-4">
+                      {passwordStrength.suggestions.slice(0, 2).map((s, i) => (
+                        <li key={i}>{s}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -118,23 +275,22 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div className="bg-red-50 border-2 border-red-500 rounded-lg p-4">
+          <div className="bg-amber-50 border-2 border-amber-500 rounded-lg p-4">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <svg className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-bold text-red-800">CRITICAL WARNING</h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <p className="font-bold">There is NO PASSWORD RECOVERY.</p>
-                  <p className="mt-1">
-                    If you forget your password, all your data will be PERMANENTLY LOST.
-                    No one can recover it, not even our support team.
+                <h3 className="text-sm font-bold text-amber-800">IMPORTANT: Recovery Key Required</h3>
+                <div className="mt-2 text-sm text-amber-700">
+                  <p>
+                    After registration, you will receive a <strong>recovery key</strong>.
+                    This key is the <strong>ONLY WAY</strong> to recover your account if you forget your password.
                   </p>
                   <p className="mt-2">
-                    Please write down your password and store it securely.
+                    You must save this key securely. Without it and your password, your data cannot be recovered.
                   </p>
                 </div>
               </div>
@@ -146,10 +302,10 @@ export default function RegisterPage() {
                   type="checkbox"
                   checked={acceptedWarning}
                   onChange={(e) => setAcceptedWarning(e.target.checked)}
-                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
                 />
-                <span className="ml-2 text-sm text-red-900 font-medium">
-                  I understand and accept this risk
+                <span className="ml-2 text-sm text-amber-900 font-medium">
+                  I understand I must save my recovery key
                 </span>
               </label>
             </div>

@@ -5,6 +5,7 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { generateSearchTokens } from '@/lib/crypto/searchTokens';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { TopicSelector } from '@/components/topics/TopicSelector';
 import { MilestoneGoalSelector } from '@/components/goals/MilestoneEditor';
 import { TaskMilestoneSelector } from '@/components/tasks/TaskMilestoneSelector';
@@ -727,7 +728,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     setSaving(true);
 
     try {
-      const content = editor.getHTML();
+      // Sanitize HTML content before encryption to prevent XSS
+      const rawContent = editor.getHTML();
+      const content = sanitizeHtml(rawContent);
       const { encryptionKey } = useEncryption.getState();
 
       const { ciphertext, iv } = await encryptData(content);

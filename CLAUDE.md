@@ -7,8 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Chronicles is a **zero-knowledge encrypted journal application** with client-side encryption. The server never sees plaintext user data. Key privacy guarantees:
 - All entry content is encrypted in the browser before transmission
 - Master encryption key exists only in browser memory (lost on refresh)
-- Password loss = permanent data loss (by design, no recovery)
--  You do have a recovery key option
+- Recovery key provided at registration for password recovery
 
 ## Commands
 
@@ -59,6 +58,25 @@ PostgreSQL Database
 
 Password changes only re-wrap the master key (instant). Data is never re-encrypted on password change.
 
+### Recovery Key System
+
+The master key is wrapped with two different keys:
+1. **Password-derived key** (PBKDF2) - for normal login
+2. **Recovery-derived key** - for password recovery
+
+At registration:
+- Client generates a random master key and recovery key (32 bytes each)
+- Master key is wrapped with password-derived key (stored as `encryptedMasterKey`)
+- Master key is also wrapped with recovery-derived key (stored as `encryptedMasterKeyWithRecovery`)
+- Recovery key is shown once to user (formatted as hex with dashes) - must be saved
+
+For password recovery:
+1. User provides email and recovery key
+2. Client fetches encrypted master key (recovery-wrapped) from server
+3. Client unwraps master key using recovery key
+4. Client wraps master key with new password-derived key
+5. Server updates password hash and wrapped master key
+
 ### Key Files
 
 **Database & Auth:**
@@ -75,7 +93,7 @@ Password changes only re-wrap the master key (instant). Data is never re-encrypt
 - `src/components/journal/` - Journal entry editor, list, and layout
 - `src/components/topics/` - Topic management (sidebar, browser, selector)
 - `src/components/goals/` - Goals and milestones tracking
-- `src/components/medical/` - Medical tracking (medications, symptoms, food, schedule)
+- `src/components/health/` - Health tracking (medications, symptoms, food, exercise, schedule)
 - `src/components/calendar/` - Calendar view
 - `src/components/sharing/` - Entry sharing functionality
 
@@ -111,7 +129,7 @@ await client.query(`SELECT * FROM "${schemaName}"."entries" WHERE ...`);
 - Journal entries with rich text editor
 - Topic organization with icons and colors
 - Goals with milestone tracking
-- Medical tracking (medications, symptoms, food, schedule)
+- Health tracking (medications, symptoms, food, exercise, schedule)
 - Calendar view
 - Entry sharing via public links
 - Favorites system
@@ -120,16 +138,25 @@ await client.query(`SELECT * FROM "${schemaName}"."entries" WHERE ...`);
 
 ### Registration Flow
 1. Email must be on whitelist (env: `REGISTRATION_WHITELIST`)
-2. User must accept password recovery warning (no recovery possible)
+2. User must acknowledge recovery key requirement
 3. User must agree to Terms of Service
 4. Password requirements: 12+ chars, uppercase, lowercase, number
+5. After registration: master key and recovery key generated client-side
+6. Recovery key displayed once - user must save it securely
+
+### Password Recovery Flow
+1. User clicks "Forgot password?" on login page
+2. Enters email address
+3. Enters recovery key (hex format with dashes)
+4. If valid, enters new password
+5. Master key re-wrapped with new password and saved
 
 ## Encryption Specification
 
 ```
 Algorithm: AES-256-GCM
 IV: Random 12 bytes per entry
-Key Derivation: PBKDF2-SHA256, 100,000 iterations
+Key Derivation: PBKDF2-SHA256, 600,000 iterations (OWASP 2023 recommendation)
 Salt: 32 bytes random per user
 ```
 

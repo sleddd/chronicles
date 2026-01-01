@@ -1,16 +1,30 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 
 export function EncryptionProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
-  const { clearKey } = useEncryption();
+  const { clearKey, isKeyReady, restoreKeyFromSession } = useEncryption();
+  const restorationAttempted = useRef(false);
 
-  // Clear encryption key when user logs out
+  // Restore encryption key from sessionStorage when authenticated but key not ready
+  useEffect(() => {
+    if (status === 'authenticated' && !isKeyReady && !restorationAttempted.current) {
+      restorationAttempted.current = true;
+      restoreKeyFromSession().then((restored) => {
+        if (!restored) {
+          console.log('[EncryptionProvider] No key in sessionStorage to restore');
+        }
+      });
+    }
+  }, [status, isKeyReady, restoreKeyFromSession]);
+
+  // Reset restoration flag when user logs out
   useEffect(() => {
     if (status === 'unauthenticated') {
+      restorationAttempted.current = false;
       clearKey();
       sessionStorage.removeItem('recent_login');
     }

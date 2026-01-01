@@ -73,9 +73,9 @@ export function checkRateLimit(
 
 // Rate limit configurations for different endpoints
 export const RATE_LIMITS = {
-  // Auth endpoints - stricter limits
-  login: { windowMs: 300000, maxRequests: 5 }, // 5 attempts per 5 minutes
-  register: { windowMs: 3600000, maxRequests: 3 }, // 3 registrations per hour per IP
+  // Auth endpoints - stricter limits (increased for dev/testing)
+  login: { windowMs: 60000, maxRequests: 20 }, // 20 attempts per 1 minute (dev-friendly)
+  register: { windowMs: 3600000, maxRequests: 10 }, // 10 registrations per hour per IP
 
   // API endpoints - standard limits
   api: { windowMs: 60000, maxRequests: 100 }, // 100 requests per minute

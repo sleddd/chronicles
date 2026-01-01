@@ -12,7 +12,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const registered = searchParams.get('registered');
 
-  const { deriveAndStoreKey } = useEncryption();
+  const { deriveAndStoreKey, unwrapAndStoreMasterKey } = useEncryption();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +36,7 @@ function LoginForm() {
         return;
       }
 
-      // Derive encryption key from password before navigating
+      // Get salt and encrypted master key before setting up encryption
       try {
         const saltResponse = await fetch('/api/user/salt', {
           method: 'POST',
@@ -45,8 +45,26 @@ function LoginForm() {
         });
 
         if (saltResponse.ok) {
-          const { salt } = await saltResponse.json();
-          await deriveAndStoreKey(password, salt);
+          const { salt, encryptedMasterKey, masterKeyIv } = await saltResponse.json();
+
+          console.log('[Login Debug] Salt response:', {
+            hasSalt: !!salt,
+            hasEncryptedMasterKey: !!encryptedMasterKey,
+            hasMasterKeyIv: !!masterKeyIv,
+          });
+
+          // Check if user has master key system (new users) or legacy (old users)
+          if (encryptedMasterKey && masterKeyIv) {
+            // New system: unwrap master key
+            console.log('[Login Debug] Using NEW master key system');
+            await unwrapAndStoreMasterKey(password, salt, encryptedMasterKey, masterKeyIv);
+          } else {
+            // Legacy system: derive key directly from password
+            // Use legacy iterations (100,000) for backward compatibility
+            console.log('[Login Debug] Using LEGACY key derivation (100k iterations)');
+            await deriveAndStoreKey(password, salt, true);
+          }
+
           sessionStorage.setItem('recent_login', 'true');
 
           // Seed default topics for new users (only runs if no topics exist)
@@ -56,7 +74,7 @@ function LoginForm() {
           }
         }
       } catch (keyError) {
-        console.error('Failed to derive encryption key:', keyError);
+        console.error('Failed to set up encryption key:', keyError);
         // Still proceed - user can re-enter password via modal
       }
 
@@ -137,10 +155,17 @@ function LoginForm() {
             {loading ? 'Signing In...' : 'Sign In'}
           </button>
 
-          <div className="text-center">
-            <Link href="/register" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
-              Don&apos;t have an account? Create one
-            </Link>
+          <div className="text-center space-y-2">
+            <div>
+              <Link href="/forgot-password" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+                Forgot your password?
+              </Link>
+            </div>
+            <div>
+              <Link href="/register" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+                Don&apos;t have an account? Create one
+              </Link>
+            </div>
           </div>
         </form>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { deriveKey } from '@/lib/crypto/keyDerivation';
+import { deriveKey, deriveLegacyKey, unwrapMasterKey } from '@/lib/crypto/keyDerivation';
 import { encrypt, decrypt } from '@/lib/crypto/encryption';
 
 const SESSION_KEY_STORAGE = 'chronicles_session_key';
@@ -27,7 +27,14 @@ async function importKey(jwkString: string): Promise<CryptoKey> {
 interface EncryptionStore {
   encryptionKey: CryptoKey | null;
   isKeyReady: boolean;
-  deriveAndStoreKey: (password: string, salt: string) => Promise<void>;
+  isLegacyKey: boolean; // Track if using legacy iterations
+  deriveAndStoreKey: (password: string, salt: string, useLegacy?: boolean) => Promise<void>;
+  unwrapAndStoreMasterKey: (
+    password: string,
+    salt: string,
+    encryptedMasterKey: string,
+    masterKeyIv: string
+  ) => Promise<void>;
   restoreKeyFromSession: () => Promise<boolean>;
   encryptData: (data: string) => Promise<{ ciphertext: string; iv: string }>;
   decryptData: (ciphertext: string, iv: string) => Promise<string>;
@@ -37,11 +44,16 @@ interface EncryptionStore {
 export const useEncryption = create<EncryptionStore>((set, get) => ({
   encryptionKey: null,
   isKeyReady: false,
+  isLegacyKey: false,
 
-  deriveAndStoreKey: async (password: string, salt: string) => {
+  // Legacy method: derive key directly from password (for old users without master key)
+  // useLegacy=true uses 100,000 iterations for backward compatibility
+  deriveAndStoreKey: async (password: string, salt: string, useLegacy: boolean = false) => {
     try {
-      const key = await deriveKey(password, salt);
-      set({ encryptionKey: key, isKeyReady: true });
+      const key = useLegacy
+        ? await deriveLegacyKey(password, salt)
+        : await deriveKey(password, salt);
+      set({ encryptionKey: key, isKeyReady: true, isLegacyKey: useLegacy });
 
       // Store key in sessionStorage for persistence across refreshes
       try {
@@ -53,6 +65,34 @@ export const useEncryption = create<EncryptionStore>((set, get) => ({
     } catch (error) {
       console.error('Key derivation failed:', error);
       throw new Error('Failed to derive encryption key');
+    }
+  },
+
+  // New method: unwrap master key using password-derived key
+  unwrapAndStoreMasterKey: async (
+    password: string,
+    salt: string,
+    encryptedMasterKey: string,
+    masterKeyIv: string
+  ) => {
+    try {
+      // First derive the wrapping key from password
+      const wrappingKey = await deriveKey(password, salt);
+
+      // Then unwrap the master key
+      const masterKey = await unwrapMasterKey(encryptedMasterKey, masterKeyIv, wrappingKey);
+      set({ encryptionKey: masterKey, isKeyReady: true });
+
+      // Store master key in sessionStorage for persistence across refreshes
+      try {
+        const exportedKey = await exportKey(masterKey);
+        sessionStorage.setItem(SESSION_KEY_STORAGE, exportedKey);
+      } catch (storageError) {
+        console.error('Failed to store key in session:', storageError);
+      }
+    } catch (error) {
+      console.error('Master key unwrap failed:', error);
+      throw new Error('Failed to unwrap master key - incorrect password or corrupted key');
     }
   },
 
@@ -99,5 +139,11 @@ export const useEncryption = create<EncryptionStore>((set, get) => ({
 
   clearKey: () => {
     set({ encryptionKey: null, isKeyReady: false });
+    // Also clear the session storage to prevent key restoration after logout
+    try {
+      sessionStorage.removeItem(SESSION_KEY_STORAGE);
+    } catch {
+      // Ignore storage errors
+    }
   },
 }));
