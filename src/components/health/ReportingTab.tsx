@@ -9,12 +9,18 @@ import {
   calculateCorrelations,
   calculateSymptomFrequency,
   calculateSeverityTrend,
+  calculateExerciseCorrelations,
+  calculateExerciseImpact,
+  calculateExerciseFrequency,
   CorrelationResult,
   FrequencyData,
   SeverityTrendData,
+  ExerciseImpactResult,
+  ExerciseFrequencyData,
   DecryptedSymptom,
   DecryptedFood,
   DecryptedMedicationLog,
+  DecryptedExercise,
 } from '@/lib/utils/correlationAnalysis';
 
 interface CustomField {
@@ -49,11 +55,14 @@ export function ReportingTab({ refreshKey }: Props) {
   const [symptoms, setSymptoms] = useState<DecryptedSymptom[]>([]);
   const [food, setFood] = useState<DecryptedFood[]>([]);
   const [medicationLogs, setMedicationLogs] = useState<DecryptedMedicationLog[]>([]);
+  const [exercises, setExercises] = useState<DecryptedExercise[]>([]);
 
   // Chart data
   const [correlations, setCorrelations] = useState<CorrelationResult[]>([]);
   const [symptomFrequency, setSymptomFrequency] = useState<FrequencyData[]>([]);
   const [severityTrend, setSeverityTrend] = useState<SeverityTrendData[]>([]);
+  const [exerciseImpact, setExerciseImpact] = useState<ExerciseImpactResult[]>([]);
+  const [exerciseFrequency, setExerciseFrequency] = useState<ExerciseFrequencyData[]>([]);
 
   const getDateRange = useCallback(() => {
     if (period === 'custom' && customStartDate && customEndDate) {
@@ -167,11 +176,11 @@ export function ReportingTab({ refreshKey }: Props) {
       }
       setFood(decryptedFood);
 
-      // Decrypt medication logs
+      // Decrypt medication logs from the medication_dose_logs table
       const decryptedLogs: DecryptedMedicationLog[] = [];
       const medicationsMap = new Map<string, string>();
 
-      // First decrypt medication names
+      // First decrypt medication names from entries
       for (const med of (report.medications || []) as RawEntry[]) {
         try {
           const rawName = await decryptData(med.encryptedContent, med.iv);
@@ -182,35 +191,68 @@ export function ReportingTab({ refreshKey }: Props) {
         }
       }
 
-      for (const log of (report.medicationLogs || []) as RawEntry[]) {
-        try {
-          let takenAt = '';
+      // Process dose logs - these come directly from medication_dose_logs table
+      // They have: id, medicationId, scheduledTime, date, status, takenAt
+      interface DoseLogEntry {
+        id: string;
+        medicationId: string;
+        scheduledTime: string;
+        date: string;
+        status: string;
+        takenAt: string | null;
+      }
 
-          if (log.custom_fields) {
-            for (const cf of log.custom_fields) {
+      for (const log of (report.medicationLogs || []) as DoseLogEntry[]) {
+        if (log.takenAt && log.medicationId) {
+          decryptedLogs.push({
+            id: log.id,
+            medicationId: log.medicationId,
+            medicationName: medicationsMap.get(log.medicationId) || 'Unknown',
+            takenAt: log.takenAt,
+          });
+        }
+      }
+      setMedicationLogs(decryptedLogs);
+
+      // Decrypt exercise entries
+      const decryptedExercises: DecryptedExercise[] = [];
+      for (const exercise of (report.exercise || []) as RawEntry[]) {
+        try {
+          const rawName = await decryptData(exercise.encryptedContent, exercise.iv);
+          const name = rawName.replace(/<[^>]*>/g, '').trim();
+          let exerciseType = '';
+          let duration = 0;
+          let intensity: 'low' | 'medium' | 'high' = 'medium';
+          let performedAt = new Date().toISOString();
+
+          if (exercise.custom_fields) {
+            for (const cf of exercise.custom_fields) {
               try {
                 const decrypted = await decryptData(cf.encryptedData, cf.iv);
                 const parsed = JSON.parse(decrypted);
-                if (parsed.fieldKey === 'takenAt') takenAt = parsed.value;
+                if (parsed.fieldKey === 'exerciseType') exerciseType = parsed.value;
+                if (parsed.fieldKey === 'duration') duration = parsed.value || 0;
+                if (parsed.fieldKey === 'intensity') intensity = parsed.value || 'medium';
+                if (parsed.fieldKey === 'performedAt') performedAt = parsed.value;
               } catch {
                 // Skip
               }
             }
           }
 
-          if (takenAt && log.medicationId) {
-            decryptedLogs.push({
-              id: log.id,
-              medicationId: log.medicationId,
-              medicationName: medicationsMap.get(log.medicationId) || 'Unknown',
-              takenAt,
-            });
-          }
+          decryptedExercises.push({
+            id: exercise.id,
+            name: name || exerciseType,
+            exerciseType: exerciseType || name,
+            duration,
+            intensity,
+            performedAt,
+          });
         } catch {
           // Skip
         }
       }
-      setMedicationLogs(decryptedLogs);
+      setExercises(decryptedExercises);
 
     } catch (error) {
       console.error('Failed to fetch report data:', error);
@@ -222,7 +264,12 @@ export function ReportingTab({ refreshKey }: Props) {
   // Calculate chart data when decrypted data changes
   useEffect(() => {
     if (symptoms.length > 0) {
-      setCorrelations(calculateCorrelations(symptoms, food, medicationLogs));
+      // Calculate food/medication correlations
+      const foodMedCorrelations = calculateCorrelations(symptoms, food, medicationLogs);
+      // Calculate exercise correlations
+      const exerciseCorrelations = calculateExerciseCorrelations(symptoms, exercises);
+      // Combine all correlations
+      setCorrelations([...foodMedCorrelations, ...exerciseCorrelations]);
       setSymptomFrequency(calculateSymptomFrequency(symptoms, period === 'year' ? 'month' : 'day'));
       setSeverityTrend(calculateSeverityTrend(symptoms, period === 'year' ? 'week' : 'day'));
     } else {
@@ -230,7 +277,16 @@ export function ReportingTab({ refreshKey }: Props) {
       setSymptomFrequency([]);
       setSeverityTrend([]);
     }
-  }, [symptoms, food, medicationLogs, period]);
+
+    // Calculate exercise-specific analytics
+    if (exercises.length > 0) {
+      setExerciseImpact(calculateExerciseImpact(symptoms, exercises));
+      setExerciseFrequency(calculateExerciseFrequency(exercises, period === 'year' ? 'month' : 'week'));
+    } else {
+      setExerciseImpact([]);
+      setExerciseFrequency([]);
+    }
+  }, [symptoms, food, medicationLogs, exercises, period]);
 
   useEffect(() => {
     fetchAndDecryptData();
@@ -241,7 +297,7 @@ export function ReportingTab({ refreshKey }: Props) {
   };
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 pb-12 space-y-6">
       {/* Filters */}
       <div className="bg-white rounded-lg border p-4">
         <h3 className="font-medium text-gray-900 mb-4">Filters</h3>
@@ -310,18 +366,27 @@ export function ReportingTab({ refreshKey }: Props) {
       ) : (
         <>
           {/* Summary Stats */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-lg border p-4 text-center">
               <div className="text-3xl font-bold text-teal-600">{symptoms.length}</div>
               <div className="text-sm text-gray-600">Symptoms Logged</div>
             </div>
             <div className="bg-white rounded-lg border p-4 text-center">
-              <div className="text-3xl font-bold text-green-600">{food.length}</div>
+              <div className="text-3xl font-bold text-red-600">{food.length}</div>
               <div className="text-sm text-gray-600">Food Entries</div>
             </div>
             <div className="bg-white rounded-lg border p-4 text-center">
               <div className="text-3xl font-bold text-blue-600">{medicationLogs.length}</div>
               <div className="text-sm text-gray-600">Medication Logs</div>
+            </div>
+            <div className="bg-white rounded-lg border p-4 text-center">
+              <div className="text-3xl font-bold text-green-600">{exercises.length}</div>
+              <div className="text-sm text-gray-600">Workouts</div>
+              {exercises.length > 0 && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {exercises.reduce((sum, e) => sum + e.duration, 0)} min total
+                </div>
+              )}
             </div>
           </div>
 
@@ -390,6 +455,97 @@ export function ReportingTab({ refreshKey }: Props) {
                       <span className="text-gray-500">{count} time{count !== 1 ? 's' : ''}</span>
                     </div>
                   ))}
+              </div>
+            </div>
+          )}
+
+          {/* Exercise Summary */}
+          {exercises.length > 0 && (
+            <div className="bg-white rounded-lg border p-4">
+              <h3 className="font-medium text-gray-900 mb-4">Exercise Summary</h3>
+              <div className="space-y-2">
+                {Object.entries(
+                  exercises.reduce((acc, e) => {
+                    const key = e.exerciseType.toLowerCase();
+                    if (!acc[key]) {
+                      acc[key] = { count: 0, duration: 0 };
+                    }
+                    acc[key].count++;
+                    acc[key].duration += e.duration;
+                    return acc;
+                  }, {} as Record<string, { count: number; duration: number }>)
+                )
+                  .sort((a, b) => b[1].count - a[1].count)
+                  .slice(0, 5)
+                  .map(([type, data]) => (
+                    <div key={type} className="flex items-center justify-between">
+                      <span className="text-gray-700 capitalize">{type}</span>
+                      <span className="text-gray-500">
+                        {data.count} session{data.count !== 1 ? 's' : ''} ({data.duration} min)
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Exercise Frequency */}
+          {exerciseFrequency.length > 0 && (
+            <div className="bg-white rounded-lg border p-4">
+              <h3 className="font-medium text-gray-900 mb-4">Exercise Frequency</h3>
+              <div className="space-y-2">
+                {exerciseFrequency.slice(-7).map((data) => (
+                  <div key={data.period} className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600 w-24">{data.period}</span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-green-500"
+                        style={{
+                          width: `${Math.min((data.count / Math.max(...exerciseFrequency.map(d => d.count))) * 100, 100)}%`
+                        }}
+                      />
+                    </div>
+                    <span className="text-sm text-gray-700 w-20 text-right">
+                      {data.count} ({data.totalDuration} min)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Exercise Impact on Symptoms */}
+          {exerciseImpact.length > 0 && (
+            <div className="bg-white rounded-lg border p-4">
+              <h3 className="font-medium text-gray-900 mb-4">Exercise Impact on Symptoms</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Shows how symptom severity changes after different exercise types (within 24 hours)
+              </p>
+              <div className="space-y-3">
+                {exerciseImpact.map((impact) => (
+                  <div key={impact.exerciseType} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <span className="font-medium text-gray-900 capitalize">{impact.exerciseType}</span>
+                      <div className="text-xs text-gray-500">{impact.occurrences} data points</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Before: {impact.avgSeverityBefore}</span>
+                        <span className="text-gray-400">→</span>
+                        <span className="text-sm text-gray-600">After: {impact.avgSeverityAfter}</span>
+                      </div>
+                      <div className={`text-sm font-medium ${
+                        impact.improvement > 0 ? 'text-green-600' : impact.improvement < 0 ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {impact.improvement > 0 ? '↓' : impact.improvement < 0 ? '↑' : '−'}
+                        {' '}
+                        {Math.abs(impact.improvement)} point{Math.abs(impact.improvement) !== 1 ? 's' : ''}
+                        {' '}
+                        {impact.improvement > 0 ? 'improvement' : impact.improvement < 0 ? 'increase' : 'no change'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

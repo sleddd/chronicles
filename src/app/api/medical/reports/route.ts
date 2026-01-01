@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       symptoms?: unknown[];
       medications?: unknown[];
       medicationLogs?: unknown[];
+      exercise?: unknown[];
       correlations?: unknown[];
     } = {};
 
@@ -109,20 +110,54 @@ export async function GET(request: NextRequest) {
       `);
       report.medications = medicationResult.rows;
 
-      // Also fetch medication logs
-      const logResult = await client.query(`
+      // Fetch medication dose logs from the dedicated table
+      // Build date filter for dose logs (uses "date" column, not "entryDate")
+      const doseParams: string[] = [];
+      let doseFilter = 'WHERE "status" = \'taken\'';
+      let doseParamIndex = 1;
+
+      if (startDate) {
+        doseFilter += ` AND "date" >= $${doseParamIndex++}`;
+        doseParams.push(startDate);
+      }
+      if (endDate) {
+        doseFilter += ` AND "date" <= $${doseParamIndex++}`;
+        doseParams.push(endDate);
+      }
+
+      // Check if the medication_dose_logs table exists
+      const tableCheck = await client.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_schema = $1 AND table_name = 'medication_dose_logs'
+        )
+      `, [session.user.schemaName]);
+
+      if (tableCheck.rows[0].exists) {
+        const logResult = await client.query(`
+          SELECT dl.*, dl."takenAt" as "takenAt"
+          FROM "${session.user.schemaName}"."medication_dose_logs" dl
+          ${doseFilter}
+          ORDER BY dl."date" DESC, dl."takenAt" DESC
+        `, doseParams);
+        report.medicationLogs = logResult.rows;
+      } else {
+        report.medicationLogs = [];
+      }
+    }
+
+    // Fetch exercise entries
+    if (!type || type === 'exercise' || type === 'correlation' || type === 'all') {
+      const exerciseResult = await client.query(`
         SELECT e.*,
-          json_agg(DISTINCT cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields,
-          rel."relatedToId" as "medicationId"
+          json_agg(DISTINCT cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
         FROM "${session.user.schemaName}"."entries" e
         LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
-        LEFT JOIN "${session.user.schemaName}"."entry_relationships" rel
-          ON rel."entryId" = e.id AND rel."relationshipType" = 'medication_log'
-        WHERE e."customType" = 'medication_log' ${dateFilter}
-        GROUP BY e.id, rel."relatedToId"
+        WHERE e."customType" = 'exercise' ${dateFilter}
+        GROUP BY e.id
         ORDER BY e."entryDate" DESC, e."createdAt" DESC
       `, dateParams);
-      report.medicationLogs = logResult.rows;
+      report.exercise = exerciseResult.rows;
     }
 
     // Fetch all correlations (relationships between entries)

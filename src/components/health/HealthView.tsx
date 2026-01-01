@@ -6,9 +6,10 @@ import { MedicationsTab } from './MedicationsTab';
 import { ScheduleTab } from './ScheduleTab';
 import { FoodTab } from './FoodTab';
 import { SymptomsTab } from './SymptomsTab';
+import { ExerciseTab } from './ExerciseTab';
 import { ReportingTab } from './ReportingTab';
 
-type TabKey = 'medications' | 'schedule' | 'food' | 'symptoms' | 'reporting';
+type TabKey = 'medications' | 'schedule' | 'food' | 'symptoms' | 'exercise' | 'reporting';
 
 interface Tab {
   key: TabKey;
@@ -19,9 +20,9 @@ interface Props {
   selectedDate: string;
 }
 
-const validTabs: TabKey[] = ['medications', 'schedule', 'food', 'symptoms', 'reporting'];
+const validTabs: TabKey[] = ['medications', 'schedule', 'food', 'symptoms', 'exercise', 'reporting'];
 
-export function MedicalView({ selectedDate }: Props) {
+export function HealthView({ selectedDate }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const initialTab = validTabs.includes(tabParam as TabKey) ? (tabParam as TabKey) : 'medications';
@@ -40,6 +41,7 @@ export function MedicalView({ selectedDate }: Props) {
     { key: 'schedule', label: 'Schedule' },
     { key: 'food', label: 'Food' },
     { key: 'symptoms', label: 'Symptoms' },
+    { key: 'exercise', label: 'Exercise' },
     { key: 'reporting', label: 'Reporting' },
   ];
 
@@ -57,6 +59,8 @@ export function MedicalView({ selectedDate }: Props) {
         return <FoodTab selectedDate={selectedDate} onDataChange={handleDataChange} refreshKey={refreshKey} />;
       case 'symptoms':
         return <SymptomsTab selectedDate={selectedDate} onDataChange={handleDataChange} refreshKey={refreshKey} />;
+      case 'exercise':
+        return <ExerciseTab selectedDate={selectedDate} onDataChange={handleDataChange} refreshKey={refreshKey} />;
       case 'reporting':
         return <ReportingTab refreshKey={refreshKey} />;
       default:

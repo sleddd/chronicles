@@ -11,6 +11,7 @@ interface FeatureSettings {
   medicationEnabled: boolean;
   goalsEnabled: boolean;
   milestonesEnabled: boolean;
+  exerciseEnabled: boolean;
   timezone: string;
 }
 
@@ -69,6 +70,7 @@ export function SettingsPanel() {
     medicationEnabled: false,
     goalsEnabled: false,
     milestonesEnabled: false,
+    exerciseEnabled: false,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   });
   const [loadingFeatures, setLoadingFeatures] = useState(true);
@@ -167,7 +169,7 @@ export function SettingsPanel() {
 
       // Also seed enabled feature topics that might be missing
       const featureResults: string[] = [];
-      const featureKeys: FeatureTopicKey[] = ['food', 'medication', 'goals', 'milestones'];
+      const featureKeys: FeatureTopicKey[] = ['food', 'medication', 'goals', 'milestones', 'exercise'];
 
       for (const featureKey of featureKeys) {
         const settingKey = `${featureKey}Enabled` as keyof FeatureSettings;
@@ -523,10 +525,10 @@ export function SettingsPanel() {
                 </p>
               </div>
 
-              {/* Medical Tracking */}
+              {/* Health Tracking */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Medical Tracking</h3>
-                <p className="mb-2">Enable medical features in the Features section below to track:</p>
+                <h3 className="font-semibold text-gray-900 mb-2">Health Tracking</h3>
+                <p className="mb-2">Enable health features in the Features section below to track:</p>
                 <p className="mb-2"><strong>Medications:</strong></p>
                 <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
                   <li>Set dosage, frequency, and schedule times</li>
@@ -544,6 +546,12 @@ export function SettingsPanel() {
                   <li>Log time and duration</li>
                   <li>Use reporting to find patterns with food and medications</li>
                 </ul>
+                <p className="mb-2"><strong>Exercise:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2 mb-3">
+                  <li>Log workouts with type, duration, and intensity</li>
+                  <li>Track distance and calories</li>
+                  <li>View exercise-symptom correlations in reports</li>
+                </ul>
               </div>
 
               {/* Calendar & Views */}
@@ -552,7 +560,7 @@ export function SettingsPanel() {
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li><strong>Calendar</strong> - Monthly overview of all entries. Click any day to view entries.</li>
                   <li><strong>Goals</strong> - Manage goals with drag-and-drop priority ordering</li>
-                  <li><strong>Medical</strong> - Dashboard for medications, doses, food, symptoms, and reports</li>
+                  <li><strong>Health</strong> - Dashboard for medications, doses, food, symptoms, exercise, and reports</li>
                   <li><strong>Favorites</strong> - Quick access to bookmarked entries</li>
                 </ul>
               </div>

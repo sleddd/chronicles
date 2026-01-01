@@ -8,15 +8,15 @@ import { usePathname, useRouter } from 'next/navigation';
 export function Header() {
   const router = useRouter();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showMedicalSubmenu, setShowMedicalSubmenu] = useState(false);
-  const medicalRef = useRef<HTMLDivElement>(null);
+  const [showHealthSubmenu, setShowHealthSubmenu] = useState(false);
+  const healthRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
-  // Close medical submenu when clicking outside
+  // Close health submenu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (medicalRef.current && !medicalRef.current.contains(event.target as Node)) {
-        setShowMedicalSubmenu(false);
+      if (healthRef.current && !healthRef.current.contains(event.target as Node)) {
+        setShowHealthSubmenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -24,13 +24,14 @@ export function Header() {
   }, []);
 
   const isActive = (path: string) => pathname === path;
-  const isMedicalActive = pathname?.startsWith('/medical');
+  const isHealthActive = pathname?.startsWith('/health');
 
-  const medicalTabs = [
+  const healthTabs = [
     { key: 'medications', label: 'Medications' },
     { key: 'schedule', label: 'Schedule' },
     { key: 'food', label: 'Food' },
     { key: 'symptoms', label: 'Symptoms' },
+    { key: 'exercise', label: 'Exercise' },
     { key: 'reporting', label: 'Reporting' },
   ];
 
@@ -92,19 +93,19 @@ export function Header() {
             Goals
           </Link>
 
-          {/* Medical with submenu */}
-          <div className="relative" ref={medicalRef}>
+          {/* Health with submenu */}
+          <div className="relative" ref={healthRef}>
             <button
-              onClick={() => setShowMedicalSubmenu(!showMedicalSubmenu)}
+              onClick={() => setShowHealthSubmenu(!showHealthSubmenu)}
               className={`px-4 py-2 text-sm rounded-md transition-colors flex items-center gap-1 ${
-                isMedicalActive
+                isHealthActive
                   ? 'text-white font-bold'
                   : 'text-teal-100 hover:text-white'
               }`}
             >
-              Medical
+              Health
               <svg
-                className={`w-4 h-4 transition-transform ${showMedicalSubmenu ? 'rotate-180' : ''}`}
+                className={`w-4 h-4 transition-transform ${showHealthSubmenu ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -113,13 +114,13 @@ export function Header() {
               </svg>
             </button>
 
-            {showMedicalSubmenu && (
+            {showHealthSubmenu && (
               <div className="absolute top-full left-0 mt-1 w-40 bg-white border rounded-md shadow-lg z-50">
-                {medicalTabs.map((tab) => (
+                {healthTabs.map((tab) => (
                   <Link
                     key={tab.key}
-                    href={`/medical?tab=${tab.key}`}
-                    onClick={() => setShowMedicalSubmenu(false)}
+                    href={`/health?tab=${tab.key}`}
+                    onClick={() => setShowHealthSubmenu(false)}
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 first:rounded-t-md last:rounded-b-md"
                   >
                     {tab.label}
@@ -203,13 +204,13 @@ export function Header() {
               Goals
             </Link>
             <Link
-              href="/medical"
+              href="/health"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isMedicalActive ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isHealthActive ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
               }`}
             >
-              Medical
+              Health
             </Link>
             <Link
               href="/topics"

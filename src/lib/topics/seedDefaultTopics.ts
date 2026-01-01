@@ -22,6 +22,7 @@ export const FEATURE_TOPICS = {
   medication: { name: 'Medication', color: '#14B8A6', icon: 'pills', description: 'Track medications and health' },
   goals: { name: 'Goal', color: '#F97316', icon: 'bullseye', description: 'Set and track goals' },
   milestones: { name: 'Milestone', color: '#A855F7', icon: 'flag', description: 'Mark important achievements' },
+  exercise: { name: 'Exercise', color: '#22C55E', icon: 'dumbbell', description: 'Track workouts and fitness' },
 } as const;
 
 export type FeatureTopicKey = keyof typeof FEATURE_TOPICS;

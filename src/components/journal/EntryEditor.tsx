@@ -185,7 +185,7 @@ interface Props {
   onEntrySaved: () => void;
   onSelectEntry?: (entryId: string | null) => void;
   today: string;
-  customType?: 'task' | 'goal' | 'milestone' | 'medication' | 'food' | 'symptom' | 'event' | 'meeting' | null;
+  customType?: 'task' | 'goal' | 'milestone' | 'medication' | 'food' | 'symptom' | 'event' | 'meeting' | 'exercise' | null;
 }
 
 
@@ -289,6 +289,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   const [meetingTopic, setMeetingTopic] = useState('');
   const [meetingAttendees, setMeetingAttendees] = useState('');
 
+  // Exercise-specific fields
+  const [exerciseType, setExerciseType] = useState<'yoga' | 'cardio' | 'strength' | 'swimming' | 'running' | 'cycling' | 'walking' | 'hiking' | 'other'>('cardio');
+  const [exerciseOtherType, setExerciseOtherType] = useState('');
+  const [exerciseDuration, setExerciseDuration] = useState('');
+  const [exerciseIntensity, setExerciseIntensity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [exerciseDistance, setExerciseDistance] = useState('');
+  const [exerciseDistanceUnit, setExerciseDistanceUnit] = useState<'miles' | 'km'>('miles');
+  const [exerciseCalories, setExerciseCalories] = useState('');
+  const [exercisePerformedAt, setExercisePerformedAt] = useState('');
+  const [exerciseNotes, setExerciseNotes] = useState('');
+
   // Ref to track save function for keyboard shortcut
   const handleSaveRef = useRef<(() => void) | null>(null);
 
@@ -370,6 +381,16 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     setMeetingNotes('');
     setMeetingTopic('');
     setMeetingAttendees('');
+    // Reset exercise fields
+    setExerciseType('cardio');
+    setExerciseOtherType('');
+    setExerciseDuration('');
+    setExerciseIntensity('medium');
+    setExerciseDistance('');
+    setExerciseDistanceUnit('miles');
+    setExerciseCalories('');
+    setExercisePerformedAt('');
+    setExerciseNotes('');
 
     try {
       const response = await fetch(`/api/entries/${entryId}`);
@@ -578,6 +599,34 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         }
       }
 
+      // Load exercise custom fields
+      if (entry.customType === 'exercise' && entry.custom_fields) {
+        for (const cf of entry.custom_fields) {
+          try {
+            const fieldData = await decryptData(cf.encryptedData, cf.iv);
+            const parsed = JSON.parse(fieldData);
+            if (parsed.fieldKey === 'exerciseType') {
+              const validTypes = ['yoga', 'cardio', 'strength', 'swimming', 'running', 'cycling', 'walking', 'hiking', 'other'];
+              if (validTypes.includes(parsed.value)) {
+                setExerciseType(parsed.value);
+              } else {
+                setExerciseType('other');
+                setExerciseOtherType(parsed.value || '');
+              }
+            }
+            if (parsed.fieldKey === 'duration') setExerciseDuration(parsed.value?.toString() || '');
+            if (parsed.fieldKey === 'intensity') setExerciseIntensity(parsed.value || 'medium');
+            if (parsed.fieldKey === 'distance') setExerciseDistance(parsed.value?.toString() || '');
+            if (parsed.fieldKey === 'distanceUnit') setExerciseDistanceUnit(parsed.value || 'miles');
+            if (parsed.fieldKey === 'calories') setExerciseCalories(parsed.value?.toString() || '');
+            if (parsed.fieldKey === 'performedAt') setExercisePerformedAt(parsed.value || '');
+            if (parsed.fieldKey === 'notes') setExerciseNotes(parsed.value || '');
+          } catch {
+            // Skip failed fields
+          }
+        }
+      }
+
       // Check if entry is favorited
       try {
         const favResponse = await fetch('/api/favorites');
@@ -653,6 +702,16 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       setMeetingNotes('');
       setMeetingTopic('');
       setMeetingAttendees('');
+      // Reset exercise fields
+      setExerciseType('cardio');
+      setExerciseOtherType('');
+      setExerciseDuration('');
+      setExerciseIntensity('medium');
+      setExerciseDistance('');
+      setExerciseDistanceUnit('miles');
+      setExerciseCalories('');
+      setExercisePerformedAt('');
+      setExerciseNotes('');
     }
   }, [entryId, isKeyReady, loadEntry, editor]);
 
@@ -845,6 +904,36 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
           { encryptedData: encryptedTopic.ciphertext, iv: encryptedTopic.iv },
           { encryptedData: encryptedAttendees.ciphertext, iv: encryptedAttendees.iv },
+        ];
+      } else if (entryType === 'exercise') {
+        const exerciseTypeValue = exerciseType === 'other' ? exerciseOtherType : exerciseType;
+        const typeField = JSON.stringify({ fieldKey: 'exerciseType', value: exerciseTypeValue });
+        const durationField = JSON.stringify({ fieldKey: 'duration', value: exerciseDuration ? parseInt(exerciseDuration) : null });
+        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: exerciseIntensity });
+        const distanceField = JSON.stringify({ fieldKey: 'distance', value: exerciseDistance ? parseFloat(exerciseDistance) : null });
+        const distanceUnitField = JSON.stringify({ fieldKey: 'distanceUnit', value: exerciseDistanceUnit });
+        const caloriesField = JSON.stringify({ fieldKey: 'calories', value: exerciseCalories ? parseInt(exerciseCalories) : null });
+        const performedAtField = JSON.stringify({ fieldKey: 'performedAt', value: exercisePerformedAt || new Date().toISOString() });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: exerciseNotes });
+
+        const encryptedType = await encryptData(typeField);
+        const encryptedDuration = await encryptData(durationField);
+        const encryptedIntensity = await encryptData(intensityField);
+        const encryptedDistance = await encryptData(distanceField);
+        const encryptedDistanceUnit = await encryptData(distanceUnitField);
+        const encryptedCalories = await encryptData(caloriesField);
+        const encryptedPerformedAt = await encryptData(performedAtField);
+        const encryptedNotes = await encryptData(notesField);
+
+        customFields = [
+          { encryptedData: encryptedType.ciphertext, iv: encryptedType.iv },
+          { encryptedData: encryptedDuration.ciphertext, iv: encryptedDuration.iv },
+          { encryptedData: encryptedIntensity.ciphertext, iv: encryptedIntensity.iv },
+          { encryptedData: encryptedDistance.ciphertext, iv: encryptedDistance.iv },
+          { encryptedData: encryptedDistanceUnit.ciphertext, iv: encryptedDistanceUnit.iv },
+          { encryptedData: encryptedCalories.ciphertext, iv: encryptedCalories.iv },
+          { encryptedData: encryptedPerformedAt.ciphertext, iv: encryptedPerformedAt.iv },
+          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
         ];
       }
 
@@ -1483,6 +1572,139 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Exercise Details - only show if current topic is exercise */}
+      {(customType === 'exercise' || selectedTopicName?.toLowerCase() === 'exercise') && (
+        <>
+          <div className="border-t my-4" />
+          <div className="mb-4">
+            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Exercise Details</h3>
+            <div className="px-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Exercise Type</label>
+                  <select
+                    value={exerciseType}
+                    onChange={(e) => setExerciseType(e.target.value as typeof exerciseType)}
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  >
+                    <option value="yoga">Yoga</option>
+                    <option value="cardio">Cardio</option>
+                    <option value="strength">Strength Training</option>
+                    <option value="swimming">Swimming</option>
+                    <option value="running">Running</option>
+                    <option value="cycling">Cycling</option>
+                    <option value="walking">Walking</option>
+                    <option value="hiking">Hiking</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                {exerciseType === 'other' && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Specify Type</label>
+                    <input
+                      type="text"
+                      value={exerciseOtherType}
+                      onChange={(e) => setExerciseOtherType(e.target.value)}
+                      placeholder="e.g., Pilates, HIIT"
+                      className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    />
+                  </div>
+                )}
+                {exerciseType !== 'other' && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Time Performed</label>
+                    <input
+                      type="time"
+                      value={exercisePerformedAt ? exercisePerformedAt.split('T')[1]?.substring(0, 5) : ''}
+                      onChange={(e) => setExercisePerformedAt(`${today}T${e.target.value}:00`)}
+                      className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    />
+                  </div>
+                )}
+              </div>
+              {exerciseType === 'other' && (
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-500 mb-1">Time Performed</label>
+                  <input
+                    type="time"
+                    value={exercisePerformedAt ? exercisePerformedAt.split('T')[1]?.substring(0, 5) : ''}
+                    onChange={(e) => setExercisePerformedAt(`${today}T${e.target.value}:00`)}
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  />
+                </div>
+              )}
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    value={exerciseDuration}
+                    onChange={(e) => setExerciseDuration(e.target.value)}
+                    placeholder="e.g., 45"
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Intensity</label>
+                  <select
+                    value={exerciseIntensity}
+                    onChange={(e) => setExerciseIntensity(e.target.value as typeof exerciseIntensity)}
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Distance (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={exerciseDistance}
+                      onChange={(e) => setExerciseDistance(e.target.value)}
+                      placeholder="e.g., 5"
+                      className="flex-1 px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    />
+                    <select
+                      value={exerciseDistanceUnit}
+                      onChange={(e) => setExerciseDistanceUnit(e.target.value as typeof exerciseDistanceUnit)}
+                      className="w-20 px-2 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    >
+                      <option value="miles">mi</option>
+                      <option value="km">km</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Calories Burned (optional)</label>
+                  <input
+                    type="number"
+                    value={exerciseCalories}
+                    onChange={(e) => setExerciseCalories(e.target.value)}
+                    placeholder="e.g., 300"
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                <input
+                  type="text"
+                  value={exerciseNotes}
+                  onChange={(e) => setExerciseNotes(e.target.value)}
+                  placeholder="How did it feel? Any observations..."
+                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                />
               </div>
             </div>
           </div>

@@ -1,31 +1,22 @@
 'use client';
 
-import { Header } from '@/components/layout/Header';
-import { PasswordReentryModal } from '@/components/auth/PasswordReentryModal';
-import { MedicalView } from '@/components/medical/MedicalView';
-import { useTimezone } from '@/lib/hooks/useTimezone';
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function MedicalPage() {
-  const { today, loading: timezoneLoading } = useTimezone();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  if (timezoneLoading) {
-    return (
-      <div className="h-screen flex flex-col bg-white">
-        <Header />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-gray-500">Loading...</div>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    // Redirect to /health with same query params for backwards compatibility
+    const tab = searchParams.get('tab');
+    const url = tab ? `/health?tab=${tab}` : '/health';
+    router.replace(url);
+  }, [router, searchParams]);
 
   return (
-    <div className="h-screen flex flex-col bg-white">
-      <Header />
-      <PasswordReentryModal />
-      <div className="flex-1 overflow-hidden">
-        <MedicalView selectedDate={today} />
-      </div>
+    <div className="h-screen flex items-center justify-center">
+      <div className="text-gray-500">Redirecting...</div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ const updateSettingsSchema = z.object({
   medicationEnabled: z.boolean().optional(),
   goalsEnabled: z.boolean().optional(),
   milestonesEnabled: z.boolean().optional(),
+  exerciseEnabled: z.boolean().optional(),
   timezone: z.string().optional(),
 });
 
@@ -37,7 +38,7 @@ export async function GET() {
     `);
 
     // Add columns if they don't exist (for users with old schema)
-    const booleanColumns = ['foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled'];
+    const booleanColumns = ['foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled', 'exerciseEnabled'];
     for (const col of booleanColumns) {
       await client.query(`
         DO $$ BEGIN
@@ -62,13 +63,13 @@ export async function GET() {
     // Ensure settings row exists
     await client.query(`
       INSERT INTO "${session.user.schemaName}"."user_settings"
-      (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", timezone, "createdAt", "updatedAt")
-      VALUES ('settings_default', false, false, false, false, 'UTC', NOW(), NOW())
+      (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "createdAt", "updatedAt")
+      VALUES ('settings_default', false, false, false, false, false, 'UTC', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
 
     const result = await client.query(`
-      SELECT "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", timezone
+      SELECT "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone
       FROM "${session.user.schemaName}"."user_settings"
       WHERE id = 'settings_default'
     `);
@@ -80,6 +81,7 @@ export async function GET() {
           medicationEnabled: false,
           goalsEnabled: false,
           milestonesEnabled: false,
+          exerciseEnabled: false,
           timezone: 'UTC',
         },
       });
@@ -125,6 +127,10 @@ export async function PATCH(request: NextRequest) {
         updates.push(`"milestonesEnabled" = $${paramIndex++}`);
         values.push(validatedData.milestonesEnabled);
       }
+      if (validatedData.exerciseEnabled !== undefined) {
+        updates.push(`"exerciseEnabled" = $${paramIndex++}`);
+        values.push(validatedData.exerciseEnabled);
+      }
       if (validatedData.timezone !== undefined) {
         updates.push(`timezone = $${paramIndex++}`);
         values.push(validatedData.timezone);
@@ -139,8 +145,8 @@ export async function PATCH(request: NextRequest) {
       // Ensure settings row exists first
       await client.query(`
         INSERT INTO "${session.user.schemaName}"."user_settings"
-        (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", timezone, "createdAt", "updatedAt")
-        VALUES ('settings_default', false, false, false, false, 'UTC', NOW(), NOW())
+        (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "createdAt", "updatedAt")
+        VALUES ('settings_default', false, false, false, false, false, 'UTC', NOW(), NOW())
         ON CONFLICT (id) DO NOTHING
       `);
 
@@ -148,7 +154,7 @@ export async function PATCH(request: NextRequest) {
         `UPDATE "${session.user.schemaName}"."user_settings"
          SET ${updates.join(', ')}
          WHERE id = 'settings_default'
-         RETURNING "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", timezone`,
+         RETURNING "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone`,
         values
       );
 
