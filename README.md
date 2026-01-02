@@ -20,6 +20,10 @@ A zero-knowledge encrypted journal application with client-side encryption. The 
 - **Favorites** - Mark and quickly access important entries
 - **Mobile Responsive** - Works on desktop and mobile devices
 
+## Screenshots
+<img width="1194" height="658" alt="Screenshot 2026-01-02 at 12 27 33 AM" src="https://github.com/user-attachments/assets/4ee4c2fb-075e-4d36-84be-79293267222e" />
+<img width="1202" height="570" alt="Screenshot 2026-01-02 at 12 28 19 AM" src="https://github.com/user-attachments/assets/a8a93b20-e1f3-44c5-afad-3f29647119c3" />
+
 ## How It Works
 
 Chronicles is designed as a simple daily log. The core philosophy is to capture the key moments of your day briefly in less than 10-15 minutes, then use topics to organize and find them later.
