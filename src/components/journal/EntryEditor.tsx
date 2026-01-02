@@ -187,10 +187,11 @@ interface Props {
   onSelectEntry?: (entryId: string | null) => void;
   today: string;
   customType?: 'task' | 'goal' | 'milestone' | 'medication' | 'food' | 'symptom' | 'event' | 'meeting' | 'exercise' | null;
+  onTopicsChange?: () => void;
 }
 
 
-export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry, today, customType }: Props) {
+export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry, today, customType, onTopicsChange }: Props) {
   // Note: _date is available for future use (e.g., viewing entries from past dates)
   void _date;
   const [loading, setLoading] = useState(false);
@@ -311,18 +312,6 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     editorProps: {
       attributes: {
         class: 'tiptap min-h-[80px] p-4 text-gray-900 focus:outline-none',
-      },
-      handleKeyDown: (_view, event) => {
-        // Enter saves the entry, Shift+Enter creates new line
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          if (handleSaveRef.current) {
-            handleSaveRef.current();
-          }
-          return true;
-        }
-        // Shift+Enter creates a new line (default behavior with StarterKit's HardBreak)
-        return false;
       },
     },
     onUpdate: ({ editor }) => {
@@ -1098,10 +1087,32 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           <TopicSelector
             selectedTopicId={selectedTopicId}
             onSelectTopic={setSelectedTopicId}
+            onTopicsChange={onTopicsChange}
           />
         </div>
-        {entryId && (
-          <div className="flex items-center gap-2 ml-4">
+        <div className="flex items-center gap-2 ml-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={expandEntry}
+              onChange={(e) => setExpandEntry(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm text-gray-600">
+              Expand entry{' '}
+              <span className={
+                !expandEntry && charCount > MAX_CHARS_SHORT
+                  ? 'text-red-600 font-medium'
+                  : charCount > MAX_CHARS_SHORT * 0.8
+                    ? 'text-amber-600'
+                    : ''
+              }>
+                ({charCount}{!expandEntry && `/${MAX_CHARS_SHORT}`})
+              </span>
+            </span>
+          </label>
+          {entryId && (
+            <>
             <button
               onClick={handleToggleFavorite}
               disabled={togglingFavorite}
@@ -1135,8 +1146,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Delete confirmation modal */}
@@ -1168,55 +1180,20 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       )}
 
       {/* Editor with character limit - no border */}
-      <div className={`mb-4 ${expandEntry ? 'flex-1 flex flex-col' : ''}`}>
+      <div className={`mb-2 ${expandEntry ? 'flex-1 flex flex-col' : ''}`}>
         <div className={`overflow-auto bg-white flex flex-col ${expandEntry ? 'flex-1' : ''}`}>
           <EditorToolbar editor={editor} />
           <EditorContent
             editor={editor}
-            className={expandEntry ? 'flex-1' : 'max-h-[120px] overflow-auto'}
+            className={expandEntry ? 'flex-1' : 'min-h-[40px]'}
           />
         </div>
-
-        {/* Character count and expand option */}
-        <div className="px-4 py-2 pt-4 flex items-center justify-between border-t">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={expandEntry}
-              onChange={(e) => setExpandEntry(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-            />
-            <span className="text-sm text-gray-600">Expand entry</span>
-          </label>
-          <div className="flex items-center gap-2">
-            <span className={`text-sm ${
-              !expandEntry && charCount > MAX_CHARS_SHORT
-                ? 'text-red-600 font-medium'
-                : charCount > MAX_CHARS_SHORT * 0.8
-                  ? 'text-amber-600'
-                  : 'text-gray-500'
-            }`}>
-              {charCount}{!expandEntry && `/${MAX_CHARS_SHORT}`}
-            </span>
-            {!expandEntry && charCount > MAX_CHARS_SHORT && (
-              <span className="text-xs text-red-500">
-                Over limit - enable expand or shorten
-              </span>
-            )}
-          </div>
-        </div>
-
-        {!expandEntry && (
-          <p className="text-xs text-gray-400 px-4 pb-2">
-            Keep entries brief. Check &quot;Expand entry&quot; for longer notes. Press Shift+Enter for new line.
-          </p>
-        )}
       </div>
 
       {/* Goal Settings - only show if current topic is goal */}
       {(customType === 'goal' || selectedTopicName?.toLowerCase() === 'goal') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t my-2" />
           <div className="mb-4">
             <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Goal Settings</h3>
             <div className="px-4">
@@ -1943,7 +1920,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           style={{ backgroundColor: saving || (!expandEntry && charCount > MAX_CHARS_SHORT) ? undefined : '#1aaeae' }}
           onMouseOver={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = '#158f8f'; }}
           onMouseOut={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
-          title="Save (Enter)"
+          title="Save"
         >
           {saving ? 'Saving...' : 'Save'}
         </button>

@@ -101,10 +101,18 @@ For password recovery:
 - `src/app/api/entries/` - CRUD for journal entries
 - `src/app/api/topics/` - Topic management
 - `src/app/api/user/register/` - User registration (with email whitelist)
+- `src/app/api/user/recover/` - Password recovery (accepts recovery key)
+- `src/app/api/user/setup-recovery-key/` - Add recovery key to existing account
 - `src/app/api/medications/` - Medication tracking
 - `src/app/api/calendar/` - Calendar data
 - `src/app/api/favorites/` - Favorite entries
 - `src/app/api/share/` - Public sharing
+
+**Security:**
+- `src/lib/sanitize.ts` - DOMPurify HTML sanitization
+- `src/lib/validation/password.ts` - Password strength and entropy validation
+- `src/components/auth/LegacyKeyMigration.tsx` - PBKDF2 iteration and recovery key migration
+- `next.config.js` - CSP headers configuration
 
 User data tables are created dynamically via `createUserSchema()`, not in Prisma schema.
 
@@ -149,7 +157,9 @@ await client.query(`SELECT * FROM "${schemaName}"."entries" WHERE ...`);
 2. Enters email address
 3. Enters recovery key (hex format with dashes)
 4. If valid, enters new password
-5. Master key re-wrapped with new password and saved
+5. Master key re-wrapped with new password
+6. **New recovery key generated** - old recovery key is invalidated
+7. User must save new recovery key
 
 ## Encryption Specification
 
@@ -158,9 +168,41 @@ Algorithm: AES-256-GCM
 IV: Random 12 bytes per entry
 Key Derivation: PBKDF2-SHA256, 600,000 iterations (OWASP 2023 recommendation)
 Salt: 32 bytes random per user
+Legacy Support: Automatic migration from 100,000 iterations
 ```
 
 All encrypted fields store: `encryptedContent` (base64) + `iv` (base64)
+
+## Security Hardening
+
+### Content Security Policy (CSP)
+Strict CSP headers configured in `next.config.js`:
+- `default-src 'self'` - Only allow same-origin resources
+- `script-src 'self'` - No inline scripts (with Next.js nonce for required scripts)
+- `style-src 'self' 'unsafe-inline'` - Styles (unsafe-inline required for Tailwind)
+- `img-src 'self' data: blob:` - Images from same origin and data URIs
+- `connect-src 'self'` - API calls to same origin only
+
+### XSS Prevention
+- **DOMPurify**: All user-generated HTML content sanitized before rendering
+- **TipTap Configuration**: Rich text editor configured with safe allowed tags/attributes
+- **Sanitization Location**: `src/lib/sanitize.ts` - centralized sanitization utility
+
+### Rate Limiting
+- Login attempts rate-limited per IP/email combination
+- Prevents brute force password attacks
+- Implemented in `/api/auth/[...nextauth]/route.ts`
+
+### Password Strength
+- Minimum 12 characters with complexity requirements
+- **Entropy validation**: Passwords checked against common patterns and dictionary words
+- Implemented in `src/lib/validation/password.ts`
+
+### Legacy Migration
+Component `src/components/auth/LegacyKeyMigration.tsx` handles:
+- Migrating users from 100k to 600k PBKDF2 iterations
+- Adding recovery key for accounts created before recovery system
+- Transparent upgrade on next login
 
 ## State Management
 

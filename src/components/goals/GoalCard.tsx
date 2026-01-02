@@ -51,11 +51,12 @@ export function GoalCard({
   onUnlinkMilestone,
 }: Props) {
   const router = useRouter();
-  const { decryptData, isKeyReady } = useEncryption();
+  const { decryptData, encryptData, isKeyReady } = useEncryption();
   const [title, setTitle] = useState<string>('');
   const [goalFields, setGoalFields] = useState<GoalCustomFields | null>(null);
   const [decryptedMilestones, setDecryptedMilestones] = useState<DecryptedMilestone[]>([]);
   const [milestonesExpanded, setMilestonesExpanded] = useState(false);
+  const [togglingMilestone, setTogglingMilestone] = useState<string | null>(null);
 
   const {
     attributes,
@@ -80,6 +81,64 @@ export function GoalCard({
   const handleEditMilestone = (e: React.MouseEvent, milestoneId: string) => {
     e.stopPropagation();
     router.push(`/?entry=${milestoneId}`);
+  };
+
+  const handleToggleMilestoneComplete = async (e: React.MouseEvent, milestoneId: string, currentlyCompleted: boolean) => {
+    e.stopPropagation();
+    if (!isKeyReady || togglingMilestone) return;
+
+    setTogglingMilestone(milestoneId);
+    try {
+      const milestone = milestones.find(m => m.id === milestoneId);
+      if (!milestone) return;
+
+      // Get existing custom fields to preserve orderIndex and linkedGoalIds
+      const existingFields: Array<{ fieldKey: string; value: unknown }> = [];
+      if (milestone.custom_fields) {
+        for (const cf of milestone.custom_fields) {
+          try {
+            const fieldData = await decryptData(cf.encryptedData, cf.iv);
+            const parsed = JSON.parse(fieldData);
+            if (parsed.fieldKey !== 'isCompleted') {
+              existingFields.push(parsed);
+            }
+          } catch {
+            // Skip failed fields
+          }
+        }
+      }
+
+      // Add updated isCompleted field
+      existingFields.push({ fieldKey: 'isCompleted', value: !currentlyCompleted });
+
+      // Re-encrypt all fields
+      const encryptedFields = [];
+      for (const field of existingFields) {
+        const fieldStr = JSON.stringify(field);
+        const encrypted = await encryptData(fieldStr);
+        encryptedFields.push({ encryptedData: encrypted.ciphertext, iv: encrypted.iv });
+      }
+
+      // Update the milestone
+      const response = await fetch(`/api/entries/${milestoneId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customFields: encryptedFields }),
+      });
+
+      if (response.ok) {
+        // Update local state
+        setDecryptedMilestones(prev =>
+          prev.map(m =>
+            m.id === milestoneId ? { ...m, isCompleted: !currentlyCompleted } : m
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle milestone:', error);
+    } finally {
+      setTogglingMilestone(null);
+    }
   };
 
   const decryptGoal = useCallback(async () => {
@@ -174,7 +233,8 @@ export function GoalCard({
   const completedCount = decryptedMilestones.filter(m => m.isCompleted).length;
   const totalCount = decryptedMilestones.length;
   const calculatedProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  const displayProgress = goalFields?.progressPercentage ?? calculatedProgress;
+  // Use calculated progress when there are milestones, otherwise use stored value
+  const displayProgress = totalCount > 0 ? calculatedProgress : (goalFields?.progressPercentage ?? 0);
 
   const getStatusColor = (): { className: string; style?: React.CSSProperties } => {
     switch (goalFields?.status) {
@@ -286,6 +346,23 @@ export function GoalCard({
                   key={milestone.id}
                   className="flex items-center gap-2 text-sm"
                 >
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleMilestoneComplete(e, milestone.id, milestone.isCompleted)}
+                    disabled={togglingMilestone === milestone.id}
+                    className={`flex-shrink-0 w-4 h-4 rounded border transition-colors ${
+                      milestone.isCompleted
+                        ? 'bg-teal-500 border-teal-500 text-white'
+                        : 'border-gray-300 hover:border-teal-500'
+                    } ${togglingMilestone === milestone.id ? 'opacity-50' : ''}`}
+                    title={milestone.isCompleted ? 'Mark incomplete' : 'Mark complete'}
+                  >
+                    {milestone.isCompleted && (
+                      <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
                   <span className={`flex-1 ${milestone.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
                     {milestone.content}
                   </span>

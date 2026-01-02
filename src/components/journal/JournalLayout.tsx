@@ -18,18 +18,14 @@ export function JournalLayout({ initialEntryId }: Props) {
   useTaskMigration(today);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [refreshKey, setRefreshKey] = useState(0);
-  // Collapsed by default on mobile only (check on mount)
-  const [isEditorCollapsed, setIsEditorCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 768;
-    }
-    return false; // Default to expanded for SSR
-  });
+  // On mobile: show editor view when an entry is selected
+  const [mobileShowEditor, setMobileShowEditor] = useState(!!initialEntryId);
 
   // Update selectedEntryId when initialEntryId changes (e.g., from URL navigation)
   useEffect(() => {
     if (initialEntryId) {
       setSelectedEntryId(initialEntryId);
+      setMobileShowEditor(true);
     }
   }, [initialEntryId]);
 
@@ -55,76 +51,62 @@ export function JournalLayout({ initialEntryId }: Props) {
 
   return (
     <div className="flex flex-row h-full bg-white min-h-0">
-      {/* Entries list - collapses on mobile when editor expanded */}
+      {/* Entries list - hidden on mobile when viewing editor */}
       <div
-        className={`border-r bg-gray-50 transition-all duration-300 min-h-0 ${
-          isEditorCollapsed
-            ? 'flex-1 md:w-1/3 md:flex-none'
-            : 'w-0 md:w-1/3 overflow-hidden'
+        className={`border-r bg-gray-50 min-h-0 ${
+          mobileShowEditor ? 'hidden md:block md:w-1/3' : 'flex-1 md:w-1/3 md:flex-none'
         }`}
       >
-        <div className={`h-full overflow-hidden ${isEditorCollapsed ? 'block' : 'hidden md:block'}`}>
+        <div className="h-full overflow-hidden">
           <EntriesList
             key={refreshKey}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
-            selectedEntryId={selectedEntryId}
             onSelectEntry={(entryId) => {
               setSelectedEntryId(entryId);
-              // Expand editor when selecting an entry (mobile only)
-              if (window.innerWidth < 768) {
-                setIsEditorCollapsed(false);
+              setMobileShowEditor(true);
+            }}
+            onEntryCreated={(entryId) => {
+              handleEntrySaved();
+              if (entryId) {
+                setSelectedEntryId(entryId);
+                setMobileShowEditor(true);
               }
             }}
-            onEntryCreated={handleEntrySaved}
             today={today}
           />
         </div>
       </div>
 
-      {/* Editor panel - 40px wide when collapsed, full width when expanded (mobile only) */}
+      {/* Editor panel - full screen on mobile when viewing, always visible on desktop */}
       <div
-        className={`overflow-auto bg-white transition-all duration-300 ${
-          isEditorCollapsed ? 'w-10 md:flex-1' : 'flex-1'
+        className={`overflow-auto bg-white flex-1 ${
+          mobileShowEditor ? 'block' : 'hidden md:block'
         }`}
       >
-        {/* Mobile collapsed strip when editor is collapsed */}
-        {isEditorCollapsed && (
+        {/* Back button on mobile */}
+        {mobileShowEditor && (
           <button
-            onClick={() => setIsEditorCollapsed(false)}
-            className="md:hidden w-10 h-full flex flex-col items-center justify-center bg-gray-100 border-l"
+            onClick={() => {
+              setMobileShowEditor(false);
+              setSelectedEntryId(null);
+            }}
+            className="md:hidden flex items-center gap-1 text-sm text-gray-600 p-4 pb-0"
           >
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <span className="text-xs text-gray-500 mt-2" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
-              Editor
-            </span>
+            Back to Entries
           </button>
         )}
-
-        {/* Editor content */}
-        <div className={`${isEditorCollapsed ? 'hidden md:block' : 'block'}`}>
-          {/* Back button on mobile when expanded */}
-          {!isEditorCollapsed && (
-            <button
-              onClick={() => setIsEditorCollapsed(true)}
-              className="md:hidden flex items-center gap-1 text-sm text-gray-600 p-4 pb-0"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Entries
-            </button>
-          )}
-          <EntryEditor
-            entryId={selectedEntryId}
-            date={selectedDate}
-            onEntrySaved={handleEntrySaved}
-            onSelectEntry={setSelectedEntryId}
-            today={today}
-          />
-        </div>
+        <EntryEditor
+          entryId={selectedEntryId}
+          date={selectedDate}
+          onEntrySaved={handleEntrySaved}
+          onSelectEntry={setSelectedEntryId}
+          today={today}
+          onTopicsChange={handleEntrySaved}
+        />
       </div>
     </div>
   );

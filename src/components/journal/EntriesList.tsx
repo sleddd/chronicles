@@ -54,16 +54,14 @@ type ViewMode = 'date' | 'all' | 'favorites' | 'search';
 interface Props {
   selectedDate: string;
   onDateChange: (date: string) => void;
-  selectedEntryId: string | null;
   onSelectEntry: (entryId: string | null) => void;
-  onEntryCreated: () => void;
+  onEntryCreated: (entryId?: string) => void;
   today: string;
 }
 
 export function EntriesList({
   selectedDate,
   onDateChange,
-  selectedEntryId,
   onSelectEntry,
   onEntryCreated,
   today,
@@ -76,11 +74,57 @@ export function EntriesList({
   const [filterTopicId, setFilterTopicId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('date');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchTopicId, setSearchTopicId] = useState<string | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(true);
   const [quickEntry, setQuickEntry] = useState('');
   const [quickEntryTopicId, setQuickEntryTopicId] = useState<string | null>(null);
   const [showTopicDropdown, setShowTopicDropdown] = useState(false);
+  const [topicSearchQuery, setTopicSearchQuery] = useState('');
+  // Quick entry custom fields
+  // Task
+  const [qfTaskCompleted, setQfTaskCompleted] = useState(false);
+  const [qfTaskAutoMigrate, setQfTaskAutoMigrate] = useState(true);
+  // Goal
+  const [qfGoalType, setQfGoalType] = useState<string>('personal');
+  const [qfGoalStatus, setQfGoalStatus] = useState<string>('not_started');
+  const [qfGoalTargetDate, setQfGoalTargetDate] = useState('');
+  // Meeting
+  const [qfMeetingStartDate, setQfMeetingStartDate] = useState('');
+  const [qfMeetingStartTime, setQfMeetingStartTime] = useState('09:00');
+  const [qfMeetingEndDate, setQfMeetingEndDate] = useState('');
+  const [qfMeetingEndTime, setQfMeetingEndTime] = useState('10:00');
+  const [qfMeetingLocation, setQfMeetingLocation] = useState('');
+  const [qfMeetingAddress, setQfMeetingAddress] = useState('');
+  const [qfMeetingPhone, setQfMeetingPhone] = useState('');
+  const [qfMeetingTopic, setQfMeetingTopic] = useState('');
+  const [qfMeetingAttendees, setQfMeetingAttendees] = useState('');
+  // Event
+  const [qfEventStartDate, setQfEventStartDate] = useState('');
+  const [qfEventStartTime, setQfEventStartTime] = useState('09:00');
+  const [qfEventEndDate, setQfEventEndDate] = useState('');
+  const [qfEventEndTime, setQfEventEndTime] = useState('10:00');
+  const [qfEventLocation, setQfEventLocation] = useState('');
+  const [qfEventAddress, setQfEventAddress] = useState('');
+  const [qfEventPhone, setQfEventPhone] = useState('');
+  // Medication
+  const [qfMedDosage, setQfMedDosage] = useState('');
+  const [qfMedFrequency, setQfMedFrequency] = useState<string>('once_daily');
+  const [qfMedScheduleTimes, setQfMedScheduleTimes] = useState<string[]>(['08:00']);
+  const [qfMedIsActive, setQfMedIsActive] = useState(true);
+  // Exercise
+  const [qfExerciseType, setQfExerciseType] = useState<string>('');
+  const [qfExerciseDuration, setQfExerciseDuration] = useState('');
+  const [qfExerciseIntensity, setQfExerciseIntensity] = useState<string>('medium');
+  const [qfExerciseDistance, setQfExerciseDistance] = useState('');
+  const [qfExerciseDistanceUnit, setQfExerciseDistanceUnit] = useState<string>('miles');
+  const [qfExerciseCalories, setQfExerciseCalories] = useState('');
+  // Food
+  const [qfMealType, setQfMealType] = useState<string>('');
+  const [qfFoodIngredients, setQfFoodIngredients] = useState('');
+  // Symptom
+  const [qfSeverity, setQfSeverity] = useState(5);
+  const [qfSymptomDuration, setQfSymptomDuration] = useState('');
   const { encryptData, decryptData, isKeyReady } = useEncryption();
 
   const fetchEntries = useCallback(async () => {
@@ -278,12 +322,236 @@ export function EntriesList({
     setFilterTopicId(null);
   };
 
+  // Get topic name for quick entry to determine which custom fields to show
+  const quickEntryTopicName = quickEntryTopicId ? decryptedTopics[quickEntryTopicId]?.toLowerCase() : null;
+
+  const resetQuickEntryFields = () => {
+    setQuickEntry('');
+    setQuickEntryTopicId(null);
+    // Task
+    setQfTaskCompleted(false);
+    setQfTaskAutoMigrate(true);
+    // Goal
+    setQfGoalType('personal');
+    setQfGoalStatus('not_started');
+    setQfGoalTargetDate('');
+    // Meeting
+    setQfMeetingStartDate('');
+    setQfMeetingStartTime('09:00');
+    setQfMeetingEndDate('');
+    setQfMeetingEndTime('10:00');
+    setQfMeetingLocation('');
+    setQfMeetingAddress('');
+    setQfMeetingPhone('');
+    setQfMeetingTopic('');
+    setQfMeetingAttendees('');
+    // Event
+    setQfEventStartDate('');
+    setQfEventStartTime('09:00');
+    setQfEventEndDate('');
+    setQfEventEndTime('10:00');
+    setQfEventLocation('');
+    setQfEventAddress('');
+    setQfEventPhone('');
+    // Medication
+    setQfMedDosage('');
+    setQfMedFrequency('once_daily');
+    setQfMedScheduleTimes(['08:00']);
+    setQfMedIsActive(true);
+    // Exercise
+    setQfExerciseType('');
+    setQfExerciseDuration('');
+    setQfExerciseIntensity('medium');
+    setQfExerciseDistance('');
+    setQfExerciseDistanceUnit('miles');
+    setQfExerciseCalories('');
+    // Food
+    setQfMealType('');
+    setQfFoodIngredients('');
+    // Symptom
+    setQfSeverity(5);
+    setQfSymptomDuration('');
+  };
+
   const handleQuickEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickEntry.trim() || !isKeyReady) return;
 
     try {
       const { ciphertext, iv } = await encryptData(`<p>${quickEntry}</p>`);
+
+      // Build custom fields based on topic type
+      const customFields: { encryptedData: string; iv: string }[] = [];
+      const topicName = quickEntryTopicName;
+
+      if (topicName === 'task') {
+        // Task fields: isCompleted, isAutoMigrating
+        const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: qfTaskCompleted });
+        const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: qfTaskAutoMigrate });
+        const enc1 = await encryptData(completedField);
+        const enc2 = await encryptData(migrateField);
+        customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
+        customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
+      } else if (topicName === 'goal') {
+        // Goal fields: type, status, targetDate, progressPercentage
+        const typeField = JSON.stringify({ fieldKey: 'type', value: qfGoalType });
+        const statusField = JSON.stringify({ fieldKey: 'status', value: qfGoalStatus });
+        const targetField = JSON.stringify({ fieldKey: 'targetDate', value: qfGoalTargetDate || null });
+        const progressField = JSON.stringify({ fieldKey: 'progressPercentage', value: 0 });
+        const enc1 = await encryptData(typeField);
+        const enc2 = await encryptData(statusField);
+        const enc3 = await encryptData(targetField);
+        const enc4 = await encryptData(progressField);
+        customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
+        customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
+        customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
+        customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
+      } else if (topicName === 'meeting') {
+        // Meeting fields: startDate, startTime, endDate, endTime, location, address, phone, topic, attendees
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: qfMeetingStartDate || selectedDate || today });
+        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: qfMeetingStartTime });
+        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: qfMeetingEndDate || qfMeetingStartDate || selectedDate || today });
+        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: qfMeetingEndTime });
+        const enc1 = await encryptData(startDateField);
+        const enc2 = await encryptData(startTimeField);
+        const enc3 = await encryptData(endDateField);
+        const enc4 = await encryptData(endTimeField);
+        customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
+        customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
+        customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
+        customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
+        if (qfMeetingLocation) {
+          const locationField = JSON.stringify({ fieldKey: 'location', value: qfMeetingLocation });
+          const enc = await encryptData(locationField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfMeetingAddress) {
+          const addressField = JSON.stringify({ fieldKey: 'address', value: qfMeetingAddress });
+          const enc = await encryptData(addressField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfMeetingPhone) {
+          const phoneField = JSON.stringify({ fieldKey: 'phone', value: qfMeetingPhone });
+          const enc = await encryptData(phoneField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfMeetingTopic) {
+          const topicField = JSON.stringify({ fieldKey: 'topic', value: qfMeetingTopic });
+          const enc = await encryptData(topicField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfMeetingAttendees) {
+          const attendeesField = JSON.stringify({ fieldKey: 'attendees', value: qfMeetingAttendees });
+          const enc = await encryptData(attendeesField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+      } else if (topicName === 'event') {
+        // Event fields: startDate, startTime, endDate, endTime, location, address, phone
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: qfEventStartDate || selectedDate || today });
+        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: qfEventStartTime });
+        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: qfEventEndDate || qfEventStartDate || selectedDate || today });
+        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: qfEventEndTime });
+        const enc1 = await encryptData(startDateField);
+        const enc2 = await encryptData(startTimeField);
+        const enc3 = await encryptData(endDateField);
+        const enc4 = await encryptData(endTimeField);
+        customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
+        customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
+        customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
+        customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
+        if (qfEventLocation) {
+          const locationField = JSON.stringify({ fieldKey: 'location', value: qfEventLocation });
+          const enc = await encryptData(locationField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfEventAddress) {
+          const addressField = JSON.stringify({ fieldKey: 'address', value: qfEventAddress });
+          const enc = await encryptData(addressField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfEventPhone) {
+          const phoneField = JSON.stringify({ fieldKey: 'phone', value: qfEventPhone });
+          const enc = await encryptData(phoneField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+      } else if (topicName === 'medication') {
+        // Medication fields: dosage, frequency, scheduleTimes, isActive, startDate
+        const dosageField = JSON.stringify({ fieldKey: 'dosage', value: qfMedDosage });
+        const frequencyField = JSON.stringify({ fieldKey: 'frequency', value: qfMedFrequency });
+        const scheduleTimesField = JSON.stringify({ fieldKey: 'scheduleTimes', value: qfMedScheduleTimes });
+        const isActiveField = JSON.stringify({ fieldKey: 'isActive', value: qfMedIsActive });
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: selectedDate || today });
+        const enc1 = await encryptData(dosageField);
+        const enc2 = await encryptData(frequencyField);
+        const enc3 = await encryptData(scheduleTimesField);
+        const enc4 = await encryptData(isActiveField);
+        const enc5 = await encryptData(startDateField);
+        customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
+        customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
+        customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
+        customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
+        customFields.push({ encryptedData: enc5.ciphertext, iv: enc5.iv });
+      } else if (topicName === 'exercise') {
+        // Exercise fields: exerciseType, duration, intensity, distance, distanceUnit, calories, performedAt
+        if (qfExerciseType) {
+          const typeField = JSON.stringify({ fieldKey: 'exerciseType', value: qfExerciseType });
+          const enc = await encryptData(typeField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfExerciseDuration) {
+          const durField = JSON.stringify({ fieldKey: 'duration', value: parseInt(qfExerciseDuration) || null });
+          const enc = await encryptData(durField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: qfExerciseIntensity });
+        const encIntensity = await encryptData(intensityField);
+        customFields.push({ encryptedData: encIntensity.ciphertext, iv: encIntensity.iv });
+        if (qfExerciseDistance) {
+          const distanceField = JSON.stringify({ fieldKey: 'distance', value: parseFloat(qfExerciseDistance) || null });
+          const enc = await encryptData(distanceField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+          const unitField = JSON.stringify({ fieldKey: 'distanceUnit', value: qfExerciseDistanceUnit });
+          const encUnit = await encryptData(unitField);
+          customFields.push({ encryptedData: encUnit.ciphertext, iv: encUnit.iv });
+        }
+        if (qfExerciseCalories) {
+          const calField = JSON.stringify({ fieldKey: 'calories', value: parseInt(qfExerciseCalories) || null });
+          const enc = await encryptData(calField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        const performedField = JSON.stringify({ fieldKey: 'performedAt', value: new Date().toISOString() });
+        const encPerformed = await encryptData(performedField);
+        customFields.push({ encryptedData: encPerformed.ciphertext, iv: encPerformed.iv });
+      } else if (topicName === 'food') {
+        // Food fields: mealType, consumedAt, ingredients
+        if (qfMealType) {
+          const mealField = JSON.stringify({ fieldKey: 'mealType', value: qfMealType });
+          const enc = await encryptData(mealField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (qfFoodIngredients) {
+          const ingredients = qfFoodIngredients.split(',').map(i => i.trim()).filter(i => i);
+          const ingredientsField = JSON.stringify({ fieldKey: 'ingredients', value: ingredients });
+          const enc = await encryptData(ingredientsField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        const consumedField = JSON.stringify({ fieldKey: 'consumedAt', value: new Date().toISOString() });
+        const encConsumed = await encryptData(consumedField);
+        customFields.push({ encryptedData: encConsumed.ciphertext, iv: encConsumed.iv });
+      } else if (topicName === 'symptom' || topicName === 'symptoms') {
+        // Symptom fields: severity, occurredAt, duration
+        const sevField = JSON.stringify({ fieldKey: 'severity', value: qfSeverity });
+        const enc = await encryptData(sevField);
+        customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        if (qfSymptomDuration) {
+          const durField = JSON.stringify({ fieldKey: 'duration', value: parseInt(qfSymptomDuration) || null });
+          const encDur = await encryptData(durField);
+          customFields.push({ encryptedData: encDur.ciphertext, iv: encDur.iv });
+        }
+        const occurredField = JSON.stringify({ fieldKey: 'occurredAt', value: new Date().toISOString() });
+        const encOccurred = await encryptData(occurredField);
+        customFields.push({ encryptedData: encOccurred.ciphertext, iv: encOccurred.iv });
+      }
 
       const response = await fetch('/api/entries', {
         method: 'POST',
@@ -293,25 +561,36 @@ export function EntriesList({
           iv,
           topicId: quickEntryTopicId,
           entryDate: selectedDate || today,
+          ...(topicName && { customType: topicName }),
+          ...(customFields.length > 0 && { customFields }),
         }),
       });
 
       if (response.ok) {
-        setQuickEntry('');
-        setQuickEntryTopicId(null);
+        const data = await response.json();
+        resetQuickEntryFields();
         fetchEntries();
-        onEntryCreated();
+        onEntryCreated(data.entry?.id);
       }
     } catch (error) {
       console.error('Failed to create quick entry:', error);
     }
   };
 
-  // Filter entries by search query (client-side)
-  const filteredEntries = viewMode === 'search' && searchQuery.trim()
+  // Filter entries by search query and topic (client-side)
+  const filteredEntries = viewMode === 'search'
     ? entries.filter(entry => {
-        const decrypted = decryptedEntries[entry.id] || '';
-        return decrypted.toLowerCase().includes(searchQuery.toLowerCase());
+        // Filter by topic if selected
+        if (searchTopicId && entry.topicId !== searchTopicId) {
+          return false;
+        }
+        // Filter by search query if provided
+        if (searchQuery.trim()) {
+          const decrypted = decryptedEntries[entry.id] || '';
+          return decrypted.toLowerCase().includes(searchQuery.toLowerCase());
+        }
+        // If only topic filter is active (no search query), include entry
+        return searchTopicId ? true : false;
       })
     : entries;
 
@@ -341,7 +620,7 @@ export function EntriesList({
   };
 
   return (
-    <div className="p-4 bg-gray-50 h-full flex flex-col min-h-0">
+    <div className="p-4 bg-gray-50 h-full overflow-auto">
       {/* Collapsible Mini Calendar */}
       <div className="mb-4 bg-white border rounded-lg overflow-hidden">
         <button
@@ -415,9 +694,9 @@ export function EntriesList({
         </button>
       </div>
 
-      {/* Search Input */}
+      {/* Search Input and Topic Filter */}
       {viewMode === 'search' && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-2">
           <input
             type="text"
             value={searchQuery}
@@ -425,6 +704,33 @@ export function EntriesList({
             placeholder="Search entries..."
             className="w-full px-3 py-2 border rounded-md bg-white text-gray-900 placeholder-gray-400"
           />
+          {searchTopicId ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-md">
+              <TopicIcon iconName={getTopic(searchTopicId)?.icon || null} color={getTopic(searchTopicId)?.color || '#6b7280'} size="sm" />
+              <span className="text-sm text-gray-700">
+                <strong>{getTopicName(searchTopicId)}</strong>
+              </span>
+              <button
+                onClick={() => setSearchTopicId(null)}
+                className="ml-auto text-gray-400 hover:text-gray-600 text-sm"
+              >
+                × Clear
+              </button>
+            </div>
+          ) : (
+            <select
+              value=""
+              onChange={(e) => setSearchTopicId(e.target.value || null)}
+              className="w-full px-3 py-2 border rounded-md bg-white text-gray-900"
+            >
+              <option value="">Filter by topic...</option>
+              {topics.map((topic) => (
+                <option key={topic.id} value={topic.id}>
+                  {decryptedTopics[topic.id] || 'Loading...'}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
@@ -475,35 +781,61 @@ export function EntriesList({
               </svg>
             </button>
             {showTopicDropdown && (
-              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-lg z-10 min-w-[120px]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuickEntryTopicId(null);
-                    setShowTopicDropdown(false);
-                  }}
-                  className="w-full px-3 py-1.5 text-sm text-left text-gray-500 hover:bg-gray-100"
-                >
-                  No topic
-                </button>
-                {topics.map((topic) => (
-                  <button
-                    key={topic.id}
-                    type="button"
-                    onClick={() => {
-                      setQuickEntryTopicId(topic.id);
-                      setShowTopicDropdown(false);
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-lg z-10 w-64">
+                <div className="p-2 border-b">
+                  <input
+                    type="text"
+                    value={topicSearchQuery}
+                    onChange={(e) => setTopicSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.preventDefault();
                     }}
-                    className="w-full px-3 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                  >
-                    <TopicIcon iconName={topic.icon} color={topic.color} size="sm" />
-                    {decryptedTopics[topic.id] || 'Loading...'}
-                  </button>
-                ))}
+                    placeholder="Type to search topics..."
+                    className="w-full px-2 py-1 text-sm border rounded bg-white text-gray-900 placeholder-gray-400"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-auto">
+                  {(!topicSearchQuery.trim() || 'no topic'.includes(topicSearchQuery.toLowerCase())) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickEntryTopicId(null);
+                        setShowTopicDropdown(false);
+                        setTopicSearchQuery('');
+                      }}
+                      className="w-full px-3 py-1.5 text-sm text-left text-gray-500 hover:bg-gray-100"
+                    >
+                      No topic
+                    </button>
+                  )}
+                  {topics
+                    .filter((topic) => {
+                      if (!topicSearchQuery.trim()) return true;
+                      const name = decryptedTopics[topic.id] || '';
+                      return name.toLowerCase().includes(topicSearchQuery.toLowerCase());
+                    })
+                    .map((topic) => (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      onClick={() => {
+                        setQuickEntryTopicId(topic.id);
+                        setShowTopicDropdown(false);
+                        setTopicSearchQuery('');
+                      }}
+                      className="w-full px-3 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <TopicIcon iconName={topic.icon} color={topic.color} size="sm" />
+                      {decryptedTopics[topic.id] || 'Loading...'}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         </div>
+
         <div className="flex gap-2">
           <input
             type="text"
@@ -512,6 +844,15 @@ export function EntriesList({
             placeholder="Quick entry..."
             className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500"
           />
+          {(quickEntry.trim() || quickEntryTopicId) && (
+            <button
+              type="button"
+              onClick={resetQuickEntryFields}
+              className="px-3 py-2 text-gray-600 text-sm rounded-md border border-gray-300 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="submit"
             disabled={!quickEntry.trim() || !isKeyReady}
@@ -523,10 +864,362 @@ export function EntriesList({
             Add
           </button>
         </div>
+
+        {/* Custom fields based on selected topic - shown below text input */}
+        {quickEntryTopicName === 'task' && (
+          <div className="flex items-center gap-4 mt-2 text-sm">
+            <label className="flex items-center gap-1.5 text-gray-600">
+              <input
+                type="checkbox"
+                checked={qfTaskAutoMigrate}
+                onChange={(e) => setQfTaskAutoMigrate(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Auto-migrate
+            </label>
+          </div>
+        )}
+
+        {quickEntryTopicName === 'goal' && (
+          <div className="space-y-2 mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={qfGoalType}
+                onChange={(e) => setQfGoalType(e.target.value)}
+                className="px-2 py-1 border rounded bg-white text-gray-900"
+              >
+                <option value="personal">Personal</option>
+                <option value="professional">Professional</option>
+                <option value="health">Health</option>
+                <option value="financial">Financial</option>
+                <option value="educational">Educational</option>
+              </select>
+              <select
+                value={qfGoalStatus}
+                onChange={(e) => setQfGoalStatus(e.target.value)}
+                className="px-2 py-1 border rounded bg-white text-gray-900"
+              >
+                <option value="not_started">Not Started</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="on_hold">On Hold</option>
+              </select>
+              <div className="flex items-center gap-1">
+                <label className="text-gray-600">Target:</label>
+                <input
+                  type="date"
+                  value={qfGoalTargetDate}
+                  onChange={(e) => setQfGoalTargetDate(e.target.value)}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {quickEntryTopicName === 'meeting' && (
+          <div className="space-y-2 mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1">
+                <label className="text-gray-600">Start:</label>
+                <input
+                  type="date"
+                  value={qfMeetingStartDate}
+                  onChange={(e) => setQfMeetingStartDate(e.target.value)}
+                  placeholder={selectedDate || today}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+                <input
+                  type="time"
+                  value={qfMeetingStartTime}
+                  onChange={(e) => setQfMeetingStartTime(e.target.value)}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="text-gray-600">End:</label>
+                <input
+                  type="date"
+                  value={qfMeetingEndDate}
+                  onChange={(e) => setQfMeetingEndDate(e.target.value)}
+                  placeholder={qfMeetingStartDate || selectedDate || today}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+                <input
+                  type="time"
+                  value={qfMeetingEndTime}
+                  onChange={(e) => setQfMeetingEndTime(e.target.value)}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                value={qfMeetingLocation}
+                onChange={(e) => setQfMeetingLocation(e.target.value)}
+                placeholder="Location"
+                className="flex-1 min-w-[100px] px-2 py-1 border rounded bg-white text-gray-900"
+              />
+              <input
+                type="text"
+                value={qfMeetingTopic}
+                onChange={(e) => setQfMeetingTopic(e.target.value)}
+                placeholder="Meeting topic"
+                className="flex-1 min-w-[120px] px-2 py-1 border rounded bg-white text-gray-900"
+              />
+            </div>
+          </div>
+        )}
+
+        {quickEntryTopicName === 'event' && (
+          <div className="space-y-2 mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1">
+                <label className="text-gray-600">Start:</label>
+                <input
+                  type="date"
+                  value={qfEventStartDate}
+                  onChange={(e) => setQfEventStartDate(e.target.value)}
+                  placeholder={selectedDate || today}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+                <input
+                  type="time"
+                  value={qfEventStartTime}
+                  onChange={(e) => setQfEventStartTime(e.target.value)}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="text-gray-600">End:</label>
+                <input
+                  type="date"
+                  value={qfEventEndDate}
+                  onChange={(e) => setQfEventEndDate(e.target.value)}
+                  placeholder={qfEventStartDate || selectedDate || today}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+                <input
+                  type="time"
+                  value={qfEventEndTime}
+                  onChange={(e) => setQfEventEndTime(e.target.value)}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                value={qfEventLocation}
+                onChange={(e) => setQfEventLocation(e.target.value)}
+                placeholder="Location"
+                className="flex-1 min-w-[100px] px-2 py-1 border rounded bg-white text-gray-900"
+              />
+            </div>
+          </div>
+        )}
+
+        {quickEntryTopicName === 'medication' && (
+          <div className="space-y-2 mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                value={qfMedDosage}
+                onChange={(e) => setQfMedDosage(e.target.value)}
+                placeholder="Dosage (e.g., 10mg)"
+                className="w-32 px-2 py-1 border rounded bg-white text-gray-900"
+              />
+              <select
+                value={qfMedFrequency}
+                onChange={(e) => setQfMedFrequency(e.target.value)}
+                className="px-2 py-1 border rounded bg-white text-gray-900"
+              >
+                <option value="once_daily">Once Daily</option>
+                <option value="twice_daily">Twice Daily</option>
+                <option value="three_times_daily">3x Daily</option>
+                <option value="four_times_daily">4x Daily</option>
+                <option value="as_needed">As Needed</option>
+                <option value="weekly">Weekly</option>
+              </select>
+              <label className="flex items-center gap-1.5 text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={qfMedIsActive}
+                  onChange={(e) => setQfMedIsActive(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                Active
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-gray-600">Schedule times:</label>
+              {qfMedScheduleTimes.map((time, idx) => (
+                <div key={idx} className="flex items-center gap-1">
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => {
+                      const newTimes = [...qfMedScheduleTimes];
+                      newTimes[idx] = e.target.value;
+                      setQfMedScheduleTimes(newTimes);
+                    }}
+                    className="px-2 py-1 border rounded bg-white text-gray-900"
+                  />
+                  {qfMedScheduleTimes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setQfMedScheduleTimes(qfMedScheduleTimes.filter((_, i) => i !== idx))}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setQfMedScheduleTimes([...qfMedScheduleTimes, '12:00'])}
+                className="text-teal-600 hover:text-teal-800"
+              >
+                + Add time
+              </button>
+            </div>
+          </div>
+        )}
+
+        {quickEntryTopicName === 'exercise' && (
+          <div className="space-y-2 mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={qfExerciseType}
+                onChange={(e) => setQfExerciseType(e.target.value)}
+                className="px-2 py-1 border rounded bg-white text-gray-900"
+              >
+                <option value="">Type...</option>
+                <option value="walking">Walking</option>
+                <option value="running">Running</option>
+                <option value="cycling">Cycling</option>
+                <option value="swimming">Swimming</option>
+                <option value="yoga">Yoga</option>
+                <option value="strength">Strength</option>
+                <option value="cardio">Cardio</option>
+                <option value="hiking">Hiking</option>
+                <option value="other">Other</option>
+              </select>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={qfExerciseDuration}
+                  onChange={(e) => setQfExerciseDuration(e.target.value)}
+                  placeholder="Duration"
+                  className="w-20 px-2 py-1 border rounded bg-white text-gray-900"
+                  min="0"
+                />
+                <span className="text-gray-500">min</span>
+              </div>
+              <select
+                value={qfExerciseIntensity}
+                onChange={(e) => setQfExerciseIntensity(e.target.value)}
+                className="px-2 py-1 border rounded bg-white text-gray-900"
+              >
+                <option value="low">Low intensity</option>
+                <option value="medium">Medium intensity</option>
+                <option value="high">High intensity</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={qfExerciseDistance}
+                  onChange={(e) => setQfExerciseDistance(e.target.value)}
+                  placeholder="Distance"
+                  className="w-20 px-2 py-1 border rounded bg-white text-gray-900"
+                  min="0"
+                  step="0.1"
+                />
+                <select
+                  value={qfExerciseDistanceUnit}
+                  onChange={(e) => setQfExerciseDistanceUnit(e.target.value)}
+                  className="px-2 py-1 border rounded bg-white text-gray-900"
+                >
+                  <option value="miles">mi</option>
+                  <option value="km">km</option>
+                  <option value="meters">m</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={qfExerciseCalories}
+                  onChange={(e) => setQfExerciseCalories(e.target.value)}
+                  placeholder="Calories"
+                  className="w-20 px-2 py-1 border rounded bg-white text-gray-900"
+                  min="0"
+                />
+                <span className="text-gray-500">cal</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {quickEntryTopicName === 'food' && (
+          <div className="space-y-2 mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={qfMealType}
+                onChange={(e) => setQfMealType(e.target.value)}
+                className="px-2 py-1 border rounded bg-white text-gray-900"
+              >
+                <option value="">Meal type...</option>
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack">Snack</option>
+              </select>
+              <input
+                type="text"
+                value={qfFoodIngredients}
+                onChange={(e) => setQfFoodIngredients(e.target.value)}
+                placeholder="Ingredients (comma separated)"
+                className="flex-1 min-w-[150px] px-2 py-1 border rounded bg-white text-gray-900"
+              />
+            </div>
+          </div>
+        )}
+
+        {(quickEntryTopicName === 'symptom' || quickEntryTopicName === 'symptoms') && (
+          <div className="flex flex-wrap items-center gap-4 mt-2 text-sm">
+            <div className="flex items-center gap-2">
+              <label className="text-gray-600">Severity:</label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={qfSeverity}
+                onChange={(e) => setQfSeverity(parseInt(e.target.value))}
+                className="w-24"
+              />
+              <span className="text-gray-700 font-medium w-6">{qfSeverity}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={qfSymptomDuration}
+                onChange={(e) => setQfSymptomDuration(e.target.value)}
+                placeholder="Duration"
+                className="w-20 px-2 py-1 border rounded bg-white text-gray-900"
+                min="0"
+              />
+              <span className="text-gray-500">min</span>
+            </div>
+          </div>
+        )}
       </form>
 
       {/* Entries List */}
-      <div className="flex-1 overflow-auto space-y-2 min-h-0">
+      <div className="space-y-2">
         {viewMode === 'date' ? (
           // Date view - flat list
           <>
@@ -537,7 +1230,6 @@ export function EntriesList({
               <EntryCard
                 key={entry.id}
                 entry={entry}
-                isSelected={selectedEntryId === entry.id}
                 isFavorite={favoriteIds.has(entry.id)}
                 taskFields={taskFields.get(entry.id)}
                 decryptedContent={decryptedEntries[entry.id]}
@@ -568,7 +1260,6 @@ export function EntriesList({
                     <EntryCard
                       key={entry.id}
                       entry={entry}
-                      isSelected={selectedEntryId === entry.id}
                       isFavorite={favoriteIds.has(entry.id)}
                       taskFields={taskFields.get(entry.id)}
                       decryptedContent={decryptedEntries[entry.id]}
@@ -593,7 +1284,6 @@ export function EntriesList({
 // Extracted entry card component for reuse
 function EntryCard({
   entry,
-  isSelected,
   isFavorite,
   taskFields,
   decryptedContent,
@@ -604,7 +1294,6 @@ function EntryCard({
   onTopicClick,
 }: {
   entry: Entry;
-  isSelected: boolean;
   isFavorite: boolean;
   taskFields: TaskFields | undefined;
   decryptedContent: string | undefined;
@@ -620,26 +1309,22 @@ function EntryCard({
   return (
     <div
       onClick={onSelect}
-      className={`p-3 border rounded-md cursor-pointer bg-white ${
-        isSelected ? 'ring-2 ring-teal-500 border-teal-300' : 'hover:border-gray-400'
-      }`}
+      className="p-3 border rounded-md cursor-pointer bg-white hover:border-gray-400"
     >
       <div className="flex items-center gap-2 mb-1">
         {topic && (
           <button
             type="button"
             onClick={onTopicClick}
-            className="text-xs px-1.5 py-1 rounded flex items-center justify-center hover:ring-2 hover:ring-gray-300 transition-all"
+            className="text-xs px-1.5 py-1 rounded flex items-center gap-1 hover:ring-2 hover:ring-gray-300 transition-all"
             style={{
               backgroundColor: `${topic.color}20`,
             }}
             title={`Filter by ${topicName}`}
           >
             <TopicIcon iconName={topic.icon} color={topic.color} size="sm" />
+            {topicName && <span style={{ color: topic.color }}>{topicName}</span>}
           </button>
-        )}
-        {isTask && (
-          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Task</span>
         )}
         {isFavorite && (
           <svg className="w-4 h-4 text-teal-500" fill="currentColor" viewBox="0 0 24 24">

@@ -27,8 +27,8 @@ export function Header() {
   const isHealthActive = pathname?.startsWith('/health');
 
   const healthTabs = [
-    { key: 'medications', label: 'Medications' },
-    { key: 'schedule', label: 'Schedule' },
+    { key: 'medications', label: 'Meds. List' },
+    { key: 'schedule', label: 'Meds. Schedule' },
     { key: 'food', label: 'Food' },
     { key: 'symptoms', label: 'Symptoms' },
     { key: 'exercise', label: 'Exercise' },

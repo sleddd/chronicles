@@ -5,8 +5,8 @@ A zero-knowledge encrypted journal application with client-side encryption. The 
 ## Privacy Guarantees
 
 - All entry content is encrypted in the browser before transmission
-- Master encryption key exists only in browser memory
-- **No password recovery** - password loss means permanent data loss (by design)
+- Master encryption key exists only in browser memory (cleared on logout/refresh)
+- Recovery key system allows password reset without compromising zero-knowledge design
 - Schema-per-user database isolation (not row-level security)
 
 ## Features
@@ -229,11 +229,18 @@ Bookmarked entries appear in the Favorites section for quick access. Click the b
 Registration is currently invite-only. To allow a user to register:
 
 1. Add their email to the `REGISTRATION_WHITELIST` environment variable
-2. Users must accept:
-   - Password recovery warning (no recovery is possible)
-   - Terms of Service agreement
+2. Users must acknowledge the recovery key requirement
+3. Users must agree to Terms of Service
 
-Password requirements: minimum 12 characters with uppercase, lowercase, and number.
+**Password requirements:**
+- Minimum 12 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- Minimum entropy score (resists common patterns and dictionary words)
+
+**Recovery Key:**
+At registration, you'll receive a recovery key (formatted as hex with dashes). This key is shown only once - save it securely. If you forget your password, this key is the only way to recover your account.
 
 ## Commands
 
@@ -252,14 +259,132 @@ npm run lint     # Run ESLint
 - **State Management**: Zustand
 - **Styling**: Tailwind CSS
 
+## Architecture
+
+### Multi-Tenant Schema-per-User Database
+
+Chronicles uses PostgreSQL with complete schema isolation per user. This is **not** row-level security - each user gets their own PostgreSQL schema with their own tables.
+
+```
+PostgreSQL Database
+├── auth schema (shared)
+│   ├── accounts        # Authentication only (email, passwordHash, wrapped keys)
+│   ├── sessions        # Database-backed sessions (enables immediate revocation)
+│   └── schema_counter  # Atomic counter for unique schema names
+│
+├── chronicles_x7k9m2_1 (user 1's isolated schema)
+│   ├── topics          # Encrypted topic names
+│   ├── entries         # Encrypted journal content
+│   ├── custom_fields   # Type-specific metadata (goals, medications, etc.)
+│   ├── entry_relationships  # Links between entries (goal → milestones)
+│   ├── medications     # Medication tracking
+│   ├── medication_doses    # Dose logging
+│   ├── symptoms        # Symptom tracking
+│   ├── food_entries    # Food/diet logging
+│   ├── exercise_entries    # Exercise logging
+│   └── favorites       # Favorited entries
+│
+└── chronicles_p3n8q5_2 (user 2's isolated schema)
+    └── ... same tables, completely isolated
+```
+
+**Schema naming**: `chronicles_<random_6_char>_<counter>` - NOT derived from user info.
+
+### Client-Server Boundary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        BROWSER                               │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
+│  │ Master Key  │  │  Encrypt/    │  │  Plaintext Data   │  │
+│  │ (memory)    │──│  Decrypt     │──│  (user sees)      │  │
+│  └─────────────┘  └──────────────┘  └───────────────────┘  │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Encrypted Data (ciphertext)             │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ HTTPS (encrypted in transit)
+┌─────────────────────────────────────────────────────────────┐
+│                        SERVER                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │     Only sees: encrypted blobs, wrapped keys,        │   │
+│  │     password hashes, session tokens                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+│                              ▼                               │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              PostgreSQL (encrypted at rest)          │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The server **never** has access to:
+- Your password (only bcrypt hash)
+- Your master encryption key (only wrapped/encrypted version)
+- Your recovery key (only derived key used to wrap master key)
+- Your plaintext journal content
+
 ## Security
 
-- AES-256-GCM encryption with random 12-byte IV per entry
-- PBKDF2-SHA256 key derivation with 100,000 iterations
-- 32-byte random salt per user
-- bcrypt password hashing
-- Database session management with immediate revocation capability
+### Encryption
+
+- **Algorithm**: AES-256-GCM with random 12-byte IV per entry
+- **Key Derivation**: PBKDF2-SHA256 with 600,000 iterations (OWASP 2023 recommendation)
+- **Salt**: 32 bytes random per user
+- **Legacy Support**: Automatic migration from 100,000 iterations for existing accounts
+
+### Two-Layer Key Architecture
+
+Chronicles uses a two-layer encryption system that separates authentication from encryption:
+
+1. **Master Key**: A randomly generated AES-256 key that encrypts all your data. This key never leaves your browser in plaintext.
+
+2. **Key Encryption Keys (KEKs)**: Your master key is "wrapped" (encrypted) by two separate keys:
+   - **Password-derived KEK**: Derived from your password using PBKDF2. Used for normal login.
+   - **Recovery-derived KEK**: Derived from your recovery key. Used for password reset.
+
+**Why this matters:**
+- Changing your password only re-wraps the master key (instant operation)
+- Your data is never re-encrypted when you change your password
+- The server stores only wrapped (encrypted) versions of your master key
+- Even with database access, an attacker cannot decrypt your data without your password or recovery key
+
+### Password Recovery Flow
+
+1. Enter your email and recovery key on the forgot password page
+2. Your browser fetches the recovery-wrapped master key from the server
+3. Your browser unwraps the master key using your recovery key (client-side)
+4. You set a new password
+5. Your browser wraps the master key with your new password-derived key
+6. A new recovery key is generated and displayed (save it!)
+7. Server stores the new wrapped keys and password hash
+
+The server never sees your master key, recovery key, or password in plaintext.
+
+### Authentication & Session Security
+
+- **Password Hashing**: bcrypt with automatic cost factor
+- **Sessions**: Database-backed sessions with immediate revocation capability
+- **Rate Limiting**: Login attempts are rate-limited to prevent brute force attacks
+- **Secure Cookies**: HttpOnly, Secure, SameSite=Lax
+
+### Input Sanitization & XSS Prevention
+
+- **Content Security Policy (CSP)**: Strict CSP headers prevent inline scripts and unauthorized resource loading
+- **HTML Sanitization**: All user content is sanitized with DOMPurify before rendering
+- **Rich Text**: TipTap editor output is sanitized to allow only safe HTML tags and attributes
+
+### Database Isolation
+
+Each user gets their own PostgreSQL schema (e.g., `chronicles_x7k9m2_1`). This provides:
+- Complete data isolation between users
+- No risk of query bugs leaking data across users
+- Easy per-user backup and deletion
+- Schema names are random, not derived from user information
 
 ## License
 
-All rights reserved.
+© 2025 Claudette Raynor | All Rights Reserved. You may not use this for any commericial purpose. You can download this appliaction for personal use only, but cannot modify it.

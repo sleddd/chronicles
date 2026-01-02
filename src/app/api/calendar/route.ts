@@ -63,13 +63,13 @@ export async function GET(request: NextRequest) {
       [startDate, endDate]
     );
 
-    // Also fetch entries that have tasks/goals/medications/meetings due on these dates
+    // Also fetch entries that have tasks/goals/medications/meetings/events due on these dates
     const entriesResult = await client.query(
       `SELECT e.*, json_agg(DISTINCT cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
        FROM "${session.user.schemaName}"."entries" e
        LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
        WHERE e."entryDate" BETWEEN $1 AND $2
-       AND e."customType" IN ('task', 'goal', 'medication', 'meeting')
+       AND e."customType" IN ('task', 'goal', 'medication', 'meeting', 'event')
        GROUP BY e.id
        ORDER BY e."entryDate" ASC`,
       [startDate, endDate]

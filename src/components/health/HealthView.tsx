@@ -37,8 +37,8 @@ export function HealthView({ selectedDate }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const tabs: Tab[] = [
-    { key: 'medications', label: 'Medications' },
-    { key: 'schedule', label: 'Schedule' },
+    { key: 'medications', label: 'Medications List' },
+    { key: 'schedule', label: 'Medication Schedule' },
     { key: 'food', label: 'Food' },
     { key: 'symptoms', label: 'Symptoms' },
     { key: 'exercise', label: 'Exercise' },
