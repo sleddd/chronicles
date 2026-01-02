@@ -387,4 +387,4 @@ Each user gets their own PostgreSQL schema (e.g., `chronicles_x7k9m2_1`). This p
 
 ## License
 
-© 2025 Claudette Raynor | All Rights Reserved. You may not use this for any commericial purpose. You can download this appliaction for personal use only, but cannot modify it.
+© 2025 Claudette Raynor | All Rights Reserved. You may not use this for any commercial purpose. You can download this application for personal use only, but you may not modify it.
