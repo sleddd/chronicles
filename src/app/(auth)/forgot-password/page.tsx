@@ -186,8 +186,8 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
+      <div className="max-w-md w-full space-y-8 p-8 backdrop-blur-sm bg-white/30 rounded-lg shadow-md">
         <div className="flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -214,7 +214,7 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your account email"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
 
@@ -261,7 +261,7 @@ export default function ForgotPasswordPage() {
                 value={recoveryKey}
                 onChange={(e) => setRecoveryKey(e.target.value)}
                 placeholder="xxxx-xxxx-xxxx-xxxx-xxxx-..."
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white font-mono text-sm"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30 font-mono text-sm"
               />
               <p className="mt-1 text-xs text-gray-500">
                 Paste your recovery key with or without dashes
@@ -319,7 +319,7 @@ export default function ForgotPasswordPage() {
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
                 />
               </div>
 
@@ -334,7 +334,7 @@ export default function ForgotPasswordPage() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
                 />
               </div>
             </div>
@@ -377,9 +377,9 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
 
-            <div className="bg-gray-100 rounded-lg p-4">
+            <div className="backdrop-blur-sm bg-white/40 rounded-lg p-4">
               <p className="text-xs text-gray-500 mb-2 text-center">Your New Recovery Key:</p>
-              <div className="font-mono text-sm text-center bg-white border border-gray-300 rounded p-3 break-all select-all">
+              <div className="font-mono text-sm text-center backdrop-blur-sm bg-white/30 border border-border rounded p-3 break-all select-all">
                 {newRecoveryKeyDisplay}
               </div>
               <button
@@ -392,13 +392,13 @@ export default function ForgotPasswordPage() {
               </button>
             </div>
 
-            <div className="border-t pt-4">
+            <div className="border-t border-border pt-4">
               <label className="flex items-start gap-2">
                 <input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-teal-600 border-gray-300 rounded"
+                  className="mt-0.5 h-4 w-4 text-teal-600 border-border rounded"
                 />
                 <span className="text-sm text-gray-700">
                   I have saved my new recovery key in a secure location

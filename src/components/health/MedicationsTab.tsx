@@ -138,7 +138,7 @@ export function MedicationsTab({ refreshKey }: Props) {
               type="checkbox"
               checked={showActiveOnly}
               onChange={(e) => setShowActiveOnly(e.target.checked)}
-              className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              className="rounded border-border text-teal-600 focus:ring-teal-500"
             />
             Active only
           </label>
@@ -150,7 +150,7 @@ export function MedicationsTab({ refreshKey }: Props) {
       </p>
 
       {filteredMedications.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border">
+        <div className="text-center py-12 backdrop-blur-sm bg-white/30 rounded-lg border border-border">
           <p className="text-gray-500">No medications found</p>
           <p className="text-sm text-gray-400 mt-1">
             Create an entry with the &quot;medication&quot; topic to add medications
@@ -162,7 +162,7 @@ export function MedicationsTab({ refreshKey }: Props) {
             const data = decryptedMedications.get(med.id);
 
             return (
-              <div key={med.id} className="bg-white rounded-lg border p-4">
+              <div key={med.id} className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export function MedicationsTab({ refreshKey }: Props) {
                         {data?.name || 'Loading...'} {data?.fields.dosage && <span className="font-normal text-gray-600">{data.fields.dosage}</span>}
                       </h3>
                       {data?.fields.isActive === false && (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">Inactive</span>
+                        <span className="px-2 py-0.5 backdrop-blur-sm bg-white/40 text-gray-600 text-xs rounded-full">Inactive</span>
                       )}
                     </div>
                     <p className="text-sm text-gray-600 mt-1">

@@ -179,14 +179,14 @@ export default function RegisterPage() {
   // Show setting up screen
   if (step === 'settingUp') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md text-center">
+      <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
+        <div className="max-w-md w-full space-y-8 p-8 backdrop-blur-sm bg-white/30 rounded-lg shadow-md text-center">
           <div className="flex flex-col items-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/chronicles-logo.png"
               alt="Chronicles"
-              className="h-20 w-auto mb-6"
+              className="h-20 w-auto mb-0"
             />
           </div>
           <div className="animate-pulse">
@@ -200,14 +200,14 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
+      <div className="max-w-md w-full space-y-8 p-8">
         <div className="flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/chronicles-logo.png"
             alt="Chronicles"
-            className="h-20 w-auto mb-6"
+            className="h-20 w-auto mb-0"
           />
         </div>
 
@@ -224,7 +224,7 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
 
@@ -239,7 +239,7 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
               />
               {/* Password strength indicator */}
               {password && (
@@ -253,7 +253,7 @@ export default function RegisterPage() {
                       {passwordStrength.strength}
                     </span>
                   </div>
-                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-1.5 backdrop-blur-sm bg-white/50 rounded-full overflow-hidden">
                     <div
                       className="h-full transition-all duration-300"
                       style={{
@@ -284,7 +284,7 @@ export default function RegisterPage() {
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
           </div>
@@ -316,7 +316,7 @@ export default function RegisterPage() {
                   type="checkbox"
                   checked={acceptedWarning}
                   onChange={(e) => setAcceptedWarning(e.target.checked)}
-                  className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-border rounded"
                 />
                 <span className="ml-2 text-sm text-amber-900 font-medium">
                   I understand I must save my recovery key
@@ -326,7 +326,7 @@ export default function RegisterPage() {
           </div>
 
           {/* Terms of Service */}
-          <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
+          <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
             <h3 className="text-sm font-bold text-gray-800 mb-2">Terms of Service Agreement</h3>
             <p className="text-xs text-gray-600 mb-3">
               By creating an account, you acknowledge and agree to our terms regarding data security and limitation of liability.
@@ -349,7 +349,7 @@ export default function RegisterPage() {
             </button>
 
             {showTerms && (
-              <div className="text-xs text-gray-700 bg-white border border-gray-200 rounded p-3 mb-3 max-h-48 overflow-y-auto space-y-2">
+              <div className="text-xs text-gray-700 backdrop-blur-sm bg-white/30 border border-border rounded p-3 mb-3 max-h-48 overflow-y-auto space-y-2">
                 <p className="font-semibold">Data Security & Limitation of Liability</p>
                 <p>
                   While we implement encryption and reasonable security measures to protect your data, we cannot guarantee absolute security. You understand and accept that:
@@ -382,7 +382,7 @@ export default function RegisterPage() {
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                className="h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                className="h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-border rounded"
               />
               <span className="ml-2 text-sm text-gray-900 font-medium">
                 I agree to the Terms of Service
@@ -400,15 +400,15 @@ export default function RegisterPage() {
             type="submit"
             disabled={loading || !acceptedWarning || !acceptedTerms}
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            style={{ backgroundColor: (loading || !acceptedWarning || !acceptedTerms) ? undefined : '#1aaeae' }}
-            onMouseOver={(e) => { if (!loading && acceptedWarning && acceptedTerms) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-            onMouseOut={(e) => { if (!loading && acceptedWarning && acceptedTerms) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+            style={{ backgroundColor: (loading || !acceptedWarning || !acceptedTerms) ? undefined : '#2d2c2a' }}
+            onMouseOver={(e) => { if (!loading && acceptedWarning && acceptedTerms) e.currentTarget.style.backgroundColor = '#000000'; }}
+            onMouseOut={(e) => { if (!loading && acceptedWarning && acceptedTerms) e.currentTarget.style.backgroundColor = '#000000'; }}
           >
             {loading ? 'Creating Account...' : 'Create Account'}
           </button>
 
           <div className="text-center">
-            <Link href="/login" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+            <Link href="/login" className="text-sm hover:underline" style={{ color: '#2d2c2a' }}>
               Already have an account? Sign in
             </Link>
           </div>

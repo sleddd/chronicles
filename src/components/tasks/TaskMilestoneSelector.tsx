@@ -79,17 +79,17 @@ export function TaskMilestoneSelector({
   }
 
   return (
-    <div className="border rounded-md max-h-40 overflow-y-auto">
+    <div className="rounded-md max-h-40 overflow-y-auto">
       {milestones.map((milestone) => (
         <label
           key={milestone.id}
-          className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+          className="flex items-center gap-3 py-2 hover:backdrop-blur-sm bg-white/30 cursor-pointer"
         >
           <input
             type="checkbox"
             checked={selectedMilestoneIds.includes(milestone.id)}
             onChange={() => toggleMilestone(milestone.id)}
-            className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+            className="w-4 h-4 text-teal-600 rounded border-border focus:ring-teal-500"
           />
           <span className="text-sm text-gray-700">
             {decryptedMilestones.get(milestone.id) || 'Loading...'}

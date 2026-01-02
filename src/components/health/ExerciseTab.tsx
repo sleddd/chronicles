@@ -174,15 +174,15 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
       {/* Stats Summary */}
       {exerciseEntries.length > 0 && (
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg border p-4 text-center">
+          <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
             <div className="text-2xl font-bold text-green-600">{exerciseEntries.length}</div>
             <div className="text-sm text-gray-500">Workouts</div>
           </div>
-          <div className="bg-white rounded-lg border p-4 text-center">
+          <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">{formatDuration(totalDuration)}</div>
             <div className="text-sm text-gray-500">Total Time</div>
           </div>
-          <div className="bg-white rounded-lg border p-4 text-center">
+          <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
             <div className="text-2xl font-bold text-orange-600">{totalCalories > 0 ? totalCalories : '-'}</div>
             <div className="text-sm text-gray-500">Calories</div>
           </div>
@@ -190,8 +190,8 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
       )}
 
       {/* Exercise List */}
-      <div className="bg-white rounded-lg border overflow-hidden">
-        <div className="bg-gray-50 px-4 py-2 border-b">
+      <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border overflow-hidden">
+        <div className="backdrop-blur-sm bg-white/30 px-4 py-2 border-b border-border">
           <span className="font-medium text-gray-700 text-sm">TODAY&apos;S WORKOUTS</span>
         </div>
 
@@ -202,7 +202,7 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
             <p className="text-sm mt-1">Create an exercise entry from the journal to track your workout</p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-border">
             {exerciseEntries.map((entry) => {
               const data = decryptedEntries.get(entry.id);
               const intensity = data?.fields.intensity || 'medium';

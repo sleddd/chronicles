@@ -151,7 +151,7 @@ export function ImageUpload({ entryId, onImageUploaded, maxFiles = 10 }: Props) 
         onDrop={handleDrop}
         className={`
           border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-          ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+          ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-border hover:border-border'}
           ${uploading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >

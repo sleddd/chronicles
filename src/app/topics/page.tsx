@@ -13,10 +13,10 @@ export default async function TopicsPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
       <Header />
       <PasswordReentryModal />
-      <div className="flex-1 overflow-hidden bg-white">
+      <div className="flex-1 overflow-hidden backdrop-blur-sm bg-white/30">
         <TopicsBrowser />
       </div>
     </div>

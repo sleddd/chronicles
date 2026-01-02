@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { MedicationsTab } from './MedicationsTab';
 import { ScheduleTab } from './ScheduleTab';
 import { FoodTab } from './FoodTab';
@@ -24,6 +25,7 @@ const validTabs: TabKey[] = ['medications', 'schedule', 'food', 'symptoms', 'exe
 
 export function HealthView({ selectedDate }: Props) {
   const searchParams = useSearchParams();
+  const { accentColor } = useAccentColor();
   const tabParam = searchParams.get('tab');
   const initialTab = validTabs.includes(tabParam as TabKey) ? (tabParam as TabKey) : 'medications';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
@@ -69,9 +71,9 @@ export function HealthView({ selectedDate }: Props) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col backdrop-blur-sm bg-white/30">
       {/* Tab Navigation */}
-      <div className="bg-white border-b px-4">
+      <div className="backdrop-blur-sm bg-white/30 border-b border-border px-4">
         <div className="flex gap-1">
           {tabs.map((tab) => (
             <button
@@ -79,9 +81,10 @@ export function HealthView({ selectedDate }: Props) {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'text-teal-600 border-b-2 border-teal-600 -mb-px'
+                  ? 'border-b-2 -mb-px'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
+              style={activeTab === tab.key ? { color: accentColor, borderColor: accentColor } : undefined}
             >
               {tab.label}
             </button>

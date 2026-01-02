@@ -13,10 +13,10 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
       <Header />
       <PasswordReentryModal />
-      <div className="flex-1 overflow-auto bg-white">
+      <div className="flex-1 overflow-auto backdrop-blur-sm bg-white/30 py-6">
         <SettingsPanel />
       </div>
     </div>

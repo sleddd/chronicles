@@ -30,8 +30,8 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-lg w-full space-y-6 p-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
+      <div className="max-w-lg w-full space-y-6 p-8 backdrop-blur-sm bg-white/30 rounded-lg shadow-md">
         <div className="flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -63,9 +63,9 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
           </div>
         </div>
 
-        <div className="bg-gray-100 rounded-lg p-4">
+        <div className="backdrop-blur-sm bg-white/40 rounded-lg p-4">
           <p className="text-xs text-gray-600 mb-2 text-center">Your Recovery Key:</p>
-          <div className="font-mono text-sm text-center bg-white border border-gray-300 rounded p-3 break-all select-all">
+          <div className="font-mono text-sm text-center backdrop-blur-sm bg-white/30 border border-border rounded p-3 break-all select-all">
             {recoveryKey}
           </div>
           <div className="mt-3 flex justify-center">
@@ -94,7 +94,7 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
           </div>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
           <h4 className="text-sm font-medium text-gray-800 mb-2">Best practices for storing your recovery key:</h4>
           <ul className="text-sm text-gray-600 space-y-1 list-disc pl-5">
             <li>Write it down on paper and store in a safe place</li>
@@ -104,13 +104,13 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
           </ul>
         </div>
 
-        <div className="border-t border-gray-200 pt-4">
+        <div className="border-t border-border pt-4">
           <label className="flex items-start">
             <input
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+              className="h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-border rounded"
             />
             <span className="ml-2 text-sm text-gray-700">
               I have saved my recovery key in a secure location. I understand that without this key,

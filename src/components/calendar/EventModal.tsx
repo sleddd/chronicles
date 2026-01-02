@@ -214,8 +214,8 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b">
+      <div className="backdrop-blur-sm bg-white/30 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold">
             {eventId ? 'Edit Event' : 'New Event'}
           </h2>
@@ -233,7 +233,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               placeholder="Event title"
               required
             />
@@ -244,7 +244,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               placeholder="Event description (optional)"
               rows={3}
             />
@@ -268,7 +268,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                 required
               />
             </div>
@@ -279,7 +279,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="time"
                   value={formData.startTime}
                   onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             )}
@@ -292,7 +292,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 type="date"
                 value={formData.endDate}
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             {!formData.isAllDay && (
@@ -302,7 +302,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="time"
                   value={formData.endTime}
                   onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             )}
@@ -327,7 +327,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
           </div>
 
           {/* Location & Venue */}
-          <div className="border-t pt-4">
+          <div className="border-t border-border pt-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Location Details</h3>
             <div className="space-y-3">
               <div>
@@ -336,7 +336,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="e.g., Conference Room A"
                 />
               </div>
@@ -346,7 +346,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="e.g., 123 Main St, City"
                 />
               </div>
@@ -354,7 +354,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
           </div>
 
           {/* Contact & Notes */}
-          <div className="border-t pt-4">
+          <div className="border-t border-border pt-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Contact & Notes</h3>
             <div className="space-y-3">
               <div>
@@ -363,7 +363,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="e.g., +1 555-123-4567"
                 />
               </div>
@@ -372,7 +372,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="Any additional notes..."
                   rows={2}
                 />
@@ -397,7 +397,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                className="px-4 py-2 text-gray-600 hover:backdrop-blur-sm bg-white/40 rounded-md"
               >
                 Cancel
               </button>

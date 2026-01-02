@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { seedDefaultTopics, addFeatureTopic, FEATURE_TOPICS, FeatureTopicKey } from '@/lib/topics/seedDefaultTopics';
 
 interface FeatureSettings {
@@ -13,6 +14,7 @@ interface FeatureSettings {
   milestonesEnabled: boolean;
   exerciseEnabled: boolean;
   timezone: string;
+  headerColor: string;
 }
 
 // Common timezones for the dropdown
@@ -43,6 +45,7 @@ const TIMEZONES = [
 export function SettingsPanel() {
   const { data: session } = useSession();
   const { isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
   const [showHowToUse, setShowHowToUse] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -76,10 +79,22 @@ export function SettingsPanel() {
     milestonesEnabled: false,
     exerciseEnabled: false,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    headerColor: '#2d2c2a',
   });
   const [loadingFeatures, setLoadingFeatures] = useState(true);
   const [togglingFeature, setTogglingFeature] = useState<FeatureTopicKey | null>(null);
   const [savingTimezone, setSavingTimezone] = useState(false);
+  const [savingHeaderColor, setSavingHeaderColor] = useState(false);
+
+  // Header color options
+  const HEADER_COLORS = [
+    { value: '#2d2c2a', label: 'Dark' },
+    { value: '#003D73', label: 'Navy' },
+    { value: '#E6B062', label: 'Gold' },
+    { value: '#EF8070', label: 'Coral' },
+    { value: '#46A99B', label: 'Teal' },
+    { value: 'transparent', label: 'Transparent' },
+  ];
 
   const loadFeatureSettings = useCallback(async () => {
     try {
@@ -150,6 +165,29 @@ export function SettingsPanel() {
       console.error('Failed to update timezone:', error);
     } finally {
       setSavingTimezone(false);
+    }
+  };
+
+  const handleHeaderColorChange = async (newColor: string) => {
+    setSavingHeaderColor(true);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ headerColor: newColor }),
+      });
+
+      if (response.ok) {
+        setFeatureSettings((prev) => ({ ...prev, headerColor: newColor }));
+        // Dispatch event so Header component updates immediately
+        window.dispatchEvent(new CustomEvent('headerColorChange', { detail: newColor }));
+        // Also update localStorage for persistence
+        localStorage.setItem('chronicles-header-color', newColor);
+      }
+    } catch (error) {
+      console.error('Failed to update header color:', error);
+    } finally {
+      setSavingHeaderColor(false);
     }
   };
 
@@ -507,10 +545,10 @@ export function SettingsPanel() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white min-h-full">
+    <div className="max-w-2xl mx-auto p-6 backdrop-blur-sm bg-white/30 min-h-full">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
-        <Link href="/" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+        <Link href="/" className="text-sm hover:underline" style={{ color: accentColor }}>
           Back to Journal
         </Link>
       </div>
@@ -518,7 +556,7 @@ export function SettingsPanel() {
       {/* Account Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Account</h2>
-        <div className="bg-white border rounded-lg p-4">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Email</p>
@@ -531,7 +569,7 @@ export function SettingsPanel() {
       {/* How to Use Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">How to Use Chronicles</h2>
-        <div className="bg-white border rounded-lg">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg">
           <button
             onClick={() => setShowHowToUse(!showHowToUse)}
             className="w-full p-4 flex items-center justify-between text-left"
@@ -551,7 +589,7 @@ export function SettingsPanel() {
           </button>
 
           {showHowToUse && (
-            <div className="px-4 pb-4 space-y-6 text-sm text-gray-700 border-t">
+            <div className="px-4 pb-4 space-y-6 text-sm text-gray-700 border-t border-border">
               {/* Philosophy */}
               <div className="pt-4">
                 <h3 className="font-semibold text-gray-900 mb-2">The Philosophy</h3>
@@ -598,7 +636,7 @@ export function SettingsPanel() {
                   <li>Select a topic from the sidebar</li>
                   <li>Type your content in the editor</li>
                   <li>Use the toolbar for formatting</li>
-                  <li>Press <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Enter</kbd> or click Save</li>
+                  <li>Press <kbd className="px-1.5 py-0.5 backdrop-blur-sm bg-white/40 rounded text-xs">Enter</kbd> or click Save</li>
                 </ol>
                 <p className="mb-2"><strong>Entry features:</strong></p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
@@ -607,7 +645,7 @@ export function SettingsPanel() {
                   <li><strong>Share</strong> - Generate a secure public link to share an entry</li>
                 </ul>
                 <p className="mt-2 text-gray-500">
-                  Tip: <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Shift+Enter</kbd> creates a new line without saving.
+                  Tip: <kbd className="px-1.5 py-0.5 backdrop-blur-sm bg-white/40 rounded text-xs">Shift+Enter</kbd> creates a new line without saving.
                 </p>
               </div>
 
@@ -698,7 +736,7 @@ export function SettingsPanel() {
       {/* Preferences Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Preferences</h2>
-        <div className="bg-white border rounded-lg p-4">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900">Timezone</p>
@@ -710,7 +748,7 @@ export function SettingsPanel() {
                 value={featureSettings.timezone}
                 onChange={(e) => handleTimezoneChange(e.target.value)}
                 disabled={savingTimezone || loadingFeatures}
-                className="px-3 py-2 border rounded-md text-sm bg-white text-gray-900 disabled:opacity-50"
+                className="px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900 disabled:opacity-50"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz.value} value={tz.value}>
@@ -729,11 +767,50 @@ export function SettingsPanel() {
         </div>
       </section>
 
+      {/* Theme Section */}
+      <section className="mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Theme</h2>
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-gray-900">Header Color</p>
+              <p className="text-sm text-gray-500">Choose a color for the header bar</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {savingHeaderColor && <span className="text-xs text-gray-400">Saving...</span>}
+              <div className="flex gap-2">
+                {HEADER_COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    onClick={() => handleHeaderColorChange(color.value)}
+                    disabled={savingHeaderColor || loadingFeatures}
+                    title={color.label}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      featureSettings.headerColor === color.value
+                        ? 'border-border scale-110'
+                        : 'border-transparent hover:border-border'
+                    } ${(savingHeaderColor || loadingFeatures) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    style={{
+                      backgroundColor: color.value === 'transparent' ? '#e8e5df' : color.value,
+                      backgroundImage: color.value === 'transparent'
+                        ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
+                        : undefined,
+                      backgroundSize: color.value === 'transparent' ? '8px 8px' : undefined,
+                      backgroundPosition: color.value === 'transparent' ? '0 0, 4px 4px' : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Security Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Security</h2>
 
-        <div className="bg-white border rounded-lg divide-y">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg divide-y divide-border">
           {/* Change Password */}
           <div className="p-4">
             <div className="flex items-center justify-between">
@@ -744,7 +821,7 @@ export function SettingsPanel() {
               <button
                 onClick={() => setShowChangePassword(!showChangePassword)}
                 className="text-sm hover:underline"
-                style={{ color: '#1aaeae' }}
+                style={{ color: accentColor }}
               >
                 {showChangePassword ? 'Cancel' : 'Change'}
               </button>
@@ -758,7 +835,7 @@ export function SettingsPanel() {
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     required
                   />
                 </div>
@@ -768,7 +845,7 @@ export function SettingsPanel() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     required
                     minLength={12}
                   />
@@ -779,7 +856,7 @@ export function SettingsPanel() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     required
                   />
                 </div>
@@ -795,9 +872,9 @@ export function SettingsPanel() {
                   type="submit"
                   disabled={isChangingPassword}
                   className="px-4 py-2 text-white text-sm rounded-md disabled:bg-gray-400"
-                  style={{ backgroundColor: isChangingPassword ? undefined : '#1aaeae' }}
-                  onMouseOver={(e) => { if (!isChangingPassword) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-                  onMouseOut={(e) => { if (!isChangingPassword) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+                  style={{ backgroundColor: isChangingPassword ? undefined : accentColor }}
+                  onMouseOver={(e) => { if (!isChangingPassword) e.currentTarget.style.backgroundColor = hoverColor; }}
+                  onMouseOut={(e) => { if (!isChangingPassword) e.currentTarget.style.backgroundColor = accentColor; }}
                 >
                   {isChangingPassword ? 'Changing...' : 'Update Password'}
                 </button>
@@ -815,7 +892,7 @@ export function SettingsPanel() {
               <button
                 onClick={handleShowSessions}
                 className="text-sm hover:underline"
-                style={{ color: '#1aaeae' }}
+                style={{ color: accentColor }}
               >
                 {showSessions ? 'Refresh' : 'View'}
               </button>
@@ -829,7 +906,7 @@ export function SettingsPanel() {
                   <>
                     <div className="space-y-2 mb-4">
                       {sessions.map((sess) => (
-                        <div key={sess.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div key={sess.id} className="flex items-center justify-between p-2 backdrop-blur-sm bg-white/30 rounded">
                           <div>
                             <p className="text-sm font-medium text-gray-900">{sess.deviceInfo || 'Unknown device'}</p>
                             <p className="text-xs text-gray-500">
@@ -864,7 +941,7 @@ export function SettingsPanel() {
         <h2 className="text-lg font-medium text-gray-900 mb-4">Features</h2>
         <p className="text-sm text-gray-500 mb-4">Enable optional topics for specialized tracking</p>
 
-        <div className="bg-white border rounded-lg divide-y">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg divide-y divide-border">
           {loadingFeatures ? (
             <div className="p-4 text-sm text-gray-500">Loading...</div>
           ) : (
@@ -877,10 +954,6 @@ export function SettingsPanel() {
               return (
                 <div key={featureKey} className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span
-                      className="w-4 h-4 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: feature.color }}
-                    />
                     <div>
                       <p className="font-medium text-gray-900">{feature.name}</p>
                       <p className="text-sm text-gray-500">{feature.description}</p>
@@ -890,12 +963,12 @@ export function SettingsPanel() {
                     onClick={() => handleToggleFeature(featureKey)}
                     disabled={isToggling || !isKeyReady}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      isEnabled ? '' : 'bg-gray-200'
+                      isEnabled ? '' : 'backdrop-blur-sm bg-white/50'
                     } ${(isToggling || !isKeyReady) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    style={isEnabled ? { backgroundColor: '#1aaeae' } : undefined}
+                    style={isEnabled ? { backgroundColor: accentColor } : undefined}
                   >
                     <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full backdrop-blur-sm bg-white/30 shadow ring-0 transition duration-200 ease-in-out ${
                         isEnabled ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
@@ -910,7 +983,7 @@ export function SettingsPanel() {
       {/* Data Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Data</h2>
-        <div className="bg-white border rounded-lg divide-y">
+        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg divide-y divide-border">
           {/* Default Topics */}
           <div className="p-4">
             <div className="flex items-center justify-between">
@@ -921,8 +994,8 @@ export function SettingsPanel() {
               <button
                 onClick={handleSeedTopics}
                 disabled={seedingTopics || !isKeyReady}
-                className="px-4 py-2 text-sm border rounded-md hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
-                style={{ color: seedingTopics || !isKeyReady ? undefined : '#1aaeae', borderColor: seedingTopics || !isKeyReady ? undefined : '#1aaeae' }}
+                className="px-4 py-2 text-sm border border-border rounded-md disabled:text-gray-400 disabled:border-border disabled:hover:backdrop-blur-sm bg-white/30"
+                style={{ color: seedingTopics || !isKeyReady ? undefined : accentColor, borderColor: seedingTopics || !isKeyReady ? undefined : accentColor }}
               >
                 {seedingTopics ? 'Adding...' : 'Add Default Topics'}
               </button>
@@ -944,8 +1017,8 @@ export function SettingsPanel() {
               <button
                 onClick={handleExportCSV}
                 disabled={exporting || !isKeyReady}
-                className="px-4 py-2 text-sm border rounded-md hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
-                style={{ color: exporting || !isKeyReady ? undefined : '#1aaeae', borderColor: exporting || !isKeyReady ? undefined : '#1aaeae' }}
+                className="px-4 py-2 text-sm border border-border rounded-md disabled:text-gray-400 disabled:border-border disabled:hover:backdrop-blur-sm bg-white/30"
+                style={{ color: exporting || !isKeyReady ? undefined : accentColor, borderColor: exporting || !isKeyReady ? undefined : accentColor }}
               >
                 {exporting ? 'Exporting...' : 'Export to CSV'}
               </button>
@@ -974,7 +1047,7 @@ export function SettingsPanel() {
       {/* Danger Zone */}
       <section>
         <h2 className="text-lg font-medium text-red-600 mb-4">Danger Zone</h2>
-        <div className="bg-white border border-red-200 rounded-lg p-4">
+        <div className="backdrop-blur-sm bg-white/30 border border-red-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900">Sign Out</p>

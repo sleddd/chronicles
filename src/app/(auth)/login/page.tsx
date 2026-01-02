@@ -88,8 +88,8 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
+      <div className="max-w-md w-full space-y-8 p-8">
         <div className="flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -118,7 +118,7 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
 
@@ -133,7 +133,7 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
           </div>
@@ -148,21 +148,21 @@ function LoginForm() {
             type="submit"
             disabled={loading}
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            style={{ backgroundColor: loading ? undefined : '#1aaeae' }}
-            onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-            onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+            style={{ backgroundColor: loading ? undefined : '#2d2c2a' }}
+            onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#2d2c2a'; }}
+            onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#2d2c2a'; }}
           >
             {loading ? 'Signing In...' : 'Sign In'}
           </button>
 
           <div className="text-center space-y-2">
             <div>
-              <Link href="/forgot-password" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+              <Link href="/forgot-password" className="text-sm hover:underline" style={{ color: '#2d2c2a' }}>
                 Forgot your password?
               </Link>
             </div>
             <div>
-              <Link href="/register" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+              <Link href="/register" className="text-sm hover:underline" style={{ color: '#2d2c2a' }}>
                 Don&apos;t have an account? Create one
               </Link>
             </div>
@@ -176,7 +176,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
         <div className="text-gray-600">Loading...</div>
       </div>
     }>

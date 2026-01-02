@@ -88,10 +88,10 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="px-3 py-1.5 text-sm rounded-md bg-white hover:bg-gray-50 flex items-center gap-2"
+          className="px-3 py-1.5 text-sm rounded-md backdrop-blur-sm bg-white/30 hover:backdrop-blur-sm bg-white/30 flex items-center gap-2"
         >
           {selectedTopic && (
-            <TopicIcon iconName={selectedTopic.icon} color={selectedTopic.color} size="sm" />
+            <TopicIcon iconName={selectedTopic.icon} size="sm" />
           )}
           <span className={selectedTopicName ? 'text-gray-900' : 'text-gray-500'}>
             {selectedTopicName || 'None'}
@@ -103,19 +103,19 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
       </div>
 
       {isOpen && (
-        <div className="absolute z-10 mt-1 w-80 bg-white border rounded-md shadow-lg">
+        <div className="absolute z-50 mt-1 w-80 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg">
           {/* Search input */}
-          <div className="p-2 border-b">
+          <div className="p-2 border-b border-border">
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Type to search topics..."
-              className="w-full px-3 py-1.5 text-sm border rounded bg-white text-gray-900 placeholder-gray-400"
+              className="w-full px-3 py-1.5 text-sm border border-border rounded backdrop-blur-xl bg-white/70 text-gray-900 placeholder-gray-400"
             />
           </div>
-          <div className="p-2 border-b max-h-64 overflow-auto">
+          <div className="p-2 border-b border-border max-h-64 overflow-auto">
             {(!searchQuery.trim() || 'none'.includes(searchQuery.toLowerCase())) && (
               <button
                 onClick={() => {
@@ -123,7 +123,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
-                className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 ${
+                className={`w-full text-left px-3 py-2 text-sm rounded hover:backdrop-blur-sm bg-white/40 ${
                   !selectedTopicId ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
                 }`}
               >
@@ -144,11 +144,11 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
-                className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 flex items-center gap-2 ${
+                className={`w-full text-left px-3 py-2 text-sm rounded hover:backdrop-blur-sm bg-white/40 flex items-center gap-2 ${
                   selectedTopicId === topic.id ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
                 }`}
               >
-                <TopicIcon iconName={topic.icon} color={topic.color} size="sm" />
+                <TopicIcon iconName={topic.icon} size="sm" />
                 {decryptedTopics.get(topic.id) || 'Loading...'}
               </button>
             ))}

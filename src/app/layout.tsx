@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Montserrat } from "next/font/google";
 import "./globals.css";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import SessionProvider from "@/components/providers/SessionProvider";
 import { EncryptionProvider } from "@/components/providers/EncryptionProvider";
+import { AccentColorProvider } from "@/lib/hooks/useAccentColor";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
   subsets: ["latin"],
 });
 
@@ -34,10 +35,12 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geist.variable} ${montserrat.variable} font-sans antialiased`}
       >
         <SessionProvider session={session}>
-          <EncryptionProvider>{children}</EncryptionProvider>
+          <AccentColorProvider>
+            <EncryptionProvider>{children}</EncryptionProvider>
+          </AccentColorProvider>
         </SessionProvider>
       </body>
     </html>

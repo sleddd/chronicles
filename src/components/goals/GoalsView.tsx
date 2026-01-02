@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { GoalCard } from './GoalCard';
 import {
   DndContext,
@@ -55,6 +56,7 @@ export function GoalsView() {
   const [activeTab, setActiveTab] = useState<TabFilter>('active');
   const [decryptedGoalFields, setDecryptedGoalFields] = useState<Map<string, DecryptedGoalFields>>(new Map());
   const { decryptData, encryptData, isKeyReady } = useEncryption();
+  const { accentColor } = useAccentColor();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -241,21 +243,22 @@ export function GoalsView() {
   }
 
   return (
-    <div className="p-4 h-full overflow-auto bg-gray-50">
+    <div className="p-4 h-full overflow-auto backdrop-blur-sm bg-white/30">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-gray-900 mb-4">Goals</h1>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b">
+        <div className="flex gap-1 border-b border-border">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'text-teal-600 border-b-2 border-teal-600 -mb-px'
+                  ? 'border-b-2 -mb-px'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
+              style={activeTab === tab.key ? { color: accentColor, borderColor: accentColor } : undefined}
             >
               {tab.label}
             </button>

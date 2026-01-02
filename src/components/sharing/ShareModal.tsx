@@ -132,8 +132,8 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between p-4 border-b">
+      <div className="backdrop-blur-sm bg-white/30 rounded-lg shadow-xl w-full max-w-md mx-4">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold">Share Entry</h2>
           <button
             onClick={onClose}
@@ -195,7 +195,7 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                   type="text"
                   value={getFullUrl(shareData.shareUrl)}
                   readOnly
-                  className="flex-1 px-3 py-2 bg-gray-50 border rounded-md text-sm text-gray-600"
+                  className="flex-1 px-3 py-2 backdrop-blur-sm bg-white/30 border border-border rounded-md text-sm text-gray-600"
                 />
                 <button
                   onClick={handleCopyLink}
@@ -260,7 +260,7 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                 <select
                   value={expiresInDays}
                   onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   <option value={1}>1 day</option>
                   <option value={7}>7 days</option>
@@ -270,12 +270,12 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
               </div>
 
               {/* Confirmation checkbox */}
-              <label className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+              <label className="flex items-start gap-3 p-3 backdrop-blur-sm bg-white/30 rounded-lg cursor-pointer hover:backdrop-blur-sm bg-white/40">
                 <input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="w-5 h-5 mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  className="w-5 h-5 mt-0.5 rounded border-border text-teal-600 focus:ring-teal-500"
                 />
                 <span className="text-sm text-gray-700">
                   I understand that this entry will be publicly visible to anyone

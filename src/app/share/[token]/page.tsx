@@ -48,7 +48,7 @@ export default function SharedEntryPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen backdrop-blur-sm bg-white/30 flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
       </div>
     );
@@ -56,8 +56,8 @@ export default function SharedEntryPage({
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-md p-8 max-w-md w-full text-center">
+      <div className="min-h-screen backdrop-blur-sm bg-white/30 flex items-center justify-center p-4">
+        <div className="backdrop-blur-sm bg-white/30 rounded-lg shadow-md p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
             <svg
               className="w-8 h-8 text-red-600"
@@ -84,17 +84,17 @@ export default function SharedEntryPage({
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen backdrop-blur-sm bg-white/30 flex items-center justify-center">
         <div className="text-gray-500">Entry not found</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen backdrop-blur-sm bg-white/30 py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="backdrop-blur-sm bg-white/30 rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold text-gray-900">
               Shared Journal Entry
@@ -147,7 +147,7 @@ export default function SharedEntryPage({
         </div>
 
         {/* Entry content - now plaintext, no decryption needed */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="backdrop-blur-sm bg-white/30 rounded-lg shadow-md p-6">
           <div
             className="prose prose-sm max-w-none"
             dangerouslySetInnerHTML={{ __html: data.entry.content }}

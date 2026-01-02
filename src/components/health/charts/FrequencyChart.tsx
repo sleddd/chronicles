@@ -38,7 +38,7 @@ export function FrequencyChart({ data, title, color = 'bg-teal-500' }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-lg border p-4">
+    <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
       <h3 className="font-medium text-gray-900 mb-4">{title}</h3>
       <div className="flex items-end gap-1 justify-between" style={{ height: maxHeight + 30 }}>
         {data.slice(-12).map((item, index) => {

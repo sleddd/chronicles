@@ -1,16 +1,60 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+
+const DEFAULT_HEADER_COLOR = '#003d73';
+const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
+
+// Get initial color from localStorage (runs synchronously before render)
+function getInitialHeaderColor(): string {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(HEADER_COLOR_STORAGE_KEY);
+    if (cached) return cached;
+  }
+  return DEFAULT_HEADER_COLOR;
+}
 
 export function Header() {
   const router = useRouter();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showHealthSubmenu, setShowHealthSubmenu] = useState(false);
+  const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
   const healthRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  // Load header color from settings and sync with localStorage
+  const loadHeaderColor = useCallback(async () => {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.settings?.headerColor) {
+          setHeaderColor(data.settings.headerColor);
+          localStorage.setItem(HEADER_COLOR_STORAGE_KEY, data.settings.headerColor);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load header color:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHeaderColor();
+  }, [loadHeaderColor]);
+
+  // Listen for header color changes from settings
+  useEffect(() => {
+    const handleColorChange = (event: CustomEvent<string>) => {
+      setHeaderColor(event.detail);
+      localStorage.setItem(HEADER_COLOR_STORAGE_KEY, event.detail);
+    };
+
+    window.addEventListener('headerColorChange', handleColorChange as EventListener);
+    return () => window.removeEventListener('headerColorChange', handleColorChange as EventListener);
+  }, []);
 
   // Close health submenu when clicking outside
   useEffect(() => {
@@ -26,6 +70,12 @@ export function Header() {
   const isActive = (path: string) => pathname === path;
   const isHealthActive = pathname?.startsWith('/health');
 
+  // Use white text on all header colors - lighter for inactive, bold white for active
+  const textColor = 'text-white/70 font-medium';
+  const textColorHover = 'hover:text-white';
+  const textColorActive = 'text-white font-black';
+  const logoFilter = 'brightness-0 invert';
+
   const healthTabs = [
     { key: 'medications', label: 'Meds. List' },
     { key: 'schedule', label: 'Meds. Schedule' },
@@ -36,7 +86,7 @@ export function Header() {
   ];
 
   return (
-    <header className="px-4 py-3" style={{ backgroundColor: '#1aaeae' }}>
+    <header className="px-4 py-3" style={{ backgroundColor: headerColor }}>
       <div className="flex items-center justify-between">
         {/* Logo and New Entry Button */}
         <div className="flex items-center gap-4">
@@ -45,13 +95,13 @@ export function Header() {
             <img
               src="/chronicles-logo.png"
               alt="Chronicles"
-              className="h-11 w-auto brightness-0 invert"
+              className={`h-11 w-auto ${logoFilter}`}
             />
           </Link>
-          <div className="w-px h-6 bg-teal-600" />
+          <div className="w-px h-6 bg-border" />
           <button
             onClick={() => router.push('/?new=true')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-teal-100 hover:text-white"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${textColor} ${textColorHover}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -66,8 +116,8 @@ export function Header() {
             href="/"
             className={`px-4 py-2 text-sm rounded-md transition-colors ${
               isActive('/')
-                ? 'text-white font-bold'
-                : 'text-teal-100 hover:text-white'
+                ? `${textColorActive} font-bold`
+                : `${textColor} ${textColorHover}`
             }`}
           >
             Journal
@@ -76,8 +126,8 @@ export function Header() {
             href="/calendar"
             className={`px-4 py-2 text-sm rounded-md transition-colors ${
               isActive('/calendar')
-                ? 'text-white font-bold'
-                : 'text-teal-100 hover:text-white'
+                ? `${textColorActive} font-bold`
+                : `${textColor} ${textColorHover}`
             }`}
           >
             Calendar
@@ -86,8 +136,8 @@ export function Header() {
             href="/goals"
             className={`px-4 py-2 text-sm rounded-md transition-colors ${
               isActive('/goals')
-                ? 'text-white font-bold'
-                : 'text-teal-100 hover:text-white'
+                ? `${textColorActive} font-bold`
+                : `${textColor} ${textColorHover}`
             }`}
           >
             Goals
@@ -99,8 +149,8 @@ export function Header() {
               onClick={() => setShowHealthSubmenu(!showHealthSubmenu)}
               className={`px-4 py-2 text-sm rounded-md transition-colors flex items-center gap-1 ${
                 isHealthActive
-                  ? 'text-white font-bold'
-                  : 'text-teal-100 hover:text-white'
+                  ? `${textColorActive} font-bold`
+                  : `${textColor} ${textColorHover}`
               }`}
             >
               Health
@@ -115,13 +165,13 @@ export function Header() {
             </button>
 
             {showHealthSubmenu && (
-              <div className="absolute top-full left-0 mt-1 w-40 bg-white border rounded-md shadow-lg z-50">
+              <div className="absolute top-full left-0 mt-1 w-40 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg z-50">
                 {healthTabs.map((tab) => (
                   <Link
                     key={tab.key}
                     href={`/health?tab=${tab.key}`}
                     onClick={() => setShowHealthSubmenu(false)}
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 first:rounded-t-md last:rounded-b-md"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:backdrop-blur-sm bg-white/40 first:rounded-t-md last:rounded-b-md"
                   >
                     {tab.label}
                   </Link>
@@ -134,8 +184,8 @@ export function Header() {
             href="/topics"
             className={`px-4 py-2 text-sm rounded-md transition-colors ${
               isActive('/topics')
-                ? 'text-white font-bold'
-                : 'text-teal-100 hover:text-white'
+                ? `${textColorActive} font-bold`
+                : `${textColor} ${textColorHover}`
             }`}
           >
             Topics
@@ -144,18 +194,18 @@ export function Header() {
             href="/settings"
             className={`px-4 py-2 text-sm rounded-md transition-colors ${
               isActive('/settings')
-                ? 'text-white font-bold'
-                : 'text-teal-100 hover:text-white'
+                ? `${textColorActive} font-bold`
+                : `${textColor} ${textColorHover}`
             }`}
           >
             Settings
           </Link>
 
-          <div className="w-px h-6 bg-teal-600 mx-2" />
+          <div className="w-px h-6 bg-border mx-2" />
 
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="px-4 py-2 text-sm text-teal-100 hover:text-white rounded-md transition-colors"
+            className={`px-4 py-2 text-sm rounded-md transition-colors ${textColor} ${textColorHover}`}
           >
             Logout
           </button>
@@ -164,9 +214,9 @@ export function Header() {
         {/* Mobile Menu Button */}
         <button
           onClick={() => setShowMobileMenu(!showMobileMenu)}
-          className="md:hidden p-2 hover:bg-teal-600 rounded-full"
+          className="md:hidden p-2 rounded-full hover:bg-white/20"
         >
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
@@ -174,13 +224,13 @@ export function Header() {
 
       {/* Mobile Menu */}
       {showMobileMenu && (
-        <div className="md:hidden mt-3 pt-3 border-t border-teal-600">
+        <div className="md:hidden mt-3 pt-3 border-t border-border">
           <nav className="space-y-1">
             <Link
               href="/"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isActive('/') ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isActive('/') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Journal
@@ -189,7 +239,7 @@ export function Header() {
               href="/calendar"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isActive('/calendar') ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isActive('/calendar') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Calendar
@@ -198,7 +248,7 @@ export function Header() {
               href="/goals"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isActive('/goals') ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isActive('/goals') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Goals
@@ -207,7 +257,7 @@ export function Header() {
               href="/health"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isHealthActive ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isHealthActive ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Health
@@ -216,7 +266,7 @@ export function Header() {
               href="/topics"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isActive('/topics') ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isActive('/topics') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Topics
@@ -225,15 +275,15 @@ export function Header() {
               href="/settings"
               onClick={() => setShowMobileMenu(false)}
               className={`block px-3 py-2 text-sm rounded-md ${
-                isActive('/settings') ? 'text-white font-bold' : 'text-teal-100 hover:text-white'
+                isActive('/settings') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Settings
             </Link>
-            <hr className="my-2 border-teal-600" />
+            <hr className="my-2 border-border" />
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="w-full text-left px-3 py-2 text-sm text-teal-100 hover:text-white rounded-md"
+              className={`w-full text-left px-3 py-2 text-sm rounded-md ${textColor} ${textColorHover}`}
             >
               Logout
             </button>

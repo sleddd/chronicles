@@ -66,7 +66,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+      <div className="backdrop-blur-sm bg-white/30 p-6 rounded-lg shadow-xl max-w-md w-full">
         <h2 className="text-xl font-bold mb-4">Add New Topic</h2>
 
         <form onSubmit={handleSubmit}>
@@ -78,7 +78,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-teal-500 focus:border-teal-500"
               placeholder="e.g., Work, Personal, Health"
             />
           </div>

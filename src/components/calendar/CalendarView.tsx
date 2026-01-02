@@ -324,9 +324,9 @@ export function CalendarView({
     ];
 
     return (
-      <div className="grid grid-cols-7 gap-px bg-gray-200">
+      <div className="grid grid-cols-7 gap-px">
         {dayLabels.map((day, index) => (
-          <div key={index} className="bg-gray-50 py-1 md:py-2 text-center text-xs md:text-sm font-medium text-gray-500">
+          <div key={index} className="py-1 md:py-2 text-center text-xs md:text-sm font-medium text-gray-500">
             <span className="md:hidden">{day.short}</span>
             <span className="hidden md:inline">{day.full}</span>
           </div>
@@ -342,10 +342,8 @@ export function CalendarView({
           return (
             <div
               key={day.toString()}
-              className={`min-h-[52px] md:min-h-[100px] p-0.5 md:p-1 ${
-                !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
-              } hover:bg-gray-50 cursor-pointer`}
-              style={isSelected ? { outline: '2px solid #1aaeae', outlineOffset: '-2px' } : undefined}
+              className={`min-h-[52px] md:min-h-[100px] p-0.5 md:p-1 cursor-pointer`}
+              style={isSelected ? { outline: '2px solid e5e6ea', outlineOffset: '-2px' } : undefined}
               onClick={() => handleDateClick(dateStr)}
               onDoubleClick={() => onCreateEvent?.(dateStr)}
             >
@@ -358,32 +356,21 @@ export function CalendarView({
                       ? 'text-gray-900'
                       : 'text-gray-400'
                   }`}
-                  style={isToday ? { backgroundColor: '#1aaeae' } : undefined}
+                  style={isToday ? { backgroundColor: '#727378' } : undefined}
                 >
                   {format(day, 'd')}
                 </div>
-                {/* Indicator dots */}
-                {itemTypes.length > 0 && (
-                  <div className="flex gap-0.5">
-                    {itemTypes.slice(0, 3).map((type) => (
-                      <div
-                        key={type}
-                        className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full"
-                        style={{ backgroundColor: typeColors[type] || '#6366f1' }}
-                      />
-                    ))}
-                  </div>
-                )}
+          
               </div>
               {/* Event list - hidden on mobile, show on larger screens */}
               <div className="hidden md:block space-y-0.5 overflow-hidden max-h-[70px]">
                 {items.slice(0, 3).map((item) => (
                   <div
                     key={item.id}
-                    className={`text-xs px-1 py-0.5 rounded truncate cursor-pointer ${
+                    className={`text-xs px-1 py-1 mb-1 rounded truncate cursor-pointer ${
                       selectedEventId === item.id ? 'ring-2 ring-teal-500' : ''
                     }`}
-                    style={{ backgroundColor: `${item.color}20`, color: item.color }}
+                    style={{ backgroundColor: `#e6e7eb`,color: '#555555'}}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (item.type === 'entry') {
@@ -425,9 +412,9 @@ export function CalendarView({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-[90%] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between p-2 md:p-4 border-b">
+      <div className="flex items-center justify-between mt-5 pt-5 mb-5 pb-5">
         <div className="flex items-center gap-2 md:gap-4">
           <h2 className="text-base md:text-xl font-semibold text-gray-900">
             {format(currentMonth, 'MMM yyyy')}
@@ -435,7 +422,7 @@ export function CalendarView({
           <div className="flex gap-0.5 md:gap-1">
             <button
               onClick={() => navigateMonth('prev')}
-              className="p-1 hover:bg-gray-100 rounded text-gray-600"
+              className="p-1 hover:backdrop-blur-sm rounded text-gray-600"
             >
               <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -443,13 +430,13 @@ export function CalendarView({
             </button>
             <button
               onClick={() => setCurrentMonth(new Date())}
-              className="px-2 py-1 text-xs md:text-sm text-gray-600 hover:bg-gray-100 rounded"
+              className="px-2 py-1 text-xs md:text-sm text-gray-600 hover:backdrop-blur-sm rounded"
             >
               Today
             </button>
             <button
               onClick={() => navigateMonth('next')}
-              className="p-1 hover:bg-gray-100 rounded text-gray-600"
+              className="p-1 hover:backdrop-blur-sm rounded text-gray-600"
             >
               <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -466,8 +453,8 @@ export function CalendarView({
 
       {/* Day Detail Panel */}
       {selectedDate && isDayPanelExpanded && (
-        <div className="border-t bg-white">
-          <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+        <div className="mt-4">
+          <div className="flex items-center justify-between p-3">
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-gray-900">
                 {format(parseISO(selectedDate), 'EEEE, MMMM d, yyyy')}
@@ -479,14 +466,14 @@ export function CalendarView({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onCreateEvent?.(selectedDate)}
-                className="text-sm px-2 py-1 rounded hover:bg-gray-200"
+                className="text-sm px-2 py-1 rounded"
                 style={{ color: '#1aaeae' }}
               >
                 + Add Event
               </button>
               <button
                 onClick={() => setIsDayPanelExpanded(false)}
-                className="p-1 hover:bg-gray-200 rounded text-gray-500"
+                className="p-1 rounded text-gray-500"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -507,11 +494,11 @@ export function CalendarView({
                 </button>
               </div>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-border">
                 {getSelectedDateItems().map((item) => (
                   <div
                     key={item.id}
-                    className="p-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3"
+                    className="p-3 cursor-pointer flex items-start gap-3"
                     onClick={() => {
                       if (item.type === 'entry') {
                         onEntrySelect?.(item.id);

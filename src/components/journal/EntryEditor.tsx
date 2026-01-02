@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { generateSearchTokens } from '@/lib/crypto/searchTokens';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { TopicSelector } from '@/components/topics/TopicSelector';
@@ -35,7 +36,7 @@ function ToolbarButton({
       className={`p-1.5 rounded text-sm font-medium transition-colors ${
         isActive
           ? 'bg-teal-100 text-teal-700'
-          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+          : 'text-gray-600 hover:backdrop-blur-sm bg-white/40 hover:text-gray-900'
       } disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       {children}
@@ -47,7 +48,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
   if (!editor) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-gray-50">
+    <div className="hidden md:flex flex-wrap items-center gap-1 p-2 border-b border-border backdrop-blur-sm bg-white/30">
       {/* Text formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -210,6 +211,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   // const [showImageUpload, setShowImageUpload] = useState(false);
   // const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const { encryptData, decryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   const MAX_CHARS_SHORT = 200;
 
@@ -311,7 +313,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: 'tiptap min-h-[80px] p-4 text-gray-900 focus:outline-none',
+        class: 'tiptap min-h-[80px] py-4 text-gray-900 focus:outline-none',
       },
     },
     onUpdate: ({ editor }) => {
@@ -1080,7 +1082,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   }
 
   return (
-    <div className="p-4 h-full flex flex-col bg-white">
+    <div className="p-4 h-full flex flex-col backdrop-blur-sm bg-white/30">
       {/* Top toolbar with topic selector and bookmark/share buttons */}
       <div className="mb-4 flex justify-between items-center">
         <div className="flex-1">
@@ -1096,7 +1098,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               type="checkbox"
               checked={expandEntry}
               onChange={(e) => setExpandEntry(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
             />
             <span className="text-sm text-gray-600">
               Expand entry{' '}
@@ -1119,7 +1121,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               className={`p-2 rounded-md transition-colors ${
                 isFavorite
                   ? 'text-teal-600 bg-teal-50 hover:bg-teal-100'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  : 'text-gray-600 hover:backdrop-blur-sm bg-white/40'
               }`}
               title={isFavorite ? 'Remove bookmark' : 'Add bookmark'}
             >
@@ -1139,7 +1141,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             </button>
             <button
               onClick={() => setShowShareModal(true)}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              className="p-2 text-gray-600 hover:backdrop-blur-sm bg-white/40 rounded-md"
               title="Share entry"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1154,7 +1156,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+          <div className="backdrop-blur-sm bg-white/30 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Entry?</h3>
             <p className="text-gray-600 mb-4">
               This action cannot be undone. The entry will be permanently deleted.
@@ -1163,7 +1165,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                className="px-4 py-2 text-gray-700 hover:backdrop-blur-sm bg-white/40 rounded-md"
               >
                 Cancel
               </button>
@@ -1181,11 +1183,11 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
       {/* Editor with character limit - no border */}
       <div className={`mb-2 ${expandEntry ? 'flex-1 flex flex-col' : ''}`}>
-        <div className={`overflow-auto bg-white flex flex-col ${expandEntry ? 'flex-1' : ''}`}>
+        <div className={`overflow-auto backdrop-blur-sm bg-white/30 flex flex-col ${expandEntry ? 'flex-1' : ''}`}>
           <EditorToolbar editor={editor} />
           <EditorContent
             editor={editor}
-            className={expandEntry ? 'flex-1' : 'min-h-[40px]'}
+            className={`border-t border-border md:border-t-0 ${expandEntry ? 'flex-1' : 'min-h-[40px]'}`}
           />
         </div>
       </div>
@@ -1193,17 +1195,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Goal Settings - only show if current topic is goal */}
       {(customType === 'goal' || selectedTopicName?.toLowerCase() === 'goal') && (
         <>
-          <div className="border-t my-2" />
+          <div className="border-t border-border my-2" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Goal Settings</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Goal Settings</h3>
+            <div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Type</label>
                   <select
                     value={goalType}
                     onChange={(e) => setGoalType(e.target.value as 'short_term' | 'long_term')}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   >
                     <option value="short_term">Short-term</option>
                     <option value="long_term">Long-term</option>
@@ -1214,7 +1216,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   <select
                     value={goalStatus}
                     onChange={(e) => setGoalStatus(e.target.value as 'active' | 'completed' | 'archived')}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   >
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>
@@ -1227,7 +1229,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="date"
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1260,16 +1262,16 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Milestone Settings - only show if current topic is milestone */}
       {(customType === 'milestone' || selectedTopicName?.toLowerCase() === 'milestone') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Milestone Settings</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Milestone Settings</h3>
+            <div>
               <MilestoneGoalSelector
                 selectedGoalIds={milestoneGoalIds}
                 onGoalIdsChange={setMilestoneGoalIds}
               />
               {linkedTasks.length > 0 && (
-                <div className="mt-4 pt-4 border-t">
+                <div className="mt-4 pt-4">
                   <label className="block text-xs text-gray-500 mb-2">
                     Linked Tasks ({linkedTasks.filter(t => t.isCompleted).length}/{linkedTasks.length} completed)
                   </label>
@@ -1301,17 +1303,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Task Settings - only show if current topic is task */}
       {(customType === 'task' || selectedTopicName?.toLowerCase() === 'task') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Task Settings</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Task Settings</h3>
+            <div>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isTaskCompleted}
                     onChange={(e) => setIsTaskCompleted(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
                   />
                   <span className="text-sm text-gray-700">Completed</span>
                 </label>
@@ -1320,7 +1322,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="checkbox"
                     checked={isAutoMigrating}
                     onChange={(e) => setIsAutoMigrating(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
                   />
                   <span className="text-sm text-gray-700">Auto-migrate if incomplete</span>
                 </label>
@@ -1328,7 +1330,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               <p className="text-xs text-gray-500 mt-2">
                 Auto-migrating tasks move to the current date at midnight if not completed.
               </p>
-              <div className="mt-4 pt-4 border-t">
+              <div className="mt-4 pt-4">
                 <label className="block text-xs text-gray-500 mb-2">
                   Link to Milestones
                 </label>
@@ -1348,10 +1350,10 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Medication Details - only show if current topic is medication */}
       {(customType === 'medication' || selectedTopicName?.toLowerCase() === 'medication') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Medication Details</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Medication Details</h3>
+            <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Dosage</label>
@@ -1360,7 +1362,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={medDosage}
                     onChange={(e) => setMedDosage(e.target.value)}
                     placeholder="e.g., 500mg"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1368,7 +1370,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   <select
                     value={medFrequency}
                     onChange={(e) => setMedFrequency(e.target.value as typeof medFrequency)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   >
                     <option value="once_daily">Once daily</option>
                     <option value="twice_daily">Twice daily</option>
@@ -1391,7 +1393,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                           newTimes[index] = e.target.value;
                           setMedScheduleTimes(newTimes);
                         }}
-                        className="px-2 py-1 border rounded text-sm bg-white text-gray-900"
+                        className="px-2 py-1 border border-border rounded text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                       />
                       {medScheduleTimes.length > 1 && (
                         <button
@@ -1408,7 +1410,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="button"
                     onClick={() => setMedScheduleTimes([...medScheduleTimes, '12:00'])}
                     className="text-xs hover:underline"
-                    style={{ color: '#1aaeae' }}
+                    style={{ color: accentColor }}
                   >
                     + Add time
                   </button>
@@ -1421,7 +1423,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   value={medNotes}
                   onChange={(e) => setMedNotes(e.target.value)}
                   placeholder="e.g., Take with food"
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
               <div className="mt-3">
@@ -1430,7 +1432,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="checkbox"
                     checked={medIsActive}
                     onChange={(e) => setMedIsActive(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
                   />
                   <span className="text-sm text-gray-700">Active medication</span>
                 </label>
@@ -1443,17 +1445,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Food Details - only show if current topic is food */}
       {(customType === 'food' || selectedTopicName?.toLowerCase() === 'food') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Food Details</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Food Details</h3>
+            <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Meal Type</label>
                   <select
                     value={foodMealType}
                     onChange={(e) => setFoodMealType(e.target.value as typeof foodMealType)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   >
                     <option value="breakfast">Breakfast</option>
                     <option value="lunch">Lunch</option>
@@ -1467,7 +1469,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={foodConsumedAt ? foodConsumedAt.split('T')[1]?.substring(0, 5) : ''}
                     onChange={(e) => setFoodConsumedAt(`${today}T${e.target.value}:00`)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1478,7 +1480,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   value={foodIngredients}
                   onChange={(e) => setFoodIngredients(e.target.value)}
                   placeholder="e.g., oats, blueberries, honey"
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
                 <p className="text-xs text-gray-400 mt-1">Used for correlation analysis with symptoms</p>
               </div>
@@ -1489,7 +1491,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   value={foodNotes}
                   onChange={(e) => setFoodNotes(e.target.value)}
                   placeholder="Any additional notes..."
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
             </div>
@@ -1500,10 +1502,10 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Symptom Details - only show if current topic is symptom */}
       {(customType === 'symptom' || selectedTopicName?.toLowerCase() === 'symptom') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Symptom Details</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Symptom Details</h3>
+            <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Severity: {symptomSeverity}/10</label>
@@ -1527,7 +1529,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={symptomOccurredAt ? symptomOccurredAt.split('T')[1]?.substring(0, 5) : ''}
                     onChange={(e) => setSymptomOccurredAt(`${today}T${e.target.value}:00`)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1539,7 +1541,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={symptomDuration}
                     onChange={(e) => setSymptomDuration(e.target.value)}
                     placeholder="e.g., 30"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1549,7 +1551,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={symptomNotes}
                     onChange={(e) => setSymptomNotes(e.target.value)}
                     placeholder="Any additional details..."
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1561,17 +1563,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Exercise Details - only show if current topic is exercise */}
       {(customType === 'exercise' || selectedTopicName?.toLowerCase() === 'exercise') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Exercise Details</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Exercise Details</h3>
+            <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Exercise Type</label>
                   <select
                     value={exerciseType}
                     onChange={(e) => setExerciseType(e.target.value as typeof exerciseType)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   >
                     <option value="yoga">Yoga</option>
                     <option value="cardio">Cardio</option>
@@ -1592,7 +1594,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                       value={exerciseOtherType}
                       onChange={(e) => setExerciseOtherType(e.target.value)}
                       placeholder="e.g., Pilates, HIIT"
-                      className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     />
                   </div>
                 )}
@@ -1603,7 +1605,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                       type="time"
                       value={exercisePerformedAt ? exercisePerformedAt.split('T')[1]?.substring(0, 5) : ''}
                       onChange={(e) => setExercisePerformedAt(`${today}T${e.target.value}:00`)}
-                      className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     />
                   </div>
                 )}
@@ -1615,7 +1617,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={exercisePerformedAt ? exercisePerformedAt.split('T')[1]?.substring(0, 5) : ''}
                     onChange={(e) => setExercisePerformedAt(`${today}T${e.target.value}:00`)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               )}
@@ -1627,7 +1629,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={exerciseDuration}
                     onChange={(e) => setExerciseDuration(e.target.value)}
                     placeholder="e.g., 45"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1635,7 +1637,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   <select
                     value={exerciseIntensity}
                     onChange={(e) => setExerciseIntensity(e.target.value as typeof exerciseIntensity)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -1653,12 +1655,12 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                       value={exerciseDistance}
                       onChange={(e) => setExerciseDistance(e.target.value)}
                       placeholder="e.g., 5"
-                      className="flex-1 px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                      className="flex-1 px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     />
                     <select
                       value={exerciseDistanceUnit}
                       onChange={(e) => setExerciseDistanceUnit(e.target.value as typeof exerciseDistanceUnit)}
-                      className="w-20 px-2 py-2 border rounded-md text-sm bg-white text-gray-900"
+                      className="w-20 px-2 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                     >
                       <option value="miles">mi</option>
                       <option value="km">km</option>
@@ -1672,7 +1674,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={exerciseCalories}
                     onChange={(e) => setExerciseCalories(e.target.value)}
                     placeholder="e.g., 300"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1683,7 +1685,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   value={exerciseNotes}
                   onChange={(e) => setExerciseNotes(e.target.value)}
                   placeholder="How did it feel? Any observations..."
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
             </div>
@@ -1694,10 +1696,10 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Event Details - only show if current topic is event */}
       {(customType === 'event' || selectedTopicName?.toLowerCase() === 'event') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Event Details</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Event Details</h3>
+            <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Start Date</label>
@@ -1705,7 +1707,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="date"
                     value={eventStartDate}
                     onChange={(e) => setEventStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1714,7 +1716,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={eventStartTime}
                     onChange={(e) => setEventStartTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1725,7 +1727,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="date"
                     value={eventEndDate}
                     onChange={(e) => setEventEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1734,7 +1736,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={eventEndTime}
                     onChange={(e) => setEventEndTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1746,7 +1748,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={eventLocation}
                     onChange={(e) => setEventLocation(e.target.value)}
                     placeholder="e.g., Conference Room A"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1756,7 +1758,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={eventPhone}
                     onChange={(e) => setEventPhone(e.target.value)}
                     placeholder="e.g., +1 555-123-4567"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1767,7 +1769,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   value={eventAddress}
                   onChange={(e) => setEventAddress(e.target.value)}
                   placeholder="e.g., 123 Main St, City"
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
               <div className="mt-3">
@@ -1777,7 +1779,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   onChange={(e) => setEventNotes(e.target.value)}
                   placeholder="Any additional details..."
                   rows={2}
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
             </div>
@@ -1788,10 +1790,10 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {/* Meeting Details - only show if current topic is meeting */}
       {(customType === 'meeting' || selectedTopicName?.toLowerCase() === 'meeting') && (
         <>
-          <div className="border-t my-4" />
+          <div className="border-t border-border my-4" />
           <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 px-4 mb-2">Meeting Details</h3>
-            <div className="px-4">
+            <h3 className="font-medium text-sm text-gray-700 mb-2">Meeting Details</h3>
+            <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Meeting Topic</label>
@@ -1800,7 +1802,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={meetingTopic}
                     onChange={(e) => setMeetingTopic(e.target.value)}
                     placeholder="e.g., Q4 Planning"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1810,7 +1812,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={meetingAttendees}
                     onChange={(e) => setMeetingAttendees(e.target.value)}
                     placeholder="e.g., John, Sarah, Mike"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1821,7 +1823,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="date"
                     value={meetingStartDate}
                     onChange={(e) => setMeetingStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1830,7 +1832,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={meetingStartTime}
                     onChange={(e) => setMeetingStartTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1841,7 +1843,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="date"
                     value={meetingEndDate}
                     onChange={(e) => setMeetingEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1850,7 +1852,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     type="time"
                     value={meetingEndTime}
                     onChange={(e) => setMeetingEndTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1862,7 +1864,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={meetingLocation}
                     onChange={(e) => setMeetingLocation(e.target.value)}
                     placeholder="e.g., Conference Room A"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
                 <div>
@@ -1872,7 +1874,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                     value={meetingPhone}
                     onChange={(e) => setMeetingPhone(e.target.value)}
                     placeholder="e.g., +1 555-123-4567"
-                    className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                   />
                 </div>
               </div>
@@ -1883,7 +1885,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   value={meetingAddress}
                   onChange={(e) => setMeetingAddress(e.target.value)}
                   placeholder="e.g., 123 Main St, City"
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
               <div className="mt-3">
@@ -1893,7 +1895,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   onChange={(e) => setMeetingNotes(e.target.value)}
                   placeholder="Agenda, action items, etc..."
                   rows={2}
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
                 />
               </div>
             </div>
@@ -1902,7 +1904,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       )}
 
       {/* Bottom action buttons */}
-      <div className="mt-4 pt-4 border-t flex justify-between items-center flex-shrink-0">
+      <div className="mt-4 pt-4 border-t border-border flex justify-between items-center flex-shrink-0">
         <div>
           {entryId && (
             <button
@@ -1917,9 +1919,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           onClick={handleSave}
           disabled={saving || (!expandEntry && charCount > MAX_CHARS_SHORT)}
           className="px-4 py-2 text-white rounded-md disabled:bg-gray-400"
-          style={{ backgroundColor: saving || (!expandEntry && charCount > MAX_CHARS_SHORT) ? undefined : '#1aaeae' }}
-          onMouseOver={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-          onMouseOut={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+          style={{ backgroundColor: saving || (!expandEntry && charCount > MAX_CHARS_SHORT) ? undefined : accentColor }}
+          onMouseOver={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = hoverColor; }}
+          onMouseOut={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = accentColor; }}
           title="Save"
         >
           {saving ? 'Saving...' : 'Save'}

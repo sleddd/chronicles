@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
 interface CustomField {
   id: string;
@@ -52,6 +53,7 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
   const [doseLogs, setDoseLogs] = useState<Record<string, DoseLog>>({});
   const [viewDate, setViewDate] = useState(initialDate);
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   // Update viewDate when initialDate changes (e.g., from parent component)
   useEffect(() => {
@@ -250,14 +252,14 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
   }
 
   return (
-    <div className="px-8 py-4 pb-12 bg-white">
+    <div className="px-8 py-4 pb-12 backdrop-blur-sm bg-white/30">
 
       {/* Date Navigation */}
       <div className="flex items-center justify-between mb-4 p-3">
         <button
           type="button"
           onClick={() => navigateDate(-1)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 hover:backdrop-blur-sm bg-white/40 rounded-full transition-colors"
           title="Previous day"
         >
           <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,13 +273,17 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
             <button
               type="button"
               onClick={goToToday}
-              className="text-xs px-2 py-1 bg-teal-100 text-teal-700 rounded hover:bg-teal-200 transition-colors"
+              className="text-xs px-2 py-1 rounded transition-colors"
+              style={{ backgroundColor: '#e5e7eb', color: accentColor }}
             >
               Today
             </button>
           )}
           {isToday && (
-            <span className="text-xs px-2 py-1 bg-teal-100 text-teal-700 rounded">
+            <span
+              className="text-xs px-2 py-1 rounded"
+              style={{ backgroundColor: '#e5e7eb', color: accentColor }}
+            >
               Today
             </span>
           )}
@@ -286,7 +292,7 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
         <button
           type="button"
           onClick={() => navigateDate(1)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 hover:backdrop-blur-sm bg-white/40 rounded-full transition-colors"
           title="Next day"
         >
           <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -304,17 +310,17 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
               {completedDoses} of {totalDoses} doses taken ({progressPercent}%)
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div className="w-full rounded-full h-3 overflow-hidden" style={{ backgroundColor: '#e5e7eb' }}>
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${progressPercent}%`,
-                backgroundColor: progressPercent === 100 ? '#22c55e' : '#1aaeae',
+                backgroundColor: progressPercent === 100 ? '#22c55e' : accentColor,
               }}
             />
           </div>
           {progressPercent === 100 && (
-            <p className="text-sm mt-2 font-medium" style={{ color: '#1aaeae' }}>
+            <p className="text-sm mt-2 font-medium" style={{ color: accentColor }}>
               All medications taken for today!
             </p>
           )}
@@ -326,18 +332,18 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
       </p>
 
       {scheduledDoses.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border">
+        <div className="text-center py-12 backdrop-blur-sm bg-white/30 rounded-lg border border-border">
           <p className="text-gray-500">No medications scheduled</p>
           <p className="text-sm text-gray-400 mt-1">Add medications to see your daily schedule</p>
         </div>
       ) : (
         <div className="space-y-6">
           {Object.entries(dosesByTime).map(([time, doses]) => (
-            <div key={time} className="bg-white rounded-lg border overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2 border-b">
+            <div key={time} className="backdrop-blur-sm bg-white/30 rounded-lg border border-border overflow-hidden">
+              <div className="backdrop-blur-sm bg-white/30 px-4 py-2 border-b border-border">
                 <span className="font-medium text-gray-700">{formatTime(time)}</span>
               </div>
-              <div className="divide-y">
+              <div className="divide-y divide-border">
                 {doses.map((dose, index) => {
                   const status = getDoseStatus(dose);
                   const key = `${dose.medicationId}-${dose.time}`;
@@ -355,8 +361,8 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
                         type="button"
                         disabled={isSaving}
                         onClick={() => handleCheckDose(dose, !isTaken)}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${isSaving ? 'opacity-50' : ''} ${!isTaken ? 'bg-white border-gray-300 hover:border-teal-400' : ''}`}
-                        style={isTaken ? { backgroundColor: '#1aaeae', borderColor: '#1aaeae' } : undefined}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${isSaving ? 'opacity-50' : ''} ${!isTaken ? 'backdrop-blur-sm bg-white/30 border-border' : ''}`}
+                        style={isTaken ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
                         aria-label={isTaken ? 'Mark as not taken' : 'Mark as taken'}
                       >
                         {isTaken && (
@@ -368,19 +374,19 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
                       <div className="flex-1 min-w-0">
                         <span
                           className={`font-medium ${isTaken ? 'line-through' : 'text-gray-900'}`}
-                          style={isTaken ? { color: '#158f8f' } : undefined}
+                          style={isTaken ? { color: hoverColor } : undefined}
                         >
                           {dose.medicationName} {dose.dosage}
                         </span>
                         {isTaken && log?.takenAt && (
-                          <span className="ml-2 text-xs" style={{ color: '#1aaeae' }}>
+                          <span className="ml-2 text-xs" style={{ color: accentColor }}>
                             (taken at {formatTakenTime(log.takenAt)})
                           </span>
                         )}
                       </div>
                       <span
-                        className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${isTaken ? '' : 'bg-gray-100 text-gray-500'}`}
-                        style={isTaken ? { backgroundColor: '#e0f2f2', color: '#158f8f' } : undefined}
+                        className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${isTaken ? '' : 'text-gray-500'}`}
+                        style={{ backgroundColor: '#e5e7eb', color: isTaken ? hoverColor : undefined }}
                       >
                         {isSaving ? 'Saving...' : isTaken ? 'Taken' : 'Pending'}
                       </span>

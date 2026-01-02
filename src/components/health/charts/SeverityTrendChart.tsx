@@ -10,7 +10,7 @@ interface Props {
 export function SeverityTrendChart({ data, title }: Props) {
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-lg border p-4">
+      <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
         <h3 className="font-medium text-gray-900 mb-4">{title}</h3>
         <div className="text-center py-8 text-gray-400">
           No severity data available
@@ -44,7 +44,7 @@ export function SeverityTrendChart({ data, title }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-lg border p-4">
+    <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
       <h3 className="font-medium text-gray-900 mb-4">{title}</h3>
 
       <div className="relative" style={{ height: chartHeight + 40 }}>
@@ -59,9 +59,9 @@ export function SeverityTrendChart({ data, title }: Props) {
         <div className="ml-8 relative" style={{ height: chartHeight }}>
           {/* Grid lines */}
           <div className="absolute inset-0 flex flex-col justify-between">
-            <div className="border-b border-gray-100" />
-            <div className="border-b border-gray-100" />
-            <div className="border-b border-gray-200" />
+            <div className="border-b border-border" />
+            <div className="border-b border-border" />
+            <div className="border-b border-border" />
           </div>
 
           {/* SVG Line */}

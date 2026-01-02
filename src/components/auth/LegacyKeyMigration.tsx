@@ -226,7 +226,7 @@ export function LegacyKeyMigration() {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-10 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="backdrop-blur-sm bg-white/30 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {step === 'prompt' && (
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -314,9 +314,9 @@ export function LegacyKeyMigration() {
               </p>
             </div>
 
-            <div className="bg-gray-100 rounded-lg p-4">
+            <div className="backdrop-blur-sm bg-white/40 rounded-lg p-4">
               <p className="text-xs text-gray-500 mb-2 text-center">Your Recovery Key:</p>
-              <div className="font-mono text-sm text-center bg-white border border-gray-300 rounded p-3 break-all select-all">
+              <div className="font-mono text-sm text-center backdrop-blur-sm bg-white/30 border border-border rounded p-3 break-all select-all">
                 {recoveryKeyDisplay}
               </div>
               <button
@@ -328,13 +328,13 @@ export function LegacyKeyMigration() {
               </button>
             </div>
 
-            <div className="border-t pt-4">
+            <div className="border-t border-border pt-4">
               <label className="flex items-start gap-2">
                 <input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-teal-600 border-gray-300 rounded"
+                  className="mt-0.5 h-4 w-4 text-teal-600 border-border rounded"
                 />
                 <span className="text-sm text-gray-700">
                   I have saved my recovery key in a secure location

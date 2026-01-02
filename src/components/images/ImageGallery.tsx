@@ -147,7 +147,7 @@ export function ImageGallery({ entryId, editable = true, onImagesChange }: Props
           {images.map((image) => (
             <div
               key={image.id}
-              className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden"
+              className="relative group aspect-square backdrop-blur-sm bg-white/40 rounded-lg overflow-hidden"
             >
               <img
                 src={image.dataUrl}
@@ -187,7 +187,7 @@ export function ImageGallery({ entryId, editable = true, onImagesChange }: Props
           onClick={() => setSelectedImage(null)}
         >
           <button
-            className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-lg"
+            className="absolute top-4 right-4 text-white p-2 hover:backdrop-blur-sm bg-white/30/10 rounded-lg"
             onClick={() => setSelectedImage(null)}
           >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">

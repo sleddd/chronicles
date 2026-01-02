@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -52,6 +53,7 @@ export function GoalCard({
 }: Props) {
   const router = useRouter();
   const { decryptData, encryptData, isKeyReady } = useEncryption();
+  const { accentColor } = useAccentColor();
   const [title, setTitle] = useState<string>('');
   const [goalFields, setGoalFields] = useState<GoalCustomFields | null>(null);
   const [decryptedMilestones, setDecryptedMilestones] = useState<DecryptedMilestone[]>([]);
@@ -238,9 +240,9 @@ export function GoalCard({
 
   const getStatusColor = (): { className: string; style?: React.CSSProperties } => {
     switch (goalFields?.status) {
-      case 'completed': return { className: '', style: { backgroundColor: '#e0f2f2', color: '#158f8f' } };
-      case 'archived': return { className: 'bg-gray-100 text-gray-600' };
-      default: return { className: 'bg-teal-100 text-teal-800' };
+      case 'completed': return { className: '', style: { backgroundColor: '#e5e7eb', color: accentColor } };
+      case 'archived': return { className: 'text-gray-600', style: { backgroundColor: '#e5e7eb' } };
+      default: return { className: '', style: { backgroundColor: '#e5e7eb', color: accentColor } };
     }
   };
 
@@ -256,7 +258,7 @@ export function GoalCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 border rounded-lg bg-white hover:border-gray-400 hover:shadow-sm transition-all ${isDragging ? 'shadow-lg z-10' : ''}`}
+      className={`p-4 border border-border rounded-lg backdrop-blur-sm bg-white/30 hover:border-border hover:shadow-sm transition-all ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-1">
@@ -275,7 +277,7 @@ export function GoalCard({
         </div>
         <div className="flex items-center gap-2 ml-2">
           {getTypeLabel() && (
-            <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+            <span className="text-xs px-2 py-0.5 rounded backdrop-blur-sm bg-white/50 text-gray-700">
               {getTypeLabel()}
             </span>
           )}
@@ -306,10 +308,10 @@ export function GoalCard({
           <span>Progress</span>
           <span>{displayProgress}%</span>
         </div>
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#e5e7eb' }}>
           <div
             className="h-full transition-all duration-300"
-            style={{ backgroundColor: '#1aaeae', width: `${displayProgress}%` }}
+            style={{ backgroundColor: accentColor, width: `${displayProgress}%` }}
           />
         </div>
       </div>
@@ -323,7 +325,7 @@ export function GoalCard({
 
       {/* Milestones */}
       {decryptedMilestones.length > 0 && (
-        <div className="border-t pt-3 mt-2">
+        <div className="border-t border-border pt-3 mt-2">
           <button
             type="button"
             onClick={() => setMilestonesExpanded(!milestonesExpanded)}
@@ -352,9 +354,10 @@ export function GoalCard({
                     disabled={togglingMilestone === milestone.id}
                     className={`flex-shrink-0 w-4 h-4 rounded border transition-colors ${
                       milestone.isCompleted
-                        ? 'bg-teal-500 border-teal-500 text-white'
-                        : 'border-gray-300 hover:border-teal-500'
+                        ? 'text-white'
+                        : 'border-border'
                     } ${togglingMilestone === milestone.id ? 'opacity-50' : ''}`}
+                    style={milestone.isCompleted ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
                     title={milestone.isCompleted ? 'Mark incomplete' : 'Mark complete'}
                   >
                     {milestone.isCompleted && (

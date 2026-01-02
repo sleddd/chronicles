@@ -23,10 +23,10 @@ export default async function Home({ searchParams }: PageProps) {
   const initialEntryId = isNewEntry ? null : (params.entry || null);
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
       <Header />
       <PasswordReentryModal />
-      <div className="flex-1 overflow-hidden bg-white min-h-0">
+      <div className="flex-1 overflow-hidden backdrop-blur-sm bg-white/30 min-h-0">
         <JournalLayout key={isNewEntry ? 'new' : initialEntryId || 'default'} initialEntryId={initialEntryId} />
       </div>
     </div>

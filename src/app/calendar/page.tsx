@@ -41,7 +41,7 @@ export default function CalendarPage() {
 
   if (timezoneLoading) {
     return (
-      <div className="h-screen flex flex-col bg-white">
+      <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
         <Header />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-gray-500">Loading...</div>
@@ -51,7 +51,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
       <Header />
       <PasswordReentryModal />
       <div className="flex-1 overflow-hidden">

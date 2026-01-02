@@ -44,7 +44,7 @@ interface LoadingOverlayProps {
 
 export function LoadingOverlay({ message = 'Loading...' }: LoadingOverlayProps) {
   return (
-    <div className="fixed inset-0 bg-white/80 flex flex-col items-center justify-center z-50">
+    <div className="fixed inset-0 backdrop-blur-sm bg-white/30/80 flex flex-col items-center justify-center z-50">
       <LoadingSpinner size="lg" />
       <p className="mt-4 text-gray-600">{message}</p>
     </div>
@@ -58,14 +58,14 @@ interface SkeletonProps {
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse bg-gray-200 rounded ${className}`}
+      className={`animate-pulse backdrop-blur-sm bg-white/50 rounded ${className}`}
     />
   );
 }
 
 export function EntrySkeleton() {
   return (
-    <div className="p-4 border-b">
+    <div className="p-4 border-b border-border">
       <div className="flex items-start gap-3">
         <Skeleton className="w-10 h-10 rounded-full" />
         <div className="flex-1">

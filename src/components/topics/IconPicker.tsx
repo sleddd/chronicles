@@ -201,10 +201,9 @@ export const ICON_MAP: Record<string, IconDefinition> = TOPIC_ICONS.reduce(
 interface IconPickerProps {
   selectedIcon: string | null;
   onSelectIcon: (iconName: string | null) => void;
-  color?: string;
 }
 
-export function IconPicker({ selectedIcon, onSelectIcon, color = '#6366F1' }: IconPickerProps) {
+export function IconPicker({ selectedIcon, onSelectIcon }: IconPickerProps) {
   return (
     <div className="grid grid-cols-8 gap-1 p-2 max-h-32 overflow-auto">
       {/* No icon option */}
@@ -212,7 +211,7 @@ export function IconPicker({ selectedIcon, onSelectIcon, color = '#6366F1' }: Ic
         type="button"
         onClick={() => onSelectIcon(null)}
         className={`w-6 h-6 rounded flex items-center justify-center border ${
-          selectedIcon === null ? 'border-gray-800 bg-gray-100' : 'border-transparent hover:bg-gray-100'
+          selectedIcon === null ? 'border-border backdrop-blur-sm bg-white/40' : 'border-transparent hover:backdrop-blur-sm bg-white/40'
         }`}
         title="No icon"
       >
@@ -224,14 +223,14 @@ export function IconPicker({ selectedIcon, onSelectIcon, color = '#6366F1' }: Ic
           type="button"
           onClick={() => onSelectIcon(name)}
           className={`w-6 h-6 rounded flex items-center justify-center border ${
-            selectedIcon === name ? 'border-gray-800 bg-gray-100' : 'border-transparent hover:bg-gray-100'
+            selectedIcon === name ? 'border-border backdrop-blur-sm bg-white/40' : 'border-transparent hover:backdrop-blur-sm bg-white/40'
           }`}
           title={name}
         >
           <FontAwesomeIcon
             icon={icon}
             className="w-3.5 h-3.5"
-            style={{ color: selectedIcon === name ? color : '#6B7280' }}
+            style={{ color: selectedIcon === name ? '#374151' : '#6B7280' }}
           />
         </button>
       ))}
@@ -241,14 +240,13 @@ export function IconPicker({ selectedIcon, onSelectIcon, color = '#6366F1' }: Ic
 
 interface TopicIconProps {
   iconName: string | null;
-  color?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
-export function TopicIcon({ iconName, color = '#6366F1', size = 'sm', className = '' }: TopicIconProps) {
+export function TopicIcon({ iconName, size = 'sm', className = '' }: TopicIconProps) {
   if (!iconName || !ICON_MAP[iconName]) {
-    // Show a colored dot as fallback
+    // Show a gray dot as fallback when no icon
     const sizeClasses = {
       sm: 'w-2.5 h-2.5',
       md: 'w-3 h-3',
@@ -256,8 +254,7 @@ export function TopicIcon({ iconName, color = '#6366F1', size = 'sm', className 
     };
     return (
       <span
-        className={`rounded-full ${sizeClasses[size]} ${className}`}
-        style={{ backgroundColor: color }}
+        className={`rounded-full bg-gray-400 ${sizeClasses[size]} ${className}`}
       />
     );
   }
@@ -271,8 +268,7 @@ export function TopicIcon({ iconName, color = '#6366F1', size = 'sm', className 
   return (
     <FontAwesomeIcon
       icon={ICON_MAP[iconName]}
-      className={`${sizeClasses[size]} ${className}`}
-      style={{ color }}
+      className={`${sizeClasses[size]} ${className} text-gray-600`}
     />
   );
 }

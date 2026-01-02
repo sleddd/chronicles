@@ -299,7 +299,7 @@ export function ReportingTab({ refreshKey }: Props) {
   return (
     <div className="p-4 pb-12 space-y-6">
       {/* Filters */}
-      <div className="bg-white rounded-lg border p-4">
+      <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
         <h3 className="font-medium text-gray-900 mb-4">Filters</h3>
 
         <div className="flex flex-wrap gap-4 items-end">
@@ -313,7 +313,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                     period === p
                       ? 'text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      : 'backdrop-blur-sm bg-white/40 text-gray-700 hover:backdrop-blur-sm bg-white/50'
                   }`}
                   style={period === p ? { backgroundColor: '#1aaeae' } : undefined}
                 >
@@ -331,7 +331,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-3 py-1.5 border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
+                  className="px-3 py-1.5 border border-border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
                 />
               </div>
               <div>
@@ -340,7 +340,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-3 py-1.5 border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
+                  className="px-3 py-1.5 border border-border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
                 />
               </div>
             </>
@@ -367,19 +367,19 @@ export function ReportingTab({ refreshKey }: Props) {
         <>
           {/* Summary Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg border p-4 text-center">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
               <div className="text-3xl font-bold text-teal-600">{symptoms.length}</div>
               <div className="text-sm text-gray-600">Symptoms Logged</div>
             </div>
-            <div className="bg-white rounded-lg border p-4 text-center">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
               <div className="text-3xl font-bold text-red-600">{food.length}</div>
               <div className="text-sm text-gray-600">Food Entries</div>
             </div>
-            <div className="bg-white rounded-lg border p-4 text-center">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
               <div className="text-3xl font-bold text-blue-600">{medicationLogs.length}</div>
               <div className="text-sm text-gray-600">Medication Logs</div>
             </div>
-            <div className="bg-white rounded-lg border p-4 text-center">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
               <div className="text-3xl font-bold text-green-600">{exercises.length}</div>
               <div className="text-sm text-gray-600">Workouts</div>
               {exercises.length > 0 && (
@@ -411,7 +411,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Top Symptoms */}
           {symptoms.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Most Common Symptoms</h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -435,7 +435,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Top Ingredients */}
           {food.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Most Consumed Ingredients</h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -461,7 +461,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Exercise Summary */}
           {exercises.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Exercise Summary</h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -491,13 +491,13 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Exercise Frequency */}
           {exerciseFrequency.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Exercise Frequency</h3>
               <div className="space-y-2">
                 {exerciseFrequency.slice(-7).map((data) => (
                   <div key={data.period} className="flex items-center gap-3">
                     <span className="text-sm text-gray-600 w-24">{data.period}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div className="flex-1 backdrop-blur-sm bg-white/40 rounded-full h-4 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-green-500"
                         style={{
@@ -516,14 +516,14 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Exercise Impact on Symptoms */}
           {exerciseImpact.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Exercise Impact on Symptoms</h3>
               <p className="text-sm text-gray-600 mb-4">
                 Shows how symptom severity changes after different exercise types (within 24 hours)
               </p>
               <div className="space-y-3">
                 {exerciseImpact.map((impact) => (
-                  <div key={impact.exerciseType} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={impact.exerciseType} className="flex items-center justify-between p-3 backdrop-blur-sm bg-white/30 rounded-lg">
                     <div>
                       <span className="font-medium text-gray-900 capitalize">{impact.exerciseType}</span>
                       <div className="text-xs text-gray-500">{impact.occurrences} data points</div>

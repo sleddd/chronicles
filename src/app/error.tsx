@@ -14,7 +14,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen backdrop-blur-sm bg-white/30 flex flex-col items-center justify-center p-4">
       <div className="text-center max-w-md">
         <div className="w-24 h-24 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
           <svg
@@ -47,7 +47,7 @@ export default function Error({
           </button>
           <a
             href="/"
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-3 border border-border text-gray-700 rounded-lg hover:backdrop-blur-sm bg-white/30 transition-colors"
           >
             Go Home
           </a>

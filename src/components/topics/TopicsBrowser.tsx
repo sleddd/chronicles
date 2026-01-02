@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
 import Link from 'next/link';
 import { IconPicker, TopicIcon } from './IconPicker';
@@ -79,6 +80,7 @@ function SortableTopicItem({
   onEditSave,
   onEditCancel,
 }: SortableTopicItemProps) {
+  const { accentColor } = useAccentColor();
   const {
     attributes,
     listeners,
@@ -96,7 +98,7 @@ function SortableTopicItem({
 
   if (isEditing && editingTopic) {
     return (
-      <div ref={setNodeRef} style={style} className="p-3 bg-white border rounded-lg space-y-3">
+      <div ref={setNodeRef} style={style} className="p-3 backdrop-blur-sm bg-white/30 border border-border rounded-lg space-y-3">
         <input
           type="text"
           value={editingTopic.name}
@@ -105,41 +107,21 @@ function SortableTopicItem({
             if (e.key === 'Enter') onEditSave();
             if (e.key === 'Escape') onEditCancel();
           }}
-          className="w-full px-3 py-2 text-sm border rounded bg-white text-gray-900"
+          className="w-full px-3 py-2 text-sm border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
           autoFocus
         />
-        <div className="flex gap-1 flex-wrap">
-          {PRESET_COLORS.map((color) => (
-            <button
-              key={color}
-              onClick={() => onEditChange({ color })}
-              className={`w-5 h-5 rounded-full border-2 ${
-                editingTopic.color === color ? 'border-gray-800' : 'border-transparent'
-              }`}
-              style={{ backgroundColor: color }}
-            />
-          ))}
-          <input
-            type="color"
-            value={editingTopic.color}
-            onChange={(e) => onEditChange({ color: e.target.value })}
-            className="w-5 h-5 rounded cursor-pointer border-0 p-0"
-            title="Custom color"
-          />
-        </div>
-        <div className="border rounded p-2 bg-gray-50">
+        <div className="border rounded p-2 backdrop-blur-sm bg-white/30">
           <p className="text-xs text-gray-500 mb-1">Icon:</p>
           <IconPicker
             selectedIcon={editingTopic.icon}
             onSelectIcon={(icon) => onEditChange({ icon })}
-            color={editingTopic.color}
           />
         </div>
         <div className="flex gap-2">
           <button
             onClick={onEditSave}
             className="flex-1 px-3 py-1.5 text-sm text-white rounded"
-            style={{ backgroundColor: '#1aaeae' }}
+            style={{ backgroundColor: accentColor }}
           >
             Save
           </button>
@@ -160,8 +142,8 @@ function SortableTopicItem({
       style={style}
       className={`group flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
         isSelected
-          ? 'bg-gray-200 text-gray-900 font-medium'
-          : 'hover:bg-gray-200 text-gray-900'
+          ? 'backdrop-blur-sm bg-white/50 text-gray-900 font-medium'
+          : 'hover:backdrop-blur-sm bg-white/50 text-gray-900'
       } ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
       {/* Drag handle */}
@@ -180,12 +162,7 @@ function SortableTopicItem({
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 text-left"
       >
-        <span
-          className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center"
-          style={{ backgroundColor: topic.color }}
-        >
-          <TopicIcon iconName={topic.icon} color="#ffffff" size="sm" />
-        </span>
+        <TopicIcon iconName={topic.icon} size="sm" />
         {decryptedName}
       </button>
 
@@ -222,6 +199,7 @@ export function TopicsBrowser() {
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [mobileEntriesExpanded, setMobileEntriesExpanded] = useState(false);
   const { decryptData, encryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   // CRUD state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -426,10 +404,10 @@ export function TopicsBrowser() {
   };
 
   return (
-    <div className="flex flex-row h-full bg-white">
+    <div className="flex flex-row h-full backdrop-blur-sm bg-white/30">
       {/* Topics sidebar - hidden on mobile when viewing entries */}
       <div
-        className={`border-r bg-gray-50 overflow-auto ${
+        className={`backdrop-blur-sm bg-white/30 overflow-auto ${
           mobileEntriesExpanded ? 'hidden md:block md:w-72' : 'flex-1 md:w-72 md:flex-none'
         }`}
       >
@@ -439,9 +417,9 @@ export function TopicsBrowser() {
             <h2 className="text-lg font-semibold text-gray-900">Topics</h2>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="p-1 rounded hover:bg-gray-200 transition-colors"
+              className="p-1 rounded hover:backdrop-blur-sm bg-white/50 transition-colors"
               title={showAddForm ? 'Cancel' : 'Add topic'}
-              style={{ color: '#1aaeae' }}
+              style={{ color: accentColor }}
             >
               {showAddForm ? (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -457,48 +435,28 @@ export function TopicsBrowser() {
 
           {/* Add new topic form */}
           {showAddForm && (
-            <div className="mb-4 p-3 bg-white border rounded-lg space-y-3">
+            <div className="mb-4 p-3 backdrop-blur-sm bg-white/30 border border-border rounded-lg space-y-3">
               <input
                 type="text"
                 value={newTopicName}
                 onChange={(e) => setNewTopicName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
                 placeholder="Topic name"
-                className="w-full px-3 py-2 text-sm border rounded bg-white text-gray-900 placeholder-gray-400"
+                className="w-full px-3 py-2 text-sm border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900 placeholder-gray-400"
                 autoFocus
               />
-              <div className="flex gap-1 flex-wrap">
-                {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => setNewTopicColor(color)}
-                    className={`w-6 h-6 rounded-full border-2 ${
-                      newTopicColor === color ? 'border-gray-800' : 'border-transparent'
-                    }`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={newTopicColor}
-                  onChange={(e) => setNewTopicColor(e.target.value)}
-                  className="w-6 h-6 rounded cursor-pointer border-0 p-0"
-                  title="Custom color"
-                />
-              </div>
-              <div className="border rounded p-2 bg-gray-50">
+              <div className="border rounded p-2 backdrop-blur-sm bg-white/30">
                 <p className="text-xs text-gray-500 mb-1">Icon (optional):</p>
                 <IconPicker
                   selectedIcon={newTopicIcon}
                   onSelectIcon={setNewTopicIcon}
-                  color={newTopicColor}
                 />
               </div>
               <button
                 onClick={handleAddTopic}
                 disabled={isAdding || !newTopicName.trim()}
                 className="w-full px-3 py-2 text-sm text-white rounded disabled:bg-gray-400"
-                style={{ backgroundColor: (isAdding || !newTopicName.trim()) ? undefined : '#1aaeae' }}
+                style={{ backgroundColor: (isAdding || !newTopicName.trim()) ? undefined : accentColor }}
               >
                 {isAdding ? 'Adding...' : 'Add Topic'}
               </button>
@@ -507,10 +465,10 @@ export function TopicsBrowser() {
 
           <button
             onClick={() => handleTopicSelect(null)}
-            className={`w-full text-left px-3 py-2 rounded-md text-sm mb-2 ${
+            className={`w-full text-left px-3 py-2 pl-5 ml-3 rounded-md text-sm mb-2 ${
               selectedTopicId === null
-                ? 'bg-gray-200 text-gray-900 font-medium'
-                : 'hover:bg-gray-200 text-gray-900'
+                ? 'backdrop-blur-sm bg-white/50 text-gray-900 font-medium'
+                : 'hover:backdrop-blur-sm bg-white/50 text-gray-900'
             }`}
           >
             All Entries
@@ -567,7 +525,7 @@ export function TopicsBrowser() {
 
       {/* Entries list - full screen on mobile when viewing, always visible on desktop */}
       <div
-        className={`overflow-auto bg-white flex-1 ${
+        className={`overflow-auto backdrop-blur-sm bg-white/30 flex-1 ${
           mobileEntriesExpanded ? 'block' : 'hidden md:block'
         }`}
       >
@@ -586,7 +544,7 @@ export function TopicsBrowser() {
             </button>
           )}
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-1xl font-semibold text-gray-900">
               {selectedTopicId
                 ? decryptedTopics.get(selectedTopicId) || 'Loading...'
                 : 'All Entries'}
@@ -607,27 +565,15 @@ export function TopicsBrowser() {
                 <Link
                   key={entry.id}
                   href={`/?entry=${entry.id}`}
-                  className="block p-4 bg-white border rounded-lg hover:border-teal-300 hover:shadow-sm transition-all"
+                  className="block p-3 mb-[5px] backdrop-blur-sm bg-white/30 border border-border rounded-md hover:border-teal-300 hover:shadow-sm transition-all"
                 >
                   {entry.topicId && selectedTopicId === null && (
                     <div className="flex items-center gap-2 mb-2">
                       {(() => {
                         const topic = topics.find(t => t.id === entry.topicId);
-                        const color = topic?.color || '#6366F1';
                         return (
-                          <span
-                            className="text-xs px-2 py-0.5 rounded flex items-center gap-1"
-                            style={{
-                              backgroundColor: `${color}20`,
-                              color: color,
-                            }}
-                          >
-                            <span
-                              className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
-                              style={{ backgroundColor: color }}
-                            >
-                              <TopicIcon iconName={topic?.icon || null} color="#ffffff" size="sm" />
-                            </span>
+                          <span className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 backdrop-blur-md bg-white/50 text-gray-700">
+                            <TopicIcon iconName={topic?.icon || null} size="sm" />
                             {decryptedTopics.get(entry.topicId) || 'Loading...'}
                           </span>
                         );
