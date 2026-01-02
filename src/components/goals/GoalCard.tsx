@@ -258,7 +258,7 @@ export function GoalCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 border border-border rounded-lg backdrop-blur-sm bg-white/30 hover:border-border hover:shadow-sm transition-all ${isDragging ? 'shadow-lg z-10' : ''}`}
+      className={`p-4 border border-border rounded-lg backdrop-blur-md bg-white/70 hover:border-border hover:shadow-sm transition-all ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-1">
@@ -277,7 +277,7 @@ export function GoalCard({
         </div>
         <div className="flex items-center gap-2 ml-2">
           {getTypeLabel() && (
-            <span className="text-xs px-2 py-0.5 rounded backdrop-blur-sm bg-white/50 text-gray-700">
+            <span className="text-xs px-2 py-0.5 rounded backdrop-blur-md bg-white/60 text-gray-700">
               {getTypeLabel()}
             </span>
           )}
@@ -385,7 +385,7 @@ export function GoalCard({
                       e.stopPropagation();
                       onUnlinkMilestone(goalId, milestone.id);
                     }}
-                    className="text-gray-400 hover:text-red-500 text-xs px-1"
+                    className="text-gray-400 hover:text-red-500 text-2xl px-2 py-1 leading-none"
                     title="Unlink milestone"
                   >
                     ×

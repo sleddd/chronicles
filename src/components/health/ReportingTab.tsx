@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { FrequencyChart } from './charts/FrequencyChart';
 import { CorrelationChart } from './charts/CorrelationChart';
 import { SeverityTrendChart } from './charts/SeverityTrendChart';
@@ -50,6 +51,7 @@ export function ReportingTab({ refreshKey }: Props) {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   // Decrypted data
   const [symptoms, setSymptoms] = useState<DecryptedSymptom[]>([]);
@@ -299,7 +301,7 @@ export function ReportingTab({ refreshKey }: Props) {
   return (
     <div className="p-4 pb-12 space-y-6">
       {/* Filters */}
-      <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+      <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
         <h3 className="font-medium text-gray-900 mb-4">Filters</h3>
 
         <div className="flex flex-wrap gap-4 items-end">
@@ -313,9 +315,9 @@ export function ReportingTab({ refreshKey }: Props) {
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                     period === p
                       ? 'text-white'
-                      : 'backdrop-blur-sm bg-white/40 text-gray-700 hover:backdrop-blur-sm bg-white/50'
+                      : 'backdrop-blur-md bg-white/60 text-gray-700 hover:bg-white/70'
                   }`}
-                  style={period === p ? { backgroundColor: '#1aaeae' } : undefined}
+                  style={period === p ? { backgroundColor: accentColor } : undefined}
                 >
                   {p === 'week' ? 'Week' : p === 'month' ? 'Month' : p === 'year' ? 'Year' : 'Custom'}
                 </button>
@@ -350,9 +352,9 @@ export function ReportingTab({ refreshKey }: Props) {
             onClick={handleGenerateReport}
             disabled={loading}
             className="px-4 py-1.5 text-white text-sm rounded-md disabled:bg-gray-400 transition-colors"
-            style={{ backgroundColor: loading ? undefined : '#1aaeae' }}
-            onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-            onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+            style={{ backgroundColor: loading ? undefined : accentColor }}
+            onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = hoverColor; }}
+            onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = accentColor; }}
           >
             {loading ? 'Loading...' : 'Generate Report'}
           </button>
@@ -367,20 +369,20 @@ export function ReportingTab({ refreshKey }: Props) {
         <>
           {/* Summary Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
-              <div className="text-3xl font-bold text-teal-600">{symptoms.length}</div>
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
+              <div className="text-3xl font-bold" style={{ color: accentColor }}>{symptoms.length}</div>
               <div className="text-sm text-gray-600">Symptoms Logged</div>
             </div>
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
-              <div className="text-3xl font-bold text-red-600">{food.length}</div>
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
+              <div className="text-3xl font-bold" style={{ color: accentColor }}>{food.length}</div>
               <div className="text-sm text-gray-600">Food Entries</div>
             </div>
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
-              <div className="text-3xl font-bold text-blue-600">{medicationLogs.length}</div>
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
+              <div className="text-3xl font-bold" style={{ color: accentColor }}>{medicationLogs.length}</div>
               <div className="text-sm text-gray-600">Medication Logs</div>
             </div>
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4 text-center">
-              <div className="text-3xl font-bold text-green-600">{exercises.length}</div>
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
+              <div className="text-3xl font-bold" style={{ color: accentColor }}>{exercises.length}</div>
               <div className="text-sm text-gray-600">Workouts</div>
               {exercises.length > 0 && (
                 <div className="text-xs text-gray-500 mt-1">
@@ -400,7 +402,6 @@ export function ReportingTab({ refreshKey }: Props) {
           <FrequencyChart
             data={symptomFrequency}
             title="Symptom Frequency"
-            color="bg-orange-500"
           />
 
           {/* Severity Trend */}
@@ -411,7 +412,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Top Symptoms */}
           {symptoms.length > 0 && (
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Most Common Symptoms</h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -435,7 +436,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Top Ingredients */}
           {food.length > 0 && (
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Most Consumed Ingredients</h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -461,7 +462,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Exercise Summary */}
           {exercises.length > 0 && (
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Exercise Summary</h3>
               <div className="space-y-2">
                 {Object.entries(
@@ -491,16 +492,17 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Exercise Frequency */}
           {exerciseFrequency.length > 0 && (
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Exercise Frequency</h3>
               <div className="space-y-2">
                 {exerciseFrequency.slice(-7).map((data) => (
                   <div key={data.period} className="flex items-center gap-3">
                     <span className="text-sm text-gray-600 w-24">{data.period}</span>
-                    <div className="flex-1 backdrop-blur-sm bg-white/40 rounded-full h-4 overflow-hidden">
+                    <div className="flex-1 backdrop-blur-md bg-white/60 rounded-full h-4 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-green-500"
+                        className="h-full rounded-full"
                         style={{
+                          backgroundColor: accentColor,
                           width: `${Math.min((data.count / Math.max(...exerciseFrequency.map(d => d.count))) * 100, 100)}%`
                         }}
                       />
@@ -516,14 +518,14 @@ export function ReportingTab({ refreshKey }: Props) {
 
           {/* Exercise Impact on Symptoms */}
           {exerciseImpact.length > 0 && (
-            <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
               <h3 className="font-medium text-gray-900 mb-4">Exercise Impact on Symptoms</h3>
               <p className="text-sm text-gray-600 mb-4">
                 Shows how symptom severity changes after different exercise types (within 24 hours)
               </p>
               <div className="space-y-3">
                 {exerciseImpact.map((impact) => (
-                  <div key={impact.exerciseType} className="flex items-center justify-between p-3 backdrop-blur-sm bg-white/30 rounded-lg">
+                  <div key={impact.exerciseType} className="flex items-center justify-between p-3 backdrop-blur-md bg-white/50 rounded-lg">
                     <div>
                       <span className="font-medium text-gray-900 capitalize">{impact.exerciseType}</span>
                       <div className="text-xs text-gray-500">{impact.occurrences} data points</div>

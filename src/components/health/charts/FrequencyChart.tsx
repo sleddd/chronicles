@@ -1,14 +1,15 @@
 'use client';
 
 import { FrequencyData } from '@/lib/utils/correlationAnalysis';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
 interface Props {
   data: FrequencyData[];
   title: string;
-  color?: string;
 }
 
-export function FrequencyChart({ data, title, color = 'bg-teal-500' }: Props) {
+export function FrequencyChart({ data, title }: Props) {
+  const { accentColor } = useAccentColor();
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">
@@ -38,7 +39,7 @@ export function FrequencyChart({ data, title, color = 'bg-teal-500' }: Props) {
   };
 
   return (
-    <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+    <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
       <h3 className="font-medium text-gray-900 mb-4">{title}</h3>
       <div className="flex items-end gap-1 justify-between" style={{ height: maxHeight + 30 }}>
         {data.slice(-12).map((item, index) => {
@@ -48,8 +49,8 @@ export function FrequencyChart({ data, title, color = 'bg-teal-500' }: Props) {
             <div key={index} className="flex-1 flex flex-col items-center">
               <div className="relative group">
                 <div
-                  className={`${color} rounded-t transition-all hover:opacity-80`}
-                  style={{ height: Math.max(height, 4), width: '100%', minWidth: 20 }}
+                  className="rounded-t transition-all hover:opacity-80"
+                  style={{ backgroundColor: accentColor, height: Math.max(height, 4), width: '100%', minWidth: 20 }}
                 />
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                   {item.count}

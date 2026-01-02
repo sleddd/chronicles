@@ -71,15 +71,15 @@ export function HealthView({ selectedDate }: Props) {
   };
 
   return (
-    <div className="h-full flex flex-col backdrop-blur-sm bg-white/30">
+    <div className="h-full flex flex-col backdrop-blur-md bg-white/70">
       {/* Tab Navigation */}
-      <div className="backdrop-blur-sm bg-white/30 border-b border-border px-4">
-        <div className="flex gap-1">
+      <div className="backdrop-blur-md bg-white/50 border-b border-border px-4 overflow-x-auto">
+        <div className="flex gap-1 min-w-max md:min-w-0 md:flex-wrap">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${
+              className={`px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'border-b-2 -mb-px'
                   : 'text-gray-500 hover:text-gray-700'

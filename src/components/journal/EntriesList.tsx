@@ -628,7 +628,7 @@ export function EntriesList({
   };
 
   return (
-    <div className="p-4 backdrop-blur-sm bg-white/30 h-full overflow-auto">
+    <div className="p-4 h-full overflow-auto">
       {/* View Mode Tabs */}
       <div className="mb-4 flex gap-1 backdrop-blur-sm bg-white/30 p-1 rounded-lg border border-border">
         <button
@@ -644,7 +644,7 @@ export function EntriesList({
           }}
           className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
             viewMode === 'date'
-              ? 'backdrop-blur-sm bg-white/30 text-gray-900 border border-border'
+              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
               : 'text-gray-600 hover:text-gray-900'
           }`}
         >
@@ -654,7 +654,7 @@ export function EntriesList({
           onClick={() => setViewMode('all')}
           className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
             viewMode === 'all'
-              ? 'backdrop-blur-sm bg-white/30 text-gray-900 border border-border'
+              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
               : 'text-gray-600 hover:text-gray-900'
           }`}
         >
@@ -664,7 +664,7 @@ export function EntriesList({
           onClick={() => setViewMode('favorites')}
           className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors flex items-center justify-center gap-1 ${
             viewMode === 'favorites'
-              ? 'backdrop-blur-sm bg-white/30 text-gray-900 border border-border'
+              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
               : 'text-gray-600 hover:text-gray-900'
           }`}
         >
@@ -677,7 +677,7 @@ export function EntriesList({
           onClick={() => setViewMode('search')}
           className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
             viewMode === 'search'
-              ? 'backdrop-blur-sm bg-white/30 text-gray-900 border border-border'
+              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
               : 'text-gray-600 hover:text-gray-900'
           }`}
         >
@@ -687,7 +687,7 @@ export function EntriesList({
 
       {/* Date Filter Panel - only shows calendar when expanded */}
       {viewMode === 'date' && isDatePickerExpanded && (
-        <div className="mb-4 backdrop-blur-sm bg-white/30 border border-border rounded-md overflow-hidden">
+        <div className="mb-4 backdrop-blur-sm bg-white/10 border border-border rounded-md overflow-hidden">
           <MiniCalendar
             selectedDate={selectedDate}
             onDateSelect={handleDateSelect}
@@ -704,10 +704,10 @@ export function EntriesList({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search entries..."
-            className="w-full px-3 py-2 border border-border rounded-md backdrop-blur-sm bg-white/30 text-gray-900 placeholder-gray-400"
+            className="w-full px-3 py-2 border border-border rounded-md backdrop-blur-sm bg-white/10 text-gray-900 placeholder-gray-400"
           />
           {searchTopicId ? (
-            <div className="flex items-center gap-2 px-3 py-2 backdrop-blur-sm bg-white/30 border border-border rounded-md">
+            <div className="flex items-center gap-2 px-3 py-2 backdrop-blur-sm bg-white/10 border border-border rounded-md">
               <TopicIcon iconName={getTopic(searchTopicId)?.icon || null} size="sm" />
               <span className="text-sm text-gray-700">
                 <strong>{getTopicName(searchTopicId)}</strong>
@@ -723,7 +723,7 @@ export function EntriesList({
             <select
               value=""
               onChange={(e) => setSearchTopicId(e.target.value || null)}
-              className="w-full px-3 py-2 border border-border rounded-md backdrop-blur-sm bg-white/30 text-gray-900"
+              className="w-full px-3 py-2 border border-border rounded-md backdrop-blur-sm bg-white/10 text-gray-900"
             >
               <option value="">Filter by topic...</option>
               {topics.map((topic) => (
@@ -742,7 +742,7 @@ export function EntriesList({
         const topicName = getTopicName(filterTopicId);
         if (!topic) return null;
         return (
-          <div className="mb-4 flex items-center gap-2 px-3 py-2 backdrop-blur-sm bg-white/30 border border-border rounded-md">
+          <div className="mb-4 flex items-center gap-2 px-3 py-2 backdrop-blur-sm bg-white/10 border border-border rounded-md">
             <TopicIcon iconName={topic.icon} size="sm" />
             <span className="text-sm text-gray-700">
               Filtering by: <strong>{topicName}</strong>
@@ -758,13 +758,13 @@ export function EntriesList({
       })()}
 
       {/* Quick Entry Form */}
-      <form onSubmit={handleQuickEntry} className="relative z-20 mb-4 backdrop-blur-sm bg-white/30 border-t border-border py-3">
+      <form onSubmit={handleQuickEntry} className="relative z-20 mb-4 backdrop-blur-sm bg-white/10 border-t border-border py-3 px-4">
         <div className="flex gap-2 mb-2">
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowTopicDropdown(!showTopicDropdown)}
-              className="px-2 py-1 text-sm rounded-md backdrop-blur-sm bg-white/30 text-gray-700 flex items-center gap-1 hover:backdrop-blur-sm bg-white/30"
+              className="px-2 py-1 text-sm rounded-md backdrop-blur-sm bg-white/10 text-gray-700 flex items-center gap-1 hover:backdrop-blur-sm bg-white/10"
             >
               {quickEntryTopicId ? (
                 <>
@@ -843,7 +843,7 @@ export function EntriesList({
             value={quickEntry}
             onChange={(e) => setQuickEntry(e.target.value)}
             placeholder="Quick entry..."
-            className="flex-1 px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900 placeholder-gray-500"
+            className="flex-1 px-4 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/10 text-gray-900 placeholder-gray-500"
           />
           {(quickEntry.trim() || quickEntryTopicId) && (
             <button
@@ -887,7 +887,7 @@ export function EntriesList({
               <select
                 value={qfGoalType}
                 onChange={(e) => setQfGoalType(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               >
                 <option value="personal">Personal</option>
                 <option value="professional">Professional</option>
@@ -898,7 +898,7 @@ export function EntriesList({
               <select
                 value={qfGoalStatus}
                 onChange={(e) => setQfGoalStatus(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               >
                 <option value="not_started">Not Started</option>
                 <option value="in_progress">In Progress</option>
@@ -911,7 +911,7 @@ export function EntriesList({
                   type="date"
                   value={qfGoalTargetDate}
                   onChange={(e) => setQfGoalTargetDate(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
               </div>
             </div>
@@ -928,13 +928,13 @@ export function EntriesList({
                   value={qfMeetingStartDate}
                   onChange={(e) => setQfMeetingStartDate(e.target.value)}
                   placeholder={selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
                 <input
                   type="time"
                   value={qfMeetingStartTime}
                   onChange={(e) => setQfMeetingStartTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
               </div>
               <div className="flex items-center gap-1">
@@ -944,13 +944,13 @@ export function EntriesList({
                   value={qfMeetingEndDate}
                   onChange={(e) => setQfMeetingEndDate(e.target.value)}
                   placeholder={qfMeetingStartDate || selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
                 <input
                   type="time"
                   value={qfMeetingEndTime}
                   onChange={(e) => setQfMeetingEndTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
               </div>
             </div>
@@ -960,14 +960,14 @@ export function EntriesList({
                 value={qfMeetingLocation}
                 onChange={(e) => setQfMeetingLocation(e.target.value)}
                 placeholder="Location"
-                className="flex-1 min-w-[100px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="flex-1 min-w-[100px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               />
               <input
                 type="text"
                 value={qfMeetingTopic}
                 onChange={(e) => setQfMeetingTopic(e.target.value)}
                 placeholder="Meeting topic"
-                className="flex-1 min-w-[120px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="flex-1 min-w-[120px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               />
             </div>
           </div>
@@ -983,13 +983,13 @@ export function EntriesList({
                   value={qfEventStartDate}
                   onChange={(e) => setQfEventStartDate(e.target.value)}
                   placeholder={selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
                 <input
                   type="time"
                   value={qfEventStartTime}
                   onChange={(e) => setQfEventStartTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
               </div>
               <div className="flex items-center gap-1">
@@ -999,13 +999,13 @@ export function EntriesList({
                   value={qfEventEndDate}
                   onChange={(e) => setQfEventEndDate(e.target.value)}
                   placeholder={qfEventStartDate || selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
                 <input
                   type="time"
                   value={qfEventEndTime}
                   onChange={(e) => setQfEventEndTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 />
               </div>
             </div>
@@ -1015,7 +1015,7 @@ export function EntriesList({
                 value={qfEventLocation}
                 onChange={(e) => setQfEventLocation(e.target.value)}
                 placeholder="Location"
-                className="flex-1 min-w-[100px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="flex-1 min-w-[100px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               />
             </div>
           </div>
@@ -1029,12 +1029,12 @@ export function EntriesList({
                 value={qfMedDosage}
                 onChange={(e) => setQfMedDosage(e.target.value)}
                 placeholder="Dosage (e.g., 10mg)"
-                className="w-32 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="w-32 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               />
               <select
                 value={qfMedFrequency}
                 onChange={(e) => setQfMedFrequency(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               >
                 <option value="once_daily">Once Daily</option>
                 <option value="twice_daily">Twice Daily</option>
@@ -1065,7 +1065,7 @@ export function EntriesList({
                       newTimes[idx] = e.target.value;
                       setQfMedScheduleTimes(newTimes);
                     }}
-                    className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                    className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                   />
                   {qfMedScheduleTimes.length > 1 && (
                     <button
@@ -1095,7 +1095,7 @@ export function EntriesList({
               <select
                 value={qfExerciseType}
                 onChange={(e) => setQfExerciseType(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               >
                 <option value="">Type...</option>
                 <option value="walking">Walking</option>
@@ -1114,7 +1114,7 @@ export function EntriesList({
                   value={qfExerciseDuration}
                   onChange={(e) => setQfExerciseDuration(e.target.value)}
                   placeholder="Duration"
-                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                   min="0"
                 />
                 <span className="text-gray-500">min</span>
@@ -1122,7 +1122,7 @@ export function EntriesList({
               <select
                 value={qfExerciseIntensity}
                 onChange={(e) => setQfExerciseIntensity(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               >
                 <option value="low">Low intensity</option>
                 <option value="medium">Medium intensity</option>
@@ -1136,14 +1136,14 @@ export function EntriesList({
                   value={qfExerciseDistance}
                   onChange={(e) => setQfExerciseDistance(e.target.value)}
                   placeholder="Distance"
-                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                   min="0"
                   step="0.1"
                 />
                 <select
                   value={qfExerciseDistanceUnit}
                   onChange={(e) => setQfExerciseDistanceUnit(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 >
                   <option value="miles">mi</option>
                   <option value="km">km</option>
@@ -1156,7 +1156,7 @@ export function EntriesList({
                   value={qfExerciseCalories}
                   onChange={(e) => setQfExerciseCalories(e.target.value)}
                   placeholder="Calories"
-                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                   min="0"
                 />
                 <span className="text-gray-500">cal</span>
@@ -1171,7 +1171,7 @@ export function EntriesList({
               <select
                 value={qfMealType}
                 onChange={(e) => setQfMealType(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               >
                 <option value="">Meal type...</option>
                 <option value="breakfast">Breakfast</option>
@@ -1184,7 +1184,7 @@ export function EntriesList({
                 value={qfFoodIngredients}
                 onChange={(e) => setQfFoodIngredients(e.target.value)}
                 placeholder="Ingredients (comma separated)"
-                className="flex-1 min-w-[150px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="flex-1 min-w-[150px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
               />
             </div>
           </div>
@@ -1210,7 +1210,7 @@ export function EntriesList({
                 value={qfSymptomDuration}
                 onChange={(e) => setQfSymptomDuration(e.target.value)}
                 placeholder="Duration"
-                className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+                className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
                 min="0"
               />
               <span className="text-gray-500">min</span>
@@ -1253,7 +1253,7 @@ export function EntriesList({
             )}
             {sortedDates.map((date) => (
               <div key={date} className="mb-4">
-                <div className="text-xs font-medium text-gray-500 mb-2 sticky top-0 backdrop-blur-sm bg-white/30 py-1">
+                <div className="text-xs font-medium text-gray-500 mb-2 sticky top-0 backdrop-blur-sm bg-white/10 py-1">
                   {formatDate(date)}
                 </div>
                 <div className="space-y-2">
@@ -1310,14 +1310,14 @@ function EntryCard({
   return (
     <div
       onClick={onSelect}
-      className="p-3 mb-[5px] border border-border rounded-md cursor-pointer backdrop-blur-sm bg-white/30"
+      className="p-3 mb-[5px] border border-border rounded-md cursor-pointer backdrop-blur-sm bg-white/10"
     >
       <div className="flex items-center gap-2 mb-1">
         {topic && (
           <button
             type="button"
             onClick={onTopicClick}
-            className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 hover:ring-2 hover:ring-gray-300 transition-all backdrop-blur-md bg-white/50"
+            className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 hover:ring-2 hover:ring-gray-300 transition-all"
             title={`Filter by ${topicName}`}
           >
             <TopicIcon iconName={topic.icon} size="sm" />

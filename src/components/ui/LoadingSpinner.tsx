@@ -1,5 +1,7 @@
 'use client';
 
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
+
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
@@ -95,5 +97,26 @@ export function CalendarSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+interface AdaptiveLoadingTextProps {
+  message?: string;
+  className?: string;
+}
+
+export function AdaptiveLoadingText({ message = 'Loading...', className = '' }: AdaptiveLoadingTextProps) {
+  const { backgroundImage, backgroundIsLight } = useAccentColor();
+
+  // When there's a background image, adapt text color based on brightness
+  // Light background = dark text, dark background = light text
+  // No background image = default gray text
+  const hasBackgroundImage = !!backgroundImage;
+  const textColor = hasBackgroundImage
+    ? (backgroundIsLight ? 'text-gray-700' : 'text-white/70')
+    : 'text-gray-500';
+
+  return (
+    <div className={`${textColor} ${className}`}>{message}</div>
   );
 }

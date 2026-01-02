@@ -7,6 +7,7 @@ import { EventModal } from '@/components/calendar/EventModal';
 import { Header } from '@/components/layout/Header';
 import { PasswordReentryModal } from '@/components/auth/PasswordReentryModal';
 import { useTimezone } from '@/lib/hooks/useTimezone';
+import { AdaptiveLoadingText } from '@/components/ui/LoadingSpinner';
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -41,17 +42,17 @@ export default function CalendarPage() {
 
   if (timezoneLoading) {
     return (
-      <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
+      <div className="h-screen flex flex-col">
         <Header />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-gray-500">Loading...</div>
+          <AdaptiveLoadingText />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
+    <div className="h-screen flex flex-col">
       <Header />
       <PasswordReentryModal />
       <div className="flex-1 overflow-hidden">

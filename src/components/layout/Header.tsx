@@ -4,9 +4,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
-const DEFAULT_HEADER_COLOR = '#003d73';
+const DEFAULT_HEADER_COLOR = '#0F4C5C';
 const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
+const BACKGROUND_IS_LIGHT_STORAGE_KEY = 'chronicles-background-is-light';
 
 // Get initial color from localStorage (runs synchronously before render)
 function getInitialHeaderColor(): string {
@@ -17,13 +19,29 @@ function getInitialHeaderColor(): string {
   return DEFAULT_HEADER_COLOR;
 }
 
+// Get initial background brightness from localStorage
+function getInitialBackgroundIsLight(): boolean {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
+    if (cached) return cached === 'true';
+  }
+  return false;
+}
+
 export function Header() {
   const router = useRouter();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showHealthSubmenu, setShowHealthSubmenu] = useState(false);
   const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
+  const [backgroundIsLight, setBackgroundIsLight] = useState(getInitialBackgroundIsLight);
   const healthRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const { backgroundIsLight: contextBackgroundIsLight, isTransparent } = useAccentColor();
+
+  // Sync with context when it updates
+  useEffect(() => {
+    setBackgroundIsLight(contextBackgroundIsLight);
+  }, [contextBackgroundIsLight]);
 
   // Load header color from settings and sync with localStorage
   const loadHeaderColor = useCallback(async () => {
@@ -56,6 +74,16 @@ export function Header() {
     return () => window.removeEventListener('headerColorChange', handleColorChange as EventListener);
   }, []);
 
+  // Listen for background brightness changes
+  useEffect(() => {
+    const handleBrightnessChange = (event: CustomEvent<boolean>) => {
+      setBackgroundIsLight(event.detail);
+    };
+
+    window.addEventListener('backgroundBrightnessChange', handleBrightnessChange as EventListener);
+    return () => window.removeEventListener('backgroundBrightnessChange', handleBrightnessChange as EventListener);
+  }, []);
+
   // Close health submenu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -70,11 +98,12 @@ export function Header() {
   const isActive = (path: string) => pathname === path;
   const isHealthActive = pathname?.startsWith('/health');
 
-  // Use white text on all header colors - lighter for inactive, bold white for active
-  const textColor = 'text-white/70 font-medium';
-  const textColorHover = 'hover:text-white';
-  const textColorActive = 'text-white font-black';
-  const logoFilter = 'brightness-0 invert';
+  // Use dark text on light backgrounds when header is transparent, white text otherwise
+  const useDarkText = isTransparent && backgroundIsLight;
+  const textColor = useDarkText ? 'text-gray-700 font-medium' : 'text-white/70 font-medium';
+  const textColorHover = useDarkText ? 'hover:text-gray-900' : 'hover:text-white';
+  const textColorActive = useDarkText ? 'text-gray-900 font-black' : 'text-white font-black';
+  const logoFilter = useDarkText ? '' : 'brightness-0 invert';
 
   const healthTabs = [
     { key: 'medications', label: 'Meds. List' },

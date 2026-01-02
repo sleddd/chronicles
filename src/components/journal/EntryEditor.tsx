@@ -313,7 +313,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: 'tiptap min-h-[80px] py-4 text-gray-900 focus:outline-none',
+        class: 'tiptap min-h-[80px] py-4 px-2 text-gray-900 focus:outline-none',
       },
     },
     onUpdate: ({ editor }) => {
@@ -1082,7 +1082,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   }
 
   return (
-    <div className="p-4 h-full flex flex-col backdrop-blur-sm bg-white/30">
+    <div className="p-4 h-full flex flex-col">
       {/* Top toolbar with topic selector and bookmark/share buttons */}
       <div className="mb-4 flex justify-between items-center">
         <div className="flex-1">

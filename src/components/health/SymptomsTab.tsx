@@ -142,7 +142,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
       </p>
 
       {symptoms.length === 0 ? (
-        <div className="text-center py-12 backdrop-blur-sm bg-white/30 rounded-lg border border-border">
+        <div className="text-center py-12 backdrop-blur-md bg-white/70 rounded-lg border border-border">
           <p className="text-gray-500">No symptoms logged</p>
           <p className="text-sm text-gray-400 mt-1">
             Create an entry with the &quot;symptom&quot; topic to track symptoms
@@ -155,7 +155,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
             const severity = data?.fields.severity || 5;
 
             return (
-              <div key={symptom.id} className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+              <div key={symptom.id} className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
                     {/* Severity bar */}
                     <div className="mt-2 flex items-center gap-2">
                       <span className="text-sm text-gray-600">Severity:</span>
-                      <div className="flex-1 max-w-32 h-2 backdrop-blur-sm bg-white/50 rounded-full overflow-hidden">
+                      <div className="flex-1 max-w-32 h-2 backdrop-blur-md bg-white/70 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${getSeverityColor(severity)}`}
                           style={{ width: `${severity * 10}%` }}

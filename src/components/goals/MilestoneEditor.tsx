@@ -112,14 +112,14 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
 
   if (loading) {
     return (
-      <div className="p-4 backdrop-blur-sm bg-white/30 border border-border rounded-lg">
+      <div className="p-4 backdrop-blur-md bg-white/70 border border-border rounded-lg">
         <p className="text-gray-500">Loading goals...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 backdrop-blur-sm bg-white/30 border border-border rounded-lg shadow-sm">
+    <div className="p-4 backdrop-blur-md bg-white/70 border border-border rounded-lg shadow-sm">
       <h3 className="text-sm font-medium text-gray-700 mb-3">Linked to Goals:</h3>
 
       {goals.length === 0 ? (
@@ -129,13 +129,13 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
           {goals.map((goal) => (
             <label
               key={goal.id}
-              className="flex items-center gap-3 px-3 py-2 hover:backdrop-blur-sm bg-white/30 cursor-pointer border-b border-border last:border-b-0"
+              className="flex items-center gap-3 px-3 py-2 hover:bg-white/50 cursor-pointer border-b border-border last:border-b-0"
             >
               <input
                 type="checkbox"
                 checked={selectedGoalIds.has(goal.id)}
                 onChange={() => toggleGoal(goal.id)}
-                className="w-4 h-4 text-teal-600 rounded border-border focus:ring-teal-500"
+                className="w-4 h-4 text-teal-600 rounded border-gray-500 focus:ring-teal-500"
               />
               <span className="text-sm text-gray-700">
                 {decryptedGoals.get(goal.id) || 'Loading...'}
@@ -243,13 +243,13 @@ export function MilestoneGoalSelector({
       {goals.map((goal) => (
         <label
           key={goal.id}
-          className="flex items-center gap-3 py-2 hover:backdrop-blur-sm bg-white/30 cursor-pointer"
+          className="flex items-center gap-3 py-2 hover:bg-white/50 cursor-pointer"
         >
           <input
             type="checkbox"
             checked={selectedGoalIds.includes(goal.id)}
             onChange={() => toggleGoal(goal.id)}
-            className="w-4 h-4 text-teal-600 rounded border-border focus:ring-teal-500"
+            className="w-4 h-4 text-teal-600 rounded border-gray-500 focus:ring-teal-500"
           />
           <span className="text-sm text-gray-700">
             {decryptedGoals.get(goal.id) || 'Loading...'}

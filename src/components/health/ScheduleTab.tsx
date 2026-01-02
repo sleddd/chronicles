@@ -252,7 +252,7 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
   }
 
   return (
-    <div className="px-8 py-4 pb-12 backdrop-blur-sm bg-white/30">
+    <div className="px-8 py-4 pb-12 backdrop-blur-md bg-white/70">
 
       {/* Date Navigation */}
       <div className="flex items-center justify-between mb-4 p-3">
@@ -332,15 +332,15 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
       </p>
 
       {scheduledDoses.length === 0 ? (
-        <div className="text-center py-12 backdrop-blur-sm bg-white/30 rounded-lg border border-border">
+        <div className="text-center py-12 backdrop-blur-md bg-white/70 rounded-lg border border-border">
           <p className="text-gray-500">No medications scheduled</p>
           <p className="text-sm text-gray-400 mt-1">Add medications to see your daily schedule</p>
         </div>
       ) : (
         <div className="space-y-6">
           {Object.entries(dosesByTime).map(([time, doses]) => (
-            <div key={time} className="backdrop-blur-sm bg-white/30 rounded-lg border border-border overflow-hidden">
-              <div className="backdrop-blur-sm bg-white/30 px-4 py-2 border-b border-border">
+            <div key={time} className="backdrop-blur-md bg-white/70 rounded-lg border border-border overflow-hidden">
+              <div className="backdrop-blur-md bg-white/50 px-4 py-2 border-b border-border">
                 <span className="font-medium text-gray-700">{formatTime(time)}</span>
               </div>
               <div className="divide-y divide-border">
@@ -361,7 +361,7 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
                         type="button"
                         disabled={isSaving}
                         onClick={() => handleCheckDose(dose, !isTaken)}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${isSaving ? 'opacity-50' : ''} ${!isTaken ? 'backdrop-blur-sm bg-white/30 border-border' : ''}`}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${isSaving ? 'opacity-50' : ''} ${!isTaken ? 'backdrop-blur-md bg-white/70 border-border' : ''}`}
                         style={isTaken ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
                         aria-label={isTaken ? 'Mark as not taken' : 'Mark as taken'}
                       >

@@ -324,10 +324,10 @@ export function CalendarView({
     ];
 
     return (
-      <div className="grid grid-cols-7 gap-px">
+      <div className="grid grid-cols-1 md:grid-cols-7 w-full">
+        {/* Day labels - hidden on mobile since each row shows its own day */}
         {dayLabels.map((day, index) => (
-          <div key={index} className="py-1 md:py-2 text-center text-xs md:text-sm font-medium text-gray-500">
-            <span className="md:hidden">{day.short}</span>
+          <div key={index} className="hidden md:block py-1 md:py-2 text-center text-xs md:text-sm font-medium text-gray-500">
             <span className="hidden md:inline">{day.full}</span>
           </div>
         ))}
@@ -342,16 +342,20 @@ export function CalendarView({
           return (
             <div
               key={day.toString()}
-              className={`min-h-[52px] md:min-h-[100px] p-0.5 md:p-1 cursor-pointer`}
-              style={isSelected ? { outline: '2px solid e5e6ea', outlineOffset: '-2px' } : undefined}
+              className={`min-h-[44px] md:min-h-[100px] p-2 md:p-1 cursor-pointer flex md:flex-col items-center md:items-stretch gap-2 md:gap-0 border-b border-border/50 md:border-0`}
+              style={isSelected ? { outline: '2px solid #e5e6ea', outlineOffset: '-2px' } : undefined}
               onClick={() => handleDateClick(dateStr)}
               onDoubleClick={() => onCreateEvent?.(dateStr)}
             >
-              <div className="flex flex-col md:flex-row items-center md:items-center gap-0.5 md:gap-1 mb-0.5 md:mb-1">
+              {/* Mobile: Day name and date */}
+              <div className="flex md:hidden items-center gap-2 w-20 flex-shrink-0">
+                <span className={`text-xs font-medium ${isCurrentMonth ? 'text-gray-500' : 'text-gray-300'}`}>
+                  {format(day, 'EEE')}
+                </span>
                 <div
-                  className={`text-xs md:text-sm font-medium ${
+                  className={`text-sm font-medium ${
                     isToday
-                      ? 'text-white w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center'
+                      ? 'text-white w-6 h-6 rounded-full flex items-center justify-center'
                       : isCurrentMonth
                       ? 'text-gray-900'
                       : 'text-gray-400'
@@ -360,17 +364,60 @@ export function CalendarView({
                 >
                   {format(day, 'd')}
                 </div>
-          
               </div>
-              {/* Event list - hidden on mobile, show on larger screens */}
-              <div className="hidden md:block space-y-0.5 overflow-hidden max-h-[70px]">
+
+              {/* Desktop: Just the date number */}
+              <div className="hidden md:flex flex-row items-center gap-1 mb-1">
+                <div
+                  className={`text-sm font-medium ${
+                    isToday
+                      ? 'text-white w-6 h-6 rounded-full flex items-center justify-center'
+                      : isCurrentMonth
+                      ? 'text-gray-900'
+                      : 'text-gray-400'
+                  }`}
+                  style={isToday ? { backgroundColor: '#727378' } : undefined}
+                >
+                  {format(day, 'd')}
+                </div>
+              </div>
+
+              {/* Mobile: Event list inline */}
+              <div className="flex md:hidden flex-1 gap-1 overflow-x-auto">
                 {items.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    className="text-xs px-2 py-1 rounded truncate max-w-[120px] flex-shrink-0"
+                    style={{ backgroundColor: '#e6e7eb', color: '#555555' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (item.type === 'entry') {
+                        onEntrySelect?.(item.id);
+                      } else {
+                        onEventSelect?.(item.id);
+                      }
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                ))}
+                {items.length > 3 && (
+                  <span className="text-xs text-gray-500 flex-shrink-0 self-center">+{items.length - 3}</span>
+                )}
+              </div>
+
+              {/* Desktop: Event list vertical */}
+              <div
+                className="hidden md:block space-y-0.5 overflow-y-scroll max-h-[70px] calendar-scroll"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {items.map((item) => (
                   <div
                     key={item.id}
                     className={`text-xs px-1 py-1 mb-1 rounded truncate cursor-pointer ${
                       selectedEventId === item.id ? 'ring-2 ring-teal-500' : ''
                     }`}
-                    style={{ backgroundColor: `#e6e7eb`,color: '#555555'}}
+                    style={{ backgroundColor: '#e6e7eb', color: '#555555' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (item.type === 'entry') {
@@ -386,16 +433,7 @@ export function CalendarView({
                     {item.title}
                   </div>
                 ))}
-                {items.length > 3 && (
-                  <div className="text-xs text-gray-500 px-1">+{items.length - 3} more</div>
-                )}
               </div>
-              {/* Mobile: show count if there are items */}
-              {items.length > 0 && (
-                <div className="md:hidden text-center">
-                  <span className="text-[10px] text-gray-500">{items.length}</span>
-                </div>
-              )}
             </div>
           );
         })}
@@ -412,42 +450,34 @@ export function CalendarView({
   }
 
   return (
-    <div className="flex flex-col h-full w-[90%] mx-auto">
+    <div className="flex flex-col h-full w-full backdrop-blur-md bg-white/30 p-4 items-center">
       {/* Header */}
-      <div className="flex items-center justify-between mt-5 pt-5 mb-5 pb-5">
+      <div className="flex items-center justify-center mt-5 pt-5 mb-5 pb-5 px-4">
         <div className="flex items-center gap-2 md:gap-4">
-          <h2 className="text-base md:text-xl font-semibold text-gray-900">
+          <button
+            onClick={() => navigateMonth('prev')}
+            className="p-1 hover:bg-white/20 rounded text-gray-600"
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h2 className="text-base md:text-xl font-semibold text-gray-900 min-w-[120px] text-center">
             {format(currentMonth, 'MMM yyyy')}
           </h2>
-          <div className="flex gap-0.5 md:gap-1">
-            <button
-              onClick={() => navigateMonth('prev')}
-              className="p-1 hover:backdrop-blur-sm rounded text-gray-600"
-            >
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setCurrentMonth(new Date())}
-              className="px-2 py-1 text-xs md:text-sm text-gray-600 hover:backdrop-blur-sm rounded"
-            >
-              Today
-            </button>
-            <button
-              onClick={() => navigateMonth('next')}
-              className="p-1 hover:backdrop-blur-sm rounded text-gray-600"
-            >
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={() => navigateMonth('next')}
+            className="p-1 hover:bg-white/20 rounded text-gray-600"
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </div>
 
       {/* Calendar grid */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto w-full">
         {renderMonthView()}
       </div>
 

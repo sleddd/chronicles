@@ -6,7 +6,7 @@ import { PasswordReentryModal } from '@/components/auth/PasswordReentryModal';
 
 export default function GoalsPage() {
   return (
-    <div className="h-screen flex flex-col backdrop-blur-sm bg-white/30">
+    <div className="h-screen flex flex-col">
       <Header />
       <PasswordReentryModal />
       <div className="flex-1 overflow-auto">

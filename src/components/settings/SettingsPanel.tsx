@@ -15,6 +15,7 @@ interface FeatureSettings {
   exerciseEnabled: boolean;
   timezone: string;
   headerColor: string;
+  backgroundImage: string;
 }
 
 // Common timezones for the dropdown
@@ -79,7 +80,8 @@ export function SettingsPanel() {
     milestonesEnabled: false,
     exerciseEnabled: false,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    headerColor: '#2d2c2a',
+    headerColor: '#0F4C5C',
+    backgroundImage: '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg',
   });
   const [loadingFeatures, setLoadingFeatures] = useState(true);
   const [togglingFeature, setTogglingFeature] = useState<FeatureTopicKey | null>(null);
@@ -93,8 +95,41 @@ export function SettingsPanel() {
     { value: '#E6B062', label: 'Gold' },
     { value: '#EF8070', label: 'Coral' },
     { value: '#46A99B', label: 'Teal' },
+    { value: '#4281A4', label: 'Steel Blue' },
+    { value: '#48A9A6', label: 'Verdigris' },
+    { value: '#D4B483', label: 'Tan' },
+    { value: '#C1666B', label: 'Rose' },
+    { value: '#582C4D', label: 'Plum' },
+    { value: '#474973', label: 'Purple' },
+    { value: '#161B33', label: 'Midnight' },
+    { value: '#0D0C1D', label: 'Black' },
+    { value: '#5F0F40', label: 'Burgundy' },
+    { value: '#9A031E', label: 'Ruby' },
+    { value: '#E36414', label: 'Orange' },
+    { value: '#0F4C5C', label: 'Deep Teal' },
     { value: 'transparent', label: 'Transparent' },
   ];
+
+  // Background image options from Unsplash
+  const BACKGROUND_IMAGES = [
+    { value: '', label: 'None', artist: null, artistUrl: null },
+    { value: '/backgrounds/daniela-cuevas-t7YycgAoVSw-unsplash.jpg', label: 'Desert', artist: 'Daniela Cuevas', artistUrl: 'https://unsplash.com/@danielacuevas' },
+    { value: '/backgrounds/enrico-bet-IicyiaPYGGI-unsplash.jpg', label: 'Mountains', artist: 'Enrico Bet', artistUrl: 'https://unsplash.com/@enricob' },
+    { value: '/backgrounds/frank-mckenna-4V8JxijgZ_c-unsplash.jpg', label: 'Ocean', artist: 'Frank McKenna', artistUrl: 'https://unsplash.com/@frankiefoto' },
+    { value: '/backgrounds/luca-bravo-zAjdgNXsMeg-unsplash.jpg', label: 'Forest', artist: 'Luca Bravo', artistUrl: 'https://unsplash.com/@lucabravo' },
+    { value: '/backgrounds/petr-vysohlid-9fqwGqGLUxc-unsplash.jpg', label: 'Aurora', artist: 'Petr Vysohlid', artistUrl: 'https://unsplash.com/@petrvysohlid' },
+    { value: '/backgrounds/sasha-matic-TEpJdLB8j8U-unsplash.jpg', label: 'Sunset', artist: 'Sasha Matic', artistUrl: 'https://unsplash.com/@sashamatic' },
+    { value: '/backgrounds/v2osk-1Z2niiBPg5A-unsplash.jpg', label: 'Night Sky', artist: 'v2osk', artistUrl: 'https://unsplash.com/@v2osk' },
+    { value: '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg', label: 'Desk', artist: 'Alvaro Serrano', artistUrl: 'https://unsplash.com/@alvaroserrano' },
+    { value: '/backgrounds/daniel-salcius-06umypXA8pE-unsplash.jpg', label: 'Coastal', artist: 'Daniel Salcius', artistUrl: 'https://unsplash.com/@dsalcius' },
+    { value: '/backgrounds/paul-talbot-pQDBGxtiDEo-unsplash.jpg', label: 'Minimalist', artist: 'Paul Talbot', artistUrl: 'https://unsplash.com/@paultalbot' },
+    { value: '/backgrounds/sandra-seitamaa-OHLgIjctfrg-unsplash.jpg', label: 'Lake', artist: 'Sandra Seitamaa', artistUrl: 'https://unsplash.com/@seitamaaphotography' },
+    { value: '/backgrounds/sandra-seitamaa-SrFL-O4qXfA-unsplash.jpg', label: 'Nordic', artist: 'Sandra Seitamaa', artistUrl: 'https://unsplash.com/@seitamaaphotography' },
+    { value: '/backgrounds/sarah-dorweiler-x2Tmfd1-SgA-unsplash.jpg', label: 'Clean', artist: 'Sarah Dorweiler', artistUrl: 'https://unsplash.com/@sarahdorweiler' },
+    { value: '/backgrounds/tamara-bellis-lEYROy-DcWo-unsplash.jpg', label: 'Warm', artist: 'Tamara Bellis', artistUrl: 'https://unsplash.com/@tamarabellis' },
+  ];
+
+  const [savingBackgroundImage, setSavingBackgroundImage] = useState(false);
 
   const loadFeatureSettings = useCallback(async () => {
     try {
@@ -188,6 +223,29 @@ export function SettingsPanel() {
       console.error('Failed to update header color:', error);
     } finally {
       setSavingHeaderColor(false);
+    }
+  };
+
+  const handleBackgroundImageChange = async (newImage: string) => {
+    setSavingBackgroundImage(true);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backgroundImage: newImage }),
+      });
+
+      if (response.ok) {
+        setFeatureSettings((prev) => ({ ...prev, backgroundImage: newImage }));
+        // Dispatch event so layout updates immediately
+        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newImage }));
+        // Also update localStorage for persistence
+        localStorage.setItem('chronicles-background-image', newImage);
+      }
+    } catch (error) {
+      console.error('Failed to update background image:', error);
+    } finally {
+      setSavingBackgroundImage(false);
     }
   };
 
@@ -545,7 +603,7 @@ export function SettingsPanel() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 backdrop-blur-sm bg-white/30 min-h-full">
+    <div className="max-w-3xl mx-auto p-6 backdrop-blur-md bg-white/70 min-h-full">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
         <Link href="/" className="text-sm hover:underline" style={{ color: accentColor }}>
@@ -556,7 +614,7 @@ export function SettingsPanel() {
       {/* Account Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Account</h2>
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Email</p>
@@ -569,7 +627,7 @@ export function SettingsPanel() {
       {/* How to Use Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">How to Use Chronicles</h2>
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg">
           <button
             onClick={() => setShowHowToUse(!showHowToUse)}
             className="w-full p-4 flex items-center justify-between text-left"
@@ -736,7 +794,7 @@ export function SettingsPanel() {
       {/* Preferences Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Preferences</h2>
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900">Timezone</p>
@@ -748,7 +806,7 @@ export function SettingsPanel() {
                 value={featureSettings.timezone}
                 onChange={(e) => handleTimezoneChange(e.target.value)}
                 disabled={savingTimezone || loadingFeatures}
-                className="px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900 disabled:opacity-50"
+                className="px-3 py-2 border border-border rounded-md text-sm backdrop-blur-md bg-white/50 text-gray-900 disabled:opacity-50"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz.value} value={tz.value}>
@@ -770,15 +828,16 @@ export function SettingsPanel() {
       {/* Theme Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Theme</h2>
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Header Color</p>
-              <p className="text-sm text-gray-500">Choose a color for the header bar</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {savingHeaderColor && <span className="text-xs text-gray-400">Saving...</span>}
-              <div className="flex gap-2">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg divide-y divide-border">
+          {/* Header Color */}
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-shrink-0">
+                <p className="font-medium text-gray-900">Header Color</p>
+                <p className="text-sm text-gray-500">Choose a color for the header bar</p>
+                {savingHeaderColor && <span className="text-xs text-gray-400">Saving...</span>}
+              </div>
+              <div className="grid grid-cols-9 gap-2">
                 {HEADER_COLORS.map((color) => (
                   <button
                     key={color.value}
@@ -803,6 +862,83 @@ export function SettingsPanel() {
               </div>
             </div>
           </div>
+
+          {/* Background Image */}
+          <div className="p-4">
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-medium text-gray-900">Background Image</p>
+                {savingBackgroundImage && <span className="text-xs text-gray-400">Saving...</span>}
+              </div>
+              <p className="text-sm text-gray-500">Choose a background image for the app</p>
+            </div>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {BACKGROUND_IMAGES.map((bg) => (
+                <button
+                  key={bg.value || 'none'}
+                  onClick={() => handleBackgroundImageChange(bg.value)}
+                  disabled={savingBackgroundImage || loadingFeatures}
+                  title={bg.label}
+                  className={`relative aspect-video rounded-md border-2 transition-all overflow-hidden ${
+                    featureSettings.backgroundImage === bg.value
+                      ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-1'
+                      : 'border-border hover:border-gray-400'
+                  } ${(savingBackgroundImage || loadingFeatures) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {bg.value ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={bg.value}
+                      alt={bg.label}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                      <span className="text-xs text-gray-400">None</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>
+                Images from{' '}
+                <a
+                  href="https://unsplash.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-gray-700"
+                >
+                  Unsplash
+                </a>
+                {' '}under the{' '}
+                <a
+                  href="https://unsplash.com/license"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-gray-700"
+                >
+                  Unsplash License
+                </a>
+              </p>
+              <p>
+                Artists:{' '}
+                {BACKGROUND_IMAGES.filter(bg => bg.artist).map((bg, index, arr) => (
+                  <span key={bg.value}>
+                    <a
+                      href={bg.artistUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-gray-700"
+                    >
+                      {bg.artist}
+                    </a>
+                    {index < arr.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -810,7 +946,7 @@ export function SettingsPanel() {
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Security</h2>
 
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg divide-y divide-border">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg divide-y divide-border">
           {/* Change Password */}
           <div className="p-4">
             <div className="flex items-center justify-between">
@@ -835,7 +971,7 @@ export function SettingsPanel() {
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-md bg-white/50 text-gray-900"
                     required
                   />
                 </div>
@@ -845,7 +981,7 @@ export function SettingsPanel() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-md bg-white/50 text-gray-900"
                     required
                     minLength={12}
                   />
@@ -856,7 +992,7 @@ export function SettingsPanel() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-md bg-white/50 text-gray-900"
                     required
                   />
                 </div>
@@ -906,7 +1042,7 @@ export function SettingsPanel() {
                   <>
                     <div className="space-y-2 mb-4">
                       {sessions.map((sess) => (
-                        <div key={sess.id} className="flex items-center justify-between p-2 backdrop-blur-sm bg-white/30 rounded">
+                        <div key={sess.id} className="flex items-center justify-between p-2 backdrop-blur-md bg-white/50 rounded">
                           <div>
                             <p className="text-sm font-medium text-gray-900">{sess.deviceInfo || 'Unknown device'}</p>
                             <p className="text-xs text-gray-500">
@@ -941,7 +1077,7 @@ export function SettingsPanel() {
         <h2 className="text-lg font-medium text-gray-900 mb-4">Features</h2>
         <p className="text-sm text-gray-500 mb-4">Enable optional topics for specialized tracking</p>
 
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg divide-y divide-border">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg divide-y divide-border">
           {loadingFeatures ? (
             <div className="p-4 text-sm text-gray-500">Loading...</div>
           ) : (
@@ -968,7 +1104,7 @@ export function SettingsPanel() {
                     style={isEnabled ? { backgroundColor: accentColor } : undefined}
                   >
                     <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full backdrop-blur-sm bg-white/30 shadow ring-0 transition duration-200 ease-in-out ${
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full backdrop-blur-md bg-white/50 shadow ring-0 transition duration-200 ease-in-out ${
                         isEnabled ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
@@ -983,7 +1119,7 @@ export function SettingsPanel() {
       {/* Data Section */}
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Data</h2>
-        <div className="backdrop-blur-sm bg-white/30 border border-border rounded-lg divide-y divide-border">
+        <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg divide-y divide-border">
           {/* Default Topics */}
           <div className="p-4">
             <div className="flex items-center justify-between">
@@ -994,7 +1130,7 @@ export function SettingsPanel() {
               <button
                 onClick={handleSeedTopics}
                 disabled={seedingTopics || !isKeyReady}
-                className="px-4 py-2 text-sm border border-border rounded-md disabled:text-gray-400 disabled:border-border disabled:hover:backdrop-blur-sm bg-white/30"
+                className="px-4 py-2 text-sm border border-border rounded-md disabled:text-gray-400 disabled:border-border disabled:hover:backdrop-blur-md bg-white/50"
                 style={{ color: seedingTopics || !isKeyReady ? undefined : accentColor, borderColor: seedingTopics || !isKeyReady ? undefined : accentColor }}
               >
                 {seedingTopics ? 'Adding...' : 'Add Default Topics'}
@@ -1017,7 +1153,7 @@ export function SettingsPanel() {
               <button
                 onClick={handleExportCSV}
                 disabled={exporting || !isKeyReady}
-                className="px-4 py-2 text-sm border border-border rounded-md disabled:text-gray-400 disabled:border-border disabled:hover:backdrop-blur-sm bg-white/30"
+                className="px-4 py-2 text-sm border border-border rounded-md disabled:text-gray-400 disabled:border-border disabled:hover:backdrop-blur-md bg-white/50"
                 style={{ color: exporting || !isKeyReady ? undefined : accentColor, borderColor: exporting || !isKeyReady ? undefined : accentColor }}
               >
                 {exporting ? 'Exporting...' : 'Export to CSV'}
@@ -1047,7 +1183,7 @@ export function SettingsPanel() {
       {/* Danger Zone */}
       <section>
         <h2 className="text-lg font-medium text-red-600 mb-4">Danger Zone</h2>
-        <div className="backdrop-blur-sm bg-white/30 border border-red-200 rounded-lg p-4">
+        <div className="backdrop-blur-md bg-white/50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900">Sign Out</p>

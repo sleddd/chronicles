@@ -150,7 +150,7 @@ export function MedicationsTab({ refreshKey }: Props) {
       </p>
 
       {filteredMedications.length === 0 ? (
-        <div className="text-center py-12 backdrop-blur-sm bg-white/30 rounded-lg border border-border">
+        <div className="text-center py-12 backdrop-blur-md bg-white/70 rounded-lg border border-border">
           <p className="text-gray-500">No medications found</p>
           <p className="text-sm text-gray-400 mt-1">
             Create an entry with the &quot;medication&quot; topic to add medications
@@ -162,16 +162,15 @@ export function MedicationsTab({ refreshKey }: Props) {
             const data = decryptedMedications.get(med.id);
 
             return (
-              <div key={med.id} className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+              <div key={med.id} className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xl">💊</span>
                       <h3 className="font-semibold text-gray-900">
                         {data?.name || 'Loading...'} {data?.fields.dosage && <span className="font-normal text-gray-600">{data.fields.dosage}</span>}
                       </h3>
                       {data?.fields.isActive === false && (
-                        <span className="px-2 py-0.5 backdrop-blur-sm bg-white/40 text-gray-600 text-xs rounded-full">Inactive</span>
+                        <span className="px-2 py-0.5 backdrop-blur-md bg-white/60 text-gray-600 text-xs rounded-full">Inactive</span>
                       )}
                     </div>
                     <p className="text-sm text-gray-600 mt-1">

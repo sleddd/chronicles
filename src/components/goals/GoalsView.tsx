@@ -243,7 +243,7 @@ export function GoalsView() {
   }
 
   return (
-    <div className="p-4 h-full overflow-auto backdrop-blur-sm bg-white/30">
+    <div className="p-4 h-full overflow-auto backdrop-blur-md bg-white/70">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-gray-900 mb-4">Goals</h1>
 

@@ -10,7 +10,7 @@ interface Props {
 export function CorrelationChart({ data, title }: Props) {
   if (data.length === 0) {
     return (
-      <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+      <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
         <h3 className="font-medium text-gray-900 mb-4">{title}</h3>
         <div className="text-center py-8 text-gray-400">
           No correlations detected yet. Keep logging food, symptoms, and medications to find patterns.
@@ -32,7 +32,7 @@ export function CorrelationChart({ data, title }: Props) {
   };
 
   return (
-    <div className="backdrop-blur-sm bg-white/30 rounded-lg border border-border p-4">
+    <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
       <h3 className="font-medium text-gray-900 mb-4">{title}</h3>
       <div className="space-y-3">
         {data.slice(0, 10).map((item, index) => (
@@ -56,7 +56,7 @@ export function CorrelationChart({ data, title }: Props) {
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex-1 h-2 backdrop-blur-sm bg-white/50 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 backdrop-blur-md bg-white/70 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${getCorrelationColor(item.correlation)}`}
                   style={{ width: `${item.correlation}%` }}

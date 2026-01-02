@@ -142,8 +142,8 @@ function SortableTopicItem({
       style={style}
       className={`group flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
         isSelected
-          ? 'backdrop-blur-sm bg-white/50 text-gray-900 font-medium'
-          : 'hover:backdrop-blur-sm bg-white/50 text-gray-900'
+          ? 'text-gray-900 font-medium'
+          : 'hover:bg-white/20 text-gray-900'
       } ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
       {/* Drag handle */}
@@ -467,8 +467,8 @@ export function TopicsBrowser() {
             onClick={() => handleTopicSelect(null)}
             className={`w-full text-left px-3 py-2 pl-5 ml-3 rounded-md text-sm mb-2 ${
               selectedTopicId === null
-                ? 'backdrop-blur-sm bg-white/50 text-gray-900 font-medium'
-                : 'hover:backdrop-blur-sm bg-white/50 text-gray-900'
+                ? 'text-gray-900 font-medium'
+                : 'hover:bg-white/20 text-gray-900'
             }`}
           >
             All Entries
@@ -572,7 +572,7 @@ export function TopicsBrowser() {
                       {(() => {
                         const topic = topics.find(t => t.id === entry.topicId);
                         return (
-                          <span className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 backdrop-blur-md bg-white/50 text-gray-700">
+                          <span className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 text-gray-700">
                             <TopicIcon iconName={topic?.icon || null} size="sm" />
                             {decryptedTopics.get(entry.topicId) || 'Loading...'}
                           </span>

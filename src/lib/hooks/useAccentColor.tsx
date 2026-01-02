@@ -2,9 +2,66 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
-const DEFAULT_HEADER_COLOR = '#2d2c2a';
+const DEFAULT_HEADER_COLOR = '#0F4C5C';
 const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
+const BACKGROUND_IMAGE_STORAGE_KEY = 'chronicles-background-image';
+const BACKGROUND_IS_LIGHT_STORAGE_KEY = 'chronicles-background-is-light';
 const FALLBACK_ACCENT_COLOR = '#6b7280'; // gray-500 for when header is transparent
+
+// Analyze image brightness by sampling the top portion (where header is)
+function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(false); // Default to dark if can't analyze
+        return;
+      }
+
+      // Sample the top portion of the image (where header would be)
+      const sampleHeight = Math.min(100, img.height * 0.15);
+      canvas.width = img.width;
+      canvas.height = sampleHeight;
+
+      ctx.drawImage(img, 0, 0, img.width, sampleHeight, 0, 0, img.width, sampleHeight);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      let totalBrightness = 0;
+      const pixelCount = data.length / 4;
+
+      for (let i = 0; i < data.length; i += 4) {
+        // Calculate perceived brightness using luminance formula
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+        totalBrightness += brightness;
+      }
+
+      const avgBrightness = totalBrightness / pixelCount;
+      // If average brightness > 128 (midpoint), consider it light
+      resolve(avgBrightness > 128);
+    };
+    img.onerror = () => {
+      resolve(false); // Default to dark on error
+    };
+    img.src = imageUrl;
+  });
+}
+
+// Get initial background brightness from localStorage
+function getInitialBackgroundIsLight(): boolean {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
+    if (cached) return cached === 'true';
+  }
+  return false;
+}
 
 // Get initial color from localStorage (runs synchronously before render)
 function getInitialHeaderColor(): string {
@@ -13,6 +70,17 @@ function getInitialHeaderColor(): string {
     if (cached) return cached;
   }
   return DEFAULT_HEADER_COLOR;
+}
+
+const DEFAULT_BACKGROUND_IMAGE = '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg';
+
+// Get initial background image from localStorage
+function getInitialBackgroundImage(): string {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(BACKGROUND_IMAGE_STORAGE_KEY);
+    if (cached) return cached;
+  }
+  return DEFAULT_BACKGROUND_IMAGE;
 }
 
 // Get the accent color - returns header color or fallback grey if transparent
@@ -55,6 +123,8 @@ interface AccentColorContextValue {
   hoverColor: string;
   lightBgColor: string;
   isTransparent: boolean;
+  backgroundImage: string;
+  backgroundIsLight: boolean;
 }
 
 const AccentColorContext = createContext<AccentColorContextValue>({
@@ -63,13 +133,32 @@ const AccentColorContext = createContext<AccentColorContextValue>({
   hoverColor: getHoverColor(DEFAULT_HEADER_COLOR),
   lightBgColor: getLightBgColor(DEFAULT_HEADER_COLOR),
   isTransparent: false,
+  backgroundImage: DEFAULT_BACKGROUND_IMAGE,
+  backgroundIsLight: false,
 });
 
 export function AccentColorProvider({ children }: { children: ReactNode }) {
   const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
+  const [backgroundImage, setBackgroundImage] = useState(getInitialBackgroundImage);
+  const [backgroundIsLight, setBackgroundIsLight] = useState(getInitialBackgroundIsLight);
 
-  // Load header color from settings
-  const loadHeaderColor = useCallback(async () => {
+  // Analyze background image brightness when it changes
+  useEffect(() => {
+    if (backgroundImage) {
+      analyzeImageBrightness(backgroundImage).then((isLight) => {
+        setBackgroundIsLight(isLight);
+        localStorage.setItem(BACKGROUND_IS_LIGHT_STORAGE_KEY, String(isLight));
+        // Dispatch event so Header can react immediately
+        window.dispatchEvent(new CustomEvent('backgroundBrightnessChange', { detail: isLight }));
+      });
+    } else {
+      setBackgroundIsLight(false);
+      localStorage.setItem(BACKGROUND_IS_LIGHT_STORAGE_KEY, 'false');
+    }
+  }, [backgroundImage]);
+
+  // Load settings from API
+  const loadSettings = useCallback(async () => {
     try {
       const response = await fetch('/api/settings');
       if (response.ok) {
@@ -78,15 +167,19 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
           setHeaderColor(data.settings.headerColor);
           localStorage.setItem(HEADER_COLOR_STORAGE_KEY, data.settings.headerColor);
         }
+        if (data.settings?.backgroundImage !== undefined) {
+          setBackgroundImage(data.settings.backgroundImage);
+          localStorage.setItem(BACKGROUND_IMAGE_STORAGE_KEY, data.settings.backgroundImage);
+        }
       }
     } catch (error) {
-      console.error('Failed to load header color:', error);
+      console.error('Failed to load settings:', error);
     }
   }, []);
 
   useEffect(() => {
-    loadHeaderColor();
-  }, [loadHeaderColor]);
+    loadSettings();
+  }, [loadSettings]);
 
   // Listen for header color changes from settings
   useEffect(() => {
@@ -97,6 +190,17 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('headerColorChange', handleColorChange as EventListener);
     return () => window.removeEventListener('headerColorChange', handleColorChange as EventListener);
+  }, []);
+
+  // Listen for background image changes from settings
+  useEffect(() => {
+    const handleBackgroundChange = (event: CustomEvent<string>) => {
+      setBackgroundImage(event.detail);
+      localStorage.setItem(BACKGROUND_IMAGE_STORAGE_KEY, event.detail);
+    };
+
+    window.addEventListener('backgroundImageChange', handleBackgroundChange as EventListener);
+    return () => window.removeEventListener('backgroundImageChange', handleBackgroundChange as EventListener);
   }, []);
 
   const accentColor = getAccentColor(headerColor);
@@ -110,6 +214,8 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
     hoverColor,
     lightBgColor,
     isTransparent,
+    backgroundImage,
+    backgroundIsLight,
   };
 
   return (

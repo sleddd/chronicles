@@ -150,8 +150,8 @@ export function FoodTab({ selectedDate, refreshKey }: Props) {
           const entries = entriesByMeal[meal.key];
 
           return (
-            <div key={meal.key} className="backdrop-blur-sm bg-white/30 rounded-lg border border-border overflow-hidden">
-              <div className="backdrop-blur-sm bg-white/30 px-4 py-2 border-b border-border flex items-center gap-2">
+            <div key={meal.key} className="backdrop-blur-md bg-white/70 rounded-lg border border-border overflow-hidden">
+              <div className="backdrop-blur-md bg-white/50 px-4 py-2 border-b border-border flex items-center gap-2">
                 <span>{meal.icon}</span>
                 <span className="font-medium text-gray-700 uppercase text-sm">{meal.label}</span>
                 <span className="text-sm text-gray-400">({entries.length})</span>

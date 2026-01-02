@@ -14,6 +14,7 @@ const updateSettingsSchema = z.object({
   exerciseEnabled: z.boolean().optional(),
   timezone: z.string().optional(),
   headerColor: z.string().optional(),
+  backgroundImage: z.string().optional(),
 });
 
 // GET /api/settings - Get user settings
@@ -71,16 +72,26 @@ export async function GET() {
       END $$;
     `);
 
+    // Add backgroundImage column if it doesn't exist
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE "${session.user.schemaName}"."user_settings"
+        ADD COLUMN "backgroundImage" TEXT NOT NULL DEFAULT '';
+      EXCEPTION
+        WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
     // Ensure settings row exists
     await client.query(`
       INSERT INTO "${session.user.schemaName}"."user_settings"
-      (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "createdAt", "updatedAt")
-      VALUES ('settings_default', false, false, false, false, false, 'UTC', '#2d2c2a', NOW(), NOW())
+      (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage", "createdAt", "updatedAt")
+      VALUES ('settings_default', false, false, false, false, false, 'UTC', '#2d2c2a', '', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
 
     const result = await client.query(`
-      SELECT "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor"
+      SELECT "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage"
       FROM "${session.user.schemaName}"."user_settings"
       WHERE id = 'settings_default'
     `);
@@ -95,6 +106,7 @@ export async function GET() {
           exerciseEnabled: false,
           timezone: 'UTC',
           headerColor: '#2d2c2a',
+          backgroundImage: '',
         },
       });
     }
@@ -151,6 +163,10 @@ export async function PATCH(request: NextRequest) {
         updates.push(`"headerColor" = $${paramIndex++}`);
         values.push(validatedData.headerColor);
       }
+      if (validatedData.backgroundImage !== undefined) {
+        updates.push(`"backgroundImage" = $${paramIndex++}`);
+        values.push(validatedData.backgroundImage);
+      }
 
       if (updates.length === 0) {
         return NextResponse.json({ error: 'No settings to update' }, { status: 400 });
@@ -161,8 +177,8 @@ export async function PATCH(request: NextRequest) {
       // Ensure settings row exists first
       await client.query(`
         INSERT INTO "${session.user.schemaName}"."user_settings"
-        (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "createdAt", "updatedAt")
-        VALUES ('settings_default', false, false, false, false, false, 'UTC', '#2d2c2a', NOW(), NOW())
+        (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage", "createdAt", "updatedAt")
+        VALUES ('settings_default', false, false, false, false, false, 'UTC', '#2d2c2a', '', NOW(), NOW())
         ON CONFLICT (id) DO NOTHING
       `);
 
@@ -170,7 +186,7 @@ export async function PATCH(request: NextRequest) {
         `UPDATE "${session.user.schemaName}"."user_settings"
          SET ${updates.join(', ')}
          WHERE id = 'settings_default'
-         RETURNING "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor"`,
+         RETURNING "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage"`,
         values
       );
 
