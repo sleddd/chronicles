@@ -83,39 +83,39 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
   const selectedTopicName = selectedTopicId ? decryptedTopics.get(selectedTopicId) : null;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="px-3 py-1.5 text-sm rounded-md backdrop-blur-sm bg-white/30 hover:backdrop-blur-sm bg-white/30 flex items-center gap-2"
-        >
-          {selectedTopic && (
+    <div className="topic-selector" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="topic-selector-trigger"
+      >
+        {selectedTopic && (
+          <span className="topic-selector-item-icon">
             <TopicIcon iconName={selectedTopic.icon} size="sm" />
-          )}
-          <span className={selectedTopicName ? 'text-gray-900' : 'text-gray-500'}>
-            {selectedTopicName || 'None'}
           </span>
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      </div>
+        )}
+        <span className={selectedTopicName ? 'topic-selector-value' : 'topic-selector-placeholder'}>
+          {selectedTopicName || 'None'}
+        </span>
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-80 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg">
+        <div className="topic-selector-dropdown w-80">
           {/* Search input */}
-          <div className="p-2 border-b border-border">
+          <div className="topic-selector-search">
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Type to search topics..."
-              className="w-full px-3 py-1.5 text-sm border border-border rounded backdrop-blur-xl bg-white/70 text-gray-900 placeholder-gray-400"
+              className="input-glass text-sm"
             />
           </div>
-          <div className="p-2 border-b border-border max-h-64 overflow-auto">
+          <div className="topic-selector-list max-h-64 overflow-auto">
             {(!searchQuery.trim() || 'none'.includes(searchQuery.toLowerCase())) && (
               <button
                 onClick={() => {
@@ -123,9 +123,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
-                className={`w-full text-left px-3 py-2 text-sm rounded hover:backdrop-blur-sm bg-white/40 ${
-                  !selectedTopicId ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
-                }`}
+                className={!selectedTopicId ? 'topic-selector-item-active' : 'topic-selector-item'}
               >
                 None
               </button>
@@ -144,24 +142,23 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
-                className={`w-full text-left px-3 py-2 text-sm rounded hover:backdrop-blur-sm bg-white/40 flex items-center gap-2 ${
-                  selectedTopicId === topic.id ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
-                }`}
+                className={selectedTopicId === topic.id ? 'topic-selector-item-active' : 'topic-selector-item'}
               >
-                <TopicIcon iconName={topic.icon} size="sm" />
+                <span className="topic-selector-item-icon">
+                  <TopicIcon iconName={topic.icon} size="sm" />
+                </span>
                 {decryptedTopics.get(topic.id) || 'Loading...'}
               </button>
             ))}
           </div>
-          <div className="p-2">
+          <div className="p-2 border-t border-border">
             <Link
               href="/topics"
               onClick={() => {
                 setIsOpen(false);
                 setSearchQuery('');
               }}
-              className="block w-full text-left px-3 py-2 text-sm hover:bg-teal-50 rounded"
-              style={{ color: '#1aaeae' }}
+              className="dropdown-item text-teal-600 hover:bg-teal-50"
             >
               Manage Topics...
             </Link>

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@import "../styles/components.css";
 
 :root {
   --background: #e8e5df;

@@ -98,7 +98,7 @@ function SortableTopicItem({
 
   if (isEditing && editingTopic) {
     return (
-      <div ref={setNodeRef} style={style} className="p-3 backdrop-blur-sm bg-white/30 border border-border rounded-lg space-y-3">
+      <div ref={setNodeRef} style={style} className="card p-3 space-y-3">
         <input
           type="text"
           value={editingTopic.name}
@@ -107,11 +107,11 @@ function SortableTopicItem({
             if (e.key === 'Enter') onEditSave();
             if (e.key === 'Escape') onEditCancel();
           }}
-          className="w-full px-3 py-2 text-sm border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900"
+          className="input-glass"
           autoFocus
         />
-        <div className="border rounded p-2 backdrop-blur-sm bg-white/30">
-          <p className="text-xs text-gray-500 mb-1">Icon:</p>
+        <div className="card p-2">
+          <p className="field-label-sm">Icon:</p>
           <IconPicker
             selectedIcon={editingTopic.icon}
             onSelectIcon={(icon) => onEditChange({ icon })}
@@ -120,14 +120,14 @@ function SortableTopicItem({
         <div className="flex gap-2">
           <button
             onClick={onEditSave}
-            className="flex-1 px-3 py-1.5 text-sm text-white rounded"
+            className="btn btn-primary flex-1"
             style={{ backgroundColor: accentColor }}
           >
             Save
           </button>
           <button
             onClick={onEditCancel}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+            className="btn btn-ghost"
           >
             Cancel
           </button>
@@ -140,11 +140,7 @@ function SortableTopicItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
-        isSelected
-          ? 'text-gray-900 font-medium'
-          : 'hover:bg-white/20 text-gray-900'
-      } ${isDragging ? 'shadow-lg z-10' : ''}`}
+      className={`group ${isSelected ? 'topic-browser-item-active' : 'topic-browser-item'} ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
       {/* Drag handle */}
       <button
@@ -162,15 +158,17 @@ function SortableTopicItem({
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 text-left"
       >
-        <TopicIcon iconName={topic.icon} size="sm" />
-        {decryptedName}
+        <span className="topic-browser-item-icon">
+          <TopicIcon iconName={topic.icon} size="sm" />
+        </span>
+        <span className="topic-browser-item-label">{decryptedName}</span>
       </button>
 
       {/* Edit/Delete buttons */}
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={onEdit}
-          className="p-1 text-gray-400 hover:text-gray-600"
+          className="btn-icon p-1"
           title="Edit"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,7 +177,7 @@ function SortableTopicItem({
         </button>
         <button
           onClick={onDelete}
-          className="p-1 text-gray-400 hover:text-red-500"
+          className="btn-icon p-1 text-gray-400 hover:text-red-500"
           title="Delete"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -404,10 +402,10 @@ export function TopicsBrowser() {
   };
 
   return (
-    <div className="flex flex-row h-full backdrop-blur-sm bg-white/30">
+    <div className="flex flex-row h-full backdrop-blur-md bg-white/90">
       {/* Topics sidebar - hidden on mobile when viewing entries */}
       <div
-        className={`backdrop-blur-sm bg-white/30 overflow-auto ${
+        className={`backdrop-blur-md bg-white/80 overflow-auto ${
           mobileEntriesExpanded ? 'hidden md:block md:w-72' : 'flex-1 md:w-72 md:flex-none'
         }`}
       >
@@ -435,18 +433,18 @@ export function TopicsBrowser() {
 
           {/* Add new topic form */}
           {showAddForm && (
-            <div className="mb-4 p-3 backdrop-blur-sm bg-white/30 border border-border rounded-lg space-y-3">
+            <div className="card mb-4 p-3 space-y-3">
               <input
                 type="text"
                 value={newTopicName}
                 onChange={(e) => setNewTopicName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
                 placeholder="Topic name"
-                className="w-full px-3 py-2 text-sm border border-border rounded backdrop-blur-sm bg-white/30 text-gray-900 placeholder-gray-400"
+                className="input-glass"
                 autoFocus
               />
-              <div className="border rounded p-2 backdrop-blur-sm bg-white/30">
-                <p className="text-xs text-gray-500 mb-1">Icon (optional):</p>
+              <div className="card p-2">
+                <p className="field-label-sm">Icon (optional):</p>
                 <IconPicker
                   selectedIcon={newTopicIcon}
                   onSelectIcon={setNewTopicIcon}
@@ -455,7 +453,7 @@ export function TopicsBrowser() {
               <button
                 onClick={handleAddTopic}
                 disabled={isAdding || !newTopicName.trim()}
-                className="w-full px-3 py-2 text-sm text-white rounded disabled:bg-gray-400"
+                className="btn btn-primary w-full"
                 style={{ backgroundColor: (isAdding || !newTopicName.trim()) ? undefined : accentColor }}
               >
                 {isAdding ? 'Adding...' : 'Add Topic'}
@@ -465,11 +463,7 @@ export function TopicsBrowser() {
 
           <button
             onClick={() => handleTopicSelect(null)}
-            className={`w-full text-left px-3 py-2 pl-5 ml-3 rounded-md text-sm mb-2 ${
-              selectedTopicId === null
-                ? 'text-gray-900 font-medium'
-                : 'hover:bg-white/20 text-gray-900'
-            }`}
+            className={selectedTopicId === null ? 'topic-browser-item-active w-full mb-2' : 'topic-browser-item w-full mb-2'}
           >
             All Entries
           </button>
@@ -525,7 +519,7 @@ export function TopicsBrowser() {
 
       {/* Entries list - full screen on mobile when viewing, always visible on desktop */}
       <div
-        className={`overflow-auto backdrop-blur-sm bg-white/30 flex-1 ${
+        className={`overflow-auto backdrop-blur-md bg-white/90 flex-1 ${
           mobileEntriesExpanded ? 'block' : 'hidden md:block'
         }`}
       >
@@ -565,14 +559,14 @@ export function TopicsBrowser() {
                 <Link
                   key={entry.id}
                   href={`/?entry=${entry.id}`}
-                  className="block p-3 mb-[5px] backdrop-blur-sm bg-white/30 border border-border rounded-md hover:border-teal-300 hover:shadow-sm transition-all"
+                  className="card-interactive block p-3 mb-[5px]"
                 >
                   {entry.topicId && selectedTopicId === null && (
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="entry-card-footer mb-2">
                       {(() => {
                         const topic = topics.find(t => t.id === entry.topicId);
                         return (
-                          <span className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 text-gray-700">
+                          <span className="entry-card-topic">
                             <TopicIcon iconName={topic?.icon || null} size="sm" />
                             {decryptedTopics.get(entry.topicId) || 'Loading...'}
                           </span>
@@ -580,7 +574,7 @@ export function TopicsBrowser() {
                       })()}
                     </div>
                   )}
-                  <p className="text-sm text-gray-900">
+                  <p className="entry-card-preview">
                     {decryptedEntries.get(entry.id) || 'Decrypting...'}
                   </p>
                 </Link>

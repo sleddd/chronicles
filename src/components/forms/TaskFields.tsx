@@ -1,0 +1,28 @@
+'use client';
+
+import React from 'react';
+import { CheckboxField } from '@/components/ui';
+import type { TaskFields as TaskFieldValues } from '@/lib/hooks/useCustomFields';
+
+interface TaskFieldsProps {
+  fields: TaskFieldValues;
+  onChange: <K extends keyof TaskFieldValues>(key: K, value: TaskFieldValues[K]) => void;
+  glass?: boolean;
+}
+
+export function TaskFields({ fields, onChange }: TaskFieldsProps) {
+  return (
+    <div className="custom-fields-body space-y-3">
+      <CheckboxField
+        label="Completed"
+        checked={fields.isCompleted}
+        onChange={(checked) => onChange('isCompleted', checked)}
+      />
+      <CheckboxField
+        label="Auto-migrate incomplete tasks"
+        checked={fields.isAutoMigrating}
+        onChange={(checked) => onChange('isAutoMigrating', checked)}
+      />
+    </div>
+  );
+}

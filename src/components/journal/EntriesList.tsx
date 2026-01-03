@@ -630,7 +630,7 @@ export function EntriesList({
   return (
     <div className="p-4 h-full overflow-auto">
       {/* View Mode Tabs */}
-      <div className="mb-4 flex gap-1 backdrop-blur-sm bg-white/30 p-1 rounded-lg border border-border">
+      <div className="view-tabs">
         <button
           onClick={() => {
             if (viewMode === 'date') {
@@ -642,31 +642,19 @@ export function EntriesList({
               setIsDatePickerExpanded(true);
             }
           }}
-          className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
-            viewMode === 'date'
-              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`view-tab ${viewMode === 'date' ? 'view-tab-active' : ''}`}
         >
           Date
         </button>
         <button
           onClick={() => setViewMode('all')}
-          className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
-            viewMode === 'all'
-              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`view-tab ${viewMode === 'all' ? 'view-tab-active' : ''}`}
         >
           All
         </button>
         <button
           onClick={() => setViewMode('favorites')}
-          className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors flex items-center justify-center gap-1 ${
-            viewMode === 'favorites'
-              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`view-tab ${viewMode === 'favorites' ? 'view-tab-active' : ''}`}
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
             <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -675,11 +663,7 @@ export function EntriesList({
         </button>
         <button
           onClick={() => setViewMode('search')}
-          className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
-            viewMode === 'search'
-              ? 'backdrop-blur-sm bg-white/10 text-gray-900 border border-border'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`view-tab ${viewMode === 'search' ? 'view-tab-active' : ''}`}
         >
           Search
         </button>
@@ -704,17 +688,17 @@ export function EntriesList({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search entries..."
-            className="w-full px-3 py-2 border border-border rounded-md backdrop-blur-sm bg-white/10 text-gray-900 placeholder-gray-400"
+            className="input-glass"
           />
           {searchTopicId ? (
-            <div className="flex items-center gap-2 px-3 py-2 backdrop-blur-sm bg-white/10 border border-border rounded-md">
+            <div className="card flex items-center gap-2 px-3 py-2">
               <TopicIcon iconName={getTopic(searchTopicId)?.icon || null} size="sm" />
               <span className="text-sm text-gray-700">
                 <strong>{getTopicName(searchTopicId)}</strong>
               </span>
               <button
                 onClick={() => setSearchTopicId(null)}
-                className="ml-auto text-gray-400 hover:text-gray-600 text-sm"
+                className="btn-ghost ml-auto text-sm"
               >
                 × Clear
               </button>
@@ -723,7 +707,7 @@ export function EntriesList({
             <select
               value=""
               onChange={(e) => setSearchTopicId(e.target.value || null)}
-              className="w-full px-3 py-2 border border-border rounded-md backdrop-blur-sm bg-white/10 text-gray-900"
+              className="select-glass"
             >
               <option value="">Filter by topic...</option>
               {topics.map((topic) => (
@@ -742,14 +726,14 @@ export function EntriesList({
         const topicName = getTopicName(filterTopicId);
         if (!topic) return null;
         return (
-          <div className="mb-4 flex items-center gap-2 px-3 py-2 backdrop-blur-sm bg-white/10 border border-border rounded-md">
+          <div className="card mb-4 flex items-center gap-2 px-3 py-2">
             <TopicIcon iconName={topic.icon} size="sm" />
             <span className="text-sm text-gray-700">
               Filtering by: <strong>{topicName}</strong>
             </span>
             <button
               onClick={clearFilter}
-              className="ml-auto text-gray-400 hover:text-gray-600 text-sm"
+              className="btn-ghost ml-auto text-sm"
             >
               × Clear
             </button>
@@ -758,13 +742,13 @@ export function EntriesList({
       })()}
 
       {/* Quick Entry Form */}
-      <form onSubmit={handleQuickEntry} className="relative z-20 mb-4 backdrop-blur-sm bg-white/10 border-t border-border py-3 px-4">
-        <div className="flex gap-2 mb-2">
+      <form onSubmit={handleQuickEntry} className="quick-entry relative z-20 mb-4">
+        <div className="quick-entry-header">
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowTopicDropdown(!showTopicDropdown)}
-              className="px-2 py-1 text-sm rounded-md backdrop-blur-sm bg-white/10 text-gray-700 flex items-center gap-1 hover:backdrop-blur-sm bg-white/10"
+              className="quick-entry-topic"
             >
               {quickEntryTopicId ? (
                 <>
@@ -775,15 +759,15 @@ export function EntriesList({
                   <span>{decryptedTopics[quickEntryTopicId] || 'Loading...'}</span>
                 </>
               ) : (
-                <span className="text-gray-500">No topic</span>
+                <span className="topic-selector-placeholder">No topic</span>
               )}
               <svg className="w-3 h-3 text-gray-400 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
             {showTopicDropdown && (
-              <div className="absolute top-full left-0 mt-1 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg z-50 w-64">
-                <div className="p-2 border-b border-border">
+              <div className="topic-selector-dropdown">
+                <div className="topic-selector-search">
                   <input
                     type="text"
                     value={topicSearchQuery}
@@ -792,11 +776,11 @@ export function EntriesList({
                       if (e.key === 'Enter') e.preventDefault();
                     }}
                     placeholder="Type to search topics..."
-                    className="w-full px-2 py-1 text-sm border border-border rounded backdrop-blur-xl bg-white/70 text-gray-900 placeholder-gray-400"
+                    className="input-glass text-sm"
                     autoFocus
                   />
                 </div>
-                <div className="max-h-48 overflow-auto">
+                <div className="topic-selector-list max-h-48 overflow-auto">
                   {(!topicSearchQuery.trim() || 'no topic'.includes(topicSearchQuery.toLowerCase())) && (
                     <button
                       type="button"
@@ -805,7 +789,7 @@ export function EntriesList({
                         setShowTopicDropdown(false);
                         setTopicSearchQuery('');
                       }}
-                      className="w-full px-3 py-1.5 text-sm text-left text-gray-500 hover:backdrop-blur-sm bg-white/40"
+                      className="topic-selector-item"
                     >
                       No topic
                     </button>
@@ -825,7 +809,7 @@ export function EntriesList({
                         setShowTopicDropdown(false);
                         setTopicSearchQuery('');
                       }}
-                      className="w-full px-3 py-1.5 text-sm text-left text-gray-700 hover:backdrop-blur-sm bg-white/40 flex items-center gap-2"
+                      className="topic-selector-item"
                     >
                       <TopicIcon iconName={topic.icon} size="sm" />
                       {decryptedTopics[topic.id] || 'Loading...'}
@@ -837,19 +821,19 @@ export function EntriesList({
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="quick-entry-body">
           <input
             type="text"
             value={quickEntry}
             onChange={(e) => setQuickEntry(e.target.value)}
             placeholder="Quick entry..."
-            className="flex-1 px-4 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/10 text-gray-900 placeholder-gray-500"
+            className="quick-entry-input"
           />
           {(quickEntry.trim() || quickEntryTopicId) && (
             <button
               type="button"
               onClick={resetQuickEntryFields}
-              className="px-3 py-2 text-gray-600 text-sm rounded-md border border-border hover:backdrop-blur-sm bg-white/40"
+              className="btn btn-ghost"
             >
               Cancel
             </button>
@@ -857,7 +841,7 @@ export function EntriesList({
           <button
             type="submit"
             disabled={!quickEntry.trim() || !isKeyReady}
-            className="px-3 py-2 text-white text-sm rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn btn-primary"
             style={{ backgroundColor: accentColor }}
             onMouseOver={(e) => e.currentTarget.style.backgroundColor = hoverColor}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = accentColor}
@@ -868,13 +852,12 @@ export function EntriesList({
 
         {/* Custom fields based on selected topic - shown below text input */}
         {quickEntryTopicName === 'task' && (
-          <div className="flex items-center gap-4 mt-2 text-sm">
-            <label className="flex items-center gap-1.5 text-gray-600">
+          <div className="custom-fields-body">
+            <label className="checkbox-field">
               <input
                 type="checkbox"
                 checked={qfTaskAutoMigrate}
                 onChange={(e) => setQfTaskAutoMigrate(e.target.checked)}
-                className="rounded border-border"
               />
               Auto-migrate
             </label>
@@ -882,12 +865,12 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'goal' && (
-          <div className="space-y-2 mt-2 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="custom-fields-body">
+            <div className="field-row">
               <select
                 value={qfGoalType}
                 onChange={(e) => setQfGoalType(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="select-glass select-sm"
               >
                 <option value="personal">Personal</option>
                 <option value="professional">Professional</option>
@@ -898,20 +881,20 @@ export function EntriesList({
               <select
                 value={qfGoalStatus}
                 onChange={(e) => setQfGoalStatus(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="select-glass select-sm"
               >
                 <option value="not_started">Not Started</option>
                 <option value="in_progress">In Progress</option>
                 <option value="completed">Completed</option>
                 <option value="on_hold">On Hold</option>
               </select>
-              <div className="flex items-center gap-1">
-                <label className="text-gray-600">Target:</label>
+              <div className="field-inline">
+                <label className="field-label">Target:</label>
                 <input
                   type="date"
                   value={qfGoalTargetDate}
                   onChange={(e) => setQfGoalTargetDate(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
               </div>
             </div>
@@ -919,122 +902,122 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'meeting' && (
-          <div className="space-y-2 mt-2 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1">
-                <label className="text-gray-600">Start:</label>
+          <div className="custom-fields-body">
+            <div className="field-row">
+              <div className="field-inline">
+                <label className="field-label">Start:</label>
                 <input
                   type="date"
                   value={qfMeetingStartDate}
                   onChange={(e) => setQfMeetingStartDate(e.target.value)}
                   placeholder={selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
                 <input
                   type="time"
                   value={qfMeetingStartTime}
                   onChange={(e) => setQfMeetingStartTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
               </div>
-              <div className="flex items-center gap-1">
-                <label className="text-gray-600">End:</label>
+              <div className="field-inline">
+                <label className="field-label">End:</label>
                 <input
                   type="date"
                   value={qfMeetingEndDate}
                   onChange={(e) => setQfMeetingEndDate(e.target.value)}
                   placeholder={qfMeetingStartDate || selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
                 <input
                   type="time"
                   value={qfMeetingEndTime}
                   onChange={(e) => setQfMeetingEndTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="field-row">
               <input
                 type="text"
                 value={qfMeetingLocation}
                 onChange={(e) => setQfMeetingLocation(e.target.value)}
                 placeholder="Location"
-                className="flex-1 min-w-[100px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="input-glass input-sm flex-1 min-w-[100px]"
               />
               <input
                 type="text"
                 value={qfMeetingTopic}
                 onChange={(e) => setQfMeetingTopic(e.target.value)}
                 placeholder="Meeting topic"
-                className="flex-1 min-w-[120px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="input-glass input-sm flex-1 min-w-[120px]"
               />
             </div>
           </div>
         )}
 
         {quickEntryTopicName === 'event' && (
-          <div className="space-y-2 mt-2 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1">
-                <label className="text-gray-600">Start:</label>
+          <div className="custom-fields-body">
+            <div className="field-row">
+              <div className="field-inline">
+                <label className="field-label">Start:</label>
                 <input
                   type="date"
                   value={qfEventStartDate}
                   onChange={(e) => setQfEventStartDate(e.target.value)}
                   placeholder={selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
                 <input
                   type="time"
                   value={qfEventStartTime}
                   onChange={(e) => setQfEventStartTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
               </div>
-              <div className="flex items-center gap-1">
-                <label className="text-gray-600">End:</label>
+              <div className="field-inline">
+                <label className="field-label">End:</label>
                 <input
                   type="date"
                   value={qfEventEndDate}
                   onChange={(e) => setQfEventEndDate(e.target.value)}
                   placeholder={qfEventStartDate || selectedDate || today}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
                 <input
                   type="time"
                   value={qfEventEndTime}
                   onChange={(e) => setQfEventEndTime(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm"
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="field-row">
               <input
                 type="text"
                 value={qfEventLocation}
                 onChange={(e) => setQfEventLocation(e.target.value)}
                 placeholder="Location"
-                className="flex-1 min-w-[100px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="input-glass input-sm flex-1 min-w-[100px]"
               />
             </div>
           </div>
         )}
 
         {quickEntryTopicName === 'medication' && (
-          <div className="space-y-2 mt-2 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="custom-fields-body">
+            <div className="field-row">
               <input
                 type="text"
                 value={qfMedDosage}
                 onChange={(e) => setQfMedDosage(e.target.value)}
                 placeholder="Dosage (e.g., 10mg)"
-                className="w-32 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="input-glass input-sm w-32"
               />
               <select
                 value={qfMedFrequency}
                 onChange={(e) => setQfMedFrequency(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="select-glass select-sm"
               >
                 <option value="once_daily">Once Daily</option>
                 <option value="twice_daily">Twice Daily</option>
@@ -1043,20 +1026,19 @@ export function EntriesList({
                 <option value="as_needed">As Needed</option>
                 <option value="weekly">Weekly</option>
               </select>
-              <label className="flex items-center gap-1.5 text-gray-600">
+              <label className="checkbox-field">
                 <input
                   type="checkbox"
                   checked={qfMedIsActive}
                   onChange={(e) => setQfMedIsActive(e.target.checked)}
-                  className="rounded border-border"
                 />
                 Active
               </label>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="text-gray-600">Schedule times:</label>
+            <div className="field-row">
+              <label className="field-label">Schedule times:</label>
               {qfMedScheduleTimes.map((time, idx) => (
-                <div key={idx} className="flex items-center gap-1">
+                <div key={idx} className="schedule-time-item">
                   <input
                     type="time"
                     value={time}
@@ -1065,13 +1047,13 @@ export function EntriesList({
                       newTimes[idx] = e.target.value;
                       setQfMedScheduleTimes(newTimes);
                     }}
-                    className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                    className="input-glass input-sm"
                   />
                   {qfMedScheduleTimes.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setQfMedScheduleTimes(qfMedScheduleTimes.filter((_, i) => i !== idx))}
-                      className="text-red-500 hover:text-red-700"
+                      className="schedule-time-remove"
                     >
                       ×
                     </button>
@@ -1081,7 +1063,7 @@ export function EntriesList({
               <button
                 type="button"
                 onClick={() => setQfMedScheduleTimes([...qfMedScheduleTimes, '12:00'])}
-                className="text-teal-600 hover:text-teal-800"
+                className="schedule-time-add"
               >
                 + Add time
               </button>
@@ -1090,12 +1072,12 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'exercise' && (
-          <div className="space-y-2 mt-2 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="custom-fields-body">
+            <div className="field-row">
               <select
                 value={qfExerciseType}
                 onChange={(e) => setQfExerciseType(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="select-glass select-sm"
               >
                 <option value="">Type...</option>
                 <option value="walking">Walking</option>
@@ -1108,70 +1090,70 @@ export function EntriesList({
                 <option value="hiking">Hiking</option>
                 <option value="other">Other</option>
               </select>
-              <div className="flex items-center gap-1">
+              <div className="field-inline">
                 <input
                   type="number"
                   value={qfExerciseDuration}
                   onChange={(e) => setQfExerciseDuration(e.target.value)}
                   placeholder="Duration"
-                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm w-20"
                   min="0"
                 />
-                <span className="text-gray-500">min</span>
+                <span className="field-unit">min</span>
               </div>
               <select
                 value={qfExerciseIntensity}
                 onChange={(e) => setQfExerciseIntensity(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="select-glass select-sm"
               >
                 <option value="low">Low intensity</option>
                 <option value="medium">Medium intensity</option>
                 <option value="high">High intensity</option>
               </select>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1">
+            <div className="field-row">
+              <div className="field-inline">
                 <input
                   type="number"
                   value={qfExerciseDistance}
                   onChange={(e) => setQfExerciseDistance(e.target.value)}
                   placeholder="Distance"
-                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm w-20"
                   min="0"
                   step="0.1"
                 />
                 <select
                   value={qfExerciseDistanceUnit}
                   onChange={(e) => setQfExerciseDistanceUnit(e.target.value)}
-                  className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="select-glass select-sm"
                 >
                   <option value="miles">mi</option>
                   <option value="km">km</option>
                   <option value="meters">m</option>
                 </select>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="field-inline">
                 <input
                   type="number"
                   value={qfExerciseCalories}
                   onChange={(e) => setQfExerciseCalories(e.target.value)}
                   placeholder="Calories"
-                  className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                  className="input-glass input-sm w-20"
                   min="0"
                 />
-                <span className="text-gray-500">cal</span>
+                <span className="field-unit">cal</span>
               </div>
             </div>
           </div>
         )}
 
         {quickEntryTopicName === 'food' && (
-          <div className="space-y-2 mt-2 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="custom-fields-body">
+            <div className="field-row">
               <select
                 value={qfMealType}
                 onChange={(e) => setQfMealType(e.target.value)}
-                className="px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="select-glass select-sm"
               >
                 <option value="">Meal type...</option>
                 <option value="breakfast">Breakfast</option>
@@ -1184,36 +1166,38 @@ export function EntriesList({
                 value={qfFoodIngredients}
                 onChange={(e) => setQfFoodIngredients(e.target.value)}
                 placeholder="Ingredients (comma separated)"
-                className="flex-1 min-w-[150px] px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
+                className="input-glass input-sm flex-1 min-w-[150px]"
               />
             </div>
           </div>
         )}
 
         {(quickEntryTopicName === 'symptom' || quickEntryTopicName === 'symptoms') && (
-          <div className="flex flex-wrap items-center gap-4 mt-2 text-sm">
-            <div className="flex items-center gap-2">
-              <label className="text-gray-600">Severity:</label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={qfSeverity}
-                onChange={(e) => setQfSeverity(parseInt(e.target.value))}
-                className="w-24"
-              />
-              <span className="text-gray-700 font-medium w-6">{qfSeverity}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                value={qfSymptomDuration}
-                onChange={(e) => setQfSymptomDuration(e.target.value)}
-                placeholder="Duration"
-                className="w-20 px-2 py-1 border border-border rounded backdrop-blur-sm bg-white/10 text-gray-900"
-                min="0"
-              />
-              <span className="text-gray-500">min</span>
+          <div className="custom-fields-body">
+            <div className="field-row">
+              <div className="field-inline">
+                <label className="field-label">Severity:</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={qfSeverity}
+                  onChange={(e) => setQfSeverity(parseInt(e.target.value))}
+                  className="range-input w-24"
+                />
+                <span className="range-value">{qfSeverity}</span>
+              </div>
+              <div className="field-inline">
+                <input
+                  type="number"
+                  value={qfSymptomDuration}
+                  onChange={(e) => setQfSymptomDuration(e.target.value)}
+                  placeholder="Duration"
+                  className="input-glass input-sm w-20"
+                  min="0"
+                />
+                <span className="field-unit">min</span>
+              </div>
             </div>
           </div>
         )}
@@ -1310,36 +1294,32 @@ function EntryCard({
   return (
     <div
       onClick={onSelect}
-      className="p-3 mb-[5px] border border-border rounded-md cursor-pointer backdrop-blur-sm bg-white/10"
+      className="entry-card"
     >
-      <div className="flex items-center gap-2 mb-1">
+      <div className="entry-card-header">
         {topic && (
           <button
             type="button"
             onClick={onTopicClick}
-            className="text-xs py-1 mb-[10px] rounded flex items-center gap-1 hover:ring-2 hover:ring-gray-300 transition-all"
+            className="entry-card-topic"
             title={`Filter by ${topicName}`}
           >
             <TopicIcon iconName={topic.icon} size="sm" />
-            {topicName && <span className="text-gray-700">{topicName}</span>}
+            {topicName && <span>{topicName}</span>}
           </button>
         )}
         {isFavorite && (
-          <svg className="w-4 h-4 text-teal-500" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="entry-card-bookmark" fill="currentColor" viewBox="0 0 24 24">
             <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
         )}
       </div>
-      <div className="flex items-start gap-2">
+      <div className="entry-card-content">
         {isTask && (
           <button
             type="button"
             onClick={onTaskToggle}
-            className={`mt-0.5 w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-              isCompleted
-                ? 'bg-green-500 border-green-500 text-white'
-                : 'border-border hover:border-border'
-            }`}
+            className={`entry-card-checkbox ${isCompleted ? 'entry-card-checkbox-checked' : ''}`}
             title={isCompleted ? 'Mark incomplete' : 'Mark complete'}
           >
             {isCompleted && (
@@ -1349,7 +1329,7 @@ function EntryCard({
             )}
           </button>
         )}
-        <p className={`text-sm ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+        <p className={`entry-card-preview ${isCompleted ? 'entry-card-preview-completed' : ''}`}>
           {decryptedContent || 'Decrypting...'}
         </p>
       </div>
@@ -1386,23 +1366,23 @@ function MiniCalendar({
   const selectedDateObj = selectedDate ? parseISO(selectedDate) : null;
 
   return (
-    <div className="p-3">
+    <div className="mini-calendar">
       {/* Month Navigation */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="mini-calendar-header">
         <button
           onClick={() => navigateMonth('prev')}
-          className="p-1 hover:backdrop-blur-sm bg-white/40 rounded text-gray-600"
+          className="mini-calendar-nav"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="text-sm font-medium text-gray-900">
+        <span className="mini-calendar-title">
           {format(currentMonth, 'MMMM yyyy')}
         </span>
         <button
           onClick={() => navigateMonth('next')}
-          className="p-1 hover:backdrop-blur-sm bg-white/40 rounded text-gray-600"
+          className="mini-calendar-nav"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1411,16 +1391,16 @@ function MiniCalendar({
       </div>
 
       {/* Day Headers */}
-      <div className="grid grid-cols-7 gap-1 mb-1">
+      <div className="mini-calendar-weekdays">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-          <div key={i} className="text-center text-xs text-gray-400 font-medium py-1">
+          <div key={i} className="mini-calendar-weekday">
             {day}
           </div>
         ))}
       </div>
 
       {/* Calendar Days */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="mini-calendar-days">
         {days.map((day) => {
           const dateStr = format(day, 'yyyy-MM-dd');
           const isToday = isSameDay(day, todayDate);
@@ -1431,12 +1411,7 @@ function MiniCalendar({
             <button
               key={day.toString()}
               onClick={() => onDateSelect(dateStr)}
-              className={`
-                text-xs p-1.5 rounded-full transition-colors
-                ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
-                ${isToday && !isSelected ? 'font-medium' : ''}
-                ${isSelected ? 'text-white font-medium' : 'hover:backdrop-blur-sm bg-white/40'}
-              `}
+              className={`mini-calendar-day ${!isCurrentMonth ? 'mini-calendar-day-outside' : ''} ${isToday && !isSelected ? 'mini-calendar-day-today' : ''} ${isSelected ? 'mini-calendar-day-selected' : ''}`}
               style={isToday && !isSelected ? { color: accentColor, backgroundColor: '#e5e7eb' } : isSelected ? { backgroundColor: accentColor } : undefined}
             >
               {format(day, 'd')}

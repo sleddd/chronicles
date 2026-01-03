@@ -243,21 +243,17 @@ export function GoalsView() {
   }
 
   return (
-    <div className="p-4 h-full overflow-auto backdrop-blur-md bg-white/70">
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold text-gray-900 mb-4">Goals</h1>
+    <div className="goals-view">
+      <div className="goals-view-header">
+        <h1 className="goals-view-title">Goals</h1>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border">
+        <div className="view-tabs goals-tabs">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? 'border-b-2 -mb-px'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
+              className={`view-tab ${activeTab === tab.key ? 'view-tab-active' : ''}`}
               style={activeTab === tab.key ? { color: accentColor, borderColor: accentColor } : undefined}
             >
               {tab.label}
@@ -268,7 +264,7 @@ export function GoalsView() {
 
       {/* Goals grid */}
       {filteredGoals.length === 0 ? (
-        <div className="text-center py-8">
+        <div className="goals-empty">
           <p className="text-gray-500">No goals found</p>
           <p className="text-sm text-gray-400 mt-1">
             Create a new entry with type &quot;goal&quot; to get started
@@ -284,7 +280,7 @@ export function GoalsView() {
             items={filteredGoals.map((g) => g.id)}
             strategy={rectSortingStrategy}
           >
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="goals-grid">
               {filteredGoals.map((goal) => (
                 <GoalCard
                   key={goal.id}

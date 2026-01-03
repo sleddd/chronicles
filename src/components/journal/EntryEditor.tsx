@@ -33,11 +33,7 @@ function ToolbarButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`p-1.5 rounded text-sm font-medium transition-colors ${
-        isActive
-          ? 'bg-teal-100 text-teal-700'
-          : 'text-gray-600 hover:backdrop-blur-sm bg-white/40 hover:text-gray-900'
-      } disabled:opacity-50 disabled:cursor-not-allowed`}
+      className={`entry-editor-toolbar-btn ${isActive ? 'entry-editor-toolbar-btn-active' : ''}`}
     >
       {children}
     </button>
@@ -48,7 +44,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
   if (!editor) return null;
 
   return (
-    <div className="hidden md:flex flex-wrap items-center gap-1 p-2 border-b border-border backdrop-blur-sm bg-white/30">
+    <div className="entry-editor-toolbar hidden md:flex flex-wrap">
       {/* Text formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -79,7 +75,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
         <span className="font-mono text-xs">&lt;/&gt;</span>
       </ToolbarButton>
 
-      <div className="w-px h-5 bg-gray-300 mx-1" />
+      <div className="entry-editor-toolbar-divider" />
 
       {/* Headings */}
       <ToolbarButton
@@ -104,7 +100,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
         H3
       </ToolbarButton>
 
-      <div className="w-px h-5 bg-gray-300 mx-1" />
+      <div className="entry-editor-toolbar-divider" />
 
       {/* Lists */}
       <ToolbarButton
@@ -122,7 +118,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
         <span className="text-xs">1. List</span>
       </ToolbarButton>
 
-      <div className="w-px h-5 bg-gray-300 mx-1" />
+      <div className="entry-editor-toolbar-divider" />
 
       {/* Block elements */}
       <ToolbarButton
@@ -146,7 +142,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
         <span className="text-xs">—</span>
       </ToolbarButton>
 
-      <div className="w-px h-5 bg-gray-300 mx-1" />
+      <div className="entry-editor-toolbar-divider" />
 
       {/* Undo/Redo */}
       <ToolbarButton
@@ -166,7 +162,7 @@ function EditorToolbar({ editor, onImageClick }: { editor: Editor | null; onImag
 
       {onImageClick && (
         <>
-          <div className="w-px h-5 bg-gray-300 mx-1" />
+          <div className="entry-editor-toolbar-divider" />
           <ToolbarButton
             onClick={onImageClick}
             title="Add Image"
@@ -1155,24 +1151,26 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="backdrop-blur-sm bg-white/30 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Entry?</h3>
-            <p className="text-gray-600 mb-4">
-              This action cannot be undone. The entry will be permanently deleted.
-            </p>
-            <div className="flex justify-end gap-3">
+        <div className="modal-overlay">
+          <div className="modal-content modal-sm modal-confirm">
+            <div className="modal-body">
+              <h3 className="modal-title mb-2">Delete Entry?</h3>
+              <p className="text-gray-600 mb-4">
+                This action cannot be undone. The entry will be permanently deleted.
+              </p>
+            </div>
+            <div className="modal-footer">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="px-4 py-2 text-gray-700 hover:backdrop-blur-sm bg-white/40 rounded-md"
+                className="btn btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400"
+                className="btn btn-danger"
               >
                 {deleting ? 'Deleting...' : 'Delete'}
               </button>
@@ -1205,7 +1203,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   <select
                     value={goalType}
                     onChange={(e) => setGoalType(e.target.value as 'short_term' | 'long_term')}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900"
                   >
                     <option value="short_term">Short-term</option>
                     <option value="long_term">Long-term</option>
@@ -1304,41 +1302,41 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       {(customType === 'task' || selectedTopicName?.toLowerCase() === 'task') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Task Settings</h3>
-            <div>
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Task Settings</h3>
+            </div>
+            <div className="custom-fields-body">
+              <div className="field-row">
+                <label className="checkbox-field">
                   <input
                     type="checkbox"
                     checked={isTaskCompleted}
                     onChange={(e) => setIsTaskCompleted(e.target.checked)}
-                    className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
                   />
-                  <span className="text-sm text-gray-700">Completed</span>
+                  Completed
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="checkbox-field">
                   <input
                     type="checkbox"
                     checked={isAutoMigrating}
                     onChange={(e) => setIsAutoMigrating(e.target.checked)}
-                    className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
                   />
-                  <span className="text-sm text-gray-700">Auto-migrate if incomplete</span>
+                  Auto-migrate if incomplete
                 </label>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="field-hint">
                 Auto-migrating tasks move to the current date at midnight if not completed.
               </p>
-              <div className="mt-4 pt-4">
-                <label className="block text-xs text-gray-500 mb-2">
+              <div className="field-group mt-4 pt-4">
+                <label className="field-label-sm">
                   Link to Milestones
                 </label>
                 <TaskMilestoneSelector
                   selectedMilestoneIds={taskMilestoneIds}
                   onMilestoneIdsChange={setTaskMilestoneIds}
                 />
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="field-hint">
                   Link this task to milestones to track progress
                 </p>
               </div>
@@ -1370,7 +1368,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   <select
                     value={medFrequency}
                     onChange={(e) => setMedFrequency(e.target.value as typeof medFrequency)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
+                    className="w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900"
                   >
                     <option value="once_daily">Once daily</option>
                     <option value="twice_daily">Twice daily</option>
@@ -1904,12 +1902,12 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       )}
 
       {/* Bottom action buttons */}
-      <div className="mt-4 pt-4 border-t border-border flex justify-between items-center flex-shrink-0">
+      <div className="entry-editor-actions mt-4 pt-4 border-t border-border">
         <div>
           {entryId && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-md border border-red-200"
+              className="btn btn-danger btn-outline"
             >
               Delete
             </button>
@@ -1918,7 +1916,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         <button
           onClick={handleSave}
           disabled={saving || (!expandEntry && charCount > MAX_CHARS_SHORT)}
-          className="px-4 py-2 text-white rounded-md disabled:bg-gray-400"
+          className="btn btn-primary"
           style={{ backgroundColor: saving || (!expandEntry && charCount > MAX_CHARS_SHORT) ? undefined : accentColor }}
           onMouseOver={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = hoverColor; }}
           onMouseOut={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = accentColor; }}

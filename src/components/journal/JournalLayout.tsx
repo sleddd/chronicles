@@ -53,7 +53,7 @@ export function JournalLayout({ initialEntryId }: Props) {
     <div className="flex flex-row h-full min-h-0">
       {/* Entries list - hidden on mobile when viewing editor */}
       <div
-        className={`backdrop-blur-md bg-white/40 min-h-0 ${
+        className={`backdrop-blur-md bg-white/80 min-h-0 ${
           mobileShowEditor ? 'hidden md:block md:w-1/3' : 'flex-1 md:w-1/3 md:flex-none'
         }`}
       >
@@ -80,7 +80,7 @@ export function JournalLayout({ initialEntryId }: Props) {
 
       {/* Editor panel - full screen on mobile when viewing, always visible on desktop */}
       <div
-        className={`overflow-auto backdrop-blur-md bg-white/70 flex-1 border-t border-border md:border-t-0 ${
+        className={`overflow-auto backdrop-blur-md bg-white/90 flex-1 border-t border-border md:border-t-0 ${
           mobileShowEditor ? 'block' : 'hidden md:block'
         }`}
       >

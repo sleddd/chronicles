@@ -450,7 +450,7 @@ export function CalendarView({
   }
 
   return (
-    <div className="flex flex-col h-full w-full backdrop-blur-md bg-white/30 p-4 items-center">
+    <div className="flex flex-col h-full w-full backdrop-blur-md bg-white/90 p-4 items-center">
       {/* Header */}
       <div className="flex items-center justify-center mt-5 pt-5 mb-5 pb-5 px-4">
         <div className="flex items-center gap-2 md:gap-4">
