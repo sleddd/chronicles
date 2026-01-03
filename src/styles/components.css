@@ -697,7 +697,6 @@
 
 .quick-entry-topic {
   @apply flex items-center gap-2 px-2 py-1 text-sm rounded-md cursor-pointer;
-  @apply border border-border backdrop-blur-sm bg-white/10;
 }
 
 .quick-entry-input {
@@ -976,11 +975,6 @@
 
 .quick-entry-header {
   @apply flex items-center gap-3 mb-3;
-}
-
-.quick-entry-topic {
-  @apply flex items-center gap-2 px-2 py-1 text-sm rounded-md cursor-pointer;
-  @apply border border-border backdrop-blur-sm bg-white/10;
 }
 
 .quick-entry-body {

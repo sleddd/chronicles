@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useCallback, useReducer, useState } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { TopicIcon } from '@/components/topics/IconPicker';
+import { entriesListReducer, initialEntriesListState } from './entriesListReducer';
 import {
   format,
   startOfMonth,
@@ -67,80 +68,41 @@ export function EntriesList({
   onEntryCreated,
   today,
 }: Props) {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [decryptedEntries, setDecryptedEntries] = useState<Record<string, string>>({});
-  const [decryptedTopics, setDecryptedTopics] = useState<Record<string, string>>({});
-  const [taskFields, setTaskFields] = useState<Map<string, TaskFields>>(new Map());
-  const [filterTopicId, setFilterTopicId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('date');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchTopicId, setSearchTopicId] = useState<string | null>(null);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  const [isDatePickerExpanded, setIsDatePickerExpanded] = useState(false);
-  const [quickEntry, setQuickEntry] = useState('');
-  const [quickEntryTopicId, setQuickEntryTopicId] = useState<string | null>(null);
-  const [showTopicDropdown, setShowTopicDropdown] = useState(false);
-  const [topicSearchQuery, setTopicSearchQuery] = useState('');
-  // Quick entry custom fields
-  // Task
-  const [qfTaskCompleted, setQfTaskCompleted] = useState(false);
-  const [qfTaskAutoMigrate, setQfTaskAutoMigrate] = useState(true);
-  // Goal
-  const [qfGoalType, setQfGoalType] = useState<string>('personal');
-  const [qfGoalStatus, setQfGoalStatus] = useState<string>('not_started');
-  const [qfGoalTargetDate, setQfGoalTargetDate] = useState('');
-  // Meeting
-  const [qfMeetingStartDate, setQfMeetingStartDate] = useState('');
-  const [qfMeetingStartTime, setQfMeetingStartTime] = useState('09:00');
-  const [qfMeetingEndDate, setQfMeetingEndDate] = useState('');
-  const [qfMeetingEndTime, setQfMeetingEndTime] = useState('10:00');
-  const [qfMeetingLocation, setQfMeetingLocation] = useState('');
-  const [qfMeetingAddress, setQfMeetingAddress] = useState('');
-  const [qfMeetingPhone, setQfMeetingPhone] = useState('');
-  const [qfMeetingTopic, setQfMeetingTopic] = useState('');
-  const [qfMeetingAttendees, setQfMeetingAttendees] = useState('');
-  // Event
-  const [qfEventStartDate, setQfEventStartDate] = useState('');
-  const [qfEventStartTime, setQfEventStartTime] = useState('09:00');
-  const [qfEventEndDate, setQfEventEndDate] = useState('');
-  const [qfEventEndTime, setQfEventEndTime] = useState('10:00');
-  const [qfEventLocation, setQfEventLocation] = useState('');
-  const [qfEventAddress, setQfEventAddress] = useState('');
-  const [qfEventPhone, setQfEventPhone] = useState('');
-  // Medication
-  const [qfMedDosage, setQfMedDosage] = useState('');
-  const [qfMedFrequency, setQfMedFrequency] = useState<string>('once_daily');
-  const [qfMedScheduleTimes, setQfMedScheduleTimes] = useState<string[]>(['08:00']);
-  const [qfMedIsActive, setQfMedIsActive] = useState(true);
-  // Exercise
-  const [qfExerciseType, setQfExerciseType] = useState<string>('');
-  const [qfExerciseDuration, setQfExerciseDuration] = useState('');
-  const [qfExerciseIntensity, setQfExerciseIntensity] = useState<string>('medium');
-  const [qfExerciseDistance, setQfExerciseDistance] = useState('');
-  const [qfExerciseDistanceUnit, setQfExerciseDistanceUnit] = useState<string>('miles');
-  const [qfExerciseCalories, setQfExerciseCalories] = useState('');
-  // Food
-  const [qfMealType, setQfMealType] = useState<string>('');
-  const [qfFoodIngredients, setQfFoodIngredients] = useState('');
-  // Symptom
-  const [qfSeverity, setQfSeverity] = useState(5);
-  const [qfSymptomDuration, setQfSymptomDuration] = useState('');
+  const [state, dispatch] = useReducer(entriesListReducer, initialEntriesListState);
   const { encryptData, decryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
+
+  // Destructure state for easier access
+  const {
+    entries,
+    topics,
+    decryptedEntries,
+    decryptedTopics,
+    taskFields,
+    favoriteIds,
+    filterTopicId,
+    viewMode,
+    searchQuery,
+    searchTopicId,
+    isDatePickerExpanded,
+    quickEntry,
+    quickEntryTopicId,
+    showTopicDropdown,
+    topicSearchQuery,
+  } = state;
 
   const fetchEntries = useCallback(async () => {
     if (viewMode === 'favorites') {
       // Fetch favorites
       const response = await fetch('/api/favorites');
       const data = await response.json();
-      setEntries(data.favorites || []);
-      setFavoriteIds(new Set((data.favorites || []).map((f: Entry) => f.id)));
+      dispatch({ type: 'SET_ENTRIES', payload: data.favorites || [] });
+      dispatch({ type: 'SET_FAVORITE_IDS', payload: new Set((data.favorites || []).map((f: Entry) => f.id)) });
     } else if (viewMode === 'search' && searchQuery.trim()) {
       // Search entries (client-side for now since we need to decrypt)
       const response = await fetch('/api/entries?all=true');
       const data = await response.json();
-      setEntries(data.entries || []);
+      dispatch({ type: 'SET_ENTRIES', payload: data.entries || [] });
     } else if (viewMode === 'all') {
       // Fetch all entries
       const params = new URLSearchParams();
@@ -149,7 +111,7 @@ export function EntriesList({
 
       const response = await fetch(`/api/entries?${params}`);
       const data = await response.json();
-      setEntries(data.entries || []);
+      dispatch({ type: 'SET_ENTRIES', payload: data.entries || [] });
     } else {
       // Fetch by date
       const params = new URLSearchParams();
@@ -158,21 +120,21 @@ export function EntriesList({
 
       const response = await fetch(`/api/entries?${params}`);
       const data = await response.json();
-      setEntries(data.entries || []);
+      dispatch({ type: 'SET_ENTRIES', payload: data.entries || [] });
     }
   }, [selectedDate, filterTopicId, viewMode, searchQuery]);
 
   const fetchTopics = useCallback(async () => {
     const response = await fetch('/api/topics');
     const data = await response.json();
-    setTopics(data.topics || []);
+    dispatch({ type: 'SET_TOPICS', payload: data.topics || [] });
   }, []);
 
   const fetchFavorites = useCallback(async () => {
     if (viewMode !== 'favorites') {
       const response = await fetch('/api/favorites');
       const data = await response.json();
-      setFavoriteIds(new Set((data.favorites || []).map((f: Entry) => f.id)));
+      dispatch({ type: 'SET_FAVORITE_IDS', payload: new Set((data.favorites || []).map((f: Entry) => f.id)) });
     }
   }, [viewMode]);
 
@@ -187,7 +149,7 @@ export function EntriesList({
         decrypted[entry.id] = 'Decryption failed';
       }
     }
-    setDecryptedEntries(decrypted);
+    dispatch({ type: 'SET_DECRYPTED_ENTRIES', payload: decrypted });
   }, [entries, decryptData]);
 
   const decryptTopics = useCallback(async () => {
@@ -200,7 +162,7 @@ export function EntriesList({
         decrypted[topic.id] = 'Unknown';
       }
     }
-    setDecryptedTopics(decrypted);
+    dispatch({ type: 'SET_DECRYPTED_TOPICS', payload: decrypted });
   }, [topics, decryptData]);
 
   const decryptTaskFields = useCallback(async () => {
@@ -228,7 +190,7 @@ export function EntriesList({
         fields.set(entry.id, { isCompleted, isAutoMigrating });
       }
     }
-    setTaskFields(fields);
+    dispatch({ type: 'SET_TASK_FIELDS', payload: fields });
   }, [entries, decryptData]);
 
   const handleTaskToggle = async (entryId: string, e: React.MouseEvent) => {
@@ -240,10 +202,9 @@ export function EntriesList({
     const newIsCompleted = !currentFields.isCompleted;
 
     // Optimistically update UI
-    setTaskFields((prev) => {
-      const updated = new Map(prev);
-      updated.set(entryId, { ...currentFields, isCompleted: newIsCompleted });
-      return updated;
+    dispatch({
+      type: 'UPDATE_TASK_FIELD',
+      payload: { entryId, fields: { ...currentFields, isCompleted: newIsCompleted } },
     });
 
     try {
@@ -267,10 +228,9 @@ export function EntriesList({
     } catch (error) {
       console.error('Failed to toggle task completion:', error);
       // Revert on error
-      setTaskFields((prev) => {
-        const updated = new Map(prev);
-        updated.set(entryId, currentFields);
-        return updated;
+      dispatch({
+        type: 'UPDATE_TASK_FIELD',
+        payload: { entryId, fields: currentFields },
       });
     }
   };
@@ -317,62 +277,18 @@ export function EntriesList({
 
   const handleIconClick = (topicId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFilterTopicId(topicId);
+    dispatch({ type: 'SET_FILTER_TOPIC_ID', payload: topicId });
   };
 
   const clearFilter = () => {
-    setFilterTopicId(null);
+    dispatch({ type: 'CLEAR_FILTER' });
   };
 
   // Get topic name for quick entry to determine which custom fields to show
   const quickEntryTopicName = quickEntryTopicId ? decryptedTopics[quickEntryTopicId]?.toLowerCase() : null;
 
   const resetQuickEntryFields = () => {
-    setQuickEntry('');
-    setQuickEntryTopicId(null);
-    // Task
-    setQfTaskCompleted(false);
-    setQfTaskAutoMigrate(true);
-    // Goal
-    setQfGoalType('personal');
-    setQfGoalStatus('not_started');
-    setQfGoalTargetDate('');
-    // Meeting
-    setQfMeetingStartDate('');
-    setQfMeetingStartTime('09:00');
-    setQfMeetingEndDate('');
-    setQfMeetingEndTime('10:00');
-    setQfMeetingLocation('');
-    setQfMeetingAddress('');
-    setQfMeetingPhone('');
-    setQfMeetingTopic('');
-    setQfMeetingAttendees('');
-    // Event
-    setQfEventStartDate('');
-    setQfEventStartTime('09:00');
-    setQfEventEndDate('');
-    setQfEventEndTime('10:00');
-    setQfEventLocation('');
-    setQfEventAddress('');
-    setQfEventPhone('');
-    // Medication
-    setQfMedDosage('');
-    setQfMedFrequency('once_daily');
-    setQfMedScheduleTimes(['08:00']);
-    setQfMedIsActive(true);
-    // Exercise
-    setQfExerciseType('');
-    setQfExerciseDuration('');
-    setQfExerciseIntensity('medium');
-    setQfExerciseDistance('');
-    setQfExerciseDistanceUnit('miles');
-    setQfExerciseCalories('');
-    // Food
-    setQfMealType('');
-    setQfFoodIngredients('');
-    // Symptom
-    setQfSeverity(5);
-    setQfSymptomDuration('');
+    dispatch({ type: 'RESET_QUICK_ENTRY' });
   };
 
   const handleQuickEntry = async (e: React.FormEvent) => {
@@ -388,17 +304,17 @@ export function EntriesList({
 
       if (topicName === 'task') {
         // Task fields: isCompleted, isAutoMigrating
-        const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: qfTaskCompleted });
-        const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: qfTaskAutoMigrate });
+        const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: state.task.isCompleted });
+        const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: state.task.isAutoMigrating });
         const enc1 = await encryptData(completedField);
         const enc2 = await encryptData(migrateField);
         customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
         customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
       } else if (topicName === 'goal') {
         // Goal fields: type, status, targetDate, progressPercentage
-        const typeField = JSON.stringify({ fieldKey: 'type', value: qfGoalType });
-        const statusField = JSON.stringify({ fieldKey: 'status', value: qfGoalStatus });
-        const targetField = JSON.stringify({ fieldKey: 'targetDate', value: qfGoalTargetDate || null });
+        const typeField = JSON.stringify({ fieldKey: 'type', value: state.goal.type });
+        const statusField = JSON.stringify({ fieldKey: 'status', value: state.goal.status });
+        const targetField = JSON.stringify({ fieldKey: 'targetDate', value: state.goal.targetDate || null });
         const progressField = JSON.stringify({ fieldKey: 'progressPercentage', value: 0 });
         const enc1 = await encryptData(typeField);
         const enc2 = await encryptData(statusField);
@@ -410,10 +326,10 @@ export function EntriesList({
         customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
       } else if (topicName === 'meeting') {
         // Meeting fields: startDate, startTime, endDate, endTime, location, address, phone, topic, attendees
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: qfMeetingStartDate || selectedDate || today });
-        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: qfMeetingStartTime });
-        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: qfMeetingEndDate || qfMeetingStartDate || selectedDate || today });
-        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: qfMeetingEndTime });
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: state.meeting.startDate || selectedDate || today });
+        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: state.meeting.startTime });
+        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: state.meeting.endDate || state.meeting.startDate || selectedDate || today });
+        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: state.meeting.endTime });
         const enc1 = await encryptData(startDateField);
         const enc2 = await encryptData(startTimeField);
         const enc3 = await encryptData(endDateField);
@@ -422,37 +338,37 @@ export function EntriesList({
         customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
         customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
         customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
-        if (qfMeetingLocation) {
-          const locationField = JSON.stringify({ fieldKey: 'location', value: qfMeetingLocation });
+        if (state.meeting.location) {
+          const locationField = JSON.stringify({ fieldKey: 'location', value: state.meeting.location });
           const enc = await encryptData(locationField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfMeetingAddress) {
-          const addressField = JSON.stringify({ fieldKey: 'address', value: qfMeetingAddress });
+        if (state.meeting.address) {
+          const addressField = JSON.stringify({ fieldKey: 'address', value: state.meeting.address });
           const enc = await encryptData(addressField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfMeetingPhone) {
-          const phoneField = JSON.stringify({ fieldKey: 'phone', value: qfMeetingPhone });
+        if (state.meeting.phone) {
+          const phoneField = JSON.stringify({ fieldKey: 'phone', value: state.meeting.phone });
           const enc = await encryptData(phoneField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfMeetingTopic) {
-          const topicField = JSON.stringify({ fieldKey: 'topic', value: qfMeetingTopic });
+        if (state.meeting.topic) {
+          const topicField = JSON.stringify({ fieldKey: 'topic', value: state.meeting.topic });
           const enc = await encryptData(topicField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfMeetingAttendees) {
-          const attendeesField = JSON.stringify({ fieldKey: 'attendees', value: qfMeetingAttendees });
+        if (state.meeting.attendees) {
+          const attendeesField = JSON.stringify({ fieldKey: 'attendees', value: state.meeting.attendees });
           const enc = await encryptData(attendeesField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
       } else if (topicName === 'event') {
         // Event fields: startDate, startTime, endDate, endTime, location, address, phone
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: qfEventStartDate || selectedDate || today });
-        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: qfEventStartTime });
-        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: qfEventEndDate || qfEventStartDate || selectedDate || today });
-        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: qfEventEndTime });
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: state.event.startDate || selectedDate || today });
+        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: state.event.startTime });
+        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: state.event.endDate || state.event.startDate || selectedDate || today });
+        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: state.event.endTime });
         const enc1 = await encryptData(startDateField);
         const enc2 = await encryptData(startTimeField);
         const enc3 = await encryptData(endDateField);
@@ -461,27 +377,27 @@ export function EntriesList({
         customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
         customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
         customFields.push({ encryptedData: enc4.ciphertext, iv: enc4.iv });
-        if (qfEventLocation) {
-          const locationField = JSON.stringify({ fieldKey: 'location', value: qfEventLocation });
+        if (state.event.location) {
+          const locationField = JSON.stringify({ fieldKey: 'location', value: state.event.location });
           const enc = await encryptData(locationField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfEventAddress) {
-          const addressField = JSON.stringify({ fieldKey: 'address', value: qfEventAddress });
+        if (state.event.address) {
+          const addressField = JSON.stringify({ fieldKey: 'address', value: state.event.address });
           const enc = await encryptData(addressField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfEventPhone) {
-          const phoneField = JSON.stringify({ fieldKey: 'phone', value: qfEventPhone });
+        if (state.event.phone) {
+          const phoneField = JSON.stringify({ fieldKey: 'phone', value: state.event.phone });
           const enc = await encryptData(phoneField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
       } else if (topicName === 'medication') {
         // Medication fields: dosage, frequency, scheduleTimes, isActive, startDate
-        const dosageField = JSON.stringify({ fieldKey: 'dosage', value: qfMedDosage });
-        const frequencyField = JSON.stringify({ fieldKey: 'frequency', value: qfMedFrequency });
-        const scheduleTimesField = JSON.stringify({ fieldKey: 'scheduleTimes', value: qfMedScheduleTimes });
-        const isActiveField = JSON.stringify({ fieldKey: 'isActive', value: qfMedIsActive });
+        const dosageField = JSON.stringify({ fieldKey: 'dosage', value: state.medication.dosage });
+        const frequencyField = JSON.stringify({ fieldKey: 'frequency', value: state.medication.frequency });
+        const scheduleTimesField = JSON.stringify({ fieldKey: 'scheduleTimes', value: state.medication.scheduleTimes });
+        const isActiveField = JSON.stringify({ fieldKey: 'isActive', value: state.medication.isActive });
         const startDateField = JSON.stringify({ fieldKey: 'startDate', value: selectedDate || today });
         const enc1 = await encryptData(dosageField);
         const enc2 = await encryptData(frequencyField);
@@ -495,29 +411,29 @@ export function EntriesList({
         customFields.push({ encryptedData: enc5.ciphertext, iv: enc5.iv });
       } else if (topicName === 'exercise') {
         // Exercise fields: exerciseType, duration, intensity, distance, distanceUnit, calories, performedAt
-        if (qfExerciseType) {
-          const typeField = JSON.stringify({ fieldKey: 'exerciseType', value: qfExerciseType });
+        if (state.exercise.type) {
+          const typeField = JSON.stringify({ fieldKey: 'exerciseType', value: state.exercise.type });
           const enc = await encryptData(typeField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfExerciseDuration) {
-          const durField = JSON.stringify({ fieldKey: 'duration', value: parseInt(qfExerciseDuration) || null });
+        if (state.exercise.duration) {
+          const durField = JSON.stringify({ fieldKey: 'duration', value: parseInt(state.exercise.duration) || null });
           const enc = await encryptData(durField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: qfExerciseIntensity });
+        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: state.exercise.intensity });
         const encIntensity = await encryptData(intensityField);
         customFields.push({ encryptedData: encIntensity.ciphertext, iv: encIntensity.iv });
-        if (qfExerciseDistance) {
-          const distanceField = JSON.stringify({ fieldKey: 'distance', value: parseFloat(qfExerciseDistance) || null });
+        if (state.exercise.distance) {
+          const distanceField = JSON.stringify({ fieldKey: 'distance', value: parseFloat(state.exercise.distance) || null });
           const enc = await encryptData(distanceField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
-          const unitField = JSON.stringify({ fieldKey: 'distanceUnit', value: qfExerciseDistanceUnit });
+          const unitField = JSON.stringify({ fieldKey: 'distanceUnit', value: state.exercise.distanceUnit });
           const encUnit = await encryptData(unitField);
           customFields.push({ encryptedData: encUnit.ciphertext, iv: encUnit.iv });
         }
-        if (qfExerciseCalories) {
-          const calField = JSON.stringify({ fieldKey: 'calories', value: parseInt(qfExerciseCalories) || null });
+        if (state.exercise.calories) {
+          const calField = JSON.stringify({ fieldKey: 'calories', value: parseInt(state.exercise.calories) || null });
           const enc = await encryptData(calField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
@@ -526,13 +442,13 @@ export function EntriesList({
         customFields.push({ encryptedData: encPerformed.ciphertext, iv: encPerformed.iv });
       } else if (topicName === 'food') {
         // Food fields: mealType, consumedAt, ingredients
-        if (qfMealType) {
-          const mealField = JSON.stringify({ fieldKey: 'mealType', value: qfMealType });
+        if (state.food.mealType) {
+          const mealField = JSON.stringify({ fieldKey: 'mealType', value: state.food.mealType });
           const enc = await encryptData(mealField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        if (qfFoodIngredients) {
-          const ingredients = qfFoodIngredients.split(',').map(i => i.trim()).filter(i => i);
+        if (state.food.ingredients) {
+          const ingredients = state.food.ingredients.split(',').map((i: string) => i.trim()).filter((i: string) => i);
           const ingredientsField = JSON.stringify({ fieldKey: 'ingredients', value: ingredients });
           const enc = await encryptData(ingredientsField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
@@ -542,11 +458,11 @@ export function EntriesList({
         customFields.push({ encryptedData: encConsumed.ciphertext, iv: encConsumed.iv });
       } else if (topicName === 'symptom' || topicName === 'symptoms') {
         // Symptom fields: severity, occurredAt, duration
-        const sevField = JSON.stringify({ fieldKey: 'severity', value: qfSeverity });
+        const sevField = JSON.stringify({ fieldKey: 'severity', value: state.symptom.severity });
         const enc = await encryptData(sevField);
         customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
-        if (qfSymptomDuration) {
-          const durField = JSON.stringify({ fieldKey: 'duration', value: parseInt(qfSymptomDuration) || null });
+        if (state.symptom.duration) {
+          const durField = JSON.stringify({ fieldKey: 'duration', value: parseInt(state.symptom.duration) || null });
           const encDur = await encryptData(durField);
           customFields.push({ encryptedData: encDur.ciphertext, iv: encDur.iv });
         }
@@ -624,7 +540,7 @@ export function EntriesList({
   // Handle date selection from calendar (collapses picker)
   const handleDateSelect = (date: string) => {
     onDateChange(date);
-    setIsDatePickerExpanded(false);
+    dispatch({ type: 'SET_DATE_PICKER_EXPANDED', payload: false });
   };
 
   return (
@@ -635,11 +551,11 @@ export function EntriesList({
           onClick={() => {
             if (viewMode === 'date') {
               // Toggle date picker if already on date tab
-              setIsDatePickerExpanded(!isDatePickerExpanded);
+              dispatch({ type: 'SET_DATE_PICKER_EXPANDED', payload: !isDatePickerExpanded });
             } else {
               // Switch to date mode and show picker
-              setViewMode('date');
-              setIsDatePickerExpanded(true);
+              dispatch({ type: 'SET_VIEW_MODE', payload: 'date' });
+              dispatch({ type: 'SET_DATE_PICKER_EXPANDED', payload: true });
             }
           }}
           className={`view-tab ${viewMode === 'date' ? 'view-tab-active' : ''}`}
@@ -647,13 +563,13 @@ export function EntriesList({
           Date
         </button>
         <button
-          onClick={() => setViewMode('all')}
+          onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'all' })}
           className={`view-tab ${viewMode === 'all' ? 'view-tab-active' : ''}`}
         >
           All
         </button>
         <button
-          onClick={() => setViewMode('favorites')}
+          onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'favorites' })}
           className={`view-tab ${viewMode === 'favorites' ? 'view-tab-active' : ''}`}
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -662,7 +578,7 @@ export function EntriesList({
           Bookmarks
         </button>
         <button
-          onClick={() => setViewMode('search')}
+          onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'search' })}
           className={`view-tab ${viewMode === 'search' ? 'view-tab-active' : ''}`}
         >
           Search
@@ -686,7 +602,7 @@ export function EntriesList({
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => dispatch({ type: 'SET_SEARCH_QUERY', payload: e.target.value })}
             placeholder="Search entries..."
             className="input-glass"
           />
@@ -697,7 +613,7 @@ export function EntriesList({
                 <strong>{getTopicName(searchTopicId)}</strong>
               </span>
               <button
-                onClick={() => setSearchTopicId(null)}
+                onClick={() => dispatch({ type: 'SET_SEARCH_TOPIC_ID', payload: null })}
                 className="btn-ghost ml-auto text-sm"
               >
                 × Clear
@@ -706,7 +622,7 @@ export function EntriesList({
           ) : (
             <select
               value=""
-              onChange={(e) => setSearchTopicId(e.target.value || null)}
+              onChange={(e) => dispatch({ type: 'SET_SEARCH_TOPIC_ID', payload: e.target.value || null })}
               className="select-glass"
             >
               <option value="">Filter by topic...</option>
@@ -747,7 +663,7 @@ export function EntriesList({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowTopicDropdown(!showTopicDropdown)}
+              onClick={() => dispatch({ type: 'SET_SHOW_TOPIC_DROPDOWN', payload: !showTopicDropdown })}
               className="quick-entry-topic"
             >
               {quickEntryTopicId ? (
@@ -771,7 +687,7 @@ export function EntriesList({
                   <input
                     type="text"
                     value={topicSearchQuery}
-                    onChange={(e) => setTopicSearchQuery(e.target.value)}
+                    onChange={(e) => dispatch({ type: 'SET_TOPIC_SEARCH_QUERY', payload: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') e.preventDefault();
                     }}
@@ -785,9 +701,9 @@ export function EntriesList({
                     <button
                       type="button"
                       onClick={() => {
-                        setQuickEntryTopicId(null);
-                        setShowTopicDropdown(false);
-                        setTopicSearchQuery('');
+                        dispatch({ type: 'SET_QUICK_ENTRY_TOPIC_ID', payload: null });
+                        dispatch({ type: 'SET_SHOW_TOPIC_DROPDOWN', payload: false });
+                        dispatch({ type: 'SET_TOPIC_SEARCH_QUERY', payload: '' });
                       }}
                       className="topic-selector-item"
                     >
@@ -805,9 +721,9 @@ export function EntriesList({
                       key={topic.id}
                       type="button"
                       onClick={() => {
-                        setQuickEntryTopicId(topic.id);
-                        setShowTopicDropdown(false);
-                        setTopicSearchQuery('');
+                        dispatch({ type: 'SET_QUICK_ENTRY_TOPIC_ID', payload: topic.id });
+                        dispatch({ type: 'SET_SHOW_TOPIC_DROPDOWN', payload: false });
+                        dispatch({ type: 'SET_TOPIC_SEARCH_QUERY', payload: '' });
                       }}
                       className="topic-selector-item"
                     >
@@ -825,7 +741,7 @@ export function EntriesList({
           <input
             type="text"
             value={quickEntry}
-            onChange={(e) => setQuickEntry(e.target.value)}
+            onChange={(e) => dispatch({ type: 'SET_QUICK_ENTRY', payload: e.target.value })}
             placeholder="Quick entry..."
             className="quick-entry-input"
           />
@@ -856,8 +772,8 @@ export function EntriesList({
             <label className="checkbox-field">
               <input
                 type="checkbox"
-                checked={qfTaskAutoMigrate}
-                onChange={(e) => setQfTaskAutoMigrate(e.target.checked)}
+                checked={state.task.isAutoMigrating}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_TASK', payload: { isAutoMigrating: e.target.checked } })}
               />
               Auto-migrate
             </label>
@@ -868,8 +784,8 @@ export function EntriesList({
           <div className="custom-fields-body">
             <div className="field-row">
               <select
-                value={qfGoalType}
-                onChange={(e) => setQfGoalType(e.target.value)}
+                value={state.goal.type}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { type: e.target.value } })}
                 className="select-glass select-sm"
               >
                 <option value="personal">Personal</option>
@@ -879,8 +795,8 @@ export function EntriesList({
                 <option value="educational">Educational</option>
               </select>
               <select
-                value={qfGoalStatus}
-                onChange={(e) => setQfGoalStatus(e.target.value)}
+                value={state.goal.status}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { status: e.target.value } })}
                 className="select-glass select-sm"
               >
                 <option value="not_started">Not Started</option>
@@ -892,8 +808,8 @@ export function EntriesList({
                 <label className="field-label">Target:</label>
                 <input
                   type="date"
-                  value={qfGoalTargetDate}
-                  onChange={(e) => setQfGoalTargetDate(e.target.value)}
+                  value={state.goal.targetDate}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { targetDate: e.target.value } })}
                   className="input-glass input-sm"
                 />
               </div>
@@ -908,15 +824,15 @@ export function EntriesList({
                 <label className="field-label">Start:</label>
                 <input
                   type="date"
-                  value={qfMeetingStartDate}
-                  onChange={(e) => setQfMeetingStartDate(e.target.value)}
+                  value={state.meeting.startDate}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { startDate: e.target.value } })}
                   placeholder={selectedDate || today}
                   className="input-glass input-sm"
                 />
                 <input
                   type="time"
-                  value={qfMeetingStartTime}
-                  onChange={(e) => setQfMeetingStartTime(e.target.value)}
+                  value={state.meeting.startTime}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { startTime: e.target.value } })}
                   className="input-glass input-sm"
                 />
               </div>
@@ -924,15 +840,15 @@ export function EntriesList({
                 <label className="field-label">End:</label>
                 <input
                   type="date"
-                  value={qfMeetingEndDate}
-                  onChange={(e) => setQfMeetingEndDate(e.target.value)}
-                  placeholder={qfMeetingStartDate || selectedDate || today}
+                  value={state.meeting.endDate}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { endDate: e.target.value } })}
+                  placeholder={state.meeting.startDate || selectedDate || today}
                   className="input-glass input-sm"
                 />
                 <input
                   type="time"
-                  value={qfMeetingEndTime}
-                  onChange={(e) => setQfMeetingEndTime(e.target.value)}
+                  value={state.meeting.endTime}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { endTime: e.target.value } })}
                   className="input-glass input-sm"
                 />
               </div>
@@ -940,15 +856,15 @@ export function EntriesList({
             <div className="field-row">
               <input
                 type="text"
-                value={qfMeetingLocation}
-                onChange={(e) => setQfMeetingLocation(e.target.value)}
+                value={state.meeting.location}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { location: e.target.value } })}
                 placeholder="Location"
                 className="input-glass input-sm flex-1 min-w-[100px]"
               />
               <input
                 type="text"
-                value={qfMeetingTopic}
-                onChange={(e) => setQfMeetingTopic(e.target.value)}
+                value={state.meeting.topic}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { topic: e.target.value } })}
                 placeholder="Meeting topic"
                 className="input-glass input-sm flex-1 min-w-[120px]"
               />
@@ -963,15 +879,15 @@ export function EntriesList({
                 <label className="field-label">Start:</label>
                 <input
                   type="date"
-                  value={qfEventStartDate}
-                  onChange={(e) => setQfEventStartDate(e.target.value)}
+                  value={state.event.startDate}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { startDate: e.target.value } })}
                   placeholder={selectedDate || today}
                   className="input-glass input-sm"
                 />
                 <input
                   type="time"
-                  value={qfEventStartTime}
-                  onChange={(e) => setQfEventStartTime(e.target.value)}
+                  value={state.event.startTime}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { startTime: e.target.value } })}
                   className="input-glass input-sm"
                 />
               </div>
@@ -979,15 +895,15 @@ export function EntriesList({
                 <label className="field-label">End:</label>
                 <input
                   type="date"
-                  value={qfEventEndDate}
-                  onChange={(e) => setQfEventEndDate(e.target.value)}
-                  placeholder={qfEventStartDate || selectedDate || today}
+                  value={state.event.endDate}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { endDate: e.target.value } })}
+                  placeholder={state.event.startDate || selectedDate || today}
                   className="input-glass input-sm"
                 />
                 <input
                   type="time"
-                  value={qfEventEndTime}
-                  onChange={(e) => setQfEventEndTime(e.target.value)}
+                  value={state.event.endTime}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { endTime: e.target.value } })}
                   className="input-glass input-sm"
                 />
               </div>
@@ -995,8 +911,8 @@ export function EntriesList({
             <div className="field-row">
               <input
                 type="text"
-                value={qfEventLocation}
-                onChange={(e) => setQfEventLocation(e.target.value)}
+                value={state.event.location}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { location: e.target.value } })}
                 placeholder="Location"
                 className="input-glass input-sm flex-1 min-w-[100px]"
               />
@@ -1009,14 +925,14 @@ export function EntriesList({
             <div className="field-row">
               <input
                 type="text"
-                value={qfMedDosage}
-                onChange={(e) => setQfMedDosage(e.target.value)}
+                value={state.medication.dosage}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { dosage: e.target.value } })}
                 placeholder="Dosage (e.g., 10mg)"
                 className="input-glass input-sm w-32"
               />
               <select
-                value={qfMedFrequency}
-                onChange={(e) => setQfMedFrequency(e.target.value)}
+                value={state.medication.frequency}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { frequency: e.target.value } })}
                 className="select-glass select-sm"
               >
                 <option value="once_daily">Once Daily</option>
@@ -1029,30 +945,30 @@ export function EntriesList({
               <label className="checkbox-field">
                 <input
                   type="checkbox"
-                  checked={qfMedIsActive}
-                  onChange={(e) => setQfMedIsActive(e.target.checked)}
+                  checked={state.medication.isActive}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { isActive: e.target.checked } })}
                 />
                 Active
               </label>
             </div>
             <div className="field-row">
               <label className="field-label">Schedule times:</label>
-              {qfMedScheduleTimes.map((time, idx) => (
+              {state.medication.scheduleTimes.map((time: string, idx: number) => (
                 <div key={idx} className="schedule-time-item">
                   <input
                     type="time"
                     value={time}
                     onChange={(e) => {
-                      const newTimes = [...qfMedScheduleTimes];
+                      const newTimes = [...state.medication.scheduleTimes];
                       newTimes[idx] = e.target.value;
-                      setQfMedScheduleTimes(newTimes);
+                      dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { scheduleTimes: newTimes } });
                     }}
                     className="input-glass input-sm"
                   />
-                  {qfMedScheduleTimes.length > 1 && (
+                  {state.medication.scheduleTimes.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => setQfMedScheduleTimes(qfMedScheduleTimes.filter((_, i) => i !== idx))}
+                      onClick={() => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { scheduleTimes: state.medication.scheduleTimes.filter((_: string, i: number) => i !== idx) } })}
                       className="schedule-time-remove"
                     >
                       ×
@@ -1062,7 +978,7 @@ export function EntriesList({
               ))}
               <button
                 type="button"
-                onClick={() => setQfMedScheduleTimes([...qfMedScheduleTimes, '12:00'])}
+                onClick={() => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { scheduleTimes: [...state.medication.scheduleTimes, '12:00'] } })}
                 className="schedule-time-add"
               >
                 + Add time
@@ -1075,8 +991,8 @@ export function EntriesList({
           <div className="custom-fields-body">
             <div className="field-row">
               <select
-                value={qfExerciseType}
-                onChange={(e) => setQfExerciseType(e.target.value)}
+                value={state.exercise.type}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { type: e.target.value } })}
                 className="select-glass select-sm"
               >
                 <option value="">Type...</option>
@@ -1093,8 +1009,8 @@ export function EntriesList({
               <div className="field-inline">
                 <input
                   type="number"
-                  value={qfExerciseDuration}
-                  onChange={(e) => setQfExerciseDuration(e.target.value)}
+                  value={state.exercise.duration}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { duration: e.target.value } })}
                   placeholder="Duration"
                   className="input-glass input-sm w-20"
                   min="0"
@@ -1102,8 +1018,8 @@ export function EntriesList({
                 <span className="field-unit">min</span>
               </div>
               <select
-                value={qfExerciseIntensity}
-                onChange={(e) => setQfExerciseIntensity(e.target.value)}
+                value={state.exercise.intensity}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { intensity: e.target.value } })}
                 className="select-glass select-sm"
               >
                 <option value="low">Low intensity</option>
@@ -1115,16 +1031,16 @@ export function EntriesList({
               <div className="field-inline">
                 <input
                   type="number"
-                  value={qfExerciseDistance}
-                  onChange={(e) => setQfExerciseDistance(e.target.value)}
+                  value={state.exercise.distance}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { distance: e.target.value } })}
                   placeholder="Distance"
                   className="input-glass input-sm w-20"
                   min="0"
                   step="0.1"
                 />
                 <select
-                  value={qfExerciseDistanceUnit}
-                  onChange={(e) => setQfExerciseDistanceUnit(e.target.value)}
+                  value={state.exercise.distanceUnit}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { distanceUnit: e.target.value } })}
                   className="select-glass select-sm"
                 >
                   <option value="miles">mi</option>
@@ -1135,8 +1051,8 @@ export function EntriesList({
               <div className="field-inline">
                 <input
                   type="number"
-                  value={qfExerciseCalories}
-                  onChange={(e) => setQfExerciseCalories(e.target.value)}
+                  value={state.exercise.calories}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { calories: e.target.value } })}
                   placeholder="Calories"
                   className="input-glass input-sm w-20"
                   min="0"
@@ -1151,8 +1067,8 @@ export function EntriesList({
           <div className="custom-fields-body">
             <div className="field-row">
               <select
-                value={qfMealType}
-                onChange={(e) => setQfMealType(e.target.value)}
+                value={state.food.mealType}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_FOOD', payload: { mealType: e.target.value } })}
                 className="select-glass select-sm"
               >
                 <option value="">Meal type...</option>
@@ -1163,8 +1079,8 @@ export function EntriesList({
               </select>
               <input
                 type="text"
-                value={qfFoodIngredients}
-                onChange={(e) => setQfFoodIngredients(e.target.value)}
+                value={state.food.ingredients}
+                onChange={(e) => dispatch({ type: 'UPDATE_QF_FOOD', payload: { ingredients: e.target.value } })}
                 placeholder="Ingredients (comma separated)"
                 className="input-glass input-sm flex-1 min-w-[150px]"
               />
@@ -1181,17 +1097,17 @@ export function EntriesList({
                   type="range"
                   min="1"
                   max="10"
-                  value={qfSeverity}
-                  onChange={(e) => setQfSeverity(parseInt(e.target.value))}
+                  value={state.symptom.severity}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_SYMPTOM', payload: { severity: parseInt(e.target.value) } })}
                   className="range-input w-24"
                 />
-                <span className="range-value">{qfSeverity}</span>
+                <span className="range-value">{state.symptom.severity}</span>
               </div>
               <div className="field-inline">
                 <input
                   type="number"
-                  value={qfSymptomDuration}
-                  onChange={(e) => setQfSymptomDuration(e.target.value)}
+                  value={state.symptom.duration}
+                  onChange={(e) => dispatch({ type: 'UPDATE_QF_SYMPTOM', payload: { duration: e.target.value } })}
                   placeholder="Duration"
                   className="input-glass input-sm w-20"
                   min="0"

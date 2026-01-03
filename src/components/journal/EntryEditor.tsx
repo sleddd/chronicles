@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useReducer } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEncryption } from '@/lib/hooks/useEncryption';
@@ -11,8 +11,28 @@ import { TopicSelector } from '@/components/topics/TopicSelector';
 import { MilestoneGoalSelector } from '@/components/goals/MilestoneEditor';
 import { TaskMilestoneSelector } from '@/components/tasks/TaskMilestoneSelector';
 import { ShareModal } from '@/components/sharing/ShareModal';
-// Images disabled for now
-// import { ImageUpload } from '@/components/images/ImageUpload';
+import { entryReducer, initialState, type EntryState } from './entryEditorReducer';
+// Import existing form field components
+import { GoalFields } from '@/components/forms/GoalFields';
+import { TaskFields } from '@/components/forms/TaskFields';
+import { MilestoneFields } from '@/components/forms/MilestoneFields';
+import { MedicationFields } from '@/components/forms/MedicationFields';
+import { FoodFields } from '@/components/forms/FoodFields';
+import { SymptomFields } from '@/components/forms/SymptomFields';
+import { ExerciseFields } from '@/components/forms/ExerciseFields';
+import { EventFields } from '@/components/forms/EventFields';
+import { MeetingFields } from '@/components/forms/MeetingFields';
+import type {
+  GoalFields as GoalFieldValues,
+  TaskFields as TaskFieldValues,
+  MilestoneFields as MilestoneFieldValues,
+  MedicationFields as MedicationFieldValues,
+  FoodFields as FoodFieldValues,
+  SymptomFields as SymptomFieldValues,
+  ExerciseFields as ExerciseFieldValues,
+  EventFields as EventFieldValues,
+  MeetingFields as MeetingFieldValues,
+} from '@/lib/hooks/useCustomFields';
 
 function ToolbarButton({
   onClick,
@@ -191,21 +211,10 @@ interface Props {
 export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry, today, customType, onTopicsChange }: Props) {
   // Note: _date is available for future use (e.g., viewing entries from past dates)
   void _date;
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-  const [selectedTopicName, setSelectedTopicName] = useState<string | null>(null);
-  const [storedCustomType, setStoredCustomType] = useState<string | null>(null);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [togglingFavorite, setTogglingFavorite] = useState(false);
-  const [expandEntry, setExpandEntry] = useState(false);
-  const [charCount, setCharCount] = useState(0);
-  // Images disabled for now
-  // const [showImageUpload, setShowImageUpload] = useState(false);
-  // const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+
+  // Use reducer for all state management
+  const [state, dispatch] = useReducer(entryReducer, initialState);
+
   const { encryptData, decryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
 
@@ -214,91 +223,24 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   // Fetch and decrypt topic name when selectedTopicId changes
   useEffect(() => {
     const fetchTopicName = async () => {
-      if (!selectedTopicId || !isKeyReady) {
-        setSelectedTopicName(null);
+      if (!state.selectedTopicId || !isKeyReady) {
+        dispatch({ type: 'SET_TOPIC_NAME', payload: null });
         return;
       }
       try {
         const response = await fetch('/api/topics');
         const data = await response.json();
-        const topic = data.topics?.find((t: { id: string }) => t.id === selectedTopicId);
+        const topic = data.topics?.find((t: { id: string }) => t.id === state.selectedTopicId);
         if (topic) {
           const name = await decryptData(topic.encryptedName, topic.iv);
-          setSelectedTopicName(name);
+          dispatch({ type: 'SET_TOPIC_NAME', payload: name });
         }
       } catch {
-        setSelectedTopicName(null);
+        dispatch({ type: 'SET_TOPIC_NAME', payload: null });
       }
     };
     fetchTopicName();
-  }, [selectedTopicId, isKeyReady, decryptData]);
-
-  // Goal-specific fields
-  const [goalType, setGoalType] = useState<'short_term' | 'long_term'>('short_term');
-  const [goalStatus, setGoalStatus] = useState<'active' | 'completed' | 'archived'>('active');
-  const [targetDate, setTargetDate] = useState<string>('');
-  const [linkedMilestones, setLinkedMilestones] = useState<Array<{ id: string; content: string }>>([]);
-
-  // Milestone-specific fields
-  const [milestoneGoalIds, setMilestoneGoalIds] = useState<string[]>([]);
-  const [linkedTasks, setLinkedTasks] = useState<Array<{ id: string; content: string; isCompleted: boolean }>>([]);
-
-  // Task-specific fields
-  const [isTaskCompleted, setIsTaskCompleted] = useState(false);
-  const [isAutoMigrating, setIsAutoMigrating] = useState(true);
-  const [taskMilestoneIds, setTaskMilestoneIds] = useState<string[]>([]);
-
-  // Medication-specific fields
-  const [medDosage, setMedDosage] = useState('');
-  const [medFrequency, setMedFrequency] = useState<'once_daily' | 'twice_daily' | 'three_times_daily' | 'as_needed' | 'custom'>('once_daily');
-  const [medScheduleTimes, setMedScheduleTimes] = useState<string[]>(['08:00']);
-  const [medIsActive, setMedIsActive] = useState(true);
-  const [medNotes, setMedNotes] = useState('');
-
-  // Food-specific fields
-  const [foodMealType, setFoodMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
-  const [foodConsumedAt, setFoodConsumedAt] = useState('');
-  const [foodIngredients, setFoodIngredients] = useState('');
-  const [foodNotes, setFoodNotes] = useState('');
-
-  // Symptom-specific fields
-  const [symptomSeverity, setSymptomSeverity] = useState(5);
-  const [symptomOccurredAt, setSymptomOccurredAt] = useState('');
-  const [symptomDuration, setSymptomDuration] = useState('');
-  const [symptomNotes, setSymptomNotes] = useState('');
-
-  // Event-specific fields
-  const [eventStartDate, setEventStartDate] = useState('');
-  const [eventStartTime, setEventStartTime] = useState('09:00');
-  const [eventEndDate, setEventEndDate] = useState('');
-  const [eventEndTime, setEventEndTime] = useState('10:00');
-  const [eventLocation, setEventLocation] = useState('');
-  const [eventAddress, setEventAddress] = useState('');
-  const [eventPhone, setEventPhone] = useState('');
-  const [eventNotes, setEventNotes] = useState('');
-
-  // Meeting-specific fields (includes all event fields plus these)
-  const [meetingStartDate, setMeetingStartDate] = useState('');
-  const [meetingStartTime, setMeetingStartTime] = useState('09:00');
-  const [meetingEndDate, setMeetingEndDate] = useState('');
-  const [meetingEndTime, setMeetingEndTime] = useState('10:00');
-  const [meetingLocation, setMeetingLocation] = useState('');
-  const [meetingAddress, setMeetingAddress] = useState('');
-  const [meetingPhone, setMeetingPhone] = useState('');
-  const [meetingNotes, setMeetingNotes] = useState('');
-  const [meetingTopic, setMeetingTopic] = useState('');
-  const [meetingAttendees, setMeetingAttendees] = useState('');
-
-  // Exercise-specific fields
-  const [exerciseType, setExerciseType] = useState<'yoga' | 'cardio' | 'strength' | 'swimming' | 'running' | 'cycling' | 'walking' | 'hiking' | 'other'>('cardio');
-  const [exerciseOtherType, setExerciseOtherType] = useState('');
-  const [exerciseDuration, setExerciseDuration] = useState('');
-  const [exerciseIntensity, setExerciseIntensity] = useState<'low' | 'medium' | 'high'>('medium');
-  const [exerciseDistance, setExerciseDistance] = useState('');
-  const [exerciseDistanceUnit, setExerciseDistanceUnit] = useState<'miles' | 'km'>('miles');
-  const [exerciseCalories, setExerciseCalories] = useState('');
-  const [exercisePerformedAt, setExercisePerformedAt] = useState('');
-  const [exerciseNotes, setExerciseNotes] = useState('');
+  }, [state.selectedTopicId, isKeyReady, decryptData]);
 
   // Ref to track save function for keyboard shortcut
   const handleSaveRef = useRef<(() => void) | null>(null);
@@ -314,71 +256,16 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     },
     onUpdate: ({ editor }) => {
       const text = editor.getText();
-      setCharCount(text.length);
+      dispatch({ type: 'SET_CHAR_COUNT', payload: text.length });
     },
   });
 
   const loadEntry = useCallback(async () => {
     if (!entryId || !isKeyReady || !editor) return;
-    setLoading(true);
+    dispatch({ type: 'SET_LOADING', payload: true });
 
     // Reset all custom fields to defaults before loading entry-specific data
-    setGoalType('short_term');
-    setGoalStatus('active');
-    setTargetDate('');
-    setLinkedMilestones([]);
-    setMilestoneGoalIds([]);
-    setLinkedTasks([]);
-    setIsTaskCompleted(false);
-    setIsAutoMigrating(true);
-    setTaskMilestoneIds([]);
-    setStoredCustomType(null);
-    // Reset medication fields
-    setMedDosage('');
-    setMedFrequency('once_daily');
-    setMedScheduleTimes(['08:00']);
-    setMedIsActive(true);
-    setMedNotes('');
-    // Reset food fields
-    setFoodMealType('breakfast');
-    setFoodConsumedAt('');
-    setFoodIngredients('');
-    setFoodNotes('');
-    // Reset symptom fields
-    setSymptomSeverity(5);
-    setSymptomOccurredAt('');
-    setSymptomDuration('');
-    setSymptomNotes('');
-    // Reset event fields
-    setEventStartDate('');
-    setEventStartTime('09:00');
-    setEventEndDate('');
-    setEventEndTime('10:00');
-    setEventLocation('');
-    setEventAddress('');
-    setEventPhone('');
-    setEventNotes('');
-    // Reset meeting fields
-    setMeetingStartDate('');
-    setMeetingStartTime('09:00');
-    setMeetingEndDate('');
-    setMeetingEndTime('10:00');
-    setMeetingLocation('');
-    setMeetingAddress('');
-    setMeetingPhone('');
-    setMeetingNotes('');
-    setMeetingTopic('');
-    setMeetingAttendees('');
-    // Reset exercise fields
-    setExerciseType('cardio');
-    setExerciseOtherType('');
-    setExerciseDuration('');
-    setExerciseIntensity('medium');
-    setExerciseDistance('');
-    setExerciseDistanceUnit('miles');
-    setExerciseCalories('');
-    setExercisePerformedAt('');
-    setExerciseNotes('');
+    dispatch({ type: 'RESET_ALL' });
 
     try {
       const response = await fetch(`/api/entries/${entryId}`);
@@ -386,27 +273,29 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
       const content = await decryptData(entry.encryptedContent, entry.iv);
       editor.commands.setContent(content);
-      setSelectedTopicId(entry.topicId);
-      setStoredCustomType(entry.customType || null);
+      dispatch({ type: 'SET_TOPIC', payload: { id: entry.topicId } });
+      dispatch({ type: 'SET_STORED_CUSTOM_TYPE', payload: entry.customType || null });
 
       // Check content length and auto-expand if over limit
       const plainText = content.replace(/<[^>]*>/g, '');
-      setCharCount(plainText.length);
-      setExpandEntry(plainText.length > MAX_CHARS_SHORT);
+      dispatch({ type: 'SET_CHAR_COUNT', payload: plainText.length });
+      dispatch({ type: 'SET_EXPAND_ENTRY', payload: plainText.length > MAX_CHARS_SHORT });
 
       // Load goal custom fields
       if (entry.customType === 'goal' && entry.custom_fields) {
+        const goalUpdates: Partial<EntryState['goal']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'type') setGoalType(parsed.value);
-            if (parsed.fieldKey === 'status') setGoalStatus(parsed.value);
-            if (parsed.fieldKey === 'targetDate') setTargetDate(parsed.value || '');
+            if (parsed.fieldKey === 'type') goalUpdates.type = parsed.value;
+            if (parsed.fieldKey === 'status') goalUpdates.status = parsed.value;
+            if (parsed.fieldKey === 'targetDate') goalUpdates.targetDate = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_GOAL', payload: goalUpdates });
 
         // Load linked milestones for goals
         if (entry.milestones && entry.milestones.length > 0) {
@@ -423,14 +312,14 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               decryptedMilestones.push({ id: milestone.id, content: 'Decryption failed' });
             }
           }
-          setLinkedMilestones(decryptedMilestones);
+          dispatch({ type: 'UPDATE_GOAL', payload: { linkedMilestones: decryptedMilestones } });
         }
       }
 
       // Load milestone goal IDs and linked tasks
       if (entry.customType === 'milestone') {
         if (entry.goalIds) {
-          setMilestoneGoalIds(entry.goalIds);
+          dispatch({ type: 'UPDATE_MILESTONE', payload: { goalIds: entry.goalIds } });
         }
 
         // Load linked tasks for milestones
@@ -467,29 +356,31 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               decryptedTasks.push({ id: task.id, content: 'Decryption failed', isCompleted: false });
             }
           }
-          setLinkedTasks(decryptedTasks);
+          dispatch({ type: 'UPDATE_MILESTONE', payload: { linkedTasks: decryptedTasks } });
         }
       }
 
       // Load task custom fields
       if (entry.customType === 'task' && entry.custom_fields) {
+        const taskUpdates: Partial<EntryState['task']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'isCompleted') setIsTaskCompleted(parsed.value === true);
-            if (parsed.fieldKey === 'isAutoMigrating') setIsAutoMigrating(parsed.value !== false);
+            if (parsed.fieldKey === 'isCompleted') taskUpdates.isCompleted = parsed.value === true;
+            if (parsed.fieldKey === 'isAutoMigrating') taskUpdates.isAutoMigrating = parsed.value !== false;
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_TASK', payload: taskUpdates });
 
         // Load task milestone links
         try {
           const milestonesResponse = await fetch(`/api/tasks/${entryId}/milestones`);
           const milestonesData = await milestonesResponse.json();
           if (milestonesData.milestoneIds) {
-            setTaskMilestoneIds(milestonesData.milestoneIds);
+            dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: milestonesData.milestoneIds } });
           }
         } catch {
           // Ignore if milestone fetch fails
@@ -498,97 +389,108 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
       // Load medication custom fields
       if (entry.customType === 'medication' && entry.custom_fields) {
+        const medUpdates: Partial<EntryState['medication']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'dosage') setMedDosage(parsed.value || '');
-            if (parsed.fieldKey === 'frequency') setMedFrequency(parsed.value || 'once_daily');
-            if (parsed.fieldKey === 'scheduleTimes') setMedScheduleTimes(parsed.value || ['08:00']);
-            if (parsed.fieldKey === 'isActive') setMedIsActive(parsed.value !== false);
-            if (parsed.fieldKey === 'notes') setMedNotes(parsed.value || '');
+            if (parsed.fieldKey === 'dosage') medUpdates.dosage = parsed.value || '';
+            if (parsed.fieldKey === 'frequency') medUpdates.frequency = parsed.value || 'once_daily';
+            if (parsed.fieldKey === 'scheduleTimes') medUpdates.scheduleTimes = parsed.value || ['08:00'];
+            if (parsed.fieldKey === 'isActive') medUpdates.isActive = parsed.value !== false;
+            if (parsed.fieldKey === 'notes') medUpdates.notes = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_MEDICATION', payload: medUpdates });
       }
 
       // Load food custom fields
       if (entry.customType === 'food' && entry.custom_fields) {
+        const foodUpdates: Partial<EntryState['food']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'mealType') setFoodMealType(parsed.value || 'breakfast');
-            if (parsed.fieldKey === 'consumedAt') setFoodConsumedAt(parsed.value || '');
-            if (parsed.fieldKey === 'ingredients') setFoodIngredients((parsed.value || []).join(', '));
-            if (parsed.fieldKey === 'notes') setFoodNotes(parsed.value || '');
+            if (parsed.fieldKey === 'mealType') foodUpdates.mealType = parsed.value || 'breakfast';
+            if (parsed.fieldKey === 'consumedAt') foodUpdates.consumedAt = parsed.value || '';
+            if (parsed.fieldKey === 'ingredients') foodUpdates.ingredients = (parsed.value || []).join(', ');
+            if (parsed.fieldKey === 'notes') foodUpdates.notes = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_FOOD', payload: foodUpdates });
       }
 
       // Load symptom custom fields
       if (entry.customType === 'symptom' && entry.custom_fields) {
+        const symptomUpdates: Partial<EntryState['symptom']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'severity') setSymptomSeverity(parsed.value || 5);
-            if (parsed.fieldKey === 'occurredAt') setSymptomOccurredAt(parsed.value || '');
-            if (parsed.fieldKey === 'duration') setSymptomDuration(parsed.value?.toString() || '');
-            if (parsed.fieldKey === 'notes') setSymptomNotes(parsed.value || '');
+            if (parsed.fieldKey === 'severity') symptomUpdates.severity = parsed.value || 5;
+            if (parsed.fieldKey === 'occurredAt') symptomUpdates.occurredAt = parsed.value || '';
+            if (parsed.fieldKey === 'duration') symptomUpdates.duration = parsed.value?.toString() || '';
+            if (parsed.fieldKey === 'notes') symptomUpdates.notes = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_SYMPTOM', payload: symptomUpdates });
       }
 
       // Load event custom fields
       if (entry.customType === 'event' && entry.custom_fields) {
+        const eventUpdates: Partial<EntryState['event']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'startDate') setEventStartDate(parsed.value || '');
-            if (parsed.fieldKey === 'startTime') setEventStartTime(parsed.value || '09:00');
-            if (parsed.fieldKey === 'endDate') setEventEndDate(parsed.value || '');
-            if (parsed.fieldKey === 'endTime') setEventEndTime(parsed.value || '10:00');
-            if (parsed.fieldKey === 'location') setEventLocation(parsed.value || '');
-            if (parsed.fieldKey === 'address') setEventAddress(parsed.value || '');
-            if (parsed.fieldKey === 'phone') setEventPhone(parsed.value || '');
-            if (parsed.fieldKey === 'notes') setEventNotes(parsed.value || '');
+            if (parsed.fieldKey === 'startDate') eventUpdates.startDate = parsed.value || '';
+            if (parsed.fieldKey === 'startTime') eventUpdates.startTime = parsed.value || '09:00';
+            if (parsed.fieldKey === 'endDate') eventUpdates.endDate = parsed.value || '';
+            if (parsed.fieldKey === 'endTime') eventUpdates.endTime = parsed.value || '10:00';
+            if (parsed.fieldKey === 'location') eventUpdates.location = parsed.value || '';
+            if (parsed.fieldKey === 'address') eventUpdates.address = parsed.value || '';
+            if (parsed.fieldKey === 'phone') eventUpdates.phone = parsed.value || '';
+            if (parsed.fieldKey === 'notes') eventUpdates.notes = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_EVENT', payload: eventUpdates });
       }
 
       // Load meeting custom fields
       if (entry.customType === 'meeting' && entry.custom_fields) {
+        const meetingUpdates: Partial<EntryState['meeting']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
             const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'startDate') setMeetingStartDate(parsed.value || '');
-            if (parsed.fieldKey === 'startTime') setMeetingStartTime(parsed.value || '09:00');
-            if (parsed.fieldKey === 'endDate') setMeetingEndDate(parsed.value || '');
-            if (parsed.fieldKey === 'endTime') setMeetingEndTime(parsed.value || '10:00');
-            if (parsed.fieldKey === 'location') setMeetingLocation(parsed.value || '');
-            if (parsed.fieldKey === 'address') setMeetingAddress(parsed.value || '');
-            if (parsed.fieldKey === 'phone') setMeetingPhone(parsed.value || '');
-            if (parsed.fieldKey === 'notes') setMeetingNotes(parsed.value || '');
-            if (parsed.fieldKey === 'topic') setMeetingTopic(parsed.value || '');
-            if (parsed.fieldKey === 'attendees') setMeetingAttendees(parsed.value || '');
+            if (parsed.fieldKey === 'startDate') meetingUpdates.startDate = parsed.value || '';
+            if (parsed.fieldKey === 'startTime') meetingUpdates.startTime = parsed.value || '09:00';
+            if (parsed.fieldKey === 'endDate') meetingUpdates.endDate = parsed.value || '';
+            if (parsed.fieldKey === 'endTime') meetingUpdates.endTime = parsed.value || '10:00';
+            if (parsed.fieldKey === 'location') meetingUpdates.location = parsed.value || '';
+            if (parsed.fieldKey === 'address') meetingUpdates.address = parsed.value || '';
+            if (parsed.fieldKey === 'phone') meetingUpdates.phone = parsed.value || '';
+            if (parsed.fieldKey === 'notes') meetingUpdates.notes = parsed.value || '';
+            if (parsed.fieldKey === 'topic') meetingUpdates.topic = parsed.value || '';
+            if (parsed.fieldKey === 'attendees') meetingUpdates.attendees = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_MEETING', payload: meetingUpdates });
       }
 
       // Load exercise custom fields
       if (entry.customType === 'exercise' && entry.custom_fields) {
+        const exerciseUpdates: Partial<EntryState['exercise']> = {};
         for (const cf of entry.custom_fields) {
           try {
             const fieldData = await decryptData(cf.encryptedData, cf.iv);
@@ -596,23 +498,24 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             if (parsed.fieldKey === 'exerciseType') {
               const validTypes = ['yoga', 'cardio', 'strength', 'swimming', 'running', 'cycling', 'walking', 'hiking', 'other'];
               if (validTypes.includes(parsed.value)) {
-                setExerciseType(parsed.value);
+                exerciseUpdates.type = parsed.value;
               } else {
-                setExerciseType('other');
-                setExerciseOtherType(parsed.value || '');
+                exerciseUpdates.type = 'other';
+                exerciseUpdates.otherType = parsed.value || '';
               }
             }
-            if (parsed.fieldKey === 'duration') setExerciseDuration(parsed.value?.toString() || '');
-            if (parsed.fieldKey === 'intensity') setExerciseIntensity(parsed.value || 'medium');
-            if (parsed.fieldKey === 'distance') setExerciseDistance(parsed.value?.toString() || '');
-            if (parsed.fieldKey === 'distanceUnit') setExerciseDistanceUnit(parsed.value || 'miles');
-            if (parsed.fieldKey === 'calories') setExerciseCalories(parsed.value?.toString() || '');
-            if (parsed.fieldKey === 'performedAt') setExercisePerformedAt(parsed.value || '');
-            if (parsed.fieldKey === 'notes') setExerciseNotes(parsed.value || '');
+            if (parsed.fieldKey === 'duration') exerciseUpdates.duration = parsed.value?.toString() || '';
+            if (parsed.fieldKey === 'intensity') exerciseUpdates.intensity = parsed.value || 'medium';
+            if (parsed.fieldKey === 'distance') exerciseUpdates.distance = parsed.value?.toString() || '';
+            if (parsed.fieldKey === 'distanceUnit') exerciseUpdates.distanceUnit = parsed.value || 'miles';
+            if (parsed.fieldKey === 'calories') exerciseUpdates.calories = parsed.value?.toString() || '';
+            if (parsed.fieldKey === 'performedAt') exerciseUpdates.performedAt = parsed.value || '';
+            if (parsed.fieldKey === 'notes') exerciseUpdates.notes = parsed.value || '';
           } catch {
             // Skip failed fields
           }
         }
+        dispatch({ type: 'UPDATE_EXERCISE', payload: exerciseUpdates });
       }
 
       // Check if entry is favorited
@@ -620,16 +523,15 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         const favResponse = await fetch('/api/favorites');
         const favData = await favResponse.json();
         const isFav = (favData.favorites || []).some((f: { id: string }) => f.id === entryId);
-        setIsFavorite(isFav);
+        dispatch({ type: 'SET_FAVORITE', payload: isFav });
       } catch {
-        setIsFavorite(false);
+        dispatch({ type: 'SET_FAVORITE', payload: false });
       }
 
-      // Images disabled for now
     } catch (error) {
       console.error('Failed to load entry:', error);
     } finally {
-      setLoading(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [entryId, isKeyReady, editor, decryptData]);
 
@@ -638,68 +540,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       loadEntry();
     } else if (!entryId && editor) {
       editor.commands.setContent('');
-      setSelectedTopicId(null);
-      setStoredCustomType(null);
-      setIsFavorite(false);
-      setExpandEntry(false);
-      setCharCount(0);
-      // setUploadedImages([]);
-      // Reset goal/milestone/task fields for new entries
-      setGoalType('short_term');
-      setGoalStatus('active');
-      setTargetDate('');
-      setLinkedMilestones([]);
-      setMilestoneGoalIds([]);
-      setLinkedTasks([]);
-      setIsTaskCompleted(false);
-      setIsAutoMigrating(true);
-      setTaskMilestoneIds([]);
-      // Reset medication fields
-      setMedDosage('');
-      setMedFrequency('once_daily');
-      setMedScheduleTimes(['08:00']);
-      setMedIsActive(true);
-      setMedNotes('');
-      // Reset food fields
-      setFoodMealType('breakfast');
-      setFoodConsumedAt('');
-      setFoodIngredients('');
-      setFoodNotes('');
-      // Reset symptom fields
-      setSymptomSeverity(5);
-      setSymptomOccurredAt('');
-      setSymptomDuration('');
-      setSymptomNotes('');
-      // Reset event fields
-      setEventStartDate('');
-      setEventStartTime('09:00');
-      setEventEndDate('');
-      setEventEndTime('10:00');
-      setEventLocation('');
-      setEventAddress('');
-      setEventPhone('');
-      setEventNotes('');
-      // Reset meeting fields
-      setMeetingStartDate('');
-      setMeetingStartTime('09:00');
-      setMeetingEndDate('');
-      setMeetingEndTime('10:00');
-      setMeetingLocation('');
-      setMeetingAddress('');
-      setMeetingPhone('');
-      setMeetingNotes('');
-      setMeetingTopic('');
-      setMeetingAttendees('');
-      // Reset exercise fields
-      setExerciseType('cardio');
-      setExerciseOtherType('');
-      setExerciseDuration('');
-      setExerciseIntensity('medium');
-      setExerciseDistance('');
-      setExerciseDistanceUnit('miles');
-      setExerciseCalories('');
-      setExercisePerformedAt('');
-      setExerciseNotes('');
+      dispatch({ type: 'RESET_ALL' });
     }
   }, [entryId, isKeyReady, loadEntry, editor]);
 
@@ -707,12 +548,12 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     if (!editor || !isKeyReady) return;
 
     // Check character limit if not expanded
-    if (!expandEntry && charCount > MAX_CHARS_SHORT) {
-      alert(`Entry is ${charCount - MAX_CHARS_SHORT} characters over the limit. Enable "Expand entry" or shorten your text.`);
+    if (!state.expandEntry && state.charCount > MAX_CHARS_SHORT) {
+      alert(`Entry is ${state.charCount - MAX_CHARS_SHORT} characters over the limit. Enable "Expand entry" or shorten your text.`);
       return;
     }
 
-    setSaving(true);
+    dispatch({ type: 'SET_SAVING', payload: true });
 
     try {
       // Sanitize HTML content before encryption to prevent XSS
@@ -726,15 +567,15 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       const searchTokens = await generateSearchTokens(plainText, encryptionKey!);
 
       // Determine entry type from prop, stored customType, or topic name (case-insensitive, stored lowercase)
-      const topicNameLower = selectedTopicName?.toLowerCase();
-      const entryType = customType?.toLowerCase() || storedCustomType || topicNameLower;
+      const topicNameLower = state.selectedTopicName?.toLowerCase();
+      const entryType = customType?.toLowerCase() || state.storedCustomType || topicNameLower;
 
       // Build custom fields based on entry type
       let customFields: { encryptedData: string; iv: string }[] | undefined;
 
       if (entryType === 'task') {
-        const isCompletedField = JSON.stringify({ fieldKey: 'isCompleted', value: isTaskCompleted });
-        const isAutoMigratingField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: isAutoMigrating });
+        const isCompletedField = JSON.stringify({ fieldKey: 'isCompleted', value: state.task.isCompleted });
+        const isAutoMigratingField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: state.task.isAutoMigrating });
 
         const encryptedCompleted = await encryptData(isCompletedField);
         const encryptedAutoMigrating = await encryptData(isAutoMigratingField);
@@ -744,9 +585,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedAutoMigrating.ciphertext, iv: encryptedAutoMigrating.iv },
         ];
       } else if (entryType === 'goal') {
-        const typeField = JSON.stringify({ fieldKey: 'type', value: goalType });
-        const statusField = JSON.stringify({ fieldKey: 'status', value: goalStatus });
-        const targetDateField = JSON.stringify({ fieldKey: 'targetDate', value: targetDate || null });
+        const typeField = JSON.stringify({ fieldKey: 'type', value: state.goal.type });
+        const statusField = JSON.stringify({ fieldKey: 'status', value: state.goal.status });
+        const targetDateField = JSON.stringify({ fieldKey: 'targetDate', value: state.goal.targetDate || null });
         const progressField = JSON.stringify({ fieldKey: 'progressPercentage', value: 0 });
 
         const encryptedType = await encryptData(typeField);
@@ -775,11 +616,11 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedCompletedAt.ciphertext, iv: encryptedCompletedAt.iv },
         ];
       } else if (entryType === 'medication') {
-        const dosageField = JSON.stringify({ fieldKey: 'dosage', value: medDosage });
-        const frequencyField = JSON.stringify({ fieldKey: 'frequency', value: medFrequency });
-        const scheduleTimesField = JSON.stringify({ fieldKey: 'scheduleTimes', value: medScheduleTimes });
-        const isActiveField = JSON.stringify({ fieldKey: 'isActive', value: medIsActive });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: medNotes });
+        const dosageField = JSON.stringify({ fieldKey: 'dosage', value: state.medication.dosage });
+        const frequencyField = JSON.stringify({ fieldKey: 'frequency', value: state.medication.frequency });
+        const scheduleTimesField = JSON.stringify({ fieldKey: 'scheduleTimes', value: state.medication.scheduleTimes });
+        const isActiveField = JSON.stringify({ fieldKey: 'isActive', value: state.medication.isActive });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.medication.notes });
         const startDateField = JSON.stringify({ fieldKey: 'startDate', value: today });
 
         const encryptedDosage = await encryptData(dosageField);
@@ -798,10 +639,10 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedStartDate.ciphertext, iv: encryptedStartDate.iv },
         ];
       } else if (entryType === 'food') {
-        const mealTypeField = JSON.stringify({ fieldKey: 'mealType', value: foodMealType });
-        const consumedAtField = JSON.stringify({ fieldKey: 'consumedAt', value: foodConsumedAt || new Date().toISOString() });
-        const ingredientsField = JSON.stringify({ fieldKey: 'ingredients', value: foodIngredients.split(',').map(i => i.trim()).filter(i => i) });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: foodNotes });
+        const mealTypeField = JSON.stringify({ fieldKey: 'mealType', value: state.food.mealType });
+        const consumedAtField = JSON.stringify({ fieldKey: 'consumedAt', value: state.food.consumedAt || new Date().toISOString() });
+        const ingredientsField = JSON.stringify({ fieldKey: 'ingredients', value: state.food.ingredients.split(',').map(i => i.trim()).filter(i => i) });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.food.notes });
 
         const encryptedMealType = await encryptData(mealTypeField);
         const encryptedConsumedAt = await encryptData(consumedAtField);
@@ -815,10 +656,10 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
         ];
       } else if (entryType === 'symptom') {
-        const severityField = JSON.stringify({ fieldKey: 'severity', value: symptomSeverity });
-        const occurredAtField = JSON.stringify({ fieldKey: 'occurredAt', value: symptomOccurredAt || new Date().toISOString() });
-        const durationField = JSON.stringify({ fieldKey: 'duration', value: symptomDuration ? parseInt(symptomDuration) : null });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: symptomNotes });
+        const severityField = JSON.stringify({ fieldKey: 'severity', value: state.symptom.severity });
+        const occurredAtField = JSON.stringify({ fieldKey: 'occurredAt', value: state.symptom.occurredAt || new Date().toISOString() });
+        const durationField = JSON.stringify({ fieldKey: 'duration', value: state.symptom.duration ? parseInt(state.symptom.duration) : null });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.symptom.notes });
 
         const encryptedSeverity = await encryptData(severityField);
         const encryptedOccurredAt = await encryptData(occurredAtField);
@@ -832,14 +673,14 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
         ];
       } else if (entryType === 'event') {
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: eventStartDate || today });
-        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: eventStartTime });
-        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: eventEndDate || eventStartDate || today });
-        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: eventEndTime });
-        const locationField = JSON.stringify({ fieldKey: 'location', value: eventLocation });
-        const addressField = JSON.stringify({ fieldKey: 'address', value: eventAddress });
-        const phoneField = JSON.stringify({ fieldKey: 'phone', value: eventPhone });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: eventNotes });
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: state.event.startDate || today });
+        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: state.event.startTime });
+        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: state.event.endDate || state.event.startDate || today });
+        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: state.event.endTime });
+        const locationField = JSON.stringify({ fieldKey: 'location', value: state.event.location });
+        const addressField = JSON.stringify({ fieldKey: 'address', value: state.event.address });
+        const phoneField = JSON.stringify({ fieldKey: 'phone', value: state.event.phone });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.event.notes });
 
         const encryptedStartDate = await encryptData(startDateField);
         const encryptedStartTime = await encryptData(startTimeField);
@@ -861,16 +702,16 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
         ];
       } else if (entryType === 'meeting') {
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: meetingStartDate || today });
-        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: meetingStartTime });
-        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: meetingEndDate || meetingStartDate || today });
-        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: meetingEndTime });
-        const locationField = JSON.stringify({ fieldKey: 'location', value: meetingLocation });
-        const addressField = JSON.stringify({ fieldKey: 'address', value: meetingAddress });
-        const phoneField = JSON.stringify({ fieldKey: 'phone', value: meetingPhone });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: meetingNotes });
-        const topicField = JSON.stringify({ fieldKey: 'topic', value: meetingTopic });
-        const attendeesField = JSON.stringify({ fieldKey: 'attendees', value: meetingAttendees });
+        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: state.meeting.startDate || today });
+        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: state.meeting.startTime });
+        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: state.meeting.endDate || state.meeting.startDate || today });
+        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: state.meeting.endTime });
+        const locationField = JSON.stringify({ fieldKey: 'location', value: state.meeting.location });
+        const addressField = JSON.stringify({ fieldKey: 'address', value: state.meeting.address });
+        const phoneField = JSON.stringify({ fieldKey: 'phone', value: state.meeting.phone });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.meeting.notes });
+        const topicField = JSON.stringify({ fieldKey: 'topic', value: state.meeting.topic });
+        const attendeesField = JSON.stringify({ fieldKey: 'attendees', value: state.meeting.attendees });
 
         const encryptedStartDate = await encryptData(startDateField);
         const encryptedStartTime = await encryptData(startTimeField);
@@ -896,15 +737,15 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           { encryptedData: encryptedAttendees.ciphertext, iv: encryptedAttendees.iv },
         ];
       } else if (entryType === 'exercise') {
-        const exerciseTypeValue = exerciseType === 'other' ? exerciseOtherType : exerciseType;
+        const exerciseTypeValue = state.exercise.type === 'other' ? state.exercise.otherType : state.exercise.type;
         const typeField = JSON.stringify({ fieldKey: 'exerciseType', value: exerciseTypeValue });
-        const durationField = JSON.stringify({ fieldKey: 'duration', value: exerciseDuration ? parseInt(exerciseDuration) : null });
-        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: exerciseIntensity });
-        const distanceField = JSON.stringify({ fieldKey: 'distance', value: exerciseDistance ? parseFloat(exerciseDistance) : null });
-        const distanceUnitField = JSON.stringify({ fieldKey: 'distanceUnit', value: exerciseDistanceUnit });
-        const caloriesField = JSON.stringify({ fieldKey: 'calories', value: exerciseCalories ? parseInt(exerciseCalories) : null });
-        const performedAtField = JSON.stringify({ fieldKey: 'performedAt', value: exercisePerformedAt || new Date().toISOString() });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: exerciseNotes });
+        const durationField = JSON.stringify({ fieldKey: 'duration', value: state.exercise.duration ? parseInt(state.exercise.duration) : null });
+        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: state.exercise.intensity });
+        const distanceField = JSON.stringify({ fieldKey: 'distance', value: state.exercise.distance ? parseFloat(state.exercise.distance) : null });
+        const distanceUnitField = JSON.stringify({ fieldKey: 'distanceUnit', value: state.exercise.distanceUnit });
+        const caloriesField = JSON.stringify({ fieldKey: 'calories', value: state.exercise.calories ? parseInt(state.exercise.calories) : null });
+        const performedAtField = JSON.stringify({ fieldKey: 'performedAt', value: state.exercise.performedAt || new Date().toISOString() });
+        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.exercise.notes });
 
         const encryptedType = await encryptData(typeField);
         const encryptedDuration = await encryptData(durationField);
@@ -936,7 +777,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             encryptedContent: ciphertext,
             iv,
             searchTokens,
-            topicId: selectedTopicId,
+            topicId: state.selectedTopicId,
             ...(entryType && { customType: entryType }),
             ...(customFields && { customFields }),
           }),
@@ -947,7 +788,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           await fetch(`/api/milestones/${entryId}/goals`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goalIds: milestoneGoalIds }),
+            body: JSON.stringify({ goalIds: state.milestone.goalIds }),
           });
         }
 
@@ -956,7 +797,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           await fetch(`/api/tasks/${entryId}/milestones`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ milestoneIds: taskMilestoneIds }),
+            body: JSON.stringify({ milestoneIds: state.task.milestoneIds }),
           });
         }
       } else {
@@ -968,7 +809,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             encryptedContent: ciphertext,
             iv,
             searchTokens,
-            ...(selectedTopicId && { topicId: selectedTopicId }),
+            ...(state.selectedTopicId && { topicId: state.selectedTopicId }),
             ...(entryType && { customType: entryType }),
             ...(customFields && { customFields }),
             entryDate: today,
@@ -979,20 +820,20 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         const newEntryId = data.entry?.id;
 
         // Link milestone to goals after creation
-        if (entryType === 'milestone' && milestoneGoalIds.length > 0 && newEntryId) {
+        if (entryType === 'milestone' && state.milestone.goalIds.length > 0 && newEntryId) {
           await fetch(`/api/milestones/${newEntryId}/goals`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goalIds: milestoneGoalIds }),
+            body: JSON.stringify({ goalIds: state.milestone.goalIds }),
           });
         }
 
         // Link task to milestones after creation
-        if (entryType === 'task' && taskMilestoneIds.length > 0 && newEntryId) {
+        if (entryType === 'task' && state.task.milestoneIds.length > 0 && newEntryId) {
           await fetch(`/api/tasks/${newEntryId}/milestones`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ milestoneIds: taskMilestoneIds }),
+            body: JSON.stringify({ milestoneIds: state.task.milestoneIds }),
           });
         }
       }
@@ -1009,7 +850,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     } catch (error) {
       console.error('Failed to save entry:', error);
     } finally {
-      setSaving(false);
+      dispatch({ type: 'SET_SAVING', payload: false });
     }
   };
 
@@ -1018,7 +859,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
   const handleDelete = async () => {
     if (!entryId) return;
-    setDeleting(true);
+    dispatch({ type: 'SET_DELETING', payload: true });
 
     try {
       const response = await fetch(`/api/entries/${entryId}`, {
@@ -1026,7 +867,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       });
 
       if (response.ok) {
-        setShowDeleteConfirm(false);
+        dispatch({ type: 'SET_SHOW_DELETE_CONFIRM', payload: false });
         onEntrySaved();
       } else {
         console.error('Failed to delete entry');
@@ -1034,22 +875,22 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     } catch (error) {
       console.error('Failed to delete entry:', error);
     } finally {
-      setDeleting(false);
+      dispatch({ type: 'SET_DELETING', payload: false });
     }
   };
 
   const handleToggleFavorite = async () => {
-    if (!entryId || togglingFavorite) return;
-    setTogglingFavorite(true);
+    if (!entryId || state.togglingFavorite) return;
+    dispatch({ type: 'SET_TOGGLING_FAVORITE', payload: true });
 
     try {
-      if (isFavorite) {
+      if (state.isFavorite) {
         // Remove from favorites
         const response = await fetch(`/api/favorites?entryId=${entryId}`, {
           method: 'DELETE',
         });
         if (response.ok) {
-          setIsFavorite(false);
+          dispatch({ type: 'SET_FAVORITE', payload: false });
         }
       } else {
         // Add to favorites
@@ -1059,17 +900,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           body: JSON.stringify({ entryId }),
         });
         if (response.ok) {
-          setIsFavorite(true);
+          dispatch({ type: 'SET_FAVORITE', payload: true });
         }
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
     } finally {
-      setTogglingFavorite(false);
+      dispatch({ type: 'SET_TOGGLING_FAVORITE', payload: false });
     }
   };
 
-  if (loading) {
+  if (state.loading) {
     return <div className="p-4 text-gray-500">Loading entry...</div>;
   }
 
@@ -1083,8 +924,8 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       <div className="mb-4 flex justify-between items-center">
         <div className="flex-1">
           <TopicSelector
-            selectedTopicId={selectedTopicId}
-            onSelectTopic={setSelectedTopicId}
+            selectedTopicId={state.selectedTopicId}
+            onSelectTopic={(id) => dispatch({ type: 'SET_TOPIC', payload: { id } })}
             onTopicsChange={onTopicsChange}
           />
         </div>
@@ -1092,20 +933,20 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={expandEntry}
-              onChange={(e) => setExpandEntry(e.target.checked)}
+              checked={state.expandEntry}
+              onChange={(e) => dispatch({ type: 'SET_EXPAND_ENTRY', payload: e.target.checked })}
               className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
             />
             <span className="text-sm text-gray-600">
               Expand entry{' '}
               <span className={
-                !expandEntry && charCount > MAX_CHARS_SHORT
+                !state.expandEntry && state.charCount > MAX_CHARS_SHORT
                   ? 'text-red-600 font-medium'
-                  : charCount > MAX_CHARS_SHORT * 0.8
+                  : state.charCount > MAX_CHARS_SHORT * 0.8
                     ? 'text-amber-600'
                     : ''
               }>
-                ({charCount}{!expandEntry && `/${MAX_CHARS_SHORT}`})
+                ({state.charCount}{!state.expandEntry && `/${MAX_CHARS_SHORT}`})
               </span>
             </span>
           </label>
@@ -1113,17 +954,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             <>
             <button
               onClick={handleToggleFavorite}
-              disabled={togglingFavorite}
+              disabled={state.togglingFavorite}
               className={`p-2 rounded-md transition-colors ${
-                isFavorite
+                state.isFavorite
                   ? 'text-teal-600 bg-teal-50 hover:bg-teal-100'
                   : 'text-gray-600 hover:backdrop-blur-sm bg-white/40'
               }`}
-              title={isFavorite ? 'Remove bookmark' : 'Add bookmark'}
+              title={state.isFavorite ? 'Remove bookmark' : 'Add bookmark'}
             >
               <svg
                 className="w-5 h-5"
-                fill={isFavorite ? 'currentColor' : 'none'}
+                fill={state.isFavorite ? 'currentColor' : 'none'}
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
@@ -1136,7 +977,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
               </svg>
             </button>
             <button
-              onClick={() => setShowShareModal(true)}
+              onClick={() => dispatch({ type: 'SET_SHOW_SHARE_MODAL', payload: true })}
               className="p-2 text-gray-600 hover:backdrop-blur-sm bg-white/40 rounded-md"
               title="Share entry"
             >
@@ -1150,7 +991,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       </div>
 
       {/* Delete confirmation modal */}
-      {showDeleteConfirm && (
+      {state.showDeleteConfirm && (
         <div className="modal-overlay">
           <div className="modal-content modal-sm modal-confirm">
             <div className="modal-body">
@@ -1161,18 +1002,18 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             </div>
             <div className="modal-footer">
               <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleting}
+                onClick={() => dispatch({ type: 'SET_SHOW_DELETE_CONFIRM', payload: false })}
+                disabled={state.deleting}
                 className="btn btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                disabled={deleting}
+                disabled={state.deleting}
                 className="btn btn-danger"
               >
-                {deleting ? 'Deleting...' : 'Delete'}
+                {state.deleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
@@ -1180,723 +1021,227 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       )}
 
       {/* Editor with character limit - no border */}
-      <div className={`mb-2 ${expandEntry ? 'flex-1 flex flex-col' : ''}`}>
-        <div className={`overflow-auto backdrop-blur-sm bg-white/30 flex flex-col ${expandEntry ? 'flex-1' : ''}`}>
+      <div className={`mb-2 ${state.expandEntry ? 'flex-1 flex flex-col' : ''}`}>
+        <div className={`overflow-auto backdrop-blur-sm bg-white/30 flex flex-col ${state.expandEntry ? 'flex-1' : ''}`}>
           <EditorToolbar editor={editor} />
           <EditorContent
             editor={editor}
-            className={`border-t border-border md:border-t-0 ${expandEntry ? 'flex-1' : 'min-h-[40px]'}`}
+            className={`border-t border-border md:border-t-0 ${state.expandEntry ? 'flex-1' : 'min-h-[40px]'}`}
           />
         </div>
       </div>
 
       {/* Goal Settings - only show if current topic is goal */}
-      {(customType === 'goal' || selectedTopicName?.toLowerCase() === 'goal') && (
+      {(customType === 'goal' || state.selectedTopicName?.toLowerCase() === 'goal') && (
         <>
           <div className="border-t border-border my-2" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Goal Settings</h3>
-            <div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Type</label>
-                  <select
-                    value={goalType}
-                    onChange={(e) => setGoalType(e.target.value as 'short_term' | 'long_term')}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900"
-                  >
-                    <option value="short_term">Short-term</option>
-                    <option value="long_term">Long-term</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Status</label>
-                  <select
-                    value={goalStatus}
-                    onChange={(e) => setGoalStatus(e.target.value as 'active' | 'completed' | 'archived')}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  >
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Target Date</label>
-                  <input
-                    type="date"
-                    value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              {linkedMilestones.length > 0 && (
-                <div className="mt-4 pt-4 border-t">
-                  <label className="block text-xs text-gray-500 mb-2">
-                    Linked Milestones ({linkedMilestones.length})
-                  </label>
-                  <div className="space-y-1">
-                    {linkedMilestones.map((milestone) => (
-                      <div
-                        key={milestone.id}
-                        className="text-sm text-gray-700 flex items-center gap-2 py-1"
-                      >
-                        <span className="text-gray-400">-</span>
-                        <span>{milestone.content}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Milestones are linked from the Milestones view
-                  </p>
-                </div>
-              )}
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Goal Settings</h3>
             </div>
+            <GoalFields
+              fields={state.goal as GoalFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_GOAL', payload: { [key]: value } })}
+              glass
+            />
+            {state.goal.linkedMilestones.length > 0 && (
+              <div className="custom-fields-body mt-4 pt-4 border-t">
+                <label className="field-label">
+                  Linked Milestones ({state.goal.linkedMilestones.length})
+                </label>
+                <div className="space-y-1">
+                  {state.goal.linkedMilestones.map((milestone) => (
+                    <div
+                      key={milestone.id}
+                      className="text-sm text-gray-700 flex items-center gap-2 py-1"
+                    >
+                      <span className="text-gray-400">-</span>
+                      <span>{milestone.content}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="field-hint">
+                  Milestones are linked from the Milestones view
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}
 
       {/* Milestone Settings - only show if current topic is milestone */}
-      {(customType === 'milestone' || selectedTopicName?.toLowerCase() === 'milestone') && (
+      {(customType === 'milestone' || state.selectedTopicName?.toLowerCase() === 'milestone') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Milestone Settings</h3>
-            <div>
-              <MilestoneGoalSelector
-                selectedGoalIds={milestoneGoalIds}
-                onGoalIdsChange={setMilestoneGoalIds}
-              />
-              {linkedTasks.length > 0 && (
-                <div className="mt-4 pt-4">
-                  <label className="block text-xs text-gray-500 mb-2">
-                    Linked Tasks ({linkedTasks.filter(t => t.isCompleted).length}/{linkedTasks.length} completed)
-                  </label>
-                  <div className="space-y-1">
-                    {linkedTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="text-sm flex items-center gap-2 py-1"
-                      >
-                        <span className={task.isCompleted ? 'text-teal-500' : 'text-gray-400'}>
-                          {task.isCompleted ? '✓' : '○'}
-                        </span>
-                        <span className={task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}>
-                          {task.content}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Tasks are linked from the Task editor
-                  </p>
-                </div>
-              )}
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Milestone Settings</h3>
             </div>
+            <MilestoneFields
+              fields={state.milestone as MilestoneFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_MILESTONE', payload: { [key]: value } })}
+              goalSelector={
+                <MilestoneGoalSelector
+                  selectedGoalIds={state.milestone.goalIds}
+                  onGoalIdsChange={(ids) => dispatch({ type: 'UPDATE_MILESTONE', payload: { goalIds: ids } })}
+                />
+              }
+              glass
+            />
+            {state.milestone.linkedTasks.length > 0 && (
+              <div className="custom-fields-body mt-4 pt-4 border-t">
+                <label className="field-label">
+                  Linked Tasks ({state.milestone.linkedTasks.filter(t => t.isCompleted).length}/{state.milestone.linkedTasks.length} completed)
+                </label>
+                <div className="space-y-1">
+                  {state.milestone.linkedTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="text-sm flex items-center gap-2 py-1"
+                    >
+                      <span className={task.isCompleted ? 'text-teal-500' : 'text-gray-400'}>
+                        {task.isCompleted ? '✓' : '○'}
+                      </span>
+                      <span className={task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}>
+                        {task.content}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="field-hint">
+                  Tasks are linked from the Task editor
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}
 
       {/* Task Settings - only show if current topic is task */}
-      {(customType === 'task' || selectedTopicName?.toLowerCase() === 'task') && (
+      {(customType === 'task' || state.selectedTopicName?.toLowerCase() === 'task') && (
         <>
           <div className="border-t border-border my-4" />
           <div className="custom-fields">
             <div className="custom-fields-header">
               <h3 className="custom-fields-title">Task Settings</h3>
             </div>
-            <div className="custom-fields-body">
-              <div className="field-row">
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={isTaskCompleted}
-                    onChange={(e) => setIsTaskCompleted(e.target.checked)}
-                  />
-                  Completed
-                </label>
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={isAutoMigrating}
-                    onChange={(e) => setIsAutoMigrating(e.target.checked)}
-                  />
-                  Auto-migrate if incomplete
-                </label>
-              </div>
+            <TaskFields
+              fields={state.task as TaskFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_TASK', payload: { [key]: value } })}
+              glass
+            />
+            <div className="custom-fields-body mt-4 pt-4 border-t">
+              <label className="field-label">Link to Milestones</label>
+              <TaskMilestoneSelector
+                selectedMilestoneIds={state.task.milestoneIds}
+                onMilestoneIdsChange={(ids) => dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: ids } })}
+              />
               <p className="field-hint">
-                Auto-migrating tasks move to the current date at midnight if not completed.
+                Link this task to milestones to track progress
               </p>
-              <div className="field-group mt-4 pt-4">
-                <label className="field-label-sm">
-                  Link to Milestones
-                </label>
-                <TaskMilestoneSelector
-                  selectedMilestoneIds={taskMilestoneIds}
-                  onMilestoneIdsChange={setTaskMilestoneIds}
-                />
-                <p className="field-hint">
-                  Link this task to milestones to track progress
-                </p>
-              </div>
             </div>
           </div>
         </>
       )}
 
       {/* Medication Details - only show if current topic is medication */}
-      {(customType === 'medication' || selectedTopicName?.toLowerCase() === 'medication') && (
+      {(customType === 'medication' || state.selectedTopicName?.toLowerCase() === 'medication') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Medication Details</h3>
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Dosage</label>
-                  <input
-                    type="text"
-                    value={medDosage}
-                    onChange={(e) => setMedDosage(e.target.value)}
-                    placeholder="e.g., 500mg"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Frequency</label>
-                  <select
-                    value={medFrequency}
-                    onChange={(e) => setMedFrequency(e.target.value as typeof medFrequency)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900"
-                  >
-                    <option value="once_daily">Once daily</option>
-                    <option value="twice_daily">Twice daily</option>
-                    <option value="three_times_daily">Three times daily</option>
-                    <option value="as_needed">As needed</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Schedule Times</label>
-                <div className="flex flex-wrap gap-2">
-                  {medScheduleTimes.map((time, index) => (
-                    <div key={index} className="flex items-center gap-1">
-                      <input
-                        type="time"
-                        value={time}
-                        onChange={(e) => {
-                          const newTimes = [...medScheduleTimes];
-                          newTimes[index] = e.target.value;
-                          setMedScheduleTimes(newTimes);
-                        }}
-                        className="px-2 py-1 border border-border rounded text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                      />
-                      {medScheduleTimes.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setMedScheduleTimes(medScheduleTimes.filter((_, i) => i !== index))}
-                          className="text-red-500 hover:text-red-700 text-xs"
-                        >
-                          x
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setMedScheduleTimes([...medScheduleTimes, '12:00'])}
-                    className="text-xs hover:underline"
-                    style={{ color: accentColor }}
-                  >
-                    + Add time
-                  </button>
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={medNotes}
-                  onChange={(e) => setMedNotes(e.target.value)}
-                  placeholder="e.g., Take with food"
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
-              <div className="mt-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={medIsActive}
-                    onChange={(e) => setMedIsActive(e.target.checked)}
-                    className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
-                  />
-                  <span className="text-sm text-gray-700">Active medication</span>
-                </label>
-              </div>
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Medication Details</h3>
             </div>
+            <MedicationFields
+              fields={state.medication as MedicationFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_MEDICATION', payload: { [key]: value } })}
+              glass
+            />
           </div>
         </>
       )}
 
       {/* Food Details - only show if current topic is food */}
-      {(customType === 'food' || selectedTopicName?.toLowerCase() === 'food') && (
+      {(customType === 'food' || state.selectedTopicName?.toLowerCase() === 'food') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Food Details</h3>
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Meal Type</label>
-                  <select
-                    value={foodMealType}
-                    onChange={(e) => setFoodMealType(e.target.value as typeof foodMealType)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  >
-                    <option value="breakfast">Breakfast</option>
-                    <option value="lunch">Lunch</option>
-                    <option value="dinner">Dinner</option>
-                    <option value="snack">Snack</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Time Consumed</label>
-                  <input
-                    type="time"
-                    value={foodConsumedAt ? foodConsumedAt.split('T')[1]?.substring(0, 5) : ''}
-                    onChange={(e) => setFoodConsumedAt(`${today}T${e.target.value}:00`)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Ingredients (comma-separated)</label>
-                <input
-                  type="text"
-                  value={foodIngredients}
-                  onChange={(e) => setFoodIngredients(e.target.value)}
-                  placeholder="e.g., oats, blueberries, honey"
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-                <p className="text-xs text-gray-400 mt-1">Used for correlation analysis with symptoms</p>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={foodNotes}
-                  onChange={(e) => setFoodNotes(e.target.value)}
-                  placeholder="Any additional notes..."
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Food Details</h3>
             </div>
+            <FoodFields
+              fields={state.food as FoodFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_FOOD', payload: { [key]: value } })}
+              glass
+            />
           </div>
         </>
       )}
 
       {/* Symptom Details - only show if current topic is symptom */}
-      {(customType === 'symptom' || selectedTopicName?.toLowerCase() === 'symptom') && (
+      {(customType === 'symptom' || state.selectedTopicName?.toLowerCase() === 'symptom') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Symptom Details</h3>
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Severity: {symptomSeverity}/10</label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={symptomSeverity}
-                    onChange={(e) => setSymptomSeverity(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>Mild</span>
-                    <span>Moderate</span>
-                    <span>Severe</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Time Occurred</label>
-                  <input
-                    type="time"
-                    value={symptomOccurredAt ? symptomOccurredAt.split('T')[1]?.substring(0, 5) : ''}
-                    onChange={(e) => setSymptomOccurredAt(`${today}T${e.target.value}:00`)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Duration (minutes)</label>
-                  <input
-                    type="number"
-                    value={symptomDuration}
-                    onChange={(e) => setSymptomDuration(e.target.value)}
-                    placeholder="e.g., 30"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                  <input
-                    type="text"
-                    value={symptomNotes}
-                    onChange={(e) => setSymptomNotes(e.target.value)}
-                    placeholder="Any additional details..."
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Symptom Details</h3>
             </div>
+            <SymptomFields
+              fields={state.symptom as SymptomFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_SYMPTOM', payload: { [key]: value } })}
+              glass
+            />
           </div>
         </>
       )}
 
       {/* Exercise Details - only show if current topic is exercise */}
-      {(customType === 'exercise' || selectedTopicName?.toLowerCase() === 'exercise') && (
+      {(customType === 'exercise' || state.selectedTopicName?.toLowerCase() === 'exercise') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Exercise Details</h3>
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Exercise Type</label>
-                  <select
-                    value={exerciseType}
-                    onChange={(e) => setExerciseType(e.target.value as typeof exerciseType)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  >
-                    <option value="yoga">Yoga</option>
-                    <option value="cardio">Cardio</option>
-                    <option value="strength">Strength Training</option>
-                    <option value="swimming">Swimming</option>
-                    <option value="running">Running</option>
-                    <option value="cycling">Cycling</option>
-                    <option value="walking">Walking</option>
-                    <option value="hiking">Hiking</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                {exerciseType === 'other' && (
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Specify Type</label>
-                    <input
-                      type="text"
-                      value={exerciseOtherType}
-                      onChange={(e) => setExerciseOtherType(e.target.value)}
-                      placeholder="e.g., Pilates, HIIT"
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                    />
-                  </div>
-                )}
-                {exerciseType !== 'other' && (
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Time Performed</label>
-                    <input
-                      type="time"
-                      value={exercisePerformedAt ? exercisePerformedAt.split('T')[1]?.substring(0, 5) : ''}
-                      onChange={(e) => setExercisePerformedAt(`${today}T${e.target.value}:00`)}
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                    />
-                  </div>
-                )}
-              </div>
-              {exerciseType === 'other' && (
-                <div className="mt-3">
-                  <label className="block text-xs text-gray-500 mb-1">Time Performed</label>
-                  <input
-                    type="time"
-                    value={exercisePerformedAt ? exercisePerformedAt.split('T')[1]?.substring(0, 5) : ''}
-                    onChange={(e) => setExercisePerformedAt(`${today}T${e.target.value}:00`)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              )}
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Duration (minutes)</label>
-                  <input
-                    type="number"
-                    value={exerciseDuration}
-                    onChange={(e) => setExerciseDuration(e.target.value)}
-                    placeholder="e.g., 45"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Intensity</label>
-                  <select
-                    value={exerciseIntensity}
-                    onChange={(e) => setExerciseIntensity(e.target.value as typeof exerciseIntensity)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Distance (optional)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={exerciseDistance}
-                      onChange={(e) => setExerciseDistance(e.target.value)}
-                      placeholder="e.g., 5"
-                      className="flex-1 px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                    />
-                    <select
-                      value={exerciseDistanceUnit}
-                      onChange={(e) => setExerciseDistanceUnit(e.target.value as typeof exerciseDistanceUnit)}
-                      className="w-20 px-2 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                    >
-                      <option value="miles">mi</option>
-                      <option value="km">km</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Calories Burned (optional)</label>
-                  <input
-                    type="number"
-                    value={exerciseCalories}
-                    onChange={(e) => setExerciseCalories(e.target.value)}
-                    placeholder="e.g., 300"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={exerciseNotes}
-                  onChange={(e) => setExerciseNotes(e.target.value)}
-                  placeholder="How did it feel? Any observations..."
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Exercise Details</h3>
             </div>
+            <ExerciseFields
+              fields={state.exercise as ExerciseFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_EXERCISE', payload: { [key]: value } })}
+              glass
+            />
           </div>
         </>
       )}
 
       {/* Event Details - only show if current topic is event */}
-      {(customType === 'event' || selectedTopicName?.toLowerCase() === 'event') && (
+      {(customType === 'event' || state.selectedTopicName?.toLowerCase() === 'event') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Event Details</h3>
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={eventStartDate}
-                    onChange={(e) => setEventStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    value={eventStartTime}
-                    onChange={(e) => setEventStartTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={eventEndDate}
-                    onChange={(e) => setEventEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">End Time</label>
-                  <input
-                    type="time"
-                    value={eventEndTime}
-                    onChange={(e) => setEventEndTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Location/Venue</label>
-                  <input
-                    type="text"
-                    value={eventLocation}
-                    onChange={(e) => setEventLocation(e.target.value)}
-                    placeholder="e.g., Conference Room A"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Phone Contact</label>
-                  <input
-                    type="tel"
-                    value={eventPhone}
-                    onChange={(e) => setEventPhone(e.target.value)}
-                    placeholder="e.g., +1 555-123-4567"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={eventAddress}
-                  onChange={(e) => setEventAddress(e.target.value)}
-                  placeholder="e.g., 123 Main St, City"
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Additional Notes</label>
-                <textarea
-                  value={eventNotes}
-                  onChange={(e) => setEventNotes(e.target.value)}
-                  placeholder="Any additional details..."
-                  rows={2}
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Event Details</h3>
             </div>
+            <EventFields
+              fields={state.event as EventFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_EVENT', payload: { [key]: value } })}
+              glass
+            />
           </div>
         </>
       )}
 
       {/* Meeting Details - only show if current topic is meeting */}
-      {(customType === 'meeting' || selectedTopicName?.toLowerCase() === 'meeting') && (
+      {(customType === 'meeting' || state.selectedTopicName?.toLowerCase() === 'meeting') && (
         <>
           <div className="border-t border-border my-4" />
-          <div className="mb-4">
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Meeting Details</h3>
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Meeting Topic</label>
-                  <input
-                    type="text"
-                    value={meetingTopic}
-                    onChange={(e) => setMeetingTopic(e.target.value)}
-                    placeholder="e.g., Q4 Planning"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Attendees</label>
-                  <input
-                    type="text"
-                    value={meetingAttendees}
-                    onChange={(e) => setMeetingAttendees(e.target.value)}
-                    placeholder="e.g., John, Sarah, Mike"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={meetingStartDate}
-                    onChange={(e) => setMeetingStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    value={meetingStartTime}
-                    onChange={(e) => setMeetingStartTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={meetingEndDate}
-                    onChange={(e) => setMeetingEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">End Time</label>
-                  <input
-                    type="time"
-                    value={meetingEndTime}
-                    onChange={(e) => setMeetingEndTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Location/Venue</label>
-                  <input
-                    type="text"
-                    value={meetingLocation}
-                    onChange={(e) => setMeetingLocation(e.target.value)}
-                    placeholder="e.g., Conference Room A"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Phone Contact</label>
-                  <input
-                    type="tel"
-                    value={meetingPhone}
-                    onChange={(e) => setMeetingPhone(e.target.value)}
-                    placeholder="e.g., +1 555-123-4567"
-                    className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={meetingAddress}
-                  onChange={(e) => setMeetingAddress(e.target.value)}
-                  placeholder="e.g., 123 Main St, City"
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">Additional Notes</label>
-                <textarea
-                  value={meetingNotes}
-                  onChange={(e) => setMeetingNotes(e.target.value)}
-                  placeholder="Agenda, action items, etc..."
-                  rows={2}
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm backdrop-blur-sm bg-white/30 text-gray-900"
-                />
-              </div>
+          <div className="custom-fields">
+            <div className="custom-fields-header">
+              <h3 className="custom-fields-title">Meeting Details</h3>
             </div>
+            <MeetingFields
+              fields={state.meeting as MeetingFieldValues}
+              onChange={(key, value) => dispatch({ type: 'UPDATE_MEETING', payload: { [key]: value } })}
+              glass
+            />
           </div>
         </>
       )}
@@ -1906,7 +1251,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         <div>
           {entryId && (
             <button
-              onClick={() => setShowDeleteConfirm(true)}
+              onClick={() => dispatch({ type: 'SET_SHOW_DELETE_CONFIRM', payload: true })}
               className="btn btn-danger btn-outline"
             >
               Delete
@@ -1915,23 +1260,23 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         </div>
         <button
           onClick={handleSave}
-          disabled={saving || (!expandEntry && charCount > MAX_CHARS_SHORT)}
+          disabled={state.saving || (!state.expandEntry && state.charCount > MAX_CHARS_SHORT)}
           className="btn btn-primary"
-          style={{ backgroundColor: saving || (!expandEntry && charCount > MAX_CHARS_SHORT) ? undefined : accentColor }}
-          onMouseOver={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = hoverColor; }}
-          onMouseOut={(e) => { if (!saving && (expandEntry || charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = accentColor; }}
+          style={{ backgroundColor: state.saving || (!state.expandEntry && state.charCount > MAX_CHARS_SHORT) ? undefined : accentColor }}
+          onMouseOver={(e) => { if (!state.saving && (state.expandEntry || state.charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = hoverColor; }}
+          onMouseOut={(e) => { if (!state.saving && (state.expandEntry || state.charCount <= MAX_CHARS_SHORT)) e.currentTarget.style.backgroundColor = accentColor; }}
           title="Save"
         >
-          {saving ? 'Saving...' : 'Save'}
+          {state.saving ? 'Saving...' : 'Save'}
         </button>
       </div>
 
       {/* Share modal */}
-      {showShareModal && entryId && editor && (
+      {state.showShareModal && entryId && editor && (
         <ShareModal
           entryId={entryId}
           plaintextContent={editor.getHTML()}
-          onClose={() => setShowShareModal(false)}
+          onClose={() => dispatch({ type: 'SET_SHOW_SHARE_MODAL', payload: false })}
         />
       )}
     </div>
