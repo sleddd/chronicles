@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Chronicles is a **zero-knowledge encrypted journal application** with client-side encryption. The server never sees plaintext user data. Key privacy guarantees:
 - All entry content is encrypted in the browser before transmission
-- Master encryption key exists only in browser memory (lost on refresh)
+- Master encryption key stored in browser `sessionStorage` (persists across page refreshes, cleared on logout/timeout/browser close)
 - Recovery key provided at registration for password recovery
 
 ## Commands
@@ -37,13 +37,12 @@ PostgreSQL Database
 │   ├── entries - encrypted content with searchTokens for SSE
 │   ├── custom_fields - encrypted type-specific metadata (WordPress-style)
 │   ├── entry_relationships - links between entries (goal → milestones)
-│   ├── user_settings - feature toggles
-│   ├── shared_entries - public sharing via token
-│   ├── medications - medication tracking
-│   ├── medication_doses - dose logging
-│   ├── symptoms - symptom tracking
-│   ├── food_entries - food/diet logging
-│   └── favorites - favorited entries
+│   ├── user_settings - feature toggles (food, medication, goals enabled)
+│   ├── shared_entries - public sharing via token (stores decrypted content)
+│   ├── calendar_events - calendar integration with encrypted titles
+│   ├── medication_dose_logs - dose logging with timestamps
+│   ├── favorites - favorited entries
+│   └── entry_images - image attachments (metadata; data on filesystem)
 │
 └── chronicles_p3n8q5_2 (user 2's isolated schema)
     └── ... same tables
@@ -208,10 +207,17 @@ Component `src/components/auth/LegacyKeyMigration.tsx` handles:
 
 **Zustand** is used for encryption key state (not Redux). Rationale:
 
-- **No persistence needed** - Encryption key must never be persisted (security requirement). Zustand defaults to in-memory only.
+- **Session-only persistence** - Encryption key is stored in `sessionStorage` for cross-refresh persistence, but cleared on logout, inactivity timeout, or browser close. Never persisted to `localStorage`.
 - **Minimal footprint** - ~1KB vs Redux Toolkit's ~11KB. Smaller attack surface for privacy-focused app.
 - **Simple state shape** - Just `{ key, deriveKey(), encrypt(), decrypt(), clearKey() }`. No reducers/actions needed.
 - **No middleware** - Web Crypto API is already Promise-based; no thunks required.
+
+### Key Storage Security
+
+- Master key exported to JWK format and stored in `sessionStorage`
+- **CSP headers are a critical security control** - sessionStorage is accessible to same-origin scripts
+- Key is cleared on: logout, inactivity timeout (configurable), browser/tab close
+- Key is never sent to server or persisted to disk
 
 ## UI Theme
 

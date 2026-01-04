@@ -127,12 +127,8 @@ export const useEncryption = create<EncryptionStore>((set, get) => ({
     try {
       return await decrypt(ciphertext, iv, encryptionKey);
     } catch (error) {
-      console.error('Decryption failed:', {
-        error,
-        ciphertextLength: ciphertext?.length,
-        ivLength: iv?.length,
-        hasKey: !!encryptionKey,
-      });
+      // Avoid logging metadata that could aid attackers
+      console.error('Decryption failed');
       throw error;
     }
   },

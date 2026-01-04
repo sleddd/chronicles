@@ -55,20 +55,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!account) {
-      // Don't reveal whether the email exists
-      return NextResponse.json(
-        { error: 'Recovery failed. Please check your email and recovery key.' },
-        { status: 400 }
-      );
-    }
+    // Use identical error message for all failure cases to prevent email enumeration
+    const genericError = 'Recovery failed. Please check your email and recovery key.';
 
-    // Verify recovery key was set up
-    if (!account.encryptedMasterKeyWithRecovery || !account.recoveryKeySalt) {
-      return NextResponse.json(
-        { error: 'Recovery key was not set up for this account.' },
-        { status: 400 }
-      );
+    if (!account || !account.encryptedMasterKeyWithRecovery || !account.recoveryKeySalt) {
+      return NextResponse.json({ error: genericError }, { status: 400 });
     }
 
     // Hash the new password
@@ -142,9 +133,9 @@ export async function GET(request: NextRequest) {
     });
 
     if (!account || !account.encryptedMasterKeyWithRecovery || !account.recoveryKeySalt) {
-      // Don't reveal whether the email exists or has recovery set up
+      // Use identical error message to prevent email enumeration
       return NextResponse.json(
-        { error: 'Recovery not available for this account.' },
+        { error: 'Recovery failed. Please check your email and recovery key.' },
         { status: 400 }
       );
     }

@@ -5,7 +5,7 @@ A zero-knowledge encrypted journal application with client-side encryption. The 
 ## Privacy Guarantees
 
 - All entry content is encrypted in the browser before transmission
-- Master encryption key exists only in browser memory (cleared on logout/refresh)
+- Master encryption key stored in browser `sessionStorage` (persists across page refreshes, cleared on logout/timeout/browser close)
 - Recovery key system allows password reset without compromising zero-knowledge design
 - Schema-per-user database isolation (not row-level security)
 
@@ -252,8 +252,8 @@ npm run lint     # Run ESLint
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
-- **Database**: PostgreSQL with Prisma ORM
+- **Framework**: Next.js 16 (App Router)
+- **Database**: PostgreSQL with Prisma ORM (supports Neon serverless)
 - **Authentication**: NextAuth.js with database sessions
 - **Encryption**: Web Crypto API (AES-256-GCM)
 - **State Management**: Zustand
@@ -277,12 +277,12 @@ PostgreSQL Database
 │   ├── entries         # Encrypted journal content
 │   ├── custom_fields   # Type-specific metadata (goals, medications, etc.)
 │   ├── entry_relationships  # Links between entries (goal → milestones)
-│   ├── medications     # Medication tracking
-│   ├── medication_doses    # Dose logging
-│   ├── symptoms        # Symptom tracking
-│   ├── food_entries    # Food/diet logging
-│   ├── exercise_entries    # Exercise logging
-│   └── favorites       # Favorited entries
+│   ├── user_settings   # Feature toggles (food, medication, goals enabled)
+│   ├── shared_entries  # Public sharing via token
+│   ├── calendar_events # Calendar integration with encrypted titles
+│   ├── medication_dose_logs  # Dose logging with timestamps
+│   ├── favorites       # Favorited entries
+│   └── entry_images    # Image attachments (metadata; data on filesystem)
 │
 └── chronicles_p3n8q5_2 (user 2's isolated schema)
     └── ... same tables, completely isolated
@@ -297,7 +297,7 @@ PostgreSQL Database
 │                        BROWSER                               │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │ Master Key  │  │  Encrypt/    │  │  Plaintext Data   │  │
-│  │ (memory)    │──│  Decrypt     │──│  (user sees)      │  │
+│  │ (session)   │──│  Decrypt     │──│  (user sees)      │  │
 │  └─────────────┘  └──────────────┘  └───────────────────┘  │
 │         │                                                    │
 │         ▼                                                    │
