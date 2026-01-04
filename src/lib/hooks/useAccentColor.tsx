@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useSession } from 'next-auth/react';
 
 const DEFAULT_HEADER_COLOR = '#0F4C5C';
 const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
@@ -54,34 +55,7 @@ function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
   });
 }
 
-// Get initial background brightness from localStorage
-function getInitialBackgroundIsLight(): boolean {
-  if (typeof window !== 'undefined') {
-    const cached = localStorage.getItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
-    if (cached) return cached === 'true';
-  }
-  return false;
-}
-
-// Get initial color from localStorage (runs synchronously before render)
-function getInitialHeaderColor(): string {
-  if (typeof window !== 'undefined') {
-    const cached = localStorage.getItem(HEADER_COLOR_STORAGE_KEY);
-    if (cached) return cached;
-  }
-  return DEFAULT_HEADER_COLOR;
-}
-
 const DEFAULT_BACKGROUND_IMAGE = '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg';
-
-// Get initial background image from localStorage
-function getInitialBackgroundImage(): string {
-  if (typeof window !== 'undefined') {
-    const cached = localStorage.getItem(BACKGROUND_IMAGE_STORAGE_KEY);
-    if (cached) return cached;
-  }
-  return DEFAULT_BACKGROUND_IMAGE;
-}
 
 // Get the accent color - returns header color or fallback grey if transparent
 function getAccentColor(headerColor: string): string {
@@ -138,9 +112,22 @@ const AccentColorContext = createContext<AccentColorContextValue>({
 });
 
 export function AccentColorProvider({ children }: { children: ReactNode }) {
-  const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
-  const [backgroundImage, setBackgroundImage] = useState(getInitialBackgroundImage);
-  const [backgroundIsLight, setBackgroundIsLight] = useState(getInitialBackgroundIsLight);
+  const { status } = useSession();
+  // Use defaults for SSR, then hydrate from localStorage on client
+  const [headerColor, setHeaderColor] = useState(DEFAULT_HEADER_COLOR);
+  const [backgroundImage, setBackgroundImage] = useState(DEFAULT_BACKGROUND_IMAGE);
+  const [backgroundIsLight, setBackgroundIsLight] = useState(false);
+
+  // Hydrate from localStorage on client mount (before API call)
+  useEffect(() => {
+    const cachedHeader = localStorage.getItem(HEADER_COLOR_STORAGE_KEY);
+    const cachedBackground = localStorage.getItem(BACKGROUND_IMAGE_STORAGE_KEY);
+    const cachedBrightness = localStorage.getItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
+
+    if (cachedHeader) setHeaderColor(cachedHeader);
+    if (cachedBackground) setBackgroundImage(cachedBackground);
+    if (cachedBrightness) setBackgroundIsLight(cachedBrightness === 'true');
+  }, []);
 
   // Analyze background image brightness when it changes
   useEffect(() => {
@@ -163,23 +150,36 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
       const response = await fetch('/api/settings');
       if (response.ok) {
         const data = await response.json();
-        if (data.settings?.headerColor) {
-          setHeaderColor(data.settings.headerColor);
-          localStorage.setItem(HEADER_COLOR_STORAGE_KEY, data.settings.headerColor);
-        }
-        if (data.settings?.backgroundImage !== undefined) {
-          setBackgroundImage(data.settings.backgroundImage);
-          localStorage.setItem(BACKGROUND_IMAGE_STORAGE_KEY, data.settings.backgroundImage);
-        }
+
+        // Use || to treat empty string as falsy and fall back to defaults
+        const newHeaderColor = data.settings?.headerColor || DEFAULT_HEADER_COLOR;
+        const newBackgroundImage = data.settings?.backgroundImage || DEFAULT_BACKGROUND_IMAGE;
+
+        setHeaderColor(newHeaderColor);
+        localStorage.setItem(HEADER_COLOR_STORAGE_KEY, newHeaderColor);
+
+        setBackgroundImage(newBackgroundImage);
+        localStorage.setItem(BACKGROUND_IMAGE_STORAGE_KEY, newBackgroundImage);
+        // Dispatch event so BackgroundImage component updates
+        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newBackgroundImage }));
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
   }, []);
 
+  // Load settings when authenticated, clear on logout
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+    if (status === 'authenticated') {
+      loadSettings();
+    } else if (status === 'unauthenticated') {
+      // Clear localStorage so next login loads fresh from DB
+      localStorage.removeItem(HEADER_COLOR_STORAGE_KEY);
+      localStorage.removeItem(BACKGROUND_IMAGE_STORAGE_KEY);
+      localStorage.removeItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
+    }
+  }, [status, loadSettings]);
+
 
   // Listen for header color changes from settings
   useEffect(() => {

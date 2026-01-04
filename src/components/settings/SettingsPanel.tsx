@@ -877,13 +877,13 @@ export function SettingsPanel() {
                 <button
                   key={bg.value || 'none'}
                   onClick={() => handleBackgroundImageChange(bg.value)}
-                  disabled={savingBackgroundImage || loadingFeatures}
+                  disabled={savingBackgroundImage}
                   title={bg.label}
                   className={`relative aspect-video rounded-md border-2 transition-all overflow-hidden ${
                     featureSettings.backgroundImage === bg.value
                       ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-1'
                       : 'border-border hover:border-gray-400'
-                  } ${(savingBackgroundImage || loadingFeatures) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${savingBackgroundImage ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {bg.value ? (
                     // eslint-disable-next-line @next/next/no-img-element
