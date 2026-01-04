@@ -34,10 +34,10 @@ interface Props {
 }
 
 const MEAL_TYPES = [
-  { key: 'breakfast', label: 'Breakfast', icon: '🌅' },
-  { key: 'lunch', label: 'Lunch', icon: '🌞' },
-  { key: 'dinner', label: 'Dinner', icon: '🌙' },
-  { key: 'snack', label: 'Snack', icon: '🍎' },
+  { key: 'breakfast', label: 'Breakfast' },
+  { key: 'lunch', label: 'Lunch' },
+  { key: 'dinner', label: 'Dinner' },
+  { key: 'snack', label: 'Snack' },
 ] as const;
 
 export function FoodTab({ selectedDate, refreshKey }: Props) {
@@ -153,7 +153,6 @@ export function FoodTab({ selectedDate, refreshKey }: Props) {
           return (
             <div key={meal.key} className="backdrop-blur-md bg-white/70 rounded-lg border border-border overflow-hidden">
               <div className="backdrop-blur-md bg-white/50 px-4 py-2 border-b border-border flex items-center gap-2">
-                <span>{meal.icon}</span>
                 <span className="font-medium text-gray-700 uppercase text-sm">{meal.label}</span>
                 <span className="text-sm text-gray-400">({entries.length})</span>
               </div>

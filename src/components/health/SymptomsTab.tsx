@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface CustomField {
@@ -39,6 +40,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
   const [loading, setLoading] = useState(true);
   const [decryptedSymptoms, setDecryptedSymptoms] = useState<Map<string, { name: string; fields: DecryptedSymptomFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor } = useAccentColor();
 
   const handleEditSymptom = (entryId: string) => {
     router.push(`/?entry=${entryId}`);
@@ -111,12 +113,6 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  const getSeverityColor = (severity: number) => {
-    if (severity <= 3) return 'bg-green-500';
-    if (severity <= 6) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
-
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
@@ -165,10 +161,10 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
                     {/* Severity bar */}
                     <div className="mt-2 flex items-center gap-2">
                       <span className="text-sm text-gray-600">Severity:</span>
-                      <div className="flex-1 max-w-32 h-2 backdrop-blur-md bg-white/70 rounded-full overflow-hidden">
+                      <div className="flex-1 max-w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${getSeverityColor(severity)}`}
-                          style={{ width: `${severity * 10}%` }}
+                          className="h-full rounded-full"
+                          style={{ width: `${severity * 10}%`, backgroundColor: accentColor }}
                         />
                       </div>
                       <span className="text-sm text-gray-600">{severity}/10</span>
