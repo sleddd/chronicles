@@ -12,7 +12,7 @@ import { TopicSelector } from '@/components/topics/TopicSelector';
 import { MilestoneGoalSelector } from '@/components/goals/MilestoneEditor';
 import { TaskMilestoneSelector } from '@/components/tasks/TaskMilestoneSelector';
 import { ShareModal } from '@/components/sharing/ShareModal';
-import { entryReducer, initialState, type EntryState } from './entryEditorReducer';
+import { entryReducer, initialState } from './entryEditorReducer';
 // Import existing form field components
 import { GoalFields } from '@/components/forms/GoalFields';
 import { TaskFields } from '@/components/forms/TaskFields';
@@ -23,6 +23,8 @@ import { SymptomFields } from '@/components/forms/SymptomFields';
 import { ExerciseFields } from '@/components/forms/ExerciseFields';
 import { EventFields } from '@/components/forms/EventFields';
 import { MeetingFields } from '@/components/forms/MeetingFields';
+import { CustomFieldSection } from '@/components/forms/CustomFieldSection';
+import { loadCustomFields, buildCustomFields } from '@/lib/customFields';
 import type {
   GoalFields as GoalFieldValues,
   TaskFields as TaskFieldValues,
@@ -309,24 +311,18 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       dispatch({ type: 'SET_CHAR_COUNT', payload: plainText.length });
       dispatch({ type: 'SET_EXPAND_ENTRY', payload: plainText.length > MAX_CHARS_SHORT });
 
-      // Load goal custom fields
-      if (entry.customType === 'goal' && entry.custom_fields) {
-        const goalUpdates: Partial<EntryState['goal']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'type') goalUpdates.type = parsed.value;
-            if (parsed.fieldKey === 'status') goalUpdates.status = parsed.value;
-            if (parsed.fieldKey === 'targetDate') goalUpdates.targetDate = parsed.value || '';
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_GOAL', payload: goalUpdates });
+      // Load custom fields based on entry type
+      if (entry.customType) {
+        const fieldUpdates = await loadCustomFields(
+          entry.customType,
+          entry.custom_fields,
+          entry,
+          decryptData
+        );
+        dispatch({ type: 'LOAD_ENTRY', payload: fieldUpdates });
 
         // Load linked milestones for goals
-        if (entry.milestones && entry.milestones.length > 0) {
+        if (entry.customType === 'goal' && entry.milestones && entry.milestones.length > 0) {
           const decryptedMilestones: Array<{ id: string; content: string }> = [];
           for (const milestone of entry.milestones) {
             try {
@@ -342,16 +338,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           }
           dispatch({ type: 'UPDATE_GOAL', payload: { linkedMilestones: decryptedMilestones } });
         }
-      }
-
-      // Load milestone goal IDs and linked tasks
-      if (entry.customType === 'milestone') {
-        if (entry.goalIds) {
-          dispatch({ type: 'UPDATE_MILESTONE', payload: { goalIds: entry.goalIds } });
-        }
 
         // Load linked tasks for milestones
-        if (entry.tasks && entry.tasks.length > 0) {
+        if (entry.customType === 'milestone' && entry.tasks && entry.tasks.length > 0) {
           const decryptedTasks: Array<{ id: string; content: string; isCompleted: boolean }> = [];
           for (const task of entry.tasks) {
             try {
@@ -386,164 +375,19 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           }
           dispatch({ type: 'UPDATE_MILESTONE', payload: { linkedTasks: decryptedTasks } });
         }
-      }
-
-      // Load task custom fields
-      if (entry.customType === 'task' && entry.custom_fields) {
-        const taskUpdates: Partial<EntryState['task']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'isCompleted') taskUpdates.isCompleted = parsed.value === true;
-            if (parsed.fieldKey === 'isAutoMigrating') taskUpdates.isAutoMigrating = parsed.value !== false;
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_TASK', payload: taskUpdates });
 
         // Load task milestone links
-        try {
-          const milestonesResponse = await fetch(`/api/tasks/${entryId}/milestones`);
-          const milestonesData = await milestonesResponse.json();
-          if (milestonesData.milestoneIds) {
-            dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: milestonesData.milestoneIds } });
-          }
-        } catch {
-          // Ignore if milestone fetch fails
-        }
-      }
-
-      // Load medication custom fields
-      if (entry.customType === 'medication' && entry.custom_fields) {
-        const medUpdates: Partial<EntryState['medication']> = {};
-        for (const cf of entry.custom_fields) {
+        if (entry.customType === 'task') {
           try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'dosage') medUpdates.dosage = parsed.value || '';
-            if (parsed.fieldKey === 'frequency') medUpdates.frequency = parsed.value || 'once_daily';
-            if (parsed.fieldKey === 'scheduleTimes') medUpdates.scheduleTimes = parsed.value || ['08:00'];
-            if (parsed.fieldKey === 'isActive') medUpdates.isActive = parsed.value !== false;
-            if (parsed.fieldKey === 'notes') medUpdates.notes = parsed.value || '';
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_MEDICATION', payload: medUpdates });
-      }
-
-      // Load food custom fields
-      if (entry.customType === 'food' && entry.custom_fields) {
-        const foodUpdates: Partial<EntryState['food']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'mealType') foodUpdates.mealType = parsed.value || 'breakfast';
-            if (parsed.fieldKey === 'consumedAt') foodUpdates.consumedAt = parsed.value || '';
-            if (parsed.fieldKey === 'ingredients') foodUpdates.ingredients = (parsed.value || []).join(', ');
-            if (parsed.fieldKey === 'notes') foodUpdates.notes = parsed.value || '';
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_FOOD', payload: foodUpdates });
-      }
-
-      // Load symptom custom fields
-      if (entry.customType === 'symptom' && entry.custom_fields) {
-        const symptomUpdates: Partial<EntryState['symptom']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'severity') symptomUpdates.severity = parsed.value || 5;
-            if (parsed.fieldKey === 'occurredAt') symptomUpdates.occurredAt = parsed.value || '';
-            if (parsed.fieldKey === 'duration') symptomUpdates.duration = parsed.value?.toString() || '';
-            if (parsed.fieldKey === 'notes') symptomUpdates.notes = parsed.value || '';
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_SYMPTOM', payload: symptomUpdates });
-      }
-
-      // Load event custom fields
-      if (entry.customType === 'event' && entry.custom_fields) {
-        const eventUpdates: Partial<EntryState['event']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'startDate') eventUpdates.startDate = parsed.value || '';
-            if (parsed.fieldKey === 'startTime') eventUpdates.startTime = parsed.value || '09:00';
-            if (parsed.fieldKey === 'endDate') eventUpdates.endDate = parsed.value || '';
-            if (parsed.fieldKey === 'endTime') eventUpdates.endTime = parsed.value || '10:00';
-            if (parsed.fieldKey === 'location') eventUpdates.location = parsed.value || '';
-            if (parsed.fieldKey === 'address') eventUpdates.address = parsed.value || '';
-            if (parsed.fieldKey === 'phone') eventUpdates.phone = parsed.value || '';
-            if (parsed.fieldKey === 'notes') eventUpdates.notes = parsed.value || '';
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_EVENT', payload: eventUpdates });
-      }
-
-      // Load meeting custom fields
-      if (entry.customType === 'meeting' && entry.custom_fields) {
-        const meetingUpdates: Partial<EntryState['meeting']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'startDate') meetingUpdates.startDate = parsed.value || '';
-            if (parsed.fieldKey === 'startTime') meetingUpdates.startTime = parsed.value || '09:00';
-            if (parsed.fieldKey === 'endDate') meetingUpdates.endDate = parsed.value || '';
-            if (parsed.fieldKey === 'endTime') meetingUpdates.endTime = parsed.value || '10:00';
-            if (parsed.fieldKey === 'location') meetingUpdates.location = parsed.value || '';
-            if (parsed.fieldKey === 'address') meetingUpdates.address = parsed.value || '';
-            if (parsed.fieldKey === 'phone') meetingUpdates.phone = parsed.value || '';
-            if (parsed.fieldKey === 'notes') meetingUpdates.notes = parsed.value || '';
-            if (parsed.fieldKey === 'topic') meetingUpdates.topic = parsed.value || '';
-            if (parsed.fieldKey === 'attendees') meetingUpdates.attendees = parsed.value || '';
-          } catch {
-            // Skip failed fields
-          }
-        }
-        dispatch({ type: 'UPDATE_MEETING', payload: meetingUpdates });
-      }
-
-      // Load exercise custom fields
-      if (entry.customType === 'exercise' && entry.custom_fields) {
-        const exerciseUpdates: Partial<EntryState['exercise']> = {};
-        for (const cf of entry.custom_fields) {
-          try {
-            const fieldData = await decryptData(cf.encryptedData, cf.iv);
-            const parsed = JSON.parse(fieldData);
-            if (parsed.fieldKey === 'exerciseType') {
-              const validTypes = ['yoga', 'cardio', 'strength', 'swimming', 'running', 'cycling', 'walking', 'hiking', 'other'];
-              if (validTypes.includes(parsed.value)) {
-                exerciseUpdates.type = parsed.value;
-              } else {
-                exerciseUpdates.type = 'other';
-                exerciseUpdates.otherType = parsed.value || '';
-              }
+            const milestonesResponse = await fetch(`/api/tasks/${entryId}/milestones`);
+            const milestonesData = await milestonesResponse.json();
+            if (milestonesData.milestoneIds) {
+              dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: milestonesData.milestoneIds } });
             }
-            if (parsed.fieldKey === 'duration') exerciseUpdates.duration = parsed.value?.toString() || '';
-            if (parsed.fieldKey === 'intensity') exerciseUpdates.intensity = parsed.value || 'medium';
-            if (parsed.fieldKey === 'distance') exerciseUpdates.distance = parsed.value?.toString() || '';
-            if (parsed.fieldKey === 'distanceUnit') exerciseUpdates.distanceUnit = parsed.value || 'miles';
-            if (parsed.fieldKey === 'calories') exerciseUpdates.calories = parsed.value?.toString() || '';
-            if (parsed.fieldKey === 'performedAt') exerciseUpdates.performedAt = parsed.value || '';
-            if (parsed.fieldKey === 'notes') exerciseUpdates.notes = parsed.value || '';
           } catch {
-            // Skip failed fields
+            // Ignore if milestone fetch fails
           }
         }
-        dispatch({ type: 'UPDATE_EXERCISE', payload: exerciseUpdates });
       }
 
       // Check if entry is favorited
@@ -599,202 +443,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       const entryType = customType?.toLowerCase() || state.storedCustomType || topicNameLower;
 
       // Build custom fields based on entry type
-      let customFields: { encryptedData: string; iv: string }[] | undefined;
-
-      if (entryType === 'task') {
-        const isCompletedField = JSON.stringify({ fieldKey: 'isCompleted', value: state.task.isCompleted });
-        const isAutoMigratingField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: state.task.isAutoMigrating });
-
-        const encryptedCompleted = await encryptData(isCompletedField);
-        const encryptedAutoMigrating = await encryptData(isAutoMigratingField);
-
-        customFields = [
-          { encryptedData: encryptedCompleted.ciphertext, iv: encryptedCompleted.iv },
-          { encryptedData: encryptedAutoMigrating.ciphertext, iv: encryptedAutoMigrating.iv },
-        ];
-      } else if (entryType === 'goal') {
-        const typeField = JSON.stringify({ fieldKey: 'type', value: state.goal.type });
-        const statusField = JSON.stringify({ fieldKey: 'status', value: state.goal.status });
-        const targetDateField = JSON.stringify({ fieldKey: 'targetDate', value: state.goal.targetDate || null });
-        const progressField = JSON.stringify({ fieldKey: 'progressPercentage', value: 0 });
-
-        const encryptedType = await encryptData(typeField);
-        const encryptedStatus = await encryptData(statusField);
-        const encryptedTargetDate = await encryptData(targetDateField);
-        const encryptedProgress = await encryptData(progressField);
-
-        customFields = [
-          { encryptedData: encryptedType.ciphertext, iv: encryptedType.iv },
-          { encryptedData: encryptedStatus.ciphertext, iv: encryptedStatus.iv },
-          { encryptedData: encryptedTargetDate.ciphertext, iv: encryptedTargetDate.iv },
-          { encryptedData: encryptedProgress.ciphertext, iv: encryptedProgress.iv },
-        ];
-      } else if (entryType === 'milestone') {
-        const orderIndexField = JSON.stringify({ fieldKey: 'orderIndex', value: 0 });
-        const isCompletedField = JSON.stringify({ fieldKey: 'isCompleted', value: false });
-        const completedAtField = JSON.stringify({ fieldKey: 'completedAt', value: null });
-
-        const encryptedOrderIndex = await encryptData(orderIndexField);
-        const encryptedIsCompleted = await encryptData(isCompletedField);
-        const encryptedCompletedAt = await encryptData(completedAtField);
-
-        customFields = [
-          { encryptedData: encryptedOrderIndex.ciphertext, iv: encryptedOrderIndex.iv },
-          { encryptedData: encryptedIsCompleted.ciphertext, iv: encryptedIsCompleted.iv },
-          { encryptedData: encryptedCompletedAt.ciphertext, iv: encryptedCompletedAt.iv },
-        ];
-      } else if (entryType === 'medication') {
-        const dosageField = JSON.stringify({ fieldKey: 'dosage', value: state.medication.dosage });
-        const frequencyField = JSON.stringify({ fieldKey: 'frequency', value: state.medication.frequency });
-        const scheduleTimesField = JSON.stringify({ fieldKey: 'scheduleTimes', value: state.medication.scheduleTimes });
-        const isActiveField = JSON.stringify({ fieldKey: 'isActive', value: state.medication.isActive });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.medication.notes });
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: today });
-
-        const encryptedDosage = await encryptData(dosageField);
-        const encryptedFrequency = await encryptData(frequencyField);
-        const encryptedScheduleTimes = await encryptData(scheduleTimesField);
-        const encryptedIsActive = await encryptData(isActiveField);
-        const encryptedNotes = await encryptData(notesField);
-        const encryptedStartDate = await encryptData(startDateField);
-
-        customFields = [
-          { encryptedData: encryptedDosage.ciphertext, iv: encryptedDosage.iv },
-          { encryptedData: encryptedFrequency.ciphertext, iv: encryptedFrequency.iv },
-          { encryptedData: encryptedScheduleTimes.ciphertext, iv: encryptedScheduleTimes.iv },
-          { encryptedData: encryptedIsActive.ciphertext, iv: encryptedIsActive.iv },
-          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
-          { encryptedData: encryptedStartDate.ciphertext, iv: encryptedStartDate.iv },
-        ];
-      } else if (entryType === 'food') {
-        const mealTypeField = JSON.stringify({ fieldKey: 'mealType', value: state.food.mealType });
-        const consumedAtField = JSON.stringify({ fieldKey: 'consumedAt', value: state.food.consumedAt || new Date().toISOString() });
-        const ingredientsField = JSON.stringify({ fieldKey: 'ingredients', value: state.food.ingredients.split(',').map(i => i.trim()).filter(i => i) });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.food.notes });
-
-        const encryptedMealType = await encryptData(mealTypeField);
-        const encryptedConsumedAt = await encryptData(consumedAtField);
-        const encryptedIngredients = await encryptData(ingredientsField);
-        const encryptedNotes = await encryptData(notesField);
-
-        customFields = [
-          { encryptedData: encryptedMealType.ciphertext, iv: encryptedMealType.iv },
-          { encryptedData: encryptedConsumedAt.ciphertext, iv: encryptedConsumedAt.iv },
-          { encryptedData: encryptedIngredients.ciphertext, iv: encryptedIngredients.iv },
-          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
-        ];
-      } else if (entryType === 'symptom') {
-        const severityField = JSON.stringify({ fieldKey: 'severity', value: state.symptom.severity });
-        const occurredAtField = JSON.stringify({ fieldKey: 'occurredAt', value: state.symptom.occurredAt || new Date().toISOString() });
-        const durationField = JSON.stringify({ fieldKey: 'duration', value: state.symptom.duration ? parseInt(state.symptom.duration) : null });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.symptom.notes });
-
-        const encryptedSeverity = await encryptData(severityField);
-        const encryptedOccurredAt = await encryptData(occurredAtField);
-        const encryptedDuration = await encryptData(durationField);
-        const encryptedNotes = await encryptData(notesField);
-
-        customFields = [
-          { encryptedData: encryptedSeverity.ciphertext, iv: encryptedSeverity.iv },
-          { encryptedData: encryptedOccurredAt.ciphertext, iv: encryptedOccurredAt.iv },
-          { encryptedData: encryptedDuration.ciphertext, iv: encryptedDuration.iv },
-          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
-        ];
-      } else if (entryType === 'event') {
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: state.event.startDate || today });
-        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: state.event.startTime });
-        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: state.event.endDate || state.event.startDate || today });
-        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: state.event.endTime });
-        const locationField = JSON.stringify({ fieldKey: 'location', value: state.event.location });
-        const addressField = JSON.stringify({ fieldKey: 'address', value: state.event.address });
-        const phoneField = JSON.stringify({ fieldKey: 'phone', value: state.event.phone });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.event.notes });
-
-        const encryptedStartDate = await encryptData(startDateField);
-        const encryptedStartTime = await encryptData(startTimeField);
-        const encryptedEndDate = await encryptData(endDateField);
-        const encryptedEndTime = await encryptData(endTimeField);
-        const encryptedLocation = await encryptData(locationField);
-        const encryptedAddress = await encryptData(addressField);
-        const encryptedPhone = await encryptData(phoneField);
-        const encryptedNotes = await encryptData(notesField);
-
-        customFields = [
-          { encryptedData: encryptedStartDate.ciphertext, iv: encryptedStartDate.iv },
-          { encryptedData: encryptedStartTime.ciphertext, iv: encryptedStartTime.iv },
-          { encryptedData: encryptedEndDate.ciphertext, iv: encryptedEndDate.iv },
-          { encryptedData: encryptedEndTime.ciphertext, iv: encryptedEndTime.iv },
-          { encryptedData: encryptedLocation.ciphertext, iv: encryptedLocation.iv },
-          { encryptedData: encryptedAddress.ciphertext, iv: encryptedAddress.iv },
-          { encryptedData: encryptedPhone.ciphertext, iv: encryptedPhone.iv },
-          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
-        ];
-      } else if (entryType === 'meeting') {
-        const startDateField = JSON.stringify({ fieldKey: 'startDate', value: state.meeting.startDate || today });
-        const startTimeField = JSON.stringify({ fieldKey: 'startTime', value: state.meeting.startTime });
-        const endDateField = JSON.stringify({ fieldKey: 'endDate', value: state.meeting.endDate || state.meeting.startDate || today });
-        const endTimeField = JSON.stringify({ fieldKey: 'endTime', value: state.meeting.endTime });
-        const locationField = JSON.stringify({ fieldKey: 'location', value: state.meeting.location });
-        const addressField = JSON.stringify({ fieldKey: 'address', value: state.meeting.address });
-        const phoneField = JSON.stringify({ fieldKey: 'phone', value: state.meeting.phone });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.meeting.notes });
-        const topicField = JSON.stringify({ fieldKey: 'topic', value: state.meeting.topic });
-        const attendeesField = JSON.stringify({ fieldKey: 'attendees', value: state.meeting.attendees });
-
-        const encryptedStartDate = await encryptData(startDateField);
-        const encryptedStartTime = await encryptData(startTimeField);
-        const encryptedEndDate = await encryptData(endDateField);
-        const encryptedEndTime = await encryptData(endTimeField);
-        const encryptedLocation = await encryptData(locationField);
-        const encryptedAddress = await encryptData(addressField);
-        const encryptedPhone = await encryptData(phoneField);
-        const encryptedNotes = await encryptData(notesField);
-        const encryptedTopic = await encryptData(topicField);
-        const encryptedAttendees = await encryptData(attendeesField);
-
-        customFields = [
-          { encryptedData: encryptedStartDate.ciphertext, iv: encryptedStartDate.iv },
-          { encryptedData: encryptedStartTime.ciphertext, iv: encryptedStartTime.iv },
-          { encryptedData: encryptedEndDate.ciphertext, iv: encryptedEndDate.iv },
-          { encryptedData: encryptedEndTime.ciphertext, iv: encryptedEndTime.iv },
-          { encryptedData: encryptedLocation.ciphertext, iv: encryptedLocation.iv },
-          { encryptedData: encryptedAddress.ciphertext, iv: encryptedAddress.iv },
-          { encryptedData: encryptedPhone.ciphertext, iv: encryptedPhone.iv },
-          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
-          { encryptedData: encryptedTopic.ciphertext, iv: encryptedTopic.iv },
-          { encryptedData: encryptedAttendees.ciphertext, iv: encryptedAttendees.iv },
-        ];
-      } else if (entryType === 'exercise') {
-        const exerciseTypeValue = state.exercise.type === 'other' ? state.exercise.otherType : state.exercise.type;
-        const typeField = JSON.stringify({ fieldKey: 'exerciseType', value: exerciseTypeValue });
-        const durationField = JSON.stringify({ fieldKey: 'duration', value: state.exercise.duration ? parseInt(state.exercise.duration) : null });
-        const intensityField = JSON.stringify({ fieldKey: 'intensity', value: state.exercise.intensity });
-        const distanceField = JSON.stringify({ fieldKey: 'distance', value: state.exercise.distance ? parseFloat(state.exercise.distance) : null });
-        const distanceUnitField = JSON.stringify({ fieldKey: 'distanceUnit', value: state.exercise.distanceUnit });
-        const caloriesField = JSON.stringify({ fieldKey: 'calories', value: state.exercise.calories ? parseInt(state.exercise.calories) : null });
-        const performedAtField = JSON.stringify({ fieldKey: 'performedAt', value: state.exercise.performedAt || new Date().toISOString() });
-        const notesField = JSON.stringify({ fieldKey: 'notes', value: state.exercise.notes });
-
-        const encryptedType = await encryptData(typeField);
-        const encryptedDuration = await encryptData(durationField);
-        const encryptedIntensity = await encryptData(intensityField);
-        const encryptedDistance = await encryptData(distanceField);
-        const encryptedDistanceUnit = await encryptData(distanceUnitField);
-        const encryptedCalories = await encryptData(caloriesField);
-        const encryptedPerformedAt = await encryptData(performedAtField);
-        const encryptedNotes = await encryptData(notesField);
-
-        customFields = [
-          { encryptedData: encryptedType.ciphertext, iv: encryptedType.iv },
-          { encryptedData: encryptedDuration.ciphertext, iv: encryptedDuration.iv },
-          { encryptedData: encryptedIntensity.ciphertext, iv: encryptedIntensity.iv },
-          { encryptedData: encryptedDistance.ciphertext, iv: encryptedDistance.iv },
-          { encryptedData: encryptedDistanceUnit.ciphertext, iv: encryptedDistanceUnit.iv },
-          { encryptedData: encryptedCalories.ciphertext, iv: encryptedCalories.iv },
-          { encryptedData: encryptedPerformedAt.ciphertext, iv: encryptedPerformedAt.iv },
-          { encryptedData: encryptedNotes.ciphertext, iv: encryptedNotes.iv },
-        ];
-      }
+      const customFields = entryType
+        ? await buildCustomFields(entryType, state, today, encryptData)
+        : undefined;
 
       if (entryId) {
         // Update existing entry
@@ -1059,220 +710,193 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         </div>
       </div>
 
-      {/* Goal Settings - only show if current topic is goal */}
-      {(customType === 'goal' || state.selectedTopicName?.toLowerCase() === 'goal') && (
-        <>
-          <div className="border-t border-border my-2" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Goal Settings</h3>
-            </div>
-            <GoalFields
-              fields={state.goal as GoalFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_GOAL', payload: { [key]: value } })}
-              glass
-            />
-            {state.goal.linkedMilestones.length > 0 && (
-              <div className="custom-fields-body mt-4 pt-4 border-t">
-                <label className="field-label">
-                  Linked Milestones ({state.goal.linkedMilestones.length})
-                </label>
-                <div className="space-y-1">
-                  {state.goal.linkedMilestones.map((milestone) => (
-                    <div
-                      key={milestone.id}
-                      className="text-sm text-gray-700 flex items-center gap-2 py-1"
-                    >
-                      <span className="text-gray-400">-</span>
-                      <span>{milestone.content}</span>
-                    </div>
-                  ))}
+      {/* Goal Settings */}
+      <CustomFieldSection
+        fieldType="goal"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Goal Settings"
+      >
+        <GoalFields
+          fields={state.goal as GoalFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_GOAL', payload: { [key]: value } })}
+          glass
+        />
+        {state.goal.linkedMilestones.length > 0 && (
+          <div className="custom-fields-body mt-4 pt-4 border-t">
+            <label className="field-label">
+              Linked Milestones ({state.goal.linkedMilestones.length})
+            </label>
+            <div className="space-y-1">
+              {state.goal.linkedMilestones.map((milestone) => (
+                <div
+                  key={milestone.id}
+                  className="text-sm text-gray-700 flex items-center gap-2 py-1"
+                >
+                  <span className="text-gray-400">-</span>
+                  <span>{milestone.content}</span>
                 </div>
-                <p className="field-hint">
-                  Milestones are linked from the Milestones view
-                </p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Milestone Settings - only show if current topic is milestone */}
-      {(customType === 'milestone' || state.selectedTopicName?.toLowerCase() === 'milestone') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Milestone Settings</h3>
+              ))}
             </div>
-            <MilestoneFields
-              fields={state.milestone as MilestoneFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_MILESTONE', payload: { [key]: value } })}
-              goalSelector={
-                <MilestoneGoalSelector
-                  selectedGoalIds={state.milestone.goalIds}
-                  onGoalIdsChange={(ids) => dispatch({ type: 'UPDATE_MILESTONE', payload: { goalIds: ids } })}
-                />
-              }
-              glass
+            <p className="field-hint">
+              Milestones are linked from the Milestones view
+            </p>
+          </div>
+        )}
+      </CustomFieldSection>
+
+      {/* Milestone Settings */}
+      <CustomFieldSection
+        fieldType="milestone"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Milestone Settings"
+      >
+        <MilestoneFields
+          fields={state.milestone as MilestoneFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_MILESTONE', payload: { [key]: value } })}
+          goalSelector={
+            <MilestoneGoalSelector
+              selectedGoalIds={state.milestone.goalIds}
+              onGoalIdsChange={(ids) => dispatch({ type: 'UPDATE_MILESTONE', payload: { goalIds: ids } })}
             />
-            {state.milestone.linkedTasks.length > 0 && (
-              <div className="custom-fields-body mt-4 pt-4 border-t">
-                <label className="field-label">
-                  Linked Tasks ({state.milestone.linkedTasks.filter(t => t.isCompleted).length}/{state.milestone.linkedTasks.length} completed)
-                </label>
-                <div className="space-y-1">
-                  {state.milestone.linkedTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="text-sm flex items-center gap-2 py-1"
-                    >
-                      <span className={task.isCompleted ? 'text-teal-500' : 'text-gray-400'}>
-                        {task.isCompleted ? '✓' : '○'}
-                      </span>
-                      <span className={task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}>
-                        {task.content}
-                      </span>
-                    </div>
-                  ))}
+          }
+          glass
+        />
+        {state.milestone.linkedTasks.length > 0 && (
+          <div className="custom-fields-body mt-4 pt-4 border-t">
+            <label className="field-label">
+              Linked Tasks ({state.milestone.linkedTasks.filter(t => t.isCompleted).length}/{state.milestone.linkedTasks.length} completed)
+            </label>
+            <div className="space-y-1">
+              {state.milestone.linkedTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="text-sm flex items-center gap-2 py-1"
+                >
+                  <span className={task.isCompleted ? 'text-teal-500' : 'text-gray-400'}>
+                    {task.isCompleted ? '✓' : '○'}
+                  </span>
+                  <span className={task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}>
+                    {task.content}
+                  </span>
                 </div>
-                <p className="field-hint">
-                  Tasks are linked from the Task editor
-                </p>
-              </div>
-            )}
+              ))}
+            </div>
+            <p className="field-hint">
+              Tasks are linked from the Task editor
+            </p>
           </div>
-        </>
-      )}
+        )}
+      </CustomFieldSection>
 
-      {/* Task Settings - only show if current topic is task */}
-      {(customType === 'task' || state.selectedTopicName?.toLowerCase() === 'task') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Task Settings</h3>
-            </div>
-            <TaskFields
-              fields={state.task as TaskFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_TASK', payload: { [key]: value } })}
-              glass
-            />
-            <div className="custom-fields-body mt-4 pt-4 border-t">
-              <label className="field-label">Link to Milestones</label>
-              <TaskMilestoneSelector
-                selectedMilestoneIds={state.task.milestoneIds}
-                onMilestoneIdsChange={(ids) => dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: ids } })}
-              />
-              <p className="field-hint">
-                Link this task to milestones to track progress
-              </p>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Task Settings */}
+      <CustomFieldSection
+        fieldType="task"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Task Settings"
+      >
+        <TaskFields
+          fields={state.task as TaskFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_TASK', payload: { [key]: value } })}
+          glass
+        />
+        <div className="custom-fields-body mt-4 pt-4 border-t">
+          <label className="field-label">Link to Milestones</label>
+          <TaskMilestoneSelector
+            selectedMilestoneIds={state.task.milestoneIds}
+            onMilestoneIdsChange={(ids) => dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: ids } })}
+          />
+          <p className="field-hint">
+            Link this task to milestones to track progress
+          </p>
+        </div>
+      </CustomFieldSection>
 
-      {/* Medication Details - only show if current topic is medication */}
-      {(customType === 'medication' || state.selectedTopicName?.toLowerCase() === 'medication') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Medication Details</h3>
-            </div>
-            <MedicationFields
-              fields={state.medication as MedicationFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_MEDICATION', payload: { [key]: value } })}
-              glass
-            />
-          </div>
-        </>
-      )}
+      {/* Medication Details */}
+      <CustomFieldSection
+        fieldType="medication"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Medication Details"
+      >
+        <MedicationFields
+          fields={state.medication as MedicationFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_MEDICATION', payload: { [key]: value } })}
+          glass
+        />
+      </CustomFieldSection>
 
-      {/* Food Details - only show if current topic is food */}
-      {(customType === 'food' || state.selectedTopicName?.toLowerCase() === 'food') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Food Details</h3>
-            </div>
-            <FoodFields
-              fields={state.food as FoodFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_FOOD', payload: { [key]: value } })}
-              glass
-            />
-          </div>
-        </>
-      )}
+      {/* Food Details */}
+      <CustomFieldSection
+        fieldType="food"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Food Details"
+      >
+        <FoodFields
+          fields={state.food as FoodFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_FOOD', payload: { [key]: value } })}
+          glass
+        />
+      </CustomFieldSection>
 
-      {/* Symptom Details - only show if current topic is symptom */}
-      {(customType === 'symptom' || state.selectedTopicName?.toLowerCase() === 'symptom') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Symptom Details</h3>
-            </div>
-            <SymptomFields
-              fields={state.symptom as SymptomFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_SYMPTOM', payload: { [key]: value } })}
-              glass
-            />
-          </div>
-        </>
-      )}
+      {/* Symptom Details */}
+      <CustomFieldSection
+        fieldType="symptom"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Symptom Details"
+      >
+        <SymptomFields
+          fields={state.symptom as SymptomFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_SYMPTOM', payload: { [key]: value } })}
+          glass
+        />
+      </CustomFieldSection>
 
-      {/* Exercise Details - only show if current topic is exercise */}
-      {(customType === 'exercise' || state.selectedTopicName?.toLowerCase() === 'exercise') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Exercise Details</h3>
-            </div>
-            <ExerciseFields
-              fields={state.exercise as ExerciseFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_EXERCISE', payload: { [key]: value } })}
-              glass
-            />
-          </div>
-        </>
-      )}
+      {/* Exercise Details */}
+      <CustomFieldSection
+        fieldType="exercise"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Exercise Details"
+      >
+        <ExerciseFields
+          fields={state.exercise as ExerciseFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_EXERCISE', payload: { [key]: value } })}
+          glass
+        />
+      </CustomFieldSection>
 
-      {/* Event Details - only show if current topic is event */}
-      {(customType === 'event' || state.selectedTopicName?.toLowerCase() === 'event') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Event Details</h3>
-            </div>
-            <EventFields
-              fields={state.event as EventFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_EVENT', payload: { [key]: value } })}
-              glass
-            />
-          </div>
-        </>
-      )}
+      {/* Event Details */}
+      <CustomFieldSection
+        fieldType="event"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Event Details"
+      >
+        <EventFields
+          fields={state.event as EventFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_EVENT', payload: { [key]: value } })}
+          glass
+        />
+      </CustomFieldSection>
 
-      {/* Meeting Details - only show if current topic is meeting */}
-      {(customType === 'meeting' || state.selectedTopicName?.toLowerCase() === 'meeting') && (
-        <>
-          <div className="border-t border-border my-4" />
-          <div className="custom-fields">
-            <div className="custom-fields-header">
-              <h3 className="custom-fields-title">Meeting Details</h3>
-            </div>
-            <MeetingFields
-              fields={state.meeting as MeetingFieldValues}
-              onChange={(key, value) => dispatch({ type: 'UPDATE_MEETING', payload: { [key]: value } })}
-              glass
-            />
-          </div>
-        </>
-      )}
+      {/* Meeting Details */}
+      <CustomFieldSection
+        fieldType="meeting"
+        customType={customType}
+        selectedTopicName={state.selectedTopicName}
+        title="Meeting Details"
+      >
+        <MeetingFields
+          fields={state.meeting as MeetingFieldValues}
+          onChange={(key, value) => dispatch({ type: 'UPDATE_MEETING', payload: { [key]: value } })}
+          glass
+        />
+      </CustomFieldSection>
 
       {/* Bottom action buttons */}
       <div className="entry-editor-actions mt-4 pt-4 border-t border-border">
