@@ -1,13 +1,6 @@
 # Chronicles
 
-A zero-knowledge encrypted journal application with client-side encryption. The server never sees your plaintext data.
-
-## Privacy Guarantees
-
-- All entry content is encrypted in the browser before transmission
-- Master encryption key stored in browser `sessionStorage` (persists across page refreshes, cleared on logout/timeout/browser close)
-- Recovery key system allows password reset without compromising zero-knowledge design
-- Schema-per-user database isolation (not row-level security)
+A journal for those to busy to journal with zero-knowledge encryption. Chronicles is designed as a simple daily log. The core philosophy is to capture the key moments of your day briefly in less than 10-15 minutes, then use topics to organize and find them later.
 
 ## Features
 
@@ -17,11 +10,25 @@ A zero-knowledge encrypted journal application with client-side encryption. The 
 - **Medical Tracking** - Log medications, symptoms, food, and schedules
 - **Calendar View** - Visual overview of entries by date
 - **Entry Sharing** - Share specific entries via secure public links
-- **Favorites** - Mark and quickly access important entries
+- **Bookmarkes** - Mark and quickly access important entries
 - **Mobile Responsive** - Works on desktop and mobile devices
+- **Customizable colors and background** - Choose from a variety of colors and background images 
+
+## Privacy Guarantees
+
+- All entry content is encrypted in the browser before transmission
+- Master encryption key stored in browser `sessionStorage` (persists across page refreshes, cleared on logout/timeout/browser close)
+- Recovery key system allows password reset without compromising zero-knowledge design
+- Schema-per-user database isolation (not row-level security)
+- Session Management - Revoke sessions at any time if you see an unfamiliar device
+
+## Screenshots
+<img width="1345" height="672" alt="Screenshot 2026-01-04 at 12 12 05 AM" src="https://github.com/user-attachments/assets/056c702b-6000-4a17-92d4-d3b47e449e37" />
+<img width="1264" height="666" alt="Screenshot 2026-01-04 at 12 18 36 AM" src="https://github.com/user-attachments/assets/3809fc81-43e1-4617-8271-a7e5984021f3" />
+<img width="1267" height="667" alt="Screenshot 2026-01-04 at 12 19 18 AM" src="https://github.com/user-attachments/assets/e57483aa-f97d-4af4-9e46-33dab158dc7b" />
+<img width="1236" height="648" alt="Screenshot 2026-01-04 at 12 31 00 AM" src="https://github.com/user-attachments/assets/6f04e329-b85c-474c-99b1-9e983115407c" />
 
 ## How It Works
-
 Chronicles is designed as a simple daily log. The core philosophy is to capture the key moments of your day briefly in less than 10-15 minutes, then use topics to organize and find them later.
 
 **Important**: You can only add entries for today or edit past entries. You cannot create entries for future dates. This keeps Chronicles focused as a record of what happened, not a planning tool. However, you can use it to track goals, milestones, events, and ideas.
@@ -43,6 +50,7 @@ Topics are how you categorize entries. Think of them as tags or folders.
 - **Medication** - Medication schedules and tracking
 - **Food** - Meal logging with ingredients
 - **Symptom** - Health symptom tracking with severity
+- **Excercise** - Daiily logs of exercise types and duration
 - **Event** - Calendar events with date/time/location
 - **Meeting** - Meetings with attendees and agenda
 
@@ -183,12 +191,8 @@ Access settings from the header menu:
 - **Change Password** - Update your password (master key is re-wrapped, data is not re-encrypted)
 - **Feature Toggles** - Enable/disable features like the medical tracker
 - **Theme Customization**:
-  - **Header Color** - Choose from 18 accent colors for the header bar (Dark, Navy, Teal, Coral, etc.) or set to transparent
+  - **Header and Accent Color** - Choose from 18 accent colors for the header bar (Dark, Navy, Teal, Coral, etc.) or set to transparent
   - **Background Image** - Select from 28 curated background images from Unsplash artists, or choose no background for a clean look
-
-### Favorites
-
-Bookmarked entries appear in the Favorites section for quick access. Click the bookmark icon on any entry to add/remove it from favorites.
 
 ## Getting Started
 
@@ -261,132 +265,6 @@ npm run lint     # Run ESLint
 - **Encryption**: Web Crypto API (AES-256-GCM)
 - **State Management**: Zustand
 - **Styling**: Tailwind CSS
-
-## Architecture
-
-### Multi-Tenant Schema-per-User Database
-
-Chronicles uses PostgreSQL with complete schema isolation per user. This is **not** row-level security - each user gets their own PostgreSQL schema with their own tables.
-
-```
-PostgreSQL Database
-├── auth schema (shared)
-│   ├── accounts        # Authentication only (email, passwordHash, wrapped keys)
-│   ├── sessions        # Database-backed sessions (enables immediate revocation)
-│   └── schema_counter  # Atomic counter for unique schema names
-│
-├── chronicles_x7k9m2_1 (user 1's isolated schema)
-│   ├── topics          # Encrypted topic names
-│   ├── entries         # Encrypted journal content
-│   ├── custom_fields   # Type-specific metadata (goals, medications, etc.)
-│   ├── entry_relationships  # Links between entries (goal → milestones)
-│   ├── user_settings   # Feature toggles (food, medication, goals enabled)
-│   ├── shared_entries  # Public sharing via token
-│   ├── calendar_events # Calendar integration with encrypted titles
-│   ├── medication_dose_logs  # Dose logging with timestamps
-│   ├── favorites       # Favorited entries
-│   └── entry_images    # Image attachments (metadata; data on filesystem)
-│
-└── chronicles_p3n8q5_2 (user 2's isolated schema)
-    └── ... same tables, completely isolated
-```
-
-**Schema naming**: `chronicles_<random_6_char>_<counter>` - NOT derived from user info.
-
-### Client-Server Boundary
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        BROWSER                               │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │ Master Key  │  │  Encrypt/    │  │  Plaintext Data   │  │
-│  │ (session)   │──│  Decrypt     │──│  (user sees)      │  │
-│  └─────────────┘  └──────────────┘  └───────────────────┘  │
-│         │                                                    │
-│         ▼                                                    │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              Encrypted Data (ciphertext)             │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ HTTPS (encrypted in transit)
-┌─────────────────────────────────────────────────────────────┐
-│                        SERVER                                │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │     Only sees: encrypted blobs, wrapped keys,        │   │
-│  │     password hashes, session tokens                   │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                              │                               │
-│                              ▼                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              PostgreSQL (encrypted at rest)          │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-The server **never** has access to:
-- Your password (only bcrypt hash)
-- Your master encryption key (only wrapped/encrypted version)
-- Your recovery key (only derived key used to wrap master key)
-- Your plaintext journal content
-
-## Security
-
-### Encryption
-
-- **Algorithm**: AES-256-GCM with random 12-byte IV per entry
-- **Key Derivation**: PBKDF2-SHA256 with 600,000 iterations (OWASP 2023 recommendation)
-- **Salt**: 32 bytes random per user
-- **Legacy Support**: Automatic migration from 100,000 iterations for existing accounts
-
-### Two-Layer Key Architecture
-
-Chronicles uses a two-layer encryption system that separates authentication from encryption:
-
-1. **Master Key**: A randomly generated AES-256 key that encrypts all your data. This key never leaves your browser in plaintext.
-
-2. **Key Encryption Keys (KEKs)**: Your master key is "wrapped" (encrypted) by two separate keys:
-   - **Password-derived KEK**: Derived from your password using PBKDF2. Used for normal login.
-   - **Recovery-derived KEK**: Derived from your recovery key. Used for password reset.
-
-**Why this matters:**
-- Changing your password only re-wraps the master key (instant operation)
-- Your data is never re-encrypted when you change your password
-- The server stores only wrapped (encrypted) versions of your master key
-- Even with database access, an attacker cannot decrypt your data without your password or recovery key
-
-### Password Recovery Flow
-
-1. Enter your email and recovery key on the forgot password page
-2. Your browser fetches the recovery-wrapped master key from the server
-3. Your browser unwraps the master key using your recovery key (client-side)
-4. You set a new password
-5. Your browser wraps the master key with your new password-derived key
-6. A new recovery key is generated and displayed (save it!)
-7. Server stores the new wrapped keys and password hash
-
-The server never sees your master key, recovery key, or password in plaintext.
-
-### Authentication & Session Security
-
-- **Password Hashing**: bcrypt with automatic cost factor
-- **Sessions**: Database-backed sessions with immediate revocation capability
-- **Rate Limiting**: Login attempts are rate-limited to prevent brute force attacks
-- **Secure Cookies**: HttpOnly, Secure, SameSite=Lax
-
-### Input Sanitization & XSS Prevention
-
-- **Content Security Policy (CSP)**: Strict CSP headers prevent inline scripts and unauthorized resource loading
-- **HTML Sanitization**: All user content is sanitized with DOMPurify before rendering
-- **Rich Text**: TipTap editor output is sanitized to allow only safe HTML tags and attributes
-
-### Database Isolation
-
-Each user gets their own PostgreSQL schema (e.g., `chronicles_x7k9m2_1`). This provides:
-- Complete data isolation between users
-- No risk of query bugs leaking data across users
-- Easy per-user backup and deletion
-- Schema names are random, not derived from user information
 
 ## License
 
