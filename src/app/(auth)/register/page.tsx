@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
@@ -36,6 +36,22 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<RegistrationStep>('form');
   const [recoveryKeyDisplay, setRecoveryKeyDisplay] = useState('');
+
+  // Security: Clear sensitive form fields
+  const clearSensitiveFields = useCallback(() => {
+    setPassword('');
+    setConfirmPassword('');
+    setEmail('');
+  }, []);
+
+  // Security: Clear password fields on unmount
+  useEffect(() => {
+    return () => {
+      clearSensitiveFields();
+      // Also clear recovery key display if component unmounts unexpectedly
+      setRecoveryKeyDisplay('');
+    };
+  }, [clearSensitiveFields]);
 
   // Password strength calculation
   const passwordStrength = useMemo(() => validatePasswordStrength(password), [password]);
@@ -151,6 +167,10 @@ export default function RegisterPage() {
       // Step 9: Seed default topics for new user
       await seedDefaultTopics(masterKey);
 
+      // Security: Clear password from state after successful key setup
+      setPassword('');
+      setConfirmPassword('');
+
       // Step 10: Show recovery key to user
       setRecoveryKeyDisplay(formatRecoveryKeyForDisplay(recoveryKey));
       setStep('showRecoveryKey');
@@ -158,11 +178,16 @@ export default function RegisterPage() {
     } catch (err) {
       console.error('Registration error:', err);
       setError('An unexpected error occurred');
+      // Security: Clear passwords after error
+      setPassword('');
+      setConfirmPassword('');
       setLoading(false);
     }
   };
 
   const handleRecoveryKeyConfirmed = () => {
+    // Security: Clear recovery key from state after user confirms
+    setRecoveryKeyDisplay('');
     router.push('/');
   };
 

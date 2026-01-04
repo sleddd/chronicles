@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 
 interface CustomField {
   id: string;
@@ -48,6 +49,22 @@ export function MedicationsTab({ refreshKey }: Props) {
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [decryptedMedications, setDecryptedMedications] = useState<Map<string, { name: string; fields: DecryptedMedicationFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+  const { registerCleanup, unregisterCleanup } = useSecurityClear();
+
+  // Register security cleanup on mount, unregister on unmount
+  useEffect(() => {
+    const clearSensitiveData = () => {
+      setDecryptedMedications(new Map());
+    };
+
+    registerCleanup('medications-tab', clearSensitiveData);
+
+    return () => {
+      clearSensitiveData();
+      unregisterCleanup('medications-tab');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount/unmount
 
   const handleEditMedication = (medicationId: string) => {
     router.push(`/?entry=${medicationId}`);

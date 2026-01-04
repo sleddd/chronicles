@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect, useCallback } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -18,6 +18,19 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Security: Clear sensitive form fields
+  const clearSensitiveFields = useCallback(() => {
+    setPassword('');
+    setEmail('');
+  }, []);
+
+  // Security: Clear password on unmount (even if login incomplete)
+  useEffect(() => {
+    return () => {
+      clearSensitiveFields();
+    };
+  }, [clearSensitiveFields]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,9 +85,14 @@ function LoginForm() {
           if (encryptionKey) {
             await seedDefaultTopics(encryptionKey);
           }
+
+          // Security: Clear password from state after successful key derivation
+          setPassword('');
         }
       } catch (keyError) {
         console.error('Failed to set up encryption key:', keyError);
+        // Security: Clear password after failed attempt
+        setPassword('');
         // Still proceed - user can re-enter password via modal
       }
 
@@ -82,6 +100,8 @@ function LoginForm() {
       router.refresh();
     } catch {
       setError('An unexpected error occurred');
+      // Security: Clear password after error
+      setPassword('');
     } finally {
       setLoading(false);
     }

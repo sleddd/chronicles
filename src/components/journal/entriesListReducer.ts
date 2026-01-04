@@ -1,5 +1,20 @@
 // Entries List State Management with useReducer
 // Replaces 60+ useState hooks with centralized, type-safe state management
+//
+// SECURITY NOTE: This reducer contains sensitive decrypted data
+// All fields below are considered sensitive and must be cleared on:
+// - Component unmount
+// - User logout
+// - Inactivity timeout
+//
+// Sensitive fields include:
+// - decryptedEntries (Record<id, plaintext content>)
+// - decryptedTopics (Record<id, plaintext topic name>)
+// - taskFields (Map of decrypted task data)
+// - quickEntry (user input)
+// - All custom field quick entry data (task, goal, meeting, event, medication, etc.)
+//
+// Use CLEAR_DECRYPTED_DATA action to clear sensitive data safely.
 
 interface TaskFieldsData {
   isCompleted: boolean;
@@ -152,7 +167,8 @@ export type EntriesListAction =
 
   // Reset actions
   | { type: 'RESET_QUICK_ENTRY' }
-  | { type: 'CLEAR_FILTER' };
+  | { type: 'CLEAR_FILTER' }
+  | { type: 'CLEAR_DECRYPTED_DATA' };
 
 export const initialEntriesListState: EntriesListState = {
   // Core data
@@ -346,6 +362,25 @@ export function entriesListReducer(
 
     case 'CLEAR_FILTER':
       return { ...state, filterTopicId: null };
+
+    // Security: Clear all decrypted/sensitive data
+    case 'CLEAR_DECRYPTED_DATA':
+      return {
+        ...state,
+        decryptedEntries: {},
+        decryptedTopics: {},
+        taskFields: new Map(),
+        // Also clear quick entry fields which may contain sensitive data
+        quickEntry: '',
+        task: initialEntriesListState.task,
+        goal: initialEntriesListState.goal,
+        meeting: initialEntriesListState.meeting,
+        event: initialEntriesListState.event,
+        medication: initialEntriesListState.medication,
+        exercise: initialEntriesListState.exercise,
+        food: initialEntriesListState.food,
+        symptom: initialEntriesListState.symptom,
+      };
 
     default:
       return state;

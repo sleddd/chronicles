@@ -1,5 +1,19 @@
 // Entry Editor State Management with useReducer
 // Replaces 50+ useState hooks with centralized, type-safe state management
+//
+// SECURITY NOTE: This reducer contains sensitive decrypted data
+// All fields below are considered sensitive and must be cleared on:
+// - Component unmount
+// - User logout
+// - Inactivity timeout
+//
+// Sensitive fields include:
+// - selectedTopicName (decrypted topic name)
+// - goal.linkedMilestones[].content (decrypted milestone content)
+// - milestone.linkedTasks[].content (decrypted task content)
+// - All custom field data (medication, food, symptom, event, meeting, exercise)
+//
+// Use RESET_ALL action to clear all sensitive data safely.
 
 export type EntryState = {
   // Core fields

@@ -5,6 +5,7 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { generateSearchTokens } from '@/lib/crypto/searchTokens';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { TopicSelector } from '@/components/topics/TopicSelector';
@@ -217,8 +218,28 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
   const { encryptData, decryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
+  const { registerCleanup, unregisterCleanup } = useSecurityClear();
 
   const MAX_CHARS_SHORT = 200;
+
+  // Register security cleanup on mount, unregister on unmount
+  useEffect(() => {
+    const cleanup = () => {
+      dispatch({ type: 'RESET_ALL' });
+      if (editorRef.current) {
+        editorRef.current.commands.clearContent();
+      }
+    };
+
+    registerCleanup('entry-editor', cleanup);
+
+    // Cleanup on unmount only - clear all sensitive state and editor content
+    return () => {
+      cleanup();
+      unregisterCleanup('entry-editor');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount/unmount
 
   // Fetch and decrypt topic name when selectedTopicId changes
   useEffect(() => {
@@ -244,6 +265,8 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
   // Ref to track save function for keyboard shortcut
   const handleSaveRef = useRef<(() => void) | null>(null);
+  // Ref to store editor for cleanup
+  const editorRef = useRef<Editor | null>(null);
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -259,6 +282,11 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       dispatch({ type: 'SET_CHAR_COUNT', payload: text.length });
     },
   });
+
+  // Keep editorRef in sync with editor for cleanup access
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   const loadEntry = useCallback(async () => {
     if (!entryId || !isKeyReady || !editor) return;

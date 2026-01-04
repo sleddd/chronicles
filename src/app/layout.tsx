@@ -7,6 +7,7 @@ import SessionProvider from "@/components/providers/SessionProvider";
 import { EncryptionProvider } from "@/components/providers/EncryptionProvider";
 import { AccentColorProvider } from "@/lib/hooks/useAccentColor";
 import { BackgroundImage } from "@/components/layout/BackgroundImage";
+import { DevToolsBlocker } from "@/components/providers/DevToolsBlocker";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -33,6 +34,7 @@ export default async function RootLayout({
       <body
         className={`${montserrat.variable} font-sans antialiased`}
       >
+        <DevToolsBlocker />
         <SessionProvider session={session}>
           <AccentColorProvider>
             <BackgroundImage />

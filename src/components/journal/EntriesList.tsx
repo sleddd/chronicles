@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useReducer, useState } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { TopicIcon } from '@/components/topics/IconPicker';
 import { entriesListReducer, initialEntriesListState } from './entriesListReducer';
 import {
@@ -71,6 +72,23 @@ export function EntriesList({
   const [state, dispatch] = useReducer(entriesListReducer, initialEntriesListState);
   const { encryptData, decryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
+  const { registerCleanup, unregisterCleanup } = useSecurityClear();
+
+  // Register security cleanup on mount, unregister on unmount
+  useEffect(() => {
+    const cleanup = () => {
+      dispatch({ type: 'CLEAR_DECRYPTED_DATA' });
+    };
+
+    registerCleanup('entries-list', cleanup);
+
+    // Cleanup on unmount only
+    return () => {
+      cleanup();
+      unregisterCleanup('entries-list');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount/unmount
 
   // Destructure state for easier access
   const {

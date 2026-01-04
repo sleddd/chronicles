@@ -506,7 +506,7 @@
 
 /* Custom field section */
 .custom-fields {
-  @apply border border-border rounded-md backdrop-blur-sm bg-white/10 overflow-hidden;
+  @apply border border-border rounded-md backdrop-blur-sm bg-white/10 overflow-visible;
 }
 
 .custom-fields-header {

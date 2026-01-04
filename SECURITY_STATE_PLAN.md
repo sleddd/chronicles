@@ -1,5 +1,19 @@
 # Security Plan: State Management Hardening
 
+## Status: IMPLEMENTED (January 2026)
+
+All phases have been implemented:
+- Phase 8: DevToolsBlocker component created and integrated
+- Phase 1: Inactivity timeout system with warning toast (5 min default)
+- Phase 4: Centralized useSecurityClear registry for cleanup functions
+- Phase 2: Component cleanup standardization (EntryEditor, EntriesList, MedicationsTab)
+- Phase 3: Authentication form hardening (login, register pages)
+- Phase 5: TipTap editor content clearing on unmount
+- Phase 6: SessionStorage cleanup on beforeunload
+- Phase 7: Reducer audit with security documentation
+
+---
+
 ## Overview
 
 This plan addresses security concerns around sensitive data in React state (`useState` and `useReducer`). While both have identical vulnerability to external attacks (DevTools, XSS, memory dumps), proper state management practices minimize exposure time and ensure complete cleanup.
@@ -277,15 +291,148 @@ For any reducer without complete reset:
 
 ---
 
+### Phase 8: Disable React DevTools in Production
+
+**Goal:** Prevent React DevTools from inspecting component state in production builds.
+
+#### 8.1 Why This Matters
+
+React DevTools allows anyone to:
+- Inspect all component state (useState, useReducer)
+- View Zustand store contents
+- See props passed between components
+- Access decrypted content, encryption keys, passwords in memory
+
+While a determined attacker can bypass this (it's client-side), it:
+- Raises the bar for casual inspection
+- Prevents accidental exposure on shared computers
+- Signals security-conscious design
+- Removes the easiest attack vector
+
+#### 8.2 Implementation Options
+
+**Option A: Disable DevTools Hook (Recommended)**
+
+**File:** `src/app/layout.tsx` or `src/components/providers/DevToolsBlocker.tsx` (new)
+
+```typescript
+'use client';
+
+import { useEffect } from 'react';
+
+export function DevToolsBlocker() {
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      // Disable React DevTools
+      if (typeof window !== 'undefined') {
+        // Method 1: Override the DevTools hook
+        const disableDevTools = () => {
+          const noop = () => {};
+
+          // React DevTools looks for this global
+          if (typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__ === 'object') {
+            for (const prop in window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+              if (typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__[prop] === 'function') {
+                window.__REACT_DEVTOOLS_GLOBAL_HOOK__[prop] = noop;
+              }
+            }
+          }
+        };
+
+        disableDevTools();
+      }
+    }
+  }, []);
+
+  return null;
+}
+```
+
+**Option B: Pre-mount Blocking (More Thorough)**
+
+**File:** `src/app/layout.tsx`
+
+Add inline script before React hydrates:
+
+```typescript
+// In layout.tsx, add to <head>
+<script
+  dangerouslySetInnerHTML={{
+    __html: `
+      if (typeof window !== 'undefined' && '${process.env.NODE_ENV}' === 'production') {
+        window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+          supportsFiber: true,
+          inject: function() {},
+          onCommitFiberRoot: function() {},
+          onCommitFiberUnmount: function() {}
+        };
+      }
+    `,
+  }}
+/>
+```
+
+**Note:** This requires updating CSP to allow this inline script or using a nonce.
+
+#### 8.3 Additional Browser DevTools Hardening
+
+**Disable Console Methods (Optional)**
+
+```typescript
+if (process.env.NODE_ENV === 'production') {
+  // Disable console to prevent data leakage via console.log
+  const noop = () => {};
+  ['log', 'debug', 'info', 'warn'].forEach(method => {
+    console[method] = noop;
+  });
+  // Keep console.error for critical issues
+}
+```
+
+**Detect DevTools Open (Optional - User Warning)**
+
+```typescript
+// Detect if DevTools is open and warn user
+const devToolsChecker = () => {
+  const threshold = 160;
+  const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+  const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+
+  if (widthThreshold || heightThreshold) {
+    // Show warning banner or log out
+    console.warn('Developer tools detected. For your security, sensitive data has been cleared.');
+    // Optionally: clearAllSensitiveData();
+  }
+};
+```
+
+**Note:** DevTools detection is unreliable and can be bypassed. Use only as an additional layer, not primary defense.
+
+#### 8.4 Limitations
+
+- **Bypassable:** Determined attackers can disable the blocker before React loads
+- **Not a complete solution:** This is defense-in-depth, not absolute protection
+- **Browser DevTools still work:** Only React-specific inspection is blocked
+- **Memory still readable:** Heap snapshots, memory profiler still expose data
+
+#### 8.5 Files to Create/Modify
+
+**Create:** `src/components/providers/DevToolsBlocker.tsx`
+
+**Modify:** `src/app/layout.tsx` - Add DevToolsBlocker component
+
+---
+
 ## Implementation Order
 
-1. **Phase 1** - Inactivity timeout (highest impact, user safety)
-2. **Phase 4** - Centralized clear function (enables other phases)
-3. **Phase 2** - Component cleanup (uses centralized function)
-4. **Phase 3** - Auth form hardening (quick wins)
-5. **Phase 5** - TipTap security (editor-specific)
-6. **Phase 6** - SessionStorage review (verification)
-7. **Phase 7** - Reducer audit (cleanup/documentation)
+1. **Phase 8** - Disable React DevTools in production (quick win, immediate protection)
+2. **Phase 1** - Inactivity timeout (highest impact, user safety)
+3. **Phase 4** - Centralized clear function (enables other phases)
+4. **Phase 2** - Component cleanup (uses centralized function)
+5. **Phase 3** - Auth form hardening (quick wins)
+6. **Phase 5** - TipTap security (editor-specific)
+7. **Phase 6** - SessionStorage review (verification)
+8. **Phase 7** - Reducer audit (cleanup/documentation)
 
 ---
 
@@ -309,6 +456,13 @@ After each scenario, verify in React DevTools:
 - No encryption key in Zustand store
 - No sensitive data in sessionStorage
 
+### DevTools Blocker Testing
+
+- [ ] React DevTools shows no component tree in production build
+- [ ] Console methods disabled in production (except error)
+- [ ] DevTools blocker doesn't affect development mode
+- [ ] No CSP violations from inline script (if using Option B)
+
 ---
 
 ## Configuration Options
@@ -329,7 +483,7 @@ NEXT_PUBLIC_INACTIVITY_WARNING=60000
 
 These issues CANNOT be fully mitigated by state management changes:
 
-1. **React DevTools** - Attacker with DevTools access can read state
+1. **React DevTools** - ✅ Mitigated by Phase 8 (disabled in production, though bypassable by determined attackers)
 2. **XSS attacks** - Attacker can traverse React fiber tree
 3. **Browser extensions** - Malicious extensions can intercept state
 4. **Memory dumps** - State exists in JavaScript heap
@@ -340,22 +494,30 @@ These issues CANNOT be fully mitigated by state management changes:
 - Input validation
 - HTTPS only
 
+**New mitigations (this plan):**
+- React DevTools disabled in production (Phase 8)
+- Console methods disabled in production (Phase 8)
+- Inactivity auto-logout (Phase 1)
+- Centralized data clearing (Phase 4)
+
 ---
 
 ## Files to Create
 
-1. `src/lib/hooks/useInactivityTimeout.ts` - Inactivity detection hook
-2. `src/lib/hooks/useSecurityClear.ts` - Centralized cleanup registry
+1. `src/components/providers/DevToolsBlocker.tsx` - React DevTools disabler (Phase 8)
+2. `src/lib/hooks/useInactivityTimeout.ts` - Inactivity detection hook (Phase 1)
+3. `src/lib/hooks/useSecurityClear.ts` - Centralized cleanup registry (Phase 4)
 
 ## Files to Modify
 
-1. `src/components/providers/EncryptionProvider.tsx` - Add inactivity, beforeunload
-2. `src/components/journal/EntryEditor.tsx` - Add unmount cleanup
-3. `src/components/journal/EntriesList.tsx` - Add clear action and unmount cleanup
-4. `src/components/journal/entriesListReducer.ts` - Add CLEAR_DECRYPTED_DATA action
-5. `src/app/(auth)/login/page.tsx` - Password clearing
-6. `src/app/(auth)/register/page.tsx` - Password/recovery key clearing
-7. `src/components/health/MedicationsTab.tsx` - Unmount cleanup
+1. `src/app/layout.tsx` - Add DevToolsBlocker component (Phase 8)
+2. `src/components/providers/EncryptionProvider.tsx` - Add inactivity, beforeunload
+3. `src/components/journal/EntryEditor.tsx` - Add unmount cleanup
+4. `src/components/journal/EntriesList.tsx` - Add clear action and unmount cleanup
+5. `src/components/journal/entriesListReducer.ts` - Add CLEAR_DECRYPTED_DATA action
+6. `src/app/(auth)/login/page.tsx` - Password clearing
+7. `src/app/(auth)/register/page.tsx` - Password/recovery key clearing
+8. `src/components/health/MedicationsTab.tsx` - Unmount cleanup
 
 ---
 
