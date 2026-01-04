@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 
-const DEFAULT_HEADER_COLOR = '#0F4C5C';
+const DEFAULT_HEADER_COLOR = '#4281a4';
 const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
 const BACKGROUND_IMAGE_STORAGE_KEY = 'chronicles-background-image';
 const BACKGROUND_IS_LIGHT_STORAGE_KEY = 'chronicles-background-is-light';
@@ -55,7 +55,7 @@ function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
   });
 }
 
-const DEFAULT_BACKGROUND_IMAGE = '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg';
+const DEFAULT_BACKGROUND_IMAGE = '';
 
 // Get the accent color - returns header color or fallback grey if transparent
 function getAccentColor(headerColor: string): string {
@@ -99,6 +99,7 @@ interface AccentColorContextValue {
   isTransparent: boolean;
   backgroundImage: string;
   backgroundIsLight: boolean;
+  settingsLoaded: boolean;
 }
 
 const AccentColorContext = createContext<AccentColorContextValue>({
@@ -109,28 +110,21 @@ const AccentColorContext = createContext<AccentColorContextValue>({
   isTransparent: false,
   backgroundImage: DEFAULT_BACKGROUND_IMAGE,
   backgroundIsLight: false,
+  settingsLoaded: false,
 });
 
 export function AccentColorProvider({ children }: { children: ReactNode }) {
   const { status } = useSession();
-  // Use defaults for SSR, then hydrate from localStorage on client
+  // Use defaults for SSR, then load from API on client
   const [headerColor, setHeaderColor] = useState(DEFAULT_HEADER_COLOR);
   const [backgroundImage, setBackgroundImage] = useState(DEFAULT_BACKGROUND_IMAGE);
   const [backgroundIsLight, setBackgroundIsLight] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // Hydrate from localStorage on client mount (before API call)
+  // Analyze background image brightness when it changes (only after settings loaded)
   useEffect(() => {
-    const cachedHeader = localStorage.getItem(HEADER_COLOR_STORAGE_KEY);
-    const cachedBackground = localStorage.getItem(BACKGROUND_IMAGE_STORAGE_KEY);
-    const cachedBrightness = localStorage.getItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
+    if (!settingsLoaded) return;
 
-    if (cachedHeader) setHeaderColor(cachedHeader);
-    if (cachedBackground) setBackgroundImage(cachedBackground);
-    if (cachedBrightness) setBackgroundIsLight(cachedBrightness === 'true');
-  }, []);
-
-  // Analyze background image brightness when it changes
-  useEffect(() => {
     if (backgroundImage) {
       analyzeImageBrightness(backgroundImage).then((isLight) => {
         setBackgroundIsLight(isLight);
@@ -142,10 +136,11 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
       setBackgroundIsLight(false);
       localStorage.setItem(BACKGROUND_IS_LIGHT_STORAGE_KEY, 'false');
     }
-  }, [backgroundImage]);
+  }, [backgroundImage, settingsLoaded]);
 
   // Load settings from API
   const loadSettings = useCallback(async () => {
+    setSettingsLoaded(false);
     try {
       const response = await fetch('/api/settings');
       if (response.ok) {
@@ -165,6 +160,8 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
+    } finally {
+      setSettingsLoaded(true);
     }
   }, []);
 
@@ -177,6 +174,12 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(HEADER_COLOR_STORAGE_KEY);
       localStorage.removeItem(BACKGROUND_IMAGE_STORAGE_KEY);
       localStorage.removeItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
+      // Reset to defaults
+      setHeaderColor(DEFAULT_HEADER_COLOR);
+      setBackgroundImage(DEFAULT_BACKGROUND_IMAGE);
+      setBackgroundIsLight(false);
+      // Mark as loaded (unauthenticated users use defaults)
+      setSettingsLoaded(true);
     }
   }, [status, loadSettings]);
 
@@ -223,7 +226,26 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
     isTransparent,
     backgroundImage,
     backgroundIsLight,
+    settingsLoaded,
   };
+
+  // Show a blank screen until settings are loaded to prevent flicker
+  if (!settingsLoaded && status !== 'loading') {
+    return (
+      <AccentColorContext.Provider value={value}>
+        <div className="fixed inset-0 bg-[#e8e5df]" />
+      </AccentColorContext.Provider>
+    );
+  }
+
+  // Also hide during session loading to prevent flicker
+  if (status === 'loading') {
+    return (
+      <AccentColorContext.Provider value={value}>
+        <div className="fixed inset-0 bg-[#e8e5df]" />
+      </AccentColorContext.Provider>
+    );
+  }
 
   return (
     <AccentColorContext.Provider value={value}>

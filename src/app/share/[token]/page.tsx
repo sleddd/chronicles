@@ -159,7 +159,7 @@ export default function SharedEntryPage({
         <div className="text-center mt-8 text-sm text-gray-500">
           <p>
             Shared via{' '}
-            <a href="/" className="hover:underline" style={{ color: '#1aaeae' }}>
+            <a href="/" className="hover:underline" style={{ color: 'var(--accent-color)' }}>
               Chronicles
             </a>
           </p>

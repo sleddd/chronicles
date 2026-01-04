@@ -242,11 +242,12 @@ interface TopicIconProps {
   iconName: string | null;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  color?: string;
 }
 
-export function TopicIcon({ iconName, size = 'sm', className = '' }: TopicIconProps) {
+export function TopicIcon({ iconName, size = 'sm', className = '', color }: TopicIconProps) {
   if (!iconName || !ICON_MAP[iconName]) {
-    // Show a gray dot as fallback when no icon
+    // Show a dot as fallback when no icon
     const sizeClasses = {
       sm: 'w-2.5 h-2.5',
       md: 'w-3 h-3',
@@ -254,7 +255,8 @@ export function TopicIcon({ iconName, size = 'sm', className = '' }: TopicIconPr
     };
     return (
       <span
-        className={`rounded-full bg-gray-400 ${sizeClasses[size]} ${className}`}
+        className={`rounded-full ${sizeClasses[size]} ${className}`}
+        style={{ backgroundColor: color || '#9ca3af' }}
       />
     );
   }
@@ -268,7 +270,8 @@ export function TopicIcon({ iconName, size = 'sm', className = '' }: TopicIconPr
   return (
     <FontAwesomeIcon
       icon={ICON_MAP[iconName]}
-      className={`${sizeClasses[size]} ${className} text-gray-500`}
+      className={`${sizeClasses[size]} ${className}`}
+      style={color ? { color } : undefined}
     />
   );
 }

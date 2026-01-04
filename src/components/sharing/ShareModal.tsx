@@ -179,7 +179,7 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                   </svg>
                   <span className="font-medium">Share link active</span>
                 </div>
-                <div className="text-sm" style={{ color: '#1aaeae' }}>
+                <div className="text-sm" style={{ color: accentColor }}>
                   {shareData.activeShare.viewCount} view
                   {shareData.activeShare.viewCount !== 1 ? 's' : ''}
                   {shareData.activeShare.expiresAt && (
@@ -202,9 +202,9 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                 <button
                   onClick={handleCopyLink}
                   className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                  style={copied ? { backgroundColor: '#e0f2f2', color: '#158f8f' } : { backgroundColor: '#1aaeae', color: 'white' }}
-                  onMouseOver={(e) => { if (!copied) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-                  onMouseOut={(e) => { if (!copied) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+                  style={copied ? { backgroundColor: lightBgColor, color: hoverColor } : { backgroundColor: accentColor, color: 'white' }}
+                  onMouseOver={(e) => { if (!copied) e.currentTarget.style.backgroundColor = hoverColor; }}
+                  onMouseOut={(e) => { if (!copied) e.currentTarget.style.backgroundColor = accentColor; }}
                 >
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
@@ -289,9 +289,9 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                 onClick={handleCreateShare}
                 disabled={creating || !confirmed}
                 className="w-full py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: (creating || !confirmed) ? undefined : '#1aaeae' }}
-                onMouseOver={(e) => { if (!creating && confirmed) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-                onMouseOut={(e) => { if (!creating && confirmed) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+                style={{ backgroundColor: (creating || !confirmed) ? undefined : accentColor }}
+                onMouseOver={(e) => { if (!creating && confirmed) e.currentTarget.style.backgroundColor = hoverColor; }}
+                onMouseOut={(e) => { if (!creating && confirmed) e.currentTarget.style.backgroundColor = accentColor; }}
               >
                 {creating ? 'Creating...' : 'Create Public Share Link'}
               </button>

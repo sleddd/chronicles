@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
 
 interface Props {
@@ -21,6 +22,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { encryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   if (!isOpen) return null;
 
@@ -118,9 +120,9 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
               type="submit"
               disabled={loading || !name.trim()}
               className="px-4 py-2 text-white rounded-md disabled:bg-gray-400"
-              style={{ backgroundColor: (loading || !name.trim()) ? undefined : '#1aaeae' }}
-              onMouseOver={(e) => { if (!loading && name.trim()) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-              onMouseOut={(e) => { if (!loading && name.trim()) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+              style={{ backgroundColor: (loading || !name.trim()) ? undefined : accentColor }}
+              onMouseOver={(e) => { if (!loading && name.trim()) e.currentTarget.style.backgroundColor = hoverColor; }}
+              onMouseOut={(e) => { if (!loading && name.trim()) e.currentTarget.style.backgroundColor = accentColor; }}
             >
               {loading ? 'Creating...' : 'Create Topic'}
             </button>

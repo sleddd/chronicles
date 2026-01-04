@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import Link from 'next/link';
 import { TopicIcon } from './IconPicker';
 
@@ -27,6 +28,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor } = useAccentColor();
 
   const fetchTopics = useCallback(async () => {
     try {
@@ -91,7 +93,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
       >
         {selectedTopic && (
           <span className="topic-selector-item-icon">
-            <TopicIcon iconName={selectedTopic.icon} size="sm" />
+            <TopicIcon iconName={selectedTopic.icon} size="sm" color={accentColor} />
           </span>
         )}
         <span className={selectedTopicName ? 'topic-selector-value' : 'topic-selector-placeholder'}>
@@ -145,7 +147,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                 className={selectedTopicId === topic.id ? 'topic-selector-item-active' : 'topic-selector-item'}
               >
                 <span className="topic-selector-item-icon">
-                  <TopicIcon iconName={topic.icon} size="sm" />
+                  <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
                 </span>
                 {decryptedTopics.get(topic.id) || 'Loading...'}
               </button>

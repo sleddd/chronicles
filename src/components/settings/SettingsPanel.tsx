@@ -113,20 +113,34 @@ export function SettingsPanel() {
   // Background image options from Unsplash
   const BACKGROUND_IMAGES = [
     { value: '', label: 'None', artist: null, artistUrl: null },
+    { value: '/backgrounds/adam-kool-ndN00KmbJ1c-unsplash.jpg', label: 'Waterfall', artist: 'Adam Kool', artistUrl: 'https://unsplash.com/@adamkool' },
+    { value: '/backgrounds/austin-distel-vC_Q127x8Kg-unsplash.jpg', label: 'Plants', artist: 'Austin Distel', artistUrl: 'https://unsplash.com/@austindistel' },
+    { value: '/backgrounds/clem-onojeghuo-zlABb6Gke24-unsplash.jpg', label: 'Abstract', artist: 'Clem Onojeghuo', artistUrl: 'https://unsplash.com/@clemono' },
+    { value: '/backgrounds/daniel-olah-6KQETG8J-zI-unsplash.jpg', label: 'Ocean', artist: 'Daniel Olah', artistUrl: 'https://unsplash.com/@danesduet' },
     { value: '/backgrounds/daniela-cuevas-t7YycgAoVSw-unsplash.jpg', label: 'Desert', artist: 'Daniela Cuevas', artistUrl: 'https://unsplash.com/@danielacuevas' },
-    { value: '/backgrounds/enrico-bet-IicyiaPYGGI-unsplash.jpg', label: 'Mountains', artist: 'Enrico Bet', artistUrl: 'https://unsplash.com/@enricob' },
-    { value: '/backgrounds/frank-mckenna-4V8JxijgZ_c-unsplash.jpg', label: 'Ocean', artist: 'Frank McKenna', artistUrl: 'https://unsplash.com/@frankiefoto' },
+    { value: '/backgrounds/emma-francis-vpHCfunwDrQ-unsplash.jpg', label: 'Blush', artist: 'Emma Francis', artistUrl: 'https://unsplash.com/@emmafrancis' },
+    { value: '/backgrounds/fiona-murray-degraaff-F6_mI0aGdZU-unsplash.jpg', label: 'Texture', artist: 'Fiona Murray-DeGraaff', artistUrl: 'https://unsplash.com/@fionamurraydegraaff' },
+    { value: '/backgrounds/frank-mckenna-4V8JxijgZ_c-unsplash.jpg', label: 'Waves', artist: 'Frank McKenna', artistUrl: 'https://unsplash.com/@frankiefoto' },
+    { value: '/backgrounds/haris-khan-kD9SRoloQCA-unsplash.jpg', label: 'Gradient', artist: 'Haris Khan', artistUrl: 'https://unsplash.com/@hariskhan' },
+    { value: '/backgrounds/joshua-sortino-71vAb1FXB6g-unsplash.jpg', label: 'Lights', artist: 'Joshua Sortino', artistUrl: 'https://unsplash.com/@sortino' },
+    { value: '/backgrounds/kace-rodriguez-p3OzJuT_Dks-unsplash.jpg', label: 'Mountain', artist: 'Kace Rodriguez', artistUrl: 'https://unsplash.com/@kace' },
+    { value: '/backgrounds/kier-in-sight-archives-O7srvV2piu0-unsplash.jpg', label: 'Vintage', artist: 'Kier in Sight Archives', artistUrl: 'https://unsplash.com/@kierinsightarchives' },
+    { value: '/backgrounds/krakograff-textures-uPIsSnY2vtA-unsplash.jpg', label: 'Paper', artist: 'Krakograff Textures', artistUrl: 'https://unsplash.com/@krakograff' },
+    { value: '/backgrounds/liana-s-9duuU4kMI6s-unsplash.jpg', label: 'Marble', artist: 'Liana S', artistUrl: 'https://unsplash.com/@lianas' },
     { value: '/backgrounds/luca-bravo-zAjdgNXsMeg-unsplash.jpg', label: 'Forest', artist: 'Luca Bravo', artistUrl: 'https://unsplash.com/@lucabravo' },
-    { value: '/backgrounds/petr-vysohlid-9fqwGqGLUxc-unsplash.jpg', label: 'Aurora', artist: 'Petr Vysohlid', artistUrl: 'https://unsplash.com/@petrvysohlid' },
-    { value: '/backgrounds/sasha-matic-TEpJdLB8j8U-unsplash.jpg', label: 'Sunset', artist: 'Sasha Matic', artistUrl: 'https://unsplash.com/@sashamatic' },
-    { value: '/backgrounds/v2osk-1Z2niiBPg5A-unsplash.jpg', label: 'Night Sky', artist: 'v2osk', artistUrl: 'https://unsplash.com/@v2osk' },
-    { value: '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg', label: 'Desk', artist: 'Alvaro Serrano', artistUrl: 'https://unsplash.com/@alvaroserrano' },
-    { value: '/backgrounds/daniel-salcius-06umypXA8pE-unsplash.jpg', label: 'Coastal', artist: 'Daniel Salcius', artistUrl: 'https://unsplash.com/@dsalcius' },
+    { value: '/backgrounds/matheo-jbt-lvi9xKSyCiE-unsplash.jpg', label: 'Soft', artist: 'Matheo JBT', artistUrl: 'https://unsplash.com/@matheo_jbt' },
+    { value: '/backgrounds/mehrab-sium-a7O0Tsd8dE8-unsplash.jpg', label: 'Colorful', artist: 'Mehrab Sium', artistUrl: 'https://unsplash.com/@mehrabsium' },
+    { value: '/backgrounds/moritz-lange-Rq2XVvWZvDc-unsplash.jpg', label: 'Warm', artist: 'Moritz Lange', artistUrl: 'https://unsplash.com/@moritzlange' },
+    { value: '/backgrounds/nasa-rTZW4f02zY8-unsplash.jpg', label: 'Earth', artist: 'NASA', artistUrl: 'https://unsplash.com/@nasa' },
+    { value: '/backgrounds/olga-thelavart-HZm2XR0whdw-unsplash.jpg', label: 'Floral', artist: 'Olga Thelavart', artistUrl: 'https://unsplash.com/@thelavart' },
     { value: '/backgrounds/paul-talbot-pQDBGxtiDEo-unsplash.jpg', label: 'Minimalist', artist: 'Paul Talbot', artistUrl: 'https://unsplash.com/@paultalbot' },
+    { value: '/backgrounds/petr-vysohlid-9fqwGqGLUxc-unsplash.jpg', label: 'Aurora', artist: 'Petr Vysohlid', artistUrl: 'https://unsplash.com/@petrvysohlid' },
     { value: '/backgrounds/sandra-seitamaa-OHLgIjctfrg-unsplash.jpg', label: 'Lake', artist: 'Sandra Seitamaa', artistUrl: 'https://unsplash.com/@seitamaaphotography' },
     { value: '/backgrounds/sandra-seitamaa-SrFL-O4qXfA-unsplash.jpg', label: 'Nordic', artist: 'Sandra Seitamaa', artistUrl: 'https://unsplash.com/@seitamaaphotography' },
-    { value: '/backgrounds/sarah-dorweiler-x2Tmfd1-SgA-unsplash.jpg', label: 'Clean', artist: 'Sarah Dorweiler', artistUrl: 'https://unsplash.com/@sarahdorweiler' },
-    { value: '/backgrounds/tamara-bellis-lEYROy-DcWo-unsplash.jpg', label: 'Warm', artist: 'Tamara Bellis', artistUrl: 'https://unsplash.com/@tamarabellis' },
+    { value: '/backgrounds/sandra-seitamaa-a7e71c0jSgQ-unsplash.jpg', label: 'Winter', artist: 'Sandra Seitamaa', artistUrl: 'https://unsplash.com/@seitamaaphotography' },
+    { value: '/backgrounds/scott-webb-sk59I1qRfEM-unsplash.jpg', label: 'Concrete', artist: 'Scott Webb', artistUrl: 'https://unsplash.com/@scottwebb' },
+    { value: '/backgrounds/stephanie-sarlos-Q9q6UGkU96s-unsplash.jpg', label: 'Pastel', artist: 'Stephanie Sarlos', artistUrl: 'https://unsplash.com/@stephaniesarlos' },
+    { value: '/backgrounds/yevhenii-deshko-ieY_9lJnLNs-unsplash.jpg', label: 'Pink', artist: 'Yevhenii Deshko', artistUrl: 'https://unsplash.com/@yevheniideshko' },
   ];
 
   const [savingBackgroundImage, setSavingBackgroundImage] = useState(false);
@@ -443,7 +457,7 @@ export function SettingsPanel() {
 
     try {
       // Get the current encryption key from the store
-      const { encryptionKey, decryptData } = useEncryption.getState();
+      const { encryptionKey } = useEncryption.getState();
       if (!encryptionKey) {
         throw new Error('Encryption key not available');
       }
@@ -827,37 +841,43 @@ export function SettingsPanel() {
       <section className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Theme</h2>
         <div className="backdrop-blur-md bg-white/50 border border-border rounded-lg divide-y divide-border">
-          {/* Header Color */}
+          {/* Header and Accent Color */}
           <div className="p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-shrink-0">
-                <p className="font-medium text-gray-900">Header Color</p>
-                <p className="text-sm text-gray-500">Choose a color for the header bar</p>
-                {savingHeaderColor && <span className="text-xs text-gray-400">Saving...</span>}
-              </div>
-              <div className="grid grid-cols-9 gap-2">
-                {HEADER_COLORS.map((color) => (
-                  <button
-                    key={color.value}
-                    onClick={() => handleHeaderColorChange(color.value)}
-                    disabled={savingHeaderColor || loadingFeatures}
-                    title={color.label}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      featureSettings.headerColor === color.value
-                        ? 'border-border scale-110'
-                        : 'border-transparent hover:border-border'
-                    } ${(savingHeaderColor || loadingFeatures) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    style={{
-                      backgroundColor: color.value === 'transparent' ? '#e8e5df' : color.value,
-                      backgroundImage: color.value === 'transparent'
-                        ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
-                        : undefined,
-                      backgroundSize: color.value === 'transparent' ? '8px 8px' : undefined,
-                      backgroundPosition: color.value === 'transparent' ? '0 0, 4px 4px' : undefined,
-                    }}
-                  />
-                ))}
-              </div>
+            <div className="mb-3">
+              <p className="font-medium text-gray-900">Header and Accent Color</p>
+              <p className="text-sm text-gray-500">Choose a color for the header bar and accents</p>
+              {savingHeaderColor && <span className="text-xs text-gray-400">Saving...</span>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {HEADER_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => handleHeaderColorChange(color.value)}
+                  disabled={savingHeaderColor || loadingFeatures}
+                  title={color.label}
+                  className={`w-8 h-8 rounded-full border-2 transition-all flex-shrink-0 ${
+                    featureSettings.headerColor === color.value
+                      ? 'border-gray-900 scale-110 ring-2 ring-gray-900 ring-offset-1'
+                      : 'border-transparent hover:border-border'
+                  } ${(savingHeaderColor || loadingFeatures) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  style={{
+                    backgroundColor: color.value === 'transparent' ? '#e8e5df' : color.value,
+                    backgroundImage: color.value === 'transparent'
+                      ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
+                      : undefined,
+                    backgroundSize: color.value === 'transparent' ? '8px 8px' : undefined,
+                    backgroundPosition: color.value === 'transparent' ? '0 0, 4px 4px' : undefined,
+                  }}
+                >
+                  <span className="sr-only">{color.label}</span>
+                </button>
+              ))}
+            </div>
+            {/* Color labels */}
+            <div className="mt-2 text-xs text-gray-500">
+              {featureSettings.headerColor && (
+                <span>Selected: {HEADER_COLORS.find(c => c.value === featureSettings.headerColor)?.label || 'Custom'}</span>
+              )}
             </div>
           </div>
 

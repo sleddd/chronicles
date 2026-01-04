@@ -99,8 +99,9 @@
 
 .input-glass {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 placeholder-gray-400;
-  @apply focus:outline-none focus:ring-2  focus:border-transparent;
+  @apply focus:outline-none focus:ring-2 focus:border-transparent;
   @apply backdrop-blur-sm bg-white/10;
+  --tw-ring-color: var(--accent-light);
 }
 
 .input-sm {
@@ -377,10 +378,60 @@
 .topic-selector-dropdown {
   @apply absolute z-40 mt-1 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg;
   @apply py-1 min-w-[150px] w-64 max-h-80 overflow-y-auto;
+  animation: dropdownSlideIn 0.15s ease-out;
+  transform-origin: top center;
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+/* Header dropdown animation */
+.animate-dropdown {
+  animation: headerDropdownIn 0.2s ease-out forwards;
+  transform-origin: top center;
+}
+
+.animate-dropdown-out {
+  animation: headerDropdownOut 0.15s ease-in forwards;
+  transform-origin: top center;
+}
+
+@keyframes headerDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes headerDropdownOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
 }
 
 .topic-selector-search {
   @apply px-3 py-2 border-b border-border sticky top-0 bg-white/90 backdrop-blur-xl;
+}
+
+.topic-selector-search input {
+  font-size: 16px; /* Prevent iOS zoom on focus */
 }
 
 .topic-selector-list {
@@ -527,6 +578,10 @@
 
 .custom-fields-body {
   @apply px-3 py-3 border-t border-border space-y-3;
+}
+
+.custom-fields-body-no-border {
+  @apply px-3 py-3 space-y-3;
 }
 
 /* Date-time field */
@@ -817,14 +872,16 @@
 }
 
 .view-tabs-slider {
-  @apply absolute top-1 bottom-1 rounded-md;
+  @apply absolute rounded-md;
   @apply backdrop-blur-sm bg-white/50 border border-border;
   @apply transition-all duration-300 ease-out;
   @apply pointer-events-none;
+  top: 0.25rem;
+  bottom: 0.25rem;
 }
 
 .view-tab {
-  @apply flex-1 px-3 py-1.5 text-sm rounded-md;
+  @apply flex-1 px-2 py-1.5 text-sm rounded-md;
   @apply text-gray-600 flex items-center justify-center gap-1;
   @apply transition-colors duration-200;
   @apply relative z-10;
@@ -836,6 +893,62 @@
 
 .view-tab-active {
   @apply text-gray-900;
+}
+
+/* ============================
+   EXPANDABLE PANEL ANIMATION
+   ============================ */
+
+.panel-expand {
+  animation: panelExpand 0.3s ease-out forwards;
+  transform-origin: top center;
+}
+
+.panel-collapse {
+  animation: panelCollapse 0.2s ease-in forwards;
+  transform-origin: top center;
+}
+
+@keyframes panelExpand {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: scaleY(0.95);
+  }
+  to {
+    opacity: 1;
+    max-height: 400px;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes panelCollapse {
+  from {
+    opacity: 1;
+    max-height: 400px;
+    transform: scaleY(1);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    transform: scaleY(0.95);
+  }
+}
+
+/* Content fade transition for view mode changes */
+.view-content-enter {
+  animation: viewContentEnter 0.25s ease-out forwards;
+}
+
+@keyframes viewContentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ============================
@@ -964,7 +1077,9 @@
 }
 
 .entry-card-checkbox-checked {
-  @apply bg-green-500 border-green-500 text-white;
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  @apply text-white;
 }
 
 .entry-card-preview {

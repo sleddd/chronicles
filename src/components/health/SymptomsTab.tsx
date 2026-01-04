@@ -117,12 +117,6 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
     return 'bg-red-500';
   };
 
-  const getSeverityEmoji = (severity: number) => {
-    if (severity <= 3) return '😊';
-    if (severity <= 6) return '😐';
-    return '😣';
-  };
-
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
@@ -160,7 +154,6 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xl">{getSeverityEmoji(severity)}</span>
                       <h3 className="font-semibold text-gray-900">{data?.name || 'Loading...'}</h3>
                       {data?.fields.occurredAt && (
                         <span className="text-sm text-gray-500">

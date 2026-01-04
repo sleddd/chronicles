@@ -92,6 +92,8 @@ export function CalendarView({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isDayPanelExpanded, setIsDayPanelExpanded] = useState(false);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const { decryptData, isKeyReady } = useEncryption();
   const { accentColor } = useAccentColor();
 
@@ -203,7 +205,13 @@ export function CalendarView({
   }, [events, entries, isKeyReady, decryptData]);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentMonth((prev) => (direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)));
+    setSlideDirection(direction === 'prev' ? 'right' : 'left');
+    setIsTransitioning(true);
+
+    setTimeout(() => {
+      setCurrentMonth((prev) => (direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)));
+      setIsTransitioning(false);
+    }, 150);
   };
 
   const getItemsForDate = (date: Date): CalendarItem[] => {
@@ -364,7 +372,7 @@ export function CalendarView({
                       ? 'text-gray-900'
                       : 'text-gray-400'
                   }`}
-                  style={isToday ? { backgroundColor: '#727378' } : undefined}
+                  style={isToday ? { backgroundColor: accentColor } : undefined}
                 >
                   {format(day, 'd')}
                 </div>
@@ -380,7 +388,7 @@ export function CalendarView({
                       ? 'text-gray-900'
                       : 'text-gray-400'
                   }`}
-                  style={isToday ? { backgroundColor: '#727378' } : undefined}
+                  style={isToday ? { backgroundColor: accentColor } : undefined}
                 >
                   {format(day, 'd')}
                 </div>
@@ -388,7 +396,7 @@ export function CalendarView({
 
               {/* Mobile: Event list vertical - show 4, expandable */}
               <div className="flex md:hidden flex-col flex-1">
-                {(expandedDays.has(dateStr) ? items : items.slice(0, 4)).map((item) => (
+                {items.slice(0, 4).map((item) => (
                   <div
                     key={item.id}
                     className="text-xs py-1 truncate border-b border-gray-200 last:border-b-0"
@@ -406,23 +414,51 @@ export function CalendarView({
                   </div>
                 ))}
                 {items.length > 4 && (
-                  <button
-                    className="text-xs text-gray-500 py-1 text-left"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedDays((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(dateStr)) {
-                          next.delete(dateStr);
-                        } else {
-                          next.add(dateStr);
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    {expandedDays.has(dateStr) ? 'Show less' : `+${items.length - 4} more`}
-                  </button>
+                  <>
+                    <div
+                      className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                      style={{
+                        gridTemplateRows: expandedDays.has(dateStr) ? '1fr' : '0fr',
+                      }}
+                    >
+                      <div className="overflow-hidden">
+                        {items.slice(4).map((item) => (
+                          <div
+                            key={item.id}
+                            className="text-xs py-1 truncate border-b border-gray-200"
+                            style={{ color: '#555555' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (item.type === 'entry') {
+                                onEntrySelect?.(item.id);
+                              } else {
+                                onEventSelect?.(item.id);
+                              }
+                            }}
+                          >
+                            {item.title}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      className="text-xs text-gray-500 py-1 text-left"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedDays((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(dateStr)) {
+                            next.delete(dateStr);
+                          } else {
+                            next.add(dateStr);
+                          }
+                          return next;
+                        });
+                      }}
+                    >
+                      {expandedDays.has(dateStr) ? 'Show less' : `+${items.length - 4} more`}
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -472,7 +508,7 @@ export function CalendarView({
   return (
     <div className="flex flex-col h-full w-full backdrop-blur-md bg-white/90 p-4 items-center">
       {/* Header */}
-      <div className="flex items-center justify-center mt-5 pt-5 mb-5 pb-5 px-4">
+      <div className="flex items-center justify-center mb-4 px-4">
         <div className="flex items-center gap-2 md:gap-4">
           <button
             onClick={() => navigateMonth('prev')}
@@ -482,7 +518,7 @@ export function CalendarView({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h2 className="text-base md:text-xl font-semibold text-gray-900 min-w-[120px] text-center">
+          <h2 className="text-base md:text-xl font-semibold text-gray-500 min-w-[120px] text-center">
             {format(currentMonth, 'MMM yyyy')}
           </h2>
           <button
@@ -497,8 +533,18 @@ export function CalendarView({
       </div>
 
       {/* Calendar grid */}
-      <div className="flex-1 overflow-auto w-full">
-        {renderMonthView()}
+      <div className="flex-1 overflow-auto w-full overflow-x-hidden">
+        <div
+          className="transition-all duration-150 ease-in-out"
+          style={{
+            opacity: isTransitioning ? 0 : 1,
+            transform: isTransitioning
+              ? `translateX(${slideDirection === 'left' ? '-20px' : '20px'})`
+              : 'translateX(0)',
+          }}
+        >
+          {renderMonthView()}
+        </div>
       </div>
 
       {/* Day Detail Panel */}

@@ -12,7 +12,6 @@ const DEFAULT_TOPICS = [
   { name: 'Event', color: '#F59E0B', icon: 'calendar' },
   { name: 'Meeting', color: '#EC4899', icon: 'users' },
   { name: 'Symptom', color: '#EF4444', icon: 'flask' },
-  { name: 'Images', color: '#06B6D4', icon: 'camera' },
 ];
 
 // Optional feature topics - only added when enabled in settings

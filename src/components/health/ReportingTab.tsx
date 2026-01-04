@@ -52,7 +52,7 @@ export function ReportingTab({ refreshKey }: Props) {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const { decryptData, isKeyReady } = useEncryption();
-  const { accentColor, hoverColor } = useAccentColor();
+  const { accentColor } = useAccentColor();
 
   // Decrypted data
   const [symptoms, setSymptoms] = useState<DecryptedSymptom[]>([]);
@@ -352,10 +352,7 @@ export function ReportingTab({ refreshKey }: Props) {
           <button
             onClick={handleGenerateReport}
             disabled={loading}
-            className="px-4 py-1.5 text-white text-sm rounded-md disabled:bg-gray-400 transition-colors"
-            style={{ backgroundColor: loading ? undefined : accentColor }}
-            onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = hoverColor; }}
-            onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = accentColor; }}
+            className="px-4 py-1.5 text-sm rounded-md disabled:bg-gray-400 transition-colors bg-gray-500 text-white hover:bg-gray-600"
           >
             {loading ? 'Loading...' : 'Generate Report'}
           </button>

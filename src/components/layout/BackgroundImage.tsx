@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { usePathname } from 'next/navigation';
 
-const DEFAULT_BACKGROUND_IMAGE = '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg';
+const DEFAULT_BACKGROUND_IMAGE = '';
+const AUTH_PATHS = ['/login', '/register', '/forgot-password'];
 const BACKGROUND_IMAGE_STORAGE_KEY = 'chronicles-background-image';
 
 // Use useSyncExternalStore for proper SSR/hydration handling
@@ -34,6 +36,8 @@ function subscribe(callback: () => void): () => void {
 export function BackgroundImage() {
   const currentImage = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+  const isAuthPage = AUTH_PATHS.some(path => pathname?.startsWith(path));
 
   // Track when component is mounted to avoid hydration mismatch
   useEffect(() => {
@@ -42,7 +46,7 @@ export function BackgroundImage() {
 
   // Update body background when currentImage changes
   useEffect(() => {
-    if (mounted && currentImage) {
+    if (mounted && currentImage && !isAuthPage) {
       document.body.style.background = 'transparent';
     } else {
       document.body.style.background = 'var(--background)';
@@ -50,10 +54,10 @@ export function BackgroundImage() {
     return () => {
       document.body.style.background = 'var(--background)';
     };
-  }, [currentImage, mounted]);
+  }, [currentImage, mounted, isAuthPage]);
 
-  // Don't render until mounted to use client-side localStorage value
-  if (!mounted || !currentImage) {
+  // Don't render on auth pages or until mounted
+  if (!mounted || !currentImage || isAuthPage) {
     return null;
   }
 

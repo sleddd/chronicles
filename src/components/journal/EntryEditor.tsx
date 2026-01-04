@@ -704,7 +704,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       )}
 
       {/* Editor with character limit - no border */}
-      <div className={`mb-2 ${state.expandEntry ? 'flex-1 flex flex-col' : ''}`}>
+      <div className={`mb-2 pb-3 border-b border-border md:border-b-0 md:pb-0 ${state.expandEntry ? 'flex-1 flex flex-col' : ''}`}>
         <div className={`overflow-auto backdrop-blur-sm bg-white/30 flex flex-col ${state.expandEntry ? 'flex-1' : ''}`}>
           <EditorToolbar editor={editor} />
           <EditorContent

@@ -182,6 +182,9 @@ Access settings from the header menu:
 - **Sessions** - View and revoke active sessions on other devices
 - **Change Password** - Update your password (master key is re-wrapped, data is not re-encrypted)
 - **Feature Toggles** - Enable/disable features like the medical tracker
+- **Theme Customization**:
+  - **Header Color** - Choose from 18 accent colors for the header bar (Dark, Navy, Teal, Coral, etc.) or set to transparent
+  - **Background Image** - Select from 28 curated background images from Unsplash artists, or choose no background for a clean look
 
 ### Favorites
 

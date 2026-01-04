@@ -32,11 +32,31 @@ export function Header() {
   const router = useRouter();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showHealthSubmenu, setShowHealthSubmenu] = useState(false);
+  const [isHealthMenuClosing, setIsHealthMenuClosing] = useState(false);
   const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
   const [backgroundIsLight, setBackgroundIsLight] = useState(getInitialBackgroundIsLight);
   const healthRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { backgroundIsLight: contextBackgroundIsLight, isTransparent } = useAccentColor();
+
+  // Handle closing the health submenu with animation
+  const closeHealthSubmenu = useCallback(() => {
+    if (showHealthSubmenu && !isHealthMenuClosing) {
+      setIsHealthMenuClosing(true);
+      setTimeout(() => {
+        setShowHealthSubmenu(false);
+        setIsHealthMenuClosing(false);
+      }, 150); // Match the animation duration
+    }
+  }, [showHealthSubmenu, isHealthMenuClosing]);
+
+  const toggleHealthSubmenu = useCallback(() => {
+    if (showHealthSubmenu) {
+      closeHealthSubmenu();
+    } else {
+      setShowHealthSubmenu(true);
+    }
+  }, [showHealthSubmenu, closeHealthSubmenu]);
 
   // Sync with context when it updates
   useEffect(() => {
@@ -88,12 +108,12 @@ export function Header() {
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (healthRef.current && !healthRef.current.contains(event.target as Node)) {
-        setShowHealthSubmenu(false);
+        closeHealthSubmenu();
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [closeHealthSubmenu]);
 
   const isActive = (path: string) => pathname === path;
   const isHealthActive = pathname?.startsWith('/health');
@@ -127,10 +147,10 @@ export function Header() {
               className={`h-11 w-auto ${logoFilter}`}
             />
           </Link>
-          <div className="w-px h-6 bg-border" />
+          <div className="hidden md:block w-px h-6 bg-border" />
           <button
             onClick={() => router.push('/?new=true')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${textColor} ${textColorHover}`}
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${textColor} ${textColorHover}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -175,7 +195,7 @@ export function Header() {
           {/* Health with submenu */}
           <div className="relative" ref={healthRef}>
             <button
-              onClick={() => setShowHealthSubmenu(!showHealthSubmenu)}
+              onClick={toggleHealthSubmenu}
               className={`px-4 py-2 text-sm rounded-md transition-colors flex items-center gap-1 ${
                 isHealthActive
                   ? `${textColorActive} font-bold`
@@ -184,7 +204,7 @@ export function Header() {
             >
               Health
               <svg
-                className={`w-4 h-4 transition-transform ${showHealthSubmenu ? 'rotate-180' : ''}`}
+                className={`w-4 h-4 transition-transform duration-200 ${showHealthSubmenu && !isHealthMenuClosing ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -194,13 +214,13 @@ export function Header() {
             </button>
 
             {showHealthSubmenu && (
-              <div className="absolute top-full left-0 mt-1 w-40 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg z-50">
+              <div className={`absolute top-full left-0 mt-1 w-40 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg z-50 ${isHealthMenuClosing ? 'animate-dropdown-out' : 'animate-dropdown'}`}>
                 {healthTabs.map((tab) => (
                   <Link
                     key={tab.key}
                     href={`/health?tab=${tab.key}`}
-                    onClick={() => setShowHealthSubmenu(false)}
-                    className="block px-4 py-2 text-sm text-gray-700 hover:backdrop-blur-sm bg-white/40 first:rounded-t-md last:rounded-b-md"
+                    onClick={closeHealthSubmenu}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-white/40 first:rounded-t-md last:rounded-b-md transition-colors"
                   >
                     {tab.label}
                   </Link>

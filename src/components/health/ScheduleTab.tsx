@@ -275,18 +275,10 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
               type="button"
               onClick={goToToday}
               className="text-xs px-2 py-1 rounded transition-colors"
-              style={{ backgroundColor: '#e5e7eb', color: accentColor }}
+              style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
             >
               Today
             </button>
-          )}
-          {isToday && (
-            <span
-              className="text-xs px-2 py-1 rounded"
-              style={{ backgroundColor: '#e5e7eb', color: accentColor }}
-            >
-              Today
-            </span>
           )}
         </div>
 
@@ -386,8 +378,8 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
                         )}
                       </div>
                       <span
-                        className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${isTaken ? '' : 'text-gray-500'}`}
-                        style={{ backgroundColor: '#e5e7eb', color: isTaken ? hoverColor : undefined }}
+                        className="text-xs px-2 py-1 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
                       >
                         {isSaving ? 'Saving...' : isTaken ? 'Taken' : 'Pending'}
                       </span>

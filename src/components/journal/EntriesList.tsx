@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useReducer, useState } from 'react';
+import { useEffect, useCallback, useReducer, useState, useRef, useLayoutEffect } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
@@ -561,20 +561,42 @@ export function EntriesList({
     dispatch({ type: 'SET_DATE_PICKER_EXPANDED', payload: false });
   };
 
+  // Refs for measuring tab positions
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [sliderStyle, setSliderStyle] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
+
+  const VIEW_MODES = ['date', 'all', 'favorites', 'search'] as const;
+  const activeIndex = VIEW_MODES.indexOf(viewMode);
+
+  // Update slider position when viewMode changes
+  useLayoutEffect(() => {
+    const activeTab = tabRefs.current[activeIndex];
+    const container = tabsContainerRef.current;
+    if (activeTab && container) {
+      const containerRect = container.getBoundingClientRect();
+      const tabRect = activeTab.getBoundingClientRect();
+      setSliderStyle({
+        left: tabRect.left - containerRect.left,
+        width: tabRect.width,
+      });
+    }
+  }, [activeIndex, viewMode]);
+
   return (
     <div className="p-4 h-full overflow-auto">
       {/* View Mode Tabs */}
-      <div className="view-tabs">
+      <div className="view-tabs" ref={tabsContainerRef}>
         {/* Sliding indicator */}
         <div
           className="view-tabs-slider"
           style={{
-            left: `calc(0.25rem + ${['date', 'all', 'favorites', 'search'].indexOf(viewMode)} * (100% - 0.5rem) / 4)`,
-            width: 'calc((100% - 0.5rem) / 4)',
-            right: 'auto',
+            left: sliderStyle.left,
+            width: sliderStyle.width,
           }}
         />
         <button
+          ref={(el) => { tabRefs.current[0] = el; }}
           onClick={() => {
             if (viewMode === 'date') {
               // Toggle date picker if already on date tab
@@ -590,12 +612,14 @@ export function EntriesList({
           Date
         </button>
         <button
+          ref={(el) => { tabRefs.current[1] = el; }}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'all' })}
           className={`view-tab ${viewMode === 'all' ? 'view-tab-active' : ''}`}
         >
           All
         </button>
         <button
+          ref={(el) => { tabRefs.current[2] = el; }}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'favorites' })}
           className={`view-tab ${viewMode === 'favorites' ? 'view-tab-active' : ''}`}
         >
@@ -605,6 +629,7 @@ export function EntriesList({
           Bookmarks
         </button>
         <button
+          ref={(el) => { tabRefs.current[3] = el; }}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'search' })}
           className={`view-tab ${viewMode === 'search' ? 'view-tab-active' : ''}`}
         >
@@ -614,7 +639,7 @@ export function EntriesList({
 
       {/* Date Filter Panel - only shows calendar when expanded */}
       {viewMode === 'date' && isDatePickerExpanded && (
-        <div className="mb-4 backdrop-blur-sm bg-white/10 border border-border rounded-md overflow-hidden">
+        <div className="mb-4 backdrop-blur-sm bg-white/10 border border-border rounded-md overflow-hidden panel-expand">
           <MiniCalendar
             selectedDate={selectedDate}
             onDateSelect={handleDateSelect}
@@ -625,7 +650,7 @@ export function EntriesList({
 
       {/* Search Input and Topic Filter */}
       {viewMode === 'search' && (
-        <div className="mb-4 space-y-2">
+        <div className="mb-4 space-y-2 panel-expand">
           <input
             type="text"
             value={searchQuery}
@@ -635,7 +660,7 @@ export function EntriesList({
           />
           {searchTopicId ? (
             <div className="card flex items-center gap-2 px-3 py-2">
-              <TopicIcon iconName={getTopic(searchTopicId)?.icon || null} size="sm" />
+              <TopicIcon iconName={getTopic(searchTopicId)?.icon || null} size="sm" color={accentColor} />
               <span className="text-sm text-gray-700">
                 <strong>{getTopicName(searchTopicId)}</strong>
               </span>
@@ -669,8 +694,8 @@ export function EntriesList({
         const topicName = getTopicName(filterTopicId);
         if (!topic) return null;
         return (
-          <div className="card mb-4 flex items-center gap-2 px-3 py-2">
-            <TopicIcon iconName={topic.icon} size="sm" />
+          <div className="card mb-4 flex items-center gap-2 px-3 py-2 panel-expand">
+            <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
             <span className="text-sm text-gray-700">
               Filtering by: <strong>{topicName}</strong>
             </span>
@@ -698,6 +723,7 @@ export function EntriesList({
                   <TopicIcon
                     iconName={getTopic(quickEntryTopicId)?.icon || null}
                     size="sm"
+                    color={accentColor}
                   />
                   <span>{decryptedTopics[quickEntryTopicId] || 'Loading...'}</span>
                 </>
@@ -754,7 +780,7 @@ export function EntriesList({
                       }}
                       className="topic-selector-item"
                     >
-                      <TopicIcon iconName={topic.icon} size="sm" />
+                      <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
                       {decryptedTopics[topic.id] || 'Loading...'}
                     </button>
                   ))}
@@ -776,7 +802,7 @@ export function EntriesList({
             <button
               type="button"
               onClick={resetQuickEntryFields}
-              className="btn btn-ghost"
+              className="btn btn-ghost hidden md:block"
             >
               Cancel
             </button>
@@ -784,7 +810,7 @@ export function EntriesList({
           <button
             type="submit"
             disabled={!quickEntry.trim() || !isKeyReady}
-            className="btn btn-primary"
+            className="btn btn-primary hidden md:block"
             style={{ backgroundColor: accentColor }}
             onMouseOver={(e) => e.currentTarget.style.backgroundColor = hoverColor}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = accentColor}
@@ -795,7 +821,7 @@ export function EntriesList({
 
         {/* Custom fields based on selected topic - shown below text input */}
         {quickEntryTopicName === 'task' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <label className="checkbox-field">
               <input
                 type="checkbox"
@@ -808,7 +834,7 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'goal' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <select
                 value={state.goal.type}
@@ -845,7 +871,7 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'meeting' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <div className="field-inline">
                 <label className="field-label">Start:</label>
@@ -900,7 +926,7 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'event' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <div className="field-inline">
                 <label className="field-label">Start:</label>
@@ -948,7 +974,7 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'medication' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <input
                 type="text"
@@ -1015,7 +1041,7 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'exercise' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <select
                 value={state.exercise.type}
@@ -1091,7 +1117,7 @@ export function EntriesList({
         )}
 
         {quickEntryTopicName === 'food' && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <select
                 value={state.food.mealType}
@@ -1116,7 +1142,7 @@ export function EntriesList({
         )}
 
         {(quickEntryTopicName === 'symptom' || quickEntryTopicName === 'symptoms') && (
-          <div className="custom-fields-body">
+          <div className="custom-fields-body-no-border">
             <div className="field-row">
               <div className="field-inline">
                 <label className="field-label">Severity:</label>
@@ -1144,10 +1170,22 @@ export function EntriesList({
             </div>
           </div>
         )}
+
+        {/* Mobile Add button - full width at bottom */}
+        <button
+          type="submit"
+          disabled={!quickEntry.trim() || !isKeyReady}
+          className="btn btn-primary w-full mt-3 md:hidden"
+          style={{ backgroundColor: accentColor }}
+          onTouchStart={(e) => e.currentTarget.style.backgroundColor = hoverColor}
+          onTouchEnd={(e) => e.currentTarget.style.backgroundColor = accentColor}
+        >
+          Add
+        </button>
       </form>
 
       {/* Entries List */}
-      <div className="space-y-2">
+      <div key={viewMode} className="space-y-2 view-content-enter">
         {viewMode === 'date' ? (
           // Date view - flat list
           <>
@@ -1231,6 +1269,7 @@ function EntryCard({
   onTaskToggle: (e: React.MouseEvent) => void;
   onTopicClick: (e: React.MouseEvent) => void;
 }) {
+  const { accentColor } = useAccentColor();
   const isTask = entry.customType === 'task';
   const isCompleted = taskFields?.isCompleted ?? false;
 
@@ -1244,10 +1283,11 @@ function EntryCard({
           <button
             type="button"
             onClick={onTopicClick}
-            className="entry-card-topic"
+            className="entry-card-topic px-2 rounded-full"
+            style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
             title={`Filter by ${topicName}`}
           >
-            <TopicIcon iconName={topic.icon} size="sm" />
+            <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
             {topicName && <span>{topicName}</span>}
           </button>
         )}
@@ -1355,7 +1395,7 @@ function MiniCalendar({
               key={day.toString()}
               onClick={() => onDateSelect(dateStr)}
               className={`mini-calendar-day ${!isCurrentMonth ? 'mini-calendar-day-outside' : ''} ${isToday && !isSelected ? 'mini-calendar-day-today' : ''} ${isSelected ? 'mini-calendar-day-selected' : ''}`}
-              style={isToday && !isSelected ? { color: accentColor, backgroundColor: '#e5e7eb' } : isSelected ? { backgroundColor: accentColor } : undefined}
+              style={isToday && !isSelected ? { color: accentColor, backgroundColor: `${accentColor}20` } : isSelected ? { backgroundColor: accentColor } : undefined}
             >
               {format(day, 'd')}
             </button>

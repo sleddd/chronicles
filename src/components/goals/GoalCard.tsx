@@ -58,7 +58,21 @@ export function GoalCard({
   const [goalFields, setGoalFields] = useState<GoalCustomFields | null>(null);
   const [decryptedMilestones, setDecryptedMilestones] = useState<DecryptedMilestone[]>([]);
   const [milestonesExpanded, setMilestonesExpanded] = useState(false);
+  const [isMilestonesClosing, setIsMilestonesClosing] = useState(false);
   const [togglingMilestone, setTogglingMilestone] = useState<string | null>(null);
+
+  // Handle milestones expand/collapse with animation
+  const toggleMilestones = useCallback(() => {
+    if (milestonesExpanded && !isMilestonesClosing) {
+      setIsMilestonesClosing(true);
+      setTimeout(() => {
+        setMilestonesExpanded(false);
+        setIsMilestonesClosing(false);
+      }, 150);
+    } else if (!milestonesExpanded) {
+      setMilestonesExpanded(true);
+    }
+  }, [milestonesExpanded, isMilestonesClosing]);
 
   const {
     attributes,
@@ -242,7 +256,7 @@ export function GoalCard({
     switch (goalFields?.status) {
       case 'completed': return { className: '', style: { backgroundColor: '#e5e7eb', color: accentColor } };
       case 'archived': return { className: 'text-gray-600', style: { backgroundColor: '#e5e7eb' } };
-      default: return { className: '', style: { backgroundColor: '#e5e7eb', color: accentColor } };
+      default: return { className: '', style: { backgroundColor: `${accentColor}20`, color: accentColor } };
     }
   };
 
@@ -277,13 +291,13 @@ export function GoalCard({
         </div>
         <div className="flex items-center gap-2 ml-2">
           {getTypeLabel() && (
-            <span className="text-xs px-2 py-0.5 rounded backdrop-blur-md bg-white/60 text-gray-700">
+            <span className="hidden md:inline text-xs px-2 py-0.5 rounded backdrop-blur-md bg-white/60 text-gray-700">
               {getTypeLabel()}
             </span>
           )}
           {goalFields?.status && (
             <span
-              className={`text-xs px-2 py-0.5 rounded capitalize ${getStatusColor().className}`}
+              className={`hidden md:inline text-xs px-2 py-0.5 rounded capitalize ${getStatusColor().className}`}
               style={getStatusColor().style}
             >
               {goalFields.status}
@@ -328,11 +342,11 @@ export function GoalCard({
         <div className="border-t border-border pt-3 mt-2">
           <button
             type="button"
-            onClick={() => setMilestonesExpanded(!milestonesExpanded)}
+            onClick={toggleMilestones}
             className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 w-full"
           >
             <svg
-              className={`w-3 h-3 transition-transform ${milestonesExpanded ? 'rotate-90' : ''}`}
+              className={`w-3 h-3 transition-transform duration-200 ${milestonesExpanded && !isMilestonesClosing ? 'rotate-90' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -342,7 +356,7 @@ export function GoalCard({
             Milestones ({completedCount}/{totalCount})
           </button>
           {milestonesExpanded && (
-            <div className="space-y-1.5 mt-2">
+            <div className={`space-y-1.5 mt-2 ${isMilestonesClosing ? 'animate-dropdown-out' : 'animate-dropdown'}`}>
               {decryptedMilestones.map((milestone) => (
                 <div
                   key={milestone.id}

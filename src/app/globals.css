@@ -6,9 +6,9 @@
   --background: #e8e5df;
   --foreground: #171717;
   --border: #d1d5db;
-  --accent-color: #6b7280;
-  --accent-hover: #4b5563;
-  --accent-light: #f3f4f6;
+  --accent-color: #4281a4;
+  --accent-hover: #2e6184;
+  --accent-light: #d6e9f4;
 }
 
 @theme inline {
@@ -23,6 +23,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-montserrat), sans-serif;
+  /* Ensure touch scrolling works on mobile */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .font-body {
@@ -183,4 +186,46 @@ body {
 
 .calendar-scroll::-webkit-scrollbar-thumb:hover {
   background: #a0a0a0;
+}
+
+/* Custom checkbox styling - use accent color */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 0.25rem;
+  background-color: white;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+input[type="checkbox"]:hover:not(:checked) {
+  border-color: var(--accent-color);
 }

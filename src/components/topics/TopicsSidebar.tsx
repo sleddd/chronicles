@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { AddTopicModal } from './AddTopicModal';
+import { TopicIcon } from './IconPicker';
 
 interface Topic {
   id: string;
@@ -23,6 +25,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
   const [decryptedNames, setDecryptedNames] = useState<Map<string, string>>(new Map());
   const [showAddModal, setShowAddModal] = useState(false);
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor } = useAccentColor();
 
   const fetchTopics = useCallback(async () => {
     const response = await fetch('/api/topics');
@@ -75,10 +78,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
               selectedTopicId === topic.id ? 'bg-gray-100 text-gray-700' : 'hover:bg-white/20'
             }`}
           >
-            <span
-              className="w-3 h-3 rounded-full flex-shrink-0"
-              style={{ backgroundColor: topic.color }}
-            />
+            <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
             <span className="truncate">{decryptedNames.get(topic.id) || 'Decrypting...'}</span>
           </button>
         ))}
@@ -87,7 +87,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
       <button
         onClick={() => setShowAddModal(true)}
         className="w-full mt-4 text-sm hover:underline"
-        style={{ color: '#1aaeae' }}
+        style={{ color: accentColor }}
       >
         + Add Topic
       </button>

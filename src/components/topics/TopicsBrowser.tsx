@@ -148,7 +148,7 @@ function SortableTopicItem({
         className="flex items-center gap-2 flex-1 text-left"
       >
         <span className="topic-browser-item-icon">
-          <TopicIcon iconName={topic.icon} size="sm" />
+          <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
         </span>
         <span className="topic-browser-item-label">{decryptedName}</span>
       </button>
@@ -534,7 +534,7 @@ export function TopicsBrowser() {
           {mobileEntriesExpanded && (
             <button
               onClick={handleCollapseEntries}
-              className="md:hidden flex items-center gap-1 text-sm text-gray-600 mb-4"
+              className="md:hidden flex items-center gap-1 text-sm text-gray-600 mb-4 w-full pb-3 border-b border-border"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -566,13 +566,16 @@ export function TopicsBrowser() {
                   href={`/?entry=${entry.id}`}
                   className="card-interactive block p-3 mb-[5px]"
                 >
-                  {entry.topicId && selectedTopicId === null && (
+                  {entry.topicId && (
                     <div className="entry-card-footer mb-2">
                       {(() => {
                         const topic = topics.find(t => t.id === entry.topicId);
                         return (
-                          <span className="entry-card-topic">
-                            <TopicIcon iconName={topic?.icon || null} size="sm" />
+                          <span
+                            className="entry-card-topic px-2 rounded-full"
+                            style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                          >
+                            <TopicIcon iconName={topic?.icon || null} size="sm" color={accentColor} />
                             {decryptedTopics.get(entry.topicId) || 'Loading...'}
                           </span>
                         );

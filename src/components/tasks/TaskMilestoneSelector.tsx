@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function TaskMilestoneSelector({
-  selectedMilestoneIds,
+  selectedMilestoneIds = [],
   onMilestoneIdsChange,
 }: Props) {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -61,7 +61,7 @@ export function TaskMilestoneSelector({
   }, [decryptMilestoneTitles]);
 
   const toggleMilestone = (milestoneId: string) => {
-    const currentSet = new Set(selectedMilestoneIds);
+    const currentSet = new Set(selectedMilestoneIds || []);
     if (currentSet.has(milestoneId)) {
       currentSet.delete(milestoneId);
     } else {
@@ -87,7 +87,7 @@ export function TaskMilestoneSelector({
         >
           <input
             type="checkbox"
-            checked={selectedMilestoneIds.includes(milestone.id)}
+            checked={(selectedMilestoneIds || []).includes(milestone.id)}
             onChange={() => toggleMilestone(milestone.id)}
             className="w-4 h-4 text-gray-600 rounded border-border "
           />
