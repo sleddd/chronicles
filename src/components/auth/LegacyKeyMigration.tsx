@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import {
   generateMasterKey,
   generateRecoveryKey,
@@ -18,6 +19,7 @@ type MigrationStep = 'checking' | 'prompt' | 'migrating' | 'showRecoveryKey' | '
 export function LegacyKeyMigration() {
   const { status } = useSession();
   const { isKeyReady, encryptionKey } = useEncryption();
+  const { accentColor } = useAccentColor();
   const [step, setStep] = useState<MigrationStep>('checking');
   const [recoveryKeyDisplay, setRecoveryKeyDisplay] = useState('');
   const [error, setError] = useState('');
@@ -275,7 +277,7 @@ export function LegacyKeyMigration() {
               <button
                 onClick={handleMigrate}
                 className="flex-1 px-4 py-2 text-white rounded-md text-sm font-medium"
-                style={{ backgroundColor: '#1aaeae' }}
+                style={{ backgroundColor: accentColor }}
               >
                 Upgrade Now
               </button>
@@ -285,7 +287,7 @@ export function LegacyKeyMigration() {
 
         {step === 'migrating' && (
           <div className="p-6 text-center space-y-4">
-            <div className="inline-block w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+            <div className="inline-block w-10 h-10 border-4 border-gray-500 border-t-transparent rounded-full animate-spin" />
             <h2 className="text-lg font-semibold text-gray-900">Upgrading Your Account</h2>
             <p className="text-sm text-gray-600">{progress}</p>
             <p className="text-xs text-gray-400">Please don&apos;t close this window...</p>
@@ -322,7 +324,7 @@ export function LegacyKeyMigration() {
               <button
                 onClick={handleCopyRecoveryKey}
                 className="mt-3 w-full px-4 py-2 text-sm text-white rounded-md"
-                style={{ backgroundColor: '#1aaeae' }}
+                style={{ backgroundColor: accentColor }}
               >
                 Copy to Clipboard
               </button>
@@ -334,7 +336,7 @@ export function LegacyKeyMigration() {
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-teal-600 border-border rounded"
+                  className="mt-0.5 h-4 w-4 text-gray-600 border-border rounded"
                 />
                 <span className="text-sm text-gray-700">
                   I have saved my recovery key in a secure location
@@ -346,7 +348,7 @@ export function LegacyKeyMigration() {
               onClick={handleComplete}
               disabled={!confirmed}
               className="w-full px-4 py-2 text-sm font-medium text-white rounded-md disabled:bg-gray-400"
-              style={{ backgroundColor: confirmed ? '#1aaeae' : undefined }}
+              style={{ backgroundColor: confirmed ? accentColor : undefined }}
             >
               Continue
             </button>

@@ -5,6 +5,7 @@ import { EntriesList } from '@/components/journal/EntriesList';
 import { EntryEditor } from '@/components/journal/EntryEditor';
 import { useTimezone } from '@/lib/hooks/useTimezone';
 import { useTaskMigration } from '@/lib/hooks/useTaskMigration';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface Props {
   initialEntryId?: string | null;
@@ -44,7 +45,7 @@ export function JournalLayout({ initialEntryId }: Props) {
   if (timezoneLoading || !selectedDate) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -91,7 +92,7 @@ export function JournalLayout({ initialEntryId }: Props) {
               setMobileShowEditor(false);
               setSelectedEntryId(null);
             }}
-            className="md:hidden flex items-center gap-1 text-sm text-gray-600 p-4 pb-0"
+            className="md:hidden w-full flex items-center gap-1 text-sm text-gray-600 p-4 border-b border-border"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

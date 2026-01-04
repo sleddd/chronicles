@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
 interface EventModalProps {
   eventId?: string | null;
@@ -52,6 +53,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { encryptData, decryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   useEffect(() => {
     if (eventId && isKeyReady) {
@@ -233,7 +235,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
               placeholder="Event title"
               required
             />
@@ -244,7 +246,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
               placeholder="Event description (optional)"
               rows={3}
             />
@@ -256,7 +258,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
               id="isAllDay"
               checked={formData.isAllDay}
               onChange={(e) => setFormData({ ...formData, isAllDay: e.target.checked })}
-              className="rounded text-teal-600"
+              className="rounded text-gray-600"
             />
             <label htmlFor="isAllDay" className="text-sm text-gray-700">All day event</label>
           </div>
@@ -268,7 +270,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                 required
               />
             </div>
@@ -279,7 +281,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="time"
                   value={formData.startTime}
                   onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                 />
               </div>
             )}
@@ -292,7 +294,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 type="date"
                 value={formData.endDate}
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
               />
             </div>
             {!formData.isAllDay && (
@@ -302,7 +304,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="time"
                   value={formData.endTime}
                   onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                 />
               </div>
             )}
@@ -336,7 +338,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                   placeholder="e.g., Conference Room A"
                 />
               </div>
@@ -346,7 +348,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                   placeholder="e.g., 123 Main St, City"
                 />
               </div>
@@ -363,7 +365,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                   placeholder="e.g., +1 555-123-4567"
                 />
               </div>
@@ -372,7 +374,7 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                   placeholder="Any additional notes..."
                   rows={2}
                 />
@@ -405,9 +407,9 @@ export function EventModal({ eventId, initialDate, onClose, onSaved }: EventModa
                 type="submit"
                 disabled={loading || !formData.title.trim()}
                 className="px-4 py-2 text-white rounded-md disabled:opacity-50"
-                style={{ backgroundColor: (loading || !formData.title.trim()) ? undefined : '#1aaeae' }}
-                onMouseOver={(e) => { if (!loading && formData.title.trim()) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-                onMouseOut={(e) => { if (!loading && formData.title.trim()) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+                style={{ backgroundColor: (loading || !formData.title.trim()) ? undefined : accentColor }}
+                onMouseOver={(e) => { if (!loading && formData.title.trim()) e.currentTarget.style.backgroundColor = hoverColor; }}
+                onMouseOut={(e) => { if (!loading && formData.title.trim()) e.currentTarget.style.backgroundColor = accentColor; }}
               >
                 {loading ? 'Saving...' : eventId ? 'Update' : 'Create'}
               </button>

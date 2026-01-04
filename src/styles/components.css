@@ -7,7 +7,7 @@
 
 .btn {
   @apply px-3 py-2 text-sm rounded-md transition-colors font-medium;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2;
+  @apply focus:outline-none focus:ring-2  focus:ring-offset-2;
 }
 
 .btn-primary {
@@ -93,13 +93,13 @@
 
 .input {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 placeholder-gray-400;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
   @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100;
 }
 
 .input-glass {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 placeholder-gray-400;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
   @apply backdrop-blur-sm bg-white/10;
 }
 
@@ -117,7 +117,7 @@
 
 .select {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 appearance-none cursor-pointer;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
@@ -127,7 +127,7 @@
 
 .select-glass {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 appearance-none cursor-pointer;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
   @apply backdrop-blur-sm bg-white/10;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   background-position: right 0.5rem center;
@@ -138,23 +138,23 @@
 
 .textarea {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 placeholder-gray-400 min-h-[100px] resize-y;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
 }
 
 .textarea-glass {
   @apply w-full px-3 py-2 border border-border rounded-md text-sm text-gray-900 placeholder-gray-400 min-h-[100px] resize-y;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
   @apply backdrop-blur-sm bg-white/10;
 }
 
 .checkbox {
-  @apply h-4 w-4 rounded border-gray-300 text-teal-600;
-  @apply focus:ring-teal-500 focus:ring-offset-0;
+  @apply h-4 w-4 rounded border-gray-300 text-gray-600;
+  @apply  focus:ring-offset-0;
 }
 
 .radio {
-  @apply h-4 w-4 border-gray-300 text-teal-600;
-  @apply focus:ring-teal-500 focus:ring-offset-0;
+  @apply h-4 w-4 border-gray-300 text-gray-600;
+  @apply  focus:ring-offset-0;
 }
 
 .label {
@@ -245,7 +245,7 @@
 }
 
 .dropdown-item-active {
-  @apply w-full text-left px-3 py-2 text-sm bg-teal-50 text-teal-700;
+  @apply w-full text-left px-3 py-2 text-sm bg-gray-50 text-gray-700;
   @apply hover:bg-white/40 transition-colors cursor-pointer;
   @apply flex items-center gap-2;
 }
@@ -287,10 +287,11 @@
 
 .card-interactive {
   @apply border border-border rounded-md backdrop-blur-sm bg-white/10 cursor-pointer transition-all;
+  @apply px-3 pt-0 pb-3;
 }
 
 .card-interactive:hover {
-  @apply border-teal-300 shadow-sm;
+  @apply border-gray-300 shadow-sm;
 }
 
 .card-header {
@@ -315,7 +316,7 @@
 }
 
 .badge-primary {
-  @apply bg-teal-100 text-teal-800;
+  @apply bg-gray-100 text-gray-800;
 }
 
 .badge-success {
@@ -356,9 +357,7 @@
 }
 
 .topic-selector-trigger {
-  @apply flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer;
-  @apply border border-border backdrop-blur-sm bg-white/10;
-  @apply hover:bg-white/20 transition-colors;
+  @apply flex items-center gap-2 px-0 py-2 rounded-md cursor-pointer;
 }
 
 .topic-selector-trigger-compact {
@@ -394,7 +393,7 @@
 }
 
 .topic-selector-item-active {
-  @apply flex items-center gap-2 w-full px-3 py-2 text-sm text-left bg-teal-50 text-teal-700;
+  @apply flex items-center gap-2 w-full px-3 py-2 text-sm text-left bg-gray-50 text-gray-700;
   @apply hover:bg-white/40 transition-colors cursor-pointer;
 }
 
@@ -428,8 +427,8 @@
 }
 
 .topic-browser-item-active {
-  @apply flex items-center gap-2 px-3 py-2 text-sm cursor-pointer bg-teal-50/50 text-teal-700 border-r-2 border-teal-500;
-  @apply hover:bg-white/30 transition-colors;
+  @apply flex items-center gap-2 px-3 py-2 text-sm cursor-pointer bg-gray-100 text-gray-700;
+  @apply hover:bg-gray-100 transition-colors;
 }
 
 .topic-browser-item-icon {
@@ -554,7 +553,7 @@
 
 .schedule-time-input {
   @apply w-auto px-3 py-2 border border-border rounded-md text-sm text-gray-900 placeholder-gray-400;
-  @apply focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent;
+  @apply focus:outline-none focus:ring-2  focus:border-transparent;
 }
 
 .schedule-time-add {
@@ -597,7 +596,7 @@
 
 .range-field-input {
   @apply w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer;
-  accent-color: theme('colors.teal.600');
+  accent-color: theme('colors.gray.600');
 }
 
 /* Goal selector */
@@ -615,12 +614,12 @@
 }
 
 .goal-selector-item-selected {
-  @apply flex items-center gap-2 p-2 rounded cursor-pointer bg-teal-50/50;
+  @apply flex items-center gap-2 p-2 rounded cursor-pointer bg-gray-50/50;
   @apply hover:bg-white/30 transition-colors;
 }
 
 .goal-selector-checkbox {
-  @apply h-4 w-4 rounded border-gray-300 text-teal-600;
+  @apply h-4 w-4 rounded border-gray-300 text-gray-600;
 }
 
 .goal-selector-label {
@@ -654,7 +653,7 @@
 }
 
 .entry-card-active {
-  @apply p-4 border-b border-border cursor-pointer bg-white/30 border-l-2 border-l-teal-500;
+  @apply p-4 border-b border-border cursor-pointer bg-white/30 border-l-2 border-l-gray-500;
   @apply hover:bg-white/20 transition-colors;
 }
 
@@ -679,7 +678,7 @@
 }
 
 .entry-card-topic {
-  @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs;
+  @apply inline-flex items-center gap-1.5 py-0.5 rounded-full text-xs text-gray-500;
 }
 
 .entry-card-status {
@@ -747,7 +746,7 @@
 }
 
 .entry-editor-toolbar {
-  @apply flex items-center gap-1 p-2 border-b border-border;
+  @apply items-center gap-1 p-2 border-b border-border;
 }
 
 .entry-editor-toolbar-btn {
@@ -812,12 +811,23 @@
    ============================ */
 
 .view-tabs {
-  @apply mb-4 flex gap-1 backdrop-blur-sm bg-white/30 p-1 rounded-lg border border-border;
+  @apply mb-4 flex backdrop-blur-sm bg-white/30 p-1 rounded-lg border border-border;
+  @apply relative;
+  gap: 0;
+}
+
+.view-tabs-slider {
+  @apply absolute top-1 bottom-1 rounded-md;
+  @apply backdrop-blur-sm bg-white/50 border border-border;
+  @apply transition-all duration-300 ease-out;
+  @apply pointer-events-none;
 }
 
 .view-tab {
-  @apply flex-1 px-3 py-1.5 text-sm rounded-md transition-colors;
+  @apply flex-1 px-3 py-1.5 text-sm rounded-md;
   @apply text-gray-600 flex items-center justify-center gap-1;
+  @apply transition-colors duration-200;
+  @apply relative z-10;
 }
 
 .view-tab:hover {
@@ -825,7 +835,7 @@
 }
 
 .view-tab-active {
-  @apply backdrop-blur-sm bg-white/10 text-gray-900 border border-border;
+  @apply text-gray-900;
 }
 
 /* ============================
@@ -902,7 +912,7 @@
 
 .range-input {
   @apply w-full;
-  accent-color: theme('colors.teal.600');
+  accent-color: theme('color.gray.600');
 }
 
 .range-value {
@@ -934,15 +944,15 @@
 }
 
 .entry-card-topic {
-  @apply text-xs py-1 mb-[10px] rounded flex items-center gap-1 transition-all text-gray-700;
+  @apply text-xs py-1 mb-[10px] rounded flex items-center gap-1 text-gray-500 transition-colors;
 }
 
 .entry-card-topic:hover {
-  @apply ring-2 ring-gray-300;
+  @apply text-gray-700;
 }
 
 .entry-card-bookmark {
-  @apply w-4 h-4 text-teal-500;
+  @apply w-4 h-4 text-gray-500;
 }
 
 .entry-card-checkbox {

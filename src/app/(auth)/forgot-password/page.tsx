@@ -214,7 +214,7 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your account email"
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
 
@@ -227,14 +227,14 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              style={{ backgroundColor: loading ? undefined : '#1aaeae' }}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2  disabled:bg-gray-400 disabled:cursor-not-allowed"
+              style={{ backgroundColor: loading ? undefined : 'var(--accent-color)' }}
             >
               {loading ? 'Checking...' : 'Continue'}
             </button>
 
             <div className="text-center">
-              <Link href="/login" className="text-sm hover:underline" style={{ color: '#1aaeae' }}>
+              <Link href="/login" className="text-sm hover:underline" style={{ color: 'var(--accent-color)' }}>
                 Back to Login
               </Link>
             </div>
@@ -261,7 +261,7 @@ export default function ForgotPasswordPage() {
                 value={recoveryKey}
                 onChange={(e) => setRecoveryKey(e.target.value)}
                 placeholder="xxxx-xxxx-xxxx-xxxx-xxxx-..."
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30 font-mono text-sm"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30 font-mono text-sm"
               />
               <p className="mt-1 text-xs text-gray-500">
                 Paste your recovery key with or without dashes
@@ -277,8 +277,8 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              style={{ backgroundColor: loading ? undefined : '#1aaeae' }}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2  disabled:bg-gray-400 disabled:cursor-not-allowed"
+              style={{ backgroundColor: loading ? undefined : 'var(--accent-color)' }}
             >
               {loading ? 'Verifying...' : 'Verify Recovery Key'}
             </button>
@@ -291,7 +291,7 @@ export default function ForgotPasswordPage() {
                   setError('');
                 }}
                 className="text-sm hover:underline"
-                style={{ color: '#1aaeae' }}
+                style={{ color: 'var(--accent-color)' }}
               >
                 Use a different email
               </button>
@@ -319,7 +319,7 @@ export default function ForgotPasswordPage() {
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                  className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
                 />
               </div>
 
@@ -334,7 +334,7 @@ export default function ForgotPasswordPage() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                  className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
                 />
               </div>
             </div>
@@ -348,8 +348,8 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              style={{ backgroundColor: loading ? undefined : '#1aaeae' }}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2  disabled:bg-gray-400 disabled:cursor-not-allowed"
+              style={{ backgroundColor: loading ? undefined : 'var(--accent-color)' }}
             >
               {loading ? 'Resetting Password...' : 'Reset Password'}
             </button>
@@ -386,7 +386,7 @@ export default function ForgotPasswordPage() {
                 type="button"
                 onClick={handleCopyRecoveryKey}
                 className="mt-3 w-full px-4 py-2 text-sm text-white rounded-md"
-                style={{ backgroundColor: copied ? '#059669' : '#1aaeae' }}
+                style={{ backgroundColor: copied ? '#059669' : 'var(--accent-color)' }}
               >
                 {copied ? 'Copied!' : 'Copy to Clipboard'}
               </button>
@@ -398,7 +398,7 @@ export default function ForgotPasswordPage() {
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-teal-600 border-border rounded"
+                  className="mt-0.5 h-4 w-4 text-gray-600 border-border rounded"
                 />
                 <span className="text-sm text-gray-700">
                   I have saved my new recovery key in a secure location
@@ -411,7 +411,7 @@ export default function ForgotPasswordPage() {
               onClick={() => setStep('success')}
               disabled={!confirmed}
               className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white disabled:bg-gray-400"
-              style={{ backgroundColor: confirmed ? '#1aaeae' : undefined }}
+              style={{ backgroundColor: confirmed ? 'var(--accent-color)' : undefined }}
             >
               Continue to Login
             </button>
@@ -432,8 +432,8 @@ export default function ForgotPasswordPage() {
 
             <Link
               href="/login"
-              className="inline-block w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white text-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
-              style={{ backgroundColor: '#1aaeae' }}
+              className="inline-block w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white text-center focus:outline-none focus:ring-2 focus:ring-offset-2 "
+              style={{ backgroundColor: 'var(--accent-color)' }}
             >
               Go to Login
             </Link>

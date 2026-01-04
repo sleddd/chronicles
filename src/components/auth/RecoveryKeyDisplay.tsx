@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
 interface RecoveryKeyDisplayProps {
   recoveryKey: string; // formatted key with dashes
@@ -10,6 +11,7 @@ interface RecoveryKeyDisplayProps {
 export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisplayProps) {
   const [copied, setCopied] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const { accentColor, hoverColor } = useAccentColor();
 
   const handleCopy = async () => {
     try {
@@ -72,8 +74,8 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
-              style={{ backgroundColor: copied ? '#059669' : '#1aaeae' }}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 "
+              style={{ backgroundColor: copied ? '#059669' : accentColor }}
             >
               {copied ? (
                 <>
@@ -110,7 +112,7 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-border rounded"
+              className="h-4 w-4 mt-0.5 text-gray-600  border-border rounded"
             />
             <span className="ml-2 text-sm text-gray-700">
               I have saved my recovery key in a secure location. I understand that without this key,
@@ -123,10 +125,10 @@ export function RecoveryKeyDisplay({ recoveryKey, onConfirmed }: RecoveryKeyDisp
           type="button"
           onClick={onConfirmed}
           disabled={!confirmed}
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          style={{ backgroundColor: confirmed ? '#1aaeae' : undefined }}
-          onMouseOver={(e) => { if (confirmed) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-          onMouseOut={(e) => { if (confirmed) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2  disabled:bg-gray-400 disabled:cursor-not-allowed"
+          style={{ backgroundColor: confirmed ? accentColor : undefined }}
+          onMouseOver={(e) => { if (confirmed) e.currentTarget.style.backgroundColor = hoverColor; }}
+          onMouseOut={(e) => { if (confirmed) e.currentTarget.style.backgroundColor = accentColor; }}
         >
           Continue to Login
         </button>

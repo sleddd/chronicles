@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface CustomField {
   id: string;
@@ -140,7 +141,7 @@ export function MedicationsTab({ refreshKey }: Props) {
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
-        <p className="text-gray-500">Loading medications...</p>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -155,7 +156,7 @@ export function MedicationsTab({ refreshKey }: Props) {
               type="checkbox"
               checked={showActiveOnly}
               onChange={(e) => setShowActiveOnly(e.target.checked)}
-              className="rounded border-border text-teal-600 focus:ring-teal-500"
+              className="rounded border-border text-gray-600 "
             />
             Active only
           </label>
@@ -206,7 +207,7 @@ export function MedicationsTab({ refreshKey }: Props) {
                   <button
                     type="button"
                     onClick={() => handleEditMedication(med.id)}
-                    className="p-1 text-gray-400 hover:text-teal-600 transition-colors ml-2"
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors ml-2"
                     title="Edit medication"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

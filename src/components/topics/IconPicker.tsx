@@ -268,7 +268,7 @@ export function TopicIcon({ iconName, size = 'sm', className = '' }: TopicIconPr
   return (
     <FontAwesomeIcon
       icon={ICON_MAP[iconName]}
-      className={`${sizeClasses[size]} ${className} text-gray-600`}
+      className={`${sizeClasses[size]} ${className} text-gray-500`}
     />
   );
 }

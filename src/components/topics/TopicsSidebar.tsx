@@ -60,7 +60,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
       <button
         onClick={() => onSelectTopic(null)}
         className={`w-full text-left px-3 py-2 rounded mb-2 ${
-          selectedTopicId === null ? 'bg-teal-100 text-teal-700' : 'hover:bg-white/20'
+          selectedTopicId === null ? 'bg-gray-100 text-gray-700' : 'hover:bg-white/20'
         }`}
       >
         All Entries
@@ -72,7 +72,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
             key={topic.id}
             onClick={() => onSelectTopic(topic.id)}
             className={`w-full text-left px-3 py-2 rounded flex items-center gap-2 ${
-              selectedTopicId === topic.id ? 'bg-teal-100 text-teal-700' : 'hover:bg-white/20'
+              selectedTopicId === topic.id ? 'bg-gray-100 text-gray-700' : 'hover:bg-white/20'
             }`}
           >
             <span

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
 interface Goal {
   id: string;
@@ -23,6 +24,7 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor, hoverColor } = useAccentColor();
 
   const fetchGoals = useCallback(async () => {
     setLoading(true);
@@ -135,7 +137,7 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
                 type="checkbox"
                 checked={selectedGoalIds.has(goal.id)}
                 onChange={() => toggleGoal(goal.id)}
-                className="w-4 h-4 text-teal-600 rounded border-gray-500 focus:ring-teal-500"
+                className="w-4 h-4 text-gray-600 rounded border-gray-500 "
               />
               <span className="text-sm text-gray-700">
                 {decryptedGoals.get(goal.id) || 'Loading...'}
@@ -159,9 +161,9 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
           onClick={handleSave}
           disabled={saving}
           className="px-3 py-1.5 text-sm text-white rounded-md disabled:bg-gray-400"
-          style={{ backgroundColor: saving ? undefined : '#1aaeae' }}
-          onMouseOver={(e) => { if (!saving) e.currentTarget.style.backgroundColor = '#158f8f'; }}
-          onMouseOut={(e) => { if (!saving) e.currentTarget.style.backgroundColor = '#1aaeae'; }}
+          style={{ backgroundColor: saving ? undefined : accentColor }}
+          onMouseOver={(e) => { if (!saving) e.currentTarget.style.backgroundColor = hoverColor; }}
+          onMouseOut={(e) => { if (!saving) e.currentTarget.style.backgroundColor = accentColor; }}
         >
           {saving ? 'Saving...' : 'Save Links'}
         </button>
@@ -249,7 +251,7 @@ export function MilestoneGoalSelector({
             type="checkbox"
             checked={selectedGoalIds.includes(goal.id)}
             onChange={() => toggleGoal(goal.id)}
-            className="w-4 h-4 text-teal-600 rounded border-gray-500 focus:ring-teal-500"
+            className="w-4 h-4 text-grey-600 rounded border-gray-500 "
           />
           <span className="text-sm text-gray-700">
             {decryptedGoals.get(goal.id) || 'Loading...'}

@@ -158,7 +158,7 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
                 setIsOpen(false);
                 setSearchQuery('');
               }}
-              className="dropdown-item text-teal-600 hover:bg-teal-50"
+              className="dropdown-item text-gray-600 hover:bg-gray-50"
             >
               Manage Topics...
             </Link>

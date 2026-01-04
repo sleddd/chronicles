@@ -600,72 +600,76 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   return (
     <div className="p-4 h-full flex flex-col">
       {/* Top toolbar with topic selector and bookmark/share buttons */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex-1">
-          <TopicSelector
-            selectedTopicId={state.selectedTopicId}
-            onSelectTopic={(id) => dispatch({ type: 'SET_TOPIC', payload: { id } })}
-            onTopicsChange={onTopicsChange}
-          />
-        </div>
-        <div className="flex items-center gap-2 ml-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={state.expandEntry}
-              onChange={(e) => dispatch({ type: 'SET_EXPAND_ENTRY', payload: e.target.checked })}
-              className="w-4 h-4 rounded border-border text-teal-600 focus:ring-teal-500"
+      <div className="mb-4">
+        {/* First row: Topic selector + bookmark/share buttons */}
+        <div className="flex justify-between items-center">
+          <div className="flex-1">
+            <TopicSelector
+              selectedTopicId={state.selectedTopicId}
+              onSelectTopic={(id) => dispatch({ type: 'SET_TOPIC', payload: { id } })}
+              onTopicsChange={onTopicsChange}
             />
-            <span className="text-sm text-gray-600">
-              Expand entry{' '}
-              <span className={
-                !state.expandEntry && state.charCount > MAX_CHARS_SHORT
-                  ? 'text-red-600 font-medium'
-                  : state.charCount > MAX_CHARS_SHORT * 0.8
-                    ? 'text-amber-600'
-                    : ''
-              }>
-                ({state.charCount}{!state.expandEntry && `/${MAX_CHARS_SHORT}`})
+          </div>
+          <div className="flex items-center gap-2 ml-4">
+            {/* Expand entry - hidden on mobile, shown on desktop */}
+            <label className="hidden md:flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.expandEntry}
+                onChange={(e) => dispatch({ type: 'SET_EXPAND_ENTRY', payload: e.target.checked })}
+                className="w-4 h-4 rounded border-border text-gray-600"
+              />
+              <span className="text-sm text-gray-600">
+                Expand entry{' '}
+                <span className={
+                  !state.expandEntry && state.charCount > MAX_CHARS_SHORT
+                    ? 'text-red-600 font-medium'
+                    : state.charCount > MAX_CHARS_SHORT * 0.8
+                      ? 'text-amber-600'
+                      : ''
+                }>
+                  ({state.charCount}{!state.expandEntry && `/${MAX_CHARS_SHORT}`})
+                </span>
               </span>
-            </span>
-          </label>
-          {entryId && (
-            <>
-            <button
-              onClick={handleToggleFavorite}
-              disabled={state.togglingFavorite}
-              className={`p-2 rounded-md transition-colors ${
-                state.isFavorite
-                  ? 'text-teal-600 bg-teal-50 hover:bg-teal-100'
-                  : 'text-gray-600 hover:backdrop-blur-sm bg-white/40'
-              }`}
-              title={state.isFavorite ? 'Remove bookmark' : 'Add bookmark'}
-            >
-              <svg
-                className="w-5 h-5"
-                fill={state.isFavorite ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            </label>
+            {entryId && (
+              <>
+              <button
+                onClick={handleToggleFavorite}
+                disabled={state.togglingFavorite}
+                className={`p-2 rounded-md transition-colors ${
+                  state.isFavorite
+                    ? 'text-gray-600 bg-gray-50 hover:bg-gray-100'
+                    : 'text-gray-600 hover:backdrop-blur-sm bg-white/40'
+                }`}
+                title={state.isFavorite ? 'Remove bookmark' : 'Add bookmark'}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                />
-              </svg>
-            </button>
-            <button
-              onClick={() => dispatch({ type: 'SET_SHOW_SHARE_MODAL', payload: true })}
-              className="p-2 text-gray-600 hover:backdrop-blur-sm bg-white/40 rounded-md"
-              title="Share entry"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-            </button>
-            </>
-          )}
+                <svg
+                  className="w-5 h-5"
+                  fill={state.isFavorite ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={() => dispatch({ type: 'SET_SHOW_SHARE_MODAL', payload: true })}
+                className="p-2 text-gray-600 hover:backdrop-blur-sm bg-white/40 rounded-md"
+                title="Share entry"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -708,6 +712,30 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             className={`border-t border-border md:border-t-0 ${state.expandEntry ? 'flex-1' : 'min-h-[40px]'}`}
           />
         </div>
+      </div>
+
+      {/* Expand entry option - shown on mobile only, between editor and custom fields */}
+      <div className="md:hidden mb-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={state.expandEntry}
+            onChange={(e) => dispatch({ type: 'SET_EXPAND_ENTRY', payload: e.target.checked })}
+            className="w-4 h-4 rounded border-border text-gray-600"
+          />
+          <span className="text-sm text-gray-600">
+            Expand entry{' '}
+            <span className={
+              !state.expandEntry && state.charCount > MAX_CHARS_SHORT
+                ? 'text-red-600 font-medium'
+                : state.charCount > MAX_CHARS_SHORT * 0.8
+                  ? 'text-amber-600'
+                  : ''
+            }>
+              ({state.charCount}{!state.expandEntry && `/${MAX_CHARS_SHORT}`})
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* Goal Settings */}
@@ -774,7 +802,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
                   key={task.id}
                   className="text-sm flex items-center gap-2 py-1"
                 >
-                  <span className={task.isCompleted ? 'text-teal-500' : 'text-gray-400'}>
+                  <span className={task.isCompleted ? 'text-gray-500' : 'text-gray-400'}>
                     {task.isCompleted ? '✓' : '○'}
                   </span>
                   <span className={task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}>

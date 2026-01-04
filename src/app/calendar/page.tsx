@@ -7,7 +7,7 @@ import { EventModal } from '@/components/calendar/EventModal';
 import { Header } from '@/components/layout/Header';
 import { PasswordReentryModal } from '@/components/auth/PasswordReentryModal';
 import { useTimezone } from '@/lib/hooks/useTimezone';
-import { AdaptiveLoadingText } from '@/components/ui/LoadingSpinner';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -45,7 +45,7 @@ export default function CalendarPage() {
       <div className="h-screen flex flex-col">
         <Header />
         <div className="flex-1 flex items-center justify-center">
-          <AdaptiveLoadingText />
+          <LoadingSpinner size="lg" />
         </div>
       </div>
     );

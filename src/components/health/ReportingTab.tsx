@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { FrequencyChart } from './charts/FrequencyChart';
 import { CorrelationChart } from './charts/CorrelationChart';
 import { SeverityTrendChart } from './charts/SeverityTrendChart';
@@ -333,7 +334,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-3 py-1.5 border border-border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
+                  className="px-3 py-1.5 border border-border rounded-md text-sm  "
                 />
               </div>
               <div>
@@ -342,7 +343,7 @@ export function ReportingTab({ refreshKey }: Props) {
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-3 py-1.5 border border-border rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
+                  className="px-3 py-1.5 border border-border rounded-md text-sm  "
                 />
               </div>
             </>
@@ -363,7 +364,7 @@ export function ReportingTab({ refreshKey }: Props) {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <p className="text-gray-500">Analyzing your data...</p>
+          <LoadingSpinner size="lg" />
         </div>
       ) : (
         <>

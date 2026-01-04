@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { seedDefaultTopics } from '@/lib/topics/seedDefaultTopics';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 function LoginForm() {
   const router = useRouter();
@@ -138,7 +139,7 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
 
@@ -153,7 +154,7 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
           </div>
@@ -167,7 +168,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2  disabled:bg-gray-400 disabled:cursor-not-allowed"
             style={{ backgroundColor: loading ? undefined : '#2d2c2a' }}
             onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#2d2c2a'; }}
             onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#2d2c2a'; }}
@@ -197,7 +198,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center backdrop-blur-sm bg-white/30">
-        <div className="text-gray-600">Loading...</div>
+        <LoadingSpinner size="lg" />
       </div>
     }>
       <LoginForm />

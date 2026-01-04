@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header';
 import { PasswordReentryModal } from '@/components/auth/PasswordReentryModal';
 import { HealthView } from '@/components/health/HealthView';
 import { useTimezone } from '@/lib/hooks/useTimezone';
-import { AdaptiveLoadingText } from '@/components/ui/LoadingSpinner';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function HealthPage() {
   const { today, loading: timezoneLoading } = useTimezone();
@@ -14,7 +14,7 @@ export default function HealthPage() {
       <div className="h-screen flex flex-col">
         <Header />
         <div className="flex-1 flex items-center justify-center">
-          <AdaptiveLoadingText />
+          <LoadingSpinner size="lg" />
         </div>
       </div>
     );

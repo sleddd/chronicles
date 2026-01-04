@@ -8,32 +8,42 @@ interface LoadingSpinnerProps {
 }
 
 export function LoadingSpinner({ size = 'md', className = '' }: LoadingSpinnerProps) {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-8 h-8',
-    lg: 'w-12 h-12',
+  const { accentColor } = useAccentColor();
+
+  const dimensions = {
+    sm: 20,
+    md: 32,
+    lg: 48,
   };
 
+  const strokeWidths = {
+    sm: 2,
+    md: 3,
+    lg: 4,
+  };
+
+  const dim = dimensions[size];
+  const strokeWidth = strokeWidths[size];
+  const radius = (dim - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
   return (
-    <div className={`${sizeClasses[size]} ${className}`}>
+    <div className={`inline-flex items-center justify-center ${className}`}>
       <svg
-        className="animate-spin text-teal-600"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
+        width={dim}
+        height={dim}
+        viewBox={`0 0 ${dim} ${dim}`}
+        className="animate-spin"
       >
         <circle
-          className="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          strokeWidth="4"
-        />
-        <path
-          className="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          cx={dim / 2}
+          cy={dim / 2}
+          r={radius}
+          fill="none"
+          stroke={accentColor}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
         />
       </svg>
     </div>

@@ -208,6 +208,13 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
   const lightBgColor = getLightBgColor(accentColor);
   const isTransparent = headerColor === 'transparent';
 
+  // Update CSS custom properties when accent color changes
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent-color', accentColor);
+    document.documentElement.style.setProperty('--accent-hover', hoverColor);
+    document.documentElement.style.setProperty('--accent-light', lightBgColor);
+  }, [accentColor, hoverColor, lightBgColor]);
+
   const value: AccentColorContextValue = {
     headerColor,
     accentColor,

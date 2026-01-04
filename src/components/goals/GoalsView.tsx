@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { GoalCard } from './GoalCard';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   DndContext,
   closestCenter,
@@ -237,23 +238,25 @@ export function GoalsView() {
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-full">
-        <p className="text-gray-500">Loading goals...</p>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="goals-view">
-      <div className="goals-view-header">
-        <h1 className="goals-view-title">Goals</h1>
-
-        {/* Tabs */}
-        <div className="view-tabs goals-tabs">
+    <div className="h-full flex flex-col backdrop-blur-md bg-white/70">
+      {/* Tab Navigation */}
+      <div className="backdrop-blur-md bg-white/50 border-b border-border px-4 overflow-x-auto">
+        <div className="flex gap-1 min-w-max md:min-w-0 md:flex-wrap">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`view-tab ${activeTab === tab.key ? 'view-tab-active' : ''}`}
+              className={`px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === tab.key
+                  ? 'border-b-2 -mb-px'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
               style={activeTab === tab.key ? { color: accentColor, borderColor: accentColor } : undefined}
             >
               {tab.label}
@@ -262,41 +265,44 @@ export function GoalsView() {
         </div>
       </div>
 
-      {/* Goals grid */}
-      {filteredGoals.length === 0 ? (
-        <div className="goals-empty">
-          <p className="text-gray-500">No goals found</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Create a new entry with type &quot;goal&quot; to get started
-          </p>
-        </div>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={filteredGoals.map((g) => g.id)}
-            strategy={rectSortingStrategy}
-          >
-            <div className="goals-grid">
-              {filteredGoals.map((goal) => (
-                <GoalCard
-                  key={goal.id}
-                  goalId={goal.id}
-                  encryptedContent={goal.encryptedContent}
-                  iv={goal.iv}
-                  customFields={goal.custom_fields}
-                  milestones={goal.milestones || []}
-                  onUnlinkMilestone={handleUnlinkMilestone}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-4">
 
+        {/* Goals grid */}
+        {filteredGoals.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No goals found</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Create a new entry with type &quot;goal&quot; to get started
+            </p>
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredGoals.map((g) => g.id)}
+              strategy={rectSortingStrategy}
+            >
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredGoals.map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goalId={goal.id}
+                    encryptedContent={goal.encryptedContent}
+                    iv={goal.iv}
+                    customFields={goal.custom_fields}
+                    milestones={goal.milestones || []}
+                    onUnlinkMilestone={handleUnlinkMilestone}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )}
+      </div>
     </div>
   );
 }

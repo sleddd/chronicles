@@ -6,6 +6,9 @@
   --background: #e8e5df;
   --foreground: #171717;
   --border: #d1d5db;
+  --accent-color: #6b7280;
+  --accent-hover: #4b5563;
+  --accent-light: #f3f4f6;
 }
 
 @theme inline {

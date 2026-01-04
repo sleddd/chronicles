@@ -215,7 +215,7 @@ export default function RegisterPage() {
             />
           </div>
           <div className="animate-pulse">
-            <div className="inline-block w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <div className="inline-block w-8 h-8 border-4 border-gray-500 border-t-transparent rounded-full animate-spin mb-4"></div>
             <h2 className="text-lg font-medium text-gray-900">Setting up your secure account...</h2>
             <p className="text-sm text-gray-500 mt-2">Generating encryption keys</p>
           </div>
@@ -249,7 +249,7 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
 
@@ -264,7 +264,7 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
               />
               {/* Password strength indicator */}
               {password && (
@@ -309,7 +309,7 @@ export default function RegisterPage() {
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 text-gray-900 backdrop-blur-sm bg-white/30"
+                className="mt-1 block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none   text-gray-900 backdrop-blur-sm bg-white/30"
               />
             </div>
           </div>
@@ -360,7 +360,7 @@ export default function RegisterPage() {
               type="button"
               onClick={() => setShowTerms(!showTerms)}
               className="text-xs font-medium mb-3 flex items-center gap-1"
-              style={{ color: '#1aaeae' }}
+              style={{ color: 'var(--accent-color)' }}
             >
               {showTerms ? 'Hide' : 'Read'} full Terms of Service
               <svg
@@ -407,7 +407,7 @@ export default function RegisterPage() {
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                className="h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-border rounded"
+                className="h-4 w-4 mt-0.5 text-gray-600  border-border rounded"
               />
               <span className="ml-2 text-sm text-gray-900 font-medium">
                 I agree to the Terms of Service
@@ -424,7 +424,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading || !acceptedWarning || !acceptedTerms}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2  disabled:bg-gray-400 disabled:cursor-not-allowed"
             style={{ backgroundColor: (loading || !acceptedWarning || !acceptedTerms) ? undefined : '#2d2c2a' }}
             onMouseOver={(e) => { if (!loading && acceptedWarning && acceptedTerms) e.currentTarget.style.backgroundColor = '#000000'; }}
             onMouseOut={(e) => { if (!loading && acceptedWarning && acceptedTerms) e.currentTarget.style.backgroundColor = '#000000'; }}

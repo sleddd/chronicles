@@ -245,20 +245,30 @@ export function Header() {
           onClick={() => setShowMobileMenu(!showMobileMenu)}
           className="md:hidden p-2 rounded-full hover:bg-white/20"
         >
-          <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          {showMobileMenu ? (
+            <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
         </button>
       </div>
 
-      {/* Mobile Menu */}
-      {showMobileMenu && (
-        <div className="md:hidden mt-3 pt-3 border-t border-border">
-          <nav className="space-y-1">
+      {/* Mobile Menu - Full height overlay with slide animation */}
+      <div
+        className={`md:hidden fixed inset-0 top-[68px] z-50 border-t border-white/20 transition-all duration-300 ease-out ${
+          showMobileMenu ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
+        }`}
+        style={{ backgroundColor: headerColor }}
+      >
+        <nav className="flex flex-col h-full p-4 space-y-1">
             <Link
               href="/"
               onClick={() => setShowMobileMenu(false)}
-              className={`block px-3 py-2 text-sm rounded-md ${
+              className={`block px-3 py-3 text-base rounded-md ${
                 isActive('/') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
@@ -267,7 +277,7 @@ export function Header() {
             <Link
               href="/calendar"
               onClick={() => setShowMobileMenu(false)}
-              className={`block px-3 py-2 text-sm rounded-md ${
+              className={`block px-3 py-3 text-base rounded-md ${
                 isActive('/calendar') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
@@ -276,7 +286,7 @@ export function Header() {
             <Link
               href="/goals"
               onClick={() => setShowMobileMenu(false)}
-              className={`block px-3 py-2 text-sm rounded-md ${
+              className={`block px-3 py-3 text-base rounded-md ${
                 isActive('/goals') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
@@ -285,7 +295,7 @@ export function Header() {
             <Link
               href="/health"
               onClick={() => setShowMobileMenu(false)}
-              className={`block px-3 py-2 text-sm rounded-md ${
+              className={`block px-3 py-3 text-base rounded-md ${
                 isHealthActive ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
@@ -294,7 +304,7 @@ export function Header() {
             <Link
               href="/topics"
               onClick={() => setShowMobileMenu(false)}
-              className={`block px-3 py-2 text-sm rounded-md ${
+              className={`block px-3 py-3 text-base rounded-md ${
                 isActive('/topics') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
@@ -303,22 +313,22 @@ export function Header() {
             <Link
               href="/settings"
               onClick={() => setShowMobileMenu(false)}
-              className={`block px-3 py-2 text-sm rounded-md ${
+              className={`block px-3 py-3 text-base rounded-md ${
                 isActive('/settings') ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
               }`}
             >
               Settings
             </Link>
-            <hr className="my-2 border-border" />
+            <div className="flex-1" />
+            <hr className="border-white/20" />
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className={`w-full text-left px-3 py-2 text-sm rounded-md ${textColor} ${textColorHover}`}
+              className={`w-full text-left px-3 py-3 text-base rounded-md ${textColor} ${textColorHover}`}
             >
               Logout
             </button>
           </nav>
-        </div>
-      )}
+      </div>
     </header>
   );
 }

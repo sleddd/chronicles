@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { format, parseISO } from 'date-fns';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface SharedEntryData {
   entry: {
@@ -49,7 +50,7 @@ export default function SharedEntryPage({
   if (loading) {
     return (
       <div className="min-h-screen backdrop-blur-sm bg-white/30 flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }

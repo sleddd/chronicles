@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
 
 interface ShareModalProps {
   entryId: string;
@@ -27,6 +28,7 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
   const [copied, setCopied] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [confirmed, setConfirmed] = useState(false);
+  const { accentColor, hoverColor, lightBgColor } = useAccentColor();
 
   // Build full URL from relative path if needed
   const getFullUrl = (url: string | null): string => {
@@ -160,8 +162,8 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
             <div className="text-center py-8 text-gray-500">Loading...</div>
           ) : shareData?.activeShare ? (
             <div className="space-y-4">
-              <div className="rounded-lg p-4" style={{ backgroundColor: '#e0f2f2', borderColor: '#a0d8d8', borderWidth: 1 }}>
-                <div className="flex items-center gap-2 mb-2" style={{ color: '#158f8f' }}>
+              <div className="rounded-lg p-4" style={{ backgroundColor: lightBgColor, borderColor: accentColor, borderWidth: 1 }}>
+                <div className="flex items-center gap-2 mb-2" style={{ color: hoverColor }}>
                   <svg
                     className="w-5 h-5"
                     fill="none"
@@ -260,7 +262,7 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                 <select
                   value={expiresInDays}
                   onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 "
                 >
                   <option value={1}>1 day</option>
                   <option value={7}>7 days</option>
@@ -275,7 +277,7 @@ export function ShareModal({ entryId, plaintextContent, onClose }: ShareModalPro
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="w-5 h-5 mt-0.5 rounded border-border text-teal-600 focus:ring-teal-500"
+                  className="w-5 h-5 mt-0.5 rounded border-border text-gray-600 "
                 />
                 <span className="text-sm text-gray-700">
                   I understand that this entry will be publicly visible to anyone

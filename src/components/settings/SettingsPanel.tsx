@@ -227,21 +227,19 @@ export function SettingsPanel() {
   };
 
   const handleBackgroundImageChange = async (newImage: string) => {
+    // Update UI immediately for instant feedback
+    setFeatureSettings((prev) => ({ ...prev, backgroundImage: newImage }));
+    window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newImage }));
+    localStorage.setItem('chronicles-background-image', newImage);
+
+    // Then persist to server
     setSavingBackgroundImage(true);
     try {
-      const response = await fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backgroundImage: newImage }),
       });
-
-      if (response.ok) {
-        setFeatureSettings((prev) => ({ ...prev, backgroundImage: newImage }));
-        // Dispatch event so layout updates immediately
-        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newImage }));
-        // Also update localStorage for persistence
-        localStorage.setItem('chronicles-background-image', newImage);
-      }
     } catch (error) {
       console.error('Failed to update background image:', error);
     } finally {
@@ -780,8 +778,8 @@ export function SettingsPanel() {
               </div>
 
               {/* Encryption Notice */}
-              <div className="bg-teal-50 p-3 rounded border border-teal-200">
-                <p className="text-teal-800">
+              <div className="-50 p-3 rounded border border-gray-200">
+                <p className="text--800">
                   <strong>Your data is encrypted</strong> in your browser before being sent to the server.
                   Only you can read your entries. If you lose your password, your data cannot be recovered.
                 </p>
@@ -875,25 +873,25 @@ export function SettingsPanel() {
             <div className="grid grid-cols-4 gap-2 mb-3">
               {BACKGROUND_IMAGES.map((bg) => (
                 <button
+                  type="button"
                   key={bg.value || 'none'}
                   onClick={() => handleBackgroundImageChange(bg.value)}
-                  disabled={savingBackgroundImage}
                   title={bg.label}
                   className={`relative aspect-video rounded-md border-2 transition-all overflow-hidden ${
                     featureSettings.backgroundImage === bg.value
                       ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-1'
                       : 'border-border hover:border-gray-400'
-                  } ${savingBackgroundImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  }`}
                 >
                   {bg.value ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={bg.value}
                       alt={bg.label}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover pointer-events-none"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center pointer-events-none">
                       <span className="text-xs text-gray-400">None</span>
                     </div>
                   )}

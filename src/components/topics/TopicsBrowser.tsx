@@ -6,6 +6,7 @@ import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
 import Link from 'next/link';
 import { IconPicker, TopicIcon } from './IconPicker';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   DndContext,
   closestCenter,
@@ -142,18 +143,6 @@ function SortableTopicItem({
       style={style}
       className={`group ${isSelected ? 'topic-browser-item-active' : 'topic-browser-item'} ${isDragging ? 'shadow-lg z-10' : ''}`}
     >
-      {/* Drag handle */}
-      <button
-        type="button"
-        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
-        {...attributes}
-        {...listeners}
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm8-12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
-        </svg>
-      </button>
-
       <button
         onClick={onSelect}
         className="flex items-center gap-2 flex-1 text-left"
@@ -185,6 +174,18 @@ function SortableTopicItem({
           </svg>
         </button>
       </div>
+
+      {/* Drag handle */}
+      <button
+        type="button"
+        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
+        {...attributes}
+        {...listeners}
+      >
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm8-12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -389,7 +390,11 @@ export function TopicsBrowser() {
   }, [entries, isKeyReady, decryptEntries]);
 
   if (!isKeyReady) {
-    return <div className="p-8 text-gray-500">Waiting for encryption key...</div>;
+    return (
+      <div className="h-full flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
   }
 
   const handleTopicSelect = (topicId: string | null) => {
@@ -524,7 +529,7 @@ export function TopicsBrowser() {
         }`}
       >
         {/* Entries content */}
-        <div className="p-6">
+        <div className="p-4">
           {/* Back button on mobile */}
           {mobileEntriesExpanded && (
             <button

@@ -78,7 +78,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-teal-500 focus:border-teal-500"
+              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none  "
               placeholder="e.g., Work, Personal, Health"
             />
           </div>
@@ -94,7 +94,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
                   type="button"
                   onClick={() => setColor(c)}
                   className={`w-8 h-8 rounded-full ${
-                    color === c ? 'ring-2 ring-offset-2 ring-teal-500' : ''
+                    color === c ? 'ring-2 ring-offset-2 ring-gray-500' : ''
                   }`}
                   style={{ backgroundColor: c }}
                 />

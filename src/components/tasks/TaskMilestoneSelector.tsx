@@ -89,7 +89,7 @@ export function TaskMilestoneSelector({
             type="checkbox"
             checked={selectedMilestoneIds.includes(milestone.id)}
             onChange={() => toggleMilestone(milestone.id)}
-            className="w-4 h-4 text-teal-600 rounded border-border focus:ring-teal-500"
+            className="w-4 h-4 text-gray-600 rounded border-border "
           />
           <span className="text-sm text-gray-700">
             {decryptedMilestones.get(milestone.id) || 'Loading...'}

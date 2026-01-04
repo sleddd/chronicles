@@ -565,6 +565,15 @@ export function EntriesList({
     <div className="p-4 h-full overflow-auto">
       {/* View Mode Tabs */}
       <div className="view-tabs">
+        {/* Sliding indicator */}
+        <div
+          className="view-tabs-slider"
+          style={{
+            left: `calc(0.25rem + ${['date', 'all', 'favorites', 'search'].indexOf(viewMode)} * (100% - 0.5rem) / 4)`,
+            width: 'calc((100% - 0.5rem) / 4)',
+            right: 'auto',
+          }}
+        />
         <button
           onClick={() => {
             if (viewMode === 'date') {

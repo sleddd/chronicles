@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
   format,
   startOfMonth,
@@ -89,7 +91,9 @@ export function CalendarView({
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isDayPanelExpanded, setIsDayPanelExpanded] = useState(false);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const { decryptData, isKeyReady } = useEncryption();
+  const { accentColor } = useAccentColor();
 
   const fetchCalendarData = useCallback(async () => {
     const start = startOfWeek(startOfMonth(currentMonth));
@@ -342,18 +346,18 @@ export function CalendarView({
           return (
             <div
               key={day.toString()}
-              className={`min-h-[44px] md:min-h-[100px] p-2 md:p-1 cursor-pointer flex md:flex-col items-center md:items-stretch gap-2 md:gap-0 border-b border-border/50 md:border-0`}
+              className={`min-h-[44px] md:min-h-[100px] p-2 md:p-2 cursor-pointer flex flex-row md:flex-col items-start md:items-stretch gap-2 md:gap-0 border-b border-border/50 md:border md:border-gray-100`}
               style={isSelected ? { outline: '2px solid #e5e6ea', outlineOffset: '-2px' } : undefined}
               onClick={() => handleDateClick(dateStr)}
               onDoubleClick={() => onCreateEvent?.(dateStr)}
             >
-              {/* Mobile: Day name and date */}
-              <div className="flex md:hidden items-center gap-2 w-20 flex-shrink-0">
-                <span className={`text-xs font-medium ${isCurrentMonth ? 'text-gray-500' : 'text-gray-300'}`}>
+              {/* Mobile: Day name and date in fixed columns */}
+              <div className="flex md:hidden items-start flex-shrink-0">
+                <span className={`w-8 text-xs font-medium ${isCurrentMonth ? 'text-gray-500' : 'text-gray-300'}`}>
                   {format(day, 'EEE')}
                 </span>
                 <div
-                  className={`text-sm font-medium ${
+                  className={`w-8 text-sm font-medium text-center ${
                     isToday
                       ? 'text-white w-6 h-6 rounded-full flex items-center justify-center'
                       : isCurrentMonth
@@ -382,13 +386,13 @@ export function CalendarView({
                 </div>
               </div>
 
-              {/* Mobile: Event list inline */}
-              <div className="flex md:hidden flex-1 gap-1 overflow-x-auto">
-                {items.slice(0, 3).map((item) => (
+              {/* Mobile: Event list vertical - show 4, expandable */}
+              <div className="flex md:hidden flex-col flex-1">
+                {(expandedDays.has(dateStr) ? items : items.slice(0, 4)).map((item) => (
                   <div
                     key={item.id}
-                    className="text-xs px-2 py-1 rounded truncate max-w-[120px] flex-shrink-0"
-                    style={{ backgroundColor: '#e6e7eb', color: '#555555' }}
+                    className="text-xs py-1 truncate border-b border-gray-200 last:border-b-0"
+                    style={{ color: '#555555' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (item.type === 'entry') {
@@ -401,8 +405,24 @@ export function CalendarView({
                     {item.title}
                   </div>
                 ))}
-                {items.length > 3 && (
-                  <span className="text-xs text-gray-500 flex-shrink-0 self-center">+{items.length - 3}</span>
+                {items.length > 4 && (
+                  <button
+                    className="text-xs text-gray-500 py-1 text-left"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedDays((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(dateStr)) {
+                          next.delete(dateStr);
+                        } else {
+                          next.add(dateStr);
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    {expandedDays.has(dateStr) ? 'Show less' : `+${items.length - 4} more`}
+                  </button>
                 )}
               </div>
 
@@ -414,10 +434,10 @@ export function CalendarView({
                 {items.map((item) => (
                   <div
                     key={item.id}
-                    className={`text-xs px-1 py-1 mb-1 rounded truncate cursor-pointer ${
-                      selectedEventId === item.id ? 'ring-2 ring-teal-500' : ''
+                    className={`text-xs px-1 py-1 truncate cursor-pointer border-b border-gray-100 last:border-b-0 ${
+                      selectedEventId === item.id ? 'ring-2 ring-gray-500' : ''
                     }`}
-                    style={{ backgroundColor: '#e6e7eb', color: '#555555' }}
+                    style={{ color: '#555555' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (item.type === 'entry') {
@@ -443,8 +463,8 @@ export function CalendarView({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading calendar...</div>
+      <div className="flex items-center justify-center h-full">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -497,7 +517,7 @@ export function CalendarView({
               <button
                 onClick={() => onCreateEvent?.(selectedDate)}
                 className="text-sm px-2 py-1 rounded"
-                style={{ color: '#1aaeae' }}
+                style={{ color: accentColor }}
               >
                 + Add Event
               </button>
@@ -518,7 +538,7 @@ export function CalendarView({
                 <button
                   onClick={() => onCreateEvent?.(selectedDate)}
                   className="block mx-auto mt-2 text-sm underline"
-                  style={{ color: '#1aaeae' }}
+                  style={{ color: accentColor }}
                 >
                   Create an event
                 </button>

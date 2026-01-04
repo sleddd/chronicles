@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface CustomField {
   id: string;
@@ -246,7 +247,7 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
-        <p className="text-gray-500">Loading schedule...</p>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }

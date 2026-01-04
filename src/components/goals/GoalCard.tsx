@@ -292,7 +292,7 @@ export function GoalCard({
           <button
             type="button"
             onClick={handleEditGoal}
-            className="p-1 text-gray-400 hover:text-teal-600 transition-colors"
+            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
             title="Edit goal"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -372,7 +372,7 @@ export function GoalCard({
                   <button
                     type="button"
                     onClick={(e) => handleEditMilestone(e, milestone.id)}
-                    className="text-gray-400 hover:text-teal-600 transition-colors p-0.5"
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-0.5"
                     title="Edit milestone"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface CustomField {
   id: string;
@@ -125,7 +126,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
-        <p className="text-gray-500">Loading symptoms...</p>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -193,7 +194,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
                   <button
                     type="button"
                     onClick={() => handleEditSymptom(symptom.id)}
-                    className="p-1 text-gray-400 hover:text-teal-600 transition-colors ml-2"
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors ml-2"
                     title="Edit symptom"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
