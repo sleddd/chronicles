@@ -33,9 +33,15 @@ export function Header() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showHealthSubmenu, setShowHealthSubmenu] = useState(false);
   const [isHealthMenuClosing, setIsHealthMenuClosing] = useState(false);
+  const [showEntertainmentSubmenu, setShowEntertainmentSubmenu] = useState(false);
+  const [isEntertainmentMenuClosing, setIsEntertainmentMenuClosing] = useState(false);
+  const [showInspirationSubmenu, setShowInspirationSubmenu] = useState(false);
+  const [isInspirationMenuClosing, setIsInspirationMenuClosing] = useState(false);
   const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
   const [backgroundIsLight, setBackgroundIsLight] = useState(getInitialBackgroundIsLight);
   const healthRef = useRef<HTMLDivElement>(null);
+  const entertainmentRef = useRef<HTMLDivElement>(null);
+  const inspirationRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { backgroundIsLight: contextBackgroundIsLight, isTransparent } = useAccentColor();
 
@@ -57,6 +63,44 @@ export function Header() {
       setShowHealthSubmenu(true);
     }
   }, [showHealthSubmenu, closeHealthSubmenu]);
+
+  // Handle closing the entertainment submenu with animation
+  const closeEntertainmentSubmenu = useCallback(() => {
+    if (showEntertainmentSubmenu && !isEntertainmentMenuClosing) {
+      setIsEntertainmentMenuClosing(true);
+      setTimeout(() => {
+        setShowEntertainmentSubmenu(false);
+        setIsEntertainmentMenuClosing(false);
+      }, 150);
+    }
+  }, [showEntertainmentSubmenu, isEntertainmentMenuClosing]);
+
+  const toggleEntertainmentSubmenu = useCallback(() => {
+    if (showEntertainmentSubmenu) {
+      closeEntertainmentSubmenu();
+    } else {
+      setShowEntertainmentSubmenu(true);
+    }
+  }, [showEntertainmentSubmenu, closeEntertainmentSubmenu]);
+
+  // Handle closing the inspiration submenu with animation
+  const closeInspirationSubmenu = useCallback(() => {
+    if (showInspirationSubmenu && !isInspirationMenuClosing) {
+      setIsInspirationMenuClosing(true);
+      setTimeout(() => {
+        setShowInspirationSubmenu(false);
+        setIsInspirationMenuClosing(false);
+      }, 150);
+    }
+  }, [showInspirationSubmenu, isInspirationMenuClosing]);
+
+  const toggleInspirationSubmenu = useCallback(() => {
+    if (showInspirationSubmenu) {
+      closeInspirationSubmenu();
+    } else {
+      setShowInspirationSubmenu(true);
+    }
+  }, [showInspirationSubmenu, closeInspirationSubmenu]);
 
   // Sync with context when it updates
   useEffect(() => {
@@ -115,8 +159,32 @@ export function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [closeHealthSubmenu]);
 
+  // Close entertainment submenu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (entertainmentRef.current && !entertainmentRef.current.contains(event.target as Node)) {
+        closeEntertainmentSubmenu();
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [closeEntertainmentSubmenu]);
+
+  // Close inspiration submenu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (inspirationRef.current && !inspirationRef.current.contains(event.target as Node)) {
+        closeInspirationSubmenu();
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [closeInspirationSubmenu]);
+
   const isActive = (path: string) => pathname === path;
   const isHealthActive = pathname?.startsWith('/health');
+  const isEntertainmentActive = pathname?.startsWith('/entertainment');
+  const isInspirationActive = pathname?.startsWith('/inspiration');
 
   // Use dark text on light backgrounds when header is transparent, white text otherwise
   const useDarkText = isTransparent && backgroundIsLight;
@@ -133,6 +201,17 @@ export function Header() {
     { key: 'exercise', label: 'Exercise' },
     { key: 'allergies', label: 'Allergies & Sensitivities' },
     { key: 'reporting', label: 'Reporting' },
+  ];
+
+  const entertainmentTabs = [
+    { key: 'music', label: 'Music' },
+    { key: 'books', label: 'Books' },
+    { key: 'tv-movies', label: 'TV/Movies' },
+  ];
+
+  const inspirationTabs = [
+    { key: 'research', label: 'Research' },
+    { key: 'ideas', label: 'Ideas' },
   ];
 
   return (
@@ -221,6 +300,80 @@ export function Header() {
                     key={tab.key}
                     href={`/health?tab=${tab.key}`}
                     onClick={closeHealthSubmenu}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-white/40 first:rounded-t-md last:rounded-b-md transition-colors"
+                  >
+                    {tab.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Entertainment with submenu */}
+          <div className="relative" ref={entertainmentRef}>
+            <button
+              onClick={toggleEntertainmentSubmenu}
+              className={`px-4 py-2 text-sm rounded-md transition-colors flex items-center gap-1 ${
+                isEntertainmentActive
+                  ? `${textColorActive} font-bold`
+                  : `${textColor} ${textColorHover}`
+              }`}
+            >
+              Entertainment
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${showEntertainmentSubmenu && !isEntertainmentMenuClosing ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showEntertainmentSubmenu && (
+              <div className={`absolute top-full left-0 mt-1 w-32 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg z-50 ${isEntertainmentMenuClosing ? 'animate-dropdown-out' : 'animate-dropdown'}`}>
+                {entertainmentTabs.map((tab) => (
+                  <Link
+                    key={tab.key}
+                    href={`/entertainment?tab=${tab.key}`}
+                    onClick={closeEntertainmentSubmenu}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-white/40 first:rounded-t-md last:rounded-b-md transition-colors"
+                  >
+                    {tab.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Inspiration with submenu */}
+          <div className="relative" ref={inspirationRef}>
+            <button
+              onClick={toggleInspirationSubmenu}
+              className={`px-4 py-2 text-sm rounded-md transition-colors flex items-center gap-1 ${
+                isInspirationActive
+                  ? `${textColorActive} font-bold`
+                  : `${textColor} ${textColorHover}`
+              }`}
+            >
+              Inspiration
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${showInspirationSubmenu && !isInspirationMenuClosing ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showInspirationSubmenu && (
+              <div className={`absolute top-full left-0 mt-1 w-28 backdrop-blur-xl bg-white/90 border border-border rounded-md shadow-lg z-50 ${isInspirationMenuClosing ? 'animate-dropdown-out' : 'animate-dropdown'}`}>
+                {inspirationTabs.map((tab) => (
+                  <Link
+                    key={tab.key}
+                    href={`/inspiration?tab=${tab.key}`}
+                    onClick={closeInspirationSubmenu}
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-white/40 first:rounded-t-md last:rounded-b-md transition-colors"
                   >
                     {tab.label}
@@ -321,6 +474,24 @@ export function Header() {
               }`}
             >
               Health
+            </Link>
+            <Link
+              href="/entertainment"
+              onClick={() => setShowMobileMenu(false)}
+              className={`block px-3 py-3 text-base rounded-md ${
+                isEntertainmentActive ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
+              }`}
+            >
+              Entertainment
+            </Link>
+            <Link
+              href="/inspiration"
+              onClick={() => setShowMobileMenu(false)}
+              className={`block px-3 py-3 text-base rounded-md ${
+                isInspirationActive ? `${textColorActive} font-bold` : `${textColor} ${textColorHover}`
+              }`}
+            >
+              Inspiration
             </Link>
             <Link
               href="/topics"

@@ -55,7 +55,7 @@ interface Topic {
   icon: string | null;
 }
 
-type ViewMode = 'date' | 'all' | 'favorites' | 'search';
+type ViewMode = 'date' | 'all' | 'favorites' | 'tasks' | 'search';
 
 interface Props {
   selectedDate: string;
@@ -539,6 +539,11 @@ export function EntriesList({
       }
     }
 
+    // Tasks view - only show tasks
+    if (viewMode === 'tasks') {
+      return entry.customType === 'task';
+    }
+
     // Search mode filtering
     if (viewMode === 'search') {
       // Filter by topic if selected
@@ -568,8 +573,8 @@ export function EntriesList({
     return 0;
   });
 
-  // Group entries by date for "all" view
-  const entriesByDate = viewMode === 'all' || viewMode === 'favorites' || viewMode === 'search'
+  // Group entries by date for "all", "favorites", "tasks", and "search" views
+  const entriesByDate = viewMode === 'all' || viewMode === 'favorites' || viewMode === 'tasks' || viewMode === 'search'
     ? filteredEntries.reduce((acc, entry) => {
         const date = entry.entryDate || 'unknown';
         if (!acc[date]) acc[date] = [];
@@ -604,7 +609,7 @@ export function EntriesList({
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [sliderStyle, setSliderStyle] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
 
-  const VIEW_MODES = ['date', 'all', 'favorites', 'search'] as const;
+  const VIEW_MODES = ['date', 'all', 'favorites', 'tasks', 'search'] as const;
   const activeIndex = VIEW_MODES.indexOf(viewMode);
 
   // Update slider position when viewMode changes
@@ -668,6 +673,16 @@ export function EntriesList({
         </button>
         <button
           ref={(el) => { tabRefs.current[3] = el; }}
+          onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'tasks' })}
+          className={`view-tab ${viewMode === 'tasks' ? 'view-tab-active' : ''}`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+          Tasks
+        </button>
+        <button
+          ref={(el) => { tabRefs.current[4] = el; }}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'search' })}
           className={`view-tab ${viewMode === 'search' ? 'view-tab-active' : ''}`}
         >

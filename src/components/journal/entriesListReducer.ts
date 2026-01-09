@@ -58,7 +58,7 @@ export type EntriesListState = {
 
   // View state
   filterTopicId: string | null;
-  viewMode: 'date' | 'all' | 'favorites' | 'search';
+  viewMode: 'date' | 'all' | 'favorites' | 'tasks' | 'search';
   searchQuery: string;
   searchTopicId: string | null;
   isDatePickerExpanded: boolean;

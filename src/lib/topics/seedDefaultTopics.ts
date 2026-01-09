@@ -12,6 +12,9 @@ const DEFAULT_TOPICS = [
   { name: 'Event', color: '#F59E0B', icon: 'calendar' },
   { name: 'Meeting', color: '#EC4899', icon: 'users' },
   { name: 'Symptom', color: '#EF4444', icon: 'flask' },
+  { name: 'Music', color: '#EC4899', icon: 'music' },
+  { name: 'Books', color: '#8B5CF6', icon: 'book' },
+  { name: 'TV/Movies', color: '#F59E0B', icon: 'film' },
 ];
 
 // Optional feature topics - only added when enabled in settings
