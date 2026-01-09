@@ -368,6 +368,107 @@ export function calculateExerciseFrequency(
     .sort((a, b) => a.period.localeCompare(b.period));
 }
 
+// Symptom co-occurrence result
+export interface SymptomCoOccurrenceResult {
+  symptom1: { name: string };
+  symptom2: { name: string };
+  coOccurrences: number;
+  totalSymptom1: number;
+  totalSymptom2: number;
+  correlation: number; // percentage of times they occur together
+  avgTimeBetween: number; // average minutes between occurrences
+}
+
+// Calculate symptom co-occurrences (symptoms that tend to occur together)
+export function calculateSymptomCoOccurrences(
+  symptoms: DecryptedSymptom[],
+  timeWindowHours: number = 24
+): SymptomCoOccurrenceResult[] {
+  const coOccurrences: Map<string, {
+    symptom1: string;
+    symptom2: string;
+    count: number;
+    timeGaps: number[];
+  }> = new Map();
+
+  const symptomCounts: Map<string, number> = new Map();
+
+  // Count occurrences of each symptom
+  for (const symptom of symptoms) {
+    const key = symptom.name.toLowerCase();
+    symptomCounts.set(key, (symptomCounts.get(key) || 0) + 1);
+  }
+
+  // Find co-occurrences within time window
+  for (let i = 0; i < symptoms.length; i++) {
+    const symptom1 = symptoms[i];
+    const time1 = new Date(symptom1.occurredAt).getTime();
+    const name1 = symptom1.name.toLowerCase();
+
+    for (let j = i + 1; j < symptoms.length; j++) {
+      const symptom2 = symptoms[j];
+      const time2 = new Date(symptom2.occurredAt).getTime();
+      const name2 = symptom2.name.toLowerCase();
+
+      // Skip if same symptom type
+      if (name1 === name2) continue;
+
+      const timeDiff = Math.abs(time2 - time1);
+      const timeWindowMs = timeWindowHours * 60 * 60 * 1000;
+
+      // Check if symptoms occurred within time window
+      if (timeDiff <= timeWindowMs) {
+        // Create a consistent key (alphabetically sorted)
+        const [first, second] = [name1, name2].sort();
+        const coOccurrenceKey = `${first}:${second}`;
+
+        if (!coOccurrences.has(coOccurrenceKey)) {
+          coOccurrences.set(coOccurrenceKey, {
+            symptom1: first,
+            symptom2: second,
+            count: 0,
+            timeGaps: [],
+          });
+        }
+
+        const data = coOccurrences.get(coOccurrenceKey)!;
+        data.count++;
+        data.timeGaps.push(timeDiff / (60 * 1000)); // Convert to minutes
+      }
+    }
+  }
+
+  // Calculate results
+  const results: SymptomCoOccurrenceResult[] = [];
+
+  for (const [, data] of coOccurrences) {
+    const totalSymptom1 = symptomCounts.get(data.symptom1) || 1;
+    const totalSymptom2 = symptomCounts.get(data.symptom2) || 1;
+    // Correlation based on smaller count (more meaningful)
+    const minTotal = Math.min(totalSymptom1, totalSymptom2);
+    const correlation = Math.round((data.count / minTotal) * 100);
+    const avgTimeBetween = data.timeGaps.length > 0
+      ? Math.round(data.timeGaps.reduce((a, b) => a + b, 0) / data.timeGaps.length)
+      : 0;
+
+    // Only include co-occurrences with at least 2 instances and 25% correlation
+    if (data.count >= 2 && correlation >= 25) {
+      results.push({
+        symptom1: { name: data.symptom1.charAt(0).toUpperCase() + data.symptom1.slice(1) },
+        symptom2: { name: data.symptom2.charAt(0).toUpperCase() + data.symptom2.slice(1) },
+        coOccurrences: data.count,
+        totalSymptom1,
+        totalSymptom2,
+        correlation,
+        avgTimeBetween,
+      });
+    }
+  }
+
+  // Sort by correlation percentage descending
+  return results.sort((a, b) => b.correlation - a.correlation);
+}
+
 // Calculate exercise-symptom correlation (exercise before symptom)
 export function calculateExerciseCorrelations(
   symptoms: DecryptedSymptom[],

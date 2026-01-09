@@ -28,6 +28,8 @@ interface DecryptedSymptomFields {
   notes?: string;
 }
 
+type ViewMode = 'today' | 'week' | 'month' | 'all';
+
 interface Props {
   selectedDate: string;
   onDataChange: () => void;
@@ -39,6 +41,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
   const [symptoms, setSymptoms] = useState<SymptomEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [decryptedSymptoms, setDecryptedSymptoms] = useState<Map<string, { name: string; fields: DecryptedSymptomFields }>>(new Map());
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
   const { decryptData, isKeyReady } = useEncryption();
   const { accentColor } = useAccentColor();
 
@@ -46,19 +49,83 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
     router.push(`/?entry=${entryId}`);
   };
 
+  // Normalize date to YYYY-MM-DD string format
+  const normalizeDate = (dateValue: string | Date | null | undefined): string => {
+    if (!dateValue) return 'unknown';
+
+    if (typeof dateValue === 'string') {
+      if (dateValue.includes('T')) {
+        return dateValue.split('T')[0];
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        return dateValue;
+      }
+    }
+
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return 'unknown';
+    return date.toISOString().split('T')[0];
+  };
+
+  // Get date range based on view mode
+  const getDateRange = useCallback(() => {
+    const today = new Date(selectedDate + 'T12:00:00');
+
+    switch (viewMode) {
+      case 'today':
+        return { start: selectedDate, end: selectedDate };
+      case 'week': {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(today.getDate() - 7);
+        return { start: weekAgo.toISOString().split('T')[0], end: selectedDate };
+      }
+      case 'month': {
+        const monthAgo = new Date(today);
+        monthAgo.setMonth(today.getMonth() - 1);
+        return { start: monthAgo.toISOString().split('T')[0], end: selectedDate };
+      }
+      case 'all':
+      default:
+        return null; // No date filter
+    }
+  }, [viewMode, selectedDate]);
+
   const fetchSymptoms = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch from entries API with customType filter
-      const response = await fetch(`/api/entries?customType=symptom&date=${selectedDate}`);
+      const dateRange = getDateRange();
+      let url = '/api/entries?customType=symptom';
+
+      // Only use date filter for 'today' view, otherwise fetch all and filter client-side
+      if (viewMode === 'today' && dateRange) {
+        url += `&date=${dateRange.end}`;
+      } else {
+        url += '&all=true';
+      }
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
       const data = await response.json();
-      setSymptoms(data.entries || []);
+      let entries: SymptomEntry[] = data.entries || [];
+
+      // Filter by date range for week/month views
+      if (dateRange && viewMode !== 'today' && viewMode !== 'all') {
+        entries = entries.filter(entry => {
+          const entryDate = normalizeDate(entry.entryDate);
+          if (entryDate === 'unknown') return false;
+          return entryDate >= dateRange.start && entryDate <= dateRange.end;
+        });
+      }
+
+      setSymptoms(entries);
     } catch (error) {
       console.error('Failed to fetch symptoms:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedDate]);
+  }, [getDateRange, viewMode]);
 
   const decryptSymptoms = useCallback(async () => {
     if (!isKeyReady || symptoms.length === 0) return;
@@ -113,6 +180,19 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
+  // Group entries by date
+  const entriesByDate = symptoms.reduce((acc, entry) => {
+    let date = normalizeDate(entry.entryDate);
+    if (date === 'unknown' && entry.createdAt) {
+      date = normalizeDate(entry.createdAt);
+    }
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(entry);
+    return acc;
+  }, {} as Record<string, SymptomEntry[]>);
+
+  const sortedDates = Object.keys(entriesByDate).sort((a, b) => b.localeCompare(a));
+
   if (loading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
@@ -125,75 +205,126 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
     <div className="px-8 py-4 pb-12">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">Symptom Log</h2>
-        <span className="text-gray-600">{formatDateDisplay(selectedDate)}</span>
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
         Add symptoms from the journal by creating an entry with the &quot;symptom&quot; topic.
       </p>
 
+      {/* View Mode Selector */}
+      <div className="mb-4">
+        <div className="flex gap-1 p-1 bg-white/30 backdrop-blur-sm rounded-lg border border-border">
+          {([
+            { key: 'today', label: 'Today' },
+            { key: 'week', label: 'Week' },
+            { key: 'month', label: 'Month' },
+            { key: 'all', label: 'All' },
+          ] as const).map((filter) => (
+            <button
+              key={filter.key}
+              onClick={() => setViewMode(filter.key)}
+              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === filter.key
+                  ? 'bg-white shadow-sm text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats Summary */}
+      {symptoms.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
+            <div className="text-2xl font-bold" style={{ color: accentColor }}>{symptoms.length}</div>
+            <div className="text-sm text-gray-500">Symptoms Logged</div>
+          </div>
+          <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
+            <div className="text-2xl font-bold" style={{ color: accentColor }}>
+              {Array.from(decryptedSymptoms.values()).length > 0
+                ? (Array.from(decryptedSymptoms.values()).reduce((sum, s) => sum + (s.fields.severity || 0), 0) / decryptedSymptoms.size).toFixed(1)
+                : '-'}
+            </div>
+            <div className="text-sm text-gray-500">Avg Severity</div>
+          </div>
+        </div>
+      )}
+
       {symptoms.length === 0 ? (
         <div className="text-center py-12 backdrop-blur-md bg-white/70 rounded-lg border border-border">
-          <p className="text-gray-500">No symptoms logged</p>
+          <div className="text-4xl mb-2">🩺</div>
+          <p className="text-gray-500">No symptoms logged {viewMode === 'today' ? 'today' : viewMode === 'all' ? 'yet' : `in the past ${viewMode}`}</p>
           <p className="text-sm text-gray-400 mt-1">
             Create an entry with the &quot;symptom&quot; topic to track symptoms
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {symptoms.map((symptom) => {
-            const data = decryptedSymptoms.get(symptom.id);
-            const severity = data?.fields.severity || 5;
+        <div className="space-y-6">
+          {sortedDates.map((date) => (
+            <div key={date}>
+              <h3 className="text-sm font-medium text-gray-500 mb-2">{formatDateDisplay(date)}</h3>
+              <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border overflow-hidden">
+                <div className="divide-y divide-border">
+                  {entriesByDate[date].map((symptom) => {
+                    const data = decryptedSymptoms.get(symptom.id);
+                    const severity = data?.fields.severity || 5;
 
-            return (
-              <div key={symptom.id} className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-900">{data?.name || 'Loading...'}</h3>
-                      {data?.fields.occurredAt && (
-                        <span className="text-sm text-gray-500">
-                          {formatTime(data.fields.occurredAt)}
-                        </span>
-                      )}
-                    </div>
+                    return (
+                      <div key={symptom.id} className="px-4 py-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-gray-900">{data?.name || 'Loading...'}</h3>
+                              {data?.fields.occurredAt && (
+                                <span className="text-sm text-gray-500">
+                                  {formatTime(data.fields.occurredAt)}
+                                </span>
+                              )}
+                            </div>
 
-                    {/* Severity bar */}
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Severity:</span>
-                      <div className="flex-1 max-w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${severity * 10}%`, backgroundColor: accentColor }}
-                        />
+                            {/* Severity bar */}
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-sm text-gray-600">Severity:</span>
+                              <div className="flex-1 max-w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${severity * 10}%`, backgroundColor: accentColor }}
+                                />
+                              </div>
+                              <span className="text-sm text-gray-600">{severity}/10</span>
+                            </div>
+
+                            {data?.fields.duration && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                Duration: {data.fields.duration} min
+                              </p>
+                            )}
+
+                            {data?.fields.notes && (
+                              <p className="text-sm text-gray-500 mt-1">{data.fields.notes}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleEditSymptom(symptom.id)}
+                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors ml-2"
+                            title="Edit symptom"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-sm text-gray-600">{severity}/10</span>
-                    </div>
-
-                    {data?.fields.duration && (
-                      <p className="text-sm text-gray-600 mt-1">
-                        Duration: {data.fields.duration} min
-                      </p>
-                    )}
-
-                    {data?.fields.notes && (
-                      <p className="text-sm text-gray-500 mt-1">{data.fields.notes}</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleEditSymptom(symptom.id)}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors ml-2"
-                    title="Edit symptom"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>

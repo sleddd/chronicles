@@ -14,11 +14,13 @@ import {
   calculateExerciseCorrelations,
   calculateExerciseImpact,
   calculateExerciseFrequency,
+  calculateSymptomCoOccurrences,
   CorrelationResult,
   FrequencyData,
   SeverityTrendData,
   ExerciseImpactResult,
   ExerciseFrequencyData,
+  SymptomCoOccurrenceResult,
   DecryptedSymptom,
   DecryptedFood,
   DecryptedMedicationLog,
@@ -66,6 +68,7 @@ export function ReportingTab({ refreshKey }: Props) {
   const [severityTrend, setSeverityTrend] = useState<SeverityTrendData[]>([]);
   const [exerciseImpact, setExerciseImpact] = useState<ExerciseImpactResult[]>([]);
   const [exerciseFrequency, setExerciseFrequency] = useState<ExerciseFrequencyData[]>([]);
+  const [symptomCoOccurrences, setSymptomCoOccurrences] = useState<SymptomCoOccurrenceResult[]>([]);
 
   const getDateRange = useCallback(() => {
     if (period === 'custom' && customStartDate && customEndDate) {
@@ -107,6 +110,9 @@ export function ReportingTab({ refreshKey }: Props) {
       const { startDate, endDate } = getDateRange();
 
       const response = await fetch(`/api/medical/reports?type=all&startDate=${startDate}&endDate=${endDate}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
       const data = await response.json();
       const report = data.report || {};
 
@@ -275,10 +281,13 @@ export function ReportingTab({ refreshKey }: Props) {
       setCorrelations([...foodMedCorrelations, ...exerciseCorrelations]);
       setSymptomFrequency(calculateSymptomFrequency(symptoms, period === 'year' ? 'month' : 'day'));
       setSeverityTrend(calculateSeverityTrend(symptoms, period === 'year' ? 'week' : 'day'));
+      // Calculate symptom co-occurrences
+      setSymptomCoOccurrences(calculateSymptomCoOccurrences(symptoms));
     } else {
       setCorrelations([]);
       setSymptomFrequency([]);
       setSeverityTrend([]);
+      setSymptomCoOccurrences([]);
     }
 
     // Calculate exercise-specific analytics
@@ -395,6 +404,43 @@ export function ReportingTab({ refreshKey }: Props) {
             data={correlations}
             title="Correlations Detected"
           />
+
+          {/* Symptom Co-occurrences */}
+          {symptomCoOccurrences.length > 0 && (
+            <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
+              <h3 className="font-medium text-gray-900 mb-2">Symptom Co-occurrences</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Symptoms that tend to occur together within 24 hours
+              </p>
+              <div className="space-y-3">
+                {symptomCoOccurrences.slice(0, 10).map((coOccurrence, index) => {
+                  const strength = coOccurrence.correlation >= 75 ? 'strong' : coOccurrence.correlation >= 50 ? 'moderate' : 'weak';
+                  const strengthColor = strength === 'strong' ? 'bg-red-100 text-red-700' : strength === 'moderate' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700';
+
+                  return (
+                    <div key={index} className="flex items-center justify-between p-3 backdrop-blur-md bg-white/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-700">{coOccurrence.symptom1.name}</span>
+                        <span className="text-gray-400">↔</span>
+                        <span className="text-gray-700">{coOccurrence.symptom2.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${strengthColor}`}>
+                          {coOccurrence.correlation}%
+                        </span>
+                        <div className="text-right text-xs text-gray-500">
+                          <div>{coOccurrence.coOccurrences} co-occurrences</div>
+                          {coOccurrence.avgTimeBetween > 0 && (
+                            <div>~{coOccurrence.avgTimeBetween < 60 ? `${coOccurrence.avgTimeBetween}m` : `${Math.round(coOccurrence.avgTimeBetween / 60)}h`} apart</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Symptom Frequency */}
           <FrequencyChart
