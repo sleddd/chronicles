@@ -6,6 +6,14 @@ import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { TopicIcon } from '@/components/topics/IconPicker';
 import { entriesListReducer, initialEntriesListState } from './entriesListReducer';
+import { TaskFields } from '@/components/forms/TaskFields';
+import { GoalFields } from '@/components/forms/GoalFields';
+import { MeetingFields } from '@/components/forms/MeetingFields';
+import { EventFields } from '@/components/forms/EventFields';
+import { MedicationFields } from '@/components/forms/MedicationFields';
+import { ExerciseFields } from '@/components/forms/ExerciseFields';
+import { FoodFields } from '@/components/forms/FoodFields';
+import { SymptomFields } from '@/components/forms/SymptomFields';
 import {
   format,
   startOfMonth,
@@ -821,354 +829,67 @@ export function EntriesList({
 
         {/* Custom fields based on selected topic - shown below text input */}
         {quickEntryTopicName === 'task' && (
-          <div className="custom-fields-body-no-border">
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={state.task.isAutoMigrating}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_TASK', payload: { isAutoMigrating: e.target.checked } })}
-              />
-              Auto-migrate
-            </label>
-          </div>
+          <TaskFields
+            fields={state.task}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_TASK', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {quickEntryTopicName === 'goal' && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <select
-                value={state.goal.type}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { type: e.target.value } })}
-                className="select-glass select-sm"
-              >
-                <option value="personal">Personal</option>
-                <option value="professional">Professional</option>
-                <option value="health">Health</option>
-                <option value="financial">Financial</option>
-                <option value="educational">Educational</option>
-              </select>
-              <select
-                value={state.goal.status}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { status: e.target.value } })}
-                className="select-glass select-sm"
-              >
-                <option value="not_started">Not Started</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="on_hold">On Hold</option>
-              </select>
-              <div className="field-inline">
-                <label className="field-label">Target:</label>
-                <input
-                  type="date"
-                  value={state.goal.targetDate}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { targetDate: e.target.value } })}
-                  className="input-glass input-sm"
-                />
-              </div>
-            </div>
-          </div>
+          <GoalFields
+            fields={state.goal}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {quickEntryTopicName === 'meeting' && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <div className="field-inline">
-                <label className="field-label">Start:</label>
-                <input
-                  type="date"
-                  value={state.meeting.startDate}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { startDate: e.target.value } })}
-                  placeholder={selectedDate || today}
-                  className="input-glass input-sm"
-                />
-                <input
-                  type="time"
-                  value={state.meeting.startTime}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { startTime: e.target.value } })}
-                  className="input-glass input-sm"
-                />
-              </div>
-              <div className="field-inline">
-                <label className="field-label">End:</label>
-                <input
-                  type="date"
-                  value={state.meeting.endDate}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { endDate: e.target.value } })}
-                  placeholder={state.meeting.startDate || selectedDate || today}
-                  className="input-glass input-sm"
-                />
-                <input
-                  type="time"
-                  value={state.meeting.endTime}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { endTime: e.target.value } })}
-                  className="input-glass input-sm"
-                />
-              </div>
-            </div>
-            <div className="field-row">
-              <input
-                type="text"
-                value={state.meeting.location}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { location: e.target.value } })}
-                placeholder="Location"
-                className="input-glass input-sm flex-1 min-w-[100px]"
-              />
-              <input
-                type="text"
-                value={state.meeting.topic}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { topic: e.target.value } })}
-                placeholder="Meeting topic"
-                className="input-glass input-sm flex-1 min-w-[120px]"
-              />
-            </div>
-          </div>
+          <MeetingFields
+            fields={state.meeting}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {quickEntryTopicName === 'event' && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <div className="field-inline">
-                <label className="field-label">Start:</label>
-                <input
-                  type="date"
-                  value={state.event.startDate}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { startDate: e.target.value } })}
-                  placeholder={selectedDate || today}
-                  className="input-glass input-sm"
-                />
-                <input
-                  type="time"
-                  value={state.event.startTime}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { startTime: e.target.value } })}
-                  className="input-glass input-sm"
-                />
-              </div>
-              <div className="field-inline">
-                <label className="field-label">End:</label>
-                <input
-                  type="date"
-                  value={state.event.endDate}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { endDate: e.target.value } })}
-                  placeholder={state.event.startDate || selectedDate || today}
-                  className="input-glass input-sm"
-                />
-                <input
-                  type="time"
-                  value={state.event.endTime}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { endTime: e.target.value } })}
-                  className="input-glass input-sm"
-                />
-              </div>
-            </div>
-            <div className="field-row">
-              <input
-                type="text"
-                value={state.event.location}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { location: e.target.value } })}
-                placeholder="Location"
-                className="input-glass input-sm flex-1 min-w-[100px]"
-              />
-            </div>
-          </div>
+          <EventFields
+            fields={state.event}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {quickEntryTopicName === 'medication' && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <input
-                type="text"
-                value={state.medication.dosage}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { dosage: e.target.value } })}
-                placeholder="Dosage (e.g., 10mg)"
-                className="input-glass input-sm w-32"
-              />
-              <select
-                value={state.medication.frequency}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { frequency: e.target.value } })}
-                className="select-glass select-sm"
-              >
-                <option value="once_daily">Once Daily</option>
-                <option value="twice_daily">Twice Daily</option>
-                <option value="three_times_daily">3x Daily</option>
-                <option value="four_times_daily">4x Daily</option>
-                <option value="as_needed">As Needed</option>
-                <option value="weekly">Weekly</option>
-              </select>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={state.medication.isActive}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { isActive: e.target.checked } })}
-                />
-                Active
-              </label>
-            </div>
-            <div className="field-row">
-              <label className="field-label">Schedule times:</label>
-              {state.medication.scheduleTimes.map((time: string, idx: number) => (
-                <div key={idx} className="schedule-time-item">
-                  <input
-                    type="time"
-                    value={time}
-                    onChange={(e) => {
-                      const newTimes = [...state.medication.scheduleTimes];
-                      newTimes[idx] = e.target.value;
-                      dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { scheduleTimes: newTimes } });
-                    }}
-                    className="input-glass input-sm"
-                  />
-                  {state.medication.scheduleTimes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { scheduleTimes: state.medication.scheduleTimes.filter((_: string, i: number) => i !== idx) } })}
-                      className="schedule-time-remove"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { scheduleTimes: [...state.medication.scheduleTimes, '12:00'] } })}
-                className="schedule-time-add"
-              >
-                + Add time
-              </button>
-            </div>
-          </div>
+          <MedicationFields
+            fields={state.medication}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {quickEntryTopicName === 'exercise' && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <select
-                value={state.exercise.type}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { type: e.target.value } })}
-                className="select-glass select-sm"
-              >
-                <option value="">Type...</option>
-                <option value="walking">Walking</option>
-                <option value="running">Running</option>
-                <option value="cycling">Cycling</option>
-                <option value="swimming">Swimming</option>
-                <option value="yoga">Yoga</option>
-                <option value="strength">Strength</option>
-                <option value="cardio">Cardio</option>
-                <option value="hiking">Hiking</option>
-                <option value="other">Other</option>
-              </select>
-              <div className="field-inline">
-                <input
-                  type="number"
-                  value={state.exercise.duration}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { duration: e.target.value } })}
-                  placeholder="Duration"
-                  className="input-glass input-sm w-20"
-                  min="0"
-                />
-                <span className="field-unit">min</span>
-              </div>
-              <select
-                value={state.exercise.intensity}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { intensity: e.target.value } })}
-                className="select-glass select-sm"
-              >
-                <option value="low">Low intensity</option>
-                <option value="medium">Medium intensity</option>
-                <option value="high">High intensity</option>
-              </select>
-            </div>
-            <div className="field-row">
-              <div className="field-inline">
-                <input
-                  type="number"
-                  value={state.exercise.distance}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { distance: e.target.value } })}
-                  placeholder="Distance"
-                  className="input-glass input-sm w-20"
-                  min="0"
-                  step="0.1"
-                />
-                <select
-                  value={state.exercise.distanceUnit}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { distanceUnit: e.target.value } })}
-                  className="select-glass select-sm"
-                >
-                  <option value="miles">mi</option>
-                  <option value="km">km</option>
-                  <option value="meters">m</option>
-                </select>
-              </div>
-              <div className="field-inline">
-                <input
-                  type="number"
-                  value={state.exercise.calories}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { calories: e.target.value } })}
-                  placeholder="Calories"
-                  className="input-glass input-sm w-20"
-                  min="0"
-                />
-                <span className="field-unit">cal</span>
-              </div>
-            </div>
-          </div>
+          <ExerciseFields
+            fields={state.exercise}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {quickEntryTopicName === 'food' && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <select
-                value={state.food.mealType}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_FOOD', payload: { mealType: e.target.value } })}
-                className="select-glass select-sm"
-              >
-                <option value="">Meal type...</option>
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="dinner">Dinner</option>
-                <option value="snack">Snack</option>
-              </select>
-              <input
-                type="text"
-                value={state.food.ingredients}
-                onChange={(e) => dispatch({ type: 'UPDATE_QF_FOOD', payload: { ingredients: e.target.value } })}
-                placeholder="Ingredients (comma separated)"
-                className="input-glass input-sm flex-1 min-w-[150px]"
-              />
-            </div>
-          </div>
+          <FoodFields
+            fields={state.food}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_FOOD', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {(quickEntryTopicName === 'symptom' || quickEntryTopicName === 'symptoms') && (
-          <div className="custom-fields-body-no-border">
-            <div className="field-row">
-              <div className="field-inline">
-                <label className="field-label">Severity:</label>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={state.symptom.severity}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_SYMPTOM', payload: { severity: parseInt(e.target.value) } })}
-                  className="range-input w-24"
-                />
-                <span className="range-value">{state.symptom.severity}</span>
-              </div>
-              <div className="field-inline">
-                <input
-                  type="number"
-                  value={state.symptom.duration}
-                  onChange={(e) => dispatch({ type: 'UPDATE_QF_SYMPTOM', payload: { duration: e.target.value } })}
-                  placeholder="Duration"
-                  className="input-glass input-sm w-20"
-                  min="0"
-                />
-                <span className="field-unit">min</span>
-              </div>
-            </div>
-          </div>
+          <SymptomFields
+            fields={state.symptom}
+            onChange={(key, value) => dispatch({ type: 'UPDATE_QF_SYMPTOM', payload: { [key]: value } })}
+            glass
+          />
         )}
 
         {/* Mobile Add button - full width at bottom */}

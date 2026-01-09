@@ -16,6 +16,17 @@
 //
 // Use CLEAR_DECRYPTED_DATA action to clear sensitive data safely.
 
+import type {
+  TaskFields,
+  GoalFields,
+  MeetingFields,
+  EventFields,
+  MedicationFields,
+  ExerciseFields,
+  FoodFields,
+  SymptomFields,
+} from '@/lib/hooks/useCustomFields';
+
 interface TaskFieldsData {
   isCompleted: boolean;
   isAutoMigrating: boolean;
@@ -64,72 +75,15 @@ export type EntriesListState = {
   showTopicDropdown: boolean;
   topicSearchQuery: string;
 
-  // Quick entry custom fields - Task
-  task: {
-    isCompleted: boolean;
-    isAutoMigrating: boolean;
-  };
-
-  // Quick entry custom fields - Goal
-  goal: {
-    type: string;
-    status: string;
-    targetDate: string;
-  };
-
-  // Quick entry custom fields - Meeting
-  meeting: {
-    startDate: string;
-    startTime: string;
-    endDate: string;
-    endTime: string;
-    location: string;
-    address: string;
-    phone: string;
-    topic: string;
-    attendees: string;
-  };
-
-  // Quick entry custom fields - Event
-  event: {
-    startDate: string;
-    startTime: string;
-    endDate: string;
-    endTime: string;
-    location: string;
-    address: string;
-    phone: string;
-  };
-
-  // Quick entry custom fields - Medication
-  medication: {
-    dosage: string;
-    frequency: string;
-    scheduleTimes: string[];
-    isActive: boolean;
-  };
-
-  // Quick entry custom fields - Exercise
-  exercise: {
-    type: string;
-    duration: string;
-    intensity: string;
-    distance: string;
-    distanceUnit: string;
-    calories: string;
-  };
-
-  // Quick entry custom fields - Food
-  food: {
-    mealType: string;
-    ingredients: string;
-  };
-
-  // Quick entry custom fields - Symptom
-  symptom: {
-    severity: number;
-    duration: string;
-  };
+  // Quick entry custom fields - use types from useCustomFields
+  task: TaskFields;
+  goal: GoalFields;
+  meeting: MeetingFields;
+  event: EventFields;
+  medication: MedicationFields;
+  exercise: ExerciseFields;
+  food: FoodFields;
+  symptom: SymptomFields;
 };
 
 export type EntriesListAction =
@@ -192,20 +146,18 @@ export const initialEntriesListState: EntriesListState = {
   showTopicDropdown: false,
   topicSearchQuery: '',
 
-  // Quick entry custom fields - Task
+  // Quick entry custom fields - use defaults from useCustomFields
   task: {
     isCompleted: false,
     isAutoMigrating: true,
   },
 
-  // Quick entry custom fields - Goal
   goal: {
-    type: 'personal',
-    status: 'not_started',
+    type: 'short_term',
+    status: 'active',
     targetDate: '',
   },
 
-  // Quick entry custom fields - Meeting
   meeting: {
     startDate: '',
     startTime: '09:00',
@@ -216,9 +168,9 @@ export const initialEntriesListState: EntriesListState = {
     phone: '',
     topic: '',
     attendees: '',
+    notes: '',
   },
 
-  // Quick entry custom fields - Event
   event: {
     startDate: '',
     startTime: '09:00',
@@ -227,36 +179,41 @@ export const initialEntriesListState: EntriesListState = {
     location: '',
     address: '',
     phone: '',
+    notes: '',
   },
 
-  // Quick entry custom fields - Medication
   medication: {
     dosage: '',
     frequency: 'once_daily',
     scheduleTimes: ['08:00'],
     isActive: true,
+    notes: '',
   },
 
-  // Quick entry custom fields - Exercise
   exercise: {
-    type: '',
+    type: 'cardio',
+    otherType: '',
     duration: '',
     intensity: 'medium',
     distance: '',
     distanceUnit: 'miles',
     calories: '',
+    performedAt: '',
+    notes: '',
   },
 
-  // Quick entry custom fields - Food
   food: {
-    mealType: '',
+    mealType: 'breakfast',
+    consumedAt: '',
     ingredients: '',
+    notes: '',
   },
 
-  // Quick entry custom fields - Symptom
   symptom: {
     severity: 5,
+    occurredAt: '',
     duration: '',
+    notes: '',
   },
 };
 
