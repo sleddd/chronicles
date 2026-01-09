@@ -15,8 +15,8 @@ interface Entry {
   id: string;
   encryptedContent: string;
   iv: string;
-  entryDate: string;
-  createdAt: string;
+  entryDate: string | Date | null;
+  createdAt: string | Date;
 }
 
 interface Props {
@@ -116,14 +116,47 @@ export function TopicEntriesTab({ topicName, refreshKey }: Props) {
     decryptEntries();
   }, [decryptEntries]);
 
+  // Normalize date to YYYY-MM-DD string format
+  const normalizeDate = (dateValue: string | Date | null | undefined): string => {
+    if (!dateValue) return 'unknown';
+
+    // If it's already a string in YYYY-MM-DD format, return it
+    if (typeof dateValue === 'string') {
+      // Check if it's an ISO date string with time component
+      if (dateValue.includes('T')) {
+        return dateValue.split('T')[0];
+      }
+      // Already in YYYY-MM-DD format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        return dateValue;
+      }
+    }
+
+    // If it's a Date object or other format, convert it
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return 'unknown';
+
+    // Format as YYYY-MM-DD
+    return date.toISOString().split('T')[0];
+  };
+
   const formatDate = (dateStr: string) => {
+    if (!dateStr || dateStr === 'unknown') {
+      return 'Unknown Date';
+    }
     const date = new Date(dateStr + 'T12:00:00');
+    if (isNaN(date.getTime())) {
+      return 'Unknown Date';
+    }
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // Group entries by date
+  // Group entries by date - use entryDate, fall back to createdAt date portion
   const entriesByDate = entries.reduce((acc, entry) => {
-    const date = entry.entryDate || 'unknown';
+    let date = normalizeDate(entry.entryDate);
+    if (date === 'unknown' && entry.createdAt) {
+      date = normalizeDate(entry.createdAt);
+    }
     if (!acc[date]) acc[date] = [];
     acc[date].push(entry);
     return acc;

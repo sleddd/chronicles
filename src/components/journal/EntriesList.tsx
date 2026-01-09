@@ -105,6 +105,7 @@ export function EntriesList({
     favoriteIds,
     filterTopicId,
     viewMode,
+    taskFilter,
     searchQuery,
     searchTopicId,
     isDatePickerExpanded,
@@ -276,10 +277,13 @@ export function EntriesList({
     if (!currentFields) return;
 
     try {
-      // Encrypt all task fields (isCompleted with new value, others unchanged)
+      // When marking as completed, also disable auto-migration
+      const newAutoMigrating = completed ? false : currentFields.isAutoMigrating;
+
+      // Encrypt all task fields (isCompleted with new value, auto-migrate disabled if completed)
       const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: completed });
       const inProgressField = JSON.stringify({ fieldKey: 'isInProgress', value: currentFields.isInProgress });
-      const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: currentFields.isAutoMigrating });
+      const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: newAutoMigrating });
       const enc1 = await encryptData(completedField);
       const enc2 = await encryptData(inProgressField);
       const enc3 = await encryptData(migrateField);
@@ -303,7 +307,7 @@ export function EntriesList({
           type: 'SET_DECRYPTED_TASK_FIELDS',
           payload: {
             ...decryptedTaskFields,
-            [entryId]: { ...currentFields, isCompleted: completed },
+            [entryId]: { ...currentFields, isCompleted: completed, isAutoMigrating: newAutoMigrating },
           },
         });
       }
@@ -539,9 +543,21 @@ export function EntriesList({
       }
     }
 
-    // Tasks view - only show tasks
+    // Tasks view - only show tasks, with optional status filter
     if (viewMode === 'tasks') {
-      return entry.customType === 'task';
+      if (entry.customType !== 'task') return false;
+
+      // Apply task status filter
+      const taskFields = decryptedTaskFields[entry.id];
+      if (taskFilter === 'completed') {
+        return taskFields?.isCompleted === true;
+      } else if (taskFilter === 'incomplete') {
+        return taskFields?.isCompleted !== true;
+      } else if (taskFilter === 'in-progress') {
+        return taskFields?.isInProgress === true && taskFields?.isCompleted !== true;
+      }
+      // 'all' - show all tasks
+      return true;
     }
 
     // Search mode filtering
@@ -609,7 +625,7 @@ export function EntriesList({
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [sliderStyle, setSliderStyle] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
 
-  const VIEW_MODES = ['date', 'all', 'favorites', 'tasks', 'search'] as const;
+  const VIEW_MODES = ['date', 'tasks', 'all', 'favorites', 'search'] as const;
   const activeIndex = VIEW_MODES.indexOf(viewMode);
 
   // Update slider position when viewMode changes
@@ -656,13 +672,20 @@ export function EntriesList({
         </button>
         <button
           ref={(el) => { tabRefs.current[1] = el; }}
+          onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'tasks' })}
+          className={`view-tab ${viewMode === 'tasks' ? 'view-tab-active' : ''}`}
+        >
+          Tasks
+        </button>
+        <button
+          ref={(el) => { tabRefs.current[2] = el; }}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'all' })}
           className={`view-tab ${viewMode === 'all' ? 'view-tab-active' : ''}`}
         >
           All
         </button>
         <button
-          ref={(el) => { tabRefs.current[2] = el; }}
+          ref={(el) => { tabRefs.current[3] = el; }}
           onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'favorites' })}
           className={`view-tab ${viewMode === 'favorites' ? 'view-tab-active' : ''}`}
         >
@@ -670,16 +693,6 @@ export function EntriesList({
             <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
           Bookmarks
-        </button>
-        <button
-          ref={(el) => { tabRefs.current[3] = el; }}
-          onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'tasks' })}
-          className={`view-tab ${viewMode === 'tasks' ? 'view-tab-active' : ''}`}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-          Tasks
         </button>
         <button
           ref={(el) => { tabRefs.current[4] = el; }}
@@ -698,6 +711,32 @@ export function EntriesList({
             onDateSelect={handleDateSelect}
             today={today}
           />
+        </div>
+      )}
+
+      {/* Task Filter Options */}
+      {viewMode === 'tasks' && (
+        <div className="mb-4 panel-expand">
+          <div className="flex gap-1 p-1 bg-white/30 backdrop-blur-sm rounded-lg border border-border">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'incomplete', label: 'To Do' },
+              { key: 'in-progress', label: 'In Progress' },
+              { key: 'completed', label: 'Done' },
+            ].map((filter) => (
+              <button
+                key={filter.key}
+                onClick={() => dispatch({ type: 'SET_TASK_FILTER', payload: filter.key as typeof taskFilter })}
+                className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  taskFilter === filter.key
+                    ? 'bg-white shadow-sm text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

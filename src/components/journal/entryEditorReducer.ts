@@ -168,7 +168,7 @@ export const initialState: EntryState = {
   task: {
     isCompleted: false,
     isInProgress: false,
-    isAutoMigrating: true,
+    isAutoMigrating: false,
     milestoneIds: [],
   },
   medication: {
@@ -273,8 +273,14 @@ export function entryReducer(state: EntryState, action: EntryAction): EntryState
     case 'UPDATE_MILESTONE':
       return { ...state, milestone: { ...state.milestone, ...action.payload } };
 
-    case 'UPDATE_TASK':
-      return { ...state, task: { ...state.task, ...action.payload } };
+    case 'UPDATE_TASK': {
+      const taskUpdates = { ...action.payload };
+      // When marking as completed, also disable auto-migration
+      if (taskUpdates.isCompleted === true) {
+        taskUpdates.isAutoMigrating = false;
+      }
+      return { ...state, task: { ...state.task, ...taskUpdates } };
+    }
 
     case 'UPDATE_MEDICATION':
       return { ...state, medication: { ...state.medication, ...action.payload } };

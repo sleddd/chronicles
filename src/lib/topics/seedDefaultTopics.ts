@@ -1,6 +1,6 @@
 'use client';
 
-import { encrypt } from '@/lib/crypto/encryption';
+import { encrypt, decrypt } from '@/lib/crypto/encryption';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
 
 // Core topics - always available
@@ -40,18 +40,34 @@ export async function seedDefaultTopics(encryptionKey: CryptoKey): Promise<boole
     }
 
     const data = await response.json();
-    const existingTopics = data.topics || [];
+    const existingTopics: Array<{ nameToken: string; encryptedName: string; iv: string }> = data.topics || [];
 
     // Check which default topics already exist by looking up their nameToken
-    const existingTokens = new Set(existingTopics.map((t: { nameToken: string }) => t.nameToken));
+    const existingTokens = new Set(existingTopics.map((t) => t.nameToken));
 
-    // Filter to only topics that don't exist yet
+    // Also decrypt all existing topic names for case-insensitive comparison
+    // This handles topics that may have been created with different casing
+    const existingNamesLower = new Set<string>();
+    for (const topic of existingTopics) {
+      try {
+        const decryptedName = await decrypt(topic.encryptedName, topic.iv, encryptionKey);
+        existingNamesLower.add(decryptedName.toLowerCase().trim());
+      } catch {
+        // Skip topics that fail to decrypt
+      }
+    }
+
+    // Filter to only topics that don't exist yet (check both token and case-insensitive name)
     const topicsToCreate = [];
     for (const topic of DEFAULT_TOPICS) {
       const token = await generateTopicToken(topic.name, encryptionKey);
-      if (!existingTokens.has(token)) {
-        topicsToCreate.push({ ...topic, nameToken: token });
+      const nameLower = topic.name.toLowerCase().trim();
+
+      // Skip if token matches OR if name matches (case-insensitive)
+      if (existingTokens.has(token) || existingNamesLower.has(nameLower)) {
+        continue;
       }
+      topicsToCreate.push({ ...topic, nameToken: token });
     }
 
     if (topicsToCreate.length === 0) {
@@ -110,11 +126,25 @@ export async function addFeatureTopic(
     }
 
     const data = await response.json();
-    const existingTopics = data.topics || [];
-    const existingTokens = new Set(existingTopics.map((t: { nameToken: string }) => t.nameToken));
+    const existingTopics: Array<{ nameToken: string; encryptedName: string; iv: string }> = data.topics || [];
+    const existingTokens = new Set(existingTopics.map((t) => t.nameToken));
+
+    // Also decrypt all existing topic names for case-insensitive comparison
+    const existingNamesLower = new Set<string>();
+    for (const topic of existingTopics) {
+      try {
+        const decryptedName = await decrypt(topic.encryptedName, topic.iv, encryptionKey);
+        existingNamesLower.add(decryptedName.toLowerCase().trim());
+      } catch {
+        // Skip topics that fail to decrypt
+      }
+    }
 
     const token = await generateTopicToken(feature.name, encryptionKey);
-    if (existingTokens.has(token)) {
+    const nameLower = feature.name.toLowerCase().trim();
+
+    // Skip if token matches OR if name matches (case-insensitive)
+    if (existingTokens.has(token) || existingNamesLower.has(nameLower)) {
       console.log(`Feature topic ${feature.name} already exists`);
       return false;
     }

@@ -59,6 +59,7 @@ export type EntriesListState = {
   // View state
   filterTopicId: string | null;
   viewMode: 'date' | 'all' | 'favorites' | 'tasks' | 'search';
+  taskFilter: 'all' | 'completed' | 'incomplete' | 'in-progress';
   searchQuery: string;
   searchTopicId: string | null;
   isDatePickerExpanded: boolean;
@@ -92,6 +93,7 @@ export type EntriesListAction =
   // View state actions
   | { type: 'SET_FILTER_TOPIC_ID'; payload: string | null }
   | { type: 'SET_VIEW_MODE'; payload: EntriesListState['viewMode'] }
+  | { type: 'SET_TASK_FILTER'; payload: EntriesListState['taskFilter'] }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
   | { type: 'SET_SEARCH_TOPIC_ID'; payload: string | null }
   | { type: 'SET_DATE_PICKER_EXPANDED'; payload: boolean }
@@ -129,6 +131,7 @@ export const initialEntriesListState: EntriesListState = {
   // View state
   filterTopicId: null,
   viewMode: 'date',
+  taskFilter: 'all',
   searchQuery: '',
   searchTopicId: null,
   isDatePickerExpanded: false,
@@ -143,7 +146,7 @@ export const initialEntriesListState: EntriesListState = {
   task: {
     isCompleted: false,
     isInProgress: false,
-    isAutoMigrating: true,
+    isAutoMigrating: false,
   },
 
   goal: {
@@ -241,6 +244,9 @@ export function entriesListReducer(
 
     case 'SET_VIEW_MODE':
       return { ...state, viewMode: action.payload };
+
+    case 'SET_TASK_FILTER':
+      return { ...state, taskFilter: action.payload };
 
     case 'SET_SEARCH_QUERY':
       return { ...state, searchQuery: action.payload };

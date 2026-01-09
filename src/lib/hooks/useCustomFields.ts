@@ -94,7 +94,7 @@ const defaultFieldsByType: Record<string, CustomFieldValues> = {
   task: {
     isCompleted: false,
     isInProgress: false,
-    isAutoMigrating: true,
+    isAutoMigrating: false,
   } as TaskFields,
   goal: {
     type: 'short_term',
