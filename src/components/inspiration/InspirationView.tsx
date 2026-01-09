@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { TopicEntriesTab } from '@/components/shared/TopicEntriesTab';
 
-type TabKey = 'research' | 'ideas';
+type TabKey = 'research' | 'ideas' | 'quotes';
 
 interface Tab {
   key: TabKey;
@@ -13,7 +13,7 @@ interface Tab {
   topicName: string;
 }
 
-const validTabs: TabKey[] = ['research', 'ideas'];
+const validTabs: TabKey[] = ['research', 'ideas', 'quotes'];
 
 export function InspirationView() {
   const searchParams = useSearchParams();
@@ -33,6 +33,7 @@ export function InspirationView() {
   const tabs: Tab[] = [
     { key: 'research', label: 'Research', topicName: 'Research' },
     { key: 'ideas', label: 'Ideas', topicName: 'Idea' },
+    { key: 'quotes', label: 'Quotes', topicName: 'Quote' },
   ];
 
   const handleDataChange = () => {

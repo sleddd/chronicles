@@ -212,6 +212,7 @@ export function Header() {
   const inspirationTabs = [
     { key: 'research', label: 'Research' },
     { key: 'ideas', label: 'Ideas' },
+    { key: 'quotes', label: 'Quotes' },
   ];
 
   return (

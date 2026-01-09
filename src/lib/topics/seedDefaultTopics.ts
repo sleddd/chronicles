@@ -15,6 +15,7 @@ const DEFAULT_TOPICS = [
   { name: 'Music', color: '#EC4899', icon: 'music' },
   { name: 'Books', color: '#8B5CF6', icon: 'book' },
   { name: 'TV/Movies', color: '#F59E0B', icon: 'film' },
+  { name: 'Quote', color: '#6366F1', icon: 'quote-left' },
 ];
 
 // Optional feature topics - only added when enabled in settings
