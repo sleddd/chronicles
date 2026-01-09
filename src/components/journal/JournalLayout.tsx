@@ -75,6 +75,7 @@ export function JournalLayout({ initialEntryId }: Props) {
               }
             }}
             today={today}
+            selectedEntryId={selectedEntryId}
           />
         </div>
       </div>

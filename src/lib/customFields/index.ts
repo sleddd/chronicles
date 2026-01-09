@@ -141,6 +141,9 @@ export async function loadTaskFields(
       case 'isCompleted':
         updates.isCompleted = parsed.value === true;
         break;
+      case 'isInProgress':
+        updates.isInProgress = parsed.value === true;
+        break;
       case 'isAutoMigrating':
         updates.isAutoMigrating = parsed.value !== false;
         break;
@@ -156,6 +159,7 @@ export async function buildTaskFields(
 ): Promise<EncryptedCustomField[]> {
   return Promise.all([
     encryptField('isCompleted', fields.isCompleted, encryptData),
+    encryptField('isInProgress', fields.isInProgress, encryptData),
     encryptField('isAutoMigrating', fields.isAutoMigrating, encryptData),
   ]);
 }

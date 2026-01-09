@@ -63,6 +63,7 @@ interface Props {
   onSelectEntry: (entryId: string | null) => void;
   onEntryCreated: (entryId?: string) => void;
   today: string;
+  selectedEntryId?: string | null;
 }
 
 export function EntriesList({
@@ -71,6 +72,7 @@ export function EntriesList({
   onSelectEntry,
   onEntryCreated,
   today,
+  selectedEntryId,
 }: Props) {
   const [state, dispatch] = useReducer(entriesListReducer, initialEntriesListState);
   const { encryptData, decryptData, isKeyReady } = useEncryption();
@@ -569,7 +571,7 @@ export function EntriesList({
   // Group entries by date for "all" view
   const entriesByDate = viewMode === 'all' || viewMode === 'favorites' || viewMode === 'search'
     ? filteredEntries.reduce((acc, entry) => {
-        const date = entry.entryDate;
+        const date = entry.entryDate || 'unknown';
         if (!acc[date]) acc[date] = [];
         acc[date].push(entry);
         return acc;
@@ -581,7 +583,7 @@ export function EntriesList({
     : [];
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr || dateStr === 'undefined' || dateStr === 'null') {
+    if (!dateStr || dateStr === 'undefined' || dateStr === 'null' || dateStr === 'unknown') {
       return 'Past entries';
     }
     const date = new Date(dateStr + 'T12:00:00');
@@ -951,6 +953,7 @@ export function EntriesList({
                 topicName={getTopicName(entry.topicId)}
                 onSelect={() => onSelectEntry(entry.id)}
                 onTopicClick={(e) => entry.topicId && handleIconClick(entry.topicId, e)}
+                isActive={selectedEntryId === entry.id}
               />
             ))}
             {/* Auto-migrated tasks section */}
@@ -970,6 +973,7 @@ export function EntriesList({
                     onTopicClick={(e) => entry.topicId && handleIconClick(entry.topicId, e)}
                     taskFields={decryptedTaskFields[entry.id]}
                     onTaskToggle={(completed: boolean) => handleTaskToggle(entry.id, completed)}
+                    isActive={selectedEntryId === entry.id}
                   />
                 ))}
               </>
@@ -1001,6 +1005,7 @@ export function EntriesList({
                       onTopicClick={(e) => entry.topicId && handleIconClick(entry.topicId, e)}
                       taskFields={entry.customType === 'task' ? decryptedTaskFields[entry.id] : undefined}
                       onTaskToggle={entry.customType === 'task' ? (completed: boolean) => handleTaskToggle(entry.id, completed) : undefined}
+                      isActive={selectedEntryId === entry.id}
                     />
                   ))}
                 </div>
@@ -1024,6 +1029,7 @@ function EntryCard({
   onTopicClick,
   taskFields,
   onTaskToggle,
+  isActive,
 }: {
   isFavorite: boolean;
   decryptedContent: string | undefined;
@@ -1033,6 +1039,7 @@ function EntryCard({
   onTopicClick: (e: React.MouseEvent) => void;
   taskFields?: { isCompleted: boolean; isInProgress: boolean; isAutoMigrating: boolean };
   onTaskToggle?: (completed: boolean) => void;
+  isActive?: boolean;
 }) {
   const { accentColor } = useAccentColor();
   const showInProgress = taskFields?.isInProgress && !taskFields.isCompleted;
@@ -1040,7 +1047,7 @@ function EntryCard({
   return (
     <div
       onClick={onSelect}
-      className="entry-card"
+      className={`entry-card ${isActive ? 'entry-card-active' : ''}`}
     >
       {(topic || showInProgress || isFavorite) && (
         <div className="entry-card-header">
@@ -1058,7 +1065,7 @@ function EntryCard({
           )}
           {showInProgress && (
             <span
-              className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+              className="text-xs px-3 py-0.5 rounded-full font-medium"
               style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
             >
               In Progress
