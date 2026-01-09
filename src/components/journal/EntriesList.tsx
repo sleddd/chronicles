@@ -689,13 +689,31 @@ export function EntriesList({
       {/* Search Input and Topic Filter */}
       {viewMode === 'search' && (
         <div className="mb-4 space-y-2 panel-expand">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => dispatch({ type: 'SET_SEARCH_QUERY', payload: e.target.value })}
-            placeholder="Search entries..."
-            className="input-glass"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => dispatch({ type: 'SET_SEARCH_QUERY', payload: e.target.value })}
+              placeholder="Search entries..."
+              className="input-glass pr-10"
+            />
+            {(searchQuery || searchTopicId) && (
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_SEARCH_QUERY', payload: '' });
+                  dispatch({ type: 'SET_SEARCH_TOPIC_ID', payload: null });
+                  dispatch({ type: 'SET_VIEW_MODE', payload: 'date' });
+                  onDateChange(today);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                title="Clear search and go to today"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
           {searchTopicId ? (
             <div className="card flex items-center gap-2 px-3 py-2">
               <TopicIcon iconName={getTopic(searchTopicId)?.icon || null} size="sm" color={accentColor} />
