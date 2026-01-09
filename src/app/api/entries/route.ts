@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
   const customType = searchParams.get('customType');
   const searchToken = searchParams.get('searchToken');
   const all = searchParams.get('all') === 'true';
+  const includeTasks = searchParams.get('includeTasks') === 'true';
 
   const client = await pool.connect();
   try {
@@ -52,9 +53,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Only filter by date if not fetching all entries
+    // When includeTasks is true, fetch entries for the date OR all tasks
     if (date && !all) {
-      query += ` AND e."entryDate" = $${paramIndex++}`;
-      params.push(date);
+      if (includeTasks) {
+        query += ` AND (e."entryDate" = $${paramIndex++} OR e."customType" = 'task')`;
+        params.push(date);
+      } else {
+        query += ` AND e."entryDate" = $${paramIndex++}`;
+        params.push(date);
+      }
     }
 
     if (customType) {

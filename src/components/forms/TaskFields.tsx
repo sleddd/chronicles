@@ -11,6 +11,7 @@ interface TaskFieldsProps {
 }
 
 export function TaskFields({ fields, onChange }: TaskFieldsProps) {
+  console.log('TaskFields - isCompleted:', fields.isCompleted, 'isAutoMigrating:', fields.isAutoMigrating);
   return (
     <div className="custom-fields-body space-y-3">
       <CheckboxField

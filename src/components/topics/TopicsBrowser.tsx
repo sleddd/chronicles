@@ -33,12 +33,21 @@ interface Topic {
   icon: string | null;
 }
 
+interface CustomField {
+  id: string;
+  entryId: string;
+  encryptedData: string;
+  iv: string;
+}
+
 interface Entry {
   id: string;
   encryptedContent: string;
   iv: string;
   topicId: string | null;
   entryDate: string;
+  customType: string | null;
+  custom_fields: CustomField[] | null;
 }
 
 const PRESET_COLORS = [
@@ -195,10 +204,11 @@ export function TopicsBrowser() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [decryptedTopics, setDecryptedTopics] = useState<Map<string, string>>(new Map());
   const [decryptedEntries, setDecryptedEntries] = useState<Map<string, string>>(new Map());
+  const [decryptedTaskFields, setDecryptedTaskFields] = useState<Map<string, { isCompleted: boolean; isAutoMigrating: boolean }>>(new Map());
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [mobileEntriesExpanded, setMobileEntriesExpanded] = useState(false);
   const { decryptData, encryptData, isKeyReady } = useEncryption();
-  const { accentColor, hoverColor } = useAccentColor();
+  const { accentColor } = useAccentColor();
 
   // CRUD state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -265,6 +275,67 @@ export function TopicsBrowser() {
     }
     setDecryptedEntries(decrypted);
   }, [entries, decryptData]);
+
+  const decryptTaskFields = useCallback(async () => {
+    const decrypted = new Map<string, { isCompleted: boolean; isAutoMigrating: boolean }>();
+    for (const entry of entries) {
+      if (entry.customType === 'task' && entry.custom_fields) {
+        let isCompleted = false;
+        let isAutoMigrating = false;
+        for (const cf of entry.custom_fields) {
+          try {
+            const fieldData = await decryptData(cf.encryptedData, cf.iv);
+            const parsed = JSON.parse(fieldData);
+            if (parsed.fieldKey === 'isCompleted') {
+              isCompleted = parsed.value === true;
+            }
+            if (parsed.fieldKey === 'isAutoMigrating') {
+              isAutoMigrating = parsed.value === true;
+            }
+          } catch {
+            // Skip failed fields
+          }
+        }
+        decrypted.set(entry.id, { isCompleted, isAutoMigrating });
+      }
+    }
+    setDecryptedTaskFields(decrypted);
+  }, [entries, decryptData]);
+
+  const handleTaskToggle = useCallback(async (entryId: string, completed: boolean) => {
+    if (!isKeyReady) return;
+
+    const currentFields = decryptedTaskFields.get(entryId);
+    if (!currentFields) return;
+
+    try {
+      const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: completed });
+      const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: currentFields.isAutoMigrating });
+      const enc1 = await encryptData(completedField);
+      const enc2 = await encryptData(migrateField);
+
+      const customFields = [
+        { encryptedData: enc1.ciphertext, iv: enc1.iv },
+        { encryptedData: enc2.ciphertext, iv: enc2.iv },
+      ];
+
+      const response = await fetch(`/api/entries/${entryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customFields }),
+      });
+
+      if (response.ok) {
+        setDecryptedTaskFields(prev => {
+          const newMap = new Map(prev);
+          newMap.set(entryId, { ...currentFields, isCompleted: completed });
+          return newMap;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to toggle task completion:', error);
+    }
+  }, [isKeyReady, encryptData, decryptedTaskFields]);
 
   // CRUD handlers
   const handleAddTopic = async () => {
@@ -388,6 +459,12 @@ export function TopicsBrowser() {
       decryptEntries();
     }
   }, [entries, isKeyReady, decryptEntries]);
+
+  useEffect(() => {
+    if (isKeyReady && entries.length > 0) {
+      decryptTaskFields();
+    }
+  }, [entries, isKeyReady, decryptTaskFields]);
 
   if (!isKeyReady) {
     return (
@@ -560,33 +637,49 @@ export function TopicsBrowser() {
             <p className="text-gray-500">No entries found.</p>
           ) : (
             <div className="space-y-4">
-              {entries.map((entry) => (
-                <Link
-                  key={entry.id}
-                  href={`/?entry=${entry.id}`}
-                  className="card-interactive block p-3 mb-[5px]"
-                >
-                  {entry.topicId && (
-                    <div className="entry-card-footer mb-2">
-                      {(() => {
-                        const topic = topics.find(t => t.id === entry.topicId);
-                        return (
-                          <span
-                            className="entry-card-topic px-2 rounded-full"
-                            style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
-                          >
-                            <TopicIcon iconName={topic?.icon || null} size="sm" color={accentColor} />
-                            {decryptedTopics.get(entry.topicId) || 'Loading...'}
-                          </span>
-                        );
-                      })()}
+              {entries.map((entry) => {
+                const taskFields = entry.customType === 'task' ? decryptedTaskFields.get(entry.id) : undefined;
+                return (
+                  <Link
+                    key={entry.id}
+                    href={`/?entry=${entry.id}`}
+                    className="card-interactive block p-3 mb-[5px]"
+                  >
+                    {entry.topicId && (
+                      <div className="entry-card-footer mb-2">
+                        {(() => {
+                          const topic = topics.find(t => t.id === entry.topicId);
+                          return (
+                            <span
+                              className="entry-card-topic px-2 rounded-full"
+                              style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                            >
+                              <TopicIcon iconName={topic?.icon || null} size="sm" color={accentColor} />
+                              {decryptedTopics.get(entry.topicId) || 'Loading...'}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    <div className="entry-card-content flex items-start gap-2">
+                      {taskFields && (
+                        <input
+                          type="checkbox"
+                          checked={taskFields.isCompleted}
+                          onChange={() => {
+                            handleTaskToggle(entry.id, !taskFields.isCompleted);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 cursor-pointer"
+                        />
+                      )}
+                      <p className={`entry-card-preview flex-1 ${taskFields?.isCompleted ? 'line-through text-gray-400' : ''}`}>
+                        {decryptedEntries.get(entry.id) || 'Decrypting...'}
+                      </p>
                     </div>
-                  )}
-                  <p className="entry-card-preview">
-                    {decryptedEntries.get(entry.id) || 'Decrypting...'}
-                  </p>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

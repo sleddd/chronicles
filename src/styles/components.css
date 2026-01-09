@@ -733,7 +733,7 @@
 }
 
 .entry-card-topic {
-  @apply inline-flex items-center gap-1.5 py-0.5 rounded-full text-xs text-gray-500;
+  @apply inline-flex items-center gap-1.5 py-0.5 rounded-full text-xs;
 }
 
 .entry-card-status {
@@ -1057,11 +1057,7 @@
 }
 
 .entry-card-topic {
-  @apply text-xs py-1 mb-[10px] rounded flex items-center gap-1 text-gray-500 transition-colors;
-}
-
-.entry-card-topic:hover {
-  @apply text-gray-700;
+  @apply text-xs py-1 mb-[10px] rounded flex items-center gap-1 transition-colors;
 }
 
 .entry-card-bookmark {

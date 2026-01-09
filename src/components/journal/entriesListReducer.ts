@@ -10,7 +10,6 @@
 // Sensitive fields include:
 // - decryptedEntries (Record<id, plaintext content>)
 // - decryptedTopics (Record<id, plaintext topic name>)
-// - taskFields (Map of decrypted task data)
 // - quickEntry (user input)
 // - All custom field quick entry data (task, goal, meeting, event, medication, etc.)
 //
@@ -26,11 +25,6 @@ import type {
   FoodFields,
   SymptomFields,
 } from '@/lib/hooks/useCustomFields';
-
-interface TaskFieldsData {
-  isCompleted: boolean;
-  isAutoMigrating: boolean;
-}
 
 export type EntriesListState = {
   // Core data
@@ -59,7 +53,7 @@ export type EntriesListState = {
   }>;
   decryptedEntries: Record<string, string>;
   decryptedTopics: Record<string, string>;
-  taskFields: Map<string, TaskFieldsData>;
+  decryptedTaskFields: Record<string, { isCompleted: boolean; isAutoMigrating: boolean }>;
   favoriteIds: Set<string>;
 
   // View state
@@ -92,8 +86,7 @@ export type EntriesListAction =
   | { type: 'SET_TOPICS'; payload: EntriesListState['topics'] }
   | { type: 'SET_DECRYPTED_ENTRIES'; payload: Record<string, string> }
   | { type: 'SET_DECRYPTED_TOPICS'; payload: Record<string, string> }
-  | { type: 'SET_TASK_FIELDS'; payload: Map<string, TaskFieldsData> }
-  | { type: 'UPDATE_TASK_FIELD'; payload: { entryId: string; fields: TaskFieldsData } }
+  | { type: 'SET_DECRYPTED_TASK_FIELDS'; payload: Record<string, { isCompleted: boolean; isAutoMigrating: boolean }> }
   | { type: 'SET_FAVORITE_IDS'; payload: Set<string> }
 
   // View state actions
@@ -130,7 +123,7 @@ export const initialEntriesListState: EntriesListState = {
   topics: [],
   decryptedEntries: {},
   decryptedTopics: {},
-  taskFields: new Map(),
+  decryptedTaskFields: {},
   favoriteIds: new Set(),
 
   // View state
@@ -235,14 +228,8 @@ export function entriesListReducer(
     case 'SET_DECRYPTED_TOPICS':
       return { ...state, decryptedTopics: action.payload };
 
-    case 'SET_TASK_FIELDS':
-      return { ...state, taskFields: action.payload };
-
-    case 'UPDATE_TASK_FIELD': {
-      const newTaskFields = new Map(state.taskFields);
-      newTaskFields.set(action.payload.entryId, action.payload.fields);
-      return { ...state, taskFields: newTaskFields };
-    }
+    case 'SET_DECRYPTED_TASK_FIELDS':
+      return { ...state, decryptedTaskFields: action.payload };
 
     case 'SET_FAVORITE_IDS':
       return { ...state, favoriteIds: action.payload };
@@ -326,7 +313,7 @@ export function entriesListReducer(
         ...state,
         decryptedEntries: {},
         decryptedTopics: {},
-        taskFields: new Map(),
+        decryptedTaskFields: {},
         // Also clear quick entry fields which may contain sensitive data
         quickEntry: '',
         task: initialEntriesListState.task,
