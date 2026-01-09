@@ -47,6 +47,7 @@ export type EntryState = {
   // Task fields
   task: {
     isCompleted: boolean;
+    isInProgress: boolean;
     isAutoMigrating: boolean;
     milestoneIds: string[];
   };
@@ -166,6 +167,7 @@ export const initialState: EntryState = {
   },
   task: {
     isCompleted: false,
+    isInProgress: false,
     isAutoMigrating: true,
     milestoneIds: [],
   },
