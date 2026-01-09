@@ -203,13 +203,22 @@ export function TopicEntriesTab({ topicName, refreshKey }: Props) {
               {entriesByDate[date].map((entry) => {
                 const content = decryptedEntries.get(entry.id) || 'Loading...';
                 return (
-                  <button
+                  <div
                     key={entry.id}
-                    onClick={() => handleEditEntry(entry.id)}
-                    className="w-full text-left p-4 bg-white/60 backdrop-blur-sm rounded-lg border border-border hover:bg-white/80 transition-colors"
+                    className="flex items-start justify-between gap-3 p-4 bg-white/60 backdrop-blur-sm rounded-lg border border-border"
                   >
-                    <p className="text-gray-900 line-clamp-2">{content}</p>
-                  </button>
+                    <p className="text-gray-900 line-clamp-2 flex-1">{content}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleEditEntry(entry.id)}
+                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                      title="Edit entry"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </div>
                 );
               })}
             </div>
