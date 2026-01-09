@@ -548,6 +548,13 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       if (response.ok) {
         dispatch({ type: 'SET_SHOW_DELETE_CONFIRM', payload: false });
         onEntrySaved();
+        // Close entry editor and show new entry view
+        if (onSelectEntry) {
+          onSelectEntry(null);
+        }
+        if (editor) {
+          editor.commands.clearContent();
+        }
       } else {
         console.error('Failed to delete entry');
       }
@@ -928,13 +935,21 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
       {/* Bottom action buttons */}
       <div className="entry-editor-actions mt-4 pt-4 border-t border-border">
-        <div>
+        <div className="flex gap-2">
           {entryId && (
             <button
               onClick={() => dispatch({ type: 'SET_SHOW_DELETE_CONFIRM', payload: true })}
               className="btn btn-danger btn-outline"
             >
               Delete
+            </button>
+          )}
+          {entryId && onSelectEntry && (
+            <button
+              onClick={() => onSelectEntry(null)}
+              className="btn btn-ghost"
+            >
+              Close
             </button>
           )}
         </div>

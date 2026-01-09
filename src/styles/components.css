@@ -149,8 +149,8 @@
 }
 
 .checkbox {
-  @apply h-4 w-4 rounded border-gray-300 text-gray-600;
-  @apply  focus:ring-offset-0;
+  @apply h-4 w-4 rounded border-gray-300 text-gray-600 bg-transparent;
+  @apply focus:ring-offset-0;
 }
 
 .radio {

@@ -53,7 +53,7 @@ export type EntriesListState = {
   }>;
   decryptedEntries: Record<string, string>;
   decryptedTopics: Record<string, string>;
-  decryptedTaskFields: Record<string, { isCompleted: boolean; isAutoMigrating: boolean }>;
+  decryptedTaskFields: Record<string, { isCompleted: boolean; isInProgress: boolean; isAutoMigrating: boolean }>;
   favoriteIds: Set<string>;
 
   // View state
@@ -86,7 +86,7 @@ export type EntriesListAction =
   | { type: 'SET_TOPICS'; payload: EntriesListState['topics'] }
   | { type: 'SET_DECRYPTED_ENTRIES'; payload: Record<string, string> }
   | { type: 'SET_DECRYPTED_TOPICS'; payload: Record<string, string> }
-  | { type: 'SET_DECRYPTED_TASK_FIELDS'; payload: Record<string, { isCompleted: boolean; isAutoMigrating: boolean }> }
+  | { type: 'SET_DECRYPTED_TASK_FIELDS'; payload: Record<string, { isCompleted: boolean; isInProgress: boolean; isAutoMigrating: boolean }> }
   | { type: 'SET_FAVORITE_IDS'; payload: Set<string> }
 
   // View state actions
@@ -142,6 +142,7 @@ export const initialEntriesListState: EntriesListState = {
   // Quick entry custom fields - use defaults from useCustomFields
   task: {
     isCompleted: false,
+    isInProgress: false,
     isAutoMigrating: true,
   },
 

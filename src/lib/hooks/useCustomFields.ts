@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 // Field value types for each custom type
 export interface TaskFields {
   isCompleted: boolean;
+  isInProgress: boolean;
   isAutoMigrating: boolean;
 }
 
@@ -92,6 +93,7 @@ export type CustomFieldValues =
 const defaultFieldsByType: Record<string, CustomFieldValues> = {
   task: {
     isCompleted: false,
+    isInProgress: false,
     isAutoMigrating: true,
   } as TaskFields,
   goal: {
@@ -204,6 +206,7 @@ export function fieldsToCustomFieldEntries(
     case 'task': {
       const taskFields = fields as TaskFields;
       entries.push({ fieldKey: 'isCompleted', value: taskFields.isCompleted });
+      entries.push({ fieldKey: 'isInProgress', value: taskFields.isInProgress });
       entries.push({ fieldKey: 'isAutoMigrating', value: taskFields.isAutoMigrating });
       break;
     }

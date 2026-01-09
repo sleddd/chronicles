@@ -168,6 +168,20 @@ body {
   .mobile-hidden {
     display: none;
   }
+
+  /* Prevent iOS Safari zoom on input focus - requires 16px minimum font size */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select,
+  .tiptap {
+    font-size: 16px !important;
+  }
 }
 
 /* Calendar cell scrollbar - always visible */
@@ -197,7 +211,7 @@ input[type="checkbox"] {
   height: 1rem;
   border: 2px solid #9ca3af;
   border-radius: 0.25rem;
-  background-color: white;
+  background-color: transparent;
   cursor: pointer;
   position: relative;
   flex-shrink: 0;

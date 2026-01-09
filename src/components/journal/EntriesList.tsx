@@ -188,10 +188,11 @@ export function EntriesList({
   }, [topics, decryptData]);
 
   const decryptTaskFields = useCallback(async () => {
-    const decrypted: Record<string, { isCompleted: boolean; isAutoMigrating: boolean }> = {};
+    const decrypted: Record<string, { isCompleted: boolean; isInProgress: boolean; isAutoMigrating: boolean }> = {};
     for (const entry of entries) {
       if (entry.customType === 'task' && entry.custom_fields) {
         let isCompleted = false;
+        let isInProgress = false;
         let isAutoMigrating = false;
         for (const cf of entry.custom_fields) {
           try {
@@ -200,6 +201,9 @@ export function EntriesList({
             if (parsed.fieldKey === 'isCompleted') {
               isCompleted = parsed.value === true;
             }
+            if (parsed.fieldKey === 'isInProgress') {
+              isInProgress = parsed.value === true;
+            }
             if (parsed.fieldKey === 'isAutoMigrating') {
               isAutoMigrating = parsed.value === true;
             }
@@ -207,8 +211,7 @@ export function EntriesList({
             // Skip failed fields
           }
         }
-        decrypted[entry.id] = { isCompleted, isAutoMigrating };
-        console.log('Decrypted task fields for', entry.id, ':', decrypted[entry.id]);
+        decrypted[entry.id] = { isCompleted, isInProgress, isAutoMigrating };
       }
     }
     dispatch({ type: 'SET_DECRYPTED_TASK_FIELDS', payload: decrypted });
@@ -265,42 +268,34 @@ export function EntriesList({
 
   // Handle task completion toggle - saves via entry PUT API
   const handleTaskToggle = useCallback(async (entryId: string, completed: boolean) => {
-    console.log('handleTaskToggle called:', entryId, completed);
-    if (!isKeyReady) {
-      console.log('Key not ready');
-      return;
-    }
+    if (!isKeyReady) return;
 
     const currentFields = decryptedTaskFields[entryId];
-    console.log('currentFields:', currentFields);
-    if (!currentFields) {
-      console.log('No current fields found');
-      return;
-    }
+    if (!currentFields) return;
 
     try {
-      // Encrypt both task fields (isCompleted with new value, isAutoMigrating unchanged)
+      // Encrypt all task fields (isCompleted with new value, others unchanged)
       const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: completed });
+      const inProgressField = JSON.stringify({ fieldKey: 'isInProgress', value: currentFields.isInProgress });
       const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: currentFields.isAutoMigrating });
       const enc1 = await encryptData(completedField);
-      const enc2 = await encryptData(migrateField);
+      const enc2 = await encryptData(inProgressField);
+      const enc3 = await encryptData(migrateField);
 
       const customFields = [
         { encryptedData: enc1.ciphertext, iv: enc1.iv },
         { encryptedData: enc2.ciphertext, iv: enc2.iv },
+        { encryptedData: enc3.ciphertext, iv: enc3.iv },
       ];
 
       // Update via existing entry PUT API
-      console.log('Sending PUT request to /api/entries/', entryId);
       const response = await fetch(`/api/entries/${entryId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customFields }),
       });
 
-      console.log('Response status:', response.status);
       if (response.ok) {
-        console.log('Update successful');
         // Update local state
         dispatch({
           type: 'SET_DECRYPTED_TASK_FIELDS',
@@ -334,13 +329,16 @@ export function EntriesList({
       const topicName = quickEntryTopicName;
 
       if (topicName === 'task') {
-        // Task fields: isCompleted, isAutoMigrating
+        // Task fields: isCompleted, isInProgress, isAutoMigrating
         const completedField = JSON.stringify({ fieldKey: 'isCompleted', value: state.task.isCompleted });
+        const inProgressField = JSON.stringify({ fieldKey: 'isInProgress', value: state.task.isInProgress });
         const migrateField = JSON.stringify({ fieldKey: 'isAutoMigrating', value: state.task.isAutoMigrating });
         const enc1 = await encryptData(completedField);
-        const enc2 = await encryptData(migrateField);
+        const enc2 = await encryptData(inProgressField);
+        const enc3 = await encryptData(migrateField);
         customFields.push({ encryptedData: enc1.ciphertext, iv: enc1.iv });
         customFields.push({ encryptedData: enc2.ciphertext, iv: enc2.iv });
+        customFields.push({ encryptedData: enc3.ciphertext, iv: enc3.iv });
       } else if (topicName === 'goal') {
         // Goal fields: type, status, targetDate, progressPercentage
         const typeField = JSON.stringify({ fieldKey: 'type', value: state.goal.type });
@@ -516,10 +514,9 @@ export function EntriesList({
       });
 
       if (response.ok) {
-        const data = await response.json();
         resetQuickEntryFields();
         fetchEntries();
-        onEntryCreated(data.entry?.id);
+        onEntryCreated();
       }
     } catch (error) {
       console.error('Failed to create quick entry:', error);
@@ -556,6 +553,17 @@ export function EntriesList({
     }
 
     return true;
+  }).sort((a, b) => {
+    // In date view, sort tasks to the bottom
+    if (viewMode === 'date') {
+      const aIsTask = a.customType === 'task';
+      const bIsTask = b.customType === 'task';
+
+      // Non-tasks first, tasks at bottom
+      if (!aIsTask && bIsTask) return -1;
+      if (aIsTask && !bIsTask) return 1;
+    }
+    return 0;
   });
 
   // Group entries by date for "all" view
@@ -933,7 +941,8 @@ export function EntriesList({
             {filteredEntries.length === 0 && (
               <p className="text-gray-500 text-sm">No entries for this date</p>
             )}
-            {filteredEntries.map((entry) => (
+            {/* Non-task entries */}
+            {filteredEntries.filter(e => e.customType !== 'task').map((entry) => (
               <EntryCard
                 key={entry.id}
                 isFavorite={favoriteIds.has(entry.id)}
@@ -942,10 +951,29 @@ export function EntriesList({
                 topicName={getTopicName(entry.topicId)}
                 onSelect={() => onSelectEntry(entry.id)}
                 onTopicClick={(e) => entry.topicId && handleIconClick(entry.topicId, e)}
-                taskFields={entry.customType === 'task' ? decryptedTaskFields[entry.id] : undefined}
-                onTaskToggle={entry.customType === 'task' ? (completed: boolean) => handleTaskToggle(entry.id, completed) : undefined}
               />
             ))}
+            {/* Auto-migrated tasks section */}
+            {filteredEntries.some(e => e.customType === 'task') && (
+              <>
+                <div className="text-xs font-medium text-gray-500 mt-4 mb-2">
+                  Auto-migrated tasks
+                </div>
+                {filteredEntries.filter(e => e.customType === 'task').map((entry) => (
+                  <EntryCard
+                    key={entry.id}
+                    isFavorite={favoriteIds.has(entry.id)}
+                    decryptedContent={decryptedEntries[entry.id]}
+                    topic={getTopic(entry.topicId)}
+                    topicName={getTopicName(entry.topicId)}
+                    onSelect={() => onSelectEntry(entry.id)}
+                    onTopicClick={(e) => entry.topicId && handleIconClick(entry.topicId, e)}
+                    taskFields={decryptedTaskFields[entry.id]}
+                    onTaskToggle={(completed: boolean) => handleTaskToggle(entry.id, completed)}
+                  />
+                ))}
+              </>
+            )}
           </>
         ) : (
           // Grouped by date view
@@ -1003,36 +1031,46 @@ function EntryCard({
   topicName: string | null;
   onSelect: () => void;
   onTopicClick: (e: React.MouseEvent) => void;
-  taskFields?: { isCompleted: boolean; isAutoMigrating: boolean };
+  taskFields?: { isCompleted: boolean; isInProgress: boolean; isAutoMigrating: boolean };
   onTaskToggle?: (completed: boolean) => void;
 }) {
   const { accentColor } = useAccentColor();
-  console.log('EntryCard taskFields:', taskFields);
+  const showInProgress = taskFields?.isInProgress && !taskFields.isCompleted;
 
   return (
     <div
       onClick={onSelect}
       className="entry-card"
     >
-      <div className="entry-card-header">
-        {topic && (
-          <button
-            type="button"
-            onClick={onTopicClick}
-            className="entry-card-topic px-2 rounded-full"
-            style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
-            title={`Filter by ${topicName}`}
-          >
-            <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
-            {topicName && <span>{topicName}</span>}
-          </button>
-        )}
-        {isFavorite && (
-          <svg className="entry-card-bookmark" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        )}
-      </div>
+      {(topic || showInProgress || isFavorite) && (
+        <div className="entry-card-header">
+          {topic && (
+            <button
+              type="button"
+              onClick={onTopicClick}
+              className="entry-card-topic px-2 rounded-full"
+              style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+              title={`Filter by ${topicName}`}
+            >
+              <TopicIcon iconName={topic.icon} size="sm" color={accentColor} />
+              {topicName && <span>{topicName}</span>}
+            </button>
+          )}
+          {showInProgress && (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+              style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+            >
+              In Progress
+            </span>
+          )}
+          {isFavorite && (
+            <svg className="entry-card-bookmark" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          )}
+        </div>
+      )}
       <div className="entry-card-content flex items-start gap-2">
         {taskFields && onTaskToggle && (
           <input
@@ -1043,7 +1081,7 @@ function EntryCard({
               onTaskToggle(!taskFields.isCompleted);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="mt-1 h-4 w-4 rounded border-gray-300 cursor-pointer"
+            className="checkbox mt-1 cursor-pointer"
           />
         )}
         <p className={`entry-card-preview flex-1 ${taskFields?.isCompleted ? 'line-through text-gray-400' : ''}`}>
