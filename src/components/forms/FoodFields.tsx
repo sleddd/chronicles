@@ -8,6 +8,7 @@ interface FoodFieldsProps {
   fields: FoodFieldValues;
   onChange: <K extends keyof FoodFieldValues>(key: K, value: FoodFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
 const mealTypeOptions = [
@@ -17,9 +18,9 @@ const mealTypeOptions = [
   { value: 'snack', label: 'Snack' },
 ];
 
-export function FoodFields({ fields, onChange, glass }: FoodFieldsProps) {
+export function FoodFields({ fields, onChange, glass, noBorder }: FoodFieldsProps) {
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <Select
         label="Meal Type"
         value={fields.mealType}

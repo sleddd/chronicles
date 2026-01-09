@@ -233,12 +233,6 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
     setViewDate(date.toISOString().split('T')[0]);
   };
 
-  const goToToday = () => {
-    setViewDate(initialDate);
-  };
-
-  const isToday = viewDate === initialDate;
-
   const formatTakenTime = (takenAt: string) => {
     // takenAt is already stored as a formatted local time string (e.g., "7:45 PM")
     return takenAt;
@@ -270,16 +264,6 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
 
         <div className="flex items-center gap-3">
           <span className="text-gray-900 font-medium">{formatDateDisplay(viewDate)}</span>
-          {!isToday && (
-            <button
-              type="button"
-              onClick={goToToday}
-              className="text-xs px-2 py-1 rounded transition-colors"
-              style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
-            >
-              Today
-            </button>
-          )}
         </div>
 
         <button
@@ -303,12 +287,12 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
               {completedDoses} of {totalDoses} doses taken ({progressPercent}%)
             </span>
           </div>
-          <div className="w-full rounded-full h-3 overflow-hidden" style={{ backgroundColor: '#e5e7eb' }}>
+          <div className="w-full rounded-full h-3 overflow-hidden bg-gray-200">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${progressPercent}%`,
-                backgroundColor: progressPercent === 100 ? '#22c55e' : accentColor,
+                backgroundColor: accentColor,
               }}
             />
           </div>

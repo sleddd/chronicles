@@ -8,11 +8,12 @@ interface MeetingFieldsProps {
   fields: MeetingFieldValues;
   onChange: <K extends keyof MeetingFieldValues>(key: K, value: MeetingFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
-export function MeetingFields({ fields, onChange, glass }: MeetingFieldsProps) {
+export function MeetingFields({ fields, onChange, glass, noBorder }: MeetingFieldsProps) {
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <DateTimeField
         label="Start"
         date={fields.startDate}

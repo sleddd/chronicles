@@ -8,6 +8,7 @@ interface MedicationFieldsProps {
   fields: MedicationFieldValues;
   onChange: <K extends keyof MedicationFieldValues>(key: K, value: MedicationFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
 const frequencyOptions = [
@@ -18,7 +19,7 @@ const frequencyOptions = [
   { value: 'custom', label: 'Custom schedule' },
 ];
 
-export function MedicationFields({ fields, onChange, glass }: MedicationFieldsProps) {
+export function MedicationFields({ fields, onChange, glass, noBorder }: MedicationFieldsProps) {
   const handleAddTime = () => {
     onChange('scheduleTimes', [...fields.scheduleTimes, '12:00']);
   };
@@ -35,7 +36,7 @@ export function MedicationFields({ fields, onChange, glass }: MedicationFieldsPr
   };
 
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <Input
         label="Dosage"
         value={fields.dosage}

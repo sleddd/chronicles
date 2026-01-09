@@ -8,6 +8,7 @@ interface GoalFieldsProps {
   fields: GoalFieldValues;
   onChange: <K extends keyof GoalFieldValues>(key: K, value: GoalFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
 const goalTypeOptions = [
@@ -21,9 +22,9 @@ const goalStatusOptions = [
   { value: 'archived', label: 'Archived' },
 ];
 
-export function GoalFields({ fields, onChange, glass }: GoalFieldsProps) {
+export function GoalFields({ fields, onChange, glass, noBorder }: GoalFieldsProps) {
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <Select
         label="Goal Type"
         value={fields.type}

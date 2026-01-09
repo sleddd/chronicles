@@ -8,9 +8,10 @@ interface SymptomFieldsProps {
   fields: SymptomFieldValues;
   onChange: <K extends keyof SymptomFieldValues>(key: K, value: SymptomFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
-export function SymptomFields({ fields, onChange, glass }: SymptomFieldsProps) {
+export function SymptomFields({ fields, onChange, glass, noBorder }: SymptomFieldsProps) {
   const getSeverityLabel = (value: number): string => {
     if (value <= 2) return `${value} - Mild`;
     if (value <= 4) return `${value} - Moderate`;
@@ -20,7 +21,7 @@ export function SymptomFields({ fields, onChange, glass }: SymptomFieldsProps) {
   };
 
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <RangeField
         label="Severity"
         value={fields.severity}

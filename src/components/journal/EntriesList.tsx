@@ -935,6 +935,7 @@ export function EntriesList({
             fields={state.task}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_TASK', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -943,6 +944,7 @@ export function EntriesList({
             fields={state.goal}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_GOAL', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -951,6 +953,7 @@ export function EntriesList({
             fields={state.meeting}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_MEETING', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -959,6 +962,7 @@ export function EntriesList({
             fields={state.event}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_EVENT', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -967,6 +971,7 @@ export function EntriesList({
             fields={state.medication}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_MEDICATION', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -975,6 +980,7 @@ export function EntriesList({
             fields={state.exercise}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_EXERCISE', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -983,6 +989,7 @@ export function EntriesList({
             fields={state.food}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_FOOD', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 
@@ -991,6 +998,7 @@ export function EntriesList({
             fields={state.symptom}
             onChange={(key, value) => dispatch({ type: 'UPDATE_QF_SYMPTOM', payload: { [key]: value } })}
             glass
+            noBorder
           />
         )}
 

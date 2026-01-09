@@ -8,11 +8,12 @@ interface EventFieldsProps {
   fields: EventFieldValues;
   onChange: <K extends keyof EventFieldValues>(key: K, value: EventFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
-export function EventFields({ fields, onChange, glass }: EventFieldsProps) {
+export function EventFields({ fields, onChange, glass, noBorder }: EventFieldsProps) {
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <DateTimeField
         label="Start"
         date={fields.startDate}

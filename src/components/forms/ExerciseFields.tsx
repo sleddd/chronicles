@@ -8,6 +8,7 @@ interface ExerciseFieldsProps {
   fields: ExerciseFieldValues;
   onChange: <K extends keyof ExerciseFieldValues>(key: K, value: ExerciseFieldValues[K]) => void;
   glass?: boolean;
+  noBorder?: boolean;
 }
 
 const exerciseTypeOptions = [
@@ -33,9 +34,9 @@ const distanceUnitOptions = [
   { value: 'km', label: 'Kilometers' },
 ];
 
-export function ExerciseFields({ fields, onChange, glass }: ExerciseFieldsProps) {
+export function ExerciseFields({ fields, onChange, glass, noBorder }: ExerciseFieldsProps) {
   return (
-    <div className="custom-fields-body space-y-3">
+    <div className={noBorder ? 'custom-fields-body-no-border space-y-3' : 'custom-fields-body space-y-3'}>
       <Select
         label="Exercise Type"
         value={fields.type}
