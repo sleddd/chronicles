@@ -105,7 +105,13 @@ export function JournalLayout({ initialEntryId }: Props) {
           entryId={selectedEntryId}
           date={selectedDate}
           onEntrySaved={handleEntrySaved}
-          onSelectEntry={setSelectedEntryId}
+          onSelectEntry={(entryId) => {
+            setSelectedEntryId(entryId);
+            // On mobile, go back to entries list when closing/saving
+            if (entryId === null) {
+              setMobileShowEditor(false);
+            }
+          }}
           today={today}
           onTopicsChange={handleEntrySaved}
         />

@@ -934,7 +934,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       </CustomFieldSection>
 
       {/* Bottom action buttons */}
-      <div className="entry-editor-actions mt-4 pt-4 border-t border-border">
+      <div className="entry-editor-actions mt-4 pt-4 border-t border-border pb-16 md:pb-0">
         <div className="flex gap-2">
           {entryId && (
             <button
