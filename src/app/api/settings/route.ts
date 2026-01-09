@@ -12,6 +12,7 @@ const updateSettingsSchema = z.object({
   goalsEnabled: z.boolean().optional(),
   milestonesEnabled: z.boolean().optional(),
   exerciseEnabled: z.boolean().optional(),
+  allergiesEnabled: z.boolean().optional(),
   timezone: z.string().optional(),
   headerColor: z.string().optional(),
   backgroundImage: z.string().optional(),
@@ -40,7 +41,7 @@ export async function GET() {
     `);
 
     // Add columns if they don't exist (for users with old schema)
-    const booleanColumns = ['foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled', 'exerciseEnabled'];
+    const booleanColumns = ['foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled', 'exerciseEnabled', 'allergiesEnabled'];
     for (const col of booleanColumns) {
       await client.query(`
         DO $$ BEGIN
@@ -85,13 +86,13 @@ export async function GET() {
     // Ensure settings row exists
     await client.query(`
       INSERT INTO "${session.user.schemaName}"."user_settings"
-      (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage", "createdAt", "updatedAt")
-      VALUES ('settings_default', false, false, false, false, false, 'UTC', '#2d2c2a', '', NOW(), NOW())
+      (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", "allergiesEnabled", timezone, "headerColor", "backgroundImage", "createdAt", "updatedAt")
+      VALUES ('settings_default', false, false, false, false, false, false, 'UTC', '#2d2c2a', '', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
 
     const result = await client.query(`
-      SELECT "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage"
+      SELECT "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", "allergiesEnabled", timezone, "headerColor", "backgroundImage"
       FROM "${session.user.schemaName}"."user_settings"
       WHERE id = 'settings_default'
     `);
@@ -104,6 +105,7 @@ export async function GET() {
           goalsEnabled: false,
           milestonesEnabled: false,
           exerciseEnabled: false,
+          allergiesEnabled: false,
           timezone: 'UTC',
           headerColor: '#2d2c2a',
           backgroundImage: '',
@@ -155,6 +157,10 @@ export async function PATCH(request: NextRequest) {
         updates.push(`"exerciseEnabled" = $${paramIndex++}`);
         values.push(validatedData.exerciseEnabled);
       }
+      if (validatedData.allergiesEnabled !== undefined) {
+        updates.push(`"allergiesEnabled" = $${paramIndex++}`);
+        values.push(validatedData.allergiesEnabled);
+      }
       if (validatedData.timezone !== undefined) {
         updates.push(`timezone = $${paramIndex++}`);
         values.push(validatedData.timezone);
@@ -177,8 +183,8 @@ export async function PATCH(request: NextRequest) {
       // Ensure settings row exists first
       await client.query(`
         INSERT INTO "${session.user.schemaName}"."user_settings"
-        (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage", "createdAt", "updatedAt")
-        VALUES ('settings_default', false, false, false, false, false, 'UTC', '#2d2c2a', '', NOW(), NOW())
+        (id, "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", "allergiesEnabled", timezone, "headerColor", "backgroundImage", "createdAt", "updatedAt")
+        VALUES ('settings_default', false, false, false, false, false, false, 'UTC', '#2d2c2a', '', NOW(), NOW())
         ON CONFLICT (id) DO NOTHING
       `);
 
@@ -186,7 +192,7 @@ export async function PATCH(request: NextRequest) {
         `UPDATE "${session.user.schemaName}"."user_settings"
          SET ${updates.join(', ')}
          WHERE id = 'settings_default'
-         RETURNING "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", timezone, "headerColor", "backgroundImage"`,
+         RETURNING "foodEnabled", "medicationEnabled", "goalsEnabled", "milestonesEnabled", "exerciseEnabled", "allergiesEnabled", timezone, "headerColor", "backgroundImage"`,
         values
       );
 

@@ -131,6 +131,7 @@ export function Header() {
     { key: 'food', label: 'Food' },
     { key: 'symptoms', label: 'Symptoms' },
     { key: 'exercise', label: 'Exercise' },
+    { key: 'allergies', label: 'Allergies & Sensitivities' },
     { key: 'reporting', label: 'Reporting' },
   ];
 

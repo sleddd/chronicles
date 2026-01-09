@@ -77,6 +77,7 @@ import {
   faMagnifyingGlass,
   faCalendar,
   faBullseye,
+  faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
 
 export interface IconOption {
@@ -115,6 +116,7 @@ export const TOPIC_ICONS: IconOption[] = [
   { name: 'brain', icon: faBrain },
   { name: 'pills', icon: faPills },
   { name: 'flask', icon: faFlask },
+  { name: 'triangle-exclamation', icon: faTriangleExclamation },
   { name: 'dumbbell', icon: faDumbbell },
   { name: 'running', icon: faRunning },
   { name: 'bicycle', icon: faBicycle },

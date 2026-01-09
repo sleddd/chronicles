@@ -195,7 +195,7 @@ input[type="checkbox"] {
   appearance: none;
   width: 1rem;
   height: 1rem;
-  border: 1.5px solid var(--border);
+  border: 2px solid #9ca3af;
   border-radius: 0.25rem;
   background-color: white;
   cursor: pointer;

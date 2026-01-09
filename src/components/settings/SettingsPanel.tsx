@@ -13,6 +13,7 @@ interface FeatureSettings {
   goalsEnabled: boolean;
   milestonesEnabled: boolean;
   exerciseEnabled: boolean;
+  allergiesEnabled: boolean;
   timezone: string;
   headerColor: string;
   backgroundImage: string;
@@ -79,6 +80,7 @@ export function SettingsPanel() {
     goalsEnabled: false,
     milestonesEnabled: false,
     exerciseEnabled: false,
+    allergiesEnabled: false,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     headerColor: '#0F4C5C',
     backgroundImage: '/backgrounds/alvaro-serrano-hjwKMkehBco-unsplash.jpg',
@@ -281,7 +283,7 @@ export function SettingsPanel() {
 
       // Also seed enabled feature topics that might be missing
       const featureResults: string[] = [];
-      const featureKeys: FeatureTopicKey[] = ['food', 'medication', 'goals', 'milestones', 'exercise'];
+      const featureKeys: FeatureTopicKey[] = ['food', 'medication', 'goals', 'milestones', 'exercise', 'allergies'];
 
       for (const featureKey of featureKeys) {
         const settingKey = `${featureKey}Enabled` as keyof FeatureSettings;

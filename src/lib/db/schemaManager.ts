@@ -142,6 +142,7 @@ export async function createUserSchema(): Promise<string> {
         "medicationEnabled" BOOLEAN NOT NULL DEFAULT false,
         "goalsEnabled" BOOLEAN NOT NULL DEFAULT false,
         "milestonesEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "allergiesEnabled" BOOLEAN NOT NULL DEFAULT false,
         timezone TEXT NOT NULL DEFAULT 'UTC',
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()

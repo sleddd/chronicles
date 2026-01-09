@@ -22,6 +22,7 @@ export const FEATURE_TOPICS = {
   goals: { name: 'Goal', color: '#F97316', icon: 'bullseye', description: 'Set and track goals' },
   milestones: { name: 'Milestone', color: '#A855F7', icon: 'flag', description: 'Mark important achievements' },
   exercise: { name: 'Exercise', color: '#22C55E', icon: 'dumbbell', description: 'Track workouts and fitness' },
+  allergies: { name: 'Allergy and Sensitivities', color: '#F59E0B', icon: 'triangle-exclamation', description: 'Track allergies and reactions' },
 } as const;
 
 export type FeatureTopicKey = keyof typeof FEATURE_TOPICS;
