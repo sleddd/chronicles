@@ -48,7 +48,6 @@ function createPrismaClient(): PrismaClient {
 
   // Use Prisma Accelerate for prisma:// URLs (edge runtime)
   if (isAccelerateUrl(connectionString)) {
-    console.log('[Prisma] Using Prisma Accelerate');
     return new PrismaClientEdge().$extends(withAccelerate()) as unknown as PrismaClient;
   }
 
@@ -56,7 +55,6 @@ function createPrismaClient(): PrismaClient {
 
   // Use Neon serverless for Neon databases
   if (isNeonDatabase(connectionString)) {
-    console.log('[Prisma] Detected Neon database, using NeonPool with @prisma/adapter-neon');
     const { PrismaNeon } = require('@prisma/adapter-neon');
     const adapter = new PrismaNeon(pool);
     return new PrismaClient({
@@ -66,7 +64,6 @@ function createPrismaClient(): PrismaClient {
   }
 
   // Use pg adapter for local PostgreSQL (Prisma 7 requires an adapter)
-  console.log('[Prisma] Using local PostgreSQL with @prisma/adapter-pg');
   const adapter = new PrismaPg(pool as PgPool);
   return new PrismaClient({
     adapter,

@@ -25,7 +25,7 @@ export function TaskFields({ fields, onChange, noBorder }: TaskFieldsProps) {
         onChange={(checked) => onChange('isCompleted', checked)}
       />
       <CheckboxField
-        label="Auto-migrate incomplete tasks"
+        label="Auto-migrate"
         checked={fields.isAutoMigrating}
         onChange={(checked) => onChange('isAutoMigrating', checked)}
       />

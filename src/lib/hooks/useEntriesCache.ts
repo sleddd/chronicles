@@ -85,6 +85,17 @@ const DEFAULT_SETTINGS: CachedSettings = {
   backgroundImage: '',
 };
 
+// Helper to normalize date strings for comparison (handles both YYYY-MM-DD and ISO timestamps)
+function normalizeDate(dateStr: string): string {
+  if (!dateStr) return '';
+  // If it's already YYYY-MM-DD format, return as-is
+  if (dateStr.length === 10 && dateStr[4] === '-' && dateStr[7] === '-') {
+    return dateStr;
+  }
+  // Otherwise extract YYYY-MM-DD from ISO timestamp
+  return dateStr.slice(0, 10);
+}
+
 interface EntriesCacheStore {
   // State
   entries: Map<string, CachedEntry>;
@@ -219,7 +230,7 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
     if (!filter || filter.all) {
       // Return all entries sorted
       return result.sort((a, b) => {
-        const dateComp = b.entryDate.localeCompare(a.entryDate);
+        const dateComp = normalizeDate(b.entryDate).localeCompare(normalizeDate(a.entryDate));
         if (dateComp !== 0) return dateComp;
         return b.createdAt.localeCompare(a.createdAt);
       });
@@ -227,12 +238,13 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
 
     // Filter by date
     if (filter.date) {
+      const filterDate = normalizeDate(filter.date);
       if (filter.includeTasks) {
         result = result.filter(
-          (e) => e.entryDate === filter.date || e.customType === 'task'
+          (e) => normalizeDate(e.entryDate) === filterDate || e.customType === 'task'
         );
       } else {
-        result = result.filter((e) => e.entryDate === filter.date);
+        result = result.filter((e) => normalizeDate(e.entryDate) === filterDate);
       }
     }
 
@@ -248,7 +260,7 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
 
     // Sort by date desc, then createdAt desc
     return result.sort((a, b) => {
-      const dateComp = b.entryDate.localeCompare(a.entryDate);
+      const dateComp = normalizeDate(b.entryDate).localeCompare(normalizeDate(a.entryDate));
       if (dateComp !== 0) return dateComp;
       return b.createdAt.localeCompare(a.createdAt);
     });
@@ -277,7 +289,7 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
     }
     // Sort by date desc
     return favorites.sort((a, b) => {
-      const dateComp = b.entryDate.localeCompare(a.entryDate);
+      const dateComp = normalizeDate(b.entryDate).localeCompare(normalizeDate(a.entryDate));
       if (dateComp !== 0) return dateComp;
       return b.createdAt.localeCompare(a.createdAt);
     });

@@ -71,7 +71,6 @@ export function useTaskMigration(today: string) {
 
         if (migrateResponse.ok) {
           const result = await migrateResponse.json();
-          console.log(`Migrated ${result.migratedCount} tasks to ${today}`);
 
           // Update cache with new dates
           for (const taskId of taskIdsToMigrate) {

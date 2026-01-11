@@ -86,13 +86,10 @@ export function LegacyKeyMigration() {
         // Partial migration: User already has master key, just add recovery key
         // The encryptionKey in Zustand IS the master key (unwrapped during login)
         setProgress('Setting up recovery key...');
-        console.log('[Migration] Starting partial migration, key extractable:', encryptionKey.extractable);
 
         const recoveryDerivedKey = await deriveKeyFromRecoveryKey(recoveryKey, recoveryKeySalt);
-        console.log('[Migration] Recovery key derived, usages:', recoveryDerivedKey.usages);
 
         const wrappedWithRecovery = await wrapMasterKey(encryptionKey, recoveryDerivedKey);
-        console.log('[Migration] Master key wrapped successfully');
 
         // Save just the recovery key to server
         const response = await fetch('/api/user/setup-recovery-key', {
@@ -104,13 +101,11 @@ export function LegacyKeyMigration() {
             recoveryKeySalt,
           }),
         });
-        console.log('[Migration] Server response status:', response.status);
 
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error || 'Failed to set up recovery key');
         }
-        console.log('[Migration] Partial migration complete');
       } else {
         // Full migration: Legacy user needs new master key and re-encryption
         setProgress('Generating new encryption keys...');

@@ -19,21 +19,11 @@ const registerSchema = z.object({
 // Email whitelist - comma-separated list from environment variable
 function isEmailWhitelisted(email: string): boolean {
   const whitelist = process.env.REGISTRATION_WHITELIST;
-
-  // Debug logging for production troubleshooting
-  console.log('[Whitelist Debug] Raw whitelist value:', whitelist ? `"${whitelist}"` : 'undefined');
-  console.log('[Whitelist Debug] Whitelist length:', whitelist?.length);
-  console.log('[Whitelist Debug] Email to check:', email.toLowerCase());
-
   if (!whitelist) {
-    console.log('[Whitelist Debug] No whitelist configured - blocking registration');
     return false;
   }
 
   const allowedEmails = whitelist.split(',').map((e) => e.trim().toLowerCase());
-  console.log('[Whitelist Debug] Parsed emails:', allowedEmails);
-  console.log('[Whitelist Debug] Is email in list:', allowedEmails.includes(email.toLowerCase()));
-
   return allowedEmails.includes(email.toLowerCase());
 }
 

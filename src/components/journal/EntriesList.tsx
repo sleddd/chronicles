@@ -544,15 +544,27 @@ export function EntriesList({
     }
   };
 
+  // Helper to normalize date strings for comparison
+  const normalizeDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    if (dateStr.length === 10 && dateStr[4] === '-' && dateStr[7] === '-') {
+      return dateStr;
+    }
+    return dateStr.slice(0, 10);
+  };
+
   // Filter entries by search query, topic, and task completion (client-side)
   const filteredEntries = entries.filter(entry => {
-    // In date view, filter out non-automigrating tasks (but show completed tasks with strikethrough)
+    // In date view, show tasks if they were created for this date OR have auto-migrate enabled
     if (viewMode === 'date' && entry.customType === 'task') {
       const taskFields = decryptedTaskFields[entry.id];
+      const taskDate = normalizeDate(entry.entryDate);
+      const isTaskForSelectedDate = taskDate === selectedDate;
+
       // If task fields not yet decrypted, show the task (will filter after decryption)
       if (taskFields) {
-        // Hide tasks that don't have auto-migrate enabled
-        if (!taskFields.isAutoMigrating) {
+        // Show task if it's for the selected date OR has auto-migrate enabled
+        if (!isTaskForSelectedDate && !taskFields.isAutoMigrating) {
           return false;
         }
       }
@@ -1051,12 +1063,14 @@ export function EntriesList({
                 isActive={selectedEntryId === entry.id}
               />
             ))}
-            {/* Auto-migrated tasks section */}
+            {/* Auto-migrated tasks section - only show label if there are also non-task entries */}
             {filteredEntries.some(e => e.customType === 'task') && (
               <>
-                <div className="text-xs font-medium text-gray-500 mt-4 mb-2">
-                  Auto-migrated tasks
-                </div>
+                {filteredEntries.some(e => e.customType !== 'task') && (
+                  <div className="text-xs font-medium text-gray-500 mt-4 mb-2">
+                    Tasks ( includes auto-migrated tasks )
+                  </div>
+                )}
                 {filteredEntries.filter(e => e.customType === 'task').map((entry) => (
                   <EntryCard
                     key={entry.id}

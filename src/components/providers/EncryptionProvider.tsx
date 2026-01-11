@@ -110,9 +110,6 @@ export function EncryptionProvider({ children }: { children: React.ReactNode }) 
     if (status === 'authenticated' && !isKeyReady && !restorationAttempted.current) {
       restorationAttempted.current = true;
       restoreKeyFromSession().then((restored) => {
-        if (!restored) {
-          console.log('[EncryptionProvider] No key in sessionStorage to restore');
-        }
       });
     }
   }, [status, isKeyReady, restoreKeyFromSession]);

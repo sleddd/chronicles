@@ -61,21 +61,13 @@ function LoginForm() {
         if (saltResponse.ok) {
           const { salt, encryptedMasterKey, masterKeyIv } = await saltResponse.json();
 
-          console.log('[Login Debug] Salt response:', {
-            hasSalt: !!salt,
-            hasEncryptedMasterKey: !!encryptedMasterKey,
-            hasMasterKeyIv: !!masterKeyIv,
-          });
-
           // Check if user has master key system (new users) or legacy (old users)
           if (encryptedMasterKey && masterKeyIv) {
             // New system: unwrap master key
-            console.log('[Login Debug] Using NEW master key system');
             await unwrapAndStoreMasterKey(password, salt, encryptedMasterKey, masterKeyIv);
           } else {
             // Legacy system: derive key directly from password
             // Use legacy iterations (100,000) for backward compatibility
-            console.log('[Login Debug] Using LEGACY key derivation (100k iterations)');
             await deriveAndStoreKey(password, salt, true);
           }
 

@@ -38,7 +38,6 @@ export async function seedDefaultTopics(encryptionKey: CryptoKey): Promise<boole
     const { getAllTopics, addTopic, isInitialized } = useEntriesCache.getState();
 
     if (!isInitialized) {
-      console.log('Cache not initialized, skipping topic seeding');
       return false;
     }
 
@@ -73,12 +72,10 @@ export async function seedDefaultTopics(encryptionKey: CryptoKey): Promise<boole
     }
 
     if (topicsToCreate.length === 0) {
-      console.log('All default topics already exist');
       return false;
     }
 
     // Seed missing default topics
-    console.log(`Adding ${topicsToCreate.length} missing default topics...`);
     for (const topic of topicsToCreate) {
       const { ciphertext, iv } = await encrypt(topic.name, encryptionKey);
 
@@ -105,8 +102,6 @@ export async function seedDefaultTopics(encryptionKey: CryptoKey): Promise<boole
       if (data.topic) {
         addTopic(data.topic);
       }
-
-      console.log('Created topic:', topic.name);
     }
 
     return true;
@@ -131,7 +126,6 @@ export async function addFeatureTopic(
     const { getAllTopics, addTopic, isInitialized } = useEntriesCache.getState();
 
     if (!isInitialized) {
-      console.log('Cache not initialized, cannot add feature topic');
       return false;
     }
 
@@ -154,7 +148,6 @@ export async function addFeatureTopic(
 
     // Skip if token matches OR if name matches (case-insensitive)
     if (existingTokens.has(token) || existingNamesLower.has(nameLower)) {
-      console.log(`Feature topic ${feature.name} already exists`);
       return false;
     }
 
@@ -184,8 +177,6 @@ export async function addFeatureTopic(
     if (data.topic) {
       addTopic(data.topic);
     }
-
-    console.log('Created feature topic:', feature.name);
     return true;
   } catch (error) {
     console.error('Failed to add feature topic:', error);
