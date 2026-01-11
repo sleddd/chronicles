@@ -7,7 +7,7 @@ A journal for those too busy to journal with zero-knowledge encryption. Chronicl
 - **Encrypted Journal Entries** - Rich text editor with client-side encryption
 - **Topic Organization** - Categorize entries with custom topics, icons, and colors
 - **Goals & Milestones** - Track goals with milestone progress
-- **Medical Tracking** - Log medications, symptoms, food, and schedules
+- **Medical Tracking** - Log medications, symptoms, food (with calorie tracking), and schedules
 - **Calendar View** - Visual overview of entries by date
 - **Entry Sharing** - Share specific entries via secure public links
 - **Bookmarks** - Mark and quickly access important entries
@@ -122,12 +122,18 @@ The Medical view shows your medication schedule and lets you log doses when take
 
 #### Food
 
-Log meals for dietary tracking or symptom correlation.
+Log meals for dietary tracking, calorie counting, or symptom correlation.
 
 - **Meal Type** - Breakfast, lunch, dinner, or snack
 - **Time Consumed** - When you ate
 - **Ingredients** - Comma-separated list (used for correlation analysis with symptoms)
+- **Calories** - Estimated calorie count for the meal
 - **Notes** - Any additional details
+
+The Food tab in the Medical view displays:
+- **Time-based filtering** - View meals for today, past week, past month, or all time
+- **Calorie summaries** - Total calories, daily totals, and per-meal calories
+- **Meal grouping** - Entries organized by meal type (breakfast, lunch, dinner, snack)
 
 #### Symptoms
 
@@ -178,7 +184,7 @@ Comprehensive health tracking dashboard:
 - **Food Tab** - View food log entries
 - **Symptoms Tab** - View symptom log entries
 - **Schedule Tab** - Today's medication schedule
-- **Reporting Tab** - Analyze correlations between food, medications, and symptoms
+- **Reporting Tab** - Analyze correlations between food, medications, and symptoms; includes calorie summaries by meal type and daily averages
 
 ### Entertainment View
 

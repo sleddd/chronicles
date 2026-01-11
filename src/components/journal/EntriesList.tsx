@@ -478,7 +478,7 @@ export function EntriesList({
         const encPerformed = await encryptData(performedField);
         customFields.push({ encryptedData: encPerformed.ciphertext, iv: encPerformed.iv });
       } else if (topicName === 'food') {
-        // Food fields: mealType, consumedAt, ingredients
+        // Food fields: mealType, consumedAt, ingredients, calories, notes
         if (state.food.mealType) {
           const mealField = JSON.stringify({ fieldKey: 'mealType', value: state.food.mealType });
           const enc = await encryptData(mealField);
@@ -490,7 +490,17 @@ export function EntriesList({
           const enc = await encryptData(ingredientsField);
           customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
         }
-        const consumedField = JSON.stringify({ fieldKey: 'consumedAt', value: new Date().toISOString() });
+        if (state.food.calories) {
+          const caloriesField = JSON.stringify({ fieldKey: 'calories', value: parseInt(state.food.calories) || null });
+          const enc = await encryptData(caloriesField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        if (state.food.notes) {
+          const notesField = JSON.stringify({ fieldKey: 'notes', value: state.food.notes });
+          const enc = await encryptData(notesField);
+          customFields.push({ encryptedData: enc.ciphertext, iv: enc.iv });
+        }
+        const consumedField = JSON.stringify({ fieldKey: 'consumedAt', value: state.food.consumedAt || new Date().toISOString() });
         const encConsumed = await encryptData(consumedField);
         customFields.push({ encryptedData: encConsumed.ciphertext, iv: encConsumed.iv });
       } else if (topicName === 'symptom' || topicName === 'symptoms') {

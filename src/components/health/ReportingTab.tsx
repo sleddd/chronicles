@@ -159,6 +159,8 @@ export function ReportingTab({ refreshKey }: Props) {
           const name = rawName.replace(/<[^>]*>/g, '').trim();
           let consumedAt = new Date().toISOString();
           let ingredients: string[] = [];
+          let calories: number | undefined = undefined;
+          let mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | undefined = undefined;
 
           if (foodItem.custom_fields) {
             for (const cf of foodItem.custom_fields) {
@@ -167,6 +169,10 @@ export function ReportingTab({ refreshKey }: Props) {
                 const parsed = JSON.parse(decrypted);
                 if (parsed.fieldKey === 'consumedAt') consumedAt = parsed.value;
                 if (parsed.fieldKey === 'ingredients') ingredients = parsed.value || [];
+                if (parsed.fieldKey === 'calories' && parsed.value != null) {
+                  calories = typeof parsed.value === 'number' ? parsed.value : parseInt(parsed.value, 10) || undefined;
+                }
+                if (parsed.fieldKey === 'mealType') mealType = parsed.value;
               } catch {
                 // Skip
               }
@@ -178,6 +184,8 @@ export function ReportingTab({ refreshKey }: Props) {
             name,
             consumedAt,
             ingredients,
+            calories,
+            mealType,
           });
         } catch {
           // Skip
@@ -383,6 +391,11 @@ export function ReportingTab({ refreshKey }: Props) {
             <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
               <div className="text-3xl font-bold" style={{ color: accentColor }}>{food.length}</div>
               <div className="text-sm text-gray-600">Food Entries</div>
+              {food.length > 0 && food.some(f => f.calories) && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {food.reduce((sum, f) => sum + (f.calories || 0), 0).toLocaleString()} cal total
+                </div>
+              )}
             </div>
             <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4 text-center">
               <div className="text-3xl font-bold" style={{ color: accentColor }}>{medicationLogs.length}</div>
@@ -503,6 +516,80 @@ export function ReportingTab({ refreshKey }: Props) {
               </div>
             </div>
           )}
+
+          {/* Calorie Summary */}
+          {food.length > 0 && food.some(f => f.calories) && (() => {
+            const foodWithCalories = food.filter(f => f.calories && f.calories > 0);
+            const totalCalories = foodWithCalories.reduce((sum, f) => sum + (f.calories || 0), 0);
+            const avgCaloriesPerMeal = foodWithCalories.length > 0 ? Math.round(totalCalories / foodWithCalories.length) : 0;
+
+            // Group by date and calculate daily averages
+            const caloriesByDate = foodWithCalories.reduce((acc, f) => {
+              const date = f.consumedAt.split('T')[0];
+              if (!acc[date]) acc[date] = 0;
+              acc[date] += f.calories || 0;
+              return acc;
+            }, {} as Record<string, number>);
+
+            const dailyValues = Object.values(caloriesByDate);
+            const avgDailyCalories = dailyValues.length > 0
+              ? Math.round(dailyValues.reduce((sum, cal) => sum + cal, 0) / dailyValues.length)
+              : 0;
+
+            // Group by meal type
+            const caloriesByMealType = foodWithCalories.reduce((acc, f) => {
+              const mealType = f.mealType || 'unknown';
+              if (!acc[mealType]) acc[mealType] = { count: 0, calories: 0 };
+              acc[mealType].count++;
+              acc[mealType].calories += f.calories || 0;
+              return acc;
+            }, {} as Record<string, { count: number; calories: number }>);
+
+            return (
+              <div className="backdrop-blur-md bg-white/70 rounded-lg border border-border p-4">
+                <h3 className="font-medium text-gray-900 mb-4">Calorie Summary</h3>
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold" style={{ color: accentColor }}>
+                      {totalCalories.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500">Total Calories</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold" style={{ color: accentColor }}>
+                      {avgDailyCalories.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500">Avg Daily</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold" style={{ color: accentColor }}>
+                      {avgCaloriesPerMeal.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500">Avg per Meal</div>
+                  </div>
+                </div>
+
+                {/* Calories by Meal Type */}
+                {Object.keys(caloriesByMealType).length > 0 && (
+                  <div className="space-y-2 pt-4 border-t border-border">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">By Meal Type</h4>
+                    {Object.entries(caloriesByMealType)
+                      .sort((a, b) => b[1].calories - a[1].calories)
+                      .map(([mealType, data]) => (
+                        <div key={mealType} className="flex items-center justify-between">
+                          <span className="text-gray-700 capitalize">{mealType}</span>
+                          <span className="text-gray-500">
+                            {data.calories.toLocaleString()} cal ({data.count} meal{data.count !== 1 ? 's' : ''})
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Exercise Summary */}
           {exercises.length > 0 && (

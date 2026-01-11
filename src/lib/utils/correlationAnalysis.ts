@@ -20,6 +20,8 @@ export interface DecryptedFood {
   name: string;
   consumedAt: string;
   ingredients: string[];
+  calories?: number;
+  mealType?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
 }
 
 export interface DecryptedMedicationLog {

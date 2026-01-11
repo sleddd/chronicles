@@ -45,6 +45,16 @@ export function FoodFields({ fields, onChange, glass, noBorder }: FoodFieldsProp
         glass={glass}
       />
 
+      <Input
+        label="Calories"
+        type="number"
+        value={fields.calories}
+        onChange={(e) => onChange('calories', e.target.value)}
+        placeholder="Estimated calories"
+        glass={glass}
+        min="0"
+      />
+
       <Textarea
         label="Notes"
         value={fields.notes}

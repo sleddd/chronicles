@@ -203,6 +203,7 @@ export const initialEntriesListState: EntriesListState = {
     mealType: 'breakfast',
     consumedAt: '',
     ingredients: '',
+    calories: '',
     notes: '',
   },
 

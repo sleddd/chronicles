@@ -313,8 +313,9 @@ Chronicles uses a WordPress-style content model. All content lives in `entries`,
 | goal | Goal with progress tracking | progressPercentage, goalStatus, targetDate |
 | milestone | Goal milestone | orderIndex, isCompleted, completedAt |
 | medication | Medication log | medicationStatus, scheduledTime, takenTime, schedule |
-| symptom | Symptom log | severity |
-| food | Food diary entry | None (content only) |
+| symptom | Symptom log | severity, occurredAt, duration, notes |
+| food | Food diary entry | mealType, consumedAt, ingredients, calories, notes |
+| exercise | Exercise log | exerciseType, duration, intensity, distance, distanceUnit, calories, performedAt, notes |
 
 ### Custom Field Structure
 
@@ -324,6 +325,9 @@ Each custom field is stored as an encrypted JSON blob:
 { "fieldKey": "isCompleted", "value": true }
 { "fieldKey": "severity", "value": 7 }
 { "fieldKey": "scheduledTime", "value": "08:00" }
+{ "fieldKey": "mealType", "value": "breakfast" }
+{ "fieldKey": "calories", "value": 450 }
+{ "fieldKey": "ingredients", "value": ["eggs", "toast", "bacon"] }
 ```
 
 ### Querying by Type
@@ -421,3 +425,90 @@ Complete removal of user data:
 4. Session invalidated
 
 Irreversible. No recovery possible after deletion.
+
+---
+
+## Food & Calorie Tracking
+
+### Data Model
+
+Food entries use the `customType: 'food'` with the following custom fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| mealType | string | 'breakfast' \| 'lunch' \| 'dinner' \| 'snack' |
+| consumedAt | string | ISO datetime when food was consumed |
+| ingredients | string[] | Array of ingredient names |
+| calories | number | Estimated calorie count (optional) |
+| notes | string | Additional notes |
+
+### UI Components
+
+**FoodTab** (`src/components/health/FoodTab.tsx`):
+- Time-based filtering: Today, Week, Month, All
+- Calorie summary cards: Total, Average per meal
+- Daily grouping with per-day calorie totals
+- Meal type grouping within each day
+- Per-entry calorie display with accent-colored badges
+
+**ReportingTab** (`src/components/health/ReportingTab.tsx`):
+- Calorie Summary section with:
+  - Total calories for selected period
+  - Average daily calorie intake
+  - Average calories per meal
+  - Breakdown by meal type
+
+### Data Flow
+
+```
+Food Entry Form
+    │
+    ├─► mealType (select)
+    ├─► consumedAt (datetime-local)
+    ├─► ingredients (comma-separated text)
+    ├─► calories (number input)
+    └─► notes (textarea)
+    │
+    ▼
+useCustomFields hook
+    │
+    ▼
+fieldsToCustomFieldEntries()
+    │
+    ├─► { fieldKey: 'mealType', value: 'breakfast' }
+    ├─► { fieldKey: 'consumedAt', value: '2024-01-15T12:30:00' }
+    ├─► { fieldKey: 'ingredients', value: ['eggs', 'toast'] }
+    ├─► { fieldKey: 'calories', value: 450 }
+    └─► { fieldKey: 'notes', value: 'Great breakfast' }
+    │
+    ▼
+Client-side encryption (per field)
+    │
+    ▼
+API: POST /api/entries
+    │
+    ▼
+Database: entries + custom_fields
+```
+
+### Calorie Aggregation
+
+Calorie calculations happen client-side after decryption:
+
+```typescript
+// Total calories
+const total = entries.reduce((sum, e) => sum + (e.calories || 0), 0);
+
+// Average per meal (only meals with calories)
+const withCalories = entries.filter(e => e.calories > 0);
+const avgPerMeal = total / withCalories.length;
+
+// Daily average
+const byDate = groupBy(entries, e => e.consumedAt.split('T')[0]);
+const avgDaily = total / Object.keys(byDate).length;
+
+// By meal type
+const byMealType = groupBy(entries, e => e.mealType);
+```
+
+All aggregation maintains zero-knowledge: server never sees calorie values.

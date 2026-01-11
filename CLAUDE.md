@@ -108,7 +108,7 @@ For password recovery:
 - `src/components/topics/` - Topic management (sidebar, browser, selector)
 - `src/components/goals/` - Goals and milestones tracking
 - `src/components/tasks/` - Task management with milestone linking
-- `src/components/health/` - Health tracking (medications, symptoms, food, exercise, schedule, allergies)
+- `src/components/health/` - Health tracking (medications, symptoms, food with calorie tracking, exercise, schedule, allergies, reporting with calorie summaries)
 - `src/components/calendar/` - Calendar view
 - `src/components/sharing/` - Entry sharing functionality
 - `src/components/entertainment/` - Entertainment tracking view
@@ -155,7 +155,7 @@ await client.query(`SELECT * FROM "${schemaName}"."entries" WHERE ...`);
 - Topic organization with icons and colors
 - Goals with milestone tracking
 - Task management with milestone linking and auto-migration
-- Health tracking (medications, symptoms, food, exercise, schedule, allergies)
+- Health tracking (medications, symptoms, food with calorie tracking, exercise, schedule, allergies)
 - Calendar view
 - Entry sharing via public links
 - Favorites system
@@ -275,3 +275,40 @@ Header and accent colors are user-customizable via Settings. The `useAccentColor
 - 28 curated images from Unsplash artists
 - Brightness analysis for header text contrast (light/dark text)
 - Cached brightness results for performance
+
+## Food & Calorie Tracking
+
+### Food Entry Fields
+
+Food entries are stored as journal entries with `customType: 'food'` and include:
+- **mealType**: `'breakfast' | 'lunch' | 'dinner' | 'snack'`
+- **consumedAt**: ISO datetime string
+- **ingredients**: Array of ingredient names (stored encrypted)
+- **calories**: Number (optional) - estimated calorie count
+- **notes**: Additional notes about the meal
+
+### Food Tab Features (`src/components/health/FoodTab.tsx`)
+
+- **Time-based filtering**: Today, Week, Month, All views
+- **Calorie summaries**: Total calories, average per meal
+- **Daily calorie totals**: Each day shows its total calorie count
+- **Meal grouping**: Entries organized by meal type within each day
+- **Per-meal calories**: Individual calorie counts displayed per entry
+
+### Reporting Tab Calorie Statistics (`src/components/health/ReportingTab.tsx`)
+
+The reporting view includes a "Calorie Summary" section when food entries have calories:
+- Total calories for the period
+- Average daily calorie intake
+- Average calories per meal
+- Breakdown by meal type (breakfast, lunch, dinner, snack)
+
+### Key Files for Food/Calorie Tracking
+
+| File | Purpose |
+|------|---------|
+| `src/lib/hooks/useCustomFields.ts` | `FoodFields` interface with `calories` field |
+| `src/components/forms/FoodFields.tsx` | Food entry form with calories input |
+| `src/components/health/FoodTab.tsx` | Food log view with filtering and calorie summaries |
+| `src/components/health/ReportingTab.tsx` | Reports including calorie analysis |
+| `src/lib/utils/correlationAnalysis.ts` | `DecryptedFood` interface with `calories` field |

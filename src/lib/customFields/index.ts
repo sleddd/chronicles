@@ -239,6 +239,9 @@ export async function loadFoodFields(
       case 'ingredients':
         updates.ingredients = ((parsed.value as string[]) || []).join(', ');
         break;
+      case 'calories':
+        updates.calories = parsed.value?.toString() || '';
+        break;
       case 'notes':
         updates.notes = (parsed.value as string) || '';
         break;
@@ -261,6 +264,7 @@ export async function buildFoodFields(
     encryptField('mealType', fields.mealType, encryptData),
     encryptField('consumedAt', fields.consumedAt || new Date().toISOString(), encryptData),
     encryptField('ingredients', ingredientsArray, encryptData),
+    encryptField('calories', fields.calories ? parseInt(fields.calories) : null, encryptData),
     encryptField('notes', fields.notes, encryptData),
   ]);
 }

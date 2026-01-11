@@ -67,6 +67,7 @@ export interface FoodFields {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   consumedAt: string;
   ingredients: string;
+  calories: string;
   notes: string;
 }
 
@@ -148,6 +149,7 @@ const defaultFieldsByType: Record<string, CustomFieldValues> = {
     mealType: 'breakfast',
     consumedAt: '',
     ingredients: '',
+    calories: '',
     notes: '',
   } as FoodFields,
   symptom: {
@@ -278,6 +280,7 @@ export function fieldsToCustomFieldEntries(
       entries.push({ fieldKey: 'mealType', value: foodFields.mealType });
       entries.push({ fieldKey: 'consumedAt', value: foodFields.consumedAt });
       entries.push({ fieldKey: 'ingredients', value: ingredientsArray });
+      entries.push({ fieldKey: 'calories', value: foodFields.calories ? parseInt(foodFields.calories) : null });
       entries.push({ fieldKey: 'notes', value: foodFields.notes });
       break;
     }

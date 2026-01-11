@@ -42,9 +42,6 @@ export function CorrelationChart({ data, title }: Props) {
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-lg">
-                  {item.trigger.type === 'food' ? '🍽️' : '💊'}
-                </span>
                 <span className="font-medium text-gray-900">
                   {item.trigger.name}
                 </span>
