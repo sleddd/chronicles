@@ -1,6 +1,6 @@
 # Chronicles
 
-A journal for those to busy to journal with zero-knowledge encryption. Chronicles is designed as a simple daily log. The core philosophy is to capture the key moments of your day briefly in less than 10-15 minutes, then use topics to organize and find them later.
+A journal for those too busy to journal with zero-knowledge encryption. Chronicles is designed as a simple daily log. The core philosophy is to capture the key moments of your day briefly in less than 10-15 minutes, then use topics to organize and find them later.
 
 ## Features
 
@@ -10,14 +10,22 @@ A journal for those to busy to journal with zero-knowledge encryption. Chronicle
 - **Medical Tracking** - Log medications, symptoms, food, and schedules
 - **Calendar View** - Visual overview of entries by date
 - **Entry Sharing** - Share specific entries via secure public links
-- **Bookmarkes** - Mark and quickly access important entries
+- **Bookmarks** - Mark and quickly access important entries
 - **Mobile Responsive** - Works on desktop and mobile devices
-- **Customizable colors and background** - Choose from a variety of colors and background images 
+- **Customizable colors and background** - Choose from a variety of colors and background images
+- **Optimized Performance** - Entries cached locally for faster loading and reduced database calls
+
+## Recent Changes (January 2026)
+
+- **Performance Improvements** - Entries are now downloaded and cached locally, reducing database calls significantly
+- **Settings Store** - Settings now load from a centralized store, eliminating flicker on app startup
+- **Task Filtering** - Completed tasks are now hidden when viewing the current date filter
+- **Goal Milestones** - Milestones are now properly attached to goal cards in the goals view
+- **Background Color** - Faster background color and accent switching
 
 ## Privacy Guarantees
 
 - All entry content is encrypted in the browser before transmission
-- Master encryption key stored in browser `sessionStorage` (persists across page refreshes, cleared on logout/timeout/browser close)
 - Recovery key system allows password reset without compromising zero-knowledge design
 - Schema-per-user database isolation (not row-level security)
 - Session Management - Revoke sessions at any time if you see an unfamiliar device
@@ -50,9 +58,15 @@ Topics are how you categorize entries. Think of them as tags or folders.
 - **Medication** - Medication schedules and tracking
 - **Food** - Meal logging with ingredients
 - **Symptom** - Health symptom tracking with severity
-- **Excercise** - Daiily logs of exercise types and duration
+- **Exercise** - Daily logs of exercise types and duration
 - **Event** - Calendar events with date/time/location
 - **Meeting** - Meetings with attendees and agenda
+- **Music** - Track music you're listening to
+- **Books** - Log books you're reading
+- **TV/Movies** - Track shows and films
+- **Research** - Save research notes and findings
+- **Idea** - Capture ideas for later
+- **Quote** - Save inspiring quotes
 
 You can create your own topics for anything else (Work, Personal, Ideas, etc.).
 
@@ -182,6 +196,22 @@ Comprehensive health tracking dashboard:
 - **Symptoms Tab** - View symptom log entries
 - **Schedule Tab** - Today's medication schedule
 - **Reporting Tab** - Analyze correlations between food, medications, and symptoms
+
+### Entertainment View
+
+Track your media consumption:
+
+- **Music Tab** - Music you're listening to
+- **Books Tab** - Books you're reading or have read
+- **TV/Movies Tab** - Shows and films you're watching
+
+### Inspiration View
+
+Collect ideas and inspiration:
+
+- **Research Tab** - Research notes and findings
+- **Ideas Tab** - Ideas you want to remember
+- **Quotes Tab** - Inspiring quotes you've collected
 
 ### Settings
 

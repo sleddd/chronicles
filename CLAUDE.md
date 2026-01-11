@@ -87,14 +87,32 @@ For password recovery:
 - `src/lib/crypto/encryption.ts` - AES-256-GCM encryption/decryption utilities
 - `src/lib/hooks/useEncryption.ts` - Zustand store for encryption key state
 
+**State Management (Zustand Stores):**
+- `src/lib/hooks/useEntriesCache.ts` - Client-side encrypted cache for entries, topics, and settings (reduces DB calls)
+- `src/lib/hooks/useAccentColor.tsx` - Dynamic accent color and background image state
+- `src/lib/hooks/useTimezone.ts` - User timezone handling
+- `src/lib/hooks/useSecurityClear.ts` - Centralized cleanup registry for logout/timeout
+- `src/lib/hooks/useTaskMigration.ts` - Auto-migrates incomplete tasks to current day at midnight
+- `src/lib/hooks/useInactivityTimeout.ts` - Session timeout on user inactivity
+
+**Providers:**
+- `src/components/providers/EncryptionProvider.tsx` - Encryption key lifecycle management
+- `src/components/providers/AccentColorInitializer.tsx` - CSS custom properties for theming
+- `src/components/providers/SessionProvider.tsx` - NextAuth session wrapper
+- `src/components/providers/DevToolsBlocker.tsx` - Production devtools protection
+
 **Core Components:**
-- `src/components/layout/Header.tsx` - Main navigation header (teal theme)
+- `src/components/layout/Header.tsx` - Main navigation header (customizable colors)
+- `src/components/layout/BackgroundImage.tsx` - Dynamic background image handling
 - `src/components/journal/` - Journal entry editor, list, and layout
 - `src/components/topics/` - Topic management (sidebar, browser, selector)
 - `src/components/goals/` - Goals and milestones tracking
-- `src/components/health/` - Health tracking (medications, symptoms, food, exercise, schedule)
+- `src/components/tasks/` - Task management with milestone linking
+- `src/components/health/` - Health tracking (medications, symptoms, food, exercise, schedule, allergies)
 - `src/components/calendar/` - Calendar view
 - `src/components/sharing/` - Entry sharing functionality
+- `src/components/entertainment/` - Entertainment tracking view
+- `src/components/inspiration/` - Quotes and inspiration view
 
 **API Routes:**
 - `src/app/api/entries/` - CRUD for journal entries
@@ -136,12 +154,17 @@ await client.query(`SELECT * FROM "${schemaName}"."entries" WHERE ...`);
 - Journal entries with rich text editor
 - Topic organization with icons and colors
 - Goals with milestone tracking
-- Health tracking (medications, symptoms, food, exercise, schedule)
+- Task management with milestone linking and auto-migration
+- Health tracking (medications, symptoms, food, exercise, schedule, allergies)
 - Calendar view
 - Entry sharing via public links
 - Favorites system
 - Image attachments
 - Mobile responsive design
+- Customizable header colors (18 options + transparent)
+- Background images (28 curated options)
+- Client-side entry caching for performance
+- Entertainment and inspiration views
 
 ### Registration Flow
 1. Email must be on whitelist (env: `REGISTRATION_WHITELIST`)
@@ -205,12 +228,18 @@ Component `src/components/auth/LegacyKeyMigration.tsx` handles:
 
 ## State Management
 
-**Zustand** is used for encryption key state (not Redux). Rationale:
+**Zustand** is used for client-side state (not Redux). Rationale:
 
 - **Session-only persistence** - Encryption key is stored in `sessionStorage` for cross-refresh persistence, but cleared on logout, inactivity timeout, or browser close. Never persisted to `localStorage`.
 - **Minimal footprint** - ~1KB vs Redux Toolkit's ~11KB. Smaller attack surface for privacy-focused app.
-- **Simple state shape** - Just `{ key, deriveKey(), encrypt(), decrypt(), clearKey() }`. No reducers/actions needed.
+- **Simple state shape** - No reducers/actions needed.
 - **No middleware** - Web Crypto API is already Promise-based; no thunks required.
+
+### Zustand Stores
+
+1. **useEncryption** - Encryption key lifecycle: `{ key, deriveKey(), encrypt(), decrypt(), clearKey() }`
+2. **useEntriesCache** - Encrypted entries/topics/settings cache with methods for CRUD operations
+3. **useAccentColor** - Theme customization (header color, background image, derived CSS variables)
 
 ### Key Storage Security
 
@@ -219,11 +248,30 @@ Component `src/components/auth/LegacyKeyMigration.tsx` handles:
 - Key is cleared on: logout, inactivity timeout (configurable), browser/tab close
 - Key is never sent to server or persisted to disk
 
+### Client-Side Caching
+
+The `useEntriesCache` store provides:
+- **Encrypted cache** - All cached data remains encrypted (safe to hold in memory)
+- **Reduced DB calls** - Initial load fetches all entries, then cache serves reads
+- **Immediate writes** - Changes write to DB first, then update cache
+- **Security cleanup** - Registered with `useSecurityClear` for logout/timeout
+
 ## UI Theme
 
-Primary colors:
-- Teal: `#1aaeae` (primary), `#158f8f` (hover/darker)
-- Light teal background: `#e0f2f2`
+### Dynamic Theming
+
+Header and accent colors are user-customizable via Settings. The `useAccentColor` hook:
+- Reads `headerColor` from cached settings
+- Derives hover color (darker) and light background color automatically
+- Sets CSS custom properties: `--accent-color`, `--accent-hover`, `--accent-light`
+- Supports transparent header with gray fallback for accent elements
+
+### Default Colors
+- Default header: `#4281a4` (steel blue)
+- Fallback accent (transparent header): `#6b7280` (gray-500)
 - Neutral background: `#f7f7f7`
 
-Header uses teal background with white/teal-100 text for contrast.
+### Background Images
+- 28 curated images from Unsplash artists
+- Brightness analysis for header text contrast (light/dark text)
+- Cached brightness results for performance
