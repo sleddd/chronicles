@@ -79,52 +79,64 @@ export async function GET(request: NextRequest) {
     const result = await client.query(query, params);
 
     // For goals and milestones, fetch relationships
-    if (customType === 'goal' || customType === 'milestone') {
-      const entryIds = result.rows.map(row => row.id);
+    // Also fetch when all=true so cache has relationship data
+    const goalEntries = result.rows.filter(r => r.customType === 'goal');
+    const milestoneEntries = result.rows.filter(r => r.customType === 'milestone');
 
-      if (entryIds.length > 0) {
-        if (customType === 'goal') {
-          // For goals, get linked milestone IDs
-          const relResult = await client.query(
-            `SELECT "relatedToId" as "goalId", "entryId" as "milestoneId"
-             FROM "${session.user.schemaName}"."entry_relationships"
-             WHERE "relatedToId" = ANY($1) AND "relationshipType" = 'goal_milestone'`,
-            [entryIds]
-          );
+    if (customType === 'goal' || (all && goalEntries.length > 0)) {
+      const idsToQuery = customType === 'goal' ? result.rows.map(r => r.id) : goalEntries.map(r => r.id);
 
-          // Create a map of goalId -> milestoneIds
-          const goalMilestones: Record<string, string[]> = {};
-          for (const rel of relResult.rows) {
-            if (!goalMilestones[rel.goalId]) {
-              goalMilestones[rel.goalId] = [];
-            }
-            goalMilestones[rel.goalId].push(rel.milestoneId);
+      if (idsToQuery.length > 0) {
+        // For goals, get linked milestone IDs
+        const relResult = await client.query(
+          `SELECT "relatedToId" as "goalId", "entryId" as "milestoneId"
+           FROM "${session.user.schemaName}"."entry_relationships"
+           WHERE "relatedToId" = ANY($1) AND "relationshipType" = 'goal_milestone'`,
+          [idsToQuery]
+        );
+
+        // Create a map of goalId -> milestoneIds
+        const goalMilestones: Record<string, string[]> = {};
+        for (const rel of relResult.rows) {
+          if (!goalMilestones[rel.goalId]) {
+            goalMilestones[rel.goalId] = [];
           }
+          goalMilestones[rel.goalId].push(rel.milestoneId);
+        }
 
-          // Add milestoneIds to each goal entry
-          for (const entry of result.rows) {
+        // Add milestoneIds to each goal entry
+        for (const entry of result.rows) {
+          if (entry.customType === 'goal') {
             entry.milestoneIds = goalMilestones[entry.id] || [];
           }
-        } else if (customType === 'milestone') {
-          // For milestones, get linked goal IDs
-          const relResult = await client.query(
-            `SELECT "entryId" as "milestoneId", "relatedToId" as "goalId"
-             FROM "${session.user.schemaName}"."entry_relationships"
-             WHERE "entryId" = ANY($1) AND "relationshipType" = 'goal_milestone'`,
-            [entryIds]
-          );
+        }
+      }
+    }
 
-          // Create a map of milestoneId -> goalIds
-          const milestoneGoals: Record<string, string[]> = {};
-          for (const rel of relResult.rows) {
-            if (!milestoneGoals[rel.milestoneId]) {
-              milestoneGoals[rel.milestoneId] = [];
-            }
-            milestoneGoals[rel.milestoneId].push(rel.goalId);
+    if (customType === 'milestone' || (all && milestoneEntries.length > 0)) {
+      const idsToQuery = customType === 'milestone' ? result.rows.map(r => r.id) : milestoneEntries.map(r => r.id);
+
+      if (idsToQuery.length > 0) {
+        // For milestones, get linked goal IDs
+        const relResult = await client.query(
+          `SELECT "entryId" as "milestoneId", "relatedToId" as "goalId"
+           FROM "${session.user.schemaName}"."entry_relationships"
+           WHERE "entryId" = ANY($1) AND "relationshipType" = 'goal_milestone'`,
+          [idsToQuery]
+        );
+
+        // Create a map of milestoneId -> goalIds
+        const milestoneGoals: Record<string, string[]> = {};
+        for (const rel of relResult.rows) {
+          if (!milestoneGoals[rel.milestoneId]) {
+            milestoneGoals[rel.milestoneId] = [];
           }
+          milestoneGoals[rel.milestoneId].push(rel.goalId);
+        }
 
-          // Add goalIds to each milestone entry
-          for (const entry of result.rows) {
+        // Add goalIds to each milestone entry
+        for (const entry of result.rows) {
+          if (entry.customType === 'milestone') {
             entry.goalIds = milestoneGoals[entry.id] || [];
           }
         }
