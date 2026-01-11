@@ -15,14 +15,6 @@ A journal for those too busy to journal with zero-knowledge encryption. Chronicl
 - **Customizable colors and background** - Choose from a variety of colors and background images
 - **Optimized Performance** - Entries cached locally for faster loading and reduced database calls
 
-## Recent Changes (January 2026)
-
-- **Performance Improvements** - Entries are now downloaded and cached locally, reducing database calls significantly
-- **Settings Store** - Settings now load from a centralized store, eliminating flicker on app startup
-- **Task Filtering** - Completed tasks are now hidden when viewing the current date filter
-- **Goal Milestones** - Milestones are now properly attached to goal cards in the goals view
-- **Background Color** - Faster background color and accent switching
-
 ## Privacy Guarantees
 
 - All entry content is encrypted in the browser before transmission
