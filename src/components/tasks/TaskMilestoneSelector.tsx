@@ -1,13 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
-
-interface Milestone {
-  id: string;
-  encryptedContent: string;
-  iv: string;
-}
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 
 interface Props {
   selectedMilestoneIds: string[];
@@ -18,23 +13,15 @@ export function TaskMilestoneSelector({
   selectedMilestoneIds = [],
   onMilestoneIdsChange,
 }: Props) {
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [decryptedMilestones, setDecryptedMilestones] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntriesByType, isInitialized } = useEntriesCache();
 
-  const fetchMilestones = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/entries?customType=milestone');
-      const data = await response.json();
-      setMilestones(data.entries || []);
-    } catch (error) {
-      console.error('Failed to fetch milestones:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Get milestones from cache
+  const milestones = useMemo(() => {
+    if (!isInitialized) return [];
+    return getEntriesByType('milestone');
+  }, [isInitialized, getEntriesByType]);
 
   const decryptMilestoneTitles = useCallback(async () => {
     if (!isKeyReady || milestones.length === 0) return;
@@ -53,10 +40,6 @@ export function TaskMilestoneSelector({
   }, [milestones, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchMilestones();
-  }, [fetchMilestones]);
-
-  useEffect(() => {
     decryptMilestoneTitles();
   }, [decryptMilestoneTitles]);
 
@@ -70,7 +53,7 @@ export function TaskMilestoneSelector({
     onMilestoneIdsChange(Array.from(currentSet));
   };
 
-  if (loading) {
+  if (!isInitialized) {
     return <p className="text-sm text-gray-500">Loading milestones...</p>;
   }
 

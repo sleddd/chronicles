@@ -1,15 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-
-interface Topic {
-  id: string;
-  encryptedName: string;
-  iv: string;
-}
 
 interface Entry {
   id: string;
@@ -27,69 +22,62 @@ interface Props {
 
 export function TopicEntriesTab({ topicName, refreshKey }: Props) {
   const router = useRouter();
-  const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [decryptedEntries, setDecryptedEntries] = useState<Map<string, string>>(new Map());
+  const [matchedTopicId, setMatchedTopicId] = useState<string | null>(null);
   const [matchedTopicName, setMatchedTopicName] = useState<string | null>(null);
   const { decryptData, isKeyReady } = useEncryption();
+  const { getAllTopics, getEntriesByTopic, isInitialized } = useEntriesCache();
+
+  // Get topics from cache
+  const topics = useMemo(() => {
+    if (!isInitialized) return [];
+    return getAllTopics();
+  }, [isInitialized, getAllTopics]);
+
+  // Get entries from cache based on matched topic
+  const entries = useMemo(() => {
+    if (!isInitialized || !matchedTopicId) return [];
+    return getEntriesByTopic(matchedTopicId);
+  }, [isInitialized, matchedTopicId, getEntriesByTopic]);
 
   const handleEditEntry = (entryId: string) => {
     router.push(`/?entry=${entryId}`);
   };
 
-  const fetchEntries = useCallback(async () => {
-    if (!isKeyReady) return;
+  // Find the matching topic by decrypting topic names
+  const findMatchingTopic = useCallback(async () => {
+    if (!isKeyReady || topics.length === 0) return;
 
     setLoading(true);
     try {
-      // Fetch all topics first
-      const topicsResponse = await fetch('/api/topics');
-      if (!topicsResponse.ok) {
-        setEntries([]);
-        return;
-      }
-      const topicsData = await topicsResponse.json();
-      const topics: Topic[] = topicsData.topics || [];
-
       // Decrypt topic names and find case-insensitive match
-      let matchedTopicId: string | null = null;
-      let foundTopicName: string | null = null;
-
       for (const topic of topics) {
         try {
           const decryptedName = await decryptData(topic.encryptedName, topic.iv);
           // Case-insensitive comparison
           if (decryptedName.toLowerCase() === topicName.toLowerCase()) {
-            matchedTopicId = topic.id;
-            foundTopicName = decryptedName;
-            break;
+            setMatchedTopicId(topic.id);
+            setMatchedTopicName(decryptedName);
+            setLoading(false);
+            return;
           }
         } catch {
           // Skip topics that fail to decrypt
         }
       }
 
-      if (!matchedTopicId) {
-        setEntries([]);
-        setMatchedTopicName(null);
-        setLoading(false);
-        return;
-      }
-
-      setMatchedTopicName(foundTopicName);
-
-      // Fetch entries for the matched topic
-      const response = await fetch(`/api/entries?topicId=${matchedTopicId}`);
-      const data = await response.json();
-      setEntries(data.entries || []);
+      // No match found
+      setMatchedTopicId(null);
+      setMatchedTopicName(null);
     } catch (error) {
-      console.error(`Failed to fetch ${topicName} entries:`, error);
+      console.error(`Failed to find topic ${topicName}:`, error);
     } finally {
       setLoading(false);
     }
-  }, [topicName, isKeyReady, decryptData]);
+  }, [topicName, isKeyReady, decryptData, topics]);
 
-  const decryptEntries = useCallback(async () => {
+  const decryptEntriesData = useCallback(async () => {
     if (!isKeyReady || entries.length === 0) return;
 
     const decrypted = new Map<string, string>();
@@ -109,12 +97,12 @@ export function TopicEntriesTab({ topicName, refreshKey }: Props) {
   }, [entries, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries, refreshKey]);
+    findMatchingTopic();
+  }, [findMatchingTopic, refreshKey]);
 
   useEffect(() => {
-    decryptEntries();
-  }, [decryptEntries]);
+    decryptEntriesData();
+  }, [decryptEntriesData]);
 
   // Normalize date to YYYY-MM-DD string format
   const normalizeDate = (dateValue: string | Date | null | undefined): string => {
@@ -167,7 +155,7 @@ export function TopicEntriesTab({ topicName, refreshKey }: Props) {
   // Display name: use matched topic name if found, otherwise use the requested name
   const displayName = matchedTopicName || topicName;
 
-  if (loading) {
+  if (loading || !isInitialized) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
         <LoadingSpinner size="lg" />

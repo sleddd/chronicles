@@ -255,27 +255,30 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run on mount/unmount
 
-  // Fetch and decrypt topic name when selectedTopicId changes
+  // Get topic from cache
+  const { getTopic } = useEntriesCache();
+
+  // Decrypt topic name when selectedTopicId changes (using cached topic)
   useEffect(() => {
-    const fetchTopicName = async () => {
+    const decryptTopicName = async () => {
       if (!state.selectedTopicId || !isKeyReady) {
         dispatch({ type: 'SET_TOPIC_NAME', payload: null });
         return;
       }
       try {
-        const response = await fetch('/api/topics');
-        const data = await response.json();
-        const topic = data.topics?.find((t: { id: string }) => t.id === state.selectedTopicId);
+        const topic = getTopic(state.selectedTopicId);
         if (topic) {
           const name = await decryptData(topic.encryptedName, topic.iv);
           dispatch({ type: 'SET_TOPIC_NAME', payload: name });
+        } else {
+          dispatch({ type: 'SET_TOPIC_NAME', payload: null });
         }
       } catch {
         dispatch({ type: 'SET_TOPIC_NAME', payload: null });
       }
     };
-    fetchTopicName();
-  }, [state.selectedTopicId, isKeyReady, decryptData]);
+    decryptTopicName();
+  }, [state.selectedTopicId, isKeyReady, decryptData, getTopic]);
 
   // Ref to track save function for keyboard shortcut
   const handleSaveRef = useRef<(() => void) | null>(null);

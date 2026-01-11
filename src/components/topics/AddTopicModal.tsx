@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
 
 interface Props {
@@ -23,6 +24,7 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
   const [error, setError] = useState('');
   const { encryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
+  const { addTopic } = useEntriesCache();
 
   if (!isOpen) return null;
 
@@ -54,6 +56,12 @@ export function AddTopicModal({ isOpen, onClose, onTopicAdded }: Props) {
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Failed to create topic');
+      }
+
+      const data = await response.json();
+      // Add to cache
+      if (data.topic) {
+        addTopic(data.topic);
       }
 
       setName('');

@@ -1,22 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-
-interface CustomField {
-  id: string;
-  encryptedData: string;
-  iv: string;
-}
-
-interface Medication {
-  id: string;
-  encryptedContent: string;
-  iv: string;
-  custom_fields: CustomField[] | null;
-}
 
 interface DecryptedMedicationFields {
   dosage?: string;
@@ -48,28 +36,29 @@ interface Props {
 }
 
 export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChange }: Props) {
-  const [medications, setMedications] = useState<Medication[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduledDoses, setScheduledDoses] = useState<ScheduledDose[]>([]);
   const [doseLogs, setDoseLogs] = useState<Record<string, DoseLog>>({});
   const [viewDate, setViewDate] = useState(initialDate);
   const { decryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
+  const { getEntriesByType, isInitialized } = useEntriesCache();
+
+  // Get medications from cache
+  const medications = useMemo(() => {
+    if (!isInitialized) return [];
+    return getEntriesByType('medication');
+  }, [isInitialized, getEntriesByType]);
 
   // Update viewDate when initialDate changes (e.g., from parent component)
   useEffect(() => {
     setViewDate(initialDate);
   }, [initialDate]);
 
-  const fetchData = useCallback(async () => {
+  const fetchDoseLogs = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch all medications from entries API
-      const medResponse = await fetch('/api/entries?customType=medication');
-      const medData = await medResponse.json();
-      setMedications(medData.entries || []);
-
-      // Fetch dose logs for selected date
+      // Fetch dose logs for selected date (this is not cacheable - date-specific)
       const logsResponse = await fetch(`/api/medications/doses?date=${viewDate}`);
       const logsData = await logsResponse.json();
 
@@ -83,7 +72,7 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
       }
       setDoseLogs(logsMap);
     } catch (error) {
-      console.error('Failed to fetch schedule data:', error);
+      console.error('Failed to fetch dose logs:', error);
     } finally {
       setLoading(false);
     }
@@ -137,8 +126,10 @@ export function ScheduleTab({ selectedDate: initialDate, refreshKey, onDataChang
   }, [medications, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData, refreshKey]);
+    if (isInitialized) {
+      fetchDoseLogs();
+    }
+  }, [fetchDoseLogs, refreshKey, isInitialized]);
 
   useEffect(() => {
     buildSchedule();

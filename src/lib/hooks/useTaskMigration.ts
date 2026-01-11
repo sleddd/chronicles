@@ -2,19 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
-
-interface CustomField {
-  id: string;
-  entryId: string;
-  encryptedData: string;
-  iv: string;
-}
-
-interface TaskEntry {
-  id: string;
-  entryDate: string;
-  custom_fields: CustomField[] | null;
-}
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 
 interface DecryptedField {
   fieldKey: string;
@@ -23,19 +11,17 @@ interface DecryptedField {
 
 export function useTaskMigration(today: string) {
   const { isKeyReady, decryptData } = useEncryption();
+  const { getEntriesByType, isInitialized, updateEntry } = useEntriesCache();
   const midnightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasMigratedRef = useRef(false);
   const scheduleNextMidnightRef = useRef<() => void>(() => {});
 
   const migrateIncompleteTasks = useCallback(async () => {
-    if (!isKeyReady || !today) return;
+    if (!isKeyReady || !today || !isInitialized) return;
 
     try {
-      // Fetch all task entries with date before today
-      const response = await fetch(`/api/entries?customType=task`);
-      if (!response.ok) return;
-
-      const { entries }: { entries: TaskEntry[] } = await response.json();
+      // Get all task entries from cache
+      const entries = getEntriesByType('task');
 
       // Filter tasks that are before today
       const pastTasks = entries.filter((entry) => entry.entryDate < today);
@@ -86,12 +72,17 @@ export function useTaskMigration(today: string) {
         if (migrateResponse.ok) {
           const result = await migrateResponse.json();
           console.log(`Migrated ${result.migratedCount} tasks to ${today}`);
+
+          // Update cache with new dates
+          for (const taskId of taskIdsToMigrate) {
+            updateEntry(taskId, { entryDate: today });
+          }
         }
       }
     } catch (error) {
       console.error('Task migration failed:', error);
     }
-  }, [isKeyReady, today, decryptData]);
+  }, [isKeyReady, today, decryptData, isInitialized, getEntriesByType, updateEntry]);
 
   const scheduleNextMidnight = useCallback(() => {
     if (midnightTimeoutRef.current) {
@@ -118,8 +109,8 @@ export function useTaskMigration(today: string) {
   }, [scheduleNextMidnight]);
 
   useEffect(() => {
-    // Run migration on app load when encryption key is ready
-    if (isKeyReady && today && !hasMigratedRef.current) {
+    // Run migration on app load when encryption key is ready and cache is initialized
+    if (isKeyReady && today && isInitialized && !hasMigratedRef.current) {
       hasMigratedRef.current = true;
       migrateIncompleteTasks();
       scheduleNextMidnight();
@@ -130,5 +121,5 @@ export function useTaskMigration(today: string) {
         clearTimeout(midnightTimeoutRef.current);
       }
     };
-  }, [isKeyReady, today, migrateIncompleteTasks, scheduleNextMidnight]);
+  }, [isKeyReady, today, isInitialized, migrateIncompleteTasks, scheduleNextMidnight]);
 }

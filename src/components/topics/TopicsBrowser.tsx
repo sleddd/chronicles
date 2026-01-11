@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
 import Link from 'next/link';
 import { IconPicker, TopicIcon } from './IconPicker';
@@ -200,8 +201,6 @@ function SortableTopicItem({
 }
 
 export function TopicsBrowser() {
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [entries, setEntries] = useState<Entry[]>([]);
   const [decryptedTopics, setDecryptedTopics] = useState<Map<string, string>>(new Map());
   const [decryptedEntries, setDecryptedEntries] = useState<Map<string, string>>(new Map());
   const [decryptedTaskFields, setDecryptedTaskFields] = useState<Map<string, { isCompleted: boolean; isInProgress: boolean; isAutoMigrating: boolean }>>(new Map());
@@ -209,6 +208,32 @@ export function TopicsBrowser() {
   const [mobileEntriesExpanded, setMobileEntriesExpanded] = useState(false);
   const { decryptData, encryptData, isKeyReady } = useEncryption();
   const { accentColor } = useAccentColor();
+  const {
+    getAllTopics,
+    getEntriesByTopic,
+    getEntries,
+    isInitialized,
+    addTopic: addTopicToCache,
+    updateTopic: updateTopicInCache,
+    removeTopic: removeTopicFromCache,
+    reorderTopics: reorderTopicsInCache,
+    updateEntry: updateEntryInCache,
+  } = useEntriesCache();
+
+  // Get topics from cache
+  const topics = useMemo(() => {
+    if (!isInitialized) return [];
+    return getAllTopics();
+  }, [isInitialized, getAllTopics]);
+
+  // Get entries from cache based on selected topic
+  const entries = useMemo(() => {
+    if (!isInitialized) return [];
+    if (selectedTopicId) {
+      return getEntriesByTopic(selectedTopicId);
+    }
+    return getEntries({ all: true });
+  }, [isInitialized, selectedTopicId, getEntriesByTopic, getEntries]);
 
   // CRUD state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -225,29 +250,6 @@ export function TopicsBrowser() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-  const fetchTopics = useCallback(async () => {
-    try {
-      const response = await fetch('/api/topics');
-      const data = await response.json();
-      setTopics(data.topics || []);
-    } catch (error) {
-      console.error('Failed to fetch topics:', error);
-    }
-  }, []);
-
-  const fetchEntriesByTopic = useCallback(async (topicId: string | null) => {
-    try {
-      const params = new URLSearchParams();
-      if (topicId) params.set('topicId', topicId);
-
-      const response = await fetch(`/api/entries?${params}`);
-      const data = await response.json();
-      setEntries(data.entries || []);
-    } catch (error) {
-      console.error('Failed to fetch entries:', error);
-    }
-  }, []);
 
   const decryptTopicsData = useCallback(async () => {
     const decrypted = new Map<string, string>();
@@ -338,11 +340,13 @@ export function TopicsBrowser() {
           newMap.set(entryId, { ...currentFields, isCompleted: completed });
           return newMap;
         });
+        // Update cache - custom_fields will be refreshed on next full load
+        updateEntryInCache(entryId, { updatedAt: new Date().toISOString() });
       }
     } catch (error) {
       console.error('Failed to toggle task completion:', error);
     }
-  }, [isKeyReady, encryptData, decryptedTaskFields]);
+  }, [isKeyReady, encryptData, decryptedTaskFields, updateEntryInCache]);
 
   // CRUD handlers
   const handleAddTopic = async () => {
@@ -354,7 +358,7 @@ export function TopicsBrowser() {
       const { ciphertext, iv } = await encryptData(newTopicName);
       const nameToken = await generateTopicToken(newTopicName, encryptionKey!);
 
-      await fetch('/api/topics', {
+      const response = await fetch('/api/topics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -366,11 +370,16 @@ export function TopicsBrowser() {
         }),
       });
 
+      if (response.ok) {
+        const data = await response.json();
+        // Add to cache
+        addTopicToCache(data.topic);
+      }
+
       setNewTopicName('');
       setNewTopicColor(PRESET_COLORS[0]);
       setNewTopicIcon(null);
       setShowAddForm(false);
-      await fetchTopics();
     } catch (error) {
       console.error('Failed to add topic:', error);
     } finally {
@@ -386,7 +395,7 @@ export function TopicsBrowser() {
       const { ciphertext, iv } = await encryptData(newName);
       const nameToken = await generateTopicToken(newName, encryptionKey!);
 
-      await fetch(`/api/topics/${topicId}`, {
+      const response = await fetch(`/api/topics/${topicId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -398,8 +407,18 @@ export function TopicsBrowser() {
         }),
       });
 
+      if (response.ok) {
+        // Update cache
+        updateTopicInCache(topicId, {
+          encryptedName: ciphertext,
+          iv,
+          nameToken,
+          color: newColor,
+          icon: newIcon,
+        });
+      }
+
       setEditingTopic(null);
-      await fetchTopics();
     } catch (error) {
       console.error('Failed to edit topic:', error);
     }
@@ -409,14 +428,18 @@ export function TopicsBrowser() {
     if (!confirm('Delete this topic? Entries with this topic will become untagged.')) return;
 
     try {
-      await fetch(`/api/topics/${topicId}`, {
+      const response = await fetch(`/api/topics/${topicId}`, {
         method: 'DELETE',
       });
+
+      if (response.ok) {
+        // Remove from cache
+        removeTopicFromCache(topicId);
+      }
 
       if (selectedTopicId === topicId) {
         setSelectedTopicId(null);
       }
-      await fetchTopics();
     } catch (error) {
       console.error('Failed to delete topic:', error);
     }
@@ -430,7 +453,10 @@ export function TopicsBrowser() {
       const newIndex = topics.findIndex((t) => t.id === over.id);
 
       const newTopics = arrayMove(topics, oldIndex, newIndex);
-      setTopics(newTopics);
+
+      // Update cache with new order
+      const reorderedTopics = newTopics.map((t, i) => ({ ...t, sortOrder: i }));
+      reorderTopicsInCache(reorderedTopics);
 
       // Save new order to server
       const topicIds = newTopics.map((t) => t.id);
@@ -442,24 +468,16 @@ export function TopicsBrowser() {
         });
       } catch (error) {
         console.error('Failed to reorder topics:', error);
-        await fetchTopics(); // Revert on error
+        // Cache will be refreshed on next page load
       }
     }
   };
-
-  useEffect(() => {
-    fetchTopics();
-  }, [fetchTopics]);
 
   useEffect(() => {
     if (isKeyReady && topics.length > 0) {
       decryptTopicsData();
     }
   }, [topics, isKeyReady, decryptTopicsData]);
-
-  useEffect(() => {
-    fetchEntriesByTopic(selectedTopicId);
-  }, [selectedTopicId, fetchEntriesByTopic]);
 
   useEffect(() => {
     if (isKeyReady && entries.length > 0) {

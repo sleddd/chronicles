@@ -1,18 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import Link from 'next/link';
 import { TopicIcon } from './IconPicker';
-
-interface Topic {
-  id: string;
-  encryptedName: string;
-  iv: string;
-  color: string;
-  icon: string | null;
-}
 
 interface Props {
   selectedTopicId: string | null;
@@ -21,7 +14,6 @@ interface Props {
 }
 
 export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
-  const [topics, setTopics] = useState<Topic[]>([]);
   const [decryptedTopics, setDecryptedTopics] = useState<Map<string, string>>(new Map());
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,16 +21,13 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { decryptData, isKeyReady } = useEncryption();
   const { accentColor } = useAccentColor();
+  const { getAllTopics, isInitialized } = useEntriesCache();
 
-  const fetchTopics = useCallback(async () => {
-    try {
-      const response = await fetch('/api/topics');
-      const data = await response.json();
-      setTopics(data.topics || []);
-    } catch (error) {
-      console.error('Failed to fetch topics:', error);
-    }
-  }, []);
+  // Get topics from cache
+  const topics = useMemo(() => {
+    if (!isInitialized) return [];
+    return getAllTopics();
+  }, [isInitialized, getAllTopics]);
 
   const decryptTopics = useCallback(async () => {
     const decrypted = new Map<string, string>();
@@ -52,10 +41,6 @@ export function TopicSelector({ selectedTopicId, onSelectTopic }: Props) {
     }
     setDecryptedTopics(decrypted);
   }, [topics, decryptData]);
-
-  useEffect(() => {
-    fetchTopics();
-  }, [fetchTopics]);
 
   useEffect(() => {
     if (isKeyReady && topics.length > 0) {

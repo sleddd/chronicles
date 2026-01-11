@@ -1,19 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { AddTopicModal } from './AddTopicModal';
 import { TopicIcon } from './IconPicker';
-
-interface Topic {
-  id: string;
-  encryptedName: string;
-  iv: string;
-  nameToken: string;
-  color: string;
-  icon: string | null;
-}
 
 interface Props {
   selectedTopicId: string | null;
@@ -21,17 +13,17 @@ interface Props {
 }
 
 export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
-  const [topics, setTopics] = useState<Topic[]>([]);
   const [decryptedNames, setDecryptedNames] = useState<Map<string, string>>(new Map());
   const [showAddModal, setShowAddModal] = useState(false);
   const { decryptData, isKeyReady } = useEncryption();
   const { accentColor } = useAccentColor();
+  const { getAllTopics, isInitialized } = useEntriesCache();
 
-  const fetchTopics = useCallback(async () => {
-    const response = await fetch('/api/topics');
-    const data = await response.json();
-    setTopics(data.topics || []);
-  }, []);
+  // Get topics from cache
+  const topics = useMemo(() => {
+    if (!isInitialized) return [];
+    return getAllTopics();
+  }, [isInitialized, getAllTopics]);
 
   const decryptTopicNames = useCallback(async () => {
     const names = new Map<string, string>();
@@ -45,10 +37,6 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
     }
     setDecryptedNames(names);
   }, [topics, decryptData]);
-
-  useEffect(() => {
-    fetchTopics();
-  }, [fetchTopics]);
 
   useEffect(() => {
     if (isKeyReady && topics.length > 0) {
@@ -95,7 +83,7 @@ export function TopicsSidebar({ selectedTopicId, onSelectTopic }: Props) {
       <AddTopicModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onTopicAdded={fetchTopics}
+        onTopicAdded={() => {}} // Cache is updated automatically by AddTopicModal
       />
     </div>
   );

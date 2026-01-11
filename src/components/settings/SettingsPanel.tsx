@@ -362,22 +362,11 @@ export function SettingsPanel() {
 
       const { decrypt } = await import('@/lib/crypto/encryption');
 
-      // Fetch all entries
-      setExportResult('Fetching entries...');
-      const entriesResponse = await fetch('/api/entries?all=true');
-      if (!entriesResponse.ok) {
-        throw new Error('Failed to fetch entries');
-      }
-      const entriesData = await entriesResponse.json();
-      const entries = entriesData.entries || [];
-
-      // Fetch all topics for name lookup
-      const topicsResponse = await fetch('/api/topics');
-      if (!topicsResponse.ok) {
-        throw new Error('Failed to fetch topics');
-      }
-      const topicsData = await topicsResponse.json();
-      const topics = topicsData.topics || [];
+      // Get entries and topics from cache
+      setExportResult('Loading entries from cache...');
+      const { getEntries, getAllTopics } = useEntriesCache.getState();
+      const entries = getEntries({ all: true });
+      const topics = getAllTopics();
 
       // Decrypt topics to build a lookup map
       setExportResult('Decrypting topics...');

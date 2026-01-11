@@ -1,14 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
-
-interface Goal {
-  id: string;
-  encryptedContent: string;
-  iv: string;
-}
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 
 interface Props {
   milestoneId: string;
@@ -18,26 +13,18 @@ interface Props {
 }
 
 export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCancel }: Props) {
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [decryptedGoals, setDecryptedGoals] = useState<Map<string, string>>(new Map());
   const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set(initialGoalIds));
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { decryptData, isKeyReady } = useEncryption();
   const { accentColor, hoverColor } = useAccentColor();
+  const { getEntriesByType, isInitialized } = useEntriesCache();
 
-  const fetchGoals = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/entries?customType=goal');
-      const data = await response.json();
-      setGoals(data.entries || []);
-    } catch (error) {
-      console.error('Failed to fetch goals:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Get goals from cache
+  const goals = useMemo(() => {
+    if (!isInitialized) return [];
+    return getEntriesByType('goal');
+  }, [isInitialized, getEntriesByType]);
 
   const decryptGoalTitles = useCallback(async () => {
     if (!isKeyReady || goals.length === 0) return;
@@ -54,10 +41,6 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
     }
     setDecryptedGoals(decrypted);
   }, [goals, decryptData, isKeyReady]);
-
-  useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
 
   useEffect(() => {
     decryptGoalTitles();
@@ -112,7 +95,7 @@ export function MilestoneEditor({ milestoneId, initialGoalIds = [], onSave, onCa
     }
   };
 
-  if (loading) {
+  if (!isInitialized) {
     return (
       <div className="p-4 backdrop-blur-md bg-white/70 border border-border rounded-lg">
         <p className="text-gray-500">Loading goals...</p>
@@ -180,23 +163,15 @@ export function MilestoneGoalSelector({
   selectedGoalIds: string[];
   onGoalIdsChange: (goalIds: string[]) => void;
 }) {
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [decryptedGoals, setDecryptedGoals] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntriesByType, isInitialized } = useEntriesCache();
 
-  const fetchGoals = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/entries?customType=goal');
-      const data = await response.json();
-      setGoals(data.entries || []);
-    } catch (error) {
-      console.error('Failed to fetch goals:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Get goals from cache
+  const goals = useMemo(() => {
+    if (!isInitialized) return [];
+    return getEntriesByType('goal');
+  }, [isInitialized, getEntriesByType]);
 
   const decryptGoalTitles = useCallback(async () => {
     if (!isKeyReady || goals.length === 0) return;
@@ -215,10 +190,6 @@ export function MilestoneGoalSelector({
   }, [goals, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
-
-  useEffect(() => {
     decryptGoalTitles();
   }, [decryptGoalTitles]);
 
@@ -232,7 +203,7 @@ export function MilestoneGoalSelector({
     onGoalIdsChange(Array.from(currentSet));
   };
 
-  if (loading) {
+  if (!isInitialized) {
     return <p className="text-sm text-gray-500">Loading goals...</p>;
   }
 

@@ -107,25 +107,16 @@ export function Header() {
     setBackgroundIsLight(contextBackgroundIsLight);
   }, [contextBackgroundIsLight]);
 
-  // Load header color from settings and sync with localStorage
-  const loadHeaderColor = useCallback(async () => {
-    try {
-      const response = await fetch('/api/settings');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.settings?.headerColor) {
-          setHeaderColor(data.settings.headerColor);
-          localStorage.setItem(HEADER_COLOR_STORAGE_KEY, data.settings.headerColor);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load header color:', error);
-    }
-  }, []);
+  // Get header color from useAccentColor (which reads from cache)
+  const { headerColor: contextHeaderColor } = useAccentColor();
 
+  // Sync local state with cache when it loads
   useEffect(() => {
-    loadHeaderColor();
-  }, [loadHeaderColor]);
+    if (contextHeaderColor) {
+      setHeaderColor(contextHeaderColor);
+      localStorage.setItem(HEADER_COLOR_STORAGE_KEY, contextHeaderColor);
+    }
+  }, [contextHeaderColor]);
 
   // Listen for header color changes from settings
   useEffect(() => {

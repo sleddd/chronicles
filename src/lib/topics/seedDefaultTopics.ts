@@ -2,6 +2,7 @@
 
 import { encrypt, decrypt } from '@/lib/crypto/encryption';
 import { generateTopicToken } from '@/lib/crypto/topicTokens';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 
 // Core topics - always available
 // Icon names must match those in IconPicker.tsx TOPIC_ICONS
@@ -33,15 +34,15 @@ export type FeatureTopicKey = keyof typeof FEATURE_TOPICS;
 
 export async function seedDefaultTopics(encryptionKey: CryptoKey): Promise<boolean> {
   try {
-    // Fetch existing topics
-    const response = await fetch('/api/topics');
-    if (!response.ok) {
-      console.error('Failed to fetch topics:', response.status, response.statusText);
-      throw new Error(`Failed to fetch topics: ${response.status}`);
+    // Get existing topics from cache
+    const { getAllTopics, addTopic, isInitialized } = useEntriesCache.getState();
+
+    if (!isInitialized) {
+      console.log('Cache not initialized, skipping topic seeding');
+      return false;
     }
 
-    const data = await response.json();
-    const existingTopics: Array<{ nameToken: string; encryptedName: string; iv: string }> = data.topics || [];
+    const existingTopics = getAllTopics();
 
     // Check which default topics already exist by looking up their nameToken
     const existingTokens = new Set(existingTopics.map((t) => t.nameToken));
@@ -99,6 +100,12 @@ export async function seedDefaultTopics(encryptionKey: CryptoKey): Promise<boole
         throw new Error(`Failed to create topic ${topic.name}: ${createResponse.status}`);
       }
 
+      // Add to cache
+      const data = await createResponse.json();
+      if (data.topic) {
+        addTopic(data.topic);
+      }
+
       console.log('Created topic:', topic.name);
     }
 
@@ -120,14 +127,15 @@ export async function addFeatureTopic(
   }
 
   try {
-    // Check if topic already exists
-    const response = await fetch('/api/topics');
-    if (!response.ok) {
-      throw new Error(`Failed to fetch topics: ${response.status}`);
+    // Get existing topics from cache
+    const { getAllTopics, addTopic, isInitialized } = useEntriesCache.getState();
+
+    if (!isInitialized) {
+      console.log('Cache not initialized, cannot add feature topic');
+      return false;
     }
 
-    const data = await response.json();
-    const existingTopics: Array<{ nameToken: string; encryptedName: string; iv: string }> = data.topics || [];
+    const existingTopics = getAllTopics();
     const existingTokens = new Set(existingTopics.map((t) => t.nameToken));
 
     // Also decrypt all existing topic names for case-insensitive comparison
@@ -169,6 +177,12 @@ export async function addFeatureTopic(
       const errorData = await createResponse.json();
       console.error('Failed to create feature topic:', feature.name, errorData);
       throw new Error(`Failed to create topic ${feature.name}: ${createResponse.status}`);
+    }
+
+    // Add to cache
+    const data = await createResponse.json();
+    if (data.topic) {
+      addTopic(data.topic);
     }
 
     console.log('Created feature topic:', feature.name);
