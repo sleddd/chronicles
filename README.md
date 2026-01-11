@@ -13,7 +13,6 @@ A journal for those too busy to journal with zero-knowledge encryption. Chronicl
 - **Bookmarks** - Mark and quickly access important entries
 - **Mobile Responsive** - Works on desktop and mobile devices
 - **Customizable colors and background** - Choose from a variety of colors and background images
-- **Optimized Performance** - Entries cached locally for faster loading and reduced database calls
 
 ## Privacy Guarantees
 
@@ -71,16 +70,6 @@ Entries are the core of Chronicles. Each entry belongs to a topic and contains y
 2. Type your content in the editor
 3. Use the toolbar for formatting (bold, italic, headings, lists, etc.)
 4. Press Enter or click "Save"
-
-**Entry Features:**
-- **Expand Entry** - By default, entries are limited to 200 characters for brevity. Check "Expand entry" for longer notes.
-- **Bookmark** - Click the bookmark icon to mark important entries for quick access
-- **Share** - Generate a secure public link to share a specific entry (decrypted for viewing)
-- **Delete** - Remove entries you no longer need
-
-**Keyboard Shortcuts:**
-- `Enter` - Save the entry
-- `Shift+Enter` - New line within the entry
 
 ### Special Entry Types
 
