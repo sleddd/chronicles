@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { seedDefaultTopics, addFeatureTopic, FEATURE_TOPICS, FeatureTopicKey } from '@/lib/topics/seedDefaultTopics';
 
@@ -47,6 +48,7 @@ const TIMEZONES = [
 export function SettingsPanel() {
   const { data: session } = useSession();
   const { isKeyReady } = useEncryption();
+  const { settings: cachedSettings, isInitialized: isCacheInitialized, updateSettings: updateCachedSettings } = useEntriesCache();
   const { accentColor, hoverColor } = useAccentColor();
   const [showHowToUse, setShowHowToUse] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -147,23 +149,23 @@ export function SettingsPanel() {
 
   const [savingBackgroundImage, setSavingBackgroundImage] = useState(false);
 
-  const loadFeatureSettings = useCallback(async () => {
-    try {
-      const response = await fetch('/api/settings');
-      const data = await response.json();
-      if (data.settings) {
-        setFeatureSettings(data.settings);
-      }
-    } catch (error) {
-      console.error('Failed to load feature settings:', error);
-    } finally {
-      setLoadingFeatures(false);
-    }
-  }, []);
-
+  // Load settings from cache when available
   useEffect(() => {
-    loadFeatureSettings();
-  }, [loadFeatureSettings]);
+    if (!isCacheInitialized) return;
+
+    setFeatureSettings({
+      foodEnabled: cachedSettings.foodEnabled,
+      medicationEnabled: cachedSettings.medicationEnabled,
+      goalsEnabled: cachedSettings.goalsEnabled,
+      milestonesEnabled: cachedSettings.milestonesEnabled,
+      exerciseEnabled: cachedSettings.exerciseEnabled,
+      allergiesEnabled: cachedSettings.allergiesEnabled,
+      timezone: cachedSettings.timezone,
+      headerColor: cachedSettings.headerColor,
+      backgroundImage: cachedSettings.backgroundImage,
+    });
+    setLoadingFeatures(false);
+  }, [isCacheInitialized, cachedSettings]);
 
   const handleToggleFeature = async (featureKey: FeatureTopicKey) => {
     if (!isKeyReady) return;
@@ -192,6 +194,8 @@ export function SettingsPanel() {
 
       if (response.ok) {
         setFeatureSettings((prev) => ({ ...prev, [settingKey]: newValue }));
+        // Update cache
+        updateCachedSettings({ [settingKey]: newValue });
       }
     } catch (error) {
       console.error('Failed to toggle feature:', error);
@@ -201,6 +205,9 @@ export function SettingsPanel() {
   };
 
   const handleTimezoneChange = async (newTimezone: string) => {
+    // Update cache immediately for instant UI feedback
+    updateCachedSettings({ timezone: newTimezone });
+
     setSavingTimezone(true);
     try {
       const response = await fetch('/api/settings', {
@@ -209,17 +216,23 @@ export function SettingsPanel() {
         body: JSON.stringify({ timezone: newTimezone }),
       });
 
-      if (response.ok) {
-        setFeatureSettings((prev) => ({ ...prev, timezone: newTimezone }));
+      if (!response.ok) {
+        // Revert on failure
+        updateCachedSettings({ timezone: featureSettings.timezone });
       }
     } catch (error) {
       console.error('Failed to update timezone:', error);
+      // Revert on error
+      updateCachedSettings({ timezone: featureSettings.timezone });
     } finally {
       setSavingTimezone(false);
     }
   };
 
   const handleHeaderColorChange = async (newColor: string) => {
+    // Update cache immediately for instant UI feedback
+    updateCachedSettings({ headerColor: newColor });
+
     setSavingHeaderColor(true);
     try {
       const response = await fetch('/api/settings', {
@@ -228,36 +241,47 @@ export function SettingsPanel() {
         body: JSON.stringify({ headerColor: newColor }),
       });
 
-      if (response.ok) {
-        setFeatureSettings((prev) => ({ ...prev, headerColor: newColor }));
-        // Dispatch event so Header component updates immediately
-        window.dispatchEvent(new CustomEvent('headerColorChange', { detail: newColor }));
-        // Also update localStorage for persistence
-        localStorage.setItem('chronicles-header-color', newColor);
+      if (!response.ok) {
+        // Revert on failure
+        updateCachedSettings({ headerColor: featureSettings.headerColor });
       }
     } catch (error) {
       console.error('Failed to update header color:', error);
+      // Revert on error
+      updateCachedSettings({ headerColor: featureSettings.headerColor });
     } finally {
       setSavingHeaderColor(false);
     }
   };
 
   const handleBackgroundImageChange = async (newImage: string) => {
-    // Update UI immediately for instant feedback
-    setFeatureSettings((prev) => ({ ...prev, backgroundImage: newImage }));
+    // Update cache immediately for instant UI feedback
+    updateCachedSettings({ backgroundImage: newImage });
+    // Dispatch event for BackgroundImage component (uses localStorage/events)
     window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newImage }));
     localStorage.setItem('chronicles-background-image', newImage);
 
     // Then persist to server
     setSavingBackgroundImage(true);
     try {
-      await fetch('/api/settings', {
+      const response = await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backgroundImage: newImage }),
       });
+
+      if (!response.ok) {
+        // Revert on failure
+        updateCachedSettings({ backgroundImage: featureSettings.backgroundImage });
+        localStorage.setItem('chronicles-background-image', featureSettings.backgroundImage);
+        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: featureSettings.backgroundImage }));
+      }
     } catch (error) {
       console.error('Failed to update background image:', error);
+      // Revert on error
+      updateCachedSettings({ backgroundImage: featureSettings.backgroundImage });
+      localStorage.setItem('chronicles-background-image', featureSettings.backgroundImage);
+      window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: featureSettings.backgroundImage }));
     } finally {
       setSavingBackgroundImage(false);
     }

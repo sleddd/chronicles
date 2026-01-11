@@ -61,11 +61,36 @@ export interface EntryFilter {
   all?: boolean;
 }
 
+export interface CachedSettings {
+  foodEnabled: boolean;
+  medicationEnabled: boolean;
+  goalsEnabled: boolean;
+  milestonesEnabled: boolean;
+  exerciseEnabled: boolean;
+  allergiesEnabled: boolean;
+  timezone: string;
+  headerColor: string;
+  backgroundImage: string;
+}
+
+const DEFAULT_SETTINGS: CachedSettings = {
+  foodEnabled: false,
+  medicationEnabled: false,
+  goalsEnabled: false,
+  milestonesEnabled: false,
+  exerciseEnabled: false,
+  allergiesEnabled: false,
+  timezone: 'UTC',
+  headerColor: '#2d2c2a',
+  backgroundImage: '',
+};
+
 interface EntriesCacheStore {
   // State
   entries: Map<string, CachedEntry>;
   topics: Map<string, CachedTopic>;
   favoriteIds: Set<string>;
+  settings: CachedSettings;
   isInitialized: boolean;
   isLoading: boolean;
   lastFetchTime: number | null;
@@ -84,6 +109,7 @@ interface EntriesCacheStore {
   getAllTopics: () => CachedTopic[];
   getTopic: (id: string) => CachedTopic | undefined;
   isFavorite: (entryId: string) => boolean;
+  getSettings: () => CachedSettings;
 
   // Actions - Write (update cache after successful API call)
   addEntry: (entry: CachedEntry) => void;
@@ -98,6 +124,8 @@ interface EntriesCacheStore {
   addFavorite: (entryId: string) => void;
   removeFavorite: (entryId: string) => void;
 
+  updateSettings: (updates: Partial<CachedSettings>) => void;
+
   // Actions - Security
   clearCache: () => void;
 }
@@ -106,6 +134,7 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
   entries: new Map(),
   topics: new Map(),
   favoriteIds: new Set(),
+  settings: DEFAULT_SETTINGS,
   isInitialized: false,
   isLoading: false,
   lastFetchTime: null,
@@ -118,21 +147,23 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
     set({ isLoading: true, initError: null });
 
     try {
-      // Parallel fetch: all entries, topics, and favorites
-      const [entriesRes, topicsRes, favoritesRes] = await Promise.all([
+      // Parallel fetch: all entries, topics, favorites, and settings
+      const [entriesRes, topicsRes, favoritesRes, settingsRes] = await Promise.all([
         fetch('/api/entries?all=true'),
         fetch('/api/topics'),
         fetch('/api/favorites'),
+        fetch('/api/settings'),
       ]);
 
-      if (!entriesRes.ok || !topicsRes.ok || !favoritesRes.ok) {
+      if (!entriesRes.ok || !topicsRes.ok || !favoritesRes.ok || !settingsRes.ok) {
         throw new Error('Failed to fetch initial data');
       }
 
-      const [entriesData, topicsData, favoritesData] = await Promise.all([
+      const [entriesData, topicsData, favoritesData, settingsData] = await Promise.all([
         entriesRes.json(),
         topicsRes.json(),
         favoritesRes.json(),
+        settingsRes.json(),
       ]);
 
       // Build entries map
@@ -153,10 +184,17 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
         favSet.add(fav.id); // Entry ID (favorites response includes full entry)
       }
 
+      // Merge settings with defaults
+      const settings: CachedSettings = {
+        ...DEFAULT_SETTINGS,
+        ...settingsData.settings,
+      };
+
       set({
         entries: entriesMap,
         topics: topicsMap,
         favoriteIds: favSet,
+        settings,
         isInitialized: true,
         isLoading: false,
         lastFetchTime: Date.now(),
@@ -341,11 +379,22 @@ export const useEntriesCache = create<EntriesCacheStore>((set, get) => ({
     });
   },
 
+  getSettings: () => {
+    return get().settings;
+  },
+
+  updateSettings: (updates: Partial<CachedSettings>) => {
+    set((state) => ({
+      settings: { ...state.settings, ...updates },
+    }));
+  },
+
   clearCache: () => {
     set({
       entries: new Map(),
       topics: new Map(),
       favoriteIds: new Set(),
+      settings: DEFAULT_SETTINGS,
       isInitialized: false,
       isLoading: false,
       lastFetchTime: null,

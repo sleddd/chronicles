@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 
 interface TimezoneState {
   timezone: string;
@@ -20,48 +21,47 @@ function getTodayInTimezone(timezone: string): string {
 }
 
 export function useTimezone() {
+  const { settings, isInitialized: isCacheInitialized } = useEntriesCache();
+
   const [state, setState] = useState<TimezoneState>({
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     loading: true,
     today: new Date().toISOString().split('T')[0],
   });
 
-  const fetchTimezone = useCallback(async () => {
-    try {
-      const response = await fetch('/api/settings');
-      const data = await response.json();
-      const userTimezone = data.settings?.timezone || 'UTC';
-      setState({
-        timezone: userTimezone,
-        loading: false,
-        today: getTodayInTimezone(userTimezone),
-      });
-    } catch (error) {
-      console.error('Failed to fetch timezone:', error);
-      // Fall back to browser timezone
-      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      setState({
-        timezone: browserTimezone,
-        loading: false,
-        today: getTodayInTimezone(browserTimezone),
-      });
-    }
-  }, []);
-
+  // Load timezone from cache when available
   useEffect(() => {
-    fetchTimezone();
-  }, [fetchTimezone]);
+    if (!isCacheInitialized) return;
+
+    const userTimezone = settings.timezone || 'UTC';
+    setState({
+      timezone: userTimezone,
+      loading: false,
+      today: getTodayInTimezone(userTimezone),
+    });
+  }, [isCacheInitialized, settings.timezone]);
 
   // Check if a given date is today in user's timezone
   const isToday = useCallback((date: string): boolean => {
     return date === state.today;
   }, [state.today]);
 
+  // Refetch just reloads from cache (settings may have been updated)
+  const refetch = useCallback(() => {
+    if (!isCacheInitialized) return;
+    const userTimezone = settings.timezone || 'UTC';
+    setState({
+      timezone: userTimezone,
+      loading: false,
+      today: getTodayInTimezone(userTimezone),
+    });
+  }, [isCacheInitialized, settings.timezone]);
+
   return {
     timezone: state.timezone,
     loading: state.loading,
     today: state.today,
     isToday,
-    refetch: fetchTimezone,
+    refetch,
   };
 }

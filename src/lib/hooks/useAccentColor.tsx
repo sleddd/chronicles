@@ -1,13 +1,44 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useSession } from 'next-auth/react';
+import { useEffect, useMemo } from 'react';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 
 const DEFAULT_HEADER_COLOR = '#4281a4';
-const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
-const BACKGROUND_IMAGE_STORAGE_KEY = 'chronicles-background-image';
-const BACKGROUND_IS_LIGHT_STORAGE_KEY = 'chronicles-background-is-light';
 const FALLBACK_ACCENT_COLOR = '#6b7280'; // gray-500 for when header is transparent
+
+// Get the accent color - returns header color or fallback grey if transparent
+function getAccentColor(headerColor: string): string {
+  if (headerColor === 'transparent') {
+    return FALLBACK_ACCENT_COLOR;
+  }
+  return headerColor;
+}
+
+// Get hover color (slightly darker)
+function getHoverColor(accentColor: string): string {
+  if (accentColor === FALLBACK_ACCENT_COLOR) {
+    return '#4b5563'; // gray-600
+  }
+  // Darken the color by reducing brightness
+  const hex = accentColor.replace('#', '');
+  const r = Math.max(0, parseInt(hex.slice(0, 2), 16) - 20);
+  const g = Math.max(0, parseInt(hex.slice(2, 4), 16) - 20);
+  const b = Math.max(0, parseInt(hex.slice(4, 6), 16) - 20);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Get light background color for the accent
+function getLightBgColor(accentColor: string): string {
+  if (accentColor === FALLBACK_ACCENT_COLOR) {
+    return '#f3f4f6'; // gray-100
+  }
+  // Create a light tint of the color
+  const hex = accentColor.replace('#', '');
+  const r = Math.min(255, parseInt(hex.slice(0, 2), 16) + 180);
+  const g = Math.min(255, parseInt(hex.slice(2, 4), 16) + 180);
+  const b = Math.min(255, parseInt(hex.slice(4, 6), 16) + 180);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
 
 // Analyze image brightness by sampling the top portion (where header is)
 function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
@@ -55,43 +86,7 @@ function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
   });
 }
 
-const DEFAULT_BACKGROUND_IMAGE = '';
-
-// Get the accent color - returns header color or fallback grey if transparent
-function getAccentColor(headerColor: string): string {
-  if (headerColor === 'transparent') {
-    return FALLBACK_ACCENT_COLOR;
-  }
-  return headerColor;
-}
-
-// Get hover color (slightly darker)
-function getHoverColor(accentColor: string): string {
-  if (accentColor === FALLBACK_ACCENT_COLOR) {
-    return '#4b5563'; // gray-600
-  }
-  // Darken the color by reducing brightness
-  const hex = accentColor.replace('#', '');
-  const r = Math.max(0, parseInt(hex.slice(0, 2), 16) - 20);
-  const g = Math.max(0, parseInt(hex.slice(2, 4), 16) - 20);
-  const b = Math.max(0, parseInt(hex.slice(4, 6), 16) - 20);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
-// Get light background color for the accent
-function getLightBgColor(accentColor: string): string {
-  if (accentColor === FALLBACK_ACCENT_COLOR) {
-    return '#f3f4f6'; // gray-100
-  }
-  // Create a light tint of the color
-  const hex = accentColor.replace('#', '');
-  const r = Math.min(255, parseInt(hex.slice(0, 2), 16) + 180);
-  const g = Math.min(255, parseInt(hex.slice(2, 4), 16) + 180);
-  const b = Math.min(255, parseInt(hex.slice(4, 6), 16) + 180);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
-interface AccentColorContextValue {
+export interface AccentColorValue {
   headerColor: string;
   accentColor: string;
   hoverColor: string;
@@ -102,161 +97,50 @@ interface AccentColorContextValue {
   settingsLoaded: boolean;
 }
 
-const AccentColorContext = createContext<AccentColorContextValue>({
-  headerColor: DEFAULT_HEADER_COLOR,
-  accentColor: DEFAULT_HEADER_COLOR,
-  hoverColor: getHoverColor(DEFAULT_HEADER_COLOR),
-  lightBgColor: getLightBgColor(DEFAULT_HEADER_COLOR),
-  isTransparent: false,
-  backgroundImage: DEFAULT_BACKGROUND_IMAGE,
-  backgroundIsLight: false,
-  settingsLoaded: false,
-});
+export function useAccentColor(): AccentColorValue {
+  const { settings, isInitialized } = useEntriesCache();
 
-export function AccentColorProvider({ children }: { children: ReactNode }) {
-  const { status } = useSession();
-  // Use defaults for SSR, then load from API on client
-  const [headerColor, setHeaderColor] = useState(DEFAULT_HEADER_COLOR);
-  const [backgroundImage, setBackgroundImage] = useState(DEFAULT_BACKGROUND_IMAGE);
-  const [backgroundIsLight, setBackgroundIsLight] = useState(false);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const headerColor = settings.headerColor || DEFAULT_HEADER_COLOR;
+  const backgroundImage = settings.backgroundImage || '';
 
-  // Analyze background image brightness when it changes (only after settings loaded)
-  useEffect(() => {
-    if (!settingsLoaded) return;
-
-    if (backgroundImage) {
-      analyzeImageBrightness(backgroundImage).then((isLight) => {
-        setBackgroundIsLight(isLight);
-        localStorage.setItem(BACKGROUND_IS_LIGHT_STORAGE_KEY, String(isLight));
-        // Dispatch event so Header can react immediately
-        window.dispatchEvent(new CustomEvent('backgroundBrightnessChange', { detail: isLight }));
-      });
-    } else {
-      setBackgroundIsLight(false);
-      localStorage.setItem(BACKGROUND_IS_LIGHT_STORAGE_KEY, 'false');
-    }
-  }, [backgroundImage, settingsLoaded]);
-
-  // Load settings from API
-  const loadSettings = useCallback(async () => {
-    setSettingsLoaded(false);
-    try {
-      const response = await fetch('/api/settings');
-      if (response.ok) {
-        const data = await response.json();
-
-        // Use || to treat empty string as falsy and fall back to defaults
-        const newHeaderColor = data.settings?.headerColor || DEFAULT_HEADER_COLOR;
-        const newBackgroundImage = data.settings?.backgroundImage || DEFAULT_BACKGROUND_IMAGE;
-
-        setHeaderColor(newHeaderColor);
-        localStorage.setItem(HEADER_COLOR_STORAGE_KEY, newHeaderColor);
-
-        setBackgroundImage(newBackgroundImage);
-        localStorage.setItem(BACKGROUND_IMAGE_STORAGE_KEY, newBackgroundImage);
-        // Dispatch event so BackgroundImage component updates
-        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newBackgroundImage }));
-      }
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-    } finally {
-      setSettingsLoaded(true);
-    }
-  }, []);
-
-  // Load settings when authenticated, clear on logout
-  useEffect(() => {
-    if (status === 'authenticated') {
-      loadSettings();
-    } else if (status === 'unauthenticated') {
-      // Clear localStorage so next login loads fresh from DB
-      localStorage.removeItem(HEADER_COLOR_STORAGE_KEY);
-      localStorage.removeItem(BACKGROUND_IMAGE_STORAGE_KEY);
-      localStorage.removeItem(BACKGROUND_IS_LIGHT_STORAGE_KEY);
-      // Reset to defaults
-      setHeaderColor(DEFAULT_HEADER_COLOR);
-      setBackgroundImage(DEFAULT_BACKGROUND_IMAGE);
-      setBackgroundIsLight(false);
-      // Mark as loaded (unauthenticated users use defaults)
-      setSettingsLoaded(true);
-    }
-  }, [status, loadSettings]);
-
-
-  // Listen for header color changes from settings
-  useEffect(() => {
-    const handleColorChange = (event: CustomEvent<string>) => {
-      setHeaderColor(event.detail);
-      localStorage.setItem(HEADER_COLOR_STORAGE_KEY, event.detail);
+  // Compute derived values
+  const derived = useMemo(() => {
+    const accent = getAccentColor(headerColor);
+    return {
+      accentColor: accent,
+      hoverColor: getHoverColor(accent),
+      lightBgColor: getLightBgColor(accent),
+      isTransparent: headerColor === 'transparent',
     };
-
-    window.addEventListener('headerColorChange', handleColorChange as EventListener);
-    return () => window.removeEventListener('headerColorChange', handleColorChange as EventListener);
-  }, []);
-
-  // Listen for background image changes from settings
-  useEffect(() => {
-    const handleBackgroundChange = (event: CustomEvent<string>) => {
-      setBackgroundImage(event.detail);
-      localStorage.setItem(BACKGROUND_IMAGE_STORAGE_KEY, event.detail);
-    };
-
-    window.addEventListener('backgroundImageChange', handleBackgroundChange as EventListener);
-    return () => window.removeEventListener('backgroundImageChange', handleBackgroundChange as EventListener);
-  }, []);
-
-  const accentColor = getAccentColor(headerColor);
-  const hoverColor = getHoverColor(accentColor);
-  const lightBgColor = getLightBgColor(accentColor);
-  const isTransparent = headerColor === 'transparent';
+  }, [headerColor]);
 
   // Update CSS custom properties when accent color changes
   useEffect(() => {
-    document.documentElement.style.setProperty('--accent-color', accentColor);
-    document.documentElement.style.setProperty('--accent-hover', hoverColor);
-    document.documentElement.style.setProperty('--accent-light', lightBgColor);
-  }, [accentColor, hoverColor, lightBgColor]);
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--accent-color', derived.accentColor);
+      document.documentElement.style.setProperty('--accent-hover', derived.hoverColor);
+      document.documentElement.style.setProperty('--accent-light', derived.lightBgColor);
+    }
+  }, [derived.accentColor, derived.hoverColor, derived.lightBgColor]);
 
-  const value: AccentColorContextValue = {
+  // Analyze background image brightness and dispatch event when it changes
+  useEffect(() => {
+    if (!isInitialized || typeof window === 'undefined') return;
+
+    if (backgroundImage) {
+      analyzeImageBrightness(backgroundImage).then((isLight) => {
+        window.dispatchEvent(new CustomEvent('backgroundBrightnessChange', { detail: isLight }));
+      });
+    } else {
+      window.dispatchEvent(new CustomEvent('backgroundBrightnessChange', { detail: false }));
+    }
+  }, [backgroundImage, isInitialized]);
+
+  return {
     headerColor,
-    accentColor,
-    hoverColor,
-    lightBgColor,
-    isTransparent,
+    ...derived,
     backgroundImage,
-    backgroundIsLight,
-    settingsLoaded,
+    backgroundIsLight: false, // This is computed async, consumers should listen to event if needed
+    settingsLoaded: isInitialized,
   };
-
-  // Show a blank screen until settings are loaded to prevent flicker
-  if (!settingsLoaded && status !== 'loading') {
-    return (
-      <AccentColorContext.Provider value={value}>
-        <div className="fixed inset-0 bg-[#e8e5df]" />
-      </AccentColorContext.Provider>
-    );
-  }
-
-  // Also hide during session loading to prevent flicker
-  if (status === 'loading') {
-    return (
-      <AccentColorContext.Provider value={value}>
-        <div className="fixed inset-0 bg-[#e8e5df]" />
-      </AccentColorContext.Provider>
-    );
-  }
-
-  return (
-    <AccentColorContext.Provider value={value}>
-      {children}
-    </AccentColorContext.Provider>
-  );
 }
-
-export function useAccentColor() {
-  return useContext(AccentColorContext);
-}
-
-// Re-export for components that just need the provider
-export { AccentColorContext };
