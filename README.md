@@ -23,7 +23,9 @@ A journal for those too busy to journal with zero-knowledge encryption. Chronicl
 
 ## Screenshots
 <img width="1403" height="661" alt="Screenshot 2026-01-11 at 12 12 38 PM" src="https://github.com/user-attachments/assets/8cbc963d-57a0-4ad4-92f8-b9984f9a21d5" />
-<img width="1264" height="666" alt="Screenshot 2026-01-04 at 12 18 36 AM" src="https://github.com/user-attachments/assets/3809fc81-43e1-4617-8271-a7e5984021f3" />
+<img width="1407" height="667" alt="Screenshot 2026-01-11 at 12 27 40 PM" src="https://github.com/user-attachments/assets/d64294f8-18b1-44e4-83e6-218073abbe83" />
+<img width="1415" height="685" alt="Screenshot 2026-01-11 at 12 28 47 PM" src="https://github.com/user-attachments/assets/ed43fe9c-051c-461b-8517-f39242c35179" />
+
 <img width="1417" height="668" alt="Screenshot 2026-01-11 at 12 11 47 PM" src="https://github.com/user-attachments/assets/8374c50b-9692-49a0-86b6-e884ca29aec5" />
 <img width="1236" height="648" alt="Screenshot 2026-01-04 at 12 31 00 AM" src="https://github.com/user-attachments/assets/6f04e329-b85c-474c-99b1-9e983115407c" />
 
