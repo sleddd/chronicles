@@ -10,6 +10,14 @@ const DEFAULT_HEADER_COLOR = '#0F4C5C';
 const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
 const BACKGROUND_IS_LIGHT_STORAGE_KEY = 'chronicles-background-is-light';
 
+// Check if we have a cached header color in localStorage
+function hasCachedHeaderColor(): boolean {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(HEADER_COLOR_STORAGE_KEY) !== null;
+  }
+  return false;
+}
+
 // Get initial color from localStorage (runs synchronously before render)
 function getInitialHeaderColor(): string {
   if (typeof window !== 'undefined') {
@@ -37,13 +45,18 @@ export function Header() {
   const [isEntertainmentMenuClosing, setIsEntertainmentMenuClosing] = useState(false);
   const [showInspirationSubmenu, setShowInspirationSubmenu] = useState(false);
   const [isInspirationMenuClosing, setIsInspirationMenuClosing] = useState(false);
+  // Only use cached color if it exists, otherwise wait for settings to load
+  const [hasCached] = useState(hasCachedHeaderColor);
   const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
   const [backgroundIsLight, setBackgroundIsLight] = useState(getInitialBackgroundIsLight);
   const healthRef = useRef<HTMLDivElement>(null);
   const entertainmentRef = useRef<HTMLDivElement>(null);
   const inspirationRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const { backgroundIsLight: contextBackgroundIsLight, isTransparent } = useAccentColor();
+  const { backgroundIsLight: contextBackgroundIsLight, isTransparent, headerColor: contextHeaderColor, settingsLoaded } = useAccentColor();
+
+  // If no cached color and settings not loaded yet, use transparent to avoid flash of default color
+  const displayHeaderColor = (!hasCached && !settingsLoaded) ? 'transparent' : headerColor;
 
   // Handle closing the health submenu with animation
   const closeHealthSubmenu = useCallback(() => {
@@ -107,16 +120,13 @@ export function Header() {
     setBackgroundIsLight(contextBackgroundIsLight);
   }, [contextBackgroundIsLight]);
 
-  // Get header color from useAccentColor (which reads from cache)
-  const { headerColor: contextHeaderColor } = useAccentColor();
-
   // Sync local state with cache when it loads
   useEffect(() => {
-    if (contextHeaderColor) {
+    if (settingsLoaded && contextHeaderColor) {
       setHeaderColor(contextHeaderColor);
       localStorage.setItem(HEADER_COLOR_STORAGE_KEY, contextHeaderColor);
     }
-  }, [contextHeaderColor]);
+  }, [contextHeaderColor, settingsLoaded]);
 
   // Listen for header color changes from settings
   useEffect(() => {
@@ -207,7 +217,7 @@ export function Header() {
   ];
 
   return (
-    <header className="px-4 py-3" style={{ backgroundColor: headerColor }}>
+    <header className="px-4 py-3" style={{ backgroundColor: displayHeaderColor }}>
       <div className="flex items-center justify-between">
         {/* Logo and New Entry Button */}
         <div className="flex items-center gap-4">
@@ -428,7 +438,7 @@ export function Header() {
         className={`md:hidden fixed inset-0 top-[68px] z-50 border-t border-white/20 transition-all duration-300 ease-out ${
           showMobileMenu ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
         }`}
-        style={{ backgroundColor: headerColor }}
+        style={{ backgroundColor: displayHeaderColor }}
       >
         <nav className="flex flex-col h-full p-4 space-y-1">
             <Link
