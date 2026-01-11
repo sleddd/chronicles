@@ -40,8 +40,18 @@ function getLightBgColor(accentColor: string): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
+// Cache for brightness analysis results to avoid re-analyzing the same image
+const brightnessCache = new Map<string, boolean>();
+
 // Analyze image brightness by sampling the top portion (where header is)
+// Uses downsampling for better performance
 function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
+  // Check cache first
+  const cached = brightnessCache.get(imageUrl);
+  if (cached !== undefined) {
+    return Promise.resolve(cached);
+  }
+
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -49,18 +59,21 @@ function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
+        brightnessCache.set(imageUrl, false);
         resolve(false); // Default to dark if can't analyze
         return;
       }
 
-      // Sample the top portion of the image (where header would be)
-      const sampleHeight = Math.min(100, img.height * 0.15);
-      canvas.width = img.width;
+      // Downsample to a small canvas for faster analysis (max 100x20)
+      const sampleWidth = Math.min(100, img.width);
+      const sampleHeight = Math.min(20, Math.ceil(img.height * 0.15));
+      canvas.width = sampleWidth;
       canvas.height = sampleHeight;
 
-      ctx.drawImage(img, 0, 0, img.width, sampleHeight, 0, 0, img.width, sampleHeight);
+      // Draw scaled-down version of the top portion
+      ctx.drawImage(img, 0, 0, img.width, Math.ceil(img.height * 0.15), 0, 0, sampleWidth, sampleHeight);
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
       const data = imageData.data;
 
       let totalBrightness = 0;
@@ -77,9 +90,12 @@ function analyzeImageBrightness(imageUrl: string): Promise<boolean> {
 
       const avgBrightness = totalBrightness / pixelCount;
       // If average brightness > 128 (midpoint), consider it light
-      resolve(avgBrightness > 128);
+      const isLight = avgBrightness > 128;
+      brightnessCache.set(imageUrl, isLight);
+      resolve(isLight);
     };
     img.onerror = () => {
+      brightnessCache.set(imageUrl, false);
       resolve(false); // Default to dark on error
     };
     img.src = imageUrl;

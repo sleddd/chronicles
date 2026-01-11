@@ -149,6 +149,16 @@ export function SettingsPanel() {
 
   const [savingBackgroundImage, setSavingBackgroundImage] = useState(false);
 
+  // Preload all background images when component mounts for instant switching
+  useEffect(() => {
+    BACKGROUND_IMAGES.forEach((bg) => {
+      if (bg.value) {
+        const img = new Image();
+        img.src = bg.value;
+      }
+    });
+  }, []);
+
   // Load settings from cache when available
   useEffect(() => {
     if (!isCacheInitialized) return;
@@ -230,8 +240,14 @@ export function SettingsPanel() {
   };
 
   const handleHeaderColorChange = async (newColor: string) => {
+    const previousColor = featureSettings.headerColor;
+    // Update local state immediately for instant UI feedback on selection
+    setFeatureSettings((prev) => ({ ...prev, headerColor: newColor }));
     // Update cache immediately for instant UI feedback
     updateCachedSettings({ headerColor: newColor });
+    // Also update localStorage and dispatch event for Header component
+    localStorage.setItem('chronicles-header-color', newColor);
+    window.dispatchEvent(new CustomEvent('headerColorChange', { detail: newColor }));
 
     setSavingHeaderColor(true);
     try {
@@ -243,23 +259,32 @@ export function SettingsPanel() {
 
       if (!response.ok) {
         // Revert on failure
-        updateCachedSettings({ headerColor: featureSettings.headerColor });
+        setFeatureSettings((prev) => ({ ...prev, headerColor: previousColor }));
+        updateCachedSettings({ headerColor: previousColor });
+        localStorage.setItem('chronicles-header-color', previousColor);
+        window.dispatchEvent(new CustomEvent('headerColorChange', { detail: previousColor }));
       }
     } catch (error) {
       console.error('Failed to update header color:', error);
       // Revert on error
-      updateCachedSettings({ headerColor: featureSettings.headerColor });
+      setFeatureSettings((prev) => ({ ...prev, headerColor: previousColor }));
+      updateCachedSettings({ headerColor: previousColor });
+      localStorage.setItem('chronicles-header-color', previousColor);
+      window.dispatchEvent(new CustomEvent('headerColorChange', { detail: previousColor }));
     } finally {
       setSavingHeaderColor(false);
     }
   };
 
   const handleBackgroundImageChange = async (newImage: string) => {
+    const previousImage = featureSettings.backgroundImage;
+    // Update local state immediately for instant UI feedback on selection
+    setFeatureSettings((prev) => ({ ...prev, backgroundImage: newImage }));
     // Update cache immediately for instant UI feedback
     updateCachedSettings({ backgroundImage: newImage });
     // Dispatch event for BackgroundImage component (uses localStorage/events)
-    window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newImage }));
     localStorage.setItem('chronicles-background-image', newImage);
+    window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: newImage }));
 
     // Then persist to server
     setSavingBackgroundImage(true);
@@ -272,16 +297,18 @@ export function SettingsPanel() {
 
       if (!response.ok) {
         // Revert on failure
-        updateCachedSettings({ backgroundImage: featureSettings.backgroundImage });
-        localStorage.setItem('chronicles-background-image', featureSettings.backgroundImage);
-        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: featureSettings.backgroundImage }));
+        setFeatureSettings((prev) => ({ ...prev, backgroundImage: previousImage }));
+        updateCachedSettings({ backgroundImage: previousImage });
+        localStorage.setItem('chronicles-background-image', previousImage);
+        window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: previousImage }));
       }
     } catch (error) {
       console.error('Failed to update background image:', error);
       // Revert on error
-      updateCachedSettings({ backgroundImage: featureSettings.backgroundImage });
-      localStorage.setItem('chronicles-background-image', featureSettings.backgroundImage);
-      window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: featureSettings.backgroundImage }));
+      setFeatureSettings((prev) => ({ ...prev, backgroundImage: previousImage }));
+      updateCachedSettings({ backgroundImage: previousImage });
+      localStorage.setItem('chronicles-background-image', previousImage);
+      window.dispatchEvent(new CustomEvent('backgroundImageChange', { detail: previousImage }));
     } finally {
       setSavingBackgroundImage(false);
     }
