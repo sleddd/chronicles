@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useInactivityTimeout } from '@/lib/hooks/useInactivityTimeout';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { LegacyKeyMigration } from '@/components/auth/LegacyKeyMigration';
@@ -37,9 +38,27 @@ function InactivityWarning({ onDismiss }: { onDismiss: () => void }) {
 export function EncryptionProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
   const { clearKey, isKeyReady, restoreKeyFromSession } = useEncryption();
-  const { clearAllSensitiveData } = useSecurityClear();
+  const { initialize: initializeCache, clearCache, isInitialized: isCacheInitialized } = useEntriesCache();
+  const { clearAllSensitiveData, registerCleanup, unregisterCleanup } = useSecurityClear();
   const restorationAttempted = useRef(false);
+  const cacheInitAttempted = useRef(false);
   const [showWarning, setShowWarning] = useState(false);
+
+  // Register cache cleanup with security clear registry
+  useEffect(() => {
+    registerCleanup('entries-cache', clearCache);
+    return () => {
+      unregisterCleanup('entries-cache');
+    };
+  }, [registerCleanup, unregisterCleanup, clearCache]);
+
+  // Initialize entries cache when authenticated and encryption key is ready
+  useEffect(() => {
+    if (status === 'authenticated' && isKeyReady && !isCacheInitialized && !cacheInitAttempted.current) {
+      cacheInitAttempted.current = true;
+      initializeCache();
+    }
+  }, [status, isKeyReady, isCacheInitialized, initializeCache]);
 
   // Handle inactivity timeout - clear all sensitive data and logout
   const handleTimeout = useCallback(async () => {
@@ -102,7 +121,8 @@ export function EncryptionProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (status === 'unauthenticated') {
       restorationAttempted.current = false;
-      clearAllSensitiveData(); // Clear all registered component data
+      cacheInitAttempted.current = false;
+      clearAllSensitiveData(); // Clear all registered component data (includes cache)
       clearKey();
       sessionStorage.removeItem('recent_login');
     }

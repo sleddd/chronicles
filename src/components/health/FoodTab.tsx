@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface CustomField {
@@ -46,24 +47,26 @@ export function FoodTab({ selectedDate, refreshKey }: Props) {
   const [loading, setLoading] = useState(true);
   const [decryptedEntries, setDecryptedEntries] = useState<Map<string, { name: string; fields: DecryptedFoodFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntries, isInitialized: isCacheInitialized } = useEntriesCache();
 
   const handleEditFood = (entryId: string) => {
     router.push(`/?entry=${entryId}`);
   };
 
-  const fetchFoodEntries = useCallback(async () => {
+  // Load food entries from cache
+  const loadFoodFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
     setLoading(true);
     try {
-      // Fetch from entries API with customType filter
-      const response = await fetch(`/api/entries?customType=food&date=${selectedDate}`);
-      const data = await response.json();
-      setFoodEntries(data.entries || []);
+      const cachedFood = getEntries({ customType: 'food', date: selectedDate });
+      setFoodEntries(cachedFood as FoodEntry[]);
     } catch (error) {
-      console.error('Failed to fetch food entries:', error);
+      console.error('Failed to load food entries from cache:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedDate]);
+  }, [isCacheInitialized, getEntries, selectedDate]);
 
   const decryptEntries = useCallback(async () => {
     if (!isKeyReady || foodEntries.length === 0) return;
@@ -101,8 +104,8 @@ export function FoodTab({ selectedDate, refreshKey }: Props) {
   }, [foodEntries, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchFoodEntries();
-  }, [fetchFoodEntries, refreshKey]);
+    loadFoodFromCache();
+  }, [loadFoodFromCache, refreshKey]);
 
   useEffect(() => {
     decryptEntries();

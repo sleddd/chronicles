@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -60,6 +61,7 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
   const [decryptedEntries, setDecryptedEntries] = useState<Map<string, { name: string; fields: DecryptedExerciseFields }>>(new Map());
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntriesByType, isInitialized: isCacheInitialized } = useEntriesCache();
   const { accentColor } = useAccentColor();
 
   const handleEditExercise = (entryId: string) => {
@@ -107,25 +109,19 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
     }
   }, [viewMode, selectedDate]);
 
-  const fetchExerciseEntries = useCallback(async () => {
+  // Load exercise entries from cache
+  const loadExerciseFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
     setLoading(true);
     try {
       const dateRange = getDateRange();
-      let url = '/api/entries?customType=exercise';
+      let entries = getEntriesByType('exercise') as ExerciseEntry[];
 
-      // Only use date filter for 'today' view, otherwise fetch all and filter client-side
+      // Filter by date range based on view mode
       if (viewMode === 'today' && dateRange) {
-        url += `&date=${dateRange.end}`;
-      } else {
-        url += '&all=true';
-      }
-
-      const response = await fetch(url);
-      const data = await response.json();
-      let entries: ExerciseEntry[] = data.entries || [];
-
-      // Filter by date range for week/month views
-      if (dateRange && viewMode !== 'today' && viewMode !== 'all') {
+        entries = entries.filter(entry => normalizeDate(entry.entryDate) === dateRange.end);
+      } else if (dateRange && viewMode !== 'all') {
         entries = entries.filter(entry => {
           const entryDate = normalizeDate(entry.entryDate);
           if (entryDate === 'unknown') return false;
@@ -135,11 +131,11 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
 
       setExerciseEntries(entries);
     } catch (error) {
-      console.error('Failed to fetch exercise entries:', error);
+      console.error('Failed to load exercise entries from cache:', error);
     } finally {
       setLoading(false);
     }
-  }, [getDateRange, viewMode]);
+  }, [isCacheInitialized, getEntriesByType, getDateRange, viewMode]);
 
   const decryptEntries = useCallback(async () => {
     if (!isKeyReady || exerciseEntries.length === 0) return;
@@ -181,8 +177,8 @@ export function ExerciseTab({ selectedDate, refreshKey }: Props) {
   }, [exerciseEntries, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchExerciseEntries();
-  }, [fetchExerciseEntries, refreshKey]);
+    loadExerciseFromCache();
+  }, [loadExerciseFromCache, refreshKey]);
 
   useEffect(() => {
     decryptEntries();

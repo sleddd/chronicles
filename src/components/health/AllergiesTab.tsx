@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -53,6 +54,7 @@ export function AllergiesTab({ refreshKey }: Props) {
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [decryptedAllergies, setDecryptedAllergies] = useState<Map<string, { name: string; fields: DecryptedAllergyFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntriesByType, isInitialized: isCacheInitialized } = useEntriesCache();
   const { registerCleanup, unregisterCleanup } = useSecurityClear();
 
   // Register security cleanup on mount, unregister on unmount
@@ -74,19 +76,20 @@ export function AllergiesTab({ refreshKey }: Props) {
     router.push(`/?entry=${allergyId}`);
   };
 
-  const fetchAllergies = useCallback(async () => {
+  // Load allergies from cache
+  const loadAllergiesFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
     setLoading(true);
     try {
-      // Fetch from entries API with customType filter
-      const response = await fetch('/api/entries?customType=allergy');
-      const data = await response.json();
-      setAllergies(data.entries || []);
+      const cachedAllergies = getEntriesByType('allergy');
+      setAllergies(cachedAllergies as Allergy[]);
     } catch (error) {
-      console.error('Failed to fetch allergies:', error);
+      console.error('Failed to load allergies from cache:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isCacheInitialized, getEntriesByType]);
 
   const decryptAllergies = useCallback(async () => {
     if (!isKeyReady || allergies.length === 0) return;
@@ -127,8 +130,8 @@ export function AllergiesTab({ refreshKey }: Props) {
   }, [allergies, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchAllergies();
-  }, [fetchAllergies, refreshKey]);
+    loadAllergiesFromCache();
+  }, [loadAllergiesFromCache, refreshKey]);
 
   useEffect(() => {
     decryptAllergies();

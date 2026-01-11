@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -43,6 +44,7 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
   const [decryptedSymptoms, setDecryptedSymptoms] = useState<Map<string, { name: string; fields: DecryptedSymptomFields }>>(new Map());
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntriesByType, isInitialized: isCacheInitialized } = useEntriesCache();
   const { accentColor } = useAccentColor();
 
   const handleEditSymptom = (entryId: string) => {
@@ -90,28 +92,19 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
     }
   }, [viewMode, selectedDate]);
 
-  const fetchSymptoms = useCallback(async () => {
+  // Load symptoms from cache
+  const loadSymptomsFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
     setLoading(true);
     try {
       const dateRange = getDateRange();
-      let url = '/api/entries?customType=symptom';
+      let entries = getEntriesByType('symptom') as SymptomEntry[];
 
-      // Only use date filter for 'today' view, otherwise fetch all and filter client-side
+      // Filter by date range based on view mode
       if (viewMode === 'today' && dateRange) {
-        url += `&date=${dateRange.end}`;
-      } else {
-        url += '&all=true';
-      }
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-      }
-      const data = await response.json();
-      let entries: SymptomEntry[] = data.entries || [];
-
-      // Filter by date range for week/month views
-      if (dateRange && viewMode !== 'today' && viewMode !== 'all') {
+        entries = entries.filter(entry => normalizeDate(entry.entryDate) === dateRange.end);
+      } else if (dateRange && viewMode !== 'all') {
         entries = entries.filter(entry => {
           const entryDate = normalizeDate(entry.entryDate);
           if (entryDate === 'unknown') return false;
@@ -121,11 +114,11 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
 
       setSymptoms(entries);
     } catch (error) {
-      console.error('Failed to fetch symptoms:', error);
+      console.error('Failed to load symptoms from cache:', error);
     } finally {
       setLoading(false);
     }
-  }, [getDateRange, viewMode]);
+  }, [isCacheInitialized, getEntriesByType, getDateRange, viewMode]);
 
   const decryptSymptoms = useCallback(async () => {
     if (!isKeyReady || symptoms.length === 0) return;
@@ -163,8 +156,8 @@ export function SymptomsTab({ selectedDate, refreshKey }: Props) {
   }, [symptoms, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchSymptoms();
-  }, [fetchSymptoms, refreshKey]);
+    loadSymptomsFromCache();
+  }, [loadSymptomsFromCache, refreshKey]);
 
   useEffect(() => {
     decryptSymptoms();

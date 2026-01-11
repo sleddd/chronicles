@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useReducer, useState, useRef, useLayoutEffect } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache, CachedEntry, CachedTopic } from '@/lib/hooks/useEntriesCache';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { TopicIcon } from '@/components/topics/IconPicker';
@@ -79,6 +80,17 @@ export function EntriesList({
   const { accentColor, hoverColor } = useAccentColor();
   const { registerCleanup, unregisterCleanup } = useSecurityClear();
 
+  // Use entries cache instead of direct API fetches
+  const {
+    getEntries: getCachedEntries,
+    getFavoriteEntries,
+    getAllTopics: getCachedTopics,
+    isFavorite,
+    isInitialized: isCacheInitialized,
+    addEntry: addToCache,
+    updateEntry: updateInCache,
+  } = useEntriesCache();
+
   // Register security cleanup on mount, unregister on unmount
   useEffect(() => {
     const cleanup = () => {
@@ -102,7 +114,6 @@ export function EntriesList({
     decryptedEntries,
     decryptedTopics,
     decryptedTaskFields,
-    favoriteIds,
     filterTopicId,
     viewMode,
     taskFilter,
@@ -115,53 +126,36 @@ export function EntriesList({
     topicSearchQuery,
   } = state;
 
-  const fetchEntries = useCallback(async () => {
+  // Load entries from cache based on view mode
+  const loadEntriesFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
+    let cachedEntries: CachedEntry[];
+
     if (viewMode === 'favorites') {
-      // Fetch favorites
-      const response = await fetch('/api/favorites');
-      const data = await response.json();
-      dispatch({ type: 'SET_ENTRIES', payload: data.favorites || [] });
-      dispatch({ type: 'SET_FAVORITE_IDS', payload: new Set((data.favorites || []).map((f: Entry) => f.id)) });
-    } else if (viewMode === 'search' && searchQuery.trim()) {
-      // Search entries (client-side for now since we need to decrypt)
-      const response = await fetch('/api/entries?all=true');
-      const data = await response.json();
-      dispatch({ type: 'SET_ENTRIES', payload: data.entries || [] });
-    } else if (viewMode === 'all') {
-      // Fetch all entries
-      const params = new URLSearchParams();
-      params.set('all', 'true');
-      if (filterTopicId) params.set('topicId', filterTopicId);
-
-      const response = await fetch(`/api/entries?${params}`);
-      const data = await response.json();
-      dispatch({ type: 'SET_ENTRIES', payload: data.entries || [] });
+      cachedEntries = getFavoriteEntries();
+    } else if (viewMode === 'search' || viewMode === 'all') {
+      cachedEntries = getCachedEntries({ all: true, topicId: filterTopicId || undefined });
+    } else if (viewMode === 'tasks') {
+      cachedEntries = getCachedEntries({ customType: 'task' });
     } else {
-      // Fetch by date + all tasks
-      const params = new URLSearchParams();
-      if (selectedDate && !filterTopicId) params.set('date', selectedDate);
-      if (filterTopicId) params.set('topicId', filterTopicId);
-      params.set('includeTasks', 'true');
-
-      const response = await fetch(`/api/entries?${params}`);
-      const data = await response.json();
-      dispatch({ type: 'SET_ENTRIES', payload: data.entries || [] });
+      // Date view - entries for selected date + all tasks
+      cachedEntries = getCachedEntries({
+        date: filterTopicId ? undefined : selectedDate,
+        topicId: filterTopicId || undefined,
+        includeTasks: !filterTopicId,
+      });
     }
-  }, [selectedDate, filterTopicId, viewMode, searchQuery]);
 
-  const fetchTopics = useCallback(async () => {
-    const response = await fetch('/api/topics');
-    const data = await response.json();
-    dispatch({ type: 'SET_TOPICS', payload: data.topics || [] });
-  }, []);
+    dispatch({ type: 'SET_ENTRIES', payload: cachedEntries as Entry[] });
+  }, [isCacheInitialized, viewMode, selectedDate, filterTopicId, getCachedEntries, getFavoriteEntries]);
 
-  const fetchFavorites = useCallback(async () => {
-    if (viewMode !== 'favorites') {
-      const response = await fetch('/api/favorites');
-      const data = await response.json();
-      dispatch({ type: 'SET_FAVORITE_IDS', payload: new Set((data.favorites || []).map((f: Entry) => f.id)) });
-    }
-  }, [viewMode]);
+  // Load topics from cache
+  const loadTopicsFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+    const cachedTopics = getCachedTopics();
+    dispatch({ type: 'SET_TOPICS', payload: cachedTopics as Topic[] });
+  }, [isCacheInitialized, getCachedTopics]);
 
   const decryptEntries = useCallback(async () => {
     const decrypted: Record<string, string> = {};
@@ -220,17 +214,15 @@ export function EntriesList({
     dispatch({ type: 'SET_DECRYPTED_TASK_FIELDS', payload: decrypted });
   }, [entries, decryptData]);
 
+  // Load entries from cache when cache is initialized or view params change
   useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
+    loadEntriesFromCache();
+  }, [loadEntriesFromCache]);
 
+  // Load topics from cache when initialized
   useEffect(() => {
-    fetchTopics();
-  }, [fetchTopics]);
-
-  useEffect(() => {
-    fetchFavorites();
-  }, [fetchFavorites]);
+    loadTopicsFromCache();
+  }, [loadTopicsFromCache]);
 
   useEffect(() => {
     if (isKeyReady && entries.length > 0) {
@@ -302,7 +294,17 @@ export function EntriesList({
       });
 
       if (response.ok) {
-        // Update local state
+        // Update cache with new custom fields
+        updateInCache(entryId, {
+          custom_fields: customFields.map((cf, i) => ({
+            id: `cf_${entryId}_${i}`,
+            entryId,
+            encryptedData: cf.encryptedData,
+            iv: cf.iv,
+          })),
+        });
+
+        // Update local decrypted state
         dispatch({
           type: 'SET_DECRYPTED_TASK_FIELDS',
           payload: {
@@ -314,7 +316,7 @@ export function EntriesList({
     } catch (error) {
       console.error('Failed to toggle task completion:', error);
     }
-  }, [isKeyReady, encryptData, decryptedTaskFields]);
+  }, [isKeyReady, encryptData, decryptedTaskFields, updateInCache]);
 
   // Get topic name for quick entry to determine which custom fields to show
   const quickEntryTopicName = quickEntryTopicId ? decryptedTopics[quickEntryTopicId]?.toLowerCase() : null;
@@ -520,9 +522,22 @@ export function EntriesList({
       });
 
       if (response.ok) {
+        const data = await response.json();
+        // Add the new entry to cache
+        if (data.entry) {
+          addToCache({
+            ...data.entry,
+            custom_fields: customFields.length > 0 ? customFields.map((cf, i) => ({
+              id: `cf_${data.entry.id}_${i}`,
+              entryId: data.entry.id,
+              encryptedData: cf.encryptedData,
+              iv: cf.iv,
+            })) : null,
+          });
+        }
         resetQuickEntryFields();
-        fetchEntries();
-        onEntryCreated();
+        loadEntriesFromCache(); // Refresh from cache
+        onEntryCreated(data.entry?.id);
       }
     } catch (error) {
       console.error('Failed to create quick entry:', error);
@@ -1027,7 +1042,7 @@ export function EntriesList({
             {filteredEntries.filter(e => e.customType !== 'task').map((entry) => (
               <EntryCard
                 key={entry.id}
-                isFavorite={favoriteIds.has(entry.id)}
+                isFavorite={isFavorite(entry.id)}
                 decryptedContent={decryptedEntries[entry.id]}
                 topic={getTopic(entry.topicId)}
                 topicName={getTopicName(entry.topicId)}
@@ -1045,7 +1060,7 @@ export function EntriesList({
                 {filteredEntries.filter(e => e.customType === 'task').map((entry) => (
                   <EntryCard
                     key={entry.id}
-                    isFavorite={favoriteIds.has(entry.id)}
+                    isFavorite={isFavorite(entry.id)}
                     decryptedContent={decryptedEntries[entry.id]}
                     topic={getTopic(entry.topicId)}
                     topicName={getTopicName(entry.topicId)}
@@ -1077,7 +1092,7 @@ export function EntriesList({
                   {entriesByDate![date].map((entry) => (
                     <EntryCard
                       key={entry.id}
-                      isFavorite={favoriteIds.has(entry.id)}
+                      isFavorite={isFavorite(entry.id)}
                       decryptedContent={decryptedEntries[entry.id]}
                       topic={getTopic(entry.topicId)}
                       topicName={getTopicName(entry.topicId)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { GoalCard } from './GoalCard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -59,6 +60,13 @@ export function GoalsView() {
   const { decryptData, encryptData, isKeyReady } = useEncryption();
   const { accentColor } = useAccentColor();
 
+  // Use entries cache
+  const {
+    getEntriesByType,
+    getEntry: getCachedEntry,
+    isInitialized: isCacheInitialized,
+  } = useEntriesCache();
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -70,34 +78,49 @@ export function GoalsView() {
     })
   );
 
-  const fetchGoals = useCallback(async () => {
+  // Load goals from cache (no N+1 problem - all data already cached)
+  const loadGoalsFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
     setLoading(true);
     try {
-      const response = await fetch('/api/entries?customType=goal');
-      const data = await response.json();
+      const cachedGoals = getEntriesByType('goal');
       const goalsWithMilestones: Goal[] = [];
 
-      // For each goal, fetch the full data including milestones
-      for (const goal of data.entries || []) {
-        try {
-          const detailResponse = await fetch(`/api/entries/${goal.id}`);
-          const detailData = await detailResponse.json();
-          goalsWithMilestones.push({
-            ...goal,
-            milestones: detailData.entry?.milestones || [],
-          });
-        } catch {
-          goalsWithMilestones.push({ ...goal, milestones: [] });
+      for (const goal of cachedGoals) {
+        // Get milestone data from cache using milestoneIds
+        const milestones: Milestone[] = [];
+        if (goal.milestoneIds) {
+          for (const milestoneId of goal.milestoneIds) {
+            const milestone = getCachedEntry(milestoneId);
+            if (milestone) {
+              milestones.push({
+                id: milestone.id,
+                encryptedContent: milestone.encryptedContent,
+                iv: milestone.iv,
+                custom_fields: milestone.custom_fields,
+              });
+            }
+          }
         }
+
+        goalsWithMilestones.push({
+          id: goal.id,
+          encryptedContent: goal.encryptedContent,
+          iv: goal.iv,
+          custom_fields: goal.custom_fields,
+          milestoneIds: goal.milestoneIds || [],
+          milestones,
+        });
       }
 
       setGoals(goalsWithMilestones);
     } catch (error) {
-      console.error('Failed to fetch goals:', error);
+      console.error('Failed to load goals from cache:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isCacheInitialized, getEntriesByType, getCachedEntry]);
 
   const decryptGoalFields = useCallback(async () => {
     if (!isKeyReady || goals.length === 0) return;
@@ -126,8 +149,8 @@ export function GoalsView() {
   }, [goals, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
+    loadGoalsFromCache();
+  }, [loadGoalsFromCache]);
 
   useEffect(() => {
     decryptGoalFields();
@@ -141,8 +164,17 @@ export function GoalsView() {
       );
 
       if (response.ok) {
-        // Refresh the goals list
-        fetchGoals();
+        // Update local state to remove the milestone
+        setGoals((prevGoals) =>
+          prevGoals.map((goal) => {
+            if (goal.id !== goalId) return goal;
+            return {
+              ...goal,
+              milestoneIds: goal.milestoneIds.filter((id) => id !== milestoneId),
+              milestones: goal.milestones?.filter((m) => m.id !== milestoneId),
+            };
+          })
+        );
       }
     } catch (error) {
       console.error('Failed to unlink milestone:', error);
@@ -223,8 +255,8 @@ export function GoalsView() {
       });
     } catch (error) {
       console.error('Failed to save goal order:', error);
-      // Refetch on error to restore correct order
-      fetchGoals();
+      // Reload from cache on error to restore correct order
+      loadGoalsFromCache();
     }
   };
 

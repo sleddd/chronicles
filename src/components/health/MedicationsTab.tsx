@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -50,6 +51,7 @@ export function MedicationsTab({ refreshKey }: Props) {
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [decryptedMedications, setDecryptedMedications] = useState<Map<string, { name: string; fields: DecryptedMedicationFields }>>(new Map());
   const { decryptData, isKeyReady } = useEncryption();
+  const { getEntriesByType, isInitialized: isCacheInitialized } = useEntriesCache();
   const { registerCleanup, unregisterCleanup } = useSecurityClear();
 
   // Register security cleanup on mount, unregister on unmount
@@ -71,19 +73,20 @@ export function MedicationsTab({ refreshKey }: Props) {
     router.push(`/?entry=${medicationId}`);
   };
 
-  const fetchMedications = useCallback(async () => {
+  // Load medications from cache
+  const loadMedicationsFromCache = useCallback(() => {
+    if (!isCacheInitialized) return;
+
     setLoading(true);
     try {
-      // Fetch from entries API with customType filter
-      const response = await fetch('/api/entries?customType=medication');
-      const data = await response.json();
-      setMedications(data.entries || []);
+      const cachedMedications = getEntriesByType('medication');
+      setMedications(cachedMedications as Medication[]);
     } catch (error) {
-      console.error('Failed to fetch medications:', error);
+      console.error('Failed to load medications from cache:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isCacheInitialized, getEntriesByType]);
 
   const decryptMedications = useCallback(async () => {
     if (!isKeyReady || medications.length === 0) return;
@@ -125,8 +128,8 @@ export function MedicationsTab({ refreshKey }: Props) {
   }, [medications, decryptData, isKeyReady]);
 
   useEffect(() => {
-    fetchMedications();
-  }, [fetchMedications, refreshKey]);
+    loadMedicationsFromCache();
+  }, [loadMedicationsFromCache, refreshKey]);
 
   useEffect(() => {
     decryptMedications();

@@ -4,6 +4,7 @@ import { useEffect, useCallback, useRef, useReducer } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useEntriesCache } from '@/lib/hooks/useEntriesCache';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
 import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 import { generateSearchTokens } from '@/lib/crypto/searchTokens';
@@ -222,6 +223,17 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
   const { accentColor, hoverColor } = useAccentColor();
   const { registerCleanup, unregisterCleanup } = useSecurityClear();
 
+  // Use entries cache
+  const {
+    getEntry: getCachedEntry,
+    isFavorite: isCachedFavorite,
+    addEntry: addToCache,
+    updateEntry: updateInCache,
+    removeEntry: removeFromCache,
+    addFavorite: addFavoriteToCache,
+    removeFavorite: removeFavoriteFromCache,
+  } = useEntriesCache();
+
   const MAX_CHARS_SHORT = 200;
 
   // Register security cleanup on mount, unregister on unmount
@@ -298,8 +310,43 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
     dispatch({ type: 'RESET_ALL' });
 
     try {
-      const response = await fetch(`/api/entries/${entryId}`);
-      const { entry } = await response.json();
+      // Try to get entry from cache first
+      const cachedEntry = getCachedEntry(entryId);
+
+      // For goals and milestones, we need the full API response to get nested milestones/tasks
+      // For other entry types, cache is sufficient
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let entry: any;
+
+      const needsRelationships = cachedEntry?.customType === 'goal' || cachedEntry?.customType === 'milestone';
+
+      if (!cachedEntry || needsRelationships) {
+        // Fetch from API to get full entry with relationships
+        const response = await fetch(`/api/entries/${entryId}`);
+        const data = await response.json();
+        entry = data.entry;
+        // Update cache with basic entry data (not relationships)
+        if (entry && !cachedEntry) {
+          addToCache({
+            id: entry.id,
+            encryptedContent: entry.encryptedContent,
+            iv: entry.iv,
+            topicId: entry.topicId,
+            customType: entry.customType,
+            custom_fields: entry.custom_fields,
+            searchTokens: [],
+            entryDate: '',
+            createdAt: '',
+            updatedAt: '',
+          });
+        }
+      } else {
+        entry = cachedEntry;
+      }
+
+      if (!entry) {
+        throw new Error('Entry not found');
+      }
 
       const content = await decryptData(entry.encryptedContent, entry.iv);
       editor.commands.setContent(content);
@@ -390,22 +437,15 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         }
       }
 
-      // Check if entry is favorited
-      try {
-        const favResponse = await fetch('/api/favorites');
-        const favData = await favResponse.json();
-        const isFav = (favData.favorites || []).some((f: { id: string }) => f.id === entryId);
-        dispatch({ type: 'SET_FAVORITE', payload: isFav });
-      } catch {
-        dispatch({ type: 'SET_FAVORITE', payload: false });
-      }
+      // Check if entry is favorited (from cache)
+      dispatch({ type: 'SET_FAVORITE', payload: isCachedFavorite(entryId) });
 
     } catch (error) {
       console.error('Failed to load entry:', error);
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [entryId, isKeyReady, editor, decryptData]);
+  }, [entryId, isKeyReady, editor, decryptData, getCachedEntry, addToCache, isCachedFavorite]);
 
   useEffect(() => {
     if (entryId && isKeyReady) {
@@ -449,7 +489,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
       if (entryId) {
         // Update existing entry
-        await fetch(`/api/entries/${entryId}`, {
+        const response = await fetch(`/api/entries/${entryId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -461,6 +501,24 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
             ...(customFields && { customFields }),
           }),
         });
+
+        if (response.ok) {
+          // Update cache with new data
+          updateInCache(entryId, {
+            encryptedContent: ciphertext,
+            iv,
+            searchTokens,
+            topicId: state.selectedTopicId,
+            customType: entryType || null,
+            custom_fields: customFields?.map((cf, i) => ({
+              id: `cf_${entryId}_${i}`,
+              entryId,
+              encryptedData: cf.encryptedData,
+              iv: cf.iv,
+            })) || null,
+            updatedAt: new Date().toISOString(),
+          });
+        }
 
         // Update milestone goal links if editing a milestone
         if (entryType === 'milestone') {
@@ -497,6 +555,19 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
 
         const data = await response.json();
         const newEntryId = data.entry?.id;
+
+        // Add new entry to cache
+        if (data.entry) {
+          addToCache({
+            ...data.entry,
+            custom_fields: customFields?.map((cf, i) => ({
+              id: `cf_${newEntryId}_${i}`,
+              entryId: newEntryId,
+              encryptedData: cf.encryptedData,
+              iv: cf.iv,
+            })) || null,
+          });
+        }
 
         // Link milestone to goals after creation
         if (entryType === 'milestone' && state.milestone.goalIds.length > 0 && newEntryId) {
@@ -546,6 +617,9 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
       });
 
       if (response.ok) {
+        // Remove from cache
+        removeFromCache(entryId);
+
         dispatch({ type: 'SET_SHOW_DELETE_CONFIRM', payload: false });
         onEntrySaved();
         // Close entry editor and show new entry view
@@ -576,6 +650,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           method: 'DELETE',
         });
         if (response.ok) {
+          removeFavoriteFromCache(entryId);
           dispatch({ type: 'SET_FAVORITE', payload: false });
         }
       } else {
@@ -586,6 +661,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           body: JSON.stringify({ entryId }),
         });
         if (response.ok) {
+          addFavoriteToCache(entryId);
           dispatch({ type: 'SET_FAVORITE', payload: true });
         }
       }
