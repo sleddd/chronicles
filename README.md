@@ -31,7 +31,7 @@ A journal for those too busy to journal with zero-knowledge encryption. Chronicl
 - Session Management - Revoke sessions at any time if you see an unfamiliar device
 
 ## Screenshots
-<img width="1345" height="672" alt="Screenshot 2026-01-04 at 12 12 05 AM" src="https://github.com/user-attachments/assets/056c702b-6000-4a17-92d4-d3b47e449e37" />
+<img width="1403" height="661" alt="Screenshot 2026-01-11 at 12 12 38 PM" src="https://github.com/user-attachments/assets/8cbc963d-57a0-4ad4-92f8-b9984f9a21d5" />
 <img width="1264" height="666" alt="Screenshot 2026-01-04 at 12 18 36 AM" src="https://github.com/user-attachments/assets/3809fc81-43e1-4617-8271-a7e5984021f3" />
 <img width="1267" height="667" alt="Screenshot 2026-01-04 at 12 19 18 AM" src="https://github.com/user-attachments/assets/e57483aa-f97d-4af4-9e46-33dab158dc7b" />
 <img width="1236" height="648" alt="Screenshot 2026-01-04 at 12 31 00 AM" src="https://github.com/user-attachments/assets/6f04e329-b85c-474c-99b1-9e983115407c" />
