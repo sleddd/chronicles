@@ -556,6 +556,7 @@ export function EntriesList({
   // Filter entries by search query, topic, and task completion (client-side)
   const filteredEntries = entries.filter(entry => {
     // In date view, show tasks if they were created for this date OR have auto-migrate enabled
+    // Also hide completed tasks in date view
     if (viewMode === 'date' && entry.customType === 'task') {
       const taskFields = decryptedTaskFields[entry.id];
       const taskDate = normalizeDate(entry.entryDate);
@@ -563,6 +564,10 @@ export function EntriesList({
 
       // If task fields not yet decrypted, show the task (will filter after decryption)
       if (taskFields) {
+        // Hide completed tasks in date view
+        if (taskFields.isCompleted) {
+          return false;
+        }
         // Show task if it's for the selected date OR has auto-migrate enabled
         if (!isTaskForSelectedDate && !taskFields.isAutoMigrating) {
           return false;
