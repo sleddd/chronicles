@@ -66,6 +66,7 @@ export type EntryState = {
     mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
     consumedAt: string;
     ingredients: string;
+    calories: string;
     notes: string;
   };
 
@@ -182,6 +183,7 @@ export const initialState: EntryState = {
     mealType: 'breakfast',
     consumedAt: '',
     ingredients: '',
+    calories: '',
     notes: '',
   },
   symptom: {
