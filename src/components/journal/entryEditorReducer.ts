@@ -305,8 +305,24 @@ export function entryReducer(state: EntryState, action: EntryAction): EntryState
     case 'RESET_ALL':
       return initialState;
 
-    case 'LOAD_ENTRY':
-      return { ...state, ...action.payload };
+    case 'LOAD_ENTRY': {
+      // Deep merge nested objects to preserve fields like linkedMilestones, linkedTasks
+      const payload = action.payload;
+      return {
+        ...state,
+        ...payload,
+        // Merge nested objects instead of replacing them
+        goal: payload.goal ? { ...state.goal, ...payload.goal } : state.goal,
+        milestone: payload.milestone ? { ...state.milestone, ...payload.milestone } : state.milestone,
+        task: payload.task ? { ...state.task, ...payload.task } : state.task,
+        medication: payload.medication ? { ...state.medication, ...payload.medication } : state.medication,
+        food: payload.food ? { ...state.food, ...payload.food } : state.food,
+        symptom: payload.symptom ? { ...state.symptom, ...payload.symptom } : state.symptom,
+        event: payload.event ? { ...state.event, ...payload.event } : state.event,
+        meeting: payload.meeting ? { ...state.meeting, ...payload.meeting } : state.meeting,
+        exercise: payload.exercise ? { ...state.exercise, ...payload.exercise } : state.exercise,
+      };
+    }
 
     default:
       return state;

@@ -104,13 +104,11 @@ export async function buildGoalFields(
 export async function loadMilestoneFields(
   entry: { goalIds?: string[] },
 ): Promise<Partial<EntryState['milestone']>> {
-  const updates: Partial<EntryState['milestone']> = {};
-
-  if (entry.goalIds) {
-    updates.goalIds = entry.goalIds;
-  }
-
-  return updates;
+  // Only return goalIds - linkedTasks is loaded separately in EntryEditor
+  // to avoid overwriting any existing linkedTasks value
+  return {
+    goalIds: entry.goalIds || [],
+  };
 }
 
 export async function buildMilestoneFields(

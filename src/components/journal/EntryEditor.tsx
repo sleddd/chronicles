@@ -528,7 +528,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           await fetch(`/api/milestones/${entryId}/goals`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goalIds: state.milestone.goalIds }),
+            body: JSON.stringify({ goalIds: state.milestone.goalIds ?? [] }),
           });
         }
 
@@ -537,7 +537,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           await fetch(`/api/tasks/${entryId}/milestones`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ milestoneIds: state.task.milestoneIds }),
+            body: JSON.stringify({ milestoneIds: state.task.milestoneIds ?? [] }),
           });
         }
       } else {
@@ -573,20 +573,20 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         }
 
         // Link milestone to goals after creation
-        if (entryType === 'milestone' && state.milestone.goalIds.length > 0 && newEntryId) {
+        if (entryType === 'milestone' && (state.milestone.goalIds?.length ?? 0) > 0 && newEntryId) {
           await fetch(`/api/milestones/${newEntryId}/goals`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goalIds: state.milestone.goalIds }),
+            body: JSON.stringify({ goalIds: state.milestone.goalIds ?? [] }),
           });
         }
 
         // Link task to milestones after creation
-        if (entryType === 'task' && state.task.milestoneIds.length > 0 && newEntryId) {
+        if (entryType === 'task' && (state.task.milestoneIds?.length ?? 0) > 0 && newEntryId) {
           await fetch(`/api/tasks/${newEntryId}/milestones`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ milestoneIds: state.task.milestoneIds }),
+            body: JSON.stringify({ milestoneIds: state.task.milestoneIds ?? [] }),
           });
         }
       }
@@ -836,7 +836,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           onChange={(key, value) => dispatch({ type: 'UPDATE_GOAL', payload: { [key]: value } })}
           glass
         />
-        {state.goal.linkedMilestones.length > 0 && (
+        {(state.goal.linkedMilestones?.length ?? 0) > 0 && (
           <div className="custom-fields-body mt-4 pt-4 border-t">
             <label className="field-label">
               Linked Milestones ({state.goal.linkedMilestones.length})
@@ -871,13 +871,13 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
           onChange={(key, value) => dispatch({ type: 'UPDATE_MILESTONE', payload: { [key]: value } })}
           goalSelector={
             <MilestoneGoalSelector
-              selectedGoalIds={state.milestone.goalIds}
+              selectedGoalIds={state.milestone.goalIds ?? []}
               onGoalIdsChange={(ids) => dispatch({ type: 'UPDATE_MILESTONE', payload: { goalIds: ids } })}
             />
           }
           glass
         />
-        {state.milestone.linkedTasks.length > 0 && (
+        {(state.milestone.linkedTasks?.length ?? 0) > 0 && (
           <div className="custom-fields-body mt-4 pt-4 border-t">
             <label className="field-label">
               Linked Tasks ({state.milestone.linkedTasks.filter(t => t.isCompleted).length}/{state.milestone.linkedTasks.length} completed)
@@ -919,7 +919,7 @@ export function EntryEditor({ entryId, date: _date, onEntrySaved, onSelectEntry,
         <div className="custom-fields-body mt-4 pt-4 border-t">
           <label className="field-label">Link to Milestones</label>
           <TaskMilestoneSelector
-            selectedMilestoneIds={state.task.milestoneIds}
+            selectedMilestoneIds={state.task.milestoneIds ?? []}
             onMilestoneIdsChange={(ids) => dispatch({ type: 'UPDATE_TASK', payload: { milestoneIds: ids } })}
           />
           <p className="field-hint">

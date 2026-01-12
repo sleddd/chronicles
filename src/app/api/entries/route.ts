@@ -143,6 +143,38 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For tasks, get linked milestone IDs
+    const taskEntries = result.rows.filter((e: { customType?: string }) => e.customType === 'task');
+    if (customType === 'task' || (all && taskEntries.length > 0)) {
+      const idsToQuery = customType === 'task' ? result.rows.map(r => r.id) : taskEntries.map(r => r.id);
+
+      if (idsToQuery.length > 0) {
+        // For tasks, get linked milestone IDs
+        const relResult = await client.query(
+          `SELECT "entryId" as "taskId", "relatedToId" as "milestoneId"
+           FROM "${session.user.schemaName}"."entry_relationships"
+           WHERE "entryId" = ANY($1) AND "relationshipType" = 'milestone_task'`,
+          [idsToQuery]
+        );
+
+        // Create a map of taskId -> milestoneIds
+        const taskMilestones: Record<string, string[]> = {};
+        for (const rel of relResult.rows) {
+          if (!taskMilestones[rel.taskId]) {
+            taskMilestones[rel.taskId] = [];
+          }
+          taskMilestones[rel.taskId].push(rel.milestoneId);
+        }
+
+        // Add milestoneIds to each task entry
+        for (const entry of result.rows) {
+          if (entry.customType === 'task') {
+            entry.milestoneIds = taskMilestones[entry.id] || [];
+          }
+        }
+      }
+    }
+
     return NextResponse.json({ entries: result.rows });
   } finally {
     client.release();

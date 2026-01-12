@@ -194,7 +194,7 @@ export function MilestoneGoalSelector({
   }, [decryptGoalTitles]);
 
   const toggleGoal = (goalId: string) => {
-    const currentSet = new Set(selectedGoalIds);
+    const currentSet = new Set(selectedGoalIds || []);
     if (currentSet.has(goalId)) {
       currentSet.delete(goalId);
     } else {
@@ -220,7 +220,7 @@ export function MilestoneGoalSelector({
         >
           <input
             type="checkbox"
-            checked={selectedGoalIds.includes(goal.id)}
+            checked={(selectedGoalIds || []).includes(goal.id)}
             onChange={() => toggleGoal(goal.id)}
             className="w-4 h-4 text-grey-600 rounded border-gray-500 "
           />
