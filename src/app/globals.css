@@ -27,10 +27,25 @@ body {
   /* Ensure touch scrolling works on mobile */
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
-  /* Improve font rendering on iOS */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Improve font rendering - use subpixel for better contrast on iOS */
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
   text-rendering: optimizeLegibility;
+}
+
+/* iOS-specific fixes for washed out text */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari only */
+  body {
+    /* Slightly heavier font weight for better iOS readability */
+    font-weight: 450;
+  }
+
+  /* Make gray text darker on iOS for better contrast */
+  .text-gray-400 { color: #8b8b8b !important; }
+  .text-gray-500 { color: #5f5f5f !important; }
+  .text-gray-600 { color: #4a4a4a !important; }
+  .text-gray-700 { color: #333333 !important; }
 }
 
 .font-body {
