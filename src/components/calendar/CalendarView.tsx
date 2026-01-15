@@ -63,6 +63,9 @@ interface DecryptedEntry {
   color: string;
   type: 'entry';
   eventTime?: string | null;
+  // For meetings/events: the actual start/end dates from custom fields
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 type CalendarItem = DecryptedEvent | DecryptedEntry;
@@ -159,8 +162,11 @@ export function CalendarView({
           // Extract first line as title
           const title = content.split('\n')[0].replace(/<[^>]*>/g, '').slice(0, 50);
 
-          // Extract eventTime from custom_fields if present
+          // Extract custom fields: eventTime, startDate, endDate, startTime
           let eventTime: string | null = null;
+          let startDate: string | null = null;
+          let endDate: string | null = null;
+          let startTime: string | null = null;
           if (entry.custom_fields) {
             for (const cf of entry.custom_fields) {
               try {
@@ -168,12 +174,22 @@ export function CalendarView({
                 const parsed = JSON.parse(fieldData);
                 if (parsed.fieldKey === 'eventTime') {
                   eventTime = parsed.value;
-                  break;
+                } else if (parsed.fieldKey === 'startDate') {
+                  startDate = parsed.value;
+                } else if (parsed.fieldKey === 'endDate') {
+                  endDate = parsed.value;
+                } else if (parsed.fieldKey === 'startTime') {
+                  startTime = parsed.value;
                 }
               } catch {
                 // Skip failed decryption
               }
             }
+          }
+
+          // For meetings/events, use startTime as eventTime if no eventTime set
+          if ((entry.customType === 'meeting' || entry.customType === 'event') && !eventTime && startTime) {
+            eventTime = startTime;
           }
 
           const colorMap: Record<string, string> = {
@@ -192,6 +208,8 @@ export function CalendarView({
             color: colorMap[entry.customType] || '#6366f1',
             type: 'entry',
             eventTime,
+            startDate,
+            endDate,
           });
         } catch (error) {
           console.error('Failed to decrypt entry:', entry.id);
@@ -220,12 +238,21 @@ export function CalendarView({
 
     decryptedItems.forEach((item) => {
       if (item.type === 'event') {
+        // Calendar events: check date range
         const start = item.startDate;
         const end = item.endDate || item.startDate;
         if (dateStr >= start && dateStr <= end) {
           items.push(item);
         }
+      } else if (item.customType === 'meeting' || item.customType === 'event') {
+        // Meeting/event entries: use startDate/endDate from custom fields
+        const start = item.startDate;
+        const end = item.endDate || item.startDate;
+        if (start && dateStr >= start && dateStr <= (end || start)) {
+          items.push(item);
+        }
       } else {
+        // Other entries (task, goal, medication): use entryDate
         if (item.entryDate === dateStr) {
           items.push(item);
         }

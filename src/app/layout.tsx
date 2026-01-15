@@ -12,6 +12,7 @@ import { AccentColorInitializer } from "@/components/providers/AccentColorInitia
 const montserrat = Montserrat({
   variable: "--font-montserrat",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "900"],
 });
 
 export const metadata: Metadata = {

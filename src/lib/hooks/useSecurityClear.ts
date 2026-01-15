@@ -71,10 +71,19 @@ export const useSecurityClear = create<SecurityClearStore>((set, get) => ({
       }
     });
 
-    // Also clear sessionStorage items that might contain sensitive data
+    // Clear sessionStorage items that might contain sensitive data
     try {
       sessionStorage.removeItem('chronicles_session_key');
       sessionStorage.removeItem('recent_login');
+    } catch {
+      // Ignore storage errors
+    }
+
+    // Clear localStorage items (user preferences cached for performance)
+    try {
+      localStorage.removeItem('chronicles-header-color');
+      localStorage.removeItem('chronicles-background-image');
+      localStorage.removeItem('chronicles-background-is-light');
     } catch {
       // Ignore storage errors
     }

@@ -5,6 +5,7 @@ import { signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAccentColor } from '@/lib/hooks/useAccentColor';
+import { useSecurityClear } from '@/lib/hooks/useSecurityClear';
 
 const DEFAULT_HEADER_COLOR = '#0F4C5C';
 const HEADER_COLOR_STORAGE_KEY = 'chronicles-header-color';
@@ -45,6 +46,7 @@ export function Header() {
   const [isEntertainmentMenuClosing, setIsEntertainmentMenuClosing] = useState(false);
   const [showInspirationSubmenu, setShowInspirationSubmenu] = useState(false);
   const [isInspirationMenuClosing, setIsInspirationMenuClosing] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   // Only use cached color if it exists, otherwise wait for settings to load
   const [hasCached] = useState(hasCachedHeaderColor);
   const [headerColor, setHeaderColor] = useState(getInitialHeaderColor);
@@ -54,6 +56,24 @@ export function Header() {
   const inspirationRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { backgroundIsLight: contextBackgroundIsLight, isTransparent, headerColor: contextHeaderColor, settingsLoaded } = useAccentColor();
+  const { clearAllSensitiveData } = useSecurityClear();
+
+  // Handle logout - clear all data first, then sign out
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) return; // Prevent double-clicks
+    setIsLoggingOut(true);
+    setShowMobileMenu(false);
+
+    try {
+      // Clear all sensitive data first (includes localStorage)
+      clearAllSensitiveData();
+      // Then sign out
+      await signOut({ callbackUrl: '/login' });
+    } catch (error) {
+      console.error('Logout error:', error);
+      setIsLoggingOut(false);
+    }
+  }, [isLoggingOut, clearAllSensitiveData]);
 
   // If no cached color and settings not loaded yet, use transparent to avoid flash of default color
   const displayHeaderColor = (!hasCached && !settingsLoaded) ? 'transparent' : headerColor;
@@ -216,6 +236,9 @@ export function Header() {
     { key: 'quotes', label: 'Quotes' },
   ];
 
+  // Don't show menu until settings are loaded
+  const showMenu = settingsLoaded;
+
   return (
     <header className="px-4 py-3" style={{ backgroundColor: displayHeaderColor }}>
       <div className="flex items-center justify-between">
@@ -229,20 +252,25 @@ export function Header() {
               className={`h-11 w-auto ${logoFilter}`}
             />
           </Link>
-          <div className="hidden md:block w-px h-6 bg-border" />
-          <button
-            onClick={() => router.push('/?new=true')}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${textColor} ${textColorHover}`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>New Entry</span>
-          </button>
+          {showMenu && (
+            <>
+              <div className="hidden min-[1200px]:block w-px h-6 bg-border" />
+              <button
+                onClick={() => router.push('/?new=true')}
+                className={`hidden min-[1200px]:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${textColor} ${textColorHover}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>New Entry</span>
+              </button>
+            </>
+          )}
         </div>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-1 flex-1 justify-end">
+        {/* Desktop Navigation - only show when settings loaded */}
+        {showMenu && (
+          <nav className="hidden min-[1200px]:flex items-center gap-1 flex-1 justify-end">
           <Link
             href="/"
             className={`px-4 py-2 text-sm rounded-md transition-colors ${
@@ -409,35 +437,40 @@ export function Header() {
           <div className="w-px h-6 bg-border mx-2" />
 
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className={`px-4 py-2 text-sm rounded-md transition-colors ${textColor} ${textColorHover}`}
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className={`px-4 py-2 text-sm rounded-md transition-colors ${textColor} ${textColorHover} ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            Logout
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
           </button>
         </nav>
+        )}
 
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setShowMobileMenu(!showMobileMenu)}
-          className="md:hidden p-2 rounded-full hover:bg-white/20"
-        >
-          {showMobileMenu ? (
-            <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
+        {/* Mobile Menu Button - only show when settings loaded */}
+        {showMenu && (
+          <button
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+            className="max-[1199px]:block hidden p-2 rounded-full hover:bg-white/20"
+          >
+            {showMobileMenu ? (
+              <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className={`w-6 h-6 ${textColorActive}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
-      {/* Mobile Menu - Full height overlay with slide animation */}
-      <div
-        className={`md:hidden fixed inset-0 top-[68px] z-50 border-t border-white/20 transition-all duration-300 ease-out ${
-          showMobileMenu ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-        }`}
+      {/* Mobile Menu - Full height overlay with slide animation - only show when settings loaded */}
+      {showMenu && (
+        <div
+          className={`max-[1199px]:block hidden fixed inset-0 top-[68px] z-50 border-t border-white/20 transition-all duration-300 ease-out ${
+            showMobileMenu ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
+          }`}
         style={{ backgroundColor: displayHeaderColor }}
       >
         <nav className="flex flex-col h-full p-4 space-y-1">
@@ -516,13 +549,15 @@ export function Header() {
             <div className="flex-1" />
             <hr className="border-white/20" />
             <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className={`w-full text-left px-3 py-3 text-base rounded-md ${textColor} ${textColorHover}`}
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={`w-full text-left px-3 py-3 text-base rounded-md ${textColor} ${textColorHover} ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              Logout
+              {isLoggingOut ? 'Logging out...' : 'Logout'}
             </button>
           </nav>
-      </div>
+        </div>
+      )}
     </header>
   );
 }

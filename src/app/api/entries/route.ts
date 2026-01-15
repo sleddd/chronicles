@@ -175,7 +175,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ entries: result.rows });
+    // Format dates as yyyy-MM-dd strings for consistent frontend comparison
+    // Use UTC methods since pg driver returns dates at UTC midnight
+    const formatDateField = (date: Date | string | null): string | null => {
+      if (!date) return null;
+      if (typeof date === 'string') return date.split('T')[0];
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const formattedEntries = result.rows.map((entry) => ({
+      ...entry,
+      entryDate: formatDateField(entry.entryDate),
+    }));
+
+    return NextResponse.json({ entries: formattedEntries });
   } finally {
     client.release();
   }

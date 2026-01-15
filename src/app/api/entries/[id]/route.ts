@@ -72,6 +72,34 @@ export async function GET(
       entry.tasks = tasksResult.rows;
     }
 
+    // Format dates as yyyy-MM-dd strings for consistent frontend comparison
+    // Use UTC methods since pg driver returns dates at UTC midnight
+    const formatDateField = (date: Date | string | null): string | null => {
+      if (!date) return null;
+      if (typeof date === 'string') return date.split('T')[0];
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Format entry date
+    entry.entryDate = formatDateField(entry.entryDate);
+
+    // Format dates in nested milestones and tasks
+    if (entry.milestones) {
+      entry.milestones = entry.milestones.map((m: { entryDate: Date | string | null }) => ({
+        ...m,
+        entryDate: formatDateField(m.entryDate),
+      }));
+    }
+    if (entry.tasks) {
+      entry.tasks = entry.tasks.map((t: { entryDate: Date | string | null }) => ({
+        ...t,
+        entryDate: formatDateField(t.entryDate),
+      }));
+    }
+
     return NextResponse.json({ entry });
   } finally {
     client.release();

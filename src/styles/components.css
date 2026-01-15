@@ -24,7 +24,7 @@
 }
 
 .btn-secondary {
-  @apply text-gray-600 bg-transparent;
+  @apply text-gray-700 bg-transparent;
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -36,7 +36,7 @@
 }
 
 .btn-icon {
-  @apply p-2 rounded-md text-gray-600 bg-transparent;
+  @apply p-2 rounded-md text-gray-700 bg-transparent;
 }
 
 .btn-icon:hover:not(:disabled) {
@@ -72,12 +72,12 @@
 }
 
 .btn-ghost {
-  @apply text-gray-500 bg-transparent border;
+  @apply text-gray-600 bg-transparent border;
   border-color: var(--accent-color);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  @apply text-gray-400 bg-transparent;
+  @apply text-gray-500 bg-transparent;
   border-color: rgb(156 163 175); /* gray-400 */
 }
 
@@ -169,7 +169,7 @@
 }
 
 .label-sm {
-  @apply text-xs text-gray-500 mb-0.5;
+  @apply text-xs text-gray-600 mb-0.5;
 }
 
 /* ============================
@@ -268,7 +268,7 @@
 }
 
 .dropdown-header {
-  @apply px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider;
+  @apply px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider;
 }
 
 .dropdown-autocomplete {
@@ -374,7 +374,7 @@
 }
 
 .topic-selector-placeholder {
-  @apply text-gray-500 text-sm;
+  @apply text-gray-600 text-sm;
 }
 
 .topic-selector-value {
@@ -459,7 +459,7 @@
 }
 
 .topic-selector-empty {
-  @apply px-3 py-4 text-sm text-gray-500 text-center;
+  @apply px-3 py-4 text-sm text-gray-600 text-center;
 }
 
 .topic-browser {
@@ -549,11 +549,11 @@
 }
 
 .field-label-sm {
-  @apply text-xs text-gray-500;
+  @apply text-xs text-gray-600;
 }
 
 .field-hint {
-  @apply text-xs text-gray-500 mt-1;
+  @apply text-xs text-gray-600 mt-1;
 }
 
 .field-error {
@@ -704,7 +704,7 @@
 }
 
 .entries-list-empty {
-  @apply flex flex-col items-center justify-center py-12 text-gray-500;
+  @apply flex flex-col items-center justify-center py-12 text-gray-600;
 }
 
 /* Entry card */
@@ -727,11 +727,11 @@
 }
 
 .entry-card-date {
-  @apply text-xs text-gray-500 flex-shrink-0;
+  @apply text-xs text-gray-600 flex-shrink-0;
 }
 
 .entry-card-preview {
-  @apply text-sm text-gray-600 line-clamp-2;
+  @apply text-sm text-gray-700 line-clamp-2;
 }
 
 .entry-card-footer {
@@ -803,7 +803,7 @@
 }
 
 .entry-editor-meta {
-  @apply flex items-center gap-4 mb-4 text-sm text-gray-500;
+  @apply flex items-center gap-4 mb-4 text-sm text-gray-600;
 }
 
 .entry-editor-toolbar {
@@ -888,7 +888,7 @@
 
 .view-tab {
   @apply flex-1 px-2 py-1.5 text-sm rounded-md;
-  @apply text-gray-600 flex items-center justify-center gap-1;
+  @apply text-gray-700 flex items-center justify-center gap-1;
   @apply transition-colors duration-200;
   @apply relative z-10;
 }
@@ -1026,7 +1026,7 @@
 }
 
 .field-unit {
-  @apply text-gray-500 text-sm;
+  @apply text-gray-600 text-sm;
 }
 
 .range-input {

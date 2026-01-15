@@ -63,23 +63,31 @@ export async function GET(request: NextRequest) {
       [startDate, endDate]
     );
 
-    // Also fetch entries that have tasks/goals/medications/meetings/events due on these dates
+    // Fetch entries: tasks/goals/medications by entryDate, but meetings/events without date filter
+    // (meetings/events will be filtered client-side by their encrypted startDate custom field)
     const entriesResult = await client.query(
       `SELECT e.*, json_agg(DISTINCT cf.*) FILTER (WHERE cf.id IS NOT NULL) as custom_fields
        FROM "${session.user.schemaName}"."entries" e
        LEFT JOIN "${session.user.schemaName}"."custom_fields" cf ON cf."entryId" = e.id
-       WHERE e."entryDate" BETWEEN $1 AND $2
-       AND e."customType" IN ('task', 'goal', 'medication', 'meeting', 'event')
+       WHERE (
+         (e."customType" IN ('task', 'goal', 'medication') AND e."entryDate" BETWEEN $1 AND $2)
+         OR e."customType" IN ('meeting', 'event')
+       )
        GROUP BY e.id
        ORDER BY e."entryDate" ASC`,
       [startDate, endDate]
     );
 
     // Format dates as yyyy-MM-dd strings for consistent frontend comparison
+    // Use local date components to avoid timezone shift issues
     const formatDateField = (date: Date | string | null): string | null => {
       if (!date) return null;
       if (typeof date === 'string') return date.split('T')[0];
-      return date.toISOString().split('T')[0];
+      // Use UTC methods since pg driver returns dates at UTC midnight
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     };
 
     const formattedEvents = result.rows.map((event) => ({
