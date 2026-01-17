@@ -2,6 +2,8 @@
 
 A journal for those too busy to journal with zero-knowledge encryption. Chronicles is designed as a simple daily log. The core philosophy is to capture the key moments of your day briefly in less than 10-15 minutes, then use topics to organize and find them later.
 
+Status: This is an early MVP I use daily and it is in a rebuild to make it more performant, secure, and maintenance friendly before final release. 
+
 ## Features
 
 - **Encrypted Journal Entries** - Rich text editor with client-side encryption
