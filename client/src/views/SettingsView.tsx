@@ -124,7 +124,7 @@ const FEATURES = [
 
 export function SettingsView() {
   const { user, logout, encryptionData } = useAuth();
-  const { lock, rewrapMasterKey, generateRecoveryKey, encryptPost } = useEncryption();
+  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost } = useEncryption();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
   const { needsUnlock, handleUnlock } = useInitializeData();
@@ -894,6 +894,13 @@ export function SettingsView() {
       {/* Security */}
       <SectionTitle>Security</SectionTitle>
       <SettingsCard>
+        <SettingsRow
+          title="Remember me"
+          description={isRemembered
+            ? 'This browser stays unlocked until you close it, lock, or sign out (an hour idle or 12 hours at most).'
+            : 'Off on this browser. Tick “Remember me” when you sign in or unlock to stay unlocked until you close the browser.'}
+          action={isRemembered ? <ActionButton onClick={forgetBrowser}>Forget this browser</ActionButton> : undefined}
+        />
         <SettingsRow
           title="Password"
           description="Change your account password"

@@ -60,6 +60,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 // =============================================================================
 
 export const auth = {
+  /** "Remember me": start a grant for this browser session; returns the device secret once. */
+  rememberStart: () => request<{ secret: string; expiresAt: string }>('/auth/remember', { method: 'POST' }),
+  /** The device secret, while this browser session still holds the grant. */
+  rememberKey: () => request<{ secret: string; expiresAt: string }>('/auth/remember/key', { method: 'POST' }),
+  /** Forget this browser. */
+  rememberForget: () => request<{ success: boolean }>('/auth/remember', { method: 'DELETE' }),
   register: (data: {
     email: string;
     username: string;

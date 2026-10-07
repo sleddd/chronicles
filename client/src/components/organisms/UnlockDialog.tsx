@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { createPortal } from 'react-dom';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
+import { RememberMe } from '../molecules/RememberMe.js';
 import { useFocusTrap } from '../../hooks/useFocusTrap.js';
 
 const Overlay = styled.div`
@@ -77,7 +78,8 @@ const ErrorText = styled.div`
 `;
 
 interface UnlockDialogProps {
-  onUnlock: (password: string) => Promise<void>;
+  /** `remember` is offered only on the lock screen (no onCancel). */
+  onUnlock: (password: string, remember?: boolean) => Promise<void>;
   /** When provided, the dialog is dismissible (used for on-demand unlocks, e.g. Settings). */
   onCancel?: () => void;
 }
@@ -87,6 +89,7 @@ export function UnlockDialog({ onUnlock, onCancel }: UnlockDialogProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [remember, setRemember] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const errorId = useId();
@@ -98,7 +101,7 @@ export function UnlockDialog({ onUnlock, onCancel }: UnlockDialogProps) {
     setError('');
     setLoading(true);
     try {
-      await onUnlock(password);
+      await onUnlock(password, !onCancel && remember);
     } catch {
       setError('Incorrect password. Please try again.');
     } finally {
@@ -129,6 +132,7 @@ export function UnlockDialog({ onUnlock, onCancel }: UnlockDialogProps) {
               {showPassword ? 'Hide' : 'Show'}
             </ShowBtn>
           </InputWrap>
+          {!onCancel && <RememberMe checked={remember} onChange={setRemember} />}
           <Button type="submit" fullWidth disabled={loading} variant="secondary">
             {loading ? <Spinner size={18} /> : 'Unlock'}
           </Button>

@@ -20,6 +20,8 @@ import {
   decrypt,
   encryptBytes,
   decryptBytes,
+  importDeviceWrapKey,
+  unwrapDeviceKey,
 } from './primitives.js';
 import { uint8ArrayToBase64, base64ToUint8Array } from './encoding.js';
 import type {
@@ -84,6 +86,44 @@ class EncryptionService {
 
     const kek = await deriveKEK(password, salt, iterations);
     return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
+  }
+
+  /**
+   * Password unlock that also produces a "remember me" blob: the master key
+   * wrapped (AES-GCM, purpose AAD 'device-wrap') under a key imported from a
+   * per-sign-in device secret. The KEK is derived once; the extractable copy
+   * used for wrapping never leaves this function and raw key bytes are never
+   * exposed to JavaScript. The returned master key is non-extractable.
+   */
+  async unwrapMasterKeyForDevice(
+    password: string,
+    saltBase64: string,
+    wrappedMKBase64: string,
+    wrapIvBase64: string,
+    iterations: number,
+    deviceSecret: Uint8Array
+  ): Promise<{ masterKey: CryptoKey; deviceWrapped: string; deviceIv: string }> {
+    const salt = base64ToUint8Array(saltBase64);
+    const wrappedMK = base64ToUint8Array(wrappedMKBase64);
+    const wrapIv = base64ToUint8Array(wrapIvBase64);
+    const kek = await deriveKEK(password, salt, iterations);
+    const masterKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
+    const extractable = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
+    const deviceKey = await importDeviceWrapKey(deviceSecret);
+    const deviceIv = generateIv();
+    const deviceWrapped = await wrapKey(extractable, deviceKey, deviceIv, 'device-wrap');
+    return {
+      masterKey,
+      deviceWrapped: uint8ArrayToBase64(new Uint8Array(deviceWrapped)),
+      deviceIv: uint8ArrayToBase64(deviceIv),
+    };
+  }
+
+  /** Restore a remembered unlock: device secret + blob → non-extractable master key. */
+  async unwrapFromDevice(deviceSecret: Uint8Array, deviceWrappedBase64: string, deviceIvBase64: string): Promise<CryptoKey> {
+    const deviceKey = await importDeviceWrapKey(deviceSecret);
+    const wrapped = base64ToUint8Array(deviceWrappedBase64);
+    return unwrapDeviceKey(wrapped.buffer as ArrayBuffer, deviceKey, base64ToUint8Array(deviceIvBase64));
   }
 
   /**

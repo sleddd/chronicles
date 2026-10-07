@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, type MutableRefObject } from 'react';
 import styled from 'styled-components';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
-import { getTopicTrail } from '../../utils/topicBreadcrumb.js';
+import { getEntryTrail } from '../../utils/topicBreadcrumb.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { Editor, type DictationControls } from './Editor.js';
 import { RecipeEntry } from './RecipeEntry.js';
@@ -489,6 +489,8 @@ interface EntryFormProps {
   onAddToMenu?: () => void;
   /** Navigate to a breadcrumb ancestor (router injected by the view). */
   onNavigate?: (path: string) => void;
+  /** The view this entry was opened from (router state) — shown as the breadcrumb so you can go back. */
+  originPath?: string;
   isEditing: boolean;
   isSaving: boolean;
   saveStatus: string;
@@ -511,7 +513,7 @@ interface EntryFormProps {
 export function EntryForm({
   entryId, content, onContentChange, topicId, onTopicChange, topics,
   customFields, onCustomFieldsChange, onSave, onAutoSave, onDelete, onNew,
-  onBookmark, onShare, onBack, onNavigate, onAddToShoppingList, onAddToMenu,
+  onBookmark, onShare, onBack, onNavigate, originPath, onAddToShoppingList, onAddToMenu,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured,
@@ -551,7 +553,7 @@ export function EntryForm({
     customType === 'food' || customType === 'exercise' ? customType : null,
     content, customFields, onCustomFieldsChange,
   );
-  const trail = getTopicTrail(selectedTopic?.name);
+  const trail = getEntryTrail(selectedTopic?.name, originPath);
 
   // Build goal options for milestone linking
   const goalOptions = entries

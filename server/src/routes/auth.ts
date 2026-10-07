@@ -9,6 +9,7 @@ import { createSession, revokeSession, revokeAllSessions, authMiddleware } from 
 import { authLimiter, strictLimiter } from '../middleware/rateLimiter.js';
 import { registerSchema, loginSchema, changePasswordSchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
+import { clearRememberCookie } from './remember.js';
 
 // In-memory map for pending 2FA sessions (single-instance safe for Render)
 const pendingTwoFA = new Map<string, { accountId: number; expiresAt: Date }>();
@@ -242,6 +243,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
     await revokeSession(req.auth!.selector, 'user_logout');
     logSecurityEvent('logout', { accountId: req.auth!.accountId, ip: req.ip });
     res.clearCookie(COOKIE_NAME, { path: '/', secure: IS_PRODUCTION, sameSite: 'strict' as const });
+    clearRememberCookie(res);
     res.json({ success: true });
   } catch (err) {
     console.error('Logout error:', err instanceof Error ? err.message : 'Unknown error');

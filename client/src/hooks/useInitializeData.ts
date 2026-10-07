@@ -7,6 +7,7 @@ import { entries as entriesApi, topics as topicsApi, settings as settingsApi } f
 import { loadImageStorageConfig } from '../services/imageStorage.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
+import { featureFlagsFrom } from '../utils/featureFlags.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -15,7 +16,7 @@ import type { EncryptedPost } from '@shared/crypto/types';
  */
 export function useInitializeData() {
   const { encryptionData } = useAuth();
-  const { isUnlocked, unlock, decryptPosts, decryptBytes } = useEncryption();
+  const { isUnlocked, isRestoring, unlock, decryptPosts, decryptBytes } = useEncryption();
   const {
     setDecryptedEntries, setRawEntries, setTopics, setFeatureFlags,
     isInitialized, setLoading, isLoading,
@@ -38,11 +39,11 @@ export function useInitializeData() {
   const setGoogleSyncToken = useUIStore(s => s.setGoogleSyncToken);
   const setCalendarImportMode = useUIStore(s => s.setCalendarImportMode);
 
-  const handleUnlock = useCallback(async (password: string) => {
+  const handleUnlock = useCallback(async (password: string, remember = false) => {
     if (!encryptionData?.kekSalt || !encryptionData?.encryptedMasterKey || !encryptionData?.kekWrapIv) {
       throw new Error('Missing encryption data');
     }
-    await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations);
+    await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations, remember);
   }, [encryptionData, unlock]);
 
   useEffect(() => {
@@ -91,15 +92,7 @@ export function useInitializeData() {
         if (settingsMap.calendarImportMode === 'chroniclesOnly' || settingsMap.calendarImportMode === 'all') setCalendarImportMode(settingsMap.calendarImportMode);
 
         // Feature flags — default to true (enabled) when not explicitly saved
-        const KNOWN_FLAGS = [
-          'foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled',
-          'exerciseEnabled', 'allergiesEnabled', 'entertainmentEnabled', 'inspirationEnabled',
-        ];
-        const flags: Record<string, boolean> = {};
-        for (const key of KNOWN_FLAGS) {
-          flags[key] = typeof settingsMap[key] === 'boolean' ? (settingsMap[key] as boolean) : true;
-        }
-        setFeatureFlags(flags);
+        setFeatureFlags(featureFlagsFrom(settingsMap));
         setTopics(topicsData);
 
         const encrypted: EncryptedPost[] = rawEntries.map(e => ({
@@ -151,7 +144,8 @@ export function useInitializeData() {
     };
   }, [isUnlocked, isInitialized]);
 
-  const needsUnlock = !!encryptionData?.encryptionEnabled && !isUnlocked;
+  // While a remembered unlock is being restored, don't prompt for the password
+  const needsUnlock = !!encryptionData?.encryptionEnabled && !isUnlocked && !isRestoring;
 
   return { isReady: isUnlocked && isInitialized, isLoading, needsUnlock, handleUnlock };
 }
