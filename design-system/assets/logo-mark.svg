@@ -1,5 +1,0 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chronicles">
-  <rect x="3.5" y="3.5" width="25" height="25" rx="6" stroke="currentColor" stroke-width="2" opacity="0.28"></rect>
-  <path d="M16 8.5 L23.5 16 L16 23.5 L8.5 16 Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"></path>
-  <circle cx="16" cy="16" r="3.2" fill="currentColor"></circle>
-</svg>
