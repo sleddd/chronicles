@@ -36,9 +36,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, '../shared/src'),
-      // Browser shims for Node-only imports in the Bedrock SDK (see src/shims)
-      assert: path.resolve(__dirname, './src/shims/assert.ts'),
-      '@aws-sdk/credential-providers': path.resolve(__dirname, './src/shims/awsCredentialProviders.ts'),
     },
   },
   server: {
