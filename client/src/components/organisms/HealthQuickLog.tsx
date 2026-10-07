@@ -10,7 +10,7 @@ import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { stripHtml } from '../../utils/stripHtml.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
-import { estimateEntryCalories } from '../../services/aiAssistant.js';
+import { autoNutritionOnSave, estimateEntryCalories } from '../../services/aiAssistant.js';
 
 /* ── Styled ── */
 
@@ -135,6 +135,7 @@ const MEAL_TYPES = [
   { value: 'lunch', label: 'Lunch' },
   { value: 'dinner', label: 'Dinner' },
   { value: 'snack', label: 'Snack' },
+  { value: 'supplement', label: 'Supplement' },
 ];
 
 const EXERCISE_TYPES = [
@@ -274,12 +275,13 @@ export function MealQuickLog() {
     setSaving(true); setStatus('');
     try {
       let fields: Record<string, unknown> = { ...baseFields(), ...(calories.trim() ? { caloriesSource: aiCalories ? 'ai' : 'manual' } : {}) };
-      // Blank calories + AI on → estimate them; a failed estimate still saves the meal
+      // AI on → fill every blank nutrient (calories included) so the Meals log
+      // has the full panel; typed calories are kept. A failed estimate still saves.
       let note = '';
-      if (!calories.trim() && aiReady) {
-        setStatus('Estimating calories…');
-        try { fields = await estimateEntryCalories('food', '', fields); }
-        catch (err) { note = ` — calories not estimated (${err instanceof Error ? err.message : 'error'})`; }
+      if (aiReady) {
+        setStatus('Estimating nutrients…');
+        try { fields = (await autoNutritionOnSave('', fields)) ?? fields; }
+        catch (err) { note = ` — nutrients not estimated (${err instanceof Error ? err.message : 'error'})`; }
       }
       const topicId = await getOrCreateTopicId('Meals', 'utensils');
       await createEntry(topicId, `<p>${escapeHtml(what.trim())}</p>`, fields);

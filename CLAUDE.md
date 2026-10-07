@@ -373,7 +373,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 **Health Tracking**
 - Medications with dosage, frequency, scheduled times
 - Dose logging with timestamps (`medication_dose_logs` table, JIT migration); real-time sync via `visibilitychange`
-- Meals tracking with meal types, ingredients, calories
+- Meals tracking with meal types, ingredients, calories and micronutrients (iron, vitamin D, B12, vitamin C) — see **Meals log** below
 - Symptom tracking with severity scale
 - Exercise tracking with type, duration, intensity, distance
 - Allergy tracking
@@ -417,6 +417,13 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Food: calories auto-estimated on save when blank (Health dashboard quick log, New entry form, journal Save) + an "Estimate" button beside Calories. Exercise: calories burned calculated on save from type/duration/distance/intensity (+ body weight) and **re-calculated when those inputs change**
 - `caloriesSource: 'ai' | 'manual'` + `calorieBasis` in the entry's custom fields — typed calories are never overwritten; an AI estimate is refreshed only when its inputs changed. A failed estimate never blocks a save. Journal autosave does not call the AI (explicit Save does)
 - CSP `connect-src` allows `https://api.anthropic.com`, `https://api.openai.com`, `https://*.amazonaws.com` (Bedrock runtime + control plane)
+
+**Meals log (nutrition)**
+- `/health/food` and `/menu/meals` render `MealsLogView` (`client/src/views/MealsLogView.tsx`, sections in `client/src/components/organisms/FoodLog.tsx`) — a daily food log modeled on the user's old "Daily log" artifact: add form + quick-add chips, an inline-editable **day sheet** (prev/next/date/today) with a highlighted day-total row, a **daily totals** table (7/30/90 days/year; green = goal met; "Took" = supplement rows, "Noticed" = Symptom entries that day; click a day to open it), and **daily goals**
+- Nutrients are defined once in `client/src/types/nutrition.ts` (`NUTRIENTS`: calories, iron mg, vitamin D mcg, B12 mcg, vitamin C mg; `DEFAULT_NUTRIENT_GOALS` vit D 15, B12 2.4, vit C 75) — add a nutrient there and forms, totals and AI pick it up. Values are strings in the Meals entry's `_customFields` (`calories`, `iron`, `vitaminD`, `vitaminB12`, `vitaminC`); `mealType` gains `supplement`
+- Pure helpers (rows by eaten day = `consumedDate` else creation day, totals, goal checks) in `client/src/utils/foodLog.ts`
+- Goals (`nutritionGoals`) and saved quick-add foods (`foodLibrary`) are **master-key-encrypted settings** via `useEncryptedSetting` (`client/src/hooks/useEncryptedSetting.ts`)
+- AI: `estimateFoodNutrition` asks for only the missing nutrients in one request; `nutrientSource` (`'ai' | 'manual'` per nutrient) + `nutritionBasis` mean typed values are never overwritten and AI values refresh when the description/meal type changes. New rows are AI-filled in the background after adding; the day sheet has "Fill missing with AI (n)" and a per-row "AI" re-estimate. Every food save path (Health dashboard quick log, New entry, journal Save) fills blank nutrients via `autoNutritionOnSave`; `FoodFields` shows the nutrient inputs
 
 ### Planned
 - Recurring calendar events

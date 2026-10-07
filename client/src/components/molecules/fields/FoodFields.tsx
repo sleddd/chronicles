@@ -5,6 +5,7 @@ import { Textarea } from '../../atoms/Textarea.js';
 import { DateTimeInput } from '../../atoms/DateTimeInput.js';
 import { FormField } from '../FormField.js';
 import { CalorieInput } from './CalorieInput.js';
+import { NUTRIENTS, nutrientSourceOf, withManualNutrient } from '../../../types/nutrition.js';
 import type { FoodFieldValues } from '../../../types/fields.js';
 export type { FoodFieldValues } from '../../../types/fields.js';
 
@@ -50,12 +51,13 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
             <option value="lunch">Lunch</option>
             <option value="dinner">Dinner</option>
             <option value="snack">Snack</option>
+            <option value="supplement">Supplement</option>
           </Select>
         </FormField>
         <FormField label="Calories">
           <CalorieInput
             value={values.calories}
-            onChange={v => onChange({ ...values, calories: v, caloriesSource: 'manual' })}
+            onChange={v => onChange(withManualNutrient(values as unknown as Record<string, unknown>, 'calories', v) as unknown as FoodFieldValues)}
             onEstimate={onEstimateCalories}
             estimating={estimatingCalories}
             isAiEstimate={values.caloriesSource === 'ai'}
@@ -63,6 +65,25 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
           />
         </FormField>
       </Row>
+      {NUTRIENTS.filter(n => n.key !== 'calories').map(n => {
+        const cf = values as unknown as Record<string, unknown>;
+        const isAi = nutrientSourceOf(cf, n.key) === 'ai' && !!String(cf[n.key] ?? '');
+        return (
+          <FormField key={n.key} label={`${n.label} (${n.unit})`}>
+            <TextInput
+              type="number"
+              step={n.step}
+              min="0"
+              inputMode="decimal"
+              value={String(cf[n.key] ?? '')}
+              onChange={e => onChange(withManualNutrient(cf, n.key, e.target.value) as unknown as FoodFieldValues)}
+              placeholder={onEstimateCalories ? 'Auto' : n.unit}
+              aria-label={`${n.label} (${n.unit})${isAi ? ', AI estimate' : ''}`}
+              hint={isAi ? 'AI estimate — edit to override' : undefined}
+            />
+          </FormField>
+        );
+      })}
       <FormField label="Time Consumed">
         <DateTimeInput
           dateValue={values.consumedDate}
