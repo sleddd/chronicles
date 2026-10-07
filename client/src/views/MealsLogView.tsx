@@ -6,13 +6,13 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import {
-  AiErrorNote, DayAtAGlance, DayNavigator, DayTitle, FillMissingAction, FoodAddForm, FoodDayList, FoodTotalsTable,
-  NutritionGoalsPanel, Section, SectionHead, SectionLabel, SectionNote, TotalsWindowTabs, longDay, useFoodLogActions,
-  type LibraryItem, type TotalWindow,
+  AiErrorNote, DayAtAGlance, DayNavigator, DayTitle, FillMissingAction, FoodDayList, FoodTotalsTable,
+  NutritionGoalsPanel, Section, SectionHead, SectionLabel, SectionNote, TotalsWindowTabs, longDay,
+  useFoodLogActions, type TotalWindow,
 } from '../components/organisms/FoodLog.js';
+import { useAiReady } from '../hooks/useAiReady.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { useAiReady } from '../hooks/useAiReady.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { entryDay, foodRowsFrom, rowsByDay, shiftDay } from '../utils/foodLog.js';
 import { stripHtml } from '../utils/stripHtml.js';
@@ -20,6 +20,27 @@ import { toDateStr } from '../utils/dateUtils.js';
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 
 /* ── Layout (mirrors HealthView) ── */
+
+/* Brief confirmation ("Deleted") — a floating toast, the one place a shadow is allowed. */
+const Toast = styled.div<{ $show: boolean }>`
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: 90vw;
+  padding: 10px 18px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-inverse, #fff);
+  background: var(--bg-inverse, #1b1d26);
+  border-radius: var(--r-md, 2px);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.25));
+  opacity: ${({ $show }) => ($show ? 1 : 0)};
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
 
 const Page = styled.div`
   flex: 1;
@@ -50,26 +71,6 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Brief confirmation ("Added …") — a floating toast, the one place a shadow is allowed. */
-const Toast = styled.div<{ $show: boolean }>`
-  position: fixed;
-  left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: 50;
-  max-width: 90vw;
-  padding: 10px 18px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-inverse, #fff);
-  background: var(--bg-inverse, #1b1d26);
-  border-radius: var(--r-md, 2px);
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.25));
-  opacity: ${({ $show }) => ($show ? 1 : 0)};
-  pointer-events: none;
-  transition: opacity 200ms ease-out;
-  @media (prefers-reduced-motion: reduce) { transition: none; }
-`;
 
 interface MealsLogViewProps {
   /** Page title — defaults to "Health". */
@@ -88,19 +89,17 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const aiReady = useAiReady();
-  const actions = useFoodLogActions('Meals');
 
   const today = toDateStr(new Date());
   const [day, setDay] = useState(today);
   const [windowDays, setWindowDays] = useState<TotalWindow>('30');
-  const [status, setStatus] = useState('');
-  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const [goals, saveGoals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
-  const [library, saveLibrary] = useEncryptedSetting<LibraryItem[]>('foodLibrary', []);
-
+  const aiReady = useAiReady();
+  const actions = useFoodLogActions('Meals');
+  const [status, setStatus] = useState('');
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (statusTimer.current) clearTimeout(statusTimer.current); }, []);
   const say = (msg: string) => {
     setStatus(msg);
@@ -164,27 +163,20 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
             <DayAtAGlance rows={dayRows} goals={goals} />
           </Section>
 
-          <Section aria-label="Log food">
-            <SectionHead><SectionLabel>Log food</SectionLabel></SectionHead>
-            <FoodAddForm day={day} actions={actions} aiReady={aiReady} library={library} onLibraryChange={saveLibrary} onStatus={say} />
-          </Section>
-
           <Section aria-label="Logged items">
             <SectionHead>
               <SectionLabel>Logged{dayRows.length ? ` · ${dayRows.length}` : ''}</SectionLabel>
               <FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} />
             </SectionHead>
             <AiErrorNote actions={actions} />
-            <FoodDayList
-              rows={dayRows} goals={goals} actions={actions} aiReady={aiReady}
-              library={library} onLibraryChange={saveLibrary} onStatus={say}
-            />
+            <FoodDayList rows={dayRows} goals={goals} actions={actions} aiReady={aiReady} onStatus={say} />
             {dayRows.length > 0 && <SectionNote style={{ marginTop: 10 }}>Select an item to edit it. Grey italic numbers are AI estimates.</SectionNote>}
           </Section>
 
-          <Section aria-label="Daily totals">
+          {/* No rule between the Logged list and this section */}
+          <Section aria-label="Meals At-a-Glance" style={{ borderTop: 'none' }}>
             <SectionHead>
-              <SectionLabel>Daily totals</SectionLabel>
+              <SectionLabel>Meals At-a-Glance</SectionLabel>
               <TotalsWindowTabs value={windowDays} onChange={setWindowDays} />
             </SectionHead>
             {totalsDays.length === 0
