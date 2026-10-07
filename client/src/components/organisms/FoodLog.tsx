@@ -1,11 +1,14 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
+import { useCallback, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import styled from 'styled-components';
 import { TextInput } from '../atoms/TextInput.js';
 import { Select } from '../atoms/Select.js';
-import { Button } from '../atoms/Button.js';
+import { PillButton } from '../atoms/PillButton.js';
+import { UnitLabel } from '../atoms/UnitLabel.js';
+import { FormField } from '../molecules/FormField.js';
 import { FilterTabs } from '../molecules/FilterTabs.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
+import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { autoNutritionOnSave, estimateEntryNutrition, nutrientsToEstimate } from '../../services/aiAssistant.js';
 import { deleteEntryWithImages } from '../../utils/entryActions.js';
@@ -18,12 +21,12 @@ import {
   type NutrientGoals, type NutrientKey,
 } from '../../types/nutrition.js';
 
-/* ── Shared styles ── */
+/* ══ Shared section chrome (flat sections: top rule + tracked label row) ══ */
 
 export const Section = styled.section`
-  margin-top: 32px;
+  margin-top: 40px;
   border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
+  padding-top: 14px;
 `;
 
 export const SectionHead = styled.div`
@@ -31,8 +34,9 @@ export const SectionHead = styled.div`
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-bottom: 12px;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+  min-height: 32px;
 `;
 
 export const SectionLabel = styled.h2`
@@ -45,174 +49,53 @@ export const SectionLabel = styled.h2`
   margin: 0;
 `;
 
-const Muted = styled.p`
+export const SectionNote = styled.p`
   font-family: var(--font-sans);
   font-size: 13px;
+  line-height: 1.5;
   color: var(--text-tertiary);
   margin: 0;
 `;
 
-const LinkBtn = styled.button`
+/** Accent text action used in section heads ("See all", "Fill missing with AI"). */
+export const TextAction = styled.button`
   font-family: var(--font-label);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-accent);
   background: transparent;
   border: none;
-  padding: 4px 2px;
+  padding: 4px 0;
   cursor: pointer;
   white-space: nowrap;
   &:hover:not(:disabled) { opacity: 0.7; }
-  &:disabled { opacity: 0.45; cursor: default; }
+  &:disabled { color: var(--text-disabled); cursor: default; }
 `;
 
-const FieldLabel = styled.label`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+const ErrorNote = styled(SectionNote)`
+  color: var(--color-danger, #c0392b);
 `;
 
-const Scroll = styled.div`
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* Two FormField columns that collapse to one on narrow screens. */
+const FieldGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+  @media (max-width: 720px) { grid-template-columns: 1fr; }
 `;
 
-const Table = styled.table<{ $min: number }>`
-  width: 100%;
-  min-width: ${({ $min }) => $min}px;
-  border-collapse: collapse;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-primary);
-
-  th, td {
-    text-align: left;
-    padding: 4px 6px;
-    border-bottom: 1px solid var(--border-subtle);
-    vertical-align: middle;
-  }
-  th {
-    font-family: var(--font-label);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-    white-space: nowrap;
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td.met { color: var(--color-success); background: var(--color-success-subtle); font-weight: 700; }
-`;
-
-/* Inline-editable cell: reads as text until hovered/focused, then fills. */
-const CellInput = styled.input<{ $num?: boolean; $ai?: boolean }>`
-  width: 100%;
-  min-width: ${({ $num }) => ($num ? '64px' : '230px')};
-  font: inherit;
-  color: ${({ $ai }) => ($ai ? 'var(--text-secondary)' : 'inherit')};
-  font-style: ${({ $ai }) => ($ai ? 'italic' : 'normal')};
-  text-align: ${({ $num }) => ($num ? 'right' : 'left')};
-  font-variant-numeric: tabular-nums;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-md, 1px);
-  padding: 6px;
-  &:hover { border-color: var(--border-subtle); }
-  &:focus { outline: none; background: var(--bg-sunken); border-color: var(--border-default); font-style: normal; }
-`;
-
-const CellSelect = styled.select`
-  font: inherit;
-  color: inherit;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-md, 1px);
-  padding: 6px 2px;
-  cursor: pointer;
-  &:hover { border-color: var(--border-subtle); }
-  &:focus { outline: none; background: var(--bg-sunken); border-color: var(--border-default); }
-`;
-
-const TotalRow = styled.tr`
-  td { background: var(--bg-sunken); font-weight: 700; padding: 10px 6px; border-bottom: none; }
-  td.lbl { font-family: var(--font-label); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); }
-`;
-
-const RowActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-`;
-
-const IconBtn = styled.button<{ $danger?: boolean }>`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-tertiary)')};
-  font-weight: ${({ $danger }) => ($danger ? 700 : 400)};
-  background: transparent;
-  border: 1px solid ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'transparent')};
-  border-radius: var(--r-md, 1px);
-  padding: 4px 6px;
-  cursor: pointer;
-  white-space: nowrap;
-  &:hover:not(:disabled) { border-color: var(--border-default); color: var(--text-primary); }
-  &:disabled { opacity: 0.5; cursor: wait; }
-`;
-
-const EmptyCell = styled.td`
-  text-align: center !important;
-  color: var(--text-tertiary);
-  padding: 20px !important;
-`;
-
-const DayName = styled.p`
-  font-family: var(--font-display);
-  font-weight: 300;
-  font-size: 18px;
-  color: var(--text-secondary);
-  margin: 0 0 8px;
-`;
-
-const DayNav = styled.div`
+const FormFooter = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 16px;
   flex-wrap: wrap;
-  input[type='date'] {
-    font: inherit;
-    font-size: 13px;
-    color: var(--text-primary);
-    background: var(--bg-sunken);
-    border: none;
-    border-radius: var(--r-md, 1px);
-    padding: 6px 8px;
-  }
+  padding-top: 18px;
 `;
 
-const NavBtn = styled.button`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--bg-sunken);
-  border: none;
-  border-radius: var(--r-md, 1px);
-  padding: 6px 10px;
-  cursor: pointer;
-  &:hover { background: var(--bg-active); }
-`;
-
-/* ── Actions ── */
+/* ══ Actions ══ */
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -297,7 +180,93 @@ export function useFoodLogActions(topicName: string) {
 
 export type FoodLogActions = ReturnType<typeof useFoodLogActions>;
 
-/* ── Add form ── */
+
+/* ══ Today at a glance ══ */
+
+const Glance = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px;
+  @media (max-width: 860px) { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 20px; }
+  @media (max-width: 480px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+`;
+
+const Stat = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`;
+
+const StatLabel = styled.span`
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+`;
+
+const StatValue = styled.span<{ $met?: boolean }>`
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 200;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $met }) => ($met ? 'var(--color-success)' : 'var(--text-primary)')};
+  small { font-family: var(--font-sans); font-size: 12px; font-weight: 400; color: var(--text-tertiary); margin-left: 4px; }
+`;
+
+const StatGoal = styled.span`
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-tertiary);
+`;
+
+const Track = styled.div`
+  height: 3px;
+  background: var(--border-subtle);
+  border-radius: var(--r-full, 999px);
+  overflow: hidden;
+  margin-top: 4px;
+`;
+
+const Fill = styled.div<{ $pct: number; $met: boolean }>`
+  height: 100%;
+  width: ${({ $pct }) => $pct}%;
+  background: ${({ $met }) => ($met ? 'var(--color-success)' : 'var(--color-accent)')};
+  transition: width 300ms ease-out;
+`;
+
+/** The selected day's totals against goals — five quiet stat columns with progress rules. */
+export function DayAtAGlance({ rows, goals }: { rows: FoodRow[]; goals: NutrientGoals }) {
+  const summary = useMemo(() => summarizeDay(rows), [rows]);
+  return (
+    <Glance>
+      {NUTRIENTS.map(n => {
+        const total = summary.has[n.key] ? summary.totals[n.key] : null;
+        const goal = goals[n.key];
+        const met = goalMet(goals, n.key, summary);
+        const pct = goal ? Math.min(100, ((total ?? 0) / goal) * 100) : 0;
+        return (
+          <Stat key={n.key}>
+            <StatLabel>{n.label}</StatLabel>
+            <StatValue $met={met}>
+              {total === null ? '—' : formatNutrient(total, n.key)}
+              {total !== null && n.unit && <small>{n.unit}</small>}
+            </StatValue>
+            <StatGoal>
+              {goal ? `${met ? 'Goal met · ' : 'of '}${formatNutrient(goal, n.key)}${n.unit ? ` ${n.unit}` : ''}` : 'No goal set'}
+            </StatGoal>
+            {goal ? <Track><Fill $pct={pct} $met={met} /></Track> : null}
+          </Stat>
+        );
+      })}
+    </Glance>
+  );
+}
+
+/* ══ Log food form ══ */
 
 export interface LibraryItem {
   id: string;
@@ -306,28 +275,12 @@ export interface LibraryItem {
   values: Partial<Record<NutrientKey, number | null>>;
 }
 
-const AddGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
-  gap: 10px;
-  align-items: end;
-  @media (max-width: 640px) { grid-template-columns: 1fr; }
-`;
-
-const NutrientGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
-  @media (max-width: 640px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-`;
-
-const Chips = styled.div`
+const SavedFoods = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
   align-items: center;
-  margin-top: 14px;
+  gap: 8px;
+  padding-top: 18px;
 `;
 
 const Chip = styled.button<{ $editing?: boolean }>`
@@ -336,11 +289,17 @@ const Chip = styled.button<{ $editing?: boolean }>`
   color: var(--text-primary);
   background: var(--bg-sunken);
   border: 1px ${({ $editing }) => ($editing ? 'dashed var(--border-strong)' : 'solid transparent')};
-  border-radius: var(--r-md, 1px);
-  padding: 5px 10px;
+  border-radius: var(--r-md, 2px);
+  padding: 6px 12px;
   cursor: pointer;
+  transition: background 120ms;
   &:hover { background: var(--bg-active); }
-  .x { color: var(--color-danger, #c0392b); font-weight: 700; margin-left: 6px; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  .x { color: var(--color-danger, #c0392b); font-weight: 700; margin-left: 8px; }
+`;
+
+const ChipsLabel = styled(StatLabel)`
+  margin-right: 4px;
 `;
 
 interface FoodAddFormProps {
@@ -350,9 +309,12 @@ interface FoodAddFormProps {
   library: LibraryItem[];
   onLibraryChange: (next: LibraryItem[]) => Promise<void>;
   onStatus: (msg: string) => void;
+  /** Label for the submit button — "Add to this day" on the log, "Log food" elsewhere */
+  submitLabel?: string;
 }
 
-export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, onStatus }: FoodAddFormProps) {
+/** Item, type and nutrients in the app's label-left field rows; blanks are AI-filled after adding. */
+export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, onStatus, submitLabel = 'Add to this day' }: FoodAddFormProps) {
   const [item, setItem] = useState('');
   const [mealType, setMealType] = useState(() => mealForNow());
   const [values, setValues] = useState<Record<NutrientKey, string>>(emptyValues);
@@ -361,12 +323,11 @@ export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, o
   const [editingQuick, setEditingQuick] = useState(false);
 
   const add = async (name: string, type: string, vals: Partial<Record<NutrientKey, string>>, note: string) => {
-    const cf: Record<string, unknown> = {
+    let fields: Record<string, unknown> = {
       mealDescription: name, mealType: type, consumedDate: day,
       consumedTime: day === toDateStr(new Date()) ? nowTime() : '',
       ingredients: '', notes: note,
     };
-    let fields = cf;
     for (const n of NUTRIENTS) {
       const v = (vals[n.key] ?? '').trim();
       fields = v ? withManualNutrient(fields, n.key, v) : { ...fields, [n.key]: '' };
@@ -400,59 +361,68 @@ export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, o
     catch { onStatus('That didn’t save — try again'); }
   };
 
+  const nutrientPlaceholder = aiReady ? 'Auto' : '—';
+  const nutrientField = (key: NutrientKey) => {
+    const n = NUTRIENTS.find(x => x.key === key)!;
+    return (
+      <FormField key={key} label={<UnitLabel label={n.label} unit={n.unit || undefined} />}>
+        <TextInput
+          type="number" step={n.step} min="0" inputMode="decimal"
+          value={values[key]}
+          onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}
+          onKeyDown={onEnter}
+          placeholder={nutrientPlaceholder}
+          aria-label={`${n.label}${n.unit ? ` (${n.unit})` : ''}`}
+        />
+      </FormField>
+    );
+  };
+
   const sorted = [...library].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div>
-      <AddGrid>
-        <FieldLabel>Item
-          <TextInput value={item} onChange={e => setItem(e.target.value)} onKeyDown={onEnter} placeholder="Chicken sausage, 1 link" autoComplete="off" />
-        </FieldLabel>
-        <FieldLabel>Type
-          <Select value={mealType} onChange={e => setMealType(e.target.value)}>
+      <FormField label="Item">
+        <TextInput value={item} onChange={e => setItem(e.target.value)} onKeyDown={onEnter} placeholder="e.g. Chicken sausage, 1 link" autoComplete="off" aria-label="Item" />
+      </FormField>
+      <FieldGrid>
+        <FormField label="Type">
+          <Select value={mealType} onChange={e => setMealType(e.target.value)} aria-label="Type">
             {MEAL_TYPE_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </Select>
-        </FieldLabel>
-      </AddGrid>
-      <NutrientGrid>
-        {NUTRIENTS.map(n => (
-          <FieldLabel key={n.key}>{n.unit ? `${n.label} (${n.unit})` : n.label}
-            <TextInput
-              type="number" step={n.step} min="0" inputMode="decimal"
-              value={values[n.key]}
-              onChange={e => setValues(v => ({ ...v, [n.key]: e.target.value }))}
-              onKeyDown={onEnter}
-              placeholder={aiReady ? 'AI' : ''}
-            />
-          </FieldLabel>
-        ))}
-      </NutrientGrid>
-      <AddGrid style={{ marginTop: 10 }}>
-        <FieldLabel>Notes
-          <TextInput value={notes} onChange={e => setNotes(e.target.value)} onKeyDown={onEnter} placeholder="Optional" autoComplete="off" />
-        </FieldLabel>
-        <Button variant="primary" onClick={handleAdd} disabled={saving || !item.trim()}>Add to this day</Button>
-      </AddGrid>
-      {aiReady && <Muted style={{ marginTop: 8 }}>Leave nutrients blank and the AI fills them in after you add.</Muted>}
+        </FormField>
+        {nutrientField('calories')}
+        {nutrientField('iron')}
+        {nutrientField('vitaminD')}
+        {nutrientField('vitaminB12')}
+        {nutrientField('vitaminC')}
+      </FieldGrid>
+      <FormField label="Notes">
+        <TextInput value={notes} onChange={e => setNotes(e.target.value)} onKeyDown={onEnter} placeholder="Optional" autoComplete="off" aria-label="Notes" />
+      </FormField>
+      <FormFooter>
+        <SectionNote>{aiReady ? 'Leave any nutrient blank and the AI fills it in.' : 'Turn on the AI assistant in Settings to fill in nutrients automatically.'}</SectionNote>
+        <PillButton type="button" onClick={handleAdd} disabled={saving || !item.trim()}>{saving ? 'Adding…' : submitLabel}</PillButton>
+      </FormFooter>
 
-      <Chips aria-label="Quick add">
-        <Muted style={{ width: '100%', display: 'flex', justifyContent: 'space-between' }}>
-          <span>Quick add to the day shown below</span>
-          {library.length > 0 && <LinkBtn type="button" onClick={() => setEditingQuick(v => !v)}>{editingQuick ? 'Done' : 'Edit list'}</LinkBtn>}
-        </Muted>
-        {library.length === 0 && <Muted>Use “Save” on any row to add it here.</Muted>}
+      <SavedFoods aria-label="Saved foods">
+        <ChipsLabel>Saved foods</ChipsLabel>
+        {library.length === 0 && <SectionNote>Use “Save” on any logged item to keep it here for one-tap adding.</SectionNote>}
         {sorted.map(it => (
           <Chip
             key={it.id}
             type="button"
             $editing={editingQuick}
-            aria-label={editingQuick ? `Remove ${it.name} from quick add` : `Add ${it.name}`}
+            aria-label={editingQuick ? `Remove ${it.name} from saved foods` : `Add ${it.name}`}
             onClick={() => editingQuick ? void onLibraryChange(library.filter(l => l.id !== it.id)) : void quickAdd(it)}
           >
-            {it.name}{editingQuick && <span className="x">×</span>}
+            {it.name}{editingQuick && <span className="x" aria-hidden="true">×</span>}
           </Chip>
         ))}
-      </Chips>
+        {library.length > 0 && (
+          <TextAction type="button" onClick={() => setEditingQuick(v => !v)}>{editingQuick ? 'Done' : 'Edit'}</TextAction>
+        )}
+      </SavedFoods>
     </div>
   );
 }
@@ -476,28 +446,186 @@ function nowTime(): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/* ── Day sheet ── */
+/* ══ Day navigation ══ */
 
 export function longDay(day: string): string {
   const t = parseDay(day).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   return day === toDateStr(new Date()) ? `Today — ${t}` : t;
 }
 
-interface DayNavigatorProps { day: string; onChange: (day: string) => void }
+const DayNav = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
 
-export function DayNavigator({ day, onChange }: DayNavigatorProps) {
+const NavIcon = styled.button`
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-md, 2px);
+  cursor: pointer;
+  &:hover { background: var(--bg-hover); color: var(--text-primary); }
+`;
+
+const DateInput = styled.input`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-sunken);
+  border: none;
+  border-radius: var(--r-md, 2px);
+  padding: 6px 10px;
+  color-scheme: light dark;
+`;
+
+export function DayNavigator({ day, onChange }: { day: string; onChange: (day: string) => void }) {
+  const isToday = day === toDateStr(new Date());
   return (
     <DayNav>
-      <NavBtn type="button" onClick={() => onChange(shiftDay(day, -1))} aria-label="Previous day">‹ Prev</NavBtn>
-      <input type="date" value={day} onChange={e => e.target.value && onChange(e.target.value)} aria-label="Day to show" />
-      <NavBtn type="button" onClick={() => onChange(shiftDay(day, 1))} aria-label="Next day">Next ›</NavBtn>
-      <NavBtn type="button" onClick={() => onChange(toDateStr(new Date()))}>Today</NavBtn>
+      <NavIcon type="button" onClick={() => onChange(shiftDay(day, -1))} aria-label="Previous day">‹</NavIcon>
+      <DateInput type="date" value={day} onChange={e => e.target.value && onChange(e.target.value)} aria-label="Day to show" />
+      <NavIcon type="button" onClick={() => onChange(shiftDay(day, 1))} aria-label="Next day">›</NavIcon>
+      {!isToday && <TextAction type="button" onClick={() => onChange(toDateStr(new Date()))} style={{ marginLeft: 8 }}>Today</TextAction>}
     </DayNav>
   );
 }
 
-interface FoodDaySheetProps {
-  day: string;
+export const DayTitle = styled.p`
+  font-family: var(--font-display);
+  font-weight: 200;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--text-primary);
+  margin: 0 0 18px;
+`;
+
+/* ══ Tables ══ */
+
+const Scroll = styled.div`
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+`;
+
+const Table = styled.table<{ $min: number }>`
+  width: 100%;
+  min-width: ${({ $min }) => $min}px;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+
+  th, td {
+    text-align: left;
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+  }
+  th:first-child, td:first-child { padding-left: 4px; }
+  th {
+    font-family: var(--font-label);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    padding-top: 6px;
+    padding-bottom: 10px;
+  }
+  th .unit { text-transform: none; letter-spacing: 0.04em; font-weight: 400; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.ai { color: var(--text-tertiary); font-style: italic; }
+  td.muted { color: var(--text-disabled); }
+`;
+
+const ItemRow = styled.tr`
+  cursor: pointer;
+  &:hover td { background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  .actions { opacity: 0; transition: opacity 120ms; }
+  &:hover .actions, &:focus-within .actions { opacity: 1; }
+  @media (hover: none) { .actions { opacity: 1; } }
+`;
+
+const ItemName = styled.div`
+  font-size: 14px;
+  color: var(--text-primary);
+`;
+
+const ItemMeta = styled.div`
+  margin-top: 2px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  span.note { font-family: var(--font-sans); font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: 6px; }
+`;
+
+const RowActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+`;
+
+const RowAction = styled.button<{ $danger?: boolean }>`
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-tertiary)')};
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  &:hover:not(:disabled) { color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-primary)')}; }
+  &:disabled { opacity: 0.5; cursor: wait; }
+`;
+
+const TotalRow = styled.tr`
+  td {
+    font-weight: 600;
+    border-bottom: none;
+    border-top: 1px solid var(--border-default);
+    padding-top: 14px;
+  }
+  td.lbl {
+    font-family: var(--font-label);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  td.met { color: var(--color-success); }
+`;
+
+const EmptyCell = styled.td`
+  text-align: center !important;
+  color: var(--text-tertiary);
+  padding: 28px !important;
+`;
+
+function NutrientHead() {
+  return (
+    <>
+      {NUTRIENTS.map(n => (
+        <th key={n.key} className="num">{n.short}{n.unit ? <span className="unit"> {n.unit}</span> : null}</th>
+      ))}
+    </>
+  );
+}
+
+interface FoodDayListProps {
   rows: FoodRow[];
   goals: NutrientGoals;
   actions: FoodLogActions;
@@ -507,29 +635,17 @@ interface FoodDaySheetProps {
   onStatus: (msg: string) => void;
 }
 
-export function FoodDaySheet({ day, rows, goals, actions, aiReady, library, onLibraryChange, onStatus }: FoodDaySheetProps) {
+/**
+ * The day's items as a quiet read-only table — select a row to edit it in the
+ * journal (like every other list). Italic grey values are AI estimates.
+ */
+export function FoodDayList({ rows, goals, actions, aiReady, library, onLibraryChange, onStatus }: FoodDayListProps) {
+  const openInJournal = useOpenInJournal();
   const [armed, setArmed] = useState<number | null>(null);
   const summary = useMemo(() => summarizeDay(rows), [rows]);
+  const mealLabel = (v: string) => MEAL_TYPE_OPTIONS.find(m => m.value === v)?.label ?? '';
 
-  const commit = async (row: FoodRow, patch: { item?: string; mealType?: string; notes?: string; nutrient?: [NutrientKey, string] }) => {
-    try {
-      let cf = { ...row.cf };
-      let content = `<p>${escapeHtml(row.item)}</p>`;
-      if (patch.item !== undefined) {
-        content = `<p>${escapeHtml(patch.item)}</p>`;
-        cf.mealDescription = patch.item;
-      }
-      if (patch.mealType !== undefined) cf.mealType = patch.mealType;
-      if (patch.notes !== undefined) cf.notes = patch.notes;
-      if (patch.nutrient) cf = withManualNutrient(cf, patch.nutrient[0], patch.nutrient[1]);
-      await actions.save(row.id, content, cf);
-      // A changed description makes earlier AI numbers stale — refresh them
-      if (aiReady && (patch.item !== undefined || patch.mealType !== undefined)) void actions.fill(row.id);
-    } catch (err) {
-      console.error('Failed to update food:', err);
-      onStatus('That didn’t save — try again');
-    }
-  };
+  const stop = (e: MouseEvent) => e.stopPropagation();
 
   const saveToQuickAdd = async (row: FoodRow) => {
     const existing = library.find(l => l.name.toLowerCase() === row.item.toLowerCase());
@@ -538,7 +654,7 @@ export function FoodDaySheet({ day, rows, goals, actions, aiReady, library, onLi
       name: row.item, mealType: row.mealType || 'snack', values: { ...row.values },
     };
     await onLibraryChange(existing ? library.map(l => (l.id === existing.id ? item : l)) : [...library, item]);
-    onStatus(existing ? 'Quick add updated' : 'Saved to quick add');
+    onStatus(existing ? 'Saved food updated' : 'Saved to saved foods');
   };
 
   const handleDelete = async (row: FoodRow) => {
@@ -548,131 +664,107 @@ export function FoodDaySheet({ day, rows, goals, actions, aiReady, library, onLi
     catch { onStatus('That didn’t delete — try again'); }
   };
 
-  const missing = rows.filter(r => nutrientsToEstimate(r.item, r.cf).length > 0);
-  const fillMissing = async () => {
-    for (const r of missing) await actions.fill(r.id);
-  };
-
-  const colCount = NUTRIENTS.length + 4;
-
   return (
-    <div>
-      {aiReady && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          {actions.aiError && <Muted style={{ color: 'var(--color-danger, #c0392b)' }}>{actions.aiError}</Muted>}
-          <LinkBtn type="button" onClick={fillMissing} disabled={missing.length === 0 || actions.pending.size > 0}>
-            {actions.pending.size > 0 ? 'Estimating…' : `Fill missing with AI${missing.length ? ` (${missing.length})` : ''}`}
-          </LinkBtn>
-        </div>
-      )}
-      <Scroll>
-        <Table $min={1020}>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Type</th>
-              {NUTRIENTS.map(n => <th key={n.key} className="num">{n.short}{n.unit ? ` (${n.unit})` : ''}</th>)}
-              <th>Notes</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr><EmptyCell colSpan={colCount}>Nothing logged for this day yet.</EmptyCell></tr>
-            )}
-            {rows.map(row => {
-              const busy = actions.pending.has(row.id);
-              return (
-                <tr key={row.id}>
-                  <td>
-                    <CellInput
-                      key={`item-${row.item}`}
-                      defaultValue={row.item}
-                      aria-label="Item"
-                      onBlur={e => { const v = e.target.value.trim(); if (!v) { e.target.value = row.item; return; } if (v !== row.item) void commit(row, { item: v }); }}
-                      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                    />
-                  </td>
-                  <td>
-                    <CellSelect value={row.mealType || 'snack'} aria-label="Type" onChange={e => void commit(row, { mealType: e.target.value })}>
-                      {MEAL_TYPE_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                    </CellSelect>
-                  </td>
-                  {NUTRIENTS.map(n => {
-                    const v = row.values[n.key];
-                    const shown = formatNutrient(v, n.key);
-                    const isAi = nutrientSourceOf(row.cf, n.key) === 'ai' && v !== null;
-                    return (
-                      <td key={n.key} className="num">
-                        {busy && v === null ? <Muted>…</Muted> : (
-                          <CellInput
-                            key={`${n.key}-${shown}`}
-                            $num
-                            $ai={isAi}
-                            type="number" step={n.step} min="0" inputMode="decimal"
-                            defaultValue={shown}
-                            title={isAi ? 'AI estimate — edit to override' : undefined}
-                            aria-label={`${n.label}${isAi ? ' (AI estimate)' : ''}`}
-                            onBlur={e => {
-                              const next = e.target.value.trim();
-                              if (next === shown) return;
-                              const parsed = nutrientNumber(next);
-                              void commit(row, { nutrient: [n.key, parsed === null ? '' : String(parsed)] });
-                            }}
-                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          />
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td>
-                    <CellInput
-                      key={`notes-${row.notes}`}
-                      defaultValue={row.notes}
-                      aria-label="Notes"
-                      onBlur={e => { const v = e.target.value.trim(); if (v !== row.notes) void commit(row, { notes: v }); }}
-                      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                    />
-                  </td>
-                  <td>
-                    <RowActions>
-                      {aiReady && (
-                        <IconBtn type="button" disabled={busy} onClick={() => void actions.fill(row.id, { refreshAi: true })} title="Re-estimate AI values (typed values are kept)">
-                          {busy ? '…' : 'AI'}
-                        </IconBtn>
-                      )}
-                      <IconBtn type="button" onClick={() => void saveToQuickAdd(row)} title="Save to quick add">Save</IconBtn>
-                      <IconBtn
-                        type="button"
-                        $danger={armed === row.id}
-                        onClick={() => void handleDelete(row)}
-                        onBlur={() => setArmed(a => (a === row.id ? null : a))}
-                        aria-label={`Delete ${row.item}`}
-                      >
-                        {armed === row.id ? 'Confirm' : 'Delete'}
-                      </IconBtn>
-                    </RowActions>
-                  </td>
-                </tr>
-              );
-            })}
+    <Scroll>
+      <Table $min={760}>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <NutrientHead />
+            <th><span className="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr><EmptyCell colSpan={NUTRIENTS.length + 2}>Nothing logged for this day yet.</EmptyCell></tr>
+          )}
+          {rows.map(row => {
+            const busy = actions.pending.has(row.id);
+            return (
+              <ItemRow
+                key={row.id}
+                tabIndex={0}
+                aria-label={`Edit ${row.item} in the journal`}
+                onClick={() => openInJournal(row.id)}
+                onKeyDown={e => { if (e.key === 'Enter') openInJournal(row.id); }}
+              >
+                <td>
+                  <ItemName>{row.item}</ItemName>
+                  <ItemMeta>
+                    {mealLabel(row.mealType) || 'Food'}
+                    {row.notes && <span className="note">· {row.notes}</span>}
+                  </ItemMeta>
+                </td>
+                {NUTRIENTS.map(n => {
+                  const v = row.values[n.key];
+                  const isAi = nutrientSourceOf(row.cf, n.key) === 'ai';
+                  const cls = v === null ? 'num muted' : `num${isAi ? ' ai' : ''}`;
+                  return (
+                    <td key={n.key} className={cls} title={isAi && v !== null ? 'AI estimate' : undefined}>
+                      {v === null ? (busy ? '…' : '—') : formatNutrient(v, n.key)}
+                    </td>
+                  );
+                })}
+                <td onClick={stop}>
+                  <RowActions className="actions">
+                    {aiReady && (
+                      <RowAction type="button" disabled={busy} onClick={() => void actions.fill(row.id, { refreshAi: true })} title="Re-estimate AI values (typed values are kept)">
+                        {busy ? 'Estimating…' : 'Estimate'}
+                      </RowAction>
+                    )}
+                    <RowAction type="button" onClick={() => void saveToQuickAdd(row)}>Save</RowAction>
+                    <RowAction
+                      type="button"
+                      $danger={armed === row.id}
+                      onClick={() => void handleDelete(row)}
+                      onBlur={() => setArmed(a => (a === row.id ? null : a))}
+                      aria-label={armed === row.id ? `Confirm delete ${row.item}` : `Delete ${row.item}`}
+                    >
+                      {armed === row.id ? 'Confirm' : 'Delete'}
+                    </RowAction>
+                  </RowActions>
+                </td>
+              </ItemRow>
+            );
+          })}
+          {rows.length > 0 && (
             <TotalRow>
-              <td className="lbl" colSpan={2}>Day total</td>
+              <td className="lbl">Day total</td>
               {NUTRIENTS.map(n => (
                 <td key={n.key} className={`num${goalMet(goals, n.key, summary) ? ' met' : ''}`}>
                   {summary.has[n.key] ? formatNutrient(summary.totals[n.key], n.key) : '—'}
                 </td>
               ))}
-              <td colSpan={2} />
+              <td />
             </TotalRow>
-          </tbody>
-        </Table>
-      </Scroll>
-    </div>
+          )}
+        </tbody>
+      </Table>
+    </Scroll>
   );
 }
 
-/* ── Daily totals ── */
+/** "Fill missing with AI (n)" for a day's rows; renders nothing when AI is off. */
+export function FillMissingAction({ rows, actions, aiReady }: { rows: FoodRow[]; actions: FoodLogActions; aiReady: boolean }) {
+  if (!aiReady) return null;
+  const missing = rows.filter(r => nutrientsToEstimate(r.item, r.cf).length > 0);
+  const busy = actions.pending.size > 0;
+  return (
+    <TextAction
+      type="button"
+      disabled={missing.length === 0 || busy}
+      onClick={async () => { for (const r of missing) await actions.fill(r.id); }}
+    >
+      {busy ? 'Estimating…' : missing.length ? `Fill ${missing.length} missing with AI` : 'All nutrients filled'}
+    </TextAction>
+  );
+}
+
+export function AiErrorNote({ actions }: { actions: FoodLogActions }) {
+  return actions.aiError ? <ErrorNote role="alert" style={{ marginBottom: 10 }}>{actions.aiError}</ErrorNote> : null;
+}
+
+/* ══ Daily totals ══ */
 
 export const TOTAL_WINDOWS = [
   { value: '7', label: '7 days' },
@@ -682,18 +774,20 @@ export const TOTAL_WINDOWS = [
 ] as const;
 export type TotalWindow = typeof TOTAL_WINDOWS[number]['value'];
 
-const ClickRow = styled.tr<{ $sel?: boolean }>`
+const DayRow = styled.tr<{ $sel?: boolean }>`
   cursor: pointer;
-  td { background: ${({ $sel }) => ($sel ? 'var(--bg-active)' : 'transparent')}; }
+  td { background: ${({ $sel }) => ($sel ? 'var(--color-accent-subtle)' : 'transparent')}; }
+  td:first-child { box-shadow: ${({ $sel }) => ($sel ? 'inset 2px 0 0 var(--color-accent)' : 'none')}; }
   &:hover td { background: var(--bg-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-  td.day { font-weight: 700; white-space: nowrap; }
-  td.met { background: var(--color-success-subtle); }
-  td.list { font-size: 12px; min-width: 160px; color: var(--text-secondary); }
+  td.day { white-space: nowrap; }
+  td.met { color: var(--color-success); font-weight: 600; }
+  td.list { font-size: 13px; color: var(--text-secondary); min-width: 160px; max-width: 280px; }
 `;
 
 const GoalRow = styled.tr`
-  td { font-size: 12px; color: var(--text-tertiary); background: var(--bg-sunken); }
+  td { font-size: 12px; color: var(--text-tertiary); padding-top: 8px; padding-bottom: 8px; }
+  td:first-child { font-family: var(--font-label); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 `;
 
 interface FoodTotalsTableProps {
@@ -710,7 +804,7 @@ export function FoodTotalsTable({ days, goals, selected, onOpen }: FoodTotalsTab
         <thead>
           <tr>
             <th>Day</th>
-            {NUTRIENTS.map(n => <th key={n.key} className="num">{n.short}{n.unit ? ` (${n.unit})` : ''}</th>)}
+            <NutrientHead />
             <th>Took</th>
             <th>Noticed</th>
           </tr>
@@ -728,7 +822,7 @@ export function FoodTotalsTable({ days, goals, selected, onOpen }: FoodTotalsTab
             const summary = summarizeDay(rows);
             const took = countNames(rows.filter(r => r.mealType === 'supplement').map(r => r.item));
             return (
-              <ClickRow
+              <DayRow
                 key={day}
                 $sel={day === selected}
                 tabIndex={0}
@@ -743,8 +837,8 @@ export function FoodTotalsTable({ days, goals, selected, onOpen }: FoodTotalsTab
                   </td>
                 ))}
                 <td className="list">{took || '—'}</td>
-                <td className="list">{noticed.length ? noticed.join('; ') : '—'}</td>
-              </ClickRow>
+                <td className="list">{noticed.length ? [...new Set(noticed)].join('; ') : '—'}</td>
+              </DayRow>
             );
           })}
         </tbody>
@@ -763,38 +857,32 @@ export function TotalsWindowTabs({ value, onChange }: { value: TotalWindow; onCh
   return <FilterTabs options={[...TOTAL_WINDOWS]} active={value} onChange={onChange} flush bordered={false} />;
 }
 
-/* ── Goals ── */
-
-const GoalGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  @media (max-width: 640px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-`;
+/* ══ Goals ══ */
 
 interface NutritionGoalsPanelProps {
   goals: NutrientGoals;
   onChange: (next: NutrientGoals) => Promise<void>;
 }
 
+/** Daily targets in field rows; each saves when you leave the field. */
 export function NutritionGoalsPanel({ goals, onChange }: NutritionGoalsPanelProps) {
   return (
-    <GoalGrid>
+    <FieldGrid>
       {NUTRIENTS.map(n => (
-        <FieldLabel key={`${n.key}-${goals[n.key] ?? ''}`}>
-          {n.key === 'calories' ? 'Calories (at least)' : `${n.label} (${n.unit})`}
+        <FormField key={`${n.key}-${goals[n.key] ?? ''}`} label={<UnitLabel label={n.label} unit={n.key === 'calories' ? 'at least' : n.unit || undefined} />}>
           <TextInput
             type="number" step={n.step} min="0" inputMode="decimal"
             defaultValue={goals[n.key] === null || goals[n.key] === undefined ? '' : formatNutrient(goals[n.key], n.key)}
             placeholder="No goal"
+            aria-label={`${n.label} goal`}
             onBlur={e => {
               const next = nutrientNumber(e.target.value);
               if (next === goals[n.key]) return;
               void onChange({ ...goals, [n.key]: next });
             }}
           />
-        </FieldLabel>
+        </FormField>
       ))}
-    </GoalGrid>
+    </FieldGrid>
   );
 }

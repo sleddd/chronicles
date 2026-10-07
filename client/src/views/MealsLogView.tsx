@@ -6,8 +6,9 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import {
-  DayNavigator, FoodAddForm, FoodDaySheet, FoodTotalsTable, NutritionGoalsPanel, Section, SectionHead,
-  SectionLabel, TotalsWindowTabs, longDay, useFoodLogActions, type LibraryItem, type TotalWindow,
+  AiErrorNote, DayAtAGlance, DayNavigator, DayTitle, FillMissingAction, FoodAddForm, FoodDayList, FoodTotalsTable,
+  NutritionGoalsPanel, Section, SectionHead, SectionLabel, SectionNote, TotalsWindowTabs, longDay, useFoodLogActions,
+  type LibraryItem, type TotalWindow,
 } from '../components/organisms/FoodLog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -49,28 +50,25 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-const Lede = styled.p`
+/* Brief confirmation ("Added …") — a floating toast, the one place a shadow is allowed. */
+const Toast = styled.div<{ $show: boolean }>`
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: 90vw;
+  padding: 10px 18px;
   font-family: var(--font-sans);
   font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0 0 12px;
-  max-width: 62ch;
-`;
-
-const DayName = styled.p`
-  font-family: var(--font-display);
-  font-weight: 300;
-  font-size: 18px;
-  color: var(--text-secondary);
-  margin: 0 0 8px;
-`;
-
-const Status = styled.p`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin: 8px 0 0;
-  min-height: 18px;
+  color: var(--text-inverse, #fff);
+  background: var(--bg-inverse, #1b1d26);
+  border-radius: var(--r-md, 2px);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.25));
+  opacity: ${({ $show }) => ($show ? 1 : 0)};
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
 interface MealsLogViewProps {
@@ -93,7 +91,8 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
   const aiReady = useAiReady();
   const actions = useFoodLogActions('Meals');
 
-  const [day, setDay] = useState(() => toDateStr(new Date()));
+  const today = toDateStr(new Date());
+  const [day, setDay] = useState(today);
   const [windowDays, setWindowDays] = useState<TotalWindow>('30');
   const [status, setStatus] = useState('');
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,22 +155,31 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
           <Head><Title>{title}</Title></Head>
           {tabBar ?? <HealthTabBar />}
 
-          <Section aria-label="Add food">
-            <SectionHead><SectionLabel>Add food</SectionLabel></SectionHead>
-            <FoodAddForm day={day} actions={actions} aiReady={aiReady} library={library} onLibraryChange={saveLibrary} onStatus={say} />
-            <Status role="status" aria-live="polite">{status}</Status>
-          </Section>
-
-          <Section aria-label="Day sheet" ref={sheetRef}>
+          <Section aria-label="Day" ref={sheetRef} style={{ borderTop: 'none', marginTop: 28 }}>
             <SectionHead>
-              <SectionLabel>Day sheet</SectionLabel>
+              <SectionLabel>{day === today ? 'Today' : 'Day'}</SectionLabel>
               <DayNavigator day={day} onChange={setDay} />
             </SectionHead>
-            <DayName>{longDay(day)}</DayName>
-            <FoodDaySheet
-              day={day} rows={dayRows} goals={goals} actions={actions} aiReady={aiReady}
+            <DayTitle>{longDay(day).replace(/^Today — /, '')}</DayTitle>
+            <DayAtAGlance rows={dayRows} goals={goals} />
+          </Section>
+
+          <Section aria-label="Log food">
+            <SectionHead><SectionLabel>Log food</SectionLabel></SectionHead>
+            <FoodAddForm day={day} actions={actions} aiReady={aiReady} library={library} onLibraryChange={saveLibrary} onStatus={say} />
+          </Section>
+
+          <Section aria-label="Logged items">
+            <SectionHead>
+              <SectionLabel>Logged{dayRows.length ? ` · ${dayRows.length}` : ''}</SectionLabel>
+              <FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} />
+            </SectionHead>
+            <AiErrorNote actions={actions} />
+            <FoodDayList
+              rows={dayRows} goals={goals} actions={actions} aiReady={aiReady}
               library={library} onLibraryChange={saveLibrary} onStatus={say}
             />
+            {dayRows.length > 0 && <SectionNote style={{ marginTop: 10 }}>Select an item to edit it. Grey italic numbers are AI estimates.</SectionNote>}
           </Section>
 
           <Section aria-label="Daily totals">
@@ -179,10 +187,12 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
               <SectionLabel>Daily totals</SectionLabel>
               <TotalsWindowTabs value={windowDays} onChange={setWindowDays} />
             </SectionHead>
-            <Lede>One row per day. Green means the day reached its goal. Select a day to open its sheet.</Lede>
             {totalsDays.length === 0
-              ? <Lede>No days logged in this range yet.</Lede>
-              : <FoodTotalsTable days={totalsDays} goals={goals} selected={day} onOpen={openDay} />}
+              ? <SectionNote>No days logged in this range yet.</SectionNote>
+              : <>
+                  <FoodTotalsTable days={totalsDays} goals={goals} selected={day} onOpen={openDay} />
+                  <SectionNote style={{ marginTop: 10 }}>Green means the day reached its goal. Select a day to open it.</SectionNote>
+                </>}
           </Section>
 
           <Section aria-label="Daily goals">
@@ -191,6 +201,7 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
           </Section>
         </Inner>
       </Page>
+      <Toast $show={!!status} role="status" aria-live="polite">{status}</Toast>
     </ContentTemplate>
   );
 }

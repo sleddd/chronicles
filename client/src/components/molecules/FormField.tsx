@@ -48,7 +48,8 @@ const ErrorText = styled.span`
 `;
 
 interface FormFieldProps {
-  label: string;
+  /** Usually a string; a node allows mixed casing such as units ("Iron <Unit>(mg)</Unit>") */
+  label: React.ReactNode;
   error?: string;
   htmlFor?: string;
   children: React.ReactNode;

@@ -5,6 +5,7 @@ import { Textarea } from '../../atoms/Textarea.js';
 import { DateTimeInput } from '../../atoms/DateTimeInput.js';
 import { FormField } from '../FormField.js';
 import { CalorieInput } from './CalorieInput.js';
+import { UnitLabel } from '../../atoms/UnitLabel.js';
 import { NUTRIENTS, nutrientSourceOf, withManualNutrient } from '../../../types/nutrition.js';
 import type { FoodFieldValues } from '../../../types/fields.js';
 export type { FoodFieldValues } from '../../../types/fields.js';
@@ -69,7 +70,7 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
         const cf = values as unknown as Record<string, unknown>;
         const isAi = nutrientSourceOf(cf, n.key) === 'ai' && !!String(cf[n.key] ?? '');
         return (
-          <FormField key={n.key} label={`${n.label} (${n.unit})`}>
+          <FormField key={n.key} label={<UnitLabel label={n.label} unit={n.unit} />}>
             <TextInput
               type="number"
               step={n.step}

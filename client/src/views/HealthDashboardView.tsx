@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -7,7 +7,13 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
-import { MealQuickLog, ExerciseQuickLog } from '../components/organisms/HealthQuickLog.js';
+import { ExerciseQuickLog, TodayFoodList } from '../components/organisms/HealthQuickLog.js';
+import { DayAtAGlance, FoodAddForm, useFoodLogActions, type LibraryItem } from '../components/organisms/FoodLog.js';
+import { useAiReady } from '../hooks/useAiReady.js';
+import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
+import { foodRowsFrom } from '../utils/foodLog.js';
+import { toDateStr } from '../utils/dateUtils.js';
+import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
@@ -171,6 +177,65 @@ function severityRank(v: unknown): number {
   return ({ severe: 9, moderate: 5, mild: 2 } as Record<string, number>)[String(v).toLowerCase()] ?? 0;
 }
 
+/* ── Food ── */
+
+const GlanceWrap = styled.div`
+  padding: 4px 0 26px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+`;
+
+const Toast = styled.div<{ $show: boolean }>`
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: 90vw;
+  padding: 10px 18px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-inverse, #fff);
+  background: var(--bg-inverse, #1b1d26);
+  border-radius: var(--r-md, 2px);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.25));
+  opacity: ${({ $show }) => ($show ? 1 : 0)};
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
+
+/** Today's nutrient totals, the shared Log food form, and what's been eaten today. */
+function FoodPanel() {
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const aiReady = useAiReady();
+  const actions = useFoodLogActions('Meals');
+  const [goals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
+  const [library, saveLibrary] = useEncryptedSetting<LibraryItem[]>('foodLibrary', []);
+  const [status, setStatus] = useState('');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const say = (msg: string) => {
+    setStatus(msg);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setStatus(''), 2600);
+  };
+
+  const today = toDateStr(new Date());
+  const mealsTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'meals')?.id, [allTopics]);
+  const todayRows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
+
+  return (
+    <>
+      <GlanceWrap><DayAtAGlance rows={todayRows} goals={goals} /></GlanceWrap>
+      <FoodAddForm day={today} actions={actions} aiReady={aiReady} library={library} onLibraryChange={saveLibrary} onStatus={say} submitLabel="Log food" />
+      <TodayFoodList />
+      <Toast $show={!!status} role="status" aria-live="polite">{status}</Toast>
+    </>
+  );
+}
+
 /* ── Allergies ── */
 
 function AllergiesList() {
@@ -251,7 +316,7 @@ export function HealthDashboardView() {
 
           {ff.foodEnabled !== false && (
             <DashSection label="Food" action={seeAll('/health/food')}>
-              <MealQuickLog />
+              <FoodPanel />
             </DashSection>
           )}
 

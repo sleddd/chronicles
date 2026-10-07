@@ -68,7 +68,7 @@ export function foodRowsFrom(entries: DecryptedPost[], topicId: number | undefin
         id: e.id,
         day: entryDay(e, 'consumedDate'),
         item: stripHtml(e.content).trim() || String(cf.mealDescription ?? '').trim() || 'Food',
-        mealType: String(cf.mealType ?? ''),
+        mealType: String(cf.mealType ?? '').toLowerCase(),
         notes: String(cf.notes ?? ''),
         values,
         cf,
