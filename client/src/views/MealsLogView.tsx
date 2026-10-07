@@ -163,7 +163,8 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
             <DayAtAGlance rows={dayRows} goals={goals} />
           </Section>
 
-          <Section aria-label="Logged items">
+          {/* No rule under the day's tallies */}
+          <Section aria-label="Logged items" style={{ borderTop: 'none', marginTop: 28 }}>
             <SectionHead>
               <SectionLabel>Logged{dayRows.length ? ` · ${dayRows.length}` : ''}</SectionLabel>
               <FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} />

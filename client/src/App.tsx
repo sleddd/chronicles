@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, darkTheme } from '@shared/theme/tokens';
 import { useUIStore } from './stores/uiStore.js';
 import { GlobalStyle } from './styles/GlobalStyle.js';
-import { AuthProvider } from './contexts/AuthContext.js';
-import { EncryptionProvider } from './contexts/EncryptionContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.js';
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
@@ -23,6 +23,7 @@ import { TopicEntriesView } from './views/TopicEntriesView.js';
 import { HealthView } from './views/HealthView.js';
 import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsLogView } from './views/MealsLogView.js';
+import { AiChat } from './components/organisms/AiChat.js';
 import { MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { MedicationScheduleView } from './views/MedicationScheduleView.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
@@ -281,6 +282,16 @@ function deriveAccentScale(base: string): Record<string, string> {
   };
 }
 
+/** The floating AI chat — only for a signed-in, unlocked journal, never on public pages. */
+function ChatGate() {
+  const { isAuthenticated } = useAuth();
+  const { isUnlocked } = useEncryption();
+  const { pathname } = useLocation();
+  const publicPage = ['/login', '/register', '/recover', '/share'].some(p => pathname.startsWith(p));
+  if (!isAuthenticated || !isUnlocked || publicPage) return null;
+  return <AiChat />;
+}
+
 function R({ children }: { children: React.ReactNode }) {
   useCalendarSync();
   return <ProtectedRoute>{children}</ProtectedRoute>;
@@ -381,6 +392,7 @@ export function App() {
               <Route path="/inspiration/research" element={<R><TopicEntriesView title="Research" topicNames={['Research']} showDateFilter={false} /></R>} />
               <Route path="/inspiration/quotes" element={<R><TopicEntriesView title="Quotes" topicNames={['Quote']} showDateFilter={false} /></R>} />
             </Routes>
+            <ChatGate />
           </BrowserRouter>
         </EncryptionProvider>
       </AuthProvider>
