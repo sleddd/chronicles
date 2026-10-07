@@ -4,7 +4,7 @@ import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
 import {
   ENTRY_ROW_COLUMNS, ENTRY_ROW_INSET_PADDING, formatRowDate,
-  DateCell, TopicCell, EntryCell, EntryTitle,
+  MetaCell, DateCell, TopicCell, EntryCell, EntryTitle,
 } from '../molecules/EntryTable.js';
 import { Checkbox } from '../atoms/Checkbox.js';
 import { useUIStore } from '../../stores/uiStore.js';
@@ -33,7 +33,7 @@ function extractTitle(html: string, fallback?: string): string {
   return entryTitleText(html) || fallback || 'Untitled entry';
 }
 
-/* Spreadsheet row (see EntryTable): Date | Topic | Entry | controls.
+/* Spreadsheet row (see EntryTable): Topic over Date | Entry | controls.
    Hairline rule between rows; the selected row gets a faint fill and a
    2px accent left bar. */
 const Row = styled.div<{ $active?: boolean }>`
@@ -68,6 +68,7 @@ const Row = styled.div<{ $active?: boolean }>`
 const TopicButton = styled.button<{ $active?: boolean }>`
   all: unset;
   cursor: pointer;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -115,21 +116,23 @@ export function EntryCard({
 
   const inner = (
     <Row $active={active} onClick={onClick}>
-      <DateCell title={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
-        {formatRowDate(d)}
-      </DateCell>
-      {topicName && onTopicClick && topicId != null ? (
-        <TopicButton
-          type="button"
-          $active={active}
-          onClick={e => { e.stopPropagation(); onTopicClick(topicId); }}
-          title={`Show only ${topicName}`}
-        >
-          {topicName}
-        </TopicButton>
-      ) : (
-        <TopicCell $active={active}>{topicName ?? ''}</TopicCell>
-      )}
+      <MetaCell>
+        {topicName && onTopicClick && topicId != null ? (
+          <TopicButton
+            type="button"
+            $active={active}
+            onClick={e => { e.stopPropagation(); onTopicClick(topicId); }}
+            title={`Show only ${topicName}`}
+          >
+            {topicName}
+          </TopicButton>
+        ) : topicName ? (
+          <TopicCell $active={active}>{topicName}</TopicCell>
+        ) : null}
+        <DateCell title={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
+          {formatRowDate(d)}
+        </DateCell>
+      </MetaCell>
       <EntryCell>
         <EntryTitle $completed={isCompleted}>{title}</EntryTitle>
       </EntryCell>

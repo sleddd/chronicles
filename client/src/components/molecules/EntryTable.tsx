@@ -1,12 +1,12 @@
 import styled from 'styled-components';
 
 /* Spreadsheet-style entry lists, matching the Meals log table: one row per
-   entry with fixed Date | Topic | Entry columns, hairline rules, 14px text,
-   and a tracked-uppercase header row. Shared by EntryCard (journal list) and
+   entry with a stacked Topic-over-Date column and an Entry column, hairline
+   rules, 14px text, and a tracked-uppercase header row. Shared by EntryCard (journal list) and
    EntryListCard (topic, task and health lists) so every list lines up. */
 
-/** Date | Topic | Entry | trailing controls */
-export const ENTRY_ROW_COLUMNS = '58px minmax(0, 96px) minmax(0, 1fr) auto';
+/** Topic over Date | Entry | trailing controls */
+export const ENTRY_ROW_COLUMNS = 'minmax(0, 112px) minmax(0, 1fr) auto';
 
 /** "Oct 7" this year, "Oct 7 '25" for other years. */
 export function formatRowDate(d: Date, now = new Date()): string {
@@ -39,8 +39,7 @@ const Head = styled.div<{ $inset?: boolean }>`
 export function EntryTableHead({ className, inset }: { className?: string; inset?: boolean }) {
   return (
     <Head className={className} $inset={inset} role="presentation">
-      <span>Date</span>
-      <span>Topic</span>
+      <span>Topic / Date</span>
       <span>Entry</span>
       <span />
     </Head>
@@ -49,15 +48,25 @@ export function EntryTableHead({ className, inset }: { className?: string; inset
 
 /* Cell pieces both row components use */
 
+/** First column: the topic label with the date underneath */
+export const MetaCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+`;
+
 export const DateCell = styled.span`
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 `;
 
 export const TopicCell = styled.span<{ $active?: boolean }>`
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

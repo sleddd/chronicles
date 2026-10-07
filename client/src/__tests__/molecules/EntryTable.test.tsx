@@ -18,16 +18,15 @@ describe('formatRowDate', () => {
 });
 
 describe('EntryTableHead', () => {
-  it('labels the Date, Topic and Entry columns', () => {
+  it('labels the Topic / Date and Entry columns', () => {
     renderWithTheme(<EntryTableHead />);
-    expect(screen.getByText('Date')).toBeInTheDocument();
-    expect(screen.getByText('Topic')).toBeInTheDocument();
+    expect(screen.getByText('Topic / Date')).toBeInTheDocument();
     expect(screen.getByText('Entry')).toBeInTheDocument();
   });
 });
 
 describe('EntryListCard (spreadsheet row)', () => {
-  it('puts the date next to the topic, then the title and preview', () => {
+  it('stacks the topic over the date, then the title and preview', () => {
     const createdAt = new Date();
     const { container } = renderWithTheme(
       <EntryListCard content="<p>Buy milk</p>" createdAt={createdAt} topicName="Task" preview="Due Friday" />
@@ -35,8 +34,9 @@ describe('EntryListCard (spreadsheet row)', () => {
     const date = formatRowDate(createdAt);
     expect(screen.getByText(date)).toBeInTheDocument();
     const text = container.textContent ?? '';
-    expect(text.indexOf(date)).toBeLessThan(text.indexOf('Task'));
-    expect(text.indexOf('Task')).toBeLessThan(text.indexOf('Buy milk'));
+    expect(text.indexOf('Task')).toBeLessThan(text.indexOf(date));
+    expect(text.indexOf(date)).toBeLessThan(text.indexOf('Buy milk'));
+    expect(screen.getByText('Task').parentElement).toBe(screen.getByText(date).parentElement);
     expect(screen.getByText('Due Friday')).toBeInTheDocument();
   });
 

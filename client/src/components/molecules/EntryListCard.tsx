@@ -3,7 +3,7 @@ import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import {
   ENTRY_ROW_COLUMNS, ENTRY_ROW_PADDING, formatRowDate,
-  DateCell, TopicCell, EntryCell, EntryTitle, EntryPreview,
+  MetaCell, DateCell, TopicCell, EntryCell, EntryTitle, EntryPreview,
 } from './EntryTable.js';
 
 interface EntryListCardProps {
@@ -19,7 +19,7 @@ interface EntryListCardProps {
   preview?: string;
 }
 
-/* Spreadsheet row (see EntryTable): Date | Topic | Entry | chevron, with a
+/* Spreadsheet row (see EntryTable): Topic over Date | Entry | chevron, with a
    hairline rule between rows. Used by Tasks, Todos, Topics and Health lists. */
 
 function extractTitle(html: string, fallback?: string): string {
@@ -50,10 +50,12 @@ export function EntryListCard({ content, createdAt, topicName, completed, onClic
 
   return (
     <Row onClick={onClick}>
-      <DateCell title={createdAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
-        {formatRowDate(createdAt)}
-      </DateCell>
-      <TopicCell>{topicName ?? ''}</TopicCell>
+      <MetaCell>
+        {topicName && <TopicCell>{topicName}</TopicCell>}
+        <DateCell title={createdAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
+          {formatRowDate(createdAt)}
+        </DateCell>
+      </MetaCell>
       <EntryCell>
         <EntryTitle $completed={completed}>{title}</EntryTitle>
         {preview && <EntryPreview>{preview}</EntryPreview>}
