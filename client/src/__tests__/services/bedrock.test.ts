@@ -3,11 +3,13 @@ import {
   bedrockConverse,
   listBedrockTextModels,
   fallbackBedrockModels,
+  bedrockApiKeyProblem,
+  normalizeBedrockApiKey,
   type BedrockCredentials,
 } from '../../services/bedrock.js';
 
 const apiKeyCreds: BedrockCredentials = {
-  region: 'us-west-2', auth: 'apiKey', apiKey: 'bedrock-key', accessKeyId: '', secretAccessKey: '', sessionToken: '',
+  region: 'us-west-2', auth: 'apiKey', apiKey: 'ABSKbedrock-key', accessKeyId: '', secretAccessKey: '', sessionToken: '',
 };
 const iamCreds: BedrockCredentials = {
   region: 'us-west-2', auth: 'iam', apiKey: '', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'secret/key', sessionToken: 'session-token',
@@ -30,7 +32,7 @@ describe('bedrockConverse', () => {
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('https://bedrock-runtime.us-west-2.amazonaws.com/model/us.amazon.nova-pro-v1%3A0/converse');
     const headers = init?.headers as Record<string, string>;
-    expect(headers.authorization).toBe('Bearer bedrock-key');
+    expect(headers.authorization).toBe('Bearer ABSKbedrock-key');
     expect(headers.host).toBeUndefined();
     const body = JSON.parse(String(init?.body));
     expect(body.system).toEqual([{ text: 'sys' }]);
@@ -109,5 +111,30 @@ describe('fallbackBedrockModels', () => {
     expect(new Set(eu.map(m => m.provider)).size).toBeGreaterThan(5);
     expect(eu.some(m => m.id.startsWith('eu.'))).toBe(true);
     expect(eu.some(m => m.id.startsWith('us.'))).toBe(false);
+  });
+});
+
+describe('Bedrock API key format', () => {
+  it('accepts long-term and short-term keys, cleaning up pasted extras', () => {
+    expect(bedrockApiKeyProblem('ABSKQmVkcm9ja0FQSUtleS1abc=')).toBeNull();
+    expect(bedrockApiKeyProblem('bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t')).toBeNull();
+    expect(normalizeBedrockApiKey('  "Bearer ABSKabc\n123="  ')).toBe('ABSKabc123=');
+    expect(bedrockApiKeyProblem('Bearer ABSKabc')).toBeNull();
+  });
+
+  it('spots an IAM access key ID pasted into the API key box', () => {
+    expect(bedrockApiKeyProblem('AKIAIOSFODNN7EXAMPLE')).toMatch(/IAM access key ID/);
+  });
+
+  it('explains the expected prefix for anything else, without calling AWS', async () => {
+    expect(bedrockApiKeyProblem('sk-ant-123')).toMatch(/ABSK/);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await expect(listBedrockTextModels({ ...apiKeyCreds, apiKey: 'AKIAIOSFODNN7EXAMPLE' })).rejects.toThrow(/IAM access key ID/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('translates AWS\'s format error if one still comes back', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ message: 'Invalid API Key format: Must start with pre-defined prefix' }, 403));
+    await expect(bedrockConverse(apiKeyCreds, 'm', 's', 'p')).rejects.toThrow(/start with "ABSK"/);
   });
 });

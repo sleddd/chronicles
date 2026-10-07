@@ -29,6 +29,28 @@ export interface BedrockModelOption {
   provider: string;
 }
 
+/**
+ * Clean up a pasted Bedrock API key: surrounding quotes, a copied
+ * "Bearer " prefix, and stray whitespace or line breaks.
+ */
+export function normalizeBedrockApiKey(raw: string): string {
+  return raw.trim().replace(/^["']|["']$/g, '').replace(/^Bearer\s+/i, '').replace(/\s+/g, '');
+}
+
+/**
+ * Why a value can't be a Bedrock API key, or null when it looks right.
+ * Long-term keys start with "ABSK", short-term keys with "bedrock-api-key-".
+ */
+export function bedrockApiKeyProblem(raw: string): string | null {
+  const key = normalizeBedrockApiKey(raw);
+  if (!key) return null;
+  if (/^(ABSK|bedrock-api-key-)/.test(key)) return null;
+  if (/^(AKIA|ASIA)[A-Z0-9]{12,}$/.test(key)) {
+    return 'That is an IAM access key ID, not a Bedrock API key. Change "Sign in with" to IAM access keys and enter it there with its secret access key.';
+  }
+  return 'Bedrock API keys start with "ABSK" (long-term) or "bedrock-api-key-" (short-term). Create one in the Amazon Bedrock console under API keys, or switch "Sign in with" to IAM access keys.';
+}
+
 /** Sign (IAM) or attach the bearer key to a Bedrock request, then send it. */
 async function bedrockFetch(
   creds: BedrockCredentials,
@@ -48,7 +70,10 @@ async function bedrockFetch(
 
   let finalHeaders: Record<string, string>;
   if (creds.auth === 'apiKey') {
-    finalHeaders = { ...headers, authorization: `Bearer ${creds.apiKey.trim()}` };
+    // Catch a wrong kind of key before AWS answers with a cryptic format error
+    const problem = bedrockApiKeyProblem(creds.apiKey);
+    if (problem) throw new Error(problem);
+    finalHeaders = { ...headers, authorization: `Bearer ${normalizeBedrockApiKey(creds.apiKey)}` };
   } else {
     const signer = new SignatureV4({
       service: 'bedrock',
@@ -84,6 +109,9 @@ async function bedrockFetch(
 /** Turn a Bedrock error response into a message the user can act on. */
 function bedrockErrorMessage(status: number, data: Record<string, unknown>): string {
   const msg = String(data.message ?? data.Message ?? '').trim();
+  if (/api key format|pre-defined prefix/i.test(msg)) {
+    return 'Bedrock did not recognise that API key. Bedrock API keys start with "ABSK" or "bedrock-api-key-" — or switch "Sign in with" to IAM access keys.';
+  }
   if (status === 401 || status === 403) {
     if (/model/i.test(msg) && /access/i.test(msg)) {
       return `No access to this model — enable it under Model access in the Bedrock console. (${msg})`;
