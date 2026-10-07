@@ -21,6 +21,9 @@ import { Select } from '../components/atoms/Select.js';
 import { Checkbox } from '../components/atoms/Checkbox.js';
 import { FormField, FieldRowLayoutContext } from '../components/molecules/FormField.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
+import { UnitLabel } from '../components/atoms/UnitLabel.js';
+import { useAiReady } from '../hooks/useAiReady.js';
+import { autoNutritionOnSave } from '../services/aiAssistant.js';
 
 /* ── Constants ── */
 
@@ -428,12 +431,20 @@ const StatusText = styled.span`
 /* ── Topic field definitions ── */
 
 type FieldType = 'text' | 'number' | 'boolean' | 'date' | 'time' | 'select';
-interface FieldDef { key: string; label: string; type: FieldType; options?: string[]; }
+interface FieldDef { key: string; label: string; type: FieldType; options?: string[]; unit?: string; }
 
 const TOPIC_FIELDS: Record<string, FieldDef[]> = {
   'medication':  [],
   'symptom':     [{ key: 'severity', label: 'Severity', type: 'select', options: ['Mild', 'Moderate', 'Severe'] }, { key: 'duration', label: 'Duration', type: 'text' }],
-  'meals':       [{ key: 'mealType', label: 'Meal', type: 'select', options: ['Breakfast', 'Lunch', 'Dinner', 'Snack'] }, { key: 'calories', label: 'Calories', type: 'number' }, { key: 'ingredients', label: 'Ingredients', type: 'text' }],
+  'meals':       [
+    { key: 'mealType', label: 'Meal', type: 'select', options: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Supplement'] },
+    { key: 'calories', label: 'Calories', type: 'number' },
+    { key: 'iron', label: 'Iron', type: 'number', unit: 'mg' },
+    { key: 'vitaminD', label: 'Vitamin D', type: 'number', unit: 'mcg' },
+    { key: 'vitaminB12', label: 'Vitamin B12', type: 'number', unit: 'mcg' },
+    { key: 'vitaminC', label: 'Vitamin C', type: 'number', unit: 'mg' },
+    { key: 'ingredients', label: 'Ingredients', type: 'text' },
+  ],
   'exercise':    [{ key: 'exerciseType', label: 'Type', type: 'text' }, { key: 'duration', label: 'Duration (min)', type: 'number' }, { key: 'intensity', label: 'Intensity', type: 'select', options: ['Low', 'Medium', 'High'] }],
   'allergy':     [{ key: 'allergen', label: 'Allergen', type: 'text' }, { key: 'severity', label: 'Severity', type: 'select', options: ['Mild', 'Moderate', 'Severe'] }, { key: 'reaction', label: 'Reaction', type: 'text' }],
   'task':        [{ key: 'priority', label: 'Priority', type: 'select', options: ['urgent', 'high', 'medium', 'low', 'none'] }],
@@ -467,6 +478,8 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
   const allTopics = useEntriesStore(s => s.allTopics);
   const selectedTopic = topics.find(t => t.id === selectedTopicId) ?? null;
   const fieldDefs = selectedTopic ? (TOPIC_FIELDS[selectedTopic.name.toLowerCase()] ?? []) : [];
+  const isMealsTopic = selectedTopic?.name.toLowerCase() === 'meals';
+  const aiReady = useAiReady();
   const userFieldDefs = selectedTopicId != null ? (topicCustomFields[selectedTopicId] ?? []) : [];
 
   const isTaskTopic = selectedTopic?.name.toLowerCase() === 'task';
@@ -514,7 +527,12 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
       const finalContent = content;
       const effectiveTopicId = selectedTopic ? selectedTopic.id : await getOrCreateJournalTopic();
       const metadata: Record<string, unknown> = { _taxonomyId: effectiveTopicId };
-      if ((fieldDefs.length > 0 || userFieldDefs.length > 0 || isMedicationTopic || isTaskTopic) && selectedTopic) metadata._customFields = customFields;
+      // Meals: with the AI assistant on, blank nutrients are filled in (typed ones are kept)
+      let fieldsToSave = customFields;
+      if (isMealsTopic && aiReady) {
+        fieldsToSave = (await autoNutritionOnSave(stripHtml(finalContent), customFields).catch(() => null)) ?? customFields;
+      }
+      if ((fieldDefs.length > 0 || userFieldDefs.length > 0 || isMedicationTopic || isTaskTopic) && selectedTopic) metadata._customFields = fieldsToSave;
       const encrypted = await encryptPost(finalContent, metadata);
       const result = await entriesApi.create({
         contentEncrypted: encrypted.contentEncrypted,
@@ -579,7 +597,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
         )}
         <FieldRowLayoutContext.Provider value={true}>
         {fieldDefs.length > 0 && fieldDefs.map(f => (
-          <FormField key={f.key} label={f.label}>
+          <FormField key={f.key} label={f.unit ? <UnitLabel label={f.label} unit={f.unit} /> : f.label}>
             {f.type === 'boolean' ? (
               <Checkbox
                 checked={!!customFields[f.key]}
@@ -594,7 +612,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
             ) : (
               <TextInput
                 type={f.type}
-                placeholder={f.type === 'number' ? '0' : `Add ${f.label.toLowerCase()}…`}
+                placeholder={f.type === 'number' ? (isMealsTopic && aiReady ? 'Auto' : '0') : `Add ${f.label.toLowerCase()}…`}
                 value={(customFields[f.key] as string) ?? ''}
                 onChange={e => setField(f.key, f.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
               />

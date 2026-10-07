@@ -2,7 +2,8 @@ import { useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { TextInput } from '../atoms/TextInput.js';
 import { Select } from '../atoms/Select.js';
-import { Button } from '../atoms/Button.js';
+import { PillButton } from '../atoms/PillButton.js';
+import { FormField } from '../molecules/FormField.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
@@ -10,57 +11,15 @@ import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { stripHtml } from '../../utils/stripHtml.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
-import { autoNutritionOnSave, estimateEntryCalories } from '../../services/aiAssistant.js';
+import { estimateEntryCalories } from '../../services/aiAssistant.js';
 
 /* ── Styled ── */
 
-const Form = styled.form`
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-`;
-
-const Grow = styled.div`
-  flex: 1 1 240px;
-  min-width: 0;
-`;
-
-const Fixed = styled.div<{ $w: number }>`
-  flex: 0 0 ${({ $w }) => $w}px;
-  @media (max-width: 480px) { flex: 1 1 ${({ $w }) => $w}px; }
-`;
-
-const EstimateBtn = styled.button`
-  flex-shrink: 0;
-  align-self: center;
-  padding: 6px 2px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  &:hover:not(:disabled) { opacity: 0.7; }
-  &:disabled { opacity: 0.5; cursor: wait; }
-`;
-
-const Status = styled.p`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin: 6px 0 0;
-  min-height: 18px;
-`;
-
 const LogList = styled.ul`
   list-style: none;
-  margin: 4px 0 0;
+  margin: 18px 0 0;
   padding: 0;
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 const LogRow = styled.li`
@@ -229,118 +188,64 @@ function useTodaysEntries(topicName: string, dateKey: string) {
   }, [entries, allTopics, topicName, dateKey]);
 }
 
-/* ── Food ── */
+const FieldGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+  @media (max-width: 720px) { grid-template-columns: 1fr; }
+`;
 
-export function MealQuickLog() {
-  const createEntry = useCreateEntry();
+const FormFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+`;
+
+const Note = styled.p`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 0;
+`;
+
+const SubLabel = styled.h3`
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 28px 0 0;
+`;
+
+/* ── Food: today's items (the form is the shared Log food form) ── */
+
+/** Today's Meals entries as a compact list — select one to edit it in the journal. */
+export function TodayFoodList() {
   const openInJournal = useOpenInJournal();
-  const aiReady = useAiReady();
   const todays = useTodaysEntries('Meals', 'consumedDate');
-
-  const [what, setWhat] = useState('');
-  const [mealType, setMealType] = useState(mealForNow);
-  const [calories, setCalories] = useState('');
-  /** Calories in the field came from the AI (vs typed) */
-  const [aiCalories, setAiCalories] = useState(false);
-  const [estimating, setEstimating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState('');
-
-  const totalCalories = todays.reduce((sum, e) => sum + (parseFloat(String(e.cf.calories)) || 0), 0);
-
-  const baseFields = () => ({
-    mealDescription: what.trim(),
-    mealType,
-    consumedDate: toDateStr(new Date()),
-    consumedTime: nowTime(),
-    ingredients: '',
-    calories: calories.trim(),
-    notes: '',
-  });
-
-  const handleEstimate = async () => {
-    if (!what.trim() || estimating) return;
-    setEstimating(true); setStatus('Estimating calories…');
-    try {
-      const est = await estimateEntryCalories('food', '', baseFields());
-      setCalories(String(est.calories)); setAiCalories(true); setStatus('AI estimate — edit to override');
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Could not estimate calories');
-    } finally { setEstimating(false); }
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!what.trim() || saving) return;
-    setSaving(true); setStatus('');
-    try {
-      let fields: Record<string, unknown> = { ...baseFields(), ...(calories.trim() ? { caloriesSource: aiCalories ? 'ai' : 'manual' } : {}) };
-      // AI on → fill every blank nutrient (calories included) so the Meals log
-      // has the full panel; typed calories are kept. A failed estimate still saves.
-      let note = '';
-      if (aiReady) {
-        setStatus('Estimating nutrients…');
-        try { fields = (await autoNutritionOnSave('', fields)) ?? fields; }
-        catch (err) { note = ` — nutrients not estimated (${err instanceof Error ? err.message : 'error'})`; }
-      }
-      const topicId = await getOrCreateTopicId('Meals', 'utensils');
-      await createEntry(topicId, `<p>${escapeHtml(what.trim())}</p>`, fields);
-      setWhat(''); setCalories(''); setAiCalories(false);
-      setStatus(fields.calories ? `Logged · ${String(fields.calories)} cal` : `Logged${note}`);
-      setTimeout(() => setStatus(''), note ? 5000 : 2500);
-    } catch (err) {
-      console.error('Failed to log meal:', err);
-      setStatus('Could not save — try again');
-    } finally { setSaving(false); }
-  };
-
   return (
-    <div>
-      <Form onSubmit={handleSubmit}>
-        <Grow>
-          <TextInput aria-label="What did you eat?" placeholder="What did you eat?" value={what} onChange={e => { setWhat(e.target.value); if (aiCalories) { setCalories(''); setAiCalories(false); } }} />
-        </Grow>
-        <Fixed $w={130}>
-          <Select aria-label="Meal" value={mealType} onChange={e => setMealType(e.target.value)}>
-            {MEAL_TYPES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </Select>
-        </Fixed>
-        <Fixed $w={100}>
-          <TextInput
-            aria-label="Calories"
-            placeholder={aiReady ? 'Auto' : 'Calories'}
-            inputMode="numeric"
-            value={calories}
-            onChange={e => { setCalories(e.target.value.replace(/[^\d.]/g, '')); setAiCalories(false); }}
-          />
-        </Fixed>
-        {aiReady && (
-          <EstimateBtn type="button" onClick={handleEstimate} disabled={estimating || !what.trim()} title="Estimate calories with AI">
-            Estimate
-          </EstimateBtn>
-        )}
-        <Button type="submit" variant="primary" disabled={saving || estimating || !what.trim()}>Log</Button>
-      </Form>
-      <Status role="status">{status}</Status>
+    <>
+      <SubLabel>Eaten today</SubLabel>
       {todays.length === 0 ? (
-        <Empty>Nothing logged today.</Empty>
+        <Empty style={{ marginTop: 10 }}>Nothing logged yet today.</Empty>
       ) : (
-        <>
-          <LogList>
-            {todays.map(e => (
-              <LogRow key={e.id}>
-                <LogBtn type="button" onClick={() => openInJournal(e.id)}>
-                  <LogTag>{labelFor(MEAL_TYPES, e.cf.mealType) || 'Meal'}</LogTag>
-                  <LogText>{e.text || String(e.cf.mealDescription || 'Meal')}</LogText>
-                  {e.cf.calories ? <LogMeta>{String(e.cf.calories)} cal</LogMeta> : null}
-                </LogBtn>
-              </LogRow>
-            ))}
-          </LogList>
-          {totalCalories > 0 && <Total>Today · {Math.round(totalCalories)} cal eaten</Total>}
-        </>
+        <LogList>
+          {todays.map(e => (
+            <LogRow key={e.id}>
+              <LogBtn type="button" onClick={() => openInJournal(e.id)}>
+                <LogTag>{labelFor(MEAL_TYPES, e.cf.mealType) || 'Meal'}</LogTag>
+                <LogText>{e.text || String(e.cf.mealDescription || 'Meal')}</LogText>
+                {e.cf.calories ? <LogMeta>{String(e.cf.calories)} cal</LogMeta> : null}
+              </LogBtn>
+            </LogRow>
+          ))}
+        </LogList>
       )}
-    </div>
+    </>
   );
 }
 
@@ -364,8 +269,8 @@ export function ExerciseQuickLog() {
   const totalBurned = todays.reduce((sum, e) => sum + (parseFloat(String(e.cf.calories)) || 0), 0);
   const canSave = !!what.trim() || !!duration.trim() || !!distance.trim();
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: FormEvent) => {
+    e?.preventDefault();
     if (!canSave || saving) return;
     setSaving(true); setStatus('');
     try {
@@ -405,34 +310,41 @@ export function ExerciseQuickLog() {
     } finally { setSaving(false); }
   };
 
+  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void handleSubmit(); } };
+  const numeric = (v: string) => v.replace(/[^\d.]/g, '');
+
   return (
     <div>
-      <Form onSubmit={handleSubmit}>
-        <Grow>
-          <TextInput aria-label="What did you do?" placeholder="What did you do? (optional)" value={what} onChange={e => setWhat(e.target.value)} />
-        </Grow>
-        <Fixed $w={160}>
+      <FormField label="Activity">
+        <TextInput aria-label="Activity" placeholder="Optional — e.g. Morning run around the park" value={what} onChange={e => setWhat(e.target.value)} onKeyDown={onEnter} autoComplete="off" />
+      </FormField>
+      <FieldGrid>
+        <FormField label="Type">
           <Select aria-label="Exercise type" value={exerciseType} onChange={e => setExerciseType(e.target.value)}>
             {EXERCISE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </Select>
-        </Fixed>
-        <Fixed $w={90}>
-          <TextInput aria-label="Minutes" placeholder="Minutes" inputMode="numeric" value={duration} onChange={e => setDuration(e.target.value.replace(/[^\d.]/g, ''))} />
-        </Fixed>
-        <Fixed $w={90}>
-          <TextInput aria-label="Distance" placeholder="Distance" inputMode="decimal" value={distance} onChange={e => setDistance(e.target.value.replace(/[^\d.]/g, ''))} />
-        </Fixed>
-        <Fixed $w={80}>
+        </FormField>
+        <FormField label="Minutes">
+          <TextInput aria-label="Minutes" placeholder="0" inputMode="numeric" value={duration} onChange={e => setDuration(numeric(e.target.value))} onKeyDown={onEnter} />
+        </FormField>
+        <FormField label="Distance">
+          <TextInput aria-label="Distance" placeholder="0" inputMode="decimal" value={distance} onChange={e => setDistance(numeric(e.target.value))} onKeyDown={onEnter} />
+        </FormField>
+        <FormField label="Unit">
           <Select aria-label="Distance unit" value={distanceUnit} onChange={e => setDistanceUnit(e.target.value as 'miles' | 'km')}>
-            <option value="miles">mi</option>
-            <option value="km">km</option>
+            <option value="miles">Miles</option>
+            <option value="km">Kilometers</option>
           </Select>
-        </Fixed>
-        <Button type="submit" variant="primary" disabled={saving || !canSave}>Log</Button>
-      </Form>
-      <Status role="status">{status}</Status>
+        </FormField>
+      </FieldGrid>
+      <FormFooter>
+        <Note role="status">{status || (aiReady ? 'Calories burned are calculated for you.' : 'Turn on the AI assistant in Settings to calculate calories burned.')}</Note>
+        <PillButton type="button" onClick={() => void handleSubmit()} disabled={saving || !canSave}>{saving ? 'Logging…' : 'Log exercise'}</PillButton>
+      </FormFooter>
+
+      <SubLabel>Today</SubLabel>
       {todays.length === 0 ? (
-        <Empty>No exercise logged today.</Empty>
+        <Empty style={{ marginTop: 10 }}>No exercise logged today.</Empty>
       ) : (
         <>
           <LogList>
