@@ -395,6 +395,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - **Breadcrumbs remember where you came from**: opening an entry from any view passes router state `{ from: path+query }` (`useOpenInJournal`, calendar views, Goals via `journalOriginState`); the editor trail becomes Journal / that view (e.g. Journal / Health / Symptoms), built by `getEntryTrail` / `viewTrailFor` in `client/src/utils/topicBreadcrumb.ts` (only known in-app paths; anything else falls back to the topic's home). The state survives reloads and the calendar's new-entry handoff
 - Entry list date badge is the day number over the **month** abbreviation (e.g. 7 / OCT) in `EntryListCard` and `EntryCard`
 - The tool row under the journal search (`ViewTabs`) ends with a **+ New entry** button
+- Journal list rows (`EntryCard`): tapping the uppercase topic label filters the list to that topic; checkable entries (tasks etc.) show a checkbox that toggles completion — both without opening the entry
 
 **Media & Inspiration**
 - Entertainment tracking (music, books, TV/movies)
@@ -491,6 +492,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - Changing the email (`/change-email`) or the recovery key (`/recovery-key`) requires the **current password**, like change-password and 2FA disable — a signed-in session alone must not be able to lock the owner out
 - Google OAuth: the signed `state` also carries the hash of a nonce kept in an HttpOnly `SameSite=Lax` cookie (`__Host-chronicle_oauth`), so the callback only succeeds in the browser that started the flow
 - `trust proxy` is on in production (`TRUST_PROXY`, default 1 hop) so per-IP rate limits see the real client IP behind Render's proxy
+- Account enumeration: `/recovery-params` answers an unknown email with **stable** decoy params (HMAC of the email, same sizes as real ones) — never random-per-request. Sign-up must say an email is taken (no email verification), so `/register` has its own `registerLimiter` (10/hour per IP)
 
 ### Rate limiting
 - `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out

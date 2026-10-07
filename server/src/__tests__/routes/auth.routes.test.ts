@@ -46,6 +46,7 @@ vi.mock('../../middleware/rateLimiter.js', () => ({
   authLimiter: (_req: any, _res: any, next: any) => next(),
   strictLimiter: (_req: any, _res: any, next: any) => next(),
   apiLimiter: (_req: any, _res: any, next: any) => next(),
+  registerLimiter: (_req: any, _res: any, next: any) => next(),
 }));
 
 // Mock security logger
@@ -637,7 +638,7 @@ describe('Auth Routes', () => {
       expect(res.body.recoveryWrapIv).toBe(Buffer.from('wrapiv').toString('base64'));
     });
 
-    it('returns fake params for non-existing user', async () => {
+    it('returns decoy params for a non-existing user, shaped like real ones', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
 
       const res = await request(app)
@@ -645,8 +646,28 @@ describe('Auth Routes', () => {
         .query({ email: 'nobody@example.com' });
 
       expect(res.status).toBe(200);
-      expect(res.body.recoveryWrappedMK).toBeDefined();
-      expect(res.body.recoveryWrapIv).toBeDefined();
+      // Same sizes as a real AES-GCM-wrapped 32-byte key and its 12-byte IV
+      expect(Buffer.from(res.body.recoveryWrappedMK, 'base64')).toHaveLength(48);
+      expect(Buffer.from(res.body.recoveryWrapIv, 'base64')).toHaveLength(12);
+    });
+
+    it('returns the SAME decoy every time for the same unknown email', async () => {
+      // Random-per-request decoys revealed which emails have no account
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+
+      const first = await request(app).get('/api/auth/recovery-params').query({ email: 'nobody@example.com' });
+      const second = await request(app).get('/api/auth/recovery-params').query({ email: 'NOBODY@example.com' });
+
+      expect(second.body).toEqual(first.body);
+    });
+
+    it('returns different decoys for different unknown emails', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+
+      const a = await request(app).get('/api/auth/recovery-params').query({ email: 'a@example.com' });
+      const b = await request(app).get('/api/auth/recovery-params').query({ email: 'b@example.com' });
+
+      expect(a.body.recoveryWrappedMK).not.toBe(b.body.recoveryWrappedMK);
     });
 
     it('returns fake params when encryption is not enabled', async () => {

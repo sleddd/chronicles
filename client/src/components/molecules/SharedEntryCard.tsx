@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import DOMPurify from 'dompurify';
-import { Icon } from '../atoms/Icon.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { Spinner } from '../atoms/Spinner.js';
 
 const Card = styled.div`
@@ -112,7 +112,7 @@ export function SharedEntryCard({ status, errorMsg, content, createdAt }: Shared
 
       {status === 'error' && (
         <StatusMessage $error>
-          <Icon name="alert-circle" size={32} strokeWidth={2} />
+          <MaterialIcon $size={32} aria-hidden="true">error</MaterialIcon>
           {errorMsg}
         </StatusMessage>
       )}

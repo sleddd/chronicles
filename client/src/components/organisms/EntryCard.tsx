@@ -2,6 +2,7 @@ import styled from 'styled-components';
 import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
+import { Checkbox } from '../atoms/Checkbox.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { stripHtml } from '../../utils/stripHtml.js';
 
@@ -107,6 +108,25 @@ const TopicLabel = styled.span<{ $active?: boolean }>`
   color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-tertiary)'};
 `;
 
+/* Tapping the topic label filters the list to that topic */
+const TopicButton = styled.button<{ $active?: boolean }>`
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-tertiary)'};
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const CheckWrap = styled.span`
+  display: inline-flex;
+  align-items: center;
+`;
+
 const TitleText = styled.div<{ $completed?: boolean }>`
   font-family: var(--font-sans);
   font-weight: 400;
@@ -138,8 +158,8 @@ const BookmarkIcon = styled.span`
 
 export function EntryCard({
   id, content, date, topicName, topicColor,
-  active, onClick, onDelete, onToggleBookmark,
-  isCompleted, isFavorite, previewText,
+  topicId, active, onClick, onDelete, onTopicClick, onToggleComplete, onToggleBookmark,
+  hasCheckbox, isCompleted, isFavorite, previewText,
 }: EntryCardProps) {
   const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
 
@@ -158,12 +178,31 @@ export function EntryCard({
       <ContentArea>
         {topicName && (
           <TopicRow>
-            <TopicLabel $active={active}>{topicName}</TopicLabel>
+            {onTopicClick && topicId != null ? (
+              <TopicButton
+                type="button"
+                $active={active}
+                onClick={e => { e.stopPropagation(); onTopicClick(topicId); }}
+                title={`Show only ${topicName}`}
+              >
+                {topicName}
+              </TopicButton>
+            ) : (
+              <TopicLabel $active={active}>{topicName}</TopicLabel>
+            )}
           </TopicRow>
         )}
         <TitleText $completed={isCompleted}>{title}</TitleText>
       </ContentArea>
       <EndCol>
+        {hasCheckbox && onToggleComplete && (
+          <CheckWrap
+            onClick={e => e.stopPropagation()}
+            title={isCompleted ? 'Mark not done' : 'Mark done'}
+          >
+            <Checkbox checked={!!isCompleted} onChange={checked => onToggleComplete(id, checked)} />
+          </CheckWrap>
+        )}
         {isFavorite && (
           <BookmarkIcon
             onClick={e => { e.stopPropagation(); onToggleBookmark?.(id, false); }}

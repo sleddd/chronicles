@@ -66,4 +66,44 @@ describe('EntryCard', () => {
     );
     expect(screen.getByText('Untitled entry')).toBeInTheDocument();
   });
+
+  it('filters by topic when the topic label is tapped, without opening the entry', () => {
+    const onTopicClick = vi.fn();
+    const onClick = vi.fn();
+    renderWithTheme(
+      <EntryCard {...defaultProps} onClick={onClick} topicName="Work" topicId={3} onTopicClick={onTopicClick} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(onTopicClick).toHaveBeenCalledWith(3);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('shows a plain topic label when topic filtering is unavailable', () => {
+    renderWithTheme(<EntryCard {...defaultProps} topicName="Work" />);
+    expect(screen.getByText('Work')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Work' })).not.toBeInTheDocument();
+  });
+
+  it('toggles completion from the checkbox without opening the entry', () => {
+    const onToggleComplete = vi.fn();
+    const onClick = vi.fn();
+    renderWithTheme(
+      <EntryCard {...defaultProps} onClick={onClick} hasCheckbox isCompleted={false} onToggleComplete={onToggleComplete} />
+    );
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(onToggleComplete).toHaveBeenCalledWith(1, true);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('shows a checked box for completed tasks', () => {
+    renderWithTheme(
+      <EntryCard {...defaultProps} hasCheckbox isCompleted onToggleComplete={vi.fn()} />
+    );
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
+  it('has no checkbox for entries that are not checkable', () => {
+    renderWithTheme(<EntryCard {...defaultProps} onToggleComplete={vi.fn()} />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
 });

@@ -29,6 +29,7 @@ declare module 'styled-components' {
       surface: string;
       surfaceHover: string;
       surfaceOverlay: string;
+      surfaceOverlayLight: string;
       surfaceOverlayBlur: string;
       text: string;
       textSecondary: string;

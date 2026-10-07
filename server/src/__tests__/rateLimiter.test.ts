@@ -39,3 +39,20 @@ describe('rateLimiter exports', () => {
     expect(apiLimiter).not.toBe(shareLimiter);
   });
 });
+
+describe('registerLimiter', () => {
+  it('allows 10 sign-up attempts per hour from one IP, then blocks', async () => {
+    const express = (await import('express')).default;
+    const request = (await import('supertest')).default;
+    const { registerLimiter } = await import('../middleware/rateLimiter.js');
+    const app = express();
+    app.post('/register', registerLimiter, (_req, res) => { res.status(201).end(); });
+
+    for (let i = 0; i < 10; i++) {
+      expect((await request(app).post('/register')).status).toBe(201);
+    }
+    const blocked = await request(app).post('/register');
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error).toMatch(/sign-up/i);
+  });
+});
