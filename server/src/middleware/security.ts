@@ -12,7 +12,7 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: blob:; " +
     "connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://www.googleapis.com https://*.r2.cloudflarestorage.com https://api.anthropic.com https://api.openai.com https://*.amazonaws.com; " +
-    "frame-ancestors 'none'"
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
   );
   // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -22,7 +22,8 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   res.setHeader('X-Frame-Options', 'DENY');
   // Control referrer leakage — no-referrer prevents share URLs (with #key fragment) from leaking
   res.setHeader('Referrer-Policy', 'no-referrer');
-  // Disable browser features we don't need
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=()');
+  // Disable browser features we don't need. The microphone stays available to
+  // our own origin only — voice dictation in the editor needs it.
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=()');
   next();
 }

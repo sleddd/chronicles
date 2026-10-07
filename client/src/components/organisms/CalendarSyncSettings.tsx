@@ -239,7 +239,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
     <SettingsCard>
       <SettingsRow
         title="Sync events & meetings"
-        description="Keep Event and Meeting entries in sync with an external calendar"
+        description="Keep Event and Meeting entries in sync with an external calendar. Synced events leave end-to-end encryption: Google stores them, and the Apple feed keeps an unencrypted copy on the Chronicles server so your calendar app can read it."
         action={<Toggle checked={calendarSyncEnabled} onChange={handleSyncToggle} activeColor={toggleColor} />}
       />
       {statusError && calendarSyncEnabled && <div style={msgStyle(true)}>{statusError}</div>}

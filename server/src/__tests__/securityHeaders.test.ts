@@ -28,6 +28,9 @@ describe('securityHeaders middleware', () => {
     expect(res.headers['Content-Security-Policy']).toContain("img-src 'self' data: blob:");
     expect(res.headers['Content-Security-Policy']).toContain("connect-src 'self'");
     expect(res.headers['Content-Security-Policy']).toContain("frame-ancestors 'none'");
+    expect(res.headers['Content-Security-Policy']).toContain("base-uri 'self'");
+    expect(res.headers['Content-Security-Policy']).toContain("form-action 'self'");
+    expect(res.headers['Content-Security-Policy']).toContain("object-src 'none'");
   });
 
   it('sets X-Content-Type-Options to nosniff', () => {
@@ -82,7 +85,8 @@ describe('securityHeaders middleware', () => {
 
     const policy = res.headers['Permissions-Policy'];
     expect(policy).toContain('camera=()');
-    expect(policy).toContain('microphone=()');
+    // Microphone is limited to our own origin (voice dictation), never third parties
+    expect(policy).toContain('microphone=(self)');
     expect(policy).toContain('geolocation=()');
     expect(policy).toContain('payment=()');
     expect(policy).toContain('usb=()');

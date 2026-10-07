@@ -72,7 +72,7 @@ describe('Session lifetime', () => {
 // 3. Constant-time delay function
 // ============================================================================
 describe('constantTimeDelay', () => {
-  it('auth.ts exports and uses constantTimeDelay for /salt and /recovery-params', async () => {
+  it('auth.ts uses constantTimeDelay for /recovery-params and /recover', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
@@ -80,9 +80,6 @@ describe('constantTimeDelay', () => {
     );
     // Verify the function exists
     expect(authContent).toContain('async function constantTimeDelay');
-    // Verify it's used in /salt endpoint
-    const saltSection = authContent.split("router.get('/salt'")[1]?.split('router.')[0] || '';
-    expect(saltSection).toContain('constantTimeDelay(startTime)');
     // Verify it's used in /recovery-params endpoint
     const recoverySection = authContent.split("router.get('/recovery-params'")[1]?.split('router.')[0] || '';
     expect(recoverySection).toContain('constantTimeDelay(startTime)');
@@ -93,19 +90,19 @@ describe('constantTimeDelay', () => {
 });
 
 // ============================================================================
-// 4. Email validation on /salt endpoint
+// 4. No unauthenticated lookup of encryption params
 // ============================================================================
-describe('Email validation on /salt', () => {
-  it('/salt endpoint validates email format before querying', async () => {
+describe('No unauthenticated encryption-param lookup', () => {
+  it('there is no /salt endpoint — the wrapped master key is only returned after auth', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    expect(authContent).toMatch(/import \{[^}]*\bemailSchema\b[^}]*\} from '@chronicles\/shared'/);
-    // Salt endpoint should validate email
-    const saltSection = authContent.split("router.get('/salt'")[1]?.split("router.")[0] || '';
-    expect(saltSection).toContain('emailSchema.safeParse');
+    expect(authContent).not.toContain("router.get('/salt'");
+    // The one public lookup returns only recovery-wrapped material (needs the 256-bit recovery key)
+    const section = authContent.split("router.get('/recovery-params'")[1]?.split('router.')[0] || '';
+    expect(section).not.toContain('encryptedMasterKey');
   });
 });
 

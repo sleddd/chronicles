@@ -304,57 +304,116 @@ describe('Auth Routes', () => {
   });
 
   // =========================================================================
-  // GET /api/auth/salt
+  // GET /api/auth/salt (removed)
   // =========================================================================
   describe('GET /api/auth/salt', () => {
-    it('returns encryption params for existing user', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({
-        encryptionEnabled: true,
-        kekSalt: Buffer.from('salt'),
-        encryptedMasterKey: Buffer.from('key'),
-        kekWrapIv: Buffer.from('iv'),
-        kekIterations: 600000,
-      });
-
+    it('no longer exists — the wrapped master key is never handed out before auth', async () => {
       const res = await request(app)
         .get('/api/auth/salt')
         .query({ email: 'test@example.com' });
 
+      expect(res.status).toBe(404);
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // POST /api/auth/change-email
+  // =========================================================================
+  describe('POST /api/auth/change-email', () => {
+    const body = { newEmail: 'New@Example.com', currentPassword: 'StrongPass1!xyz' };
+
+    it('changes the email when the current password is correct', async () => {
+      (prisma.account.findUnique as any)
+        .mockResolvedValueOnce({ passwordHash: '$2a$12$hash' }) // password check
+        .mockResolvedValueOnce(null); // email not taken
+      (bcrypt.compare as any).mockResolvedValueOnce(true);
+
+      const res = await request(app).post('/api/auth/change-email').send(body);
+
       expect(res.status).toBe(200);
-      expect(res.body.encryptionEnabled).toBe(true);
-      expect(res.body.kekSalt).toBe(Buffer.from('salt').toString('base64'));
-      expect(res.body.kekIterations).toBe(600000);
+      expect(res.body.email).toBe('new@example.com');
+      expect(prisma.account.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { email: 'new@example.com' } });
     });
 
-    it('returns fake params for non-existing user (prevents enumeration)', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue(null);
+    it('rejects a wrong password without changing anything', async () => {
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: '$2a$12$hash' });
+      (bcrypt.compare as any).mockResolvedValueOnce(false);
 
-      const res = await request(app)
-        .get('/api/auth/salt')
-        .query({ email: 'nobody@example.com' });
+      const res = await request(app).post('/api/auth/change-email').send(body);
 
-      expect(res.status).toBe(200);
-      // Fake params still have the same shape
-      expect(res.body.encryptionEnabled).toBe(true);
-      expect(res.body.kekSalt).toBeDefined();
-      expect(res.body.encryptedMasterKey).toBeDefined();
-      expect(res.body.kekIterations).toBe(600000);
+      expect(res.status).toBe(401);
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
-    it('returns 400 when email is missing', async () => {
-      const res = await request(app).get('/api/auth/salt');
+    it('requires the current password', async () => {
+      const res = await request(app).post('/api/auth/change-email').send({ newEmail: 'new@example.com' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Email required');
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
-    it('returns 400 for invalid email format', async () => {
-      const res = await request(app)
-        .get('/api/auth/salt')
-        .query({ email: 'not-an-email' });
+    it('returns 409 when the email belongs to another account', async () => {
+      (prisma.account.findUnique as any)
+        .mockResolvedValueOnce({ passwordHash: '$2a$12$hash' })
+        .mockResolvedValueOnce({ id: 99 });
+      (bcrypt.compare as any).mockResolvedValueOnce(true);
+
+      const res = await request(app).post('/api/auth/change-email').send(body);
+
+      expect(res.status).toBe(409);
+      expect(prisma.account.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // POST /api/auth/recovery-key
+  // =========================================================================
+  describe('POST /api/auth/recovery-key', () => {
+    const body = {
+      currentPassword: 'StrongPass1!xyz',
+      recoveryWrappedMK: Buffer.from('wrapped').toString('base64'),
+      recoveryWrapIv: Buffer.from('iv12345678ab').toString('base64'),
+      recoveryKeyHash: 'a'.repeat(64),
+      recoveryKeySalt: 'b'.repeat(32),
+    };
+
+    it('saves the new recovery key when the current password is correct', async () => {
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: '$2a$12$hash' });
+      (bcrypt.compare as any).mockResolvedValueOnce(true);
+
+      const res = await request(app).post('/api/auth/recovery-key').send(body);
+
+      expect(res.status).toBe(200);
+      expect(prisma.account.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ recoveryKeyHash: 'a'.repeat(64), recoveryKeySalt: 'b'.repeat(32) }),
+      }));
+    });
+
+    it('rejects a wrong password — a session alone cannot replace the recovery key', async () => {
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: '$2a$12$hash' });
+      (bcrypt.compare as any).mockResolvedValueOnce(false);
+
+      const res = await request(app).post('/api/auth/recovery-key').send(body);
+
+      expect(res.status).toBe(401);
+      expect(prisma.account.update).not.toHaveBeenCalled();
+    });
+
+    it('requires the current password', async () => {
+      const { currentPassword, ...rest } = body;
+      const res = await request(app).post('/api/auth/recovery-key').send(rest);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Invalid email');
+      expect(prisma.account.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects malformed hash material', async () => {
+      const res = await request(app).post('/api/auth/recovery-key').send({ ...body, recoveryKeyHash: { $ne: null } });
+
+      expect(res.status).toBe(400);
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
   });
 
