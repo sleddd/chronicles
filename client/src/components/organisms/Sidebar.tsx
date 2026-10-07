@@ -1,5 +1,7 @@
+import { memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 
@@ -19,7 +21,7 @@ const SidebarRoot = styled.aside<{ $mobileOpen?: boolean }>`
 
   /* Mobile = reveal pattern: the bar is pinned under the content at the far
      left; the main view slides right to expose it. Wider + scrollable. */
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     position: fixed;
     left: 0;
     top: 56px;
@@ -100,7 +102,7 @@ const NavScroll = styled.nav`
   /* Mobile reveal bar: pack items at the top and let the bar scroll. The
      bottom padding (plus safe-area inset) keeps the last item reachable above
      the browser chrome / home indicator. */
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     justify-content: flex-start;
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
@@ -134,7 +136,7 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
 
   /* On the mobile reveal bar, keep natural height so the list can scroll
      instead of stretching items to fill the viewport. */
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     flex: 0 0 auto;
     min-height: 64px;
   }
@@ -169,7 +171,9 @@ const MaterialIcon = styled.span<{ $size?: number }>`
 `;
 
 
-export function Sidebar() {
+/* Memoized: it reads its state from the stores, so parents re-rendering
+   (e.g. the journal on every keystroke) shouldn't re-render the nav. */
+export const Sidebar = memo(function Sidebar() {
   const location = useLocation();
   const rawNavigate = useNavigate();
   const ff = useEntriesStore(s => s.featureFlags);
@@ -253,4 +257,4 @@ export function Sidebar() {
 
     </SidebarRoot>
   );
-}
+});

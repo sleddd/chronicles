@@ -36,6 +36,7 @@ import { recipeShareHtml } from '../utils/recipeShareHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
+import { defaultShoppingListTitle } from '../utils/kitchen.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -508,7 +509,7 @@ export function JournalView() {
     const hasFieldValues = userFieldDefs.length > 0 && summarizeUserFields(userFieldDefs, userFieldValues) !== '';
     const hasFieldData = Object.keys(customFields).length > 0;
     if (!hasText && !hasDrawing && !hasFieldValues && !hasFieldData && entryImages.length === 0) return;
-    const finalContent = editorContent;
+    let finalContent = editorContent;
     setIsSaving(true); setSaveStatus('');
 
     // Resolve effective topic — fall back to "Journal" if none selected
@@ -524,6 +525,11 @@ export function JournalView() {
       // blocks the save.
       let fieldsToSave = customFields;
       const topicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
+      // A shopping list saved without a title gets a dated one
+      if (!hasText && !hasDrawing && topicName === 'shopping list') {
+        finalContent = `<p>${defaultShoppingListTitle()}</p>`;
+        setEditorContent(finalContent);
+      }
       const calorieKind = topicName === 'meals' ? 'food' : topicName === 'exercise' ? 'exercise' : null;
       if (calorieKind) {
         const estimated = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields).catch(() => null);

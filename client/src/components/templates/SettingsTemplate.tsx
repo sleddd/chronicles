@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import type { ReactNode } from 'react';
 import { Header } from '../organisms/Header.js';
 import { Sidebar } from '../organisms/Sidebar.js';
@@ -14,7 +15,7 @@ const Layout = styled.div`
   height: 100vh;
   overflow: hidden;
 
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     padding-top: 56px;
   }
 `;

@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { useMemo, useCallback, useState } from 'react';
+import { memo, useMemo, useCallback, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { EntryCard } from './EntryCard.js';
@@ -128,7 +128,9 @@ interface EntryListProps {
   onToggleBookmark?: (entryId: number, isFavorite: boolean) => void;
 }
 
-export function EntryList({ onToggleBookmark }: EntryListProps = {}) {
+/* Memoized: the journal re-renders on every keystroke in the editor, and the
+   list (which reads its data from the stores) must not re-render with it. */
+export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryListProps = {}) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const topics = useEntriesStore(s => s.topics);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
@@ -454,4 +456,4 @@ export function EntryList({ onToggleBookmark }: EntryListProps = {}) {
       })}
     </ListContainer>
   );
-}
+});

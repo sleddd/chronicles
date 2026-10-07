@@ -23,6 +23,9 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi } from '../../services/api.js';
 import type { Topic } from '../../types/topics.js';
+import { TextInput } from '../atoms/TextInput.js';
+import { FormField } from '../molecules/FormField.js';
+import { defaultShoppingListTitle } from '../../utils/kitchen.js';
 
 const TOPIC_TO_TYPE: Record<string, string> = {
   task: 'task', goal: 'goal', milestone: 'milestone',
@@ -34,6 +37,10 @@ const TOPIC_TO_TYPE: Record<string, string> = {
 function getCustomType(topicName: string | undefined): string | null {
   if (!topicName) return null;
   return TOPIC_TO_TYPE[topicName.toLowerCase()] || null;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 const AddButton = styled.button<{ $color: string }>`
@@ -141,7 +148,7 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
     setSaving(true); setStatus('');
     let finalContent = content;
     if (!hasText && isShoppingList) {
-      finalContent = `<p>Shopping List: ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>`;
+      finalContent = `<p>${defaultShoppingListTitle()}</p>`;
     }
     if (!hasText && isWellness) {
       const w = (customFields.waterGlasses as number) || 0;
@@ -195,7 +202,7 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
       case 'goal': return <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as never} onChange={onChange as never} />;
       case 'milestone': return <MilestoneFields values={{ milestoneStatus: 'active', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as never} onChange={onChange as never} goalOptions={goalOptions} />;
       case 'food': return <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as never} onChange={onChange as never} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />;
-      case 'medication': return <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as never} onChange={onChange as never} />;
+      case 'medication': return <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as never} onChange={onChange as never} entryName={content.replace(/<[^>]+>/g, ' ').trim()} />;
       case 'symptom': return <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'allergy': return <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'exercise': return <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as never} onChange={onChange as never} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />;
@@ -224,7 +231,19 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
     <Card $accentColor={accentColor}>
       <EditWrapper>
         <InlineEditPanel
-          editor={isShoppingList ? undefined : <Editor content={content} onChange={setContent} placeholder={`Write a new ${topic.name.toLowerCase()} entry...`} />}
+          editor={isShoppingList
+            ? (
+              <FormField label="Title">
+                <TextInput
+                  value={stripHtml(content)}
+                  onChange={e => setContent(e.target.value ? `<p>${escapeHtml(e.target.value)}</p>` : '')}
+                  placeholder={defaultShoppingListTitle()}
+                  aria-label="Shopping list title"
+                  autoFocus
+                />
+              </FormField>
+            )
+            : <Editor content={content} onChange={setContent} placeholder={`Write a new ${topic.name.toLowerCase()} entry...`} />}
           fields={renderFields()}
           accentColor={accentColor}
           saving={saving}

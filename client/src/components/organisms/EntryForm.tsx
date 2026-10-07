@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment, type MutableRefObject } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject } from 'react';
 import styled from 'styled-components';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { getEntryTrail } from '../../utils/topicBreadcrumb.js';
@@ -556,17 +556,17 @@ export function EntryForm({
   const trail = getEntryTrail(selectedTopic?.name, originPath);
 
   // Build goal options for milestone linking
-  const goalOptions = entries
+  const goalOptions = useMemo(() => entries
     .filter(e => {
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
       return t && getCustomType(t.name) === 'goal';
     })
-    .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Goal #${e.id}` }));
+    .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Goal #${e.id}` })), [entries, topics, entryId]);
 
   // Build milestone options for task linking (include parentGoalId for cascading)
-  const milestoneOptions = entries
+  const milestoneOptions = useMemo(() => entries
     .filter(e => {
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
@@ -580,10 +580,10 @@ export function EntryForm({
         title: stripHtml(e.content).slice(0, 60) || `Milestone #${e.id}`,
         parentGoalId: (cf?.parentGoalId as number) || undefined,
       };
-    });
+    }), [entries, topics, entryId]);
 
   // Build recipe options for shopping list linking
-  const recipeOptions = entries
+  const recipeOptions = useMemo(() => entries
     .filter(e => {
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
@@ -594,20 +594,20 @@ export function EntryForm({
       const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
       const name = typeof cf?.recipeName === 'string' ? cf.recipeName.trim() : '';
       return { id: e.id, title: name || stripHtml(e.content).slice(0, 60) || `Recipe #${e.id}` };
-    });
+    }), [entries, topics, entryId]);
 
   // Build shopping list options for recipe linking
-  const shoppingListOptions = entries
+  const shoppingListOptions = useMemo(() => entries
     .filter(e => {
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
       return t && getCustomType(t.name) === 'shopping_list' && e.id !== entryId;
     })
-    .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Shopping List #${e.id}` }));
+    .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Shopping List #${e.id}` })), [entries, topics, entryId]);
 
   // Build linked tasks for the current milestone (tasks whose parentMilestoneId === this entry)
-  const linkedTasks = entryId ? entries
+  const linkedTasks = useMemo(() => entryId ? entries
     .filter(e => {
       const meta = e.metadata as Record<string, unknown>;
       const cf = meta?._customFields as Record<string, unknown> | undefined;
@@ -618,7 +618,7 @@ export function EntryForm({
     .map(e => {
       const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
       return { id: e.id, title: stripHtml(e.content).slice(0, 60) || `Task #${e.id}`, isCompleted: !!cf?.isCompleted };
-    }) : [];
+    }) : [], [entries, topics, entryId]);
 
   // Toggle a linked task's completion status
   const handleToggleTaskComplete = (taskId: number, completed: boolean) => {
@@ -976,7 +976,7 @@ export function EntryForm({
                   {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
                   {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
                   {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
-                  {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+                  {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={content.replace(/<[^>]+>/g, ' ').trim()} />}
                   {customType === 'symptom' && <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
                   {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
                   {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}

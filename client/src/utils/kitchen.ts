@@ -71,3 +71,8 @@ export function latestOpenList(entries: DecryptedPost[], listTopicId: number | u
     })
     .sort((a, b) => time(b) - time(a))[0];
 }
+
+/** Name for a shopping list saved without a title: "Shopping list created on Oct 7, 2026". */
+export function defaultShoppingListTitle(date = new Date()): string {
+  return `Shopping list created on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
