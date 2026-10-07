@@ -10,7 +10,6 @@ import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { EntryTableHead } from '../components/molecules/EntryTable.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -192,7 +191,6 @@ export function TopicDetailView() {
             <EmptyState message={`No ${topic.name.toLowerCase()} entries yet.`} />
           ) : (
             <List>
-              <EntryTableHead />
               {topicEntries.map((entry: DecryptedPost) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 return (

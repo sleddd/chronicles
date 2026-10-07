@@ -7,7 +7,6 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { EntryTableHead } from '../components/molecules/EntryTable.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
@@ -926,7 +925,6 @@ export function PlannerFilterView() {
                 <SectionHeader $color={accentColor}>
                   Goals <ResultCount>({results.goalResults.length})</ResultCount>
                 </SectionHeader>
-                <EntryTableHead />
                 {results.goalResults.map(g => renderResultCard(g.id, g.taxonomyId, g.goalStatus === 'completed'))}
               </>
             )}
@@ -936,7 +934,6 @@ export function PlannerFilterView() {
                 <SectionHeader $color={accentColor}>
                   Milestones <ResultCount>({results.milestoneResults.length})</ResultCount>
                 </SectionHeader>
-                <EntryTableHead />
                 {results.milestoneResults.map(m => renderResultCard(m.id, m.taxonomyId, m.isCompleted))}
               </>
             )}
@@ -946,7 +943,6 @@ export function PlannerFilterView() {
                 <SectionHeader $color={accentColor}>
                   Tasks <ResultCount>({results.taskResults.length})</ResultCount>
                 </SectionHeader>
-                <EntryTableHead />
                 {results.taskResults.map(t => renderResultCard(t.id, t.taxonomyId, t.isCompleted))}
               </>
             )}
@@ -956,7 +952,6 @@ export function PlannerFilterView() {
                 <SectionHeader $color={accentColor}>
                   Todos <ResultCount>({results.todoResults.length})</ResultCount>
                 </SectionHeader>
-                <EntryTableHead />
                 {results.todoResults.map(t => renderResultCard(t.id, t.taxonomyId, t.isCompleted))}
               </>
             )}

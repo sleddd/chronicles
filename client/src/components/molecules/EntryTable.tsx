@@ -2,7 +2,7 @@ import styled from 'styled-components';
 
 /* Spreadsheet-style entry lists, matching the Meals log table: one row per
    entry with a stacked Topic-over-Date column and an Entry column, hairline
-   rules, 14px text, and a tracked-uppercase header row. Shared by EntryCard (journal list) and
+   rules and 14px text — no header row. Shared by EntryCard (journal list) and
    EntryListCard (topic, task and health lists) so every list lines up. */
 
 /** Topic over Date | Entry | trailing controls */
@@ -14,37 +14,10 @@ export function formatRowDate(d: Date, now = new Date()): string {
   return d.getFullYear() === now.getFullYear() ? md : `${md} '${String(d.getFullYear()).slice(-2)}`;
 }
 
-/** Shared cell padding so header and rows align. */
+/** Shared row padding. */
 export const ENTRY_ROW_PADDING = '12px 10px 12px 4px';
 /** Inset variant for edge-to-edge panels (journal list) — matches its 20px toolbar gutter. */
 export const ENTRY_ROW_INSET_PADDING = '12px 20px';
-
-const Head = styled.div<{ $inset?: boolean }>`
-  display: grid;
-  grid-template-columns: ${ENTRY_ROW_COLUMNS};
-  gap: 12px;
-  align-items: end;
-  padding: ${({ $inset }) => ($inset ? '6px 20px 10px' : '6px 10px 10px 4px')};
-  border-bottom: 1px solid var(--border-subtle);
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-`;
-
-/** Column header row for an entry list. */
-export function EntryTableHead({ className, inset }: { className?: string; inset?: boolean }) {
-  return (
-    <Head className={className} $inset={inset} role="presentation">
-      <span>Topic / Date</span>
-      <span>Entry</span>
-      <span />
-    </Head>
-  );
-}
 
 /* Cell pieces both row components use */
 

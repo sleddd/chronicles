@@ -6,7 +6,6 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { EntryTableHead } from '../components/molecules/EntryTable.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
@@ -190,7 +189,6 @@ export function ShoppingListsView() {
             />
           ) : (
             <List>
-              <EntryTableHead />
               {visible.map(({ entry, completed }) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 return (

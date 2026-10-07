@@ -8,7 +8,6 @@ import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { EntryTableHead } from '../components/molecules/EntryTable.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
@@ -186,7 +185,6 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
             <EmptyState message={`No ${title.toLowerCase()} entries yet.`} />
           ) : (
             <List>
-              <EntryTableHead />
               {filtered.map(entry => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);
