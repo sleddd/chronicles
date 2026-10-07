@@ -84,7 +84,7 @@ const DayNum = styled.span`
   letter-spacing: -0.01em;
 `;
 
-const Weekday = styled.span`
+const MonthLabel = styled.span`
   font-family: var(--font-label);
   font-size: 10px;
   font-weight: 700;
@@ -152,7 +152,7 @@ export function EntryCard({
 
   const d = new Date(date);
   const dayNum = d.getDate();
-  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
 
   const title = extractTitle(content, previewText);
 
@@ -160,7 +160,7 @@ export function EntryCard({
     <Row $active={active} $accent={topicColor} onClick={onClick}>
       <DateCol>
         <DayNum>{dayNum}</DayNum>
-        <Weekday>{weekday}</Weekday>
+        <MonthLabel>{month}</MonthLabel>
       </DateCol>
       <ContentArea>
         {topicName && (

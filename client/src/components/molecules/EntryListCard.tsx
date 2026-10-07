@@ -56,7 +56,7 @@ const DayNum = styled.span`
   letter-spacing: -0.01em;
 `;
 
-const Weekday = styled.span`
+const MonthLabel = styled.span`
   font-family: var(--font-label);
   font-size: 10px;
   font-weight: 700;
@@ -122,14 +122,14 @@ const Preview = styled.div`
 
 export function EntryListCard({ content, createdAt, topicName, completed, onClick, fallbackTitle, preview }: EntryListCardProps) {
   const dayNum = createdAt.getDate();
-  const weekday = createdAt.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = createdAt.toLocaleDateString('en-US', { month: 'short' });
   const title = extractTitle(content, fallbackTitle);
 
   return (
     <Row onClick={onClick}>
       <DateCol>
         <DayNum>{dayNum}</DayNum>
-        <Weekday>{weekday}</Weekday>
+        <MonthLabel>{month}</MonthLabel>
       </DateCol>
       <ContentArea>
         {topicName && (

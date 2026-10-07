@@ -259,7 +259,8 @@ Views     → Route logic + top-level data orchestration
 | `/settings` | SettingsView |
 | `/goals`, `/goals/milestones`, `/goals/tasks`, `/goals/todos` | Goals/planning views |
 | `/goals/filter` | PlannerFilterView — cross-hierarchy search/filter |
-| `/health/*` | Health tracking views |
+| `/health/*` | Health tracking views — tabs: Dashboard, Meds (`/health/schedule`), Meals (`/health/food`), Exercise, Symptoms, Med List (`/health/meds`), Allergies, Reports |
+| `/kitchen`, `/menu`, `/menu/recipes`, `/shopping` | From the Kitchen — tabs: Dashboard, Menu, Recipes, Shopping Lists (`MealsTabBar`, title `KITCHEN_TITLE`); `/menu/meals` redirects to `/health/food` |
 | `/entertainment/*`, `/inspiration/*` | Media/inspiration views |
 
 ### Key Files
@@ -381,9 +382,17 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Reporting view with wellness trends + cross-correlations (sleep→mood, water→symptoms, exercise→sleep, mood→symptoms); cycle calendar showing period/flow days by month
 
 **Calendar**
-- Monthly grid with entry previews per day
+- Shows scheduled items only — never ordinary journal entries: events/meetings on `startDate`, tasks/todos on `deadline` (else their creation day), goals/milestones on `targetDate` (`calendarDayFor` in `client/src/utils/calendarItems.ts`)
+- Monthly grid with item previews per day
 - Events and meetings placed on their `startDate`, sorted first, shown in user header colour
 - Day detail panel with full editable entry list
+
+**From the Kitchen**
+- `KitchenDashboardView` (`/kitchen`, the sidebar's fork-and-spoon icon): **Meals** — today's planned meals from the weekly Menu Plan entries (or the next planned day within two weeks; a meal linked to a recipe opens it); **Shopping list** — the newest list with unchecked items as a checklist (tick off, add an item, open the list), unchecked items first. Pure helpers in `client/src/utils/kitchen.ts`
+
+**Journal**
+- Entry list date badge is the day number over the **month** abbreviation (e.g. 7 / OCT) in `EntryListCard` and `EntryCard`
+- The tool row under the journal search (`ViewTabs`) ends with a **+ New entry** button
 
 **Media & Inspiration**
 - Entertainment tracking (music, books, TV/movies)
@@ -421,6 +430,9 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 **AI chat (unsaved)**
 - `client/src/components/organisms/AiChat.tsx` — floating chat bubble bottom-right (`forum` icon; lifted to 88px on `/journal` so it clears the editor's Save bar) that opens a small pop-up panel. Mounted once in `App.tsx` via `ChatGate` — only when signed in **and** unlocked, never on `/login`, `/register`, `/recover`, `/share`
 - **Chats are never saved**: messages live only in component state, so closing the page or locking the journal (which unmounts it) clears them; "Clear" empties it. Replies come from the user's configured provider via `chatReply(system, turns)` in `aiAssistant.ts` (multi-turn: Claude Messages / Bedrock Converse with a message list / OpenAI chat)
+- Look: rounded panel (18px) and pill input — a deliberate exception to the squared DS corners; alternating bubbles (user right in the accent tint, assistant left on `--bg-sunken`, notes centred). Assistant replies render a safe Markdown subset (paragraphs, headings, bullet/numbered lists, bold, italic, code) via `parseChatMarkdown` in `client/src/utils/chatMarkdown.ts` — a data tree rendered as React elements, never HTML
+- Persona (`CHAT_PERSONA` in `chatSave.ts`): warm and human, humor and kindness where fitting; never mocking, patronizing or misogynistic; inclusive; always says it is an AI when asked; gently steers real distress or imminent-harm signs toward journaling or talking to a person and offers help finding someone
+- `/save Meals <food>` creates a proper Meals log row for today (meal type by time of day) and, when AI is on, fills its nutrients with `autoNutritionOnSave` before saving
 - `/save <topic> <text>` saves `text` as an encrypted journal entry under that topic — handled locally (never sent to the AI), created with the existing encrypted entries API (**no server endpoint**). Topic matching is case-insensitive, longest name first (so "Shopping List" works unquoted) — `parseSaveCommand` in `client/src/utils/chatSave.ts`. "Journal" is always accepted and created via `getOrCreateJournalTopic` if missing. Works even when AI is off
 - The system prompt (`chatSystemPrompt`) lists the user's topic names so the model can suggest a fitting `` `/save Topic text` ``; suggestions render as one-tap chips that fill the input
 - Settings → AI Assistant shows a readiness line ("Ready — using …" / "Not ready yet — add …" from `missingCredentials`); Test connection is always clickable and says what's missing; a blank model is auto-filled with the first available model, and model IDs from the old Claude-only Bedrock endpoint are cleared on load

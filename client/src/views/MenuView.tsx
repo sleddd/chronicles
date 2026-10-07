@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { MealsTabBar } from '../components/molecules/MealsTabBar.js';
+import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { RecipeAutocomplete } from '../components/molecules/RecipeAutocomplete.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -706,7 +706,7 @@ export function MenuView() {
       <Page>
         <Inner>
           <Head>
-            <Title>Meals</Title>
+            <Title>{KITCHEN_TITLE}</Title>
             <HeadActions>
               <WeekNav>
                 <NavBtn onClick={() => setWeekStart(w => addDays(w, -7))} aria-label="Previous week">

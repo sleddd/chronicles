@@ -14,7 +14,7 @@ export interface TrailCrumb {
 const JOURNAL_CRUMB: TrailCrumb = { label: 'Journal', path: '/journal' };
 const PLANNING_TRAIL: TrailCrumb[] = [{ label: 'Planning', path: '/goals' }];
 const HEALTH_TRAIL: TrailCrumb[] = [{ label: 'Health', path: '/health' }];
-const MEALS_TRAIL: TrailCrumb[] = [{ label: 'Meals', path: '/menu' }];
+const MEALS_TRAIL: TrailCrumb[] = [{ label: 'From the Kitchen', path: '/kitchen' }];
 const CALENDAR_TRAIL: TrailCrumb[] = [{ label: 'Calendar', path: '/calendar' }];
 
 const TRAILS: Record<string, TrailCrumb[]> = {
@@ -28,11 +28,12 @@ const TRAILS: Record<string, TrailCrumb[]> = {
   exercise: HEALTH_TRAIL,
   allergy: HEALTH_TRAIL,
   wellness: HEALTH_TRAIL,
-  meals: [...HEALTH_TRAIL, { label: 'Food', path: '/health/food' }],
+  meals: [...HEALTH_TRAIL, { label: 'Meals', path: '/health/food' }],
 
   recipe: MEALS_TRAIL,
   recipes: MEALS_TRAIL,
   'shopping list': MEALS_TRAIL,
+  'menu plan': MEALS_TRAIL,
 
   event: CALENDAR_TRAIL,
   meeting: CALENDAR_TRAIL,
@@ -47,7 +48,7 @@ const TRAILS: Record<string, TrailCrumb[]> = {
 };
 
 /** Ancestor crumbs for a topic — always rooted at Journal, then the topic's
- *  home view/subview (e.g. Meals → Journal / Health / Food). */
+ *  home view/subview (e.g. Meals → Journal / Health / Meals). */
 export function getTopicTrail(topicName?: string | null): TrailCrumb[] {
   const key = (topicName ?? '').toLowerCase();
   return [JOURNAL_CRUMB, ...(TRAILS[key] ?? [])];

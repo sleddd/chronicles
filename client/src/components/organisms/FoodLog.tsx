@@ -14,7 +14,7 @@ import { autoNutritionOnSave, estimateEntryNutrition, nutrientsToEstimate } from
 import { deleteEntryWithImages } from '../../utils/entryActions.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import {
-  MEAL_TYPE_OPTIONS, goalMet, parseDay, shiftDay, summarizeDay, type FoodRow,
+  MEAL_TYPE_OPTIONS, goalMet, mealForNow, nowTime, parseDay, shiftDay, summarizeDay, type FoodRow,
 } from '../../utils/foodLog.js';
 import {
   NUTRIENTS, formatNutrient, nutrientNumber, nutrientSourceOf, withManualNutrient,
@@ -360,18 +360,6 @@ function emptyValues(): Record<NutrientKey, string> {
   return v;
 }
 
-function mealForNow(): string {
-  const h = new Date().getHours();
-  if (h < 11) return 'breakfast';
-  if (h < 15) return 'lunch';
-  if (h >= 17 && h < 21) return 'dinner';
-  return 'snack';
-}
-
-function nowTime(): string {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 /* ══ Day navigation ══ */
 

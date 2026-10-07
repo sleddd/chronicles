@@ -195,7 +195,7 @@ export function CalendarDayDetail({
   }).length;
 
   const countParts: string[] = [];
-  if (entries.length > 0) countParts.push(`${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`);
+  if (entries.length > 0) countParts.push(`${entries.length} ${entries.length === 1 ? 'item' : 'items'}`);
   if (eventCount > 0) countParts.push(`${eventCount} ${eventCount === 1 ? 'event' : 'events'}`);
   if (taskCount > 0) countParts.push(`${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`);
   const countLine = countParts.join(' · ');

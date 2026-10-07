@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { MealsTabBar } from '../components/molecules/MealsTabBar.js';
+import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
@@ -157,7 +157,7 @@ export function ShoppingListsView() {
       <Page>
         <Inner>
           <Head>
-            <Title>Meals</Title>
+            <Title>{KITCHEN_TITLE}</Title>
             {shoppingListTopic && (
               <NewBtn onClick={() => setIsAddOpen(true)}>
                 <MaterialIcon $size={16} aria-hidden="true">add</MaterialIcon>
