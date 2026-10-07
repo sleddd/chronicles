@@ -14,6 +14,7 @@ import { GoalCard } from '../components/organisms/GoalCard.js';
 import { MilestoneCard } from '../components/organisms/MilestoneCard.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { EntryTableHead } from '../components/molecules/EntryTable.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
@@ -648,7 +649,7 @@ export function GoalsView() {
 
         {tab === 'tasks' && (tasks.length === 0
             ? <EmptyState message="No tasks found." submessage="Create a journal entry with the Task topic to get started." />
-            : [...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(t => {
+            : <><EntryTableHead />{[...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(t => {
                 const entry = entries.find(e => e.id === t.id);
                 if (!entry) return null;
                 const topic = allTopics.find(tp => tp.id === t.taxonomyId);
@@ -665,12 +666,12 @@ export function GoalsView() {
                     />
                   </SwipeActions>
                 );
-              })
+              })}</>
         )}
 
         {tab === 'todos' && (todos.length === 0
             ? <EmptyState message="No todos found." submessage="Create a task without linking it to a milestone or goal." />
-            : [...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(t => {
+            : <><EntryTableHead />{[...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(t => {
                 const entry = entries.find(e => e.id === t.id);
                 if (!entry) return null;
                 const topic = allTopics.find(tp => tp.id === t.taxonomyId);
@@ -687,7 +688,7 @@ export function GoalsView() {
                     />
                   </SwipeActions>
                 );
-              })
+              })}</>
         )}
           </Body>
         </Inner>

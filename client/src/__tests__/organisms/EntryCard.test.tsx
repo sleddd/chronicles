@@ -31,10 +31,13 @@ describe('EntryCard', () => {
     expect(screen.getByText('This is a journal entry')).toBeInTheDocument();
   });
 
-  it('renders the day number over the month abbreviation', () => {
-    renderWithTheme(<EntryCard {...defaultProps} />);
-    expect(screen.getByText('15')).toBeInTheDocument();
-    expect(screen.getByText('Jan')).toBeInTheDocument();
+  it('renders a spreadsheet row: date, then topic, then the entry', () => {
+    const { container } = renderWithTheme(<EntryCard {...defaultProps} topicName="Work" />);
+    // 2024 isn't the current year, so the short year is shown
+    expect(screen.getByText("Jan 15 '24")).toBeInTheDocument();
+    const text = container.textContent ?? '';
+    expect(text.indexOf("Jan 15 '24")).toBeLessThan(text.indexOf('Work'));
+    expect(text.indexOf('Work')).toBeLessThan(text.indexOf('This is a journal entry'));
   });
 
   it('calls onClick when card is clicked', () => {

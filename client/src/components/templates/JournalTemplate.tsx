@@ -12,8 +12,9 @@ const ContentArea = styled.div`
 `;
 
 const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean; $lightBg?: boolean }>`
-  width: 312px;
-  min-width: 312px;
+  /* Wide enough for the Date | Topic | Entry columns */
+  width: 380px;
+  min-width: 380px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
