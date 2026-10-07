@@ -18,6 +18,7 @@ import {
   type BedrockCredentials,
   type BedrockModelOption,
 } from './bedrock.js';
+import { NUTRIENTS, NUTRIENT_KEYS, nutrientSourceOf, type NutrientKey, type NutrientSource } from '../types/nutrition.js';
 
 export type { BedrockAuth, BedrockModelOption };
 export type AiProvider = 'anthropic' | 'bedrock' | 'openai';
@@ -344,6 +345,51 @@ export async function estimateExerciseCalories(input: ExerciseInput): Promise<nu
   return parseCalories(await complete(cfg, SYSTEM_PROMPT, lines.join('\n')));
 }
 
+const NUTRITION_PROMPT =
+  'You are a nutrition assistant inside a personal health journal. ' +
+  'For a food, drink or supplement the user logged, estimate the nutrients in the amount described. ' +
+  'When details are missing, assume a typical single portion (or one dose for a supplement). ' +
+  'Use 0 for nutrients the item does not contain. ' +
+  'Reply with only a JSON object containing exactly the requested keys with numeric values, and nothing else.';
+
+const NUTRIENT_PROMPT_UNITS: Record<NutrientKey, string> = {
+  calories: 'calories (kcal)',
+  iron: 'iron (mg)',
+  vitaminD: 'vitaminD (mcg)',
+  vitaminB12: 'vitaminB12 (mcg)',
+  vitaminC: 'vitaminC (mg)',
+};
+
+/** Pull the requested nutrient numbers out of a model reply; throws if any is missing. */
+export function parseNutrients(text: string, keys: NutrientKey[]): Partial<Record<NutrientKey, number>> {
+  const json = text.match(/\{[\s\S]*\}/);
+  if (!json) throw new Error('The AI did not return a nutrition estimate');
+  let data: Record<string, unknown>;
+  try { data = JSON.parse(json[0]) as Record<string, unknown>; }
+  catch { throw new Error('The AI did not return a nutrition estimate'); }
+  const out: Partial<Record<NutrientKey, number>> = {};
+  for (const key of keys) {
+    const n = Number(data[key]);
+    const max = NUTRIENTS.find(x => x.key === key)!.max;
+    if (!Number.isFinite(n) || n < 0 || n > max) throw new Error(`The AI did not return a usable ${key} estimate`);
+    out[key] = key === 'calories' ? Math.round(n) : Number(n.toFixed(Math.abs(n) < 1 ? 2 : 1));
+  }
+  return out;
+}
+
+/** Nutrients in a logged food/drink/supplement — only the requested keys. */
+export async function estimateFoodNutrition(
+  input: MealInput, keys: NutrientKey[] = NUTRIENT_KEYS, cfg: AiConfig = requireReady(),
+): Promise<Partial<Record<NutrientKey, number>>> {
+  const lines = [
+    `Item: ${input.description.trim()}`,
+    input.mealType ? `Logged as: ${input.mealType}` : '',
+    input.ingredients?.trim() ? `Ingredients: ${input.ingredients.trim()}` : '',
+    `Estimate these and reply with JSON using exactly these keys: ${keys.map(k => NUTRIENT_PROMPT_UNITS[k]).join(', ')}.`,
+  ].filter(Boolean);
+  return parseNutrients(await complete(cfg, NUTRITION_PROMPT, lines.join('\n')), keys);
+}
+
 // ── Entry helpers ────────────────────────────────────────────────────────────
 
 /** The inputs a calorie estimate was based on — a change means it is stale. */
@@ -360,27 +406,24 @@ function hasEstimateInputs(kind: 'food' | 'exercise', text: string, cf: Record<s
 }
 
 /**
- * Estimate calories for a food/exercise entry's custom fields.
+ * Estimate an entry's numbers on demand (the "Estimate" button): calories
+ * burned for exercise; every missing or AI nutrient for food.
  * `text` is the entry's plain-text content. Returns the updated fields, marked
  * as AI-estimated with the inputs they were based on.
  */
 export async function estimateEntryCalories(
   kind: 'food' | 'exercise', text: string, cf: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const calories = kind === 'food'
-    ? await estimateMealCalories({
-        description: [String(cf.mealDescription ?? '').trim(), text.trim()].filter(Boolean).join(' — ') || String(cf.ingredients ?? ''),
-        mealType: String(cf.mealType ?? ''),
-        ingredients: String(cf.ingredients ?? ''),
-      })
-    : await estimateExerciseCalories({
-        description: text,
-        exerciseType: String(cf.exerciseType ?? ''),
-        durationMinutes: String(cf.duration ?? ''),
-        distance: String(cf.distance ?? ''),
-        distanceUnit: String(cf.distanceUnit ?? ''),
-        intensity: String(cf.intensity ?? ''),
-      });
+  // Food gets the full nutrient panel; anything typed by hand is kept
+  if (kind === 'food') return (await estimateEntryNutrition(text, cf, { refreshAi: true })) ?? cf;
+  const calories = await estimateExerciseCalories({
+    description: text,
+    exerciseType: String(cf.exerciseType ?? ''),
+    durationMinutes: String(cf.duration ?? ''),
+    distance: String(cf.distance ?? ''),
+    distanceUnit: String(cf.distanceUnit ?? ''),
+    intensity: String(cf.intensity ?? ''),
+  });
   return { ...cf, calories: String(calories), caloriesSource: 'ai', calorieBasis: calorieBasis(kind, text, cf) };
 }
 
@@ -392,9 +435,76 @@ export async function estimateEntryCalories(
 export async function autoCaloriesOnSave(
   kind: 'food' | 'exercise', text: string, cf: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
+  if (kind === 'food') return autoNutritionOnSave(text, cf);
   if (!isAiReady() || !hasEstimateInputs(kind, text, cf)) return null;
   const blank = !String(cf.calories ?? '').trim();
   const staleAi = cf.caloriesSource === 'ai' && cf.calorieBasis !== calorieBasis(kind, text, cf);
   if (!blank && !staleAi) return null;
   return estimateEntryCalories(kind, text, cf);
+}
+
+// ── Food nutrition ───────────────────────────────────────────────────────────
+
+/** What a food's AI nutrient values were based on — a change means they are stale. */
+function nutritionBasis(text: string, cf: Record<string, unknown>): string {
+  return calorieBasis('food', text, cf);
+}
+
+/** Description the AI sees for a food entry. */
+function foodDescription(text: string, cf: Record<string, unknown>): string {
+  return [String(cf.mealDescription ?? '').trim(), text.trim()]
+    .filter((v, i, all) => v && all.indexOf(v) === i).join(' — ') || String(cf.ingredients ?? '').trim();
+}
+
+/** Nutrients on this food entry that the AI should (re)fill. Typed values are never included. */
+export function nutrientsToEstimate(
+  text: string, cf: Record<string, unknown>, opts: { refreshAi?: boolean } = {},
+): NutrientKey[] {
+  const stale = cf.nutritionBasis !== undefined
+    ? cf.nutritionBasis !== nutritionBasis(text, cf)
+    : cf.calorieBasis !== undefined && cf.calorieBasis !== nutritionBasis(text, cf);
+  return NUTRIENT_KEYS.filter(key => {
+    const blank = !String(cf[key] ?? '').trim();
+    const source = nutrientSourceOf(cf, key);
+    if (source === 'manual' && !blank) return false;
+    if (blank) return true;
+    return source === 'ai' && (opts.refreshAi || stale);
+  });
+}
+
+/**
+ * Estimate the missing (or stale AI) nutrients of a food entry in one request.
+ * Returns the updated fields — values marked as AI with the inputs they were
+ * based on — or null when there is nothing to estimate.
+ */
+export async function estimateEntryNutrition(
+  text: string, cf: Record<string, unknown>, opts: { refreshAi?: boolean } = {},
+): Promise<Record<string, unknown> | null> {
+  const description = foodDescription(text, cf);
+  if (!description) return null;
+  const keys = nutrientsToEstimate(text, cf, opts);
+  if (keys.length === 0) return null;
+  const values = await estimateFoodNutrition({
+    description,
+    mealType: String(cf.mealType ?? ''),
+    ingredients: String(cf.ingredients ?? ''),
+  }, keys);
+  const sources: Partial<Record<NutrientKey, NutrientSource>> = {
+    ...((cf.nutrientSource as Partial<Record<NutrientKey, NutrientSource>> | undefined) ?? {}),
+  };
+  const next: Record<string, unknown> = { ...cf };
+  for (const key of keys) {
+    next[key] = String(values[key]);
+    sources[key] = 'ai';
+  }
+  next.nutrientSource = sources;
+  if (keys.includes('calories')) { next.caloriesSource = 'ai'; next.calorieBasis = nutritionBasis(text, cf); }
+  next.nutritionBasis = nutritionBasis(text, cf);
+  return next;
+}
+
+/** On save: fill blank nutrients and refresh stale AI ones. Null when AI is off or nothing changes. */
+export async function autoNutritionOnSave(text: string, cf: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  if (!isAiReady()) return null;
+  return estimateEntryNutrition(text, cf);
 }

@@ -109,7 +109,7 @@ export interface MilestoneFieldValues {
 export interface FoodFieldValues {
   /** Primary label — shown when the entry has no text content. */
   mealDescription?: string;
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'supplement';
   consumedDate: string;
   consumedTime: string;
   ingredients: string;
@@ -118,6 +118,15 @@ export interface FoodFieldValues {
   caloriesSource?: 'ai' | 'manual';
   /** Inputs the AI estimate was based on — a change triggers a re-estimate */
   calorieBasis?: string;
+  /** Micronutrients (see types/nutrition.ts) — strings like every other field */
+  iron?: string;
+  vitaminD?: string;
+  vitaminB12?: string;
+  vitaminC?: string;
+  /** Per-nutrient origin: 'ai' estimates may be refreshed, 'manual' values never are */
+  nutrientSource?: Partial<Record<string, 'ai' | 'manual'>>;
+  /** Inputs the AI nutrient estimates were based on */
+  nutritionBasis?: string;
   notes: string;
 }
 

@@ -7,6 +7,8 @@ import {
   clearAiConfig,
   autoCaloriesOnSave,
   estimateEntryCalories,
+  autoNutritionOnSave,
+  parseNutrients,
   DEFAULT_AI_CONFIG,
   type AiConfig,
 } from '../../services/aiAssistant.js';
@@ -15,10 +17,21 @@ const openai: AiConfig = { ...DEFAULT_AI_CONFIG, enabled: true, provider: 'opena
 
 /** Mock the OpenAI endpoint to answer with the given calories; returns the fetch spy. */
 function mockOpenAI(calories: number) {
-  return vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
-    JSON.stringify({ choices: [{ message: { content: `{"calories": ${calories}}` } }] }),
+  return mockOpenAIJson({ calories });
+}
+
+/** Mock the OpenAI endpoint to answer with a JSON object (fresh Response per call). */
+function mockOpenAIJson(payload: Record<string, number>) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(
+    JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   ));
+}
+
+const FULL = { calories: 250, iron: 1.5, vitaminD: 0.4, vitaminB12: 0.9, vitaminC: 12 };
+
+function promptOf(spy: ReturnType<typeof mockOpenAIJson>, call = 0): string {
+  return JSON.parse(String(spy.mock.calls[call][1]?.body)).messages[1].content as string;
 }
 
 afterEach(() => {
@@ -93,18 +106,12 @@ describe('autoCaloriesOnSave', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('fills blank calories', async () => {
+  it('fills every blank nutrient on a food entry', async () => {
     setAiConfig(openai, null);
-    mockOpenAI(250);
+    mockOpenAIJson(FULL);
     const out = await autoCaloriesOnSave('food', 'Toast with jam', { mealType: 'breakfast', calories: '' });
-    expect(out?.calories).toBe('250');
-  });
-
-  it('never overwrites calories the user typed', async () => {
-    setAiConfig(openai, null);
-    const fetchSpy = mockOpenAI(250);
-    expect(await autoCaloriesOnSave('food', 'Toast', { calories: '180', caloriesSource: 'manual' })).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ calories: '250', iron: '1.5', vitaminD: '0.4', vitaminB12: '0.9', vitaminC: '12' });
+    expect(out?.nutrientSource).toEqual({ calories: 'ai', iron: 'ai', vitaminD: 'ai', vitaminB12: 'ai', vitaminC: 'ai' });
   });
 
   it('refreshes an AI estimate only when its inputs changed', async () => {
@@ -123,5 +130,45 @@ describe('autoCaloriesOnSave', () => {
     const fetchSpy = mockOpenAI(100);
     expect(await autoCaloriesOnSave('exercise', 'Stretching', { calories: '' })).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('food nutrition', () => {
+  it('asks only for missing nutrients and keeps typed calories', async () => {
+    setAiConfig(openai, null);
+    const spy = mockOpenAIJson({ iron: 0.5, vitaminD: 0, vitaminB12: 0, vitaminC: 120 });
+    const out = await autoNutritionOnSave('Orange juice, 1 cup', { calories: '112', caloriesSource: 'manual' });
+    expect(promptOf(spy)).toContain('iron (mg), vitaminD (mcg), vitaminB12 (mcg), vitaminC (mg)');
+    expect(promptOf(spy)).not.toContain('calories (kcal)');
+    expect(out).toMatchObject({ calories: '112', caloriesSource: 'manual', iron: '0.5', vitaminC: '120' });
+  });
+
+  it('does nothing when every nutrient is filled by hand', async () => {
+    setAiConfig(openai, null);
+    const spy = mockOpenAIJson(FULL);
+    const cf = { calories: '1', iron: '1', vitaminD: '1', vitaminB12: '1', vitaminC: '1',
+      nutrientSource: { calories: 'manual', iron: 'manual', vitaminD: 'manual', vitaminB12: 'manual', vitaminC: 'manual' } };
+    expect(await autoNutritionOnSave('Toast', cf)).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('refreshes AI values when the description changes, never typed ones', async () => {
+    setAiConfig(openai, null);
+    mockOpenAIJson(FULL);
+    const first = (await autoNutritionOnSave('Toast', { mealDescription: 'Toast' }))!;
+    const edited = { ...first, iron: '9', nutrientSource: { ...(first.nutrientSource as object), iron: 'manual' } };
+    const unchanged = mockOpenAIJson(FULL);
+    expect(await autoNutritionOnSave('Toast', edited)).toBeNull();
+    expect(unchanged).not.toHaveBeenCalled();
+    const spy = mockOpenAIJson({ calories: 400, vitaminD: 1, vitaminB12: 1, vitaminC: 1 });
+    const out = await autoNutritionOnSave('Toast with butter', { ...edited, mealDescription: 'Toast with butter' });
+    expect(promptOf(spy)).not.toContain('iron (mg)');
+    expect(out).toMatchObject({ calories: '400', iron: '9' });
+  });
+
+  it('rejects replies missing a requested nutrient', () => {
+    expect(() => parseNutrients('{"calories": 100}', ['calories', 'iron'])).toThrow(/iron/);
+    expect(parseNutrients('```json\n{"calories": 99.6, "vitaminB12": 0.234}\n```', ['calories', 'vitaminB12']))
+      .toEqual({ calories: 100, vitaminB12: 0.23 });
   });
 });
