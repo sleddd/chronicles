@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
-import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { entries as entriesApi, topics as topicsApi, settings as settingsApi, retryDelayMs } from '../services/api.js';
 import { loadImageStorageConfig } from '../services/imageStorage.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
@@ -50,6 +50,7 @@ export function useInitializeData() {
     if (!isUnlocked || isInitialized) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
     const load = async () => {
       setLoading(true);
       try {
@@ -133,8 +134,11 @@ export function useInitializeData() {
         // Transient failure (rate limit, server restart, network) — keep the
         // loading state and retry rather than rendering an empty journal,
         // which reads as data loss
-        console.error('Failed to load, retrying in 10s:', err);
-        if (!cancelled) retryTimer = setTimeout(load, 10_000);
+        // Back off (honoring Retry-After on 429) so retries don't keep a
+        // rate-limited account locked out
+        const delay = retryDelayMs(err, attempt++);
+        console.error(`Failed to load, retrying in ${Math.round(delay / 1000)}s:`, err);
+        if (!cancelled) retryTimer = setTimeout(load, delay);
       }
     };
     load();

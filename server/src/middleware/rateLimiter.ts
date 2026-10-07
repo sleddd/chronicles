@@ -26,12 +26,14 @@ export const strictLimiter = rateLimit({
 
 /**
  * Authenticated API rate limiter — per-user throttling for data endpoints
- * 300 requests per 15-minute window per user (falls back to IP if unauthenticated)
+ * 1500 requests per 15-minute window per user (falls back to IP if unauthenticated).
+ * Normal use of the SPA plus bulk actions (imports, bulk edits, dose → Meals
+ * sync) must stay well under this; 300 was low enough to lock real users out.
  * Apply AFTER authMiddleware so req.auth is populated
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {

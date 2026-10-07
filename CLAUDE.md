@@ -483,6 +483,10 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket, and the AI providers (`api.anthropic.com`, `api.openai.com`, `*.amazonaws.com`)
 - `frame-ancestors 'none'` — prevent clickjacking
 
+### Rate limiting
+- `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out
+- Client: identical in-flight GETs share one request (`request` in `services/api.ts`; followers get a `structuredClone`). A 429's `Retry-After` is carried on `ApiError.retryAfterSec`; initial loads (`useInitializeData`, `JournalView`) retry with `retryDelayMs` — Retry-After on 429 (5s–15min), else 10s→60s backoff — and never fall back to an empty journal
+
 ### CSRF Protection
 - Web requests require `X-Requested-With: XMLHttpRequest` header
 - Mobile requests use `Authorization: Bearer` (no CSRF risk)
