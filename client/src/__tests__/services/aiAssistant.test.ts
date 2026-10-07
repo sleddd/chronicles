@@ -66,10 +66,11 @@ describe('hasCredentials / isAiReady', () => {
 
   it('needs region plus the chosen Bedrock credentials', () => {
     const bedrock: AiConfig = { ...DEFAULT_AI_CONFIG, provider: 'bedrock', model: 'anthropic.claude-opus-5-5' };
-    expect(hasCredentials({ ...bedrock, bedrockApiKey: 'k' })).toBe(true);
+    expect(hasCredentials(bedrock)).toBe(false); // access keys by default
+    expect(hasCredentials({ ...bedrock, bedrockAuth: 'apiKey', bedrockApiKey: 'k' })).toBe(true);
     expect(hasCredentials({ ...bedrock, bedrockAuth: 'iam', awsAccessKeyId: 'AKIA' })).toBe(false);
     expect(hasCredentials({ ...bedrock, bedrockAuth: 'iam', awsAccessKeyId: 'AKIA', awsSecretAccessKey: 's' })).toBe(true);
-    expect(hasCredentials({ ...bedrock, bedrockApiKey: 'k', bedrockRegion: '' })).toBe(false);
+    expect(hasCredentials({ ...bedrock, awsAccessKeyId: 'AKIA', awsSecretAccessKey: 's', bedrockRegion: '' })).toBe(false);
   });
 
   it('is off when disabled, unconfigured, or locked', () => {

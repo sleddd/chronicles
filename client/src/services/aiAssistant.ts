@@ -47,7 +47,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   model: 'claude-opus-5-5',
   apiKey: '',
   bedrockRegion: 'us-east-1',
-  bedrockAuth: 'apiKey',
+  bedrockAuth: 'iam',
   bedrockApiKey: '',
   awsAccessKeyId: '',
   awsSecretAccessKey: '',
@@ -135,7 +135,8 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
     try {
       const plaintext = await decryptBytes(base64ToArrayBuffer(ciphertext), iv);
       const parsed = JSON.parse(new TextDecoder().decode(plaintext));
-      if (parsed && typeof parsed === 'object') aiConfig = { ...DEFAULT_AI_CONFIG, ...parsed };
+      // Bedrock always signs in with IAM access keys (the API-key option was removed)
+      if (parsed && typeof parsed === 'object') aiConfig = { ...DEFAULT_AI_CONFIG, ...parsed, bedrockAuth: 'iam' };
     } catch (err) {
       console.warn('AI settings could not be decrypted:', err);
     }

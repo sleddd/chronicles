@@ -24,7 +24,6 @@ import {
   type AiProvider,
   type BedrockModelOption,
 } from '../../services/aiAssistant.js';
-import { bedrockApiKeyProblem } from '../../services/bedrock.js';
 
 const CUSTOM = '__custom__';
 
@@ -98,7 +97,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     const model = provider === 'bedrock'
       ? (bedrockModels ?? suggestedBedrockModels(cfg.bedrockRegion))[0]?.id ?? ''
       : AI_MODEL_PRESETS[provider][0].id;
-    update({ provider, model }, true);
+    update({ provider, model, ...(provider === 'bedrock' ? { bedrockAuth: 'iam' as const } : {}) }, true);
   };
 
   // Bedrock: load every text model the account can use in its region once the
@@ -106,9 +105,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const bedrockCredKey = cfg.provider === 'bedrock'
     ? JSON.stringify([cfg.bedrockRegion.trim(), cfg.bedrockAuth, cfg.bedrockApiKey.trim(), cfg.awsAccessKeyId.trim(), cfg.awsSecretAccessKey.trim(), cfg.awsSessionToken.trim()])
     : '';
-  const apiKeyProblem = cfg.provider === 'bedrock' && cfg.bedrockAuth === 'apiKey' ? bedrockApiKeyProblem(cfg.bedrockApiKey) : null;
-  // Don't ask AWS for the model list with a key that can't be right
-  const bedrockCredsComplete = cfg.provider === 'bedrock' && !apiKeyProblem && hasCredentials({ ...cfg, model: cfg.model || 'x' });
+  const bedrockCredsComplete = cfg.provider === 'bedrock' && hasCredentials({ ...cfg, bedrockAuth: 'iam', model: cfg.model || 'x' });
   useEffect(() => {
     if (!cfg.enabled || !bedrockCredsComplete) { setBedrockModels(null); setModelsState('idle'); return; }
     let cancelled = false;
@@ -242,34 +239,17 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
                   <TextInput value={cfg.bedrockRegion} onChange={e => update({ bedrockRegion: e.target.value })} placeholder="e.g. us-east-1" autoComplete="off" />
                 </div>
                 <div style={inputRow}>
-                  <span style={labelStyle}>Sign in with</span>
-                  <Select value={cfg.bedrockAuth} onChange={e => update({ bedrockAuth: e.target.value as AiConfig['bedrockAuth'] }, true)}>
-                    <option value="apiKey">Bedrock API key</option>
-                    <option value="iam">IAM access keys</option>
-                  </Select>
+                  <span style={labelStyle}>Access key ID</span>
+                  <TextInput value={cfg.awsAccessKeyId} onChange={e => update({ awsAccessKeyId: e.target.value, bedrockAuth: 'iam' })} placeholder="AKIA…" autoComplete="off" />
                 </div>
-                {cfg.bedrockAuth === 'apiKey' ? (
-                  <div style={inputRow}>
-                    <span style={labelStyle}>Bedrock API key</span>
-                    <PasswordInput value={cfg.bedrockApiKey} onChange={e => update({ bedrockApiKey: e.target.value })} placeholder="Starts with ABSK… or bedrock-api-key-…" autoComplete="off" />
-                    {apiKeyProblem && <span style={errStyle} role="alert">{apiKeyProblem}</span>}
-                  </div>
-                ) : (
-                  <>
-                    <div style={inputRow}>
-                      <span style={labelStyle}>Access key ID</span>
-                      <TextInput value={cfg.awsAccessKeyId} onChange={e => update({ awsAccessKeyId: e.target.value })} placeholder="AKIA…" autoComplete="off" />
-                    </div>
-                    <div style={inputRow}>
-                      <span style={labelStyle}>Secret access key</span>
-                      <PasswordInput value={cfg.awsSecretAccessKey} onChange={e => update({ awsSecretAccessKey: e.target.value })} autoComplete="off" />
-                    </div>
-                    <div style={inputRow}>
-                      <span style={labelStyle}>Session token (optional)</span>
-                      <PasswordInput value={cfg.awsSessionToken} onChange={e => update({ awsSessionToken: e.target.value })} placeholder="Only for temporary credentials" autoComplete="off" />
-                    </div>
-                  </>
-                )}
+                <div style={inputRow}>
+                  <span style={labelStyle}>Secret access key</span>
+                  <PasswordInput value={cfg.awsSecretAccessKey} onChange={e => update({ awsSecretAccessKey: e.target.value })} autoComplete="off" />
+                </div>
+                <div style={inputRow}>
+                  <span style={labelStyle}>Session token (optional)</span>
+                  <PasswordInput value={cfg.awsSessionToken} onChange={e => update({ awsSessionToken: e.target.value })} placeholder="Only for temporary credentials" autoComplete="off" />
+                </div>
               </>
             )}
 
