@@ -107,9 +107,7 @@ function DashSection({ label, action, children }: { label: string; action?: Reac
 /* ── Food ── */
 
 const GlanceWrap = styled.div`
-  padding: 4px 0 26px;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 4px;
+  padding: 4px 0 18px;
 `;
 
 const Toast = styled.div<{ $show: boolean }>`

@@ -73,6 +73,9 @@ export const AI_MODEL_PRESETS: Record<AiProvider, { id: string; label: string }[
   ],
 };
 
+/** Model IDs offered for Bedrock's Mantle endpoint before the Converse switch. */
+const LEGACY_BEDROCK_MODEL_IDS = ['anthropic.claude-opus-5-5', 'anthropic.claude-sonnet-5-5', 'anthropic.claude-haiku-4-5'];
+
 export const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   anthropic: 'Claude (Anthropic API)',
   bedrock: 'Amazon Bedrock',
@@ -101,16 +104,27 @@ export function subscribeAi(listener: () => void): () => void {
   return () => { listeners.delete(listener); };
 }
 
+/** What still has to be filled in before requests can be made (empty = ready). */
+export function missingCredentials(cfg: AiConfig): string[] {
+  const missing: string[] = [];
+  if (cfg.provider === 'bedrock') {
+    if (!cfg.bedrockRegion.trim()) missing.push('AWS region');
+    if (cfg.bedrockAuth === 'apiKey') {
+      if (!cfg.bedrockApiKey.trim()) missing.push('Bedrock API key');
+    } else {
+      if (!cfg.awsAccessKeyId.trim()) missing.push('access key ID');
+      if (!cfg.awsSecretAccessKey.trim()) missing.push('secret access key');
+    }
+  } else if (!cfg.apiKey.trim()) {
+    missing.push(cfg.provider === 'anthropic' ? 'Claude API key' : 'OpenAI API key');
+  }
+  if (!cfg.model.trim()) missing.push('model');
+  return missing;
+}
+
 /** Credentials present for the chosen provider — requests can be made. */
 export function hasCredentials(cfg: AiConfig): boolean {
-  if (!cfg.model.trim()) return false;
-  if (cfg.provider === 'bedrock') {
-    if (!cfg.bedrockRegion.trim()) return false;
-    return cfg.bedrockAuth === 'apiKey'
-      ? !!cfg.bedrockApiKey.trim()
-      : !!(cfg.awsAccessKeyId.trim() && cfg.awsSecretAccessKey.trim());
-  }
-  return !!cfg.apiKey.trim();
+  return missingCredentials(cfg).length === 0;
 }
 
 /** AI is switched on, unlocked, and fully configured. */
@@ -136,7 +150,13 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
       const plaintext = await decryptBytes(base64ToArrayBuffer(ciphertext), iv);
       const parsed = JSON.parse(new TextDecoder().decode(plaintext));
       // Bedrock always signs in with IAM access keys (the API-key option was removed)
-      if (parsed && typeof parsed === 'object') aiConfig = { ...DEFAULT_AI_CONFIG, ...parsed, bedrockAuth: 'iam' };
+      if (parsed && typeof parsed === 'object') {
+        const cfg: AiConfig = { ...DEFAULT_AI_CONFIG, ...parsed, bedrockAuth: 'iam' };
+        // Model IDs from the old Claude-only Bedrock endpoint don't exist on the
+        // Converse API — clear them so Settings asks for a real model
+        if (cfg.provider === 'bedrock' && LEGACY_BEDROCK_MODEL_IDS.includes(cfg.model)) cfg.model = '';
+        aiConfig = cfg;
+      }
     } catch (err) {
       console.warn('AI settings could not be decrypted:', err);
     }
@@ -193,7 +213,18 @@ function claudeText(res: ClaudeMessage): string {
   return res.content.filter(b => b.type === 'text').map(b => b.text ?? '').join('');
 }
 
-async function completeClaude(cfg: AiConfig, system: string, prompt: string): Promise<string> {
+/** One turn of a conversation sent to the provider. */
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface CompleteOptions {
+  /** Short JSON answers (estimates) vs free-form chat replies */
+  mode: 'json' | 'chat';
+}
+
+async function completeClaude(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   // Keys are the user's own, typed into their own browser — there is no
   // server to hold them, which is the point of the zero-knowledge design
@@ -201,11 +232,12 @@ async function completeClaude(cfg: AiConfig, system: string, prompt: string): Pr
   const model = cfg.model.trim();
   const params = {
     model,
-    max_tokens: 2048,
+    max_tokens: opts.mode === 'chat' ? 4096 : 2048,
     system,
-    messages: [{ role: 'user' as const, content: prompt }],
-    // A one-number estimate is a simple task — low effort keeps it fast and cheap
-    ...(isClaude5(model) ? { output_config: { effort: 'low' as const } } : {}),
+    messages: turns.map(t => ({ role: t.role, content: t.content })),
+    // A one-number estimate is a simple task — low effort keeps it fast and cheap;
+    // chat keeps the model's default
+    ...(opts.mode === 'json' && isClaude5(model) ? { output_config: { effort: 'low' as const } } : {}),
   };
   try {
     const res = supportsServerFallback(model)
@@ -242,18 +274,18 @@ export function suggestedBedrockModels(region: string): BedrockModelOption[] {
   return fallbackBedrockModels(region);
 }
 
-async function completeBedrock(cfg: AiConfig, system: string, prompt: string): Promise<string> {
-  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, prompt);
+async function completeBedrock(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
+  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, turns, opts.mode === 'chat' ? 4096 : 2048);
 }
 
-async function completeOpenAI(cfg: AiConfig, system: string, prompt: string): Promise<string> {
+async function completeOpenAI(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey.trim()}` },
     body: JSON.stringify({
       model: cfg.model.trim(),
-      messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, ...turns],
+      ...(opts.mode === 'json' ? { response_format: { type: 'json_object' } } : {}),
     }),
   });
   if (!res.ok) {
@@ -266,16 +298,26 @@ async function completeOpenAI(cfg: AiConfig, system: string, prompt: string): Pr
   return data.choices?.[0]?.message?.content ?? '';
 }
 
-async function complete(cfg: AiConfig, system: string, prompt: string): Promise<string> {
+async function completeTurns(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
   try {
-    if (cfg.provider === 'anthropic') return await completeClaude(cfg, system, prompt);
-    if (cfg.provider === 'bedrock') return await completeBedrock(cfg, system, prompt);
-    return await completeOpenAI(cfg, system, prompt);
+    if (cfg.provider === 'anthropic') return await completeClaude(cfg, system, turns, opts);
+    if (cfg.provider === 'bedrock') return await completeBedrock(cfg, system, turns, opts);
+    return await completeOpenAI(cfg, system, turns, opts);
   } catch (err) {
     // A browser CORS/network failure surfaces as a bare TypeError
     if (err instanceof TypeError) throw new Error(`Could not reach ${AI_PROVIDER_LABELS[cfg.provider]} — check your connection`);
     throw err;
   }
+}
+
+/** One-shot JSON request (calorie/nutrient estimates). */
+function complete(cfg: AiConfig, system: string, prompt: string): Promise<string> {
+  return completeTurns(cfg, system, [{ role: 'user', content: prompt }], { mode: 'json' });
+}
+
+/** Free-form reply to an ongoing (unsaved) chat with the user's configured model. */
+export async function chatReply(system: string, turns: ChatTurn[]): Promise<string> {
+  return completeTurns(requireReady(), system, turns, { mode: 'chat' });
 }
 
 // ── Calorie estimates ────────────────────────────────────────────────────────
@@ -301,7 +343,8 @@ export function parseCalories(text: string): number {
 
 function requireReady(): AiConfig {
   if (!aiConfig || !aiConfig.enabled) throw new Error('AI assistant is off');
-  if (!hasCredentials(aiConfig)) throw new Error('AI assistant is not fully set up');
+  const missing = missingCredentials(aiConfig);
+  if (missing.length) throw new Error(`AI assistant needs: ${missing.join(', ')}`);
   return aiConfig;
 }
 

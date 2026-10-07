@@ -17,6 +17,7 @@ import {
   getAiConfigValue,
   hasCredentials,
   listBedrockModels,
+  missingCredentials,
   setAiConfig,
   suggestedBedrockModels,
   subscribeAi,
@@ -95,7 +96,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const handleProviderChange = (provider: AiProvider) => {
     setCustomModel(false);
     const model = provider === 'bedrock'
-      ? (bedrockModels ?? suggestedBedrockModels(cfg.bedrockRegion))[0]?.id ?? ''
+      ? (bedrockModels?.length ? bedrockModels : suggestedBedrockModels(cfg.bedrockRegion))[0]?.id ?? ''
       : AI_MODEL_PRESETS[provider][0].id;
     update({ provider, model, ...(provider === 'bedrock' ? { bedrockAuth: 'iam' as const } : {}) }, true);
   };
@@ -117,6 +118,8 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
         if (cancelled) return;
         setBedrockModels(models);
         setModelsState('loaded');
+        const autoPicked = !cfg.model || suggestedBedrockModels(cfg.bedrockRegion).some(m => m.id === cfg.model);
+        if (models.length && autoPicked && !models.some(m => m.id === cfg.model)) update({ model: models[0].id }, true);
       } catch (err) {
         if (cancelled) return;
         setBedrockModels(null);
@@ -135,6 +138,12 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   };
 
   const handleTest = async () => {
+    const missing = missingCredentials(cfg);
+    if (missing.length) {
+      setTestState('fail');
+      setTestMessage(`Add ${joinList(missing)} first.`);
+      return;
+    }
     setTestState('testing');
     setTestMessage('');
     try {
@@ -172,6 +181,14 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     for (const m of modelOptions) groups.set(m.provider, [...(groups.get(m.provider) ?? []), m]);
     return [...groups.entries()];
   }, [modelOptions]);
+  const modelLabel = modelOptions.find(m => m.id === cfg.model)?.label ?? cfg.model;
+
+  // Never leave the model blank: the menu would show its first entry while
+  // nothing is saved, which silently blocks every AI request
+  useEffect(() => {
+    if (!cfg.enabled || cfg.model || customModel || modelsState === 'loading' || modelOptions.length === 0) return;
+    update({ model: modelOptions[0].id }, true);
+  }, [cfg.enabled, cfg.model, customModel, modelsState, modelOptions]); // eslint-disable-line react-hooks/exhaustive-deps
   const providerName = AI_PROVIDER_LABELS[cfg.provider];
 
   const noteStyle = { fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 } as const;
@@ -204,7 +221,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
         <>
           <SettingsRow
             title="Provider and model"
-            description={`Your key is encrypted with your master key and never touches the Chronicles server. Food and exercise descriptions you log are sent straight from your browser to ${providerName} to get the estimate.`}
+            description={`Your key is encrypted with your master key and never touches the Chronicles server. Chat messages (with your topic names, so it can suggest where to save) and the food and exercise you log are sent straight from your browser to ${providerName}.`}
             action={(getAiConfigValue() || ready) ? (
               <ActionButton onClick={handleForget} onBlur={() => setForgetArmed(false)}>
                 {forgetArmed ? 'Confirm forget' : 'Forget credentials'}
@@ -256,6 +273,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
             <div style={inputRow}>
               <span style={labelStyle}>Model</span>
               <Select value={showCustom ? CUSTOM : cfg.model} onChange={e => handleModelSelect(e.target.value)}>
+                {!cfg.model && !showCustom && <option value="" disabled>Choose a model…</option>}
                 {modelGroups.map(([group, models]) => group ? (
                   <optgroup key={group} label={group}>
                     {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
@@ -305,12 +323,14 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
             title="Test connection"
             description="Asks the model for one quick estimate to check the key and model work"
             action={
-              <ActionButton onClick={handleTest} disabled={!ready || testState === 'testing'}>
+              <ActionButton onClick={handleTest} disabled={testState === 'testing'}>
                 {testState === 'testing' ? <Spinner size={14} /> : 'Test connection'}
               </ActionButton>
             }
           >
-            {testMessage && <div style={testState === 'fail' ? errStyle : okStyle}>{testMessage}</div>}
+            {testMessage
+              ? <div style={testState === 'fail' ? errStyle : okStyle}>{testMessage}</div>
+              : <div style={ready ? okStyle : errStyle}>{ready ? `Ready — using ${modelLabel}` : `Not ready yet — add ${joinList(missingCredentials(cfg))}.`}</div>}
           </SettingsRow>
         </>
       )}
@@ -328,4 +348,10 @@ function ActionLink({ onClick, children }: { onClick: () => void; children: Reac
       {children}
     </button>
   );
+}
+
+/** "a", "a and b", "a, b and c" */
+function joinList(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }

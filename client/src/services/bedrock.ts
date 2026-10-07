@@ -126,14 +126,16 @@ function bedrockErrorMessage(status: number, data: Record<string, unknown>): str
   return `Bedrock error ${status}${msg ? `: ${msg}` : ''}`;
 }
 
-/** One-turn completion through the Converse API (works for every Bedrock text model). */
+/** Completion through the Converse API (works for every Bedrock text model): one prompt or a whole conversation. */
 export async function bedrockConverse(
-  creds: BedrockCredentials, modelId: string, system: string, prompt: string,
+  creds: BedrockCredentials, modelId: string, system: string,
+  turns: string | { role: 'user' | 'assistant'; content: string }[], maxTokens = 2048,
 ): Promise<string> {
+  const messages = typeof turns === 'string' ? [{ role: 'user' as const, content: turns }] : turns;
   const data = await bedrockFetch(creds, 'runtime', 'POST', `/model/${encodeURIComponent(modelId.trim())}/converse`, {}, {
     system: [{ text: system }],
-    messages: [{ role: 'user', content: [{ text: prompt }] }],
-    inferenceConfig: { maxTokens: 2048 },
+    messages: messages.map(m => ({ role: m.role, content: [{ text: m.content }] })),
+    inferenceConfig: { maxTokens },
   }) as {
     stopReason?: string;
     output?: { message?: { content?: { text?: string }[] } };
