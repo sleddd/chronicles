@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { TextInput } from '../atoms/TextInput.js';
 import { Select } from '../atoms/Select.js';
@@ -7,95 +7,13 @@ import { FormField } from '../molecules/FormField.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
-import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
-import { stripHtml } from '../../utils/stripHtml.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { estimateEntryCalories } from '../../services/aiAssistant.js';
 
 /* ── Styled ── */
 
-const LogList = styled.ul`
-  list-style: none;
-  margin: 18px 0 0;
-  padding: 0;
-  border-bottom: 1px solid var(--border-subtle);
-`;
-
-const LogRow = styled.li`
-  border-top: 1px solid var(--border-subtle);
-`;
-
-const LogBtn = styled.button`
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 4px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  color: var(--text-primary);
-  &:hover { background: var(--bg-hover); }
-`;
-
-const LogTag = styled.span`
-  flex: 0 0 auto;
-  min-width: 76px;
-  white-space: nowrap;
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-`;
-
-const LogText = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const LogMeta = styled.span`
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-`;
-
-const Total = styled.p`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin: 8px 0 0;
-  padding: 0 4px;
-`;
-
-const Empty = styled.p`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 4px 0 0;
-  padding: 0 4px;
-`;
-
 /* ── Helpers ── */
-
-const MEAL_TYPES = [
-  { value: 'breakfast', label: 'Breakfast' },
-  { value: 'lunch', label: 'Lunch' },
-  { value: 'dinner', label: 'Dinner' },
-  { value: 'snack', label: 'Snack' },
-  { value: 'supplement', label: 'Supplement' },
-];
 
 const EXERCISE_TYPES = [
   { value: 'walking', label: 'Walking' },
@@ -162,32 +80,6 @@ function useCreateEntry() {
   };
 }
 
-/** Today's entries for a topic, oldest first, with their custom fields. */
-function useTodaysEntries(topicName: string, dateKey: string) {
-  const entries = useEntriesStore(s => s.decryptedEntries);
-  const allTopics = useEntriesStore(s => s.allTopics);
-  return useMemo(() => {
-    const topicId = allTopics.find(t => t.name.toLowerCase() === topicName.toLowerCase())?.id;
-    if (!topicId) return [];
-    const today = toDateStr(new Date());
-    return entries
-      .filter(e => {
-        const meta = e.metadata as Record<string, unknown> | undefined;
-        if (meta?._taxonomyId !== topicId) return false;
-        const cf = (meta._customFields as Record<string, unknown>) || {};
-        const day = (cf[dateKey] as string) || toDateStr(new Date(e.createdAt));
-        return day === today;
-      })
-      .map(e => ({
-        id: e.id,
-        text: stripHtml(e.content).trim(),
-        cf: ((e.metadata as Record<string, unknown>)._customFields as Record<string, unknown>) || {},
-        time: new Date(e.createdAt).getTime(),
-      }))
-      .sort((a, b) => a.time - b.time);
-  }, [entries, allTopics, topicName, dateKey]);
-}
-
 const FieldGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -211,51 +103,11 @@ const Note = styled.p`
   margin: 0;
 `;
 
-const SubLabel = styled.h3`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin: 28px 0 0;
-`;
-
-/* ── Food: today's items (the form is the shared Log food form) ── */
-
-/** Today's Meals entries as a compact list — select one to edit it in the journal. */
-export function TodayFoodList() {
-  const openInJournal = useOpenInJournal();
-  const todays = useTodaysEntries('Meals', 'consumedDate');
-  return (
-    <>
-      <SubLabel>Eaten today</SubLabel>
-      {todays.length === 0 ? (
-        <Empty style={{ marginTop: 10 }}>Nothing logged yet today.</Empty>
-      ) : (
-        <LogList>
-          {todays.map(e => (
-            <LogRow key={e.id}>
-              <LogBtn type="button" onClick={() => openInJournal(e.id)}>
-                <LogTag>{labelFor(MEAL_TYPES, e.cf.mealType) || 'Meal'}</LogTag>
-                <LogText>{e.text || String(e.cf.mealDescription || 'Meal')}</LogText>
-                {e.cf.calories ? <LogMeta>{String(e.cf.calories)} cal</LogMeta> : null}
-              </LogBtn>
-            </LogRow>
-          ))}
-        </LogList>
-      )}
-    </>
-  );
-}
-
 /* ── Exercise ── */
 
 export function ExerciseQuickLog() {
   const createEntry = useCreateEntry();
-  const openInJournal = useOpenInJournal();
   const aiReady = useAiReady();
-  const todays = useTodaysEntries('Exercise', 'performedDate');
 
   const [what, setWhat] = useState('');
   const [exerciseType, setExerciseType] = useState('walking');
@@ -265,8 +117,6 @@ export function ExerciseQuickLog() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
 
-  const totalMinutes = todays.reduce((sum, e) => sum + (parseFloat(String(e.cf.duration)) || 0), 0);
-  const totalBurned = todays.reduce((sum, e) => sum + (parseFloat(String(e.cf.calories)) || 0), 0);
   const canSave = !!what.trim() || !!duration.trim() || !!distance.trim();
 
   const handleSubmit = async (e?: FormEvent) => {
@@ -338,40 +188,10 @@ export function ExerciseQuickLog() {
         </FormField>
       </FieldGrid>
       <FormFooter>
-        <Note role="status">{status || (aiReady ? 'Calories burned are calculated for you.' : 'Turn on the AI assistant in Settings to calculate calories burned.')}</Note>
+        <Note role="status">{status}</Note>
         <PillButton type="button" onClick={() => void handleSubmit()} disabled={saving || !canSave}>{saving ? 'Logging…' : 'Log exercise'}</PillButton>
       </FormFooter>
 
-      <SubLabel>Today</SubLabel>
-      {todays.length === 0 ? (
-        <Empty style={{ marginTop: 10 }}>No exercise logged today.</Empty>
-      ) : (
-        <>
-          <LogList>
-            {todays.map(e => {
-              const meta = [
-                e.cf.duration ? `${String(e.cf.duration)} min` : '',
-                e.cf.distance ? `${String(e.cf.distance)} ${e.cf.distanceUnit === 'km' ? 'km' : 'mi'}` : '',
-                e.cf.calories ? `${String(e.cf.calories)} cal` : '',
-              ].filter(Boolean).join(' · ');
-              return (
-                <LogRow key={e.id}>
-                  <LogBtn type="button" onClick={() => openInJournal(e.id)}>
-                    <LogTag>{labelFor(EXERCISE_TYPES, e.cf.exerciseType) || 'Exercise'}</LogTag>
-                    <LogText>{e.text || 'Exercise'}</LogText>
-                    {meta && <LogMeta>{meta}</LogMeta>}
-                  </LogBtn>
-                </LogRow>
-              );
-            })}
-          </LogList>
-          {(totalMinutes > 0 || totalBurned > 0) && (
-            <Total>
-              Today · {[totalMinutes > 0 ? `${Math.round(totalMinutes)} min` : '', totalBurned > 0 ? `${Math.round(totalBurned)} cal burned` : ''].filter(Boolean).join(' · ')}
-            </Total>
-          )}
-        </>
-      )}
     </div>
   );
 }

@@ -6,9 +6,8 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
-import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
-import { ExerciseQuickLog, TodayFoodList } from '../components/organisms/HealthQuickLog.js';
-import { DayAtAGlance, FoodAddForm, useFoodLogActions, type LibraryItem } from '../components/organisms/FoodLog.js';
+import { ExerciseQuickLog } from '../components/organisms/HealthQuickLog.js';
+import { DayAtAGlance, FoodAddForm, useFoodLogActions } from '../components/organisms/FoodLog.js';
 import { useAiReady } from '../hooks/useAiReady.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
@@ -16,8 +15,6 @@ import { toDateStr } from '../utils/dateUtils.js';
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
-import { stripHtml } from '../utils/stripHtml.js';
 
 /* ── Layout (mirrors HealthView) ── */
 
@@ -93,65 +90,6 @@ const SectionLink = styled.button`
   &:hover { opacity: 0.7; }
 `;
 
-const AllergyList = styled.ul`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-`;
-
-const AllergyRow = styled.li`
-  border-top: 1px solid var(--border-subtle);
-  &:first-child { border-top: none; }
-`;
-
-const AllergyBtn = styled.button`
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  width: 100%;
-  padding: 10px 4px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  color: var(--text-primary);
-  &:hover { background: var(--bg-hover); }
-  @media (max-width: 480px) { flex-wrap: wrap; gap: 4px 12px; }
-`;
-
-const AllergyName = styled.span<{ $wide: boolean }>`
-  flex: ${({ $wide }) => ($wide ? '1 1 auto' : '0 1 220px')};
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-`;
-
-const AllergyReaction = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-`;
-
-const AllergySeverity = styled.span`
-  flex-shrink: 0;
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-`;
-
-const Muted = styled.p`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0;
-  padding: 0 4px;
-`;
-
 /* ── Helpers ── */
 
 function DashSection({ label, action, children }: { label: string; action?: ReactNode; children: ReactNode }) {
@@ -164,17 +102,6 @@ function DashSection({ label, action, children }: { label: string; action?: Reac
       {children}
     </Section>
   );
-}
-
-function severityText(v: unknown): string {
-  if (v == null || v === '') return '';
-  return typeof v === 'number' || /^\d+$/.test(String(v)) ? `Severity ${v}/10` : String(v);
-}
-
-function severityRank(v: unknown): number {
-  const n = Number(v);
-  if (!Number.isNaN(n)) return n;
-  return ({ severe: 9, moderate: 5, mild: 2 } as Record<string, number>)[String(v).toLowerCase()] ?? 0;
 }
 
 /* ── Food ── */
@@ -212,7 +139,6 @@ function FoodPanel() {
   const aiReady = useAiReady();
   const actions = useFoodLogActions('Meals');
   const [goals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
-  const [library, saveLibrary] = useEncryptedSetting<LibraryItem[]>('foodLibrary', []);
   const [status, setStatus] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -229,51 +155,9 @@ function FoodPanel() {
   return (
     <>
       <GlanceWrap><DayAtAGlance rows={todayRows} goals={goals} /></GlanceWrap>
-      <FoodAddForm day={today} actions={actions} aiReady={aiReady} library={library} onLibraryChange={saveLibrary} onStatus={say} submitLabel="Log food" />
-      <TodayFoodList />
+      <FoodAddForm day={today} actions={actions} aiReady={aiReady} onStatus={say} />
       <Toast $show={!!status} role="status" aria-live="polite">{status}</Toast>
     </>
-  );
-}
-
-/* ── Allergies ── */
-
-function AllergiesList() {
-  const entries = useEntriesStore(s => s.decryptedEntries);
-  const allTopics = useEntriesStore(s => s.allTopics);
-  const openInJournal = useOpenInJournal();
-
-  const allergies = useMemo(() => {
-    const topicId = allTopics.find(t => t.name.toLowerCase() === 'allergy')?.id;
-    if (!topicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === topicId)
-      .map(e => {
-        const cf = ((e.metadata as Record<string, unknown>)._customFields as Record<string, unknown>) || {};
-        return {
-          id: e.id,
-          name: String(cf.allergen || '').trim() || stripHtml(e.content).trim() || 'Allergy',
-          reaction: String(cf.reaction || '').trim(),
-          severity: cf.severity,
-        };
-      })
-      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || a.name.localeCompare(b.name));
-  }, [entries, allTopics]);
-
-  if (allergies.length === 0) return <Muted>No allergies recorded.</Muted>;
-
-  return (
-    <AllergyList>
-      {allergies.map(a => (
-        <AllergyRow key={a.id}>
-          <AllergyBtn type="button" onClick={() => openInJournal(a.id)}>
-            <AllergyName $wide={!a.reaction}>{a.name}</AllergyName>
-            {a.reaction && <AllergyReaction>{a.reaction}</AllergyReaction>}
-            <AllergySeverity>{severityText(a.severity)}</AllergySeverity>
-          </AllergyBtn>
-        </AllergyRow>
-      ))}
-    </AllergyList>
   );
 }
 
@@ -326,17 +210,6 @@ export function HealthDashboardView() {
             </DashSection>
           )}
 
-          {ff.medicationEnabled !== false && (
-            <DashSection label="Medication schedule" action={seeAll('/health/meds')}>
-              <MedicationSchedule isReady={isReady} />
-            </DashSection>
-          )}
-
-          {ff.allergiesEnabled !== false && (
-            <DashSection label="Allergies" action={seeAll('/health/allergies')}>
-              <AllergiesList />
-            </DashSection>
-          )}
         </Inner>
       </Page>
     </ContentTemplate>

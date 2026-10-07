@@ -89,7 +89,7 @@ const FieldGrid = styled.div`
 const FormFooter = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   flex-wrap: wrap;
   padding-top: 18px;
@@ -268,80 +268,40 @@ export function DayAtAGlance({ rows, goals }: { rows: FoodRow[]; goals: Nutrient
 
 /* ══ Log food form ══ */
 
-export interface LibraryItem {
-  id: string;
-  name: string;
-  mealType: string;
-  values: Partial<Record<NutrientKey, number | null>>;
-}
-
-const SavedFoods = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding-top: 18px;
-`;
-
-const Chip = styled.button<{ $editing?: boolean }>`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--bg-sunken);
-  border: 1px ${({ $editing }) => ($editing ? 'dashed var(--border-strong)' : 'solid transparent')};
-  border-radius: var(--r-md, 2px);
-  padding: 6px 12px;
-  cursor: pointer;
-  transition: background 120ms;
-  &:hover { background: var(--bg-active); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-  .x { color: var(--color-danger, #c0392b); font-weight: 700; margin-left: 8px; }
-`;
-
-const ChipsLabel = styled(StatLabel)`
-  margin-right: 4px;
-`;
-
 interface FoodAddFormProps {
   day: string;
   actions: FoodLogActions;
   aiReady: boolean;
-  library: LibraryItem[];
-  onLibraryChange: (next: LibraryItem[]) => Promise<void>;
   onStatus: (msg: string) => void;
-  /** Label for the submit button — "Add to this day" on the log, "Log food" elsewhere */
+  /** Label for the submit button */
   submitLabel?: string;
 }
 
 /** Item, type and nutrients in the app's label-left field rows; blanks are AI-filled after adding. */
-export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, onStatus, submitLabel = 'Add to this day' }: FoodAddFormProps) {
+export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Log food' }: FoodAddFormProps) {
   const [item, setItem] = useState('');
   const [mealType, setMealType] = useState(() => mealForNow());
   const [values, setValues] = useState<Record<NutrientKey, string>>(emptyValues);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [editingQuick, setEditingQuick] = useState(false);
-
-  const add = async (name: string, type: string, vals: Partial<Record<NutrientKey, string>>, note: string) => {
-    let fields: Record<string, unknown> = {
-      mealDescription: name, mealType: type, consumedDate: day,
-      consumedTime: day === toDateStr(new Date()) ? nowTime() : '',
-      ingredients: '', notes: note,
-    };
-    for (const n of NUTRIENTS) {
-      const v = (vals[n.key] ?? '').trim();
-      fields = v ? withManualNutrient(fields, n.key, v) : { ...fields, [n.key]: '' };
-    }
-    const id = await actions.create(day, name, fields);
-    onStatus(`Added ${name}`);
-    if (aiReady) void actions.fill(id);
-  };
 
   const handleAdd = async () => {
     if (!item.trim() || saving) return;
     setSaving(true);
     try {
-      await add(item.trim(), mealType, values, notes.trim());
+      const name = item.trim();
+      let fields: Record<string, unknown> = {
+        mealDescription: name, mealType, consumedDate: day,
+        consumedTime: day === toDateStr(new Date()) ? nowTime() : '',
+        ingredients: '', notes: notes.trim(),
+      };
+      for (const n of NUTRIENTS) {
+        const v = values[n.key].trim();
+        fields = v ? withManualNutrient(fields, n.key, v) : { ...fields, [n.key]: '' };
+      }
+      const id = await actions.create(day, name, fields);
+      onStatus(`Added ${name}`);
+      if (aiReady) void actions.fill(id);
       setItem(''); setValues(emptyValues()); setNotes('');
     } catch (err) {
       console.error('Failed to add food:', err);
@@ -351,17 +311,6 @@ export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, o
 
   const onEnter = (e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void handleAdd(); } };
 
-  const quickAdd = async (it: LibraryItem) => {
-    const vals: Partial<Record<NutrientKey, string>> = {};
-    for (const n of NUTRIENTS) {
-      const v = it.values[n.key];
-      if (v !== null && v !== undefined) vals[n.key] = String(v);
-    }
-    try { await add(it.name, it.mealType || 'snack', vals, ''); }
-    catch { onStatus('That didn’t save — try again'); }
-  };
-
-  const nutrientPlaceholder = aiReady ? 'Auto' : '—';
   const nutrientField = (key: NutrientKey) => {
     const n = NUTRIENTS.find(x => x.key === key)!;
     return (
@@ -371,14 +320,12 @@ export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, o
           value={values[key]}
           onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}
           onKeyDown={onEnter}
-          placeholder={nutrientPlaceholder}
+          placeholder={aiReady ? 'Auto' : '—'}
           aria-label={`${n.label}${n.unit ? ` (${n.unit})` : ''}`}
         />
       </FormField>
     );
   };
-
-  const sorted = [...library].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div>
@@ -401,28 +348,8 @@ export function FoodAddForm({ day, actions, aiReady, library, onLibraryChange, o
         <TextInput value={notes} onChange={e => setNotes(e.target.value)} onKeyDown={onEnter} placeholder="Optional" autoComplete="off" aria-label="Notes" />
       </FormField>
       <FormFooter>
-        <SectionNote>{aiReady ? 'Leave any nutrient blank and the AI fills it in.' : 'Turn on the AI assistant in Settings to fill in nutrients automatically.'}</SectionNote>
-        <PillButton type="button" onClick={handleAdd} disabled={saving || !item.trim()}>{saving ? 'Adding…' : submitLabel}</PillButton>
+        <PillButton type="button" onClick={handleAdd} disabled={saving || !item.trim()}>{saving ? 'Logging…' : submitLabel}</PillButton>
       </FormFooter>
-
-      <SavedFoods aria-label="Saved foods">
-        <ChipsLabel>Saved foods</ChipsLabel>
-        {library.length === 0 && <SectionNote>Use “Save” on any logged item to keep it here for one-tap adding.</SectionNote>}
-        {sorted.map(it => (
-          <Chip
-            key={it.id}
-            type="button"
-            $editing={editingQuick}
-            aria-label={editingQuick ? `Remove ${it.name} from saved foods` : `Add ${it.name}`}
-            onClick={() => editingQuick ? void onLibraryChange(library.filter(l => l.id !== it.id)) : void quickAdd(it)}
-          >
-            {it.name}{editingQuick && <span className="x" aria-hidden="true">×</span>}
-          </Chip>
-        ))}
-        {library.length > 0 && (
-          <TextAction type="button" onClick={() => setEditingQuick(v => !v)}>{editingQuick ? 'Done' : 'Edit'}</TextAction>
-        )}
-      </SavedFoods>
     </div>
   );
 }
@@ -630,8 +557,6 @@ interface FoodDayListProps {
   goals: NutrientGoals;
   actions: FoodLogActions;
   aiReady: boolean;
-  library: LibraryItem[];
-  onLibraryChange: (next: LibraryItem[]) => Promise<void>;
   onStatus: (msg: string) => void;
 }
 
@@ -639,23 +564,13 @@ interface FoodDayListProps {
  * The day's items as a quiet read-only table — select a row to edit it in the
  * journal (like every other list). Italic grey values are AI estimates.
  */
-export function FoodDayList({ rows, goals, actions, aiReady, library, onLibraryChange, onStatus }: FoodDayListProps) {
+export function FoodDayList({ rows, goals, actions, aiReady, onStatus }: FoodDayListProps) {
   const openInJournal = useOpenInJournal();
   const [armed, setArmed] = useState<number | null>(null);
   const summary = useMemo(() => summarizeDay(rows), [rows]);
   const mealLabel = (v: string) => MEAL_TYPE_OPTIONS.find(m => m.value === v)?.label ?? '';
 
   const stop = (e: MouseEvent) => e.stopPropagation();
-
-  const saveToQuickAdd = async (row: FoodRow) => {
-    const existing = library.find(l => l.name.toLowerCase() === row.item.toLowerCase());
-    const item: LibraryItem = {
-      id: existing?.id ?? `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      name: row.item, mealType: row.mealType || 'snack', values: { ...row.values },
-    };
-    await onLibraryChange(existing ? library.map(l => (l.id === existing.id ? item : l)) : [...library, item]);
-    onStatus(existing ? 'Saved food updated' : 'Saved to saved foods');
-  };
 
   const handleDelete = async (row: FoodRow) => {
     if (armed !== row.id) { setArmed(row.id); return; }
@@ -712,7 +627,6 @@ export function FoodDayList({ rows, goals, actions, aiReady, library, onLibraryC
                         {busy ? 'Estimating…' : 'Estimate'}
                       </RowAction>
                     )}
-                    <RowAction type="button" onClick={() => void saveToQuickAdd(row)}>Save</RowAction>
                     <RowAction
                       type="button"
                       $danger={armed === row.id}
