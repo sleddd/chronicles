@@ -235,3 +235,14 @@ describe('JournalView (unlocked, loaded)', () => {
     expect(screen.getByTestId('quick-entry')).toBeInTheDocument();
   });
 });
+
+describe('JournalView (mobile back to list)', () => {
+  it('puts a back-to-entries control at the top of the editor panel', async () => {
+    (useEncryption as any).mockReturnValue({
+      isUnlocked: true, unlock: vi.fn(), decryptPosts: vi.fn().mockResolvedValue([]), encryptPost: vi.fn(),
+    });
+    renderWithTheme(<JournalView />);
+    const back = await screen.findByText('Back');
+    expect(screen.getByTestId('editor-panel')).toContainElement(back);
+  });
+});

@@ -75,15 +75,16 @@ describe('EditorPanel', () => {
 });
 
 describe('MobileBackButton', () => {
-  it('renders back button text', () => {
+  it('renders an Entries back label with an accessible name', () => {
     renderWithTheme(<MobileBackButton onClick={() => {}} />);
-    expect(screen.getByText('Back to entries')).toBeInTheDocument();
+    expect(screen.getByText('Entries')).toBeInTheDocument();
+    expect(screen.getByLabelText('Back to entries')).toBeInTheDocument();
   });
 
   it('calls onClick when clicked', () => {
     const handleClick = vi.fn();
     renderWithTheme(<MobileBackButton onClick={handleClick} />);
-    fireEvent.click(screen.getByText('Back to entries'));
+    fireEvent.click(screen.getByText('Entries'));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 

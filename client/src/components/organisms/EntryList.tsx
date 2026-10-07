@@ -2,7 +2,6 @@ import styled from 'styled-components';
 import { memo, useMemo, useCallback, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
-import { EntryTableHead } from '../molecules/EntryTable.js';
 import { EntryCard } from './EntryCard.js';
 import { Checkbox } from '../atoms/Checkbox.js';
 import { entries as entriesApi } from '../../services/api.js';
@@ -386,7 +385,6 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
           </>
         )}
       </BulkBar>
-      <EntryTableHead inset />
       {groups.map(([dateKey, groupEntries]) => {
         return (
           <div key={dateKey}>
