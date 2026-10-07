@@ -25,7 +25,7 @@ import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
-import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { entries as entriesApi, topics as topicsApi, settings as settingsApi, retryDelayMs } from '../services/api.js';
 import { loadAiConfig, autoCaloriesOnSave } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
@@ -386,6 +386,9 @@ export function JournalView() {
 
   useEffect(() => {
     if (!isUnlocked || isInitialized) return;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
     const load = async () => {
       setLoading(true);
       try {
@@ -456,14 +459,21 @@ export function JournalView() {
           }
         }
         setDecryptedEntries(decrypted);
+        setLoading(false);
       } catch (err) {
-        console.error('Failed to load:', err);
-        // Still mark as initialized so we don't loop
-        setDecryptedEntries([]);
+        // Transient failure (rate limit, server restart, network): keep the
+        // loading state and retry with backoff (honoring Retry-After) rather
+        // than showing an empty journal, which reads as data loss
+        const delay = retryDelayMs(err, attempt++);
+        console.error(`Failed to load, retrying in ${Math.round(delay / 1000)}s:`, err);
+        if (!cancelled) retryTimer = setTimeout(load, delay);
       }
-      finally { setLoading(false); }
     };
     load();
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
   }, [isUnlocked, isInitialized]);
 
   useEffect(() => {

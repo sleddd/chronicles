@@ -12,13 +12,44 @@ interface RequestOptions {
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public retryAfterSec?: number) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
+/** Seconds to wait from a Retry-After / RateLimit-Reset header, if present. */
+function retryAfterFrom(res: Response): number | undefined {
+  const raw = res.headers.get('retry-after') ?? res.headers.get('ratelimit-reset');
+  if (!raw) return undefined;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.max(0, secs);
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, Math.round((at - Date.now()) / 1000)) : undefined;
+}
+
+/*
+ * Identical GETs already in flight share one request — several components
+ * load settings/entries on the same page load, which used to multiply
+ * traffic (and burn through the server's rate limit).
+ */
+const inflight = new Map<string, Promise<unknown>>();
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body } = options;
+  if (method === 'GET' && body === undefined) {
+    const key = `${path}?${new URLSearchParams(options.params ?? {}).toString()}`;
+    const pending = inflight.get(key) as Promise<T> | undefined;
+    // Followers get their own copy so no caller can mutate another's data
+    if (pending) return pending.then(v => structuredClone(v));
+    const p = send<T>(path, options).finally(() => inflight.delete(key));
+    inflight.set(key, p);
+    return p;
+  }
+  return send<T>(path, options);
+}
+
+async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, params } = options;
 
   let url = `${BASE_URL}${path}`;
@@ -44,7 +75,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: 'Request failed' }));
-    throw new ApiError(res.status, data.error || 'Request failed');
+    throw new ApiError(res.status, data.error || 'Request failed', res.status === 429 ? retryAfterFrom(res) : undefined);
   }
 
   const contentType = res.headers.get('content-type');
@@ -339,3 +370,16 @@ export const calendar = {
 
 export { ApiError };
 export default { auth, entries, topics, settings, sessions, doses, shares, calendar };
+
+/**
+ * How long to wait before retrying a failed initial load: the server's
+ * Retry-After on a 429 (capped at 15 min), otherwise exponential backoff
+ * from 10s up to a minute.
+ */
+export function retryDelayMs(err: unknown, attempt: number): number {
+  if (err instanceof ApiError && err.status === 429) {
+    const secs = err.retryAfterSec ?? 60;
+    return Math.min(Math.max(secs, 5), 15 * 60) * 1000;
+  }
+  return Math.min(10_000 * 2 ** attempt, 60_000);
+}
