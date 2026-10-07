@@ -24,6 +24,7 @@ import {
   type AiProvider,
   type BedrockModelOption,
 } from '../../services/aiAssistant.js';
+import { bedrockApiKeyProblem } from '../../services/bedrock.js';
 
 const CUSTOM = '__custom__';
 
@@ -105,7 +106,9 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const bedrockCredKey = cfg.provider === 'bedrock'
     ? JSON.stringify([cfg.bedrockRegion.trim(), cfg.bedrockAuth, cfg.bedrockApiKey.trim(), cfg.awsAccessKeyId.trim(), cfg.awsSecretAccessKey.trim(), cfg.awsSessionToken.trim()])
     : '';
-  const bedrockCredsComplete = cfg.provider === 'bedrock' && hasCredentials({ ...cfg, model: cfg.model || 'x' });
+  const apiKeyProblem = cfg.provider === 'bedrock' && cfg.bedrockAuth === 'apiKey' ? bedrockApiKeyProblem(cfg.bedrockApiKey) : null;
+  // Don't ask AWS for the model list with a key that can't be right
+  const bedrockCredsComplete = cfg.provider === 'bedrock' && !apiKeyProblem && hasCredentials({ ...cfg, model: cfg.model || 'x' });
   useEffect(() => {
     if (!cfg.enabled || !bedrockCredsComplete) { setBedrockModels(null); setModelsState('idle'); return; }
     let cancelled = false;
@@ -248,7 +251,8 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
                 {cfg.bedrockAuth === 'apiKey' ? (
                   <div style={inputRow}>
                     <span style={labelStyle}>Bedrock API key</span>
-                    <PasswordInput value={cfg.bedrockApiKey} onChange={e => update({ bedrockApiKey: e.target.value })} placeholder="From the Amazon Bedrock console → API keys" autoComplete="off" />
+                    <PasswordInput value={cfg.bedrockApiKey} onChange={e => update({ bedrockApiKey: e.target.value })} placeholder="Starts with ABSK… or bedrock-api-key-…" autoComplete="off" />
+                    {apiKeyProblem && <span style={errStyle} role="alert">{apiKeyProblem}</span>}
                   </div>
                 ) : (
                   <>
