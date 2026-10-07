@@ -54,7 +54,7 @@ describe('MilestoneCard', () => {
     tasks: [],
     goalTitle: null,
     goalOptions: [],
-    headerColor: '#4281a4',
+    accentColor: '#4281a4',
     isEditing: false,
     onSelect: vi.fn(),
     onClose: vi.fn(),
@@ -67,16 +67,6 @@ describe('MilestoneCard', () => {
   it('renders milestone title', () => {
     renderWithTheme(<MilestoneCard {...defaultProps} />);
     expect(screen.getByText('Complete MVP')).toBeInTheDocument();
-  });
-
-  it('renders milestone status badge', () => {
-    renderWithTheme(<MilestoneCard {...defaultProps} />);
-    expect(screen.getByText('active')).toBeInTheDocument();
-  });
-
-  it('renders target date', () => {
-    renderWithTheme(<MilestoneCard {...defaultProps} />);
-    expect(screen.getByText('2024-06-30')).toBeInTheDocument();
   });
 
   it('shows completed status when milestone is completed', () => {

@@ -48,13 +48,22 @@ describe('Modal', () => {
 
   it('calls onClose when overlay is clicked', () => {
     const onClose = vi.fn();
-    const { container } = renderWithTheme(
+    renderWithTheme(
       <Modal open={true} onClose={onClose} title="Test">Body</Modal>
     );
-    // The overlay is the outermost div rendered by Modal
-    const overlay = container.firstChild as HTMLElement;
+    // Modal portals to document.body; the overlay is the dialog's parent
+    const overlay = screen.getByRole('dialog').parentElement as HTMLElement;
     fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not close when clicking inside the dialog', () => {
+    const onClose = vi.fn();
+    renderWithTheme(
+      <Modal open={true} onClose={onClose} title="Test">Body</Modal>
+    );
+    fireEvent.click(screen.getByText('Body'));
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('does not call onClose when content area is clicked', () => {

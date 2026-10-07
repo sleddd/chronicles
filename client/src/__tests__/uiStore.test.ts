@@ -14,7 +14,6 @@ beforeEach(() => {
     selectedEntryId: null,
     showMobileEditor: false,
     themeMode: 'light',
-    headerColor: '#4A5568',
     accentColor: '#00b4d8',
     backgroundImage: '',
     backgroundOpacity: 0.7,
@@ -34,7 +33,6 @@ describe('uiStore – initial state', () => {
     expect(state.selectedEntryId).toBeNull();
     expect(state.showMobileEditor).toBe(false);
     expect(state.themeMode).toBe('light');
-    expect(state.headerColor).toBe('#4A5568');
     expect(state.accentColor).toBe('#00b4d8');
     expect(state.backgroundImage).toBe('');
     expect(state.backgroundOpacity).toBe(0.7);
@@ -144,11 +142,6 @@ describe('uiStore – mobile editor', () => {
 });
 
 describe('uiStore – theme', () => {
-  it('setHeaderColor updates header color', () => {
-    useUIStore.getState().setHeaderColor('#ff0000');
-    expect(useUIStore.getState().headerColor).toBe('#ff0000');
-  });
-
   it('setAccentColor updates accent color', () => {
     useUIStore.getState().setAccentColor('#00ff00');
     expect(useUIStore.getState().accentColor).toBe('#00ff00');

@@ -656,12 +656,15 @@ describe('Dose Log queries', () => {
       expect(idx3).toContain('idx_usr_1_abc123_dose_logs_unique');
     });
 
-    it('skips creation when table already exists', async () => {
+    it('skips table creation when it already exists but still ensures indexes', async () => {
       mockQueryRawUnsafe.mockResolvedValue([{ exists: true }]);
 
       await ensureDoseLogsTable(SCHEMA);
 
-      expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+      const statements = mockExecuteRawUnsafe.mock.calls.map(c => c[0] as string);
+      expect(statements.some(sql => sql.includes('CREATE TABLE'))).toBe(false);
+      expect(statements).toHaveLength(3);
+      expect(statements.every(sql => sql.includes('CREATE') && sql.includes('INDEX IF NOT EXISTS'))).toBe(true);
     });
   });
 

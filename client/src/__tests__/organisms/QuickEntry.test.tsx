@@ -22,6 +22,20 @@ vi.mock('@/utils/topicIcons', () => ({
   getTopicIcon: () => ({ prefix: 'fas', iconName: 'book' }),
 }));
 
+// Stand-in for the TipTap editor with the same contract QuickEntry relies on
+vi.mock('@/components/organisms/Editor', () => ({
+  Editor: ({ content, onChange, placeholder, onEnterSave }: {
+    content: string; onChange: (v: string) => void; placeholder: string; onEnterSave?: () => void;
+  }) => (
+    <textarea
+      placeholder={placeholder}
+      value={content}
+      onChange={e => onChange(e.target.value)}
+      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onEnterSave?.(); } }}
+    />
+  ),
+}));
+
 vi.mock('@/components/organisms/TopicSelectorDropdown', () => ({
   TopicSelectorDropdown: () => null,
 }));

@@ -50,9 +50,10 @@ describe('InlineEditPanel', () => {
     expect(screen.queryByText('Save')).not.toBeInTheDocument();
   });
 
-  it('displays status text when provided', () => {
-    renderWithTheme(<InlineEditPanel {...baseProps} status="Saved successfully" />);
-    expect(screen.getByText('Saved successfully')).toBeInTheDocument();
+  it('turns the save button into a failure notice when saving failed', () => {
+    renderWithTheme(<InlineEditPanel {...baseProps} status="Save failed" />);
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.queryByText('Save')).not.toBeInTheDocument();
   });
 
   it('does not display status when empty', () => {

@@ -27,7 +27,7 @@ import type { TaskFieldValues } from '@/types/fields';
 describe('GoalFields', () => {
   const defaultValues: GoalFieldValues = {
     goalType: 'short_term',
-    goalStatus: 'active',
+    goalStatus: 'in_progress',
     targetDate: '2024-12-31',
   };
 
@@ -354,16 +354,6 @@ describe('MilestoneFields', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ parentGoalId: 1 }));
   });
 
-  it('shows linked tasks count', () => {
-    const linkedTasks = [
-      { id: 1, title: 'Task 1', isCompleted: true },
-      { id: 2, title: 'Task 2', isCompleted: false },
-    ];
-    renderWithTheme(
-      <MilestoneFields values={defaultValues} onChange={() => {}} goalOptions={[]} linkedTasks={linkedTasks} />,
-    );
-    expect(screen.getByText(/1\/2 completed/)).toBeInTheDocument();
-  });
 });
 
 /* ═══════════════════════ TaskFields ═══════════════════════ */
@@ -406,7 +396,8 @@ describe('TaskFields', () => {
     renderWithTheme(
       <TaskFields values={defaultValues} onChange={onChange} milestoneOptions={milestoneOptions} />,
     );
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '1' } });
+    // Priority is also a select, so target the milestone one by its empty option
+    fireEvent.change(screen.getByDisplayValue('No milestone'), { target: { value: '1' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ parentMilestoneId: 1 }));
   });
 });

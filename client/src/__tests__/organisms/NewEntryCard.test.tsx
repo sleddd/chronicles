@@ -13,9 +13,19 @@ vi.mock('@/contexts/EncryptionContext', () => ({
   }),
 }));
 
+// Stable references, like real Zustand state
+const entriesState = vi.hoisted(() => ({
+  addDecryptedEntry: () => {},
+  allTopics: [],
+  decryptedEntries: [],
+  featureFlags: {},
+}));
+
 vi.mock('@/stores/entriesStore', () => ({
-  useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ addDecryptedEntry: vi.fn() }),
+  useEntriesStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector(entriesState),
+    { getState: () => entriesState },
+  ),
 }));
 
 vi.mock('@/services/api', () => ({
@@ -38,18 +48,18 @@ const mockTopic = { id: 1, name: 'Work', icon: null, color: '#3B82F6' };
 
 describe('NewEntryCard', () => {
   it('renders add button when not open', () => {
-    renderWithTheme(<NewEntryCard topic={mockTopic} headerColor="#4281a4" />);
+    renderWithTheme(<NewEntryCard topic={mockTopic} accentColor="#4281a4" />);
     expect(screen.getByText(/New Work Entry/)).toBeInTheDocument();
   });
 
   it('opens card when add button is clicked', () => {
-    renderWithTheme(<NewEntryCard topic={mockTopic} headerColor="#4281a4" />);
+    renderWithTheme(<NewEntryCard topic={mockTopic} accentColor="#4281a4" />);
     fireEvent.click(screen.getByText(/New Work Entry/));
     expect(screen.getByTestId('editor')).toBeInTheDocument();
   });
 
   it('shows correct placeholder based on topic', () => {
-    renderWithTheme(<NewEntryCard topic={mockTopic} headerColor="#4281a4" />);
+    renderWithTheme(<NewEntryCard topic={mockTopic} accentColor="#4281a4" />);
     fireEvent.click(screen.getByText(/New Work Entry/));
     expect(screen.getByText(/Write a new work entry/i)).toBeInTheDocument();
   });

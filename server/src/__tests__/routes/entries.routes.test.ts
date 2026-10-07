@@ -61,7 +61,8 @@ describe('Entry Routes', () => {
       expect(res.body).toHaveLength(1);
       expect(res.body[0].contentEncrypted).toBe(Buffer.from('encrypted').toString('base64'));
       expect(res.body[0].contentIv).toBe(Buffer.from('iv12345678ab').toString('base64'));
-      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 100, offset: 0 });
+      // Default is large on purpose — the client keeps every entry in its store
+      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 0 });
     });
 
     it('respects limit and offset query params', async () => {
@@ -72,12 +73,12 @@ describe('Entry Routes', () => {
       expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 50, offset: 10 });
     });
 
-    it('clamps limit to max 200', async () => {
+    it('clamps limit to max 10000', async () => {
       (getAllPosts as any).mockResolvedValue([]);
 
-      await request(app).get('/api/entries?limit=999');
+      await request(app).get('/api/entries?limit=999999');
 
-      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 200, offset: 0 });
+      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 10000, offset: 0 });
     });
 
     it('returns 500 on database error', async () => {

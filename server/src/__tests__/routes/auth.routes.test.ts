@@ -124,15 +124,30 @@ describe('Auth Routes', () => {
       expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.any(Object));
     });
 
-    it('returns 409 when email or username already exists', async () => {
-      (prisma.account.findFirst as any).mockResolvedValue({ id: 99, email: 'test@example.com' });
+    it('returns 409 when the email already exists', async () => {
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ id: 99, email: 'test@example.com' });
 
       const res = await request(app)
         .post('/api/auth/register')
         .send(validRegisterBody);
 
       expect(res.status).toBe(409);
-      expect(res.body.error).toContain('Registration could not be completed');
+      expect(res.body.field).toBe('email');
+      expect(registerTenant).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 when the username is taken', async () => {
+      (prisma.account.findUnique as any)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 99, username: 'testuser' });
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send(validRegisterBody);
+
+      expect(res.status).toBe(409);
+      expect(res.body.field).toBe('username');
+      expect(registerTenant).not.toHaveBeenCalled();
     });
 
     it('returns 400 for invalid password (too short)', async () => {
@@ -353,6 +368,11 @@ describe('Auth Routes', () => {
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
       newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
+      // Recovery rotates in a fresh recovery key so it can be used again
+      newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
+      newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
+      newRecoveryKeyHash: 'newrecoveryhash',
+      newRecoveryKeySalt: 'newrecoverysalt',
     };
 
     const mockAccount = {
@@ -427,6 +447,11 @@ describe('Auth Routes', () => {
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
       newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
+      // Recovery rotates in a fresh recovery key so it can be used again
+      newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
+      newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
+      newRecoveryKeyHash: 'newrecoveryhash',
+      newRecoveryKeySalt: 'newrecoverysalt',
     };
 
     it('returns 401 when account not found', async () => {
@@ -502,19 +527,31 @@ describe('Auth Routes', () => {
         encryptionEnabled: true,
         kekIterations: 600000,
       });
-      (prisma.$transaction as any).mockImplementation(async (fn: any) => {
-        return fn({
-          $queryRawUnsafe: vi.fn().mockResolvedValue([{ id: 1, recovery_key_hash: correctHash }]),
-          account: { update: vi.fn().mockResolvedValue({}) },
-          session: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-        });
-      });
+      const tx = {
+        $queryRawUnsafe: vi.fn().mockResolvedValue([{ id: 1, recovery_key_hash: correctHash }]),
+        account: { update: vi.fn().mockResolvedValue({}) },
+        session: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      };
+      (prisma.$transaction as any).mockImplementation(async (fn: any) => fn(tx));
 
       const res = await request(app)
         .post('/api/auth/recover')
         .send(recoverBody);
 
       expect(res.status).toBe(200);
+      // Old recovery key is replaced by the new one, and every old session is revoked
+      expect(tx.account.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({
+          recoveryKeyHash: 'newrecoveryhash',
+          recoveryKeySalt: 'newrecoverysalt',
+          recoveryKeyUsedAt: expect.any(Date),
+        }),
+      }));
+      expect(tx.session.updateMany).toHaveBeenCalledWith({
+        where: { accountId: 1, revokedAt: null },
+        data: { revokedAt: expect.any(Date), revokedReason: 'recovery' },
+      });
       expect(res.body.user).toEqual({ email: 'test@example.com', username: 'testuser' });
       expect(res.body.encryption).toBeDefined();
       expect(res.body.encryption.recoveryWrappedMK).toBeNull();

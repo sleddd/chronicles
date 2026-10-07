@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 /**
  * Theme module unit tests
  * Tests for tokens, accent colors, and backgrounds
@@ -33,19 +35,21 @@ describe('theme tokens', () => {
     });
 
     it('has spacing object with expected scale', () => {
-      expect(lightTheme.spacing).toEqual({ xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 });
+      expect(lightTheme.spacing).toMatchObject({ xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 });
+      // DS numbered scale (--s-1 … --s-10)
+      expect(lightTheme.spacing).toMatchObject({ s1: 4, s4: 16, s8: 48, s10: 96 });
     });
 
     it('has fontSize object with expected scale', () => {
-      expect(lightTheme.fontSize).toEqual({ xs: 12, sm: 14, md: 16, lg: 18, xl: 24, xxl: 32 });
+      expect(lightTheme.fontSize).toEqual({ xs: 13, sm: 15, md: 17, lg: 20, xl: 26, xxl: 34 });
     });
 
     it('has fontWeight object', () => {
       expect(lightTheme.fontWeight).toEqual({ normal: 400, medium: 500, semibold: 600, bold: 700 });
     });
 
-    it('has borderRadius object', () => {
-      expect(lightTheme.borderRadius).toEqual({ sm: 2, md: 4, lg: 6, xl: 8, full: 9999 });
+    it('has the squared DS borderRadius scale', () => {
+      expect(lightTheme.borderRadius).toEqual({ sm: 0, md: 1, lg: 2, xl: 2, full: 9999 });
     });
 
     it('has zIndex object', () => {
@@ -140,10 +144,6 @@ describe('HEADER_COLORS', () => {
     }
   });
 
-  it('includes a transparent option', () => {
-    expect(HEADER_COLORS.some(c => c.value === 'transparent')).toBe(true);
-  });
-
   it('has unique labels', () => {
     const labels = HEADER_COLORS.map(c => c.label);
     expect(new Set(labels).size).toBe(labels.length);
@@ -167,7 +167,7 @@ describe('deriveHoverColor', () => {
   });
 
   it('handles transparent by returning a fallback dark color', () => {
-    expect(deriveHoverColor('transparent')).toBe('#3d3c3a');
+    expect(deriveHoverColor('transparent')).toBe('#2D2C2A');
   });
 
   it('darkens a mid-range color correctly', () => {
@@ -276,10 +276,20 @@ describe('BACKGROUND_IMAGES', () => {
     }
   });
 
-  it('non-empty entries have thumbs starting with /backgrounds/thumbs/', () => {
+  it('non-empty entries have thumbs under /backgrounds/', () => {
     for (const bg of BACKGROUND_IMAGES) {
       if (bg.thumb) {
-        expect(bg.thumb).toMatch(/^\/backgrounds\/thumbs\//);
+        expect(bg.thumb).toMatch(/^\/backgrounds\//);
+      }
+    }
+  });
+
+  it('every selectable image and thumb exists in client/public', () => {
+    const publicDir = fileURLToPath(new URL('../../../client/public', import.meta.url));
+    // Hidden entries are retired backgrounds kept only so old saved settings resolve
+    for (const bg of BACKGROUND_IMAGES.filter(b => !b.hidden)) {
+      for (const p of [bg.value, bg.thumb]) {
+        if (p) expect(existsSync(publicDir + p), p).toBe(true);
       }
     }
   });
@@ -294,10 +304,10 @@ describe('BACKGROUND_IMAGES', () => {
     expect(new Set(values).size).toBe(values.length);
   });
 
-  it('image values end with .jpg', () => {
+  it('image values are jpg or png', () => {
     for (const bg of BACKGROUND_IMAGES) {
       if (bg.value) {
-        expect(bg.value).toMatch(/\.jpg$/);
+        expect(bg.value).toMatch(/\.(jpg|png)$/);
       }
     }
   });

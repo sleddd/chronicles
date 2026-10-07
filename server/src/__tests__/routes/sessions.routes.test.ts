@@ -7,8 +7,7 @@ vi.mock('../../db/prisma.js', () => ({
   prisma: {
     session: {
       findMany: vi.fn(),
-      findFirst: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -125,24 +124,21 @@ describe('Session Routes', () => {
   // =========================================================================
   describe('POST /api/sessions/:id/revoke', () => {
     it('revokes a specific session', async () => {
-      (prisma.session.findFirst as any).mockResolvedValue(mockSession);
-      (prisma.session.update as any).mockResolvedValue({ ...mockSession, revokedAt: new Date() });
+      (prisma.session.updateMany as any).mockResolvedValue({ count: 1 });
 
       const res = await request(app).post('/api/sessions/42/revoke');
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(prisma.session.findFirst).toHaveBeenCalledWith({
-        where: { id: 42, accountId: TEST_AUTH.accountId },
-      });
-      expect(prisma.session.update).toHaveBeenCalledWith({
-        where: { id: 42 },
+      // Ownership check and revocation happen in one atomic statement
+      expect(prisma.session.updateMany).toHaveBeenCalledWith({
+        where: { id: 42, accountId: TEST_AUTH.accountId, revokedAt: null },
         data: { revokedAt: expect.any(Date), revokedReason: 'user_logout' },
       });
     });
 
     it('returns 404 when session not found', async () => {
-      (prisma.session.findFirst as any).mockResolvedValue(null);
+      (prisma.session.updateMany as any).mockResolvedValue({ count: 0 });
 
       const res = await request(app).post('/api/sessions/999/revoke');
 
@@ -158,8 +154,7 @@ describe('Session Routes', () => {
     });
 
     it('returns 500 on database error', async () => {
-      (prisma.session.findFirst as any).mockResolvedValue(mockSession);
-      (prisma.session.update as any).mockRejectedValue(new Error('DB error'));
+      (prisma.session.updateMany as any).mockRejectedValue(new Error('DB error'));
 
       const res = await request(app).post('/api/sessions/42/revoke');
 

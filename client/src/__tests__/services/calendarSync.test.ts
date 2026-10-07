@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // This project's jsdom setup doesn't provide localStorage — polyfill it for the
 // pending-deletes queue (the engine itself guards all localStorage access).
@@ -116,6 +116,17 @@ async function syncedFieldsFor(id: number, fields: MappedFields, content = '<h2>
   const syncedHash = await computeSyncHash(payload);
   return { payload, syncedHash };
 }
+
+// Fixtures are dated around mid-July 2026 and the sync never imports past
+// events — pin "now" so the suite doesn't expire as the calendar moves on.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-07-13T12:00:00Z'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

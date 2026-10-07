@@ -48,7 +48,7 @@ describe('TopicSidebarPanel', () => {
     selectedTopicId: null,
     totalEntryCount: 10,
     entryCounts: new Map([[1, 5], [2, 3]]),
-    headerColor: '#4281a4',
+    accentColor: '#4281a4',
     editingId: null,
     editName: '',
     editIcon: null,
@@ -70,7 +70,7 @@ describe('TopicSidebarPanel', () => {
 
   it('renders all entries item', () => {
     renderWithTheme(<TopicSidebarPanel {...defaultProps} />);
-    expect(screen.getByText('All Entries')).toBeInTheDocument();
+    expect(screen.getByText('All Topics')).toBeInTheDocument();
   });
 
   it('renders topic items', () => {
@@ -82,7 +82,7 @@ describe('TopicSidebarPanel', () => {
   it('calls onSelectTopic when all entries is clicked', () => {
     const onSelectTopic = vi.fn();
     renderWithTheme(<TopicSidebarPanel {...defaultProps} onSelectTopic={onSelectTopic} />);
-    fireEvent.click(screen.getByText('All Entries'));
+    fireEvent.click(screen.getByText('All Topics'));
     expect(onSelectTopic).toHaveBeenCalledWith(null);
   });
 

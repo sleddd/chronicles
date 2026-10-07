@@ -1,10 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { ContentTemplate } from '@/components/templates/ContentTemplate';
-import { renderWithTheme } from '../testUtils';
+import { renderWithRouter as renderWithTheme } from '../testUtils';
 
 vi.mock('@/components/organisms/Header', () => ({
   Header: () => <header data-testid="mock-header">Header</header>,
+}));
+
+vi.mock('@/components/organisms/Sidebar', () => ({
+  Sidebar: () => <aside data-testid="mock-sidebar">Sidebar</aside>,
+}));
+
+vi.mock('@/components/organisms/MobileChrome', () => ({
+  MobileChrome: () => <div data-testid="mock-mobile-chrome" />,
 }));
 
 vi.mock('@/components/organisms/Background', () => ({
@@ -45,13 +53,23 @@ describe('ContentTemplate', () => {
     expect(screen.getByTestId('main-child')).toBeInTheDocument();
   });
 
-  it('does not render a sidebar', () => {
+  it('renders the nav sidebar by default', () => {
     renderWithTheme(
       <ContentTemplate>
         <div>content</div>
       </ContentTemplate>
     );
-    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
+  });
+
+  it('hides the nav sidebar when hideSidebar is set', () => {
+    renderWithTheme(
+      <ContentTemplate hideSidebar>
+        <div>content</div>
+      </ContentTemplate>
+    );
+    expect(screen.queryByTestId('mock-sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-mobile-chrome')).not.toBeInTheDocument();
   });
 
   it('renders multiple children', () => {

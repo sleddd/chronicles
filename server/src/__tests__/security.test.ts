@@ -102,7 +102,7 @@ describe('Email validation on /salt', () => {
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    expect(authContent).toContain("import { registerSchema, loginSchema, changePasswordSchema, recoverSchema, emailSchema }");
+    expect(authContent).toMatch(/import \{[^}]*\bemailSchema\b[^}]*\} from '@chronicles\/shared'/);
     // Salt endpoint should validate email
     const saltSection = authContent.split("router.get('/salt'")[1]?.split("router.")[0] || '';
     expect(saltSection).toContain('emailSchema.safeParse');
@@ -165,7 +165,7 @@ describe('Recovery key PBKDF2 hashing', () => {
 // 7. Recovery key is single-use (atomic transaction with recoveryKeyUsedAt)
 // ============================================================================
 describe('Recovery key single-use enforcement', () => {
-  it('recovery endpoint uses atomic transaction to clear recovery data and revoke sessions', async () => {
+  it('recovery endpoint atomically rotates recovery data and revokes sessions', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
@@ -176,11 +176,13 @@ describe('Recovery key single-use enforcement', () => {
     expect(recoverSection).toContain('prisma.$transaction');
     // Should set recoveryKeyUsedAt
     expect(recoverSection).toContain('recoveryKeyUsedAt: new Date()');
-    // Should null out recovery key material
-    expect(recoverSection).toContain('recoveryKeyHash: null');
-    expect(recoverSection).toContain('recoveryKeySalt: null');
-    expect(recoverSection).toContain('recoveryWrappedMK: null');
-    expect(recoverSection).toContain('recoveryWrapIv: null');
+    // The used recovery key is replaced by a fresh one in the same transaction,
+    // so the old key can never unlock the account again
+    expect(recoverSection).toContain('recoveryKeyHash: newRecoveryKeyHash');
+    expect(recoverSection).toContain('recoveryKeySalt: newRecoveryKeySalt');
+    expect(recoverSection).toContain('recoveryWrappedMK: new Uint8Array(Buffer.from(newRecoveryWrappedMK');
+    // Row lock re-checks the key wasn't consumed by a concurrent request
+    expect(recoverSection).toContain('FOR UPDATE');
     // Should revoke all sessions in same transaction
     expect(recoverSection).toContain('session.updateMany');
   });

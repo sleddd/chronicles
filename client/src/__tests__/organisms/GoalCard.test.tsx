@@ -70,7 +70,7 @@ describe('GoalCard', () => {
   const defaultProps = {
     goal: mockGoal as never,
     milestones: [],
-    headerColor: '#4281a4',
+    accentColor: '#4281a4',
     isEditing: false,
     onSelect: vi.fn(),
     onClose: vi.fn(),
@@ -86,19 +86,18 @@ describe('GoalCard', () => {
     expect(screen.getByText('Learn TypeScript')).toBeInTheDocument();
   });
 
-  it('renders goal type label', () => {
-    renderWithTheme(<GoalCard {...defaultProps} />);
-    expect(screen.getByText('Short')).toBeInTheDocument();
+  it('shows milestone progress when milestones are linked', () => {
+    const milestones = [
+      { id: 2, title: 'Basics', isCompleted: true, parentGoalId: 1 },
+      { id: 3, title: 'Generics', isCompleted: false, parentGoalId: 1 },
+    ];
+    renderWithTheme(<GoalCard {...defaultProps} milestones={milestones as never} />);
+    expect(screen.getByText('1/2 milestones')).toBeInTheDocument();
   });
 
-  it('renders goal status badge', () => {
+  it('hides progress when no milestones are linked', () => {
     renderWithTheme(<GoalCard {...defaultProps} />);
-    expect(screen.getByText('active')).toBeInTheDocument();
-  });
-
-  it('renders target date', () => {
-    renderWithTheme(<GoalCard {...defaultProps} />);
-    expect(screen.getByText('2024-12-31')).toBeInTheDocument();
+    expect(screen.queryByText(/milestones$/)).not.toBeInTheDocument();
   });
 
   it('calls onSelect when header is clicked', () => {

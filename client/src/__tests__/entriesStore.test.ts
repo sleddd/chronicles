@@ -126,36 +126,33 @@ describe('entriesStore – entries', () => {
 // ---------------------------------------------------------------------------
 
 describe('entriesStore – topics', () => {
-  it('setTopics stores allTopics and filters by feature flags', () => {
-    const topicsList = [makeTopic({ id: 1, name: 'Journal' }), makeTopic({ id: 2, name: 'Food' })];
-    // Without foodEnabled flag, Food should be filtered out
+  it('setTopics stores allTopics and treats unset feature flags as enabled', () => {
+    const topicsList = [makeTopic({ id: 1, name: 'Journal' }), makeTopic({ id: 2, name: 'Meals' })];
     useEntriesStore.getState().setTopics(topicsList);
 
     const state = useEntriesStore.getState();
     expect(state.allTopics).toHaveLength(2);
-    // Food is gated, no flags set, so filtered topics only has non-gated ones
-    expect(state.topics).toHaveLength(1);
-    expect(state.topics[0].name).toBe('Journal');
+    // No flags saved yet → every feature counts as on
+    expect(state.topics.map(t => t.name)).toEqual(['Journal', 'Meals']);
   });
 
-  it('setFeatureFlags re-filters topics', () => {
+  it('setFeatureFlags hides only topics whose flag is explicitly false', () => {
     const topicsList = [
       makeTopic({ id: 1, name: 'Journal' }),
-      makeTopic({ id: 2, name: 'Food' }),
+      makeTopic({ id: 2, name: 'Meals' }),
       makeTopic({ id: 3, name: 'Medication' }),
     ];
     useEntriesStore.getState().setTopics(topicsList);
+    expect(useEntriesStore.getState().topics.map(t => t.name)).toEqual(['Journal', 'Meals', 'Medication']);
 
-    // Initially only Journal (non-gated) is visible
+    useEntriesStore.getState().setFeatureFlags({ foodEnabled: false });
+    expect(useEntriesStore.getState().topics.map(t => t.name)).toEqual(['Journal', 'Medication']);
+
+    useEntriesStore.getState().setFeatureFlags({ foodEnabled: false, medicationEnabled: false });
     expect(useEntriesStore.getState().topics.map(t => t.name)).toEqual(['Journal']);
 
-    // Enable food
-    useEntriesStore.getState().setFeatureFlags({ foodEnabled: true });
-    expect(useEntriesStore.getState().topics.map(t => t.name)).toEqual(['Journal', 'Food']);
-
-    // Enable medication too
     useEntriesStore.getState().setFeatureFlags({ foodEnabled: true, medicationEnabled: true });
-    expect(useEntriesStore.getState().topics.map(t => t.name)).toEqual(['Journal', 'Food', 'Medication']);
+    expect(useEntriesStore.getState().topics.map(t => t.name)).toEqual(['Journal', 'Meals', 'Medication']);
   });
 
   it('non-gated topics are always visible regardless of flags', () => {

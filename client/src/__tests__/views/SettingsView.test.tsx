@@ -227,7 +227,7 @@ describe('SettingsView', () => {
   it('renders features section with toggles', () => {
     renderWithTheme(<SettingsView />);
     expect(screen.getByText('Features')).toBeInTheDocument();
-    expect(screen.getByText('Food')).toBeInTheDocument();
+    expect(screen.getByText('Meals')).toBeInTheDocument();
     expect(screen.getByText('Medication')).toBeInTheDocument();
   });
 
@@ -242,20 +242,12 @@ describe('SettingsView', () => {
     expect(screen.getByTestId('sign-out-btn')).toBeInTheDocument();
   });
 
-  it('renders back to journal link', () => {
+  it('renders the theme mode and accent presets', () => {
     renderWithTheme(<SettingsView />);
-    const link = screen.getByRole('link', { name: /Back to Journal/i });
-    expect(link).toHaveAttribute('href', '/');
-  });
-
-  it('renders color picker', () => {
-    renderWithTheme(<SettingsView />);
-    expect(screen.getByTestId('color-picker')).toBeInTheDocument();
-  });
-
-  it('renders background picker', () => {
-    renderWithTheme(<SettingsView />);
-    expect(screen.getByTestId('background-picker')).toBeInTheDocument();
+    expect(screen.getByText('Accent Color')).toBeInTheDocument();
+    for (const name of ['Teal', 'Ink', 'Rose', 'Amber', 'Sage']) {
+      expect(screen.getByTitle(name)).toBeInTheDocument();
+    }
   });
 
   it('renders data section with export and seed options', () => {

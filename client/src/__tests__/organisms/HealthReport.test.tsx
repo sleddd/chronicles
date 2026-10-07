@@ -40,7 +40,7 @@ describe('HealthReport', () => {
     exercises: [],
     wellness: [],
     period: 'week' as const,
-    headerColor: '#4281a4',
+    accentColor: '#4281a4',
   };
 
   it('renders summary stat cards', () => {

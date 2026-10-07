@@ -16,9 +16,8 @@ describe('Toggle', () => {
 
   it('does not render label when not provided', () => {
     const { container } = renderWithTheme(<Toggle checked={false} onChange={() => {}} />);
-    const spans = container.querySelectorAll('span');
-    // The toggle label span should not be present
-    expect(spans.length).toBe(0);
+    // Only the track + thumb render; no label text
+    expect(container.textContent).toBe('');
   });
 
   it('reflects checked state', () => {

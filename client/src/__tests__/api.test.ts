@@ -224,13 +224,14 @@ describe('auth', () => {
 // ---------------------------------------------------------------------------
 
 describe('entries', () => {
-  it('getAll fetches /entries', async () => {
+  it('getAll fetches every entry in one request', async () => {
     fetchSpy = mockFetchResponse([]);
     vi.stubGlobal('fetch', fetchSpy);
 
     await entries.getAll();
 
-    expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries');
+    // Topic filtering relies on the whole journal being in the store
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries?limit=5000');
   });
 
   it('get fetches /entries/:id', async () => {
@@ -440,7 +441,9 @@ describe('shares', () => {
     fetchSpy = mockFetchResponse({ id: 1, token: 'abc' });
     vi.stubGlobal('fetch', fetchSpy);
 
-    await shares.create({ contentEncrypted: 'enc', contentIv: 'iv' });
+    await shares.create({ content: '<p>Hi</p>', entryId: 7 });
+
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({ content: '<p>Hi</p>', entryId: 7 });
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/api/shares');

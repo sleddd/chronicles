@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { TopicEntriesView } from '@/views/TopicEntriesView';
 import { renderWithTheme } from '../testUtils';
 import { useInitializeData } from '@/hooks/useInitializeData';
@@ -115,20 +115,6 @@ describe('TopicEntriesView', () => {
     expect(screen.getByText('Food Tracking')).toBeInTheDocument();
   });
 
-  it('shows entry count badge', () => {
-    renderWithTheme(
-      <TopicEntriesView title="Food Tracking" topicNames={['Food']} />
-    );
-    expect(screen.getByTestId('badge')).toHaveTextContent('(0)');
-  });
-
-  it('renders date filter tabs when showDateFilter is true', () => {
-    renderWithTheme(
-      <TopicEntriesView title="Food" topicNames={['Food']} showDateFilter />
-    );
-    expect(screen.getByTestId('filter-tabs')).toBeInTheDocument();
-  });
-
   it('hides date filter when showDateFilter is false', () => {
     renderWithTheme(
       <TopicEntriesView title="Food" topicNames={['Food']} showDateFilter={false} />
@@ -143,19 +129,20 @@ describe('TopicEntriesView', () => {
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
   });
 
-  it('renders new entry card for single topic', () => {
+  it('opens the new entry card from the New entry button for a single topic', () => {
     renderWithTheme(
       <TopicEntriesView title="Food" topicNames={['Food']} />
     );
+    expect(screen.queryByTestId('new-entry-card')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('New entry'));
     expect(screen.getByTestId('new-entry-card')).toBeInTheDocument();
   });
 
-  it('navigates back when back button is clicked', () => {
+  it('hides New entry when the names match no single topic', () => {
     renderWithTheme(
-      <TopicEntriesView title="Food" topicNames={['Food']} />
+      <TopicEntriesView title="Mixed" topicNames={['Nope']} />
     );
-    screen.getByText('Back').click();
-    expect(mockNavigate).toHaveBeenCalledWith('/');
+    expect(screen.queryByText('New entry')).not.toBeInTheDocument();
   });
 });
 

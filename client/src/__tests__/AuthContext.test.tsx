@@ -141,7 +141,8 @@ describe('AuthProvider – register', () => {
       });
     });
 
-    expect(result.current.user).toEqual({ email: 'new@b.com', username: 'newuser' });
+    // A brand-new account never has 2FA on yet
+    expect(result.current.user).toEqual({ email: 'new@b.com', username: 'newuser', totpEnabled: false });
     expect(result.current.isAuthenticated).toBe(true);
   });
 });
