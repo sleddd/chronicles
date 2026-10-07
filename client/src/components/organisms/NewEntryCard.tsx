@@ -9,6 +9,7 @@ import { MilestoneFields } from '../molecules/fields/MilestoneFields.js';
 import { FoodFields } from '../molecules/fields/FoodFields.js';
 import { MedicationFields } from '../molecules/fields/MedicationFields.js';
 import { SymptomFields } from '../molecules/fields/SymptomFields.js';
+import { AllergyFields } from '../molecules/fields/AllergyFields.js';
 import { ExerciseFields } from '../molecules/fields/ExerciseFields.js';
 import { EventFields } from '../molecules/fields/EventFields.js';
 import { MeetingFields } from '../molecules/fields/MeetingFields.js';
@@ -24,7 +25,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   task: 'task', goal: 'goal', milestone: 'milestone',
   meals: 'food', medication: 'medication', symptom: 'symptom',
   exercise: 'exercise', event: 'event', meeting: 'meeting',
-  wellness: 'wellness', 'shopping list': 'shopping_list',
+  allergy: 'allergy', wellness: 'wellness', 'shopping list': 'shopping_list',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -183,6 +184,7 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
       case 'food': return <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'medication': return <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'symptom': return <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
+      case 'allergy': return <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'exercise': return <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'event': return <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as never} onChange={onChange as never} showCalendarSync={calendarSyncEnabled} />;
       case 'meeting': return <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as never} onChange={onChange as never} showCalendarSync={calendarSyncEnabled} />;

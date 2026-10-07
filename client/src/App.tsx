@@ -21,6 +21,7 @@ import { GoalsView } from './views/GoalsView.js';
 import { PlannerFilterView } from './views/PlannerFilterView.js';
 import { TopicEntriesView } from './views/TopicEntriesView.js';
 import { HealthView } from './views/HealthView.js';
+import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { MedicationScheduleView } from './views/MedicationScheduleView.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
@@ -361,13 +362,13 @@ export function App() {
               <Route path="/shopping" element={<R><ShoppingListsView /></R>} />
 
               {/* Health */}
-              <Route path="/health" element={<R><HealthView topicNames={['Medication', 'Symptom', 'Meals', 'Exercise', 'Allergy']} /></R>} />
-              <Route path="/health/meds" element={<R><HealthView topicNames={['Medication']} metaFields={[{ key: 'dosage', label: 'Dosage' }, { key: 'frequency', label: 'Frequency' }, { key: 'isActive', label: 'Active' }]} showDateFilter={false} printable /></R>} />
+              <Route path="/health" element={<R><HealthDashboardView /></R>} />
+              <Route path="/health/meds" element={<R><HealthView topicNames={['Medication']} metaFields={[{ key: 'dosage', label: 'Dosage' }, { key: 'frequency', label: 'Frequency' }, { key: 'isActive', label: 'Active' }]} showDateFilter={false} printable printTitle="Medications" /></R>} />
               <Route path="/health/schedule" element={<R><MedicationScheduleView /></R>} />
               <Route path="/health/food" element={<R><HealthView topicNames={['Meals']} metaFields={[{ key: 'mealType', label: 'Meal' }, { key: 'calories', label: 'Calories' }, { key: 'ingredients', label: 'Ingredients' }]} summaryFields={[{ key: 'calories', label: 'Total Calories' }]} /></R>} />
-              <Route path="/health/symptoms" element={<R><HealthView topicNames={['Symptom']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'duration', label: 'Duration' }]} printable /></R>} />
+              <Route path="/health/symptoms" element={<R><HealthView topicNames={['Symptom']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'duration', label: 'Duration' }]} printable printTitle="Symptoms" /></R>} />
               <Route path="/health/exercise" element={<R><HealthView topicNames={['Exercise']} metaFields={[{ key: 'exerciseType', label: 'Type' }, { key: 'duration', label: 'Duration' }, { key: 'intensity', label: 'Intensity' }]} summaryFields={[{ key: 'duration', label: 'Total Minutes' }, { key: 'calories', label: 'Total Calories' }]} /></R>} />
-              <Route path="/health/allergies" element={<R><HealthView topicNames={['Allergy']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'allergen', label: 'Allergen' }, { key: 'reaction', label: 'Reaction' }]} printable /></R>} />
+              <Route path="/health/allergies" element={<R><HealthView topicNames={['Allergy']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'allergen', label: 'Allergen' }, { key: 'reaction', label: 'Reaction' }]} printable printTitle="Allergies" /></R>} />
               <Route path="/health/reporting" element={<R><HealthReportingView /></R>} />
 
               {/* Entertainment */}

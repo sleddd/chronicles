@@ -143,10 +143,32 @@ export const GlobalStyle = createGlobalStyle`
       height: auto !important;
     }
 
-    /* Remove fixed heights so content flows */
+    /* Remove fixed heights so content flows. body is position: fixed on
+       screen (iOS scroll lock) — a fixed element prints as a single page,
+       so it must go back to static or everything past page one is cut off. */
     html, body, #root, #root > * {
       height: auto !important;
       overflow: visible !important;
+    }
+
+    html, body {
+      position: static !important;
+    }
+
+    /* Paper is white: dark-theme tokens would print pale grey on white */
+    html[data-theme="dark"] {
+      --text-primary: #18181c !important;
+      --text-secondary: #4c4c55 !important;
+      --text-tertiary: #74747f !important;
+      --ink: #18181c !important;
+      --ink-2: #56565f !important;
+      --ink-3: #74747f !important;
+      --border-subtle: #e4e6ec !important;
+      --border-default: #d8dae2 !important;
+      --rule: #e4e6ec !important;
+      --bg-app: #ffffff !important;
+      --bg-surface: #ffffff !important;
+      --paper: #ffffff !important;
     }
   }
 
