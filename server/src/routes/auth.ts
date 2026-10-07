@@ -7,7 +7,7 @@ import { prisma } from '../db/prisma.js';
 import { registerTenant } from '../db/schemaManager.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
 import { authLimiter, strictLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
 
@@ -251,65 +251,11 @@ router.post('/logout', authMiddleware, async (req, res) => {
   }
 });
 
-// =============================================================================
-// GET /api/auth/salt — Get encryption params for key derivation
-// =============================================================================
-router.get('/salt', authLimiter, async (req, res) => {
-  const startTime = Date.now();
-  try {
-    const rawEmail = req.query.email as string;
-    if (!rawEmail || typeof rawEmail !== 'string' || rawEmail.length > 254) {
-      res.status(400).json({ error: 'Email required' });
-      return;
-    }
-    const emailParsed = emailSchema.safeParse(rawEmail);
-    if (!emailParsed.success) {
-      res.status(400).json({ error: 'Invalid email' });
-      return;
-    }
-    const email = rawEmail.toLowerCase();
-
-    const account = await prisma.account.findUnique({
-      where: { email },
-      select: {
-        kekSalt: true,
-        encryptedMasterKey: true,
-        kekWrapIv: true,
-        kekIterations: true,
-        encryptionEnabled: true,
-      },
-    });
-
-    if (!account) {
-      // Return fake params so attackers can't distinguish existing vs non-existing accounts
-      // The login will still fail — these fake params just waste their time
-      const fakeSalt = crypto.randomBytes(16).toString('base64');
-      const fakeWrappedKey = crypto.randomBytes(48).toString('base64');
-      const fakeIv = crypto.randomBytes(12).toString('base64');
-      await constantTimeDelay(startTime);
-      res.json({
-        encryptionEnabled: true,
-        kekSalt: fakeSalt,
-        encryptedMasterKey: fakeWrappedKey,
-        kekWrapIv: fakeIv,
-        kekIterations: 600000,
-      });
-      return;
-    }
-
-    await constantTimeDelay(startTime);
-    res.json({
-      encryptionEnabled: account.encryptionEnabled,
-      kekSalt: account.kekSalt ? Buffer.from(account.kekSalt).toString('base64') : null,
-      encryptedMasterKey: account.encryptedMasterKey ? Buffer.from(account.encryptedMasterKey).toString('base64') : null,
-      kekWrapIv: account.kekWrapIv ? Buffer.from(account.kekWrapIv).toString('base64') : null,
-      kekIterations: account.kekIterations,
-    });
-  } catch (err) {
-    console.error('Salt error:', err instanceof Error ? err.message : 'Unknown error');
-    res.status(500).json({ error: 'Failed to fetch encryption params' });
-  }
-});
+// Encryption params (salt + wrapped master key) are only ever returned by
+// /login and /me, i.e. after the password or a session has been verified.
+// There is deliberately no unauthenticated lookup: handing the wrapped key to
+// anyone who knows an email would allow offline password guessing with no
+// rate limit.
 
 // =============================================================================
 // POST /api/auth/change-password
@@ -376,18 +322,29 @@ router.post('/change-password', strictLimiter, authMiddleware, async (req, res) 
 // =============================================================================
 // POST /api/auth/change-email — Change email address
 // =============================================================================
-router.post('/change-email', authMiddleware, async (req, res) => {
+router.post('/change-email', strictLimiter, authMiddleware, async (req, res) => {
   try {
-    const { newEmail } = req.body;
-    if (!newEmail) {
-      res.status(400).json({ error: 'Email is required' });
+    const parsed = changeEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
       return;
     }
 
-    const normalizedEmail = newEmail.toLowerCase().trim();
+    const normalizedEmail = parsed.data.newEmail.toLowerCase().trim();
     const emailParsed = emailSchema.safeParse(normalizedEmail);
     if (!emailParsed.success) {
       res.status(400).json({ error: 'Invalid email format' });
+      return;
+    }
+
+    // The email is the login identifier — changing it needs the password
+    const account = await prisma.account.findUnique({
+      where: { id: req.auth!.accountId },
+      select: { passwordHash: true },
+    });
+    if (!account || !(await bcrypt.compare(parsed.data.currentPassword, account.passwordHash))) {
+      logSecurityEvent('email_change_failed', { accountId: req.auth!.accountId, ip: req.ip });
+      res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
 
@@ -403,6 +360,7 @@ router.post('/change-email', authMiddleware, async (req, res) => {
       data: { email: normalizedEmail },
     });
 
+    logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true, email: normalizedEmail });
   } catch (err) {
     console.error('Change email error:', err instanceof Error ? err.message : 'Unknown error');
@@ -771,11 +729,24 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
 // =============================================================================
 // POST /api/auth/recovery-key — Generate / regenerate recovery key (authenticated)
 // =============================================================================
-router.post('/recovery-key', authMiddleware, strictLimiter, async (req, res) => {
+router.post('/recovery-key', strictLimiter, authMiddleware, async (req, res) => {
   try {
-    const { recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = req.body;
-    if (!recoveryWrappedMK || !recoveryWrapIv || !recoveryKeyHash || !recoveryKeySalt) {
-      res.status(400).json({ error: 'Missing required fields' });
+    const parsed = saveRecoveryKeySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    const { currentPassword, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
+
+    // Whoever sets the recovery key can later reset the password with it, so
+    // a signed-in session alone must not be enough to replace it
+    const account = await prisma.account.findUnique({
+      where: { id: req.auth!.accountId },
+      select: { passwordHash: true },
+    });
+    if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+      logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
+      res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
 

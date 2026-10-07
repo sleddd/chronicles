@@ -90,36 +90,36 @@ describe('EntryForm', () => {
     expect(screen.getByTestId('topic-selector')).toBeInTheDocument();
   });
 
-  it('renders save button', () => {
+  it('renders the save button', () => {
     renderWithTheme(<EntryForm {...defaultProps} />);
-    expect(screen.getByText('Save')).toBeInTheDocument();
+    expect(screen.getByText('Save entry')).toBeInTheDocument();
   });
 
   it('disables save button when content is empty', () => {
     renderWithTheme(<EntryForm {...defaultProps} content="" />);
-    const saveBtn = screen.getByText('Save');
-    expect(saveBtn).toBeDisabled();
+    expect(screen.getByText('Save entry')).toBeDisabled();
   });
 
   it('enables save button when content is present', () => {
     renderWithTheme(<EntryForm {...defaultProps} content="Hello world" />);
-    const saveBtn = screen.getByText('Save');
-    expect(saveBtn).not.toBeDisabled();
+    expect(screen.getByText('Save entry')).not.toBeDisabled();
   });
 
-
-  it('shows close button when editing', () => {
-    renderWithTheme(
-      <EntryForm {...defaultProps} isEditing={true} entryId={1} />
-    );
-    expect(screen.getByText('Close')).toBeInTheDocument();
+  it('shows Discard changes, wired to onNew', () => {
+    const onNew = vi.fn();
+    renderWithTheme(<EntryForm {...defaultProps} isEditing={true} entryId={1} onNew={onNew} />);
+    fireEvent.click(screen.getByText('Discard changes'));
+    expect(onNew).toHaveBeenCalled();
   });
 
-  it('displays save status', () => {
-    renderWithTheme(
-      <EntryForm {...defaultProps} saveStatus="Saved!" />
-    );
-    expect(screen.getByText('Saved!')).toBeInTheDocument();
+  it('shows a save failure', () => {
+    renderWithTheme(<EntryForm {...defaultProps} saveStatus="Save failed" />);
+    expect(screen.getByText('Save failed')).toBeInTheDocument();
+  });
+
+  it('shows Saved for an existing entry', () => {
+    renderWithTheme(<EntryForm {...defaultProps} isEditing entryId={1} />);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
   });
 
   it('calls onSave when save button is clicked', () => {
@@ -127,7 +127,7 @@ describe('EntryForm', () => {
     renderWithTheme(
       <EntryForm {...defaultProps} content="Hello" onSave={onSave} />
     );
-    fireEvent.click(screen.getByText('Save'));
+    fireEvent.click(screen.getByText('Save entry'));
     expect(onSave).toHaveBeenCalled();
   });
 
@@ -184,9 +184,17 @@ describe('EntryForm', () => {
     it('keeps the editor for custom topics without the hide option', () => {
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={5}
-          topics={[{ id: 5, name: 'Books', icon: null, color: null }]} content="" />
+          topics={[{ id: 5, name: 'Garden', icon: null, color: null }]} content="" />
       );
       expect(screen.getByTestId('editor')).toBeVisible();
+    });
+
+    it('hides the editor for field-led topics like Books', () => {
+      renderWithTheme(
+        <EntryForm {...defaultProps} entryId={2} isEditing topicId={5}
+          topics={[{ id: 5, name: 'Books', icon: null, color: null }]} content="" />
+      );
+      expect(screen.getByTestId('editor')).not.toBeVisible();
     });
 
     it('keeps the editor for the Journal topic', () => {
@@ -198,9 +206,10 @@ describe('EntryForm', () => {
     });
 
     it('keeps existing text content visible on structured topics', () => {
+      // (Events are the exception — they keep notes in their own Notes field)
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={3}
-          topics={[{ id: 3, name: 'Event', icon: null, color: null }]} content="<p>Some notes</p>" />
+          topics={[{ id: 3, name: 'Meeting', icon: null, color: null }]} content="<p>Some notes</p>" />
       );
       expect(screen.getByTestId('editor')).toBeVisible();
     });

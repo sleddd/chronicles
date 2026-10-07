@@ -18,6 +18,16 @@ const GOOGLE_SCOPES = [
 ].join(' ');
 const STATE_TTL_MS = 10 * 60 * 1000;
 
+// Browser binding for the OAuth round-trip: a random nonce lives in an HttpOnly
+// cookie and its hash rides in the signed state. Without it, someone could
+// start a flow from their own account and trick you into approving it, linking
+// YOUR Google Calendar to THEIR account. Lax (not Strict) because Google's
+// redirect back is a cross-site top-level navigation.
+const IS_PRODUCTION = process.env.NODE_ENV !== 'development';
+const OAUTH_NONCE_COOKIE = IS_PRODUCTION ? '__Host-chronicle_oauth' : 'chronicle_oauth';
+const OAUTH_NONCE_COOKIE_OPTIONS = { httpOnly: true, secure: IS_PRODUCTION, sameSite: 'lax' as const, path: '/' };
+const hashNonce = (nonce: string) => crypto.createHash('sha256').update(nonce).digest('base64url');
+
 function googleEnv(): { clientId: string; clientSecret: string; redirectUri: string } | null {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -30,14 +40,15 @@ function clientUrl(): string {
   return (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
 }
 
-// State token: base64url payload + HMAC signature, binds the OAuth round-trip to a session
-function signState(selector: string, secret: string): string {
-  const payload = Buffer.from(JSON.stringify({ selector, exp: Date.now() + STATE_TTL_MS })).toString('base64url');
+// State token: base64url payload + HMAC signature, binds the OAuth round-trip
+// to a session and (via the nonce hash) to the browser that started it
+function signState(selector: string, nonceHash: string, secret: string): string {
+  const payload = Buffer.from(JSON.stringify({ selector, nonce: nonceHash, exp: Date.now() + STATE_TTL_MS })).toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
-function verifyState(state: string, secret: string): { selector: string } | null {
+function verifyState(state: string, secret: string): { selector: string; nonce: string } | null {
   const dot = state.lastIndexOf('.');
   if (dot === -1) return null;
   const payload = state.slice(0, dot);
@@ -48,9 +59,9 @@ function verifyState(state: string, secret: string): { selector: string } | null
   if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
   try {
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (typeof parsed.selector !== 'string' || typeof parsed.exp !== 'number') return null;
+    if (typeof parsed.selector !== 'string' || typeof parsed.nonce !== 'string' || typeof parsed.exp !== 'number') return null;
     if (parsed.exp < Date.now()) return null;
-    return { selector: parsed.selector };
+    return { selector: parsed.selector, nonce: parsed.nonce };
   } catch {
     return null;
   }
@@ -67,6 +78,7 @@ router.get('/google/auth-url', authMiddleware, apiLimiter, (req, res) => {
     res.status(500).json({ error: 'Google Calendar sync is not configured on this server' });
     return;
   }
+  const nonce = crypto.randomBytes(32).toString('base64url');
   const params = new URLSearchParams({
     client_id: env.clientId,
     redirect_uri: env.redirectUri,
@@ -74,8 +86,9 @@ router.get('/google/auth-url', authMiddleware, apiLimiter, (req, res) => {
     access_type: 'offline',
     prompt: 'consent',
     scope: GOOGLE_SCOPES,
-    state: signState(req.auth!.selector, env.clientSecret),
+    state: signState(req.auth!.selector, hashNonce(nonce), env.clientSecret),
   });
+  res.cookie(OAUTH_NONCE_COOKIE, nonce, { ...OAUTH_NONCE_COOKIE_OPTIONS, maxAge: STATE_TTL_MS });
   res.json({ url: `${GOOGLE_AUTH_URL}?${params.toString()}` });
 });
 
@@ -83,6 +96,9 @@ router.get('/google/auth-url', authMiddleware, apiLimiter, (req, res) => {
 router.get('/google/callback', async (req, res) => {
   const settingsUrl = `${clientUrl()}/settings`;
   const fail = () => res.redirect(302, `${settingsUrl}?googleCalendar=error`);
+  // Single-use: the nonce is spent whether or not this attempt succeeds
+  const nonce = req.cookies?.[OAUTH_NONCE_COOKIE];
+  res.clearCookie(OAUTH_NONCE_COOKIE, OAUTH_NONCE_COOKIE_OPTIONS);
 
   try {
     const env = googleEnv();
@@ -94,6 +110,17 @@ router.get('/google/callback', async (req, res) => {
 
     const verified = verifyState(state, env.clientSecret);
     if (!verified) {
+      fail();
+      return;
+    }
+
+    // Must be completed in the same browser that started the flow
+    const nonceOk = typeof nonce === 'string' && nonce.length <= 128 && (() => {
+      const a = Buffer.from(hashNonce(nonce));
+      const b = Buffer.from(verified.nonce);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    })();
+    if (!nonceOk) {
       fail();
       return;
     }

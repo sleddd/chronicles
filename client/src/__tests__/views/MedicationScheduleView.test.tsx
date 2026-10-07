@@ -6,8 +6,23 @@ import { useInitializeData } from '@/hooks/useInitializeData';
 
 const mockNavigate = vi.fn();
 
+const { mockLocation, mockSearchParams } = vi.hoisted(() => ({
+  mockLocation: { pathname: '/', search: '', hash: '', state: null, key: 'default' },
+  mockSearchParams: [new URLSearchParams(), () => {}] as const,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
+  useLocation: vi.fn(() => mockLocation),
+  useSearchParams: vi.fn(() => mockSearchParams),
+}));
+
+vi.mock('@/components/molecules/HealthTabBar', () => ({
+  HealthTabBar: () => <nav data-testid="health-tab-bar" />,
+}));
+
+vi.mock('@/components/atoms/PrintButton', () => ({
+  PrintButton: () => null,
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({
@@ -56,9 +71,10 @@ describe('MedicationScheduleView', () => {
     expect(screen.getByTestId('content-template')).toBeInTheDocument();
   });
 
-  it('displays the view header with title', () => {
+  it('shows the Health title with the health tabs', () => {
     renderWithTheme(<MedicationScheduleView />);
-    expect(screen.getByText('Medication Schedule')).toBeInTheDocument();
+    expect(screen.getByText('Health')).toBeInTheDocument();
+    expect(screen.getByTestId('health-tab-bar')).toBeInTheDocument();
   });
 
   it('renders the medication schedule component', () => {
@@ -71,11 +87,6 @@ describe('MedicationScheduleView', () => {
     expect(screen.getByTestId('medication-schedule')).toHaveTextContent('ready: true');
   });
 
-  it('navigates back when back button is clicked', () => {
-    renderWithTheme(<MedicationScheduleView />);
-    screen.getByText('Back').click();
-    expect(mockNavigate).toHaveBeenCalledWith('/');
-  });
 });
 
 describe('MedicationScheduleView (needs unlock)', () => {

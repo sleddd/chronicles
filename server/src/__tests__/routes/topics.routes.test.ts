@@ -80,8 +80,10 @@ describe('Topic Routes', () => {
       const res = await request(app).get('/api/topics');
 
       expect(res.status).toBe(200);
-      // 15 default topics should be created
-      expect(createTaxonomy).toHaveBeenCalledTimes(15);
+      // Every default topic is created (incl. Allergy, Shopping List, Recipe, Menu Plan)
+      expect(createTaxonomy).toHaveBeenCalledTimes(19);
+      const names = (createTaxonomy as any).mock.calls.map((c: any[]) => c[1]);
+      expect(names).toEqual(expect.arrayContaining(['Meals', 'Medication', 'Shopping List', 'Menu Plan']));
     });
 
     it('returns 500 on database error', async () => {

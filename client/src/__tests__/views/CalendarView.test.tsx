@@ -6,8 +6,15 @@ import { useInitializeData } from '@/hooks/useInitializeData';
 
 const mockNavigate = vi.fn();
 
+const { mockLocation, mockSearchParams } = vi.hoisted(() => ({
+  mockLocation: { pathname: '/', search: '', hash: '', state: null, key: 'default' },
+  mockSearchParams: [new URLSearchParams(), () => {}] as const,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
+  useLocation: vi.fn(() => mockLocation),
+  useSearchParams: vi.fn(() => mockSearchParams),
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({
@@ -24,6 +31,7 @@ vi.mock('@/stores/entriesStore', () => ({
     selector({
       decryptedEntries: [],
       allTopics: [],
+      featureFlags: {},
     })
   ),
 }));
@@ -37,8 +45,8 @@ vi.mock('@/stores/uiStore', () => ({
   ),
 }));
 
-vi.mock('@/components/templates/ContentTemplate', () => ({
-  ContentTemplate: ({ children }: any) => <div data-testid="content-template">{children}</div>,
+vi.mock('@/components/templates/AppTemplate', () => ({
+  AppTemplate: ({ children }: any) => <div data-testid="content-template">{children}</div>,
 }));
 
 vi.mock('@/components/organisms/CalendarGrid', () => ({

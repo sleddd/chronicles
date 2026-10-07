@@ -29,25 +29,27 @@ function renderWithTheme(ui: React.ReactElement) {
 
 describe('ShareModal', () => {
   it('renders share entry title', () => {
-    renderWithTheme(<ShareModal entryContent="Hello world" onClose={vi.fn()} />);
+    renderWithTheme(<ShareModal entryId={7} entryContent="Hello world" onClose={vi.fn()} />);
     expect(screen.getByText('Share Entry')).toBeInTheDocument();
   });
 
   it('renders create share link section', () => {
-    renderWithTheme(<ShareModal entryContent="Hello world" onClose={vi.fn()} />);
+    renderWithTheme(<ShareModal entryId={7} entryContent="Hello world" onClose={vi.fn()} />);
     const elements = screen.getAllByText('Create share link');
     expect(elements.length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders create share link button', async () => {
-    renderWithTheme(<ShareModal entryContent="Hello world" onClose={vi.fn()} />);
+    renderWithTheme(<ShareModal entryId={7} entryContent="Hello world" onClose={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByText('Create share link', { selector: 'button' }) || screen.getByRole('button', { name: /create share link/i })).toBeInTheDocument();
     });
   });
 
-  it('shows notice about encrypted link', () => {
-    renderWithTheme(<ShareModal entryContent="Hello world" onClose={vi.fn()} />);
-    expect(screen.getByText(/unique encrypted link/i)).toBeInTheDocument();
+  it('warns that a shared copy is readable by anyone and stored unencrypted', () => {
+    // Sharing opts this entry out of zero-knowledge — the user must be told
+    renderWithTheme(<ShareModal entryId={7} entryContent="Hello world" onClose={vi.fn()} />);
+    expect(screen.getByText(/anyone with the link can read this entry/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored unencrypted on the server/i)).toBeInTheDocument();
   });
 });

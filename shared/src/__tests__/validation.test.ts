@@ -287,6 +287,10 @@ describe('recoverSchema', () => {
     newEncryptedMasterKey: 'enc123',
     newKekSalt: 'salt123',
     newKekWrapIv: 'iv123',
+    newRecoveryWrappedMK: 'rwmk123',
+    newRecoveryWrapIv: 'riv123',
+    newRecoveryKeyHash: 'rhash123',
+    newRecoveryKeySalt: 'rsalt123',
   };
 
   it('accepts valid recovery data', () => {
@@ -295,6 +299,11 @@ describe('recoverSchema', () => {
 
   it('rejects missing recoveryKey', () => {
     const { recoveryKey, ...rest } = valid;
+    expect(recoverSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it('requires the rotated recovery key material', () => {
+    const { newRecoveryKeyHash, ...rest } = valid;
     expect(recoverSchema.safeParse(rest).success).toBe(false);
   });
 
@@ -573,67 +582,43 @@ describe('upsertSettingSchema', () => {
 // createShareSchema
 // ============================================================================
 describe('createShareSchema', () => {
+  const valid = { content: '<p>Shared entry</p>', entryId: 7 };
+
   it('accepts valid share with required fields', () => {
-    expect(createShareSchema.safeParse({
-      contentEncrypted: 'encrypted-data',
-      contentIv: 'iv-data',
-    }).success).toBe(true);
+    expect(createShareSchema.safeParse(valid).success).toBe(true);
   });
 
   it('accepts share with optional expiresAt', () => {
-    expect(createShareSchema.safeParse({
-      contentEncrypted: 'encrypted-data',
-      contentIv: 'iv-data',
-      expiresAt: '2025-12-31T23:59:59Z',
-    }).success).toBe(true);
+    expect(createShareSchema.safeParse({ ...valid, expiresAt: '2025-12-31T23:59:59Z' }).success).toBe(true);
   });
 
   it('accepts share with null expiresAt', () => {
-    expect(createShareSchema.safeParse({
-      contentEncrypted: 'encrypted-data',
-      contentIv: 'iv-data',
-      expiresAt: null,
-    }).success).toBe(true);
+    expect(createShareSchema.safeParse({ ...valid, expiresAt: null }).success).toBe(true);
   });
 
-  it('accepts share without expiresAt', () => {
-    expect(createShareSchema.safeParse({
-      contentEncrypted: 'encrypted-data',
-      contentIv: 'iv-data',
-    }).success).toBe(true);
+  it('rejects missing content', () => {
+    expect(createShareSchema.safeParse({ entryId: 7 }).success).toBe(false);
   });
 
-  it('rejects missing contentEncrypted', () => {
-    const result = createShareSchema.safeParse({ contentIv: 'iv-data' });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects missing contentIv', () => {
-    const result = createShareSchema.safeParse({ contentEncrypted: 'encrypted-data' });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects empty contentEncrypted', () => {
-    const result = createShareSchema.safeParse({ contentEncrypted: '', contentIv: 'iv' });
+  it('rejects empty content', () => {
+    const result = createShareSchema.safeParse({ ...valid, content: '' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe('contentEncrypted is required');
+      expect(result.error.issues[0].message).toBe('content is required');
     }
   });
 
-  it('rejects empty contentIv', () => {
-    const result = createShareSchema.safeParse({ contentEncrypted: 'data', contentIv: '' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe('contentIv is required');
-    }
+  it('rejects content over 100,000 characters', () => {
+    expect(createShareSchema.safeParse({ ...valid, content: 'x'.repeat(100_001) }).success).toBe(false);
+  });
+
+  it('rejects missing or non-positive entryId', () => {
+    expect(createShareSchema.safeParse({ content: 'x' }).success).toBe(false);
+    expect(createShareSchema.safeParse({ content: 'x', entryId: 0 }).success).toBe(false);
+    expect(createShareSchema.safeParse({ content: 'x', entryId: 1.5 }).success).toBe(false);
   });
 
   it('rejects invalid datetime for expiresAt', () => {
-    expect(createShareSchema.safeParse({
-      contentEncrypted: 'data',
-      contentIv: 'iv',
-      expiresAt: 'not-a-date',
-    }).success).toBe(false);
+    expect(createShareSchema.safeParse({ ...valid, expiresAt: 'not-a-date' }).success).toBe(false);
   });
 });

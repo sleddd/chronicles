@@ -8,9 +8,16 @@ describe('BackgroundPicker', () => {
   it('renders all background option labels', () => {
     renderWithTheme(<BackgroundPicker selected="" onImageChange={() => {}} />);
     // Check a specific non-"None" label to confirm rendering
-    const nonNoneLabels = BACKGROUND_IMAGES.filter(bg => bg.label !== 'None');
+    const nonNoneLabels = BACKGROUND_IMAGES.filter(bg => bg.label !== 'None' && !bg.hidden);
     nonNoneLabels.forEach(bg => {
       expect(screen.getByText(bg.label)).toBeInTheDocument();
+    });
+  });
+
+  it('does not offer retired (hidden) backgrounds', () => {
+    renderWithTheme(<BackgroundPicker selected="" onImageChange={() => {}} />);
+    BACKGROUND_IMAGES.filter(bg => bg.hidden).forEach(bg => {
+      expect(screen.queryByText(bg.label)).not.toBeInTheDocument();
     });
   });
 
@@ -33,7 +40,7 @@ describe('BackgroundPicker', () => {
   it('renders thumbnail images for backgrounds that have thumbs', () => {
     renderWithTheme(<BackgroundPicker selected="" onImageChange={() => {}} />);
     const images = screen.getAllByRole('img');
-    const bgWithThumbs = BACKGROUND_IMAGES.filter(bg => bg.thumb);
+    const bgWithThumbs = BACKGROUND_IMAGES.filter(bg => bg.thumb && !bg.hidden);
     expect(images).toHaveLength(bgWithThumbs.length);
   });
 });

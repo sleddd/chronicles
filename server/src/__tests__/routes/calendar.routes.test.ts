@@ -59,8 +59,13 @@ beforeAll(async () => {
   app.use('/api/calendar', calendarRouter);
 });
 
-function signTestState(selector: string, expOffsetMs = 10 * 60 * 1000): string {
-  const payload = Buffer.from(JSON.stringify({ selector, exp: Date.now() + expOffsetMs })).toString('base64url');
+const NONCE_COOKIE = process.env.NODE_ENV !== 'development' ? '__Host-chronicle_oauth' : 'chronicle_oauth';
+const TEST_NONCE = 'browser-nonce-123';
+const nonceCookie = (nonce = TEST_NONCE) => `${NONCE_COOKIE}=${nonce}`;
+const hashNonce = (nonce: string) => crypto.createHash('sha256').update(nonce).digest('base64url');
+
+function signTestState(selector: string, expOffsetMs = 10 * 60 * 1000, nonce = TEST_NONCE): string {
+  const payload = Buffer.from(JSON.stringify({ selector, nonce: hashNonce(nonce), exp: Date.now() + expOffsetMs })).toString('base64url');
   const sig = crypto.createHmac('sha256', TEST_ENV.GOOGLE_CLIENT_SECRET).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
@@ -102,6 +107,13 @@ describe('Calendar Routes', () => {
       const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
       expect(decoded.selector).toBe('aabbccddee11');
       expect(decoded.exp).toBeGreaterThan(Date.now());
+
+      // The browser gets an HttpOnly Lax nonce cookie whose hash is in the state
+      const setCookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find(c => c.startsWith(`${NONCE_COOKIE}=`))!;
+      expect(setCookie).toMatch(/HttpOnly/i);
+      expect(setCookie).toMatch(/SameSite=Lax/i);
+      const nonce = setCookie.split(';')[0].split('=')[1];
+      expect(decoded.nonce).toBe(hashNonce(nonce));
     });
   });
 
@@ -132,6 +144,7 @@ describe('Calendar Routes', () => {
 
       const res = await request(app)
         .get('/api/calendar/google/callback')
+        .set('Cookie', nonceCookie())
         .query({ code: 'abc', state: signTestState('aabbccddee11') });
 
       expect(res.status).toBe(302);
@@ -150,6 +163,7 @@ describe('Calendar Routes', () => {
 
       const res = await request(app)
         .get('/api/calendar/google/callback')
+        .set('Cookie', nonceCookie())
         .query({ code: 'auth-code', state: signTestState('aabbccddee11') });
 
       expect(res.status).toBe(302);
@@ -163,6 +177,45 @@ describe('Calendar Routes', () => {
       expect(upsert.create.googleRefreshToken.split(':')).toHaveLength(3);
     });
 
+    it('rejects a callback finished in a different browser (no nonce cookie)', async () => {
+      // e.g. an attacker's state link opened by the victim
+      prisma.session.findUnique.mockResolvedValue(validSession);
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const res = await request(app)
+        .get('/api/calendar/google/callback')
+        .query({ code: 'auth-code', state: signTestState('aabbccddee11') });
+
+      expect(res.headers.location).toContain('googleCalendar=error');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(prisma.calendarIntegration.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a nonce cookie that does not match the state', async () => {
+      prisma.session.findUnique.mockResolvedValue(validSession);
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const res = await request(app)
+        .get('/api/calendar/google/callback')
+        .set('Cookie', nonceCookie('someone-elses-nonce'))
+        .query({ code: 'auth-code', state: signTestState('aabbccddee11') });
+
+      expect(res.headers.location).toContain('googleCalendar=error');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('clears the nonce cookie after the callback', async () => {
+      const res = await request(app)
+        .get('/api/calendar/google/callback')
+        .set('Cookie', nonceCookie())
+        .query({ code: 'abc', state: 'garbage' });
+
+      const cleared = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find(c => c.startsWith(`${NONCE_COOKIE}=`));
+      expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970/);
+    });
+
     it('redirects with error when Google returns no refresh token', async () => {
       prisma.session.findUnique.mockResolvedValue(validSession);
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -172,6 +225,7 @@ describe('Calendar Routes', () => {
 
       const res = await request(app)
         .get('/api/calendar/google/callback')
+        .set('Cookie', nonceCookie())
         .query({ code: 'auth-code', state: signTestState('aabbccddee11') });
 
       expect(res.status).toBe(302);

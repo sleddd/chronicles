@@ -23,7 +23,7 @@ describe('SubItemRow', () => {
   it('calls onToggleStatus when status button is clicked', () => {
     const onToggleStatus = vi.fn();
     renderWithTheme(<SubItemRow {...baseProps} onToggleStatus={onToggleStatus} />);
-    const statusBtn = screen.getByTitle('In Progress — click to change');
+    const statusBtn = screen.getByLabelText('In Progress — click to change');
     fireEvent.click(statusBtn);
     expect(onToggleStatus).toHaveBeenCalledOnce();
   });
@@ -31,7 +31,7 @@ describe('SubItemRow', () => {
   it('calls onUnlink when remove button is clicked', () => {
     const onUnlink = vi.fn();
     renderWithTheme(<SubItemRow {...baseProps} onUnlink={onUnlink} />);
-    const removeBtn = screen.getByTitle('Remove');
+    const removeBtn = screen.getByLabelText('Remove item');
     fireEvent.click(removeBtn);
     expect(onUnlink).toHaveBeenCalledOnce();
   });

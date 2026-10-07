@@ -18,9 +18,8 @@ function isSameDay(a: Date, b: Date): boolean {
 function extractTitle(html: string, fallback?: string): string {
   const headingMatch = html.match(/<h[1-4][^>]*>(.*?)<\/h[1-4]>/i);
   if (headingMatch) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = headingMatch[1];
-    const text = (tmp.textContent || tmp.innerText || '').trim();
+    // Sanitized text extraction — never parse raw entry HTML into the live DOM
+    const text = stripHtml(headingMatch[1]).trim();
     if (text) return text;
   }
   return stripHtml(html).trim().slice(0, 60) || fallback || 'Untitled';

@@ -14,6 +14,10 @@ vi.mock('@/contexts/EncryptionContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ encryptionData: { kekIterations: 600000 } }),
+}));
+
 vi.mock('@/services/api', () => ({
   auth: {
     changePassword: vi.fn().mockResolvedValue(undefined),

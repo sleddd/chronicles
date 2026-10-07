@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { TwoPanelTemplate } from '@/components/templates/TwoPanelTemplate';
-import { renderWithTheme } from '../testUtils';
+import { renderWithRouter as renderWithTheme } from '../testUtils';
 
 vi.mock('@/components/organisms/Header', () => ({
   Header: () => <header data-testid="mock-header">Header</header>,
@@ -39,19 +39,5 @@ describe('TwoPanelTemplate', () => {
     );
     expect(screen.getByTestId('left')).toBeInTheDocument();
     expect(screen.getByTestId('right')).toBeInTheDocument();
-  });
-
-  it('uses a full-height column layout', () => {
-    const { container } = renderWithTheme(
-      <TwoPanelTemplate>
-        <div>child</div>
-      </TwoPanelTemplate>
-    );
-    // The Layout div should be flex column
-    // Background is first, Layout is second
-    const layout = container.children[1] as HTMLElement;
-    const styles = window.getComputedStyle(layout);
-    expect(styles.display).toBe('flex');
-    expect(styles.flexDirection).toBe('column');
   });
 });

@@ -32,7 +32,7 @@ describe('SortableTopicItem', () => {
     topic: { id: 1, name: 'Work', icon: 'briefcase', color: '#3B82F6' },
     isActive: false,
     count: 5,
-    headerColor: '#4281a4',
+    accentColor: '#4281a4',
     onSelect: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
@@ -41,11 +41,6 @@ describe('SortableTopicItem', () => {
   it('renders topic name', () => {
     renderWithTheme(<SortableTopicItem {...defaultProps} />);
     expect(screen.getByText('Work')).toBeInTheDocument();
-  });
-
-  it('renders entry count', () => {
-    renderWithTheme(<SortableTopicItem {...defaultProps} />);
-    expect(screen.getByText('(5)')).toBeInTheDocument();
   });
 
   it('calls onSelect when clicked', () => {

@@ -72,7 +72,7 @@ describe('Session lifetime', () => {
 // 3. Constant-time delay function
 // ============================================================================
 describe('constantTimeDelay', () => {
-  it('auth.ts exports and uses constantTimeDelay for /salt and /recovery-params', async () => {
+  it('auth.ts uses constantTimeDelay for /recovery-params and /recover', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
@@ -80,9 +80,6 @@ describe('constantTimeDelay', () => {
     );
     // Verify the function exists
     expect(authContent).toContain('async function constantTimeDelay');
-    // Verify it's used in /salt endpoint
-    const saltSection = authContent.split("router.get('/salt'")[1]?.split('router.')[0] || '';
-    expect(saltSection).toContain('constantTimeDelay(startTime)');
     // Verify it's used in /recovery-params endpoint
     const recoverySection = authContent.split("router.get('/recovery-params'")[1]?.split('router.')[0] || '';
     expect(recoverySection).toContain('constantTimeDelay(startTime)');
@@ -93,19 +90,19 @@ describe('constantTimeDelay', () => {
 });
 
 // ============================================================================
-// 4. Email validation on /salt endpoint
+// 4. No unauthenticated lookup of encryption params
 // ============================================================================
-describe('Email validation on /salt', () => {
-  it('/salt endpoint validates email format before querying', async () => {
+describe('No unauthenticated encryption-param lookup', () => {
+  it('there is no /salt endpoint — the wrapped master key is only returned after auth', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    expect(authContent).toContain("import { registerSchema, loginSchema, changePasswordSchema, recoverSchema, emailSchema }");
-    // Salt endpoint should validate email
-    const saltSection = authContent.split("router.get('/salt'")[1]?.split("router.")[0] || '';
-    expect(saltSection).toContain('emailSchema.safeParse');
+    expect(authContent).not.toContain("router.get('/salt'");
+    // The one public lookup returns only recovery-wrapped material (needs the 256-bit recovery key)
+    const section = authContent.split("router.get('/recovery-params'")[1]?.split('router.')[0] || '';
+    expect(section).not.toContain('encryptedMasterKey');
   });
 });
 
@@ -165,7 +162,7 @@ describe('Recovery key PBKDF2 hashing', () => {
 // 7. Recovery key is single-use (atomic transaction with recoveryKeyUsedAt)
 // ============================================================================
 describe('Recovery key single-use enforcement', () => {
-  it('recovery endpoint uses atomic transaction to clear recovery data and revoke sessions', async () => {
+  it('recovery endpoint atomically rotates recovery data and revokes sessions', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
@@ -176,11 +173,13 @@ describe('Recovery key single-use enforcement', () => {
     expect(recoverSection).toContain('prisma.$transaction');
     // Should set recoveryKeyUsedAt
     expect(recoverSection).toContain('recoveryKeyUsedAt: new Date()');
-    // Should null out recovery key material
-    expect(recoverSection).toContain('recoveryKeyHash: null');
-    expect(recoverSection).toContain('recoveryKeySalt: null');
-    expect(recoverSection).toContain('recoveryWrappedMK: null');
-    expect(recoverSection).toContain('recoveryWrapIv: null');
+    // The used recovery key is replaced by a fresh one in the same transaction,
+    // so the old key can never unlock the account again
+    expect(recoverSection).toContain('recoveryKeyHash: newRecoveryKeyHash');
+    expect(recoverSection).toContain('recoveryKeySalt: newRecoveryKeySalt');
+    expect(recoverSection).toContain('recoveryWrappedMK: new Uint8Array(Buffer.from(newRecoveryWrappedMK');
+    // Row lock re-checks the key wasn't consumed by a concurrent request
+    expect(recoverSection).toContain('FOR UPDATE');
     // Should revoke all sessions in same transaction
     expect(recoverSection).toContain('session.updateMany');
   });

@@ -64,6 +64,21 @@ export const disable2FASchema = z.object({
   password: z.string().min(1),
 });
 
+// Account changes that could lock the owner out require the current password,
+// so a session left signed in on an unattended device isn't enough
+export const changeEmailSchema = z.object({
+  newEmail: z.string().min(1, 'Email is required').max(254),
+  currentPassword: z.string().min(1, 'Current password is required'),
+});
+
+export const saveRecoveryKeySchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  recoveryWrappedMK: z.string().min(1).max(1024),
+  recoveryWrapIv: z.string().min(1).max(64),
+  recoveryKeyHash: z.string().regex(/^[a-f0-9]{64}$/, 'Invalid recovery key hash'),
+  recoveryKeySalt: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery key salt'),
+});
+
 // Shares validation — shared content is stored as plaintext by design; the
 // user opts into that risk when creating a public link
 export const createShareSchema = z.object({

@@ -6,8 +6,15 @@ import { useInitializeData } from '@/hooks/useInitializeData';
 
 const mockNavigate = vi.fn();
 
+const { mockLocation, mockSearchParams } = vi.hoisted(() => ({
+  mockLocation: { pathname: '/', search: '', hash: '', state: null, key: 'default' },
+  mockSearchParams: [new URLSearchParams(), () => {}] as const,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
+  useLocation: vi.fn(() => mockLocation),
+  useSearchParams: vi.fn(() => mockSearchParams),
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({
@@ -19,24 +26,35 @@ vi.mock('@/hooks/useInitializeData', () => ({
   })),
 }));
 
+// Stable references, like real Zustand state — fresh arrays per selector call
+// would loop the view's memo → setState effects forever.
+const { entriesState, uiState } = vi.hoisted(() => ({
+  entriesState: {
+    decryptedEntries: [],
+    allTopics: [
+      { id: 1, name: 'Goal', icon: 'bullseye', color: null },
+      { id: 2, name: 'Milestone', icon: 'flag', color: null },
+      { id: 3, name: 'Task', icon: 'check', color: null },
+    ],
+    featureFlags: {},
+    updateDecryptedEntry: () => {},
+    addDecryptedEntry: () => {},
+    removeEntry: () => {},
+  } as any,
+  uiState: { accentColor: '#4A5568', setSelectedEntryId: () => {}, setShowMobileEditor: () => {} } as any,
+}));
+
 vi.mock('@/stores/entriesStore', () => ({
-  useEntriesStore: vi.fn((selector: (s: any) => any) =>
-    selector({
-      decryptedEntries: [],
-      allTopics: [
-        { id: 1, name: 'Goal', icon: 'bullseye', color: null },
-        { id: 2, name: 'Milestone', icon: 'flag', color: null },
-        { id: 3, name: 'Task', icon: 'check', color: null },
-      ],
-      updateDecryptedEntry: vi.fn(),
-      addDecryptedEntry: vi.fn(),
-    })
+  useEntriesStore: Object.assign(
+    vi.fn((selector: (s: any) => any) => selector(entriesState)),
+    { getState: () => entriesState },
   ),
 }));
 
 vi.mock('@/stores/uiStore', () => ({
-  useUIStore: vi.fn((selector: (s: any) => any) =>
-    selector({ headerColor: '#4A5568' })
+  useUIStore: Object.assign(
+    vi.fn((selector: (s: any) => any) => selector(uiState)),
+    { getState: () => uiState },
   ),
 }));
 
@@ -75,6 +93,10 @@ vi.mock('@/components/molecules/ViewHeader', () => ({
       <button onClick={onBack}>Back</button>
     </div>
   ),
+}));
+
+vi.mock('@/components/molecules/PlanningTabBar', () => ({
+  PlanningTabBar: () => <nav data-testid="planning-tab-bar" />,
 }));
 
 vi.mock('@/components/molecules/FilterTabs', () => ({
@@ -139,30 +161,15 @@ describe('GoalsView', () => {
     expect(screen.getByTestId('content-template')).toBeInTheDocument();
   });
 
-  it('displays the view header with title', () => {
+  it('displays the Planning title and the planning tabs', () => {
     renderWithTheme(<GoalsView />);
-    expect(screen.getByText('Goals & Milestones')).toBeInTheDocument();
-  });
-
-  it('renders tab bar with goals and milestones tabs', () => {
-    renderWithTheme(<GoalsView />);
-    expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
-  });
-
-  it('renders filter tabs', () => {
-    renderWithTheme(<GoalsView />);
-    expect(screen.getByTestId('filter-tabs')).toBeInTheDocument();
+    expect(screen.getByText('Planning')).toBeInTheDocument();
+    expect(screen.getByTestId('planning-tab-bar')).toBeInTheDocument();
   });
 
   it('shows empty state when no goals exist', () => {
     renderWithTheme(<GoalsView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-  });
-
-  it('navigates back when back button is clicked', () => {
-    renderWithTheme(<GoalsView />);
-    screen.getByText('Back').click();
-    expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 });
 

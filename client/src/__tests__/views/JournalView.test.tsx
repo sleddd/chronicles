@@ -26,55 +26,72 @@ vi.mock('@/contexts/EncryptionContext', () => ({
 }));
 
 // Stable setter references to avoid infinite re-renders
-const setters = {
-  setDecryptedEntries: vi.fn(),
-  setRawEntries: vi.fn(),
-  setTopics: vi.fn(),
-  setFeatureFlags: vi.fn(),
-  setLoading: vi.fn(),
-  addDecryptedEntry: vi.fn(),
-  updateDecryptedEntry: vi.fn(),
-  removeEntry: vi.fn(),
-  setSelectedEntryId: vi.fn(),
-  setShowMobileEditor: vi.fn(),
-  setSelectedTopicId: vi.fn(),
-  setHeaderColor: vi.fn(),
-  setThemeMode: vi.fn(),
-  setBackgroundImage: vi.fn(),
-  setBackgroundOpacity: vi.fn(),
-};
+const { setters, entriesState, uiState } = vi.hoisted(() => {
+  const setters = {
+    setDecryptedEntries: (() => {}) as any,
+    setRawEntries: (() => {}) as any,
+    setTopics: (() => {}) as any,
+    setFeatureFlags: (() => {}) as any,
+    setLoading: (() => {}) as any,
+    addDecryptedEntry: (() => {}) as any,
+    updateDecryptedEntry: (() => {}) as any,
+    removeEntry: (() => {}) as any,
+    setSelectedEntryId: (() => {}) as any,
+    setShowMobileEditor: (() => {}) as any,
+    setSelectedTopicId: (() => {}) as any,
+    setHeaderColor: (() => {}) as any,
+    setThemeMode: (() => {}) as any,
+    setBackgroundImage: (() => {}) as any,
+    setBackgroundOpacity: (() => {}) as any,
+  };
 
-const entriesState = {
-  decryptedEntries: [] as any[],
-  topics: [] as any[],
-  isInitialized: true,
-  isLoading: false,
-  ...setters,
-};
+  const entriesState = {
+    decryptedEntries: [] as any[],
+    topics: [] as any[],
+    isInitialized: true,
+    isLoading: false,
+    ...setters,
+  };
 
-const uiState = {
-  selectedEntryId: null,
-  showMobileEditor: false,
-  viewMode: 'date' as const,
-  selectedTopicId: null,
-  headerColor: '#4A5568',
-  backgroundImage: '',
-  ...setters,
-};
+  const uiState = {
+    selectedEntryId: null,
+    showMobileEditor: false,
+    viewMode: 'date' as const,
+    selectedDate: new Date(2024, 5, 15),
+    selectedTopicId: null,
+    topicCustomFields: {},
+    topicHideText: {},
+    headerColor: '#4A5568',
+    backgroundImage: '',
+    ...setters,
+  };
+  return { setters, entriesState, uiState };
+});
 
-vi.mock('@/stores/entriesStore', () => {
+// Mocked stores start from the real stores' full initial state (so new
+// fields/setters don't break this test) with the overrides above on top.
+// Built once, so every selector returns stable references.
+vi.mock('@/stores/entriesStore', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/stores/entriesStore')>();
+  const state = Object.assign({}, real.useEntriesStore.getState(), entriesState);
+  Object.assign(entriesState, state);
   const fn = vi.fn((selector?: (s: any) => any) =>
     selector ? selector(entriesState) : entriesState
   );
   (fn as any).getState = () => entriesState;
-  return { useEntriesStore: fn };
+  return { ...real, useEntriesStore: fn };
 });
 
-vi.mock('@/stores/uiStore', () => ({
-  useUIStore: vi.fn((selector?: (s: any) => any) =>
+vi.mock('@/stores/uiStore', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/stores/uiStore')>();
+  const state = Object.assign({}, real.useUIStore.getState(), uiState);
+  Object.assign(uiState, state);
+  const fn = vi.fn((selector?: (s: any) => any) =>
     selector ? selector(uiState) : uiState
-  ),
-}));
+  );
+  (fn as any).getState = () => uiState;
+  return { ...real, useUIStore: fn };
+});
 
 vi.mock('@/services/api', () => ({
   entries: { getAll: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn(), delete: vi.fn() },

@@ -156,15 +156,6 @@ export const auth = {
 
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 
-  getSalt: (email: string) =>
-    request<{
-      encryptionEnabled: boolean;
-      kekSalt: string | null;
-      encryptedMasterKey: string | null;
-      kekWrapIv: string | null;
-      kekIterations: number;
-    }>('/auth/salt', { params: { email } }),
-
   changePassword: (data: {
     currentPassword: string;
     newPassword: string;
@@ -173,7 +164,7 @@ export const auth = {
     newKekWrapIv: string;
   }) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
 
-  changeEmail: (data: { newEmail: string }) =>
+  changeEmail: (data: { newEmail: string; currentPassword: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
 
   getRecoveryParams: (email: string) =>
@@ -199,6 +190,7 @@ export const auth = {
   }>('/auth/recover', { method: 'POST', body: data }),
 
   saveRecoveryKey: (data: {
+    currentPassword: string;
     recoveryWrappedMK: string;
     recoveryWrapIv: string;
     recoveryKeyHash: string;

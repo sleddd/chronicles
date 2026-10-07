@@ -168,15 +168,15 @@ describe('auth', () => {
     expect(init.method).toBe('POST');
   });
 
-  it('getSalt sends email as query param', async () => {
-    fetchSpy = mockFetchResponse({ encryptionEnabled: true, kekSalt: 's', encryptedMasterKey: null, kekWrapIv: null, kekIterations: 600000 });
+  it('changeEmail sends the current password along', async () => {
+    fetchSpy = mockFetchResponse({ success: true, email: 'n@b.com' });
     vi.stubGlobal('fetch', fetchSpy);
 
-    await auth.getSalt('a@b.com');
+    await auth.changeEmail({ newEmail: 'n@b.com', currentPassword: 'pw' });
 
-    const [url] = fetchSpy.mock.calls[0];
-    expect(url).toContain('/api/auth/salt');
-    expect(url).toContain('email=a%40b.com');
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('/api/auth/change-email');
+    expect(JSON.parse(init.body)).toEqual({ newEmail: 'n@b.com', currentPassword: 'pw' });
   });
 
   it('changePassword sends POST with body', async () => {
@@ -224,13 +224,14 @@ describe('auth', () => {
 // ---------------------------------------------------------------------------
 
 describe('entries', () => {
-  it('getAll fetches /entries', async () => {
+  it('getAll fetches every entry in one request', async () => {
     fetchSpy = mockFetchResponse([]);
     vi.stubGlobal('fetch', fetchSpy);
 
     await entries.getAll();
 
-    expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries');
+    // Topic filtering relies on the whole journal being in the store
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries?limit=5000');
   });
 
   it('get fetches /entries/:id', async () => {
@@ -440,7 +441,9 @@ describe('shares', () => {
     fetchSpy = mockFetchResponse({ id: 1, token: 'abc' });
     vi.stubGlobal('fetch', fetchSpy);
 
-    await shares.create({ contentEncrypted: 'enc', contentIv: 'iv' });
+    await shares.create({ content: '<p>Hi</p>', entryId: 7 });
+
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({ content: '<p>Hi</p>', entryId: 7 });
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/api/shares');

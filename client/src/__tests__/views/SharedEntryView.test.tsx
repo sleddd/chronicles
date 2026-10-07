@@ -9,14 +9,9 @@ vi.mock('react-router-dom', () => ({
   useParams: vi.fn(() => ({ token: 'abc123' })),
 }));
 
+const mockGet = vi.hoisted(() => vi.fn());
 vi.mock('@/services/api', () => ({
-  shares: {
-    get: vi.fn().mockResolvedValue({
-      contentEncrypted: 'encrypted',
-      contentIv: 'iv',
-      createdAt: '2024-01-01T00:00:00Z',
-    }),
-  },
+  shares: { get: mockGet },
 }));
 
 vi.mock('@/components/templates/SharedTemplate', () => ({
@@ -38,6 +33,10 @@ vi.mock('@/styles/GlobalStyle', () => ({
 }));
 
 describe('SharedEntryView', () => {
+  beforeEach(() => {
+    mockGet.mockReset().mockResolvedValue({ content: '<p>x</p>', createdAt: '2024-01-01T00:00:00Z' });
+  });
+
   it('renders without crashing', () => {
     render(<SharedEntryView />);
     expect(screen.getByTestId('shared-template')).toBeInTheDocument();
@@ -48,10 +47,23 @@ describe('SharedEntryView', () => {
     expect(screen.getByTestId('shared-entry-card')).toBeInTheDocument();
   });
 
-  it('shows error when share key is missing from URL hash', () => {
-    // window.location.hash is empty by default in jsdom
+  it('shows the shared content once loaded', async () => {
+    mockGet.mockResolvedValue({ content: '<p>Hello</p>', createdAt: '2024-01-01T00:00:00Z' });
     render(<SharedEntryView />);
-    expect(screen.getByTestId('error')).toHaveTextContent('missing its decryption key');
+    expect(await screen.findByTestId('content')).toHaveTextContent('<p>Hello</p>');
+    expect(mockGet).toHaveBeenCalledWith('abc123');
+  });
+
+  it('shows an unavailable message for revoked or expired links', async () => {
+    mockGet.mockRejectedValue(new Error('404'));
+    render(<SharedEntryView />);
+    expect(await screen.findByTestId('error')).toHaveTextContent(/unavailable/);
+  });
+
+  it('treats a share with no content as unavailable', async () => {
+    mockGet.mockResolvedValue({ content: null, createdAt: '2024-01-01T00:00:00Z' });
+    render(<SharedEntryView />);
+    expect(await screen.findByTestId('error')).toHaveTextContent(/unavailable/);
   });
 });
 

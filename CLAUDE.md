@@ -130,7 +130,7 @@ chronicles-rebuild/
 │       │   ├── auth.ts                # Split-token session validation + CSRF
 │       │   └── security.ts            # CSP, HSTS, X-Frame-Options headers
 │       └── routes/
-│           ├── auth.ts                # Register, login, logout, salt, change-password, recover, TOTP 2FA
+│           ├── auth.ts                # Register, login, logout, change-password/email, recover, TOTP 2FA
 │           ├── entries.ts             # CRUD for journal entries (encrypted)
 │           ├── topics.ts              # CRUD for topics/taxonomies
 │           ├── settings.ts            # Key-value settings
@@ -483,7 +483,14 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - `style-src 'self' 'unsafe-inline'` — required for styled-components
 - `img-src 'self' data: blob:` — images from same origin and data URIs
 - `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket, and the AI providers (`api.anthropic.com`, `api.openai.com`, `*.amazonaws.com`)
-- `frame-ancestors 'none'` — prevent clickjacking
+- `frame-ancestors 'none'` — prevent clickjacking; plus `base-uri 'self'`, `form-action 'self'`, `object-src 'none'`
+- `Permissions-Policy` keeps `microphone=(self)` (voice dictation); camera, geolocation etc. are off
+
+### Account-change rules
+- The wrapped master key + salt are returned only by `/login`, `/login/2fa` and `/me` — never by an unauthenticated lookup (that would allow offline password guessing). There is no `/auth/salt`
+- Changing the email (`/change-email`) or the recovery key (`/recovery-key`) requires the **current password**, like change-password and 2FA disable — a signed-in session alone must not be able to lock the owner out
+- Google OAuth: the signed `state` also carries the hash of a nonce kept in an HttpOnly `SameSite=Lax` cookie (`__Host-chronicle_oauth`), so the callback only succeeds in the browser that started the flow
+- `trust proxy` is on in production (`TRUST_PROXY`, default 1 hop) so per-IP rate limits see the real client IP behind Render's proxy
 
 ### Rate limiting
 - `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out

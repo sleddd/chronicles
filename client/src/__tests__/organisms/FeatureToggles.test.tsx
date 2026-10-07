@@ -27,7 +27,7 @@ describe('FeatureToggles', () => {
   it('renders all feature toggle labels', async () => {
     renderWithTheme(<FeatureToggles />);
     await waitFor(() => {
-      expect(screen.getByText('Food Tracking')).toBeInTheDocument();
+      expect(screen.getByText('Meals Tracking')).toBeInTheDocument();
       expect(screen.getByText('Medication Tracking')).toBeInTheDocument();
       expect(screen.getByText('Goals & Milestones')).toBeInTheDocument();
       expect(screen.getByText('Exercise Tracking')).toBeInTheDocument();

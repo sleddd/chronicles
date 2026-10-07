@@ -45,11 +45,16 @@ const mockShare = {
   id: 1,
   token: 'abc123token',
   accountId: 1,
-  contentEncrypted: Buffer.from('encrypted-content'),
-  contentIv: Buffer.from('iv12345678ab'),
+  entryId: 7,
+  content: '<p>Shared entry</p>',
   createdAt: new Date('2025-01-01'),
   expiresAt: null,
   isActive: true,
+};
+
+const AUTH_HEADERS = {
+  'X-Requested-With': 'XMLHttpRequest',
+  Cookie: 'chronicle_session=aabbccddee11verifier1234567890123456789012',
 };
 
 describe('Share Routes', () => {
@@ -64,15 +69,18 @@ describe('Share Routes', () => {
   // GET /api/shares/:token (public)
   // =========================================================================
   describe('GET /api/shares/:token', () => {
-    it('returns share data with serialized buffers', async () => {
+    it('returns only the public share payload', async () => {
       (getShareByToken as any).mockResolvedValue(mockShare);
 
       const res = await request(app).get('/api/shares/abc123token');
 
       expect(res.status).toBe(200);
       expect(res.body.token).toBe('abc123token');
-      expect(res.body.contentEncrypted).toBe(Buffer.from('encrypted-content').toString('base64'));
-      expect(res.body.contentIv).toBe(Buffer.from('iv12345678ab').toString('base64'));
+      expect(res.body.content).toBe('<p>Shared entry</p>');
+      // Viewers must never learn who owns the share or which entry it came from
+      expect(res.body).not.toHaveProperty('accountId');
+      expect(res.body).not.toHaveProperty('id');
+      expect(res.body).not.toHaveProperty('entryId');
       expect(getShareByToken).toHaveBeenCalledWith('abc123token');
     });
 
@@ -83,6 +91,14 @@ describe('Share Routes', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('Share not found or expired');
+    });
+
+    it('returns 404 for retired encrypted shares with no content', async () => {
+      (getShareByToken as any).mockResolvedValue({ ...mockShare, content: null });
+
+      const res = await request(app).get('/api/shares/abc123token');
+
+      expect(res.status).toBe(404);
     });
 
     it('returns 500 on database error', async () => {
@@ -99,26 +115,20 @@ describe('Share Routes', () => {
   // POST /api/shares (auth required)
   // =========================================================================
   describe('POST /api/shares', () => {
-    const validShareBody = {
-      contentEncrypted: Buffer.from('encrypted').toString('base64'),
-      contentIv: Buffer.from('iv12345678ab').toString('base64'),
-    };
+    const validShareBody = { content: '<p>Shared entry</p>', entryId: 7 };
 
     it('creates a share and returns 201', async () => {
       (createShare as any).mockResolvedValue(mockShare);
 
-      const res = await request(app)
-        .post('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012')
-        .send(validShareBody);
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
 
       expect(res.status).toBe(201);
       expect(res.body.token).toBe('abc123token');
+      expect(res.body).not.toHaveProperty('content');
       expect(createShare).toHaveBeenCalledWith({
         accountId: 1,
-        contentEncrypted: expect.any(Buffer),
-        contentIv: expect.any(Buffer),
+        entryId: 7,
+        content: '<p>Shared entry</p>',
         expiresAt: null,
       });
     });
@@ -128,47 +138,44 @@ describe('Share Routes', () => {
 
       const res = await request(app)
         .post('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012')
+        .set(AUTH_HEADERS)
         .send({ ...validShareBody, expiresAt: '2025-12-31T00:00:00.000Z' });
 
       expect(res.status).toBe(201);
       expect(createShare).toHaveBeenCalledWith({
         accountId: 1,
-        contentEncrypted: expect.any(Buffer),
-        contentIv: expect.any(Buffer),
+        entryId: 7,
+        content: '<p>Shared entry</p>',
         expiresAt: expect.any(Date),
       });
     });
 
-    it('returns 400 when contentEncrypted is missing', async () => {
-      const res = await request(app)
-        .post('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012')
-        .send({ contentIv: Buffer.from('iv').toString('base64') });
+    it('returns 400 when content is missing', async () => {
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send({ entryId: 7 });
 
       expect(res.status).toBe(400);
+      expect(createShare).not.toHaveBeenCalled();
     });
 
-    it('returns 400 when contentIv is missing', async () => {
-      const res = await request(app)
-        .post('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012')
-        .send({ contentEncrypted: Buffer.from('enc').toString('base64') });
+    it('returns 400 when entryId is missing', async () => {
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send({ content: 'x' });
 
       expect(res.status).toBe(400);
+      expect(createShare).not.toHaveBeenCalled();
+    });
+
+    it('ignores a client-supplied accountId', async () => {
+      (createShare as any).mockResolvedValue(mockShare);
+
+      await request(app).post('/api/shares').set(AUTH_HEADERS).send({ ...validShareBody, accountId: 999 });
+
+      expect((createShare as any).mock.calls[0][0].accountId).toBe(1);
     });
 
     it('returns 500 on database error', async () => {
       (createShare as any).mockRejectedValue(new Error('DB error'));
 
-      const res = await request(app)
-        .post('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012')
-        .send(validShareBody);
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Failed to create share');
@@ -182,10 +189,7 @@ describe('Share Routes', () => {
     it('revokes a share successfully', async () => {
       (revokeShare as any).mockResolvedValue(true);
 
-      const res = await request(app)
-        .delete('/api/shares/abc123token')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012');
+      const res = await request(app).delete('/api/shares/abc123token').set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -195,10 +199,7 @@ describe('Share Routes', () => {
     it('returns 404 when share not found or not owned', async () => {
       (revokeShare as any).mockResolvedValue(false);
 
-      const res = await request(app)
-        .delete('/api/shares/nonexistent')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012');
+      const res = await request(app).delete('/api/shares/nonexistent').set(AUTH_HEADERS);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('Share not found or not owned by you');
@@ -207,10 +208,7 @@ describe('Share Routes', () => {
     it('returns 500 on database error', async () => {
       (revokeShare as any).mockRejectedValue(new Error('DB error'));
 
-      const res = await request(app)
-        .delete('/api/shares/abc123token')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012');
+      const res = await request(app).delete('/api/shares/abc123token').set(AUTH_HEADERS);
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Failed to revoke share');
@@ -221,64 +219,39 @@ describe('Share Routes', () => {
   // GET /api/shares (auth required — list user's shares)
   // =========================================================================
   describe('GET /api/shares (list)', () => {
-    it('returns list of user shares', async () => {
+    it('returns share metadata without content', async () => {
       (getSharesByAccount as any).mockResolvedValue([mockShare]);
 
-      // Note: GET /api/shares/ must match the route that has authMiddleware
-      // The router defines GET /:token before GET /, so we need trailing slash or
-      // the router will match /:token with an empty string param.
-      // Actually GET / is defined last, but Express matches it correctly.
-      // We need to trigger the authenticated list endpoint, not the /:token endpoint.
-      // The shares router mounts GET /:token first, then GET / with authMiddleware.
-      // A request to GET /api/shares will match '/' because no token segment.
-      // But actually Express routing: '/' and '/:token' — '/' takes precedence when there's
-      // no additional path segment... Let's check. Actually /:token matches any single
-      // segment, and / matches the root. So GET /api/shares should hit the / route.
-      // However the /:token route is defined first, so a request to /api/shares/
-      // would match /:token with token=''. Let's see.
-      // Looking at the router order: GET /:token, POST /, DELETE /:token, GET /
-      // For a GET to '/', Express should match GET / (exact match over parameterized).
-      // But actually in Express, /:token will match '' as well... Let's just test it.
+      const res = await request(app).get('/api/shares').set(AUTH_HEADERS);
 
-      const res = await request(app)
-        .get('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012');
-
-      // If this hits the /:token route instead, getShareByToken would be called
-      // We check that getSharesByAccount was called instead
-      if (res.status === 200 && Array.isArray(res.body)) {
-        expect(res.body).toHaveLength(1);
-        expect(res.body[0].contentEncrypted).toBe(Buffer.from('encrypted-content').toString('base64'));
-        expect(getSharesByAccount).toHaveBeenCalledWith(1);
-      }
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0]).toEqual({
+        token: 'abc123token',
+        entryId: 7,
+        createdAt: mockShare.createdAt.toISOString(),
+        expiresAt: null,
+      });
+      expect(getSharesByAccount).toHaveBeenCalledWith(1);
+      expect(getShareByToken).not.toHaveBeenCalled();
     });
 
     it('returns empty array when no shares', async () => {
       (getSharesByAccount as any).mockResolvedValue([]);
 
-      const res = await request(app)
-        .get('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012');
+      const res = await request(app).get('/api/shares').set(AUTH_HEADERS);
 
-      if (res.status === 200 && Array.isArray(res.body)) {
-        expect(res.body).toEqual([]);
-      }
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
     });
 
     it('returns 500 on database error', async () => {
       (getSharesByAccount as any).mockRejectedValue(new Error('DB error'));
 
-      const res = await request(app)
-        .get('/api/shares')
-        .set('X-Requested-With', 'XMLHttpRequest')
-        .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012');
+      const res = await request(app).get('/api/shares').set(AUTH_HEADERS);
 
-      // Only assert if the route actually hit the list endpoint
-      if (res.status === 500) {
-        expect(res.body.error).toBe('Failed to list shares');
-      }
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to list shares');
     });
   });
 });

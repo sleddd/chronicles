@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
@@ -8,70 +8,47 @@ function renderWithTheme(ui: React.ReactElement) {
   return render(<ThemeProvider theme={lightTheme}>{ui}</ThemeProvider>);
 }
 
+// The strip is a week scroller anchored on today, so pin "today"
+const TODAY = new Date(2024, 5, 15, 12); // Sat June 15, 2024
+
 describe('MiniCalendar', () => {
-  const defaultProps = {
-    selectedDate: new Date(2024, 5, 15), // June 15, 2024
-    onSelectDate: vi.fn(),
-    expanded: true,
-  };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(TODAY);
+  });
+  afterEach(() => vi.useRealTimers());
 
-  it('renders month label', () => {
+  const defaultProps = { selectedDate: TODAY, onSelectDate: vi.fn() };
+
+  it('renders a year of weeks either side of today', () => {
     renderWithTheme(<MiniCalendar {...defaultProps} />);
-    expect(screen.getByText('June 2024')).toBeInTheDocument();
+    // 104 weeks × 7 days
+    expect(screen.getAllByRole('button')).toHaveLength(728);
   });
 
-  it('renders weekday labels', () => {
+  it('labels each day with its full date', () => {
     renderWithTheme(<MiniCalendar {...defaultProps} />);
-    const sLabels = screen.getAllByText('S');
-    expect(sLabels.length).toBeGreaterThanOrEqual(2); // S for Sun and Sat
-    expect(screen.getByText('M')).toBeInTheDocument();
+    expect(screen.getByTitle('Sat, Jun 15')).toBeInTheDocument();
+    expect(screen.getByTitle('Mon, Jun 10')).toBeInTheDocument();
   });
 
-  it('renders day numbers', () => {
-    renderWithTheme(<MiniCalendar {...defaultProps} />);
-    expect(screen.getByText('15')).toBeInTheDocument();
-    const ones = screen.getAllByText('1');
-    expect(ones.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('calls onSelectDate when a day is clicked', () => {
+  it('calls onSelectDate with the clicked day', () => {
     const onSelectDate = vi.fn();
     renderWithTheme(<MiniCalendar {...defaultProps} onSelectDate={onSelectDate} />);
-    fireEvent.click(screen.getByText('20'));
-    expect(onSelectDate).toHaveBeenCalled();
+    fireEvent.click(screen.getByTitle('Thu, Jun 13'));
+    const picked = onSelectDate.mock.calls[0][0] as Date;
+    expect([picked.getFullYear(), picked.getMonth(), picked.getDate()]).toEqual([2024, 5, 13]);
   });
 
-  it('navigates to previous month', () => {
-    renderWithTheme(<MiniCalendar {...defaultProps} />);
-    // Find nav buttons (prev/next)
-    const buttons = screen.getAllByRole('button');
-    // First navigation button should navigate to previous month
-    const prevBtn = buttons[0];
-    fireEvent.click(prevBtn);
-    expect(screen.getByText('May 2024')).toBeInTheDocument();
-  });
-
-  it('navigates to next month', () => {
-    renderWithTheme(<MiniCalendar {...defaultProps} />);
-    const buttons = screen.getAllByRole('button');
-    // Second navigation button
-    const nextBtn = buttons[1];
-    fireEvent.click(nextBtn);
-    expect(screen.getByText('July 2024')).toBeInTheDocument();
-  });
-
-  it('shows collapsed state when not expanded', () => {
-    renderWithTheme(<MiniCalendar {...defaultProps} expanded={false} />);
-    // In collapsed state, should show the month label in toggle bar
-    expect(screen.getByText('June 2024')).toBeInTheDocument();
-    // Days grid should not be visible
-    expect(screen.queryByText('S')).not.toBeInTheDocument();
-  });
-
-  it('shows entry dots for dates with entries', () => {
-    const entryDates = new Set(['2024-06-15']);
-    renderWithTheme(<MiniCalendar {...defaultProps} entryDates={entryDates} />);
-    // The day button for the 15th should exist
-    expect(screen.getByText('15')).toBeInTheDocument();
+  it('marks only days that have entries', () => {
+    const { rerender } = renderWithTheme(<MiniCalendar {...defaultProps} />);
+    const without = screen.getByTitle('Fri, Jun 14').childElementCount;
+    rerender(
+      <ThemeProvider theme={lightTheme}>
+        <MiniCalendar {...defaultProps} entryDates={new Set(['2024-06-14'])} />
+      </ThemeProvider>
+    );
+    expect(screen.getByTitle('Fri, Jun 14').childElementCount).toBe(without + 1);
+    expect(screen.getByTitle('Thu, Jun 13').childElementCount).toBe(without);
   });
 });

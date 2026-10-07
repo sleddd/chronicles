@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { SettingsTemplate } from '@/components/templates/SettingsTemplate';
-import { renderWithTheme } from '../testUtils';
+import { renderWithRouter as renderWithTheme } from '../testUtils';
 
 vi.mock('@/components/organisms/Header', () => ({
   Header: () => <header data-testid="mock-header">Header</header>,

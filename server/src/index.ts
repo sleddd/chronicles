@@ -48,6 +48,14 @@ if (process.env.CLIENT_URL) {
   }
 }
 
+// Behind a hosting proxy (Render etc.) every request arrives from the proxy's
+// address; without this, per-IP rate limits would see one shared IP — one
+// visitor could exhaust the login limit for everyone. TRUST_PROXY sets the
+// number of proxy hops to trust (default 1 in production, none in dev so a
+// spoofed X-Forwarded-For header is ignored locally).
+const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? '1' : '');
+if (trustProxy && !['0', 'false'].includes(trustProxy)) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',

@@ -5,7 +5,7 @@ import { lightTheme } from '@shared/theme/tokens';
 import { ThemeSettings } from '@/components/organisms/ThemeSettings';
 
 const mockSetThemeMode = vi.fn();
-const mockSetHeaderColor = vi.fn();
+const mockSetAccentColor = vi.fn();
 const mockSetBackgroundImage = vi.fn();
 const mockSetBackgroundOpacity = vi.fn();
 
@@ -14,8 +14,8 @@ vi.mock('@/stores/uiStore', () => ({
     selector({
       themeMode: 'light',
       setThemeMode: mockSetThemeMode,
-      headerColor: '#2d2c2a',
-      setHeaderColor: mockSetHeaderColor,
+      accentColor: '#2d2c2a',
+      setAccentColor: mockSetAccentColor,
       backgroundImage: '',
       setBackgroundImage: mockSetBackgroundImage,
       backgroundOpacity: 0.6,
@@ -23,10 +23,9 @@ vi.mock('@/stores/uiStore', () => ({
     }),
 }));
 
+const mockUpsert = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/services/api', () => ({
-  settings: {
-    upsert: vi.fn().mockResolvedValue(undefined),
-  },
+  settings: { upsert: mockUpsert },
 }));
 
 vi.mock('@/components/molecules/ColorPicker', () => ({
@@ -50,14 +49,24 @@ function renderWithTheme(ui: React.ReactElement) {
 }
 
 describe('ThemeSettings', () => {
-  it('renders theme title', () => {
+  it('renders the Appearance and Accent color sections', () => {
     renderWithTheme(<ThemeSettings />);
-    expect(screen.getByText('Theme')).toBeInTheDocument();
+    expect(screen.getByText('Appearance')).toBeInTheDocument();
+    expect(screen.getByText('Accent color')).toBeInTheDocument();
   });
 
-  it('renders header color title', () => {
+  it('offers the seven named DS accent presets', () => {
     renderWithTheme(<ThemeSettings />);
-    expect(screen.getByText('Header Color')).toBeInTheDocument();
+    for (const name of ['Ink', 'Sage', 'Clay', 'Amber', 'Teal', 'Rose', 'Slate']) {
+      expect(screen.getByLabelText(name)).toBeInTheDocument();
+    }
+  });
+
+  it('saves a custom accent color', () => {
+    renderWithTheme(<ThemeSettings />);
+    fireEvent.click(screen.getByText('Pick color'));
+    expect(mockSetAccentColor).toHaveBeenCalledWith('#ff0000');
+    expect(mockUpsert).toHaveBeenCalledWith('accentColor', '#ff0000');
   });
 
   it('renders background title', () => {

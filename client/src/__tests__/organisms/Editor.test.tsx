@@ -16,13 +16,17 @@ vi.mock('@tiptap/react', () => ({
   EditorContent: ({ editor }: { editor: unknown }) => (
     <div data-testid="editor-content">Editor Content</div>
   ),
+  // Used by the inline drawing node extension
+  NodeViewWrapper: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ReactNodeViewRenderer: () => () => null,
 }));
 
 vi.mock('@tiptap/starter-kit', () => ({ default: {} }));
 vi.mock('@tiptap/extension-placeholder', () => ({
   default: { configure: () => ({}) },
 }));
-vi.mock('@tiptap/core', () => ({
+vi.mock('@tiptap/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tiptap/core')>()),
   Extension: { create: () => ({}) },
 }));
 vi.mock('@tiptap/pm/state', () => ({

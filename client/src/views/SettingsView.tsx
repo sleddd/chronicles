@@ -260,15 +260,16 @@ export function SettingsView() {
   };
 
   const handleChangeEmail = async () => {
-    if (!newEmail.trim()) return;
+    if (!newEmail.trim() || !emailPassword) return;
     setEmailLoading(true);
     setEmailMessage('');
     setEmailError(false);
     try {
-      const result = await authApi.changeEmail({ newEmail: newEmail.trim() });
+      const result = await authApi.changeEmail({ newEmail: newEmail.trim(), currentPassword: emailPassword });
       setEmailMessage('Email updated');
       setEditingEmail(false);
       setNewEmail('');
+      setEmailPassword('');
       if (user) (user as unknown as Record<string, unknown>).email = result.email;
     } catch (err) {
       setEmailError(true);
@@ -359,7 +360,7 @@ export function SettingsView() {
       const derivedBits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: 600000, hash: 'SHA-256' }, keyMaterial, 256);
       const keyHash = Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      await authApi.saveRecoveryKey({ recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash: keyHash, recoveryKeySalt: saltHex });
+      await authApi.saveRecoveryKey({ currentPassword: recoveryKeyPw, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash: keyHash, recoveryKeySalt: saltHex });
       setGeneratedRecoveryKey(recoveryKey);
       setRecoveryKeyPw('');
     } catch (err) {
@@ -704,10 +705,10 @@ export function SettingsView() {
               </ActionButton>
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
-                <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim()}>
+                <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword}>
                   {emailLoading ? <Spinner size={14} /> : 'Save'}
                 </ActionButton>
-                <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailMessage(''); }}>
+                <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailMessage(''); }}>
                   Cancel
                 </ActionButton>
               </div>
@@ -715,14 +716,21 @@ export function SettingsView() {
           }
         >
           {editingEmail && (
-            <TextInput
-              value={newEmail}
-              onChange={e => setNewEmail(e.target.value)}
-              placeholder="New email address"
-              type="email"
-              autoFocus
-              style={{ marginTop: 4 }}
-            />
+            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <TextInput
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+                placeholder="New email address"
+                type="email"
+                autoFocus
+              />
+              <PasswordInput
+                value={emailPassword}
+                onChange={e => setEmailPassword(e.target.value)}
+                placeholder="Current password"
+                autoComplete="current-password"
+              />
+            </div>
           )}
         </SettingsRow>
         {emailMessage && <div style={{ padding: '0 0 12px', fontSize: 13, color: emailError ? '#9B4444' : '#5A8A6A' }}>{emailMessage}</div>}

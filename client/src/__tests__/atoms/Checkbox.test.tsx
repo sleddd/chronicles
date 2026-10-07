@@ -14,21 +14,15 @@ describe('Checkbox', () => {
     expect(screen.getByText('Remember me')).toBeInTheDocument();
   });
 
-  it('does not render label when not provided', () => {
+  it('does not render label text when not provided', () => {
     const { container } = renderWithTheme(<Checkbox checked={false} onChange={() => {}} />);
-    // Only the checkbox box div, no label span
-    const spans = container.querySelectorAll('span');
-    expect(spans.length).toBe(0);
+    expect(container.querySelector('.ch-check__label')).toBeNull();
+    expect(container.textContent).toBe('');
   });
 
-  it('shows check mark when checked', () => {
-    renderWithTheme(<Checkbox checked={true} onChange={() => {}} />);
-    expect(screen.getByText('✓')).toBeInTheDocument();
-  });
-
-  it('does not show check mark when unchecked', () => {
+  it('is unchecked when checked is false', () => {
     renderWithTheme(<Checkbox checked={false} onChange={() => {}} />);
-    expect(screen.queryByText('✓')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
   });
 
   it('reflects checked state on the hidden input', () => {

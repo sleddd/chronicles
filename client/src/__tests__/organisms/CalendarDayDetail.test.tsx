@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
@@ -5,7 +6,7 @@ import { lightTheme } from '@shared/theme/tokens';
 import { CalendarDayDetail } from '@/components/organisms/CalendarDayDetail';
 
 function renderWithTheme(ui: React.ReactElement) {
-  return render(<ThemeProvider theme={lightTheme}>{ui}</ThemeProvider>);
+  return render(<ThemeProvider theme={lightTheme}><MemoryRouter>{ui}</MemoryRouter></ThemeProvider>);
 }
 
 const makeEntry = (id: number, text: string) => ({
@@ -45,7 +46,8 @@ describe('CalendarDayDetail', () => {
         entries={[makeEntry(1, 'Test entry')]}
       />
     );
-    expect(screen.getByText(/1 entry/i)).toBeInTheDocument();
+    // The calendar shows scheduled items, so the count reads "1 item"
+    expect(screen.getByText(/1 item\b/i)).toBeInTheDocument();
   });
 
   it('renders multiple entries without crashing', () => {

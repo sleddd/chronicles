@@ -9,10 +9,10 @@ function renderWithTheme(ui: React.ReactElement) {
 }
 
 describe('UnlockDialog', () => {
-  it('renders unlock title and description', () => {
+  it('renders the unlock title and password prompt', () => {
     renderWithTheme(<UnlockDialog onUnlock={vi.fn()} />);
     expect(screen.getByText('Unlock Your Journal')).toBeInTheDocument();
-    expect(screen.getByText(/Enter your password to decrypt/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
   });
 
   it('renders password field and unlock button', () => {
