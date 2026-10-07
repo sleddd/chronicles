@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '../../../design-system/components/core/Icon.jsx';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
-import { JournalTemplate, SidePanel, EditorPanel } from '../components/templates/JournalTemplate.js';
+import { JournalTemplate, SidePanel, EditorPanel, MobileBackButton } from '../components/templates/JournalTemplate.js';
 import { LoadingCenter } from '../components/atoms/LoadingCenter.js';
 import { EmptyEditor } from '../components/atoms/EmptyEditor.js';
 import { SidePadding } from '../components/atoms/SidePadding.js';
@@ -961,6 +961,7 @@ export function JournalView() {
         }
         editorPanel={
           <EditorPanel visibleMobile={showMobileEditor}>
+            <MobileBackButton onClick={handleMobileBack} />
             <EditorFocusWrap
               $expanded={editorExpanded}
               onFocus={e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); }}

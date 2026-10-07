@@ -150,10 +150,14 @@ describe('bestEffortDeleteImages', () => {
     vi.stubGlobal('fetch', fetchMock);
     await bestEffortDeleteImages([img(1).key, img(1).thumbKey]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, opts] = fetchMock.mock.calls[0];
-    expect(opts).toEqual({ method: 'DELETE' });
-    expect(url).toContain(`/my-images/${img(1).key}?`);
-    expect(url).toContain('X-Amz-Signature=');
+    // Keys are signed concurrently, so requests can go out in either order
+    for (const [, opts] of fetchMock.mock.calls) expect(opts).toEqual({ method: 'DELETE' });
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    for (const key of [img(1).key, img(1).thumbKey]) {
+      const matching = urls.filter(u => u.includes(`/my-images/${key}?`));
+      expect(matching).toHaveLength(1);
+      expect(matching[0]).toContain('X-Amz-Signature=');
+    }
   });
 
   it('never throws on network failure', async () => {

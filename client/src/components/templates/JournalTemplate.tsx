@@ -1,7 +1,6 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChevronLeft } from '@fortawesome/free-solid-svg-icons';
+import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
@@ -43,22 +42,27 @@ const StyledEditorPanel = styled.div<{ $visibleMobile?: boolean; $isDark?: boole
   }
 `;
 
+/* Phones/tablets show one pane at a time: this bar takes the editor back to
+   the entry list. Hidden whenever both panes are side by side. */
 const StyledMobileBackButton = styled.button`
   display: none;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  font-weight: 500;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 20px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.05rem;
-  color: ${({ theme }) => theme.colors.text};
-  background: none;
+  color: var(--text-secondary);
+  background: transparent;
   border: none;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  &:hover { color: ${({ theme }) => theme.colors.text}; }
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
   @media (max-width: 1024px) {
     display: flex;
@@ -97,9 +101,9 @@ interface MobileBackButtonProps {
 
 export function MobileBackButton({ onClick }: MobileBackButtonProps) {
   return (
-    <StyledMobileBackButton onClick={onClick}>
-      <FontAwesomeIcon icon={faChevronLeft} size="xs" />
-      Back to entries
+    <StyledMobileBackButton type="button" onClick={onClick} aria-label="Back to entries">
+      <Icon name="chevron-left" size={16} strokeWidth={2} />
+      Entries
     </StyledMobileBackButton>
   );
 }
