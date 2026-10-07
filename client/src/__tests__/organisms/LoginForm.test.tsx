@@ -33,7 +33,7 @@ describe('LoginForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith('test@example.com', 'mypassword123');
+      expect(onSubmit).toHaveBeenCalledWith('test@example.com', 'mypassword123', false);
     });
   });
 

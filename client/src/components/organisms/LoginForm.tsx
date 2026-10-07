@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
+import { RememberMe } from '../molecules/RememberMe.js';
 
 const Form = styled.form`
   display: flex;
@@ -66,7 +67,7 @@ const ErrorBanner = styled.div`
 `;
 
 interface LoginFormProps {
-  onSubmit: (email: string, password: string) => Promise<void>;
+  onSubmit: (email: string, password: string, remember: boolean) => Promise<void>;
   onForgotPassword?: () => void;
 }
 
@@ -76,13 +77,14 @@ export function LoginForm({ onSubmit, onForgotPassword }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [remember, setRemember] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await onSubmit(email, password);
+      await onSubmit(email, password, remember);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -126,6 +128,8 @@ export function LoginForm({ onSubmit, onForgotPassword }: LoginFormProps) {
           </ShowBtn>
         </InputWrap>
       </Field>
+
+      <RememberMe checked={remember} onChange={setRemember} />
 
       <Button type="submit" fullWidth disabled={loading} variant="secondary">
         {loading ? <Spinner size={18} /> : 'Sign in'}

@@ -7,6 +7,7 @@ import { securityHeaders } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import authRoutes from './routes/auth.js';
+import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
 import settingsRoutes from './routes/settings.js';
@@ -62,6 +63,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Routes
+app.use('/api/auth/remember', authMiddleware, apiLimiter, rememberRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/entries', authMiddleware, apiLimiter, entriesRoutes);
 app.use('/api/topics', authMiddleware, apiLimiter, topicsRoutes);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTopicTrail } from '@/utils/topicBreadcrumb';
+import { getEntryTrail, getTopicTrail, journalOriginState, viewTrailFor } from '@/utils/topicBreadcrumb';
 
 const JOURNAL = { label: 'Journal', path: '/journal' };
 
@@ -60,5 +60,37 @@ describe('getTopicTrail', () => {
   it('is case-insensitive', () => {
     expect(getTopicTrail('recipe')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
     expect(getTopicTrail('RECIPE')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
+  });
+});
+
+describe('origin trails', () => {
+  it('uses the view an entry was opened from', () => {
+    expect(getEntryTrail('Task', '/calendar')).toEqual([JOURNAL, { label: 'Calendar', path: '/calendar' }]);
+    expect(getEntryTrail('Meals', '/kitchen')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
+    expect(getEntryTrail('Symptom', '/health/symptoms')).toEqual([
+      JOURNAL, { label: 'Health', path: '/health' }, { label: 'Symptoms', path: '/health/symptoms' },
+    ]);
+  });
+
+  it('keeps the query string on the last crumb', () => {
+    expect(viewTrailFor('/goals/filter?q=paint')).toEqual([
+      { label: 'Planning', path: '/goals' }, { label: 'Filters', path: '/goals/filter?q=paint' },
+    ]);
+  });
+
+  it('falls back to the topic home for unknown, journal or unsafe origins', () => {
+    for (const from of [undefined, '', '/journal', '/nowhere', 'https://evil.example', '//evil.example', 'javascript:alert(1)']) {
+      expect(getEntryTrail('Task', from)).toEqual(getTopicTrail('Task'));
+    }
+  });
+
+  it('only builds origin state outside the journal', () => {
+    expect(journalOriginState('/health/food')).toEqual({ from: '/health/food' });
+    expect(journalOriginState('/goals/filter', '?q=x')).toEqual({ from: '/goals/filter?q=x' });
+    expect(journalOriginState('/journal')).toBeUndefined();
+  });
+
+  it('handles topic detail pages', () => {
+    expect(viewTrailFor('/topics/12')).toEqual([{ label: 'Topics', path: '/topics' }, { label: 'Topic', path: '/topics/12' }]);
   });
 });

@@ -8,6 +8,7 @@ const mockNavigate = vi.fn();
 
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
+  useLocation: vi.fn(() => ({ pathname: '/entertainment/music', search: '', state: null })),
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({

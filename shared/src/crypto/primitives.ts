@@ -90,7 +90,7 @@ export async function importRawKey(keyBytes: Uint8Array): Promise<CryptoKey> {
 }
 
 /** Wrap purpose identifiers for Additional Authenticated Data (AAD) */
-export type WrapPurpose = 'kek-wrap' | 'recovery-wrap';
+export type WrapPurpose = 'kek-wrap' | 'recovery-wrap' | 'device-wrap';
 
 /** Encode a wrap purpose string as AAD bytes for AES-GCM */
 function purposeToAAD(purpose: WrapPurpose): ArrayBuffer {
@@ -149,6 +149,37 @@ export async function unwrapKey(
       ['encrypt', 'decrypt']
     );
   }
+}
+
+/**
+ * "Remember me" wrapping key, imported from a 32-byte per-sign-in secret the
+ * server holds only in memory. Non-extractable and limited to wrap/unwrap.
+ */
+export async function importDeviceWrapKey(secret: Uint8Array): Promise<CryptoKey> {
+  if (secret.byteLength !== 32) throw new Error('Device secret must be 32 bytes');
+  return crypto.subtle.importKey(
+    'raw',
+    secret.buffer.slice(secret.byteOffset, secret.byteOffset + secret.byteLength) as ArrayBuffer,
+    { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
+    false,
+    ['wrapKey', 'unwrapKey']
+  );
+}
+
+/**
+ * Unwrap a "remember me" blob straight into a NON-extractable master key.
+ * No legacy no-AAD fallback: the purpose AAD must match.
+ */
+export async function unwrapDeviceKey(wrappedKey: ArrayBuffer, wrappingKey: CryptoKey, iv: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.unwrapKey(
+    'raw',
+    wrappedKey,
+    wrappingKey,
+    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, additionalData: purposeToAAD('device-wrap') },
+    { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
+    false,
+    ['encrypt', 'decrypt']
+  );
 }
 
 /**

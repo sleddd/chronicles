@@ -244,7 +244,7 @@ export function CalendarWeekView({
                   const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
 
                   return (
-                    <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal'); }}>
+                    <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
                       <DateCol>
                         <TimeLabel>{timeLabel}</TimeLabel>
                       </DateCol>

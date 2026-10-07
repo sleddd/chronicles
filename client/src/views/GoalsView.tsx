@@ -24,6 +24,7 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { entries as entriesApi } from '../services/api.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { journalOriginState } from '../utils/topicBreadcrumb.js';
 import type { GoalEntry, MilestoneEntryData, TaskEntryData, RoadmapStatus } from '../types/goals.js';
 import { ROADMAP_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus, milestoneFieldsForStatus } from '../types/goals.js';
 import { useDroppable } from '@dnd-kit/core';
@@ -543,8 +544,8 @@ export function GoalsView() {
   const openInJournal = useCallback((id: number) => {
     setSelectedEntryId(id);
     setShowMobileEditor(true);
-    navigate('/journal');
-  }, [setSelectedEntryId, setShowMobileEditor, navigate]);
+    navigate('/journal', { state: journalOriginState(location.pathname, location.search) });
+  }, [setSelectedEntryId, setShowMobileEditor, navigate, location.pathname, location.search]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const activeAddTopic = tab === 'goals' ? allTopics.find(t => t.id === goalTopicId)

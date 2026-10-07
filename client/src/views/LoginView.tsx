@@ -86,6 +86,7 @@ export function LoginView() {
 
   // Saved password for encryption unlock after 2FA completes
   const [savedPassword, setSavedPassword] = useState('');
+  const [savedRemember, setSavedRemember] = useState(false);
 
   // 2FA screen state
   const [otpCode, setOtpCode] = useState('');
@@ -93,12 +94,13 @@ export function LoginView() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
 
-  const handleLogin = async (email: string, password: string) => {
+  const handleLogin = async (email: string, password: string, remember: boolean) => {
     const encryptionData = await login(email, password);
 
     if (encryptionData === null) {
       // 2FA required — save password for later unlock
       setSavedPassword(password);
+      setSavedRemember(remember);
       return;
     }
 
@@ -114,7 +116,8 @@ export function LoginView() {
         encryptionData.kekSalt,
         encryptionData.encryptedMasterKey,
         encryptionData.kekWrapIv,
-        encryptionData.kekIterations
+        encryptionData.kekIterations,
+        remember
       );
     }
 
@@ -139,7 +142,8 @@ export function LoginView() {
           encryptionData.kekSalt,
           encryptionData.encryptedMasterKey,
           encryptionData.kekWrapIv,
-          encryptionData.kekIterations
+          encryptionData.kekIterations,
+          savedRemember
         );
       }
       navigate('/');

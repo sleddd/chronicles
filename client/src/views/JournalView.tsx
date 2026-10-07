@@ -35,6 +35,7 @@ import type { RecipeFieldValues } from '../types/fields.js';
 import { recipeShareHtml } from '../utils/recipeShareHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import type { EncryptedPost } from '@shared/crypto/types';
+import { featureFlagsFrom } from '../utils/featureFlags.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -158,7 +159,7 @@ const imagesSig = (imgs: EntryImage[], featured: string | null) =>
 
 export function JournalView() {
   const { encryptionData } = useAuth();
-  const { isUnlocked, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
+  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
   const {
     decryptedEntries, setDecryptedEntries, setRawEntries,
     topics, setTopics, setFeatureFlags, isInitialized, setLoading, isLoading,
@@ -221,7 +222,7 @@ export function JournalView() {
   const location = useLocation();
 
   useEffect(() => {
-    const state = location.state as { newEntryDate?: string } | null;
+    const state = location.state as { newEntryDate?: string; from?: string } | null;
     if (state?.newEntryDate) {
       const dateStr = state.newEntryDate;
       calendarArrivalRef.current = true;
@@ -230,7 +231,8 @@ export function JournalView() {
       setSelectedDate(new Date(dateStr + 'T00:00:00'));
       setViewMode('date');
       setShowMobileEditor(true);
-      navigate(location.pathname, { replace: true, state: null });
+      // Keep the origin view so the breadcrumb can still lead back to it
+      navigate(location.pathname, { replace: true, state: state.from ? { from: state.from } : null });
     }
   }, [location.state]);
 
@@ -374,11 +376,11 @@ export function JournalView() {
     return () => setEditorFocusMode(false);
   }, [editorExpanded]);
 
-  const handleUnlock = useCallback(async (password: string) => {
+  const handleUnlock = useCallback(async (password: string, remember = false) => {
     if (!encryptionData?.kekSalt || !encryptionData?.encryptedMasterKey || !encryptionData?.kekWrapIv) {
       throw new Error('Missing encryption data');
     }
-    await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations);
+    await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations, remember);
   }, [encryptionData, unlock]);
 
   useEffect(() => {
@@ -415,14 +417,9 @@ export function JournalView() {
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
         void loadAiConfig(settingsMap.aiConfig, decryptBytes);
-        // Extract feature flags and store them (must be set before setTopics so filtering works)
-        const flags: Record<string, boolean> = {};
-        for (const key of Object.keys(settingsMap)) {
-          if (key.endsWith('Enabled') && typeof settingsMap[key] === 'boolean') {
-            flags[key] = settingsMap[key] as boolean;
-          }
-        }
-        setFeatureFlags(flags);
+        // Feature flags (must be set before setTopics so filtering works);
+        // never-saved flags default to enabled, same as useInitializeData
+        setFeatureFlags(featureFlagsFrom(settingsMap));
         setTopics(topicsData);
         const encrypted: EncryptedPost[] = rawEntries.map(e => ({
           id: e.id as number,
@@ -886,11 +883,11 @@ export function JournalView() {
     } catch (err) { console.error('Quick create failed:', err); }
   }, [encryptPost]);
 
-  if (encryptionData?.encryptionEnabled && !isUnlocked) {
+  if (encryptionData?.encryptionEnabled && !isUnlocked && !isRestoring) {
     return (<><AppTemplate><EmptyEditor>Unlock your journal to view entries</EmptyEditor></AppTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
   }
 
-  if (isLoading) {
+  if (isLoading || (isRestoring && !isUnlocked)) {
     return (<AppTemplate><LoadingCenter><Spinner size={40} /></LoadingCenter></AppTemplate>);
   }
 
@@ -977,6 +974,7 @@ export function JournalView() {
               onDelete={selectedEntryId ? handleDelete : undefined}
               onNew={handleNew}
               onBookmark={handleBookmark}
+              originPath={(location.state as { from?: string } | null)?.from}
               onNavigate={path => {
                 // The Journal crumb returns to the entry list — on mobile
                 // that means closing the editor so the list is full-width

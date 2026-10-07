@@ -220,7 +220,7 @@ export function CalendarDayView({
       <Divider />
 
       <List>
-        <AddEntryRow onClick={() => navigate('/journal', { state: { newEntryDate: dateStr } })}>
+        <AddEntryRow onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
@@ -235,7 +235,7 @@ export function CalendarDayView({
             const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
 
             return (
-              <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal'); }}>
+              <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
                 <DateCol>
                   {timeLabel && <TimeLabel>{timeLabel}</TimeLabel>}
                 </DateCol>

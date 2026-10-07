@@ -391,6 +391,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - `KitchenDashboardView` (`/kitchen`, the sidebar's fork-and-spoon icon): **Meals** — today's planned meals from the weekly Menu Plan entries (or the next planned day within two weeks; a meal linked to a recipe opens it); **Shopping list** — the newest list with unchecked items as a checklist (tick off, add an item, open the list), unchecked items first. Pure helpers in `client/src/utils/kitchen.ts`
 
 **Journal**
+- **Breadcrumbs remember where you came from**: opening an entry from any view passes router state `{ from: path+query }` (`useOpenInJournal`, calendar views, Goals via `journalOriginState`); the editor trail becomes Journal / that view (e.g. Journal / Health / Symptoms), built by `getEntryTrail` / `viewTrailFor` in `client/src/utils/topicBreadcrumb.ts` (only known in-app paths; anything else falls back to the topic's home). The state survives reloads and the calendar's new-entry handoff
 - Entry list date badge is the day number over the **month** abbreviation (e.g. 7 / OCT) in `EntryListCard` and `EntryCard`
 - The tool row under the journal search (`ViewTabs`) ends with a **+ New entry** button
 
@@ -456,7 +457,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 `entriesApi.getAll()` requests `?limit=5000`. Server allows up to 10,000. Do not reduce this — personal journals can easily exceed 100 entries and topic filtering relies on all entries being in the client store.
 
 ### Feature Flags
-Feature flags in `entriesStore.featureFlags` default to `{}` on load. `useInitializeData` explicitly sets all known flags to `true` when not present in settings. The `filterTopics` function uses `featureFlags[flag] !== false` (not `featureFlags[flag]`) so undefined flags are treated as enabled.
+Feature flags in `entriesStore.featureFlags` default to `{}` on load. Both `useInitializeData` and `JournalView` build them with `featureFlagsFrom` (`client/src/utils/featureFlags.ts`), which sets all known flags to `true` when not present in settings. The `filterTopics` function uses `featureFlags[flag] !== false` (not `featureFlags[flag]`) so undefined flags are treated as enabled.
 
 ### Dashboard Widget Data
 Dashboard widgets save entries with `_taxonomyId` in encrypted metadata (same as all entries). The Priorities widget auto-creates a "Priorities" topic on first save. The Meds widget reads from `decryptedEntries` filtered by the Medication topic — it only renders when `hasMeds` is true.
@@ -497,9 +498,15 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 ### Key Storage Security
 - Master key is a **non-extractable CryptoKey** — cannot be exported to JWK or raw bytes
 - Key lives in React ref (memory only) — lost on page refresh
-- On refresh: user re-enters password to re-derive key
-- Optional: Service Worker can hold key across refreshes (user toggle in Settings)
-- Key is cleared on: logout, inactivity timeout, tab close
+- On refresh: user re-enters password to re-derive key — unless they opted into **Remember me**
+- Key is cleared on: logout, inactivity timeout, tab hidden (not when remembered), tab close
+
+### Remember me (stay unlocked until the browser closes)
+Opt-in checkbox on sign-in and on the lock screen (`RememberMe` molecule). Off by default; shows a shared-computer warning.
+- **Browser keeps only ciphertext**: `localStorage['chronicles.remember.v1']` = the master key wrapped (AES-GCM, purpose AAD `'device-wrap'`) under a 32-byte **device secret**. Produced by `encryptionService.unwrapMasterKeyForDevice` (KEK derived once; the transient extractable copy is only ever passed to `wrapKey`, raw key bytes never reach JS) and reopened by `unwrapFromDevice` straight into a **non-extractable** key (`unwrapDeviceKey`, no legacy no-AAD fallback)
+- **Server keeps the device secret in memory only** (`server/src/services/rememberGrants.ts`; never DB/logs), keyed by SHA-256 of a random grant id carried in an **HttpOnly, SameSite=Strict, Secure session cookie** (`__Host-chronicle_unlock`, no Expires → gone when the browser closes). `POST /api/auth/remember` (create, one per session), `POST /api/auth/remember/key` (returns the secret only for the same account **and** signed-in session that created it), `DELETE /api/auth/remember`; all behind `authMiddleware` (CSRF header enforced), `Cache-Control: no-store`, browser-only (Bearer refused). 12-hour absolute cap so browsers that restore session cookies can't keep it alive; server restart, logout and session revocation (`revokeSession` / `revokeAllSessions`) drop grants
+- **Client lifecycle** (`client/src/services/rememberDevice.ts`, `EncryptionContext`): restores on page load (`isRestoring` suppresses the unlock prompt), skips the hidden-tab auto-lock, and replaces the 15-minute per-tab idle lock with **60 minutes idle across all Chronicles tabs** (shared `chronicles.lastActive`). `lock()` forgets everywhere (blob + grant); other tabs lock via the `storage` event. 401/403/404 from the key endpoint deletes the blob; network errors keep it. Settings → Security shows status and **Forget this browser**
+- Trade-off (documented to users): while remembered, script running in the page (e.g. XSS) could fetch the secret and reopen the key, so the CSP (`script-src 'self'`) matters even more; it's opt-in for personal devices only
 
 ## UI Theme
 
