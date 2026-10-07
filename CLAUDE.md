@@ -410,13 +410,13 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - User setup requires a bucket CORS policy allowing `GET, PUT, DELETE` (documented in Settings → Entry Images → Setup guide); CSP `connect-src` allows `https://*.r2.cloudflarestorage.com`
 
 **AI Assistant (calorie estimates)**
-- Bring-your-own AI: Settings → AI Assistant lets the user pick **Claude (Anthropic API)**, **Amazon Bedrock** (Bedrock API key or IAM access keys, via the Bedrock Mantle Messages endpoint), or **OpenAI**, enter credentials, and choose a model (presets + any model ID)
+- Bring-your-own AI: Settings → AI Assistant lets the user pick **Claude (Anthropic API)**, **Amazon Bedrock** (Bedrock API key or IAM access keys), or **OpenAI**, enter credentials, and choose a model (presets + any model ID)
+- **Bedrock supports every text model, not just Claude** (`client/src/services/bedrock.ts`): inference uses the model-agnostic **Converse API** on `bedrock-runtime`; the model picker loads the account's text models live (`ListFoundationModels` + system `ListInferenceProfiles` for cross-region-only models like `us.meta.llama…`), grouped by provider, with a region-aware fallback list if listing fails. IAM requests are SigV4-signed in the browser with `@smithy/signature-v4` (`applyChecksum: false`, verified byte-identical to botocore); Bedrock API keys go as `Authorization: Bearer`
 - **Fully client-side, like Entry Images** — the whole config (provider, model, keys, optional body weight) is encrypted with the master key and stored as the `aiConfig` setting; decrypted into module memory on unlock (`rederiveAiConfig`) and cleared on lock (`clearAiConfig`). Requests go browser → provider; the server never sees keys, prompts, or answers. Logged food/exercise descriptions DO go to the chosen provider (disclosed in Settings)
-- `client/src/services/aiAssistant.ts` — config lifecycle, provider calls (`@anthropic-ai/sdk` with `dangerouslyAllowBrowser`, `@anthropic-ai/bedrock-sdk/mantle-client`, OpenAI chat completions via fetch), `estimateMealCalories` / `estimateExerciseCalories`, `autoCaloriesOnSave`; `useAiReady()` hook; SDKs are lazy-loaded chunks
-- Bedrock SDK browser shims for Node-only imports (`assert`, `@aws-sdk/credential-providers`) live in `client/src/shims/` and are aliased in `vite.config.ts`
+- `client/src/services/aiAssistant.ts` — config lifecycle, provider calls (`@anthropic-ai/sdk` with `dangerouslyAllowBrowser`, Bedrock via `bedrock.ts`, OpenAI chat completions via fetch), `estimateMealCalories` / `estimateExerciseCalories`, `autoCaloriesOnSave`; `useAiReady()` hook; the Anthropic SDK is a lazy-loaded chunk
 - Food: calories auto-estimated on save when blank (Health dashboard quick log, New entry form, journal Save) + an "Estimate" button beside Calories. Exercise: calories burned calculated on save from type/duration/distance/intensity (+ body weight) and **re-calculated when those inputs change**
 - `caloriesSource: 'ai' | 'manual'` + `calorieBasis` in the entry's custom fields — typed calories are never overwritten; an AI estimate is refreshed only when its inputs changed. A failed estimate never blocks a save. Journal autosave does not call the AI (explicit Save does)
-- CSP `connect-src` allows `https://api.anthropic.com`, `https://api.openai.com`, `https://*.api.aws`
+- CSP `connect-src` allows `https://api.anthropic.com`, `https://api.openai.com`, `https://*.amazonaws.com` (Bedrock runtime + control plane)
 
 ### Planned
 - Recurring calendar events
@@ -443,7 +443,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - `script-src 'self'` — no inline scripts
 - `style-src 'self' 'unsafe-inline'` — required for styled-components
 - `img-src 'self' data: blob:` — images from same origin and data URIs
-- `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket, and the AI providers (`api.anthropic.com`, `api.openai.com`, `*.api.aws`)
+- `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket, and the AI providers (`api.anthropic.com`, `api.openai.com`, `*.amazonaws.com`)
 - `frame-ancestors 'none'` — prevent clickjacking
 
 ### CSRF Protection

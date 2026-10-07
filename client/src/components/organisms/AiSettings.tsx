@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { SettingsCard, SettingsRow } from '../molecules/SettingsCard.js';
 import { ActionButton } from '../atoms/SettingsAtoms.js';
 import { Toggle } from '../atoms/Toggle.js';
@@ -16,10 +16,13 @@ import {
   estimateMealCalories,
   getAiConfigValue,
   hasCredentials,
+  listBedrockModels,
   setAiConfig,
+  suggestedBedrockModels,
   subscribeAi,
   type AiConfig,
   type AiProvider,
+  type BedrockModelOption,
 } from '../../services/aiAssistant.js';
 
 const CUSTOM = '__custom__';
@@ -33,7 +36,13 @@ const CUSTOM = '__custom__';
 export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const { encryptBytes } = useEncryption();
   const [cfg, setCfg] = useState<AiConfig>(() => getAiConfigValue() ?? DEFAULT_AI_CONFIG);
-  const [customModel, setCustomModel] = useState(() => isCustomModel(cfg));
+  /** User picked "Other model ID…" */
+  const [customModel, setCustomModel] = useState(false);
+  /** Bedrock: the account's live model list (null until loaded) */
+  const [bedrockModels, setBedrockModels] = useState<BedrockModelOption[] | null>(null);
+  const [modelsState, setModelsState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [modelsError, setModelsError] = useState('');
+  const [modelsReloadTick, setModelsReloadTick] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
@@ -49,7 +58,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     const fill = () => {
       if (touchedRef.current) return;
       const stored = getAiConfigValue();
-      if (stored) { setCfg(stored); setCustomModel(isCustomModel(stored)); }
+      if (stored) setCfg(stored);
     };
     fill();
     return subscribeAi(fill);
@@ -85,8 +94,39 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
 
   const handleProviderChange = (provider: AiProvider) => {
     setCustomModel(false);
-    update({ provider, model: AI_MODEL_PRESETS[provider][0].id }, true);
+    const model = provider === 'bedrock'
+      ? (bedrockModels ?? suggestedBedrockModels(cfg.bedrockRegion))[0]?.id ?? ''
+      : AI_MODEL_PRESETS[provider][0].id;
+    update({ provider, model }, true);
   };
+
+  // Bedrock: load every text model the account can use in its region once the
+  // credentials are complete (debounced so typing a key doesn't spam AWS)
+  const bedrockCredKey = cfg.provider === 'bedrock'
+    ? JSON.stringify([cfg.bedrockRegion.trim(), cfg.bedrockAuth, cfg.bedrockApiKey.trim(), cfg.awsAccessKeyId.trim(), cfg.awsSecretAccessKey.trim(), cfg.awsSessionToken.trim()])
+    : '';
+  const bedrockCredsComplete = cfg.provider === 'bedrock' && hasCredentials({ ...cfg, model: cfg.model || 'x' });
+  useEffect(() => {
+    if (!cfg.enabled || !bedrockCredsComplete) { setBedrockModels(null); setModelsState('idle'); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setModelsState('loading');
+      setModelsError('');
+      try {
+        const models = await listBedrockModels(cfg);
+        if (cancelled) return;
+        setBedrockModels(models);
+        setModelsState('loaded');
+      } catch (err) {
+        if (cancelled) return;
+        setBedrockModels(null);
+        setModelsState('error');
+        setModelsError(err instanceof Error ? err.message : 'Could not load models');
+      }
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // cfg is read through bedrockCredKey — the list only depends on region + credentials
+  }, [cfg.enabled, bedrockCredsComplete, bedrockCredKey, modelsReloadTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleModelSelect = (value: string) => {
     if (value === CUSTOM) { setCustomModel(true); return; }
@@ -114,13 +154,24 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     touchedRef.current = true;
     setCfg(DEFAULT_AI_CONFIG);
     setCustomModel(false);
+    setBedrockModels(null);
     setTestState('idle'); setTestMessage(''); setSaveState('idle');
     await settingsApi.upsert('aiConfig', null).catch(() => {});
     setAiConfig(null, null);
   };
 
   const ready = hasCredentials(cfg);
-  const presets = AI_MODEL_PRESETS[cfg.provider];
+  const modelOptions: BedrockModelOption[] = useMemo(() => {
+    if (cfg.provider !== 'bedrock') return AI_MODEL_PRESETS[cfg.provider].map(m => ({ ...m, provider: '' }));
+    return bedrockModels && bedrockModels.length > 0 ? bedrockModels : suggestedBedrockModels(cfg.bedrockRegion);
+  }, [cfg.provider, cfg.bedrockRegion, bedrockModels]);
+  const showCustom = customModel || (!!cfg.model && !modelOptions.some(m => m.id === cfg.model));
+  // Bedrock options are grouped by model provider (Amazon, Anthropic, Meta, …)
+  const modelGroups = useMemo(() => {
+    const groups = new Map<string, BedrockModelOption[]>();
+    for (const m of modelOptions) groups.set(m.provider, [...(groups.get(m.provider) ?? []), m]);
+    return [...groups.entries()];
+  }, [modelOptions]);
   const providerName = AI_PROVIDER_LABELS[cfg.provider];
 
   const noteStyle = { fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 } as const;
@@ -220,12 +271,24 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
 
             <div style={inputRow}>
               <span style={labelStyle}>Model</span>
-              <Select value={customModel ? CUSTOM : cfg.model} onChange={e => handleModelSelect(e.target.value)}>
-                {presets.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              <Select value={showCustom ? CUSTOM : cfg.model} onChange={e => handleModelSelect(e.target.value)}>
+                {modelGroups.map(([group, models]) => group ? (
+                  <optgroup key={group} label={group}>
+                    {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </optgroup>
+                ) : models.map(m => <option key={m.id} value={m.id}>{m.label}</option>))}
                 <option value={CUSTOM}>Other model ID…</option>
               </Select>
-              {customModel && (
-                <TextInput value={cfg.model} onChange={e => update({ model: e.target.value })} placeholder="Exact model ID" autoComplete="off" />
+              {showCustom && (
+                <TextInput value={cfg.model} onChange={e => update({ model: e.target.value })} placeholder={cfg.provider === 'bedrock' ? 'Model or inference profile ID, e.g. us.amazon.nova-pro-v1:0' : 'Exact model ID'} autoComplete="off" />
+              )}
+              {cfg.provider === 'bedrock' && (
+                <span style={modelsState === 'error' ? errStyle : noteStyle}>
+                  {modelsState === 'idle' && 'Add your credentials to load every text model your AWS account can use. Common models are listed until then.'}
+                  {modelsState === 'loading' && <><Spinner size={11} /> Loading models from your AWS account…</>}
+                  {modelsState === 'loaded' && <>{bedrockModels?.length ?? 0} text models available in {cfg.bedrockRegion.trim()} · <ActionLink onClick={() => setModelsReloadTick(t => t + 1)}>Refresh</ActionLink></>}
+                  {modelsState === 'error' && <>Couldn't load your model list ({modelsError}). Showing common models — pick one or enter an ID. <ActionLink onClick={() => setModelsReloadTick(t => t + 1)}>Try again</ActionLink></>}
+                </span>
               )}
             </div>
             {saveStatusNode}
@@ -271,6 +334,14 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   );
 }
 
-function isCustomModel(cfg: AiConfig): boolean {
-  return !!cfg.model && !AI_MODEL_PRESETS[cfg.provider].some(m => m.id === cfg.model);
+function ActionLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-accent)', font: 'inherit', textDecoration: 'underline' }}
+    >
+      {children}
+    </button>
+  );
 }

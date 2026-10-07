@@ -10,9 +10,17 @@
  */
 
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
+import {
+  bedrockConverse,
+  fallbackBedrockModels,
+  listBedrockTextModels,
+  type BedrockAuth,
+  type BedrockCredentials,
+  type BedrockModelOption,
+} from './bedrock.js';
 
+export type { BedrockAuth, BedrockModelOption };
 export type AiProvider = 'anthropic' | 'bedrock' | 'openai';
-export type BedrockAuth = 'apiKey' | 'iam';
 
 export interface AiConfig {
   enabled: boolean;
@@ -54,11 +62,9 @@ export const AI_MODEL_PRESETS: Record<AiProvider, { id: string; label: string }[
     { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
     { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
   ],
-  bedrock: [
-    { id: 'anthropic.claude-opus-5-5', label: 'Claude Opus 5.5' },
-    { id: 'anthropic.claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
-    { id: 'anthropic.claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-  ],
+  // Bedrock's picker loads the account's own model list (see listBedrockTextModels);
+  // this is only the starter list before that loads
+  bedrock: fallbackBedrockModels('us-east-1'),
   openai: [
     { id: 'gpt-5-mini', label: 'GPT-5 mini' },
     { id: 'gpt-5', label: 'GPT-5' },
@@ -213,30 +219,29 @@ async function completeClaude(cfg: AiConfig, system: string, prompt: string): Pr
   }
 }
 
+function bedrockCreds(cfg: AiConfig): BedrockCredentials {
+  return {
+    region: cfg.bedrockRegion,
+    auth: cfg.bedrockAuth,
+    apiKey: cfg.bedrockApiKey,
+    accessKeyId: cfg.awsAccessKeyId,
+    secretAccessKey: cfg.awsSecretAccessKey,
+    sessionToken: cfg.awsSessionToken,
+  };
+}
+
+/** Every text model the Bedrock account can use in its region (Settings model picker). */
+export function listBedrockModels(cfg: AiConfig): Promise<BedrockModelOption[]> {
+  return listBedrockTextModels(bedrockCreds(cfg));
+}
+
+/** Starter Bedrock model list for a region, shown until the live list loads. */
+export function suggestedBedrockModels(region: string): BedrockModelOption[] {
+  return fallbackBedrockModels(region);
+}
+
 async function completeBedrock(cfg: AiConfig, system: string, prompt: string): Promise<string> {
-  const { AnthropicBedrockMantle } = await import('@anthropic-ai/bedrock-sdk/mantle-client');
-  const auth = cfg.bedrockAuth === 'apiKey'
-    ? { apiKey: cfg.bedrockApiKey.trim() }
-    : {
-        awsAccessKey: cfg.awsAccessKeyId.trim(),
-        awsSecretAccessKey: cfg.awsSecretAccessKey.trim(),
-        awsSessionToken: cfg.awsSessionToken.trim() || null,
-      };
-  const client = new AnthropicBedrockMantle({
-    awsRegion: cfg.bedrockRegion.trim(),
-    dangerouslyAllowBrowser: true,
-    maxRetries: 1,
-    ...auth,
-  });
-  const model = cfg.model.trim();
-  const res = await client.messages.create({
-    model,
-    max_tokens: 2048,
-    system,
-    messages: [{ role: 'user', content: prompt }],
-    ...(isClaude5(model) ? { output_config: { effort: 'low' as const } } : {}),
-  });
-  return claudeText(res as ClaudeMessage);
+  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, prompt);
 }
 
 async function completeOpenAI(cfg: AiConfig, system: string, prompt: string): Promise<string> {
