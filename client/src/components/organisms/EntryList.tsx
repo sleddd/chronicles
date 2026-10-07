@@ -2,6 +2,7 @@ import styled from 'styled-components';
 import { memo, useMemo, useCallback, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
+import { EntryTableHead } from '../molecules/EntryTable.js';
 import { EntryCard } from './EntryCard.js';
 import { Checkbox } from '../atoms/Checkbox.js';
 import { entries as entriesApi } from '../../services/api.js';
@@ -226,12 +227,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
       const customFields = meta?._customFields as Record<string, unknown> | undefined;
       const taxId = meta?._taxonomyId as number | undefined;
 
-      // Orphaned mode: show only entries with topic ID that doesn't exist
-      if (viewMode === 'orphaned') {
-        return taxId !== undefined && !enabledTopicIds.has(taxId);
-      }
-
-      // Normal modes: hide orphaned entries
+      // Hide entries whose topic is gone or switched off
       if (taxId && !enabledTopicIds.has(taxId)) return false;
 
       if (viewMode === 'date') {
@@ -346,7 +342,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
   }, [selectedEntries, alsoDeleteRemote, removeEntry, exitSelectMode]);
 
   if (filteredEntries.length === 0) {
-    return <EmptyState>{viewMode === 'orphaned' ? 'No orphaned entries' : 'No entries yet'}</EmptyState>;
+    return <EmptyState>No entries yet</EmptyState>;
   }
 
   return (
@@ -390,6 +386,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
           </>
         )}
       </BulkBar>
+      <EntryTableHead inset />
       {groups.map(([dateKey, groupEntries]) => {
         return (
           <div key={dateKey}>

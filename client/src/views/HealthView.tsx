@@ -6,6 +6,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { EntryTableHead } from '../components/molecules/EntryTable.js';
 import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
@@ -392,6 +393,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             <div data-print-hide={printable || undefined}><EmptyState message="No entries yet." /></div>
           ) : (
             <List data-print-hide={printable || undefined}>
+              <EntryTableHead />
               {sortedEntries.map(entry => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);

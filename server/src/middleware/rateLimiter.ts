@@ -25,6 +25,20 @@ export const strictLimiter = rateLimit({
 });
 
 /**
+ * Sign-up limiter — 10 attempts per hour per IP.
+ * Sign-up has to say when an email is already registered (there's no email
+ * verification step that could hide it), so this keeps anyone from using it
+ * to check lots of addresses. A real person signs up once.
+ */
+export const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-up attempts, please try again later' },
+});
+
+/**
  * Authenticated API rate limiter — per-user throttling for data endpoints
  * 1500 requests per 15-minute window per user (falls back to IP if unauthenticated).
  * Normal use of the SPA plus bulk actions (imports, bulk edits, dose → Meals

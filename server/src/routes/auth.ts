@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
 import { registerTenant } from '../db/schemaManager.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
-import { authLimiter, strictLimiter } from '../middleware/rateLimiter.js';
+import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
 import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
@@ -59,6 +59,29 @@ const COOKIE_OPTIONS = {
   path: '/',
 };
 
+// Decoy recovery params for emails with no account must look exactly like a
+// real account's: the same bytes every time for the same email (random-per-
+// request decoys gave the game away — real params never change). Derived from
+// the server secret when configured, else a per-process key.
+const DECOY_KEY = (() => {
+  const configured = process.env.SECRETS_ENCRYPTION_KEY || process.env.CALENDAR_TOKEN_KEY;
+  return configured
+    ? crypto.createHmac('sha256', Buffer.from(configured, 'base64')).update('chronicles:recovery-decoy').digest()
+    : crypto.randomBytes(32);
+})();
+
+function decoyBytes(email: string, label: string, length: number): string {
+  return crypto.createHmac('sha256', DECOY_KEY).update(`${label}:${email}`).digest()
+    .subarray(0, length).toString('base64');
+}
+
+function longDecoyBytes(email: string, label: string, length: number): string {
+  // Two HMAC blocks, for values longer than 32 bytes
+  const a = crypto.createHmac('sha256', DECOY_KEY).update(`${label}:1:${email}`).digest();
+  const b = crypto.createHmac('sha256', DECOY_KEY).update(`${label}:2:${email}`).digest();
+  return Buffer.concat([a, b]).subarray(0, length).toString('base64');
+}
+
 /** Enforce a constant-time floor on endpoint response time to prevent timing-based enumeration */
 async function constantTimeDelay(startTime: number, minMs = 200): Promise<void> {
   const elapsed = Date.now() - startTime;
@@ -70,7 +93,7 @@ async function constantTimeDelay(startTime: number, minMs = 200): Promise<void> 
 // =============================================================================
 // POST /api/auth/register
 // =============================================================================
-router.post('/register', authLimiter, async (req, res) => {
+router.post('/register', registerLimiter, authLimiter, async (req, res) => {
   try {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -703,22 +726,21 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
       },
     });
 
-    if (!account || !account.encryptionEnabled) {
-      // Return fake params to prevent account enumeration
-      const fakeWrappedKey = crypto.randomBytes(48).toString('base64');
-      const fakeIv = crypto.randomBytes(12).toString('base64');
+    if (!account || !account.encryptionEnabled || !account.recoveryWrappedMK || !account.recoveryWrapIv) {
+      // Stable decoy params (same size as a real AES-GCM-wrapped 32-byte key)
+      // so an unknown email is indistinguishable from a real one
       await constantTimeDelay(startTime);
       res.json({
-        recoveryWrappedMK: fakeWrappedKey,
-        recoveryWrapIv: fakeIv,
+        recoveryWrappedMK: longDecoyBytes(email, 'wrapped-mk', 48),
+        recoveryWrapIv: decoyBytes(email, 'wrap-iv', 12),
       });
       return;
     }
 
     await constantTimeDelay(startTime);
     res.json({
-      recoveryWrappedMK: account.recoveryWrappedMK ? Buffer.from(account.recoveryWrappedMK).toString('base64') : null,
-      recoveryWrapIv: account.recoveryWrapIv ? Buffer.from(account.recoveryWrapIv).toString('base64') : null,
+      recoveryWrappedMK: Buffer.from(account.recoveryWrappedMK).toString('base64'),
+      recoveryWrapIv: Buffer.from(account.recoveryWrapIv).toString('base64'),
     });
   } catch (err) {
     console.error('Recovery params error:', err instanceof Error ? err.message : 'Unknown error');
