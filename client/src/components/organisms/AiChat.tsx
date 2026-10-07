@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
@@ -9,9 +9,12 @@ import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { entries as entriesApi } from '../../services/api.js';
-import { chatReply, type ChatTurn } from '../../services/aiAssistant.js';
+import { autoNutritionOnSave, chatReply, type ChatTurn } from '../../services/aiAssistant.js';
+import { mealForNow, nowTime } from '../../utils/foodLog.js';
+import { toDateStr } from '../../utils/dateUtils.js';
 import { chatSystemPrompt, parseSaveCommand, textToEntryHtml, type TopicRef } from '../../utils/chatSave.js';
 import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
+import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
 
 /* ── Styles (floating overlay: the one place a shadow is allowed) ── */
 
@@ -50,7 +53,8 @@ const Panel = styled.section<{ $lifted: boolean }>`
   flex-direction: column;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg, 2px);
+  /* The chat is a soft, conversational overlay — rounded on purpose */
+  border-radius: 18px;
   box-shadow: var(--shadow-xl, 0 16px 48px rgba(0,0,0,0.3));
   overflow: hidden;
   @media (max-width: 640px) {
@@ -117,18 +121,36 @@ const Log = styled.div`
   gap: 12px;
 `;
 
+/* Alternating bubbles: the user on the right in the accent tint, the assistant
+   on the left in a sunken bubble; notes sit centred and quiet. */
 const Msg = styled.div<{ $role: 'user' | 'assistant' | 'note' }>`
-  max-width: ${({ $role }) => ($role === 'user' ? '85%' : '100%')};
-  align-self: ${({ $role }) => ($role === 'user' ? 'flex-end' : 'flex-start')};
-  padding: ${({ $role }) => ($role === 'user' ? '8px 12px' : '0')};
-  background: ${({ $role }) => ($role === 'user' ? 'var(--bg-sunken)' : 'transparent')};
-  border-radius: var(--r-md, 2px);
+  max-width: ${({ $role }) => ($role === 'note' ? '100%' : '85%')};
+  align-self: ${({ $role }) => ($role === 'user' ? 'flex-end' : $role === 'assistant' ? 'flex-start' : 'center')};
+  padding: ${({ $role }) => ($role === 'note' ? '0 4px' : '9px 13px')};
+  background: ${({ $role }) => ($role === 'user' ? 'var(--color-accent-subtle)' : $role === 'assistant' ? 'var(--bg-sunken)' : 'transparent')};
+  border-radius: ${({ $role }) => ($role === 'user' ? '16px 16px 4px 16px' : $role === 'assistant' ? '16px 16px 16px 4px' : '0')};
   font-family: var(--font-sans);
   font-size: ${({ $role }) => ($role === 'note' ? '12px' : '14px')};
   line-height: 1.55;
+  text-align: ${({ $role }) => ($role === 'note' ? 'center' : 'left')};
   color: ${({ $role }) => ($role === 'note' ? 'var(--text-tertiary)' : 'var(--text-primary)')};
-  white-space: pre-wrap;
+  white-space: ${({ $role }) => ($role === 'assistant' ? 'normal' : 'pre-wrap')};
   overflow-wrap: anywhere;
+
+  /* Basic formatting in assistant replies */
+  p { margin: 0; }
+  p + p, p + ul, p + ol, ul + p, ol + p, ul + ul, ol + ol, ul + ol, ol + ul, h4 + * , * + h4 { margin-top: 8px; }
+  h4 { margin: 0; font-size: 14px; font-weight: 700; }
+  ul, ol { margin: 0; padding-left: 20px; }
+  li + li { margin-top: 2px; }
+  strong { font-weight: 700; }
+  code {
+    font-family: var(--mono, monospace);
+    font-size: 12px;
+    padding: 1px 5px;
+    background: var(--bg-hover);
+    border-radius: 6px;
+  }
 `;
 
 const ErrorText = styled.span`
@@ -142,8 +164,8 @@ const Suggestion = styled.button`
   color: var(--color-accent);
   background: var(--color-accent-subtle);
   border: none;
-  border-radius: var(--r-md, 2px);
-  padding: 1px 6px;
+  border-radius: 8px;
+  padding: 2px 8px;
   cursor: pointer;
   text-align: left;
   &:hover { text-decoration: underline; }
@@ -179,8 +201,8 @@ const Input = styled.textarea`
   color: var(--text-primary);
   background: var(--bg-sunken);
   border: none;
-  border-radius: var(--r-md, 2px);
-  padding: 9px 10px;
+  border-radius: 20px;
+  padding: 9px 14px;
   &:focus { outline: 2px solid var(--color-accent-subtle); }
   &::placeholder { color: var(--text-tertiary); }
 `;
@@ -210,16 +232,33 @@ interface ChatMessage {
 let nextId = 1;
 const JOURNAL_PLACEHOLDER_ID = -1;
 
-/** Split assistant text so `/save …` suggestions become one-tap buttons that fill the input. */
-function renderWithSuggestions(text: string, onUse: (cmd: string) => void) {
-  const parts = text.split(/(`\/save [^`]+`)/g);
-  return parts.map((part, i) => {
-    const m = part.match(/^`(\/save [^`]+)`$/);
-    if (!m) return <Fragment key={i}>{part}</Fragment>;
+/** Inline spans; a `/save …` code span becomes a one-tap button that fills the input. */
+function renderInline(nodes: Inline[], onUse: (cmd: string) => void): ReactNode[] {
+  return nodes.map((n, i) => {
+    if (n.kind === 'text') return <Fragment key={i}>{n.text}</Fragment>;
+    if (n.kind === 'bold') return <strong key={i}>{renderInline(n.children, onUse)}</strong>;
+    if (n.kind === 'italic') return <em key={i}>{renderInline(n.children, onUse)}</em>;
+    if (/^\/save\s/.test(n.text)) {
+      return (
+        <Suggestion key={i} type="button" onClick={() => onUse(n.text)} title="Put this in the message box to save it">
+          {n.text}
+        </Suggestion>
+      );
+    }
+    return <code key={i}>{n.text}</code>;
+  });
+}
+
+/** Assistant reply with basic formatting: paragraphs, headings, lists, bold, italic, code. */
+function renderReply(text: string, onUse: (cmd: string) => void): ReactNode {
+  return parseChatMarkdown(text).map((b, i) => {
+    if (b.kind === 'heading') return <h4 key={i}>{renderInline(b.children, onUse)}</h4>;
+    if (b.kind === 'ul') return <ul key={i}>{b.items.map((it, j) => <li key={j}>{renderInline(it, onUse)}</li>)}</ul>;
+    if (b.kind === 'ol') return <ol key={i} start={b.start}>{b.items.map((it, j) => <li key={j}>{renderInline(it, onUse)}</li>)}</ol>;
     return (
-      <Suggestion key={i} type="button" onClick={() => onUse(m[1])} title="Put this in the message box to save it">
-        {m[1]}
-      </Suggestion>
+      <p key={i}>
+        {b.lines.map((line, j) => <Fragment key={j}>{j > 0 && <br />}{renderInline(line, onUse)}</Fragment>)}
+      </p>
     );
   });
 }
@@ -296,7 +335,25 @@ export function AiChat() {
     try {
       const topicId = cmd.topic.id === JOURNAL_PLACEHOLDER_ID ? await getOrCreateJournalTopic() : cmd.topic.id;
       const content = textToEntryHtml(cmd.text);
-      const metadata = { _taxonomyId: topicId };
+      const metadata: Record<string, unknown> = { _taxonomyId: topicId };
+      // A meal saved from chat lands in the Meals log for today, with its
+      // nutrients estimated by the AI (a failed estimate never blocks the save)
+      let estimated = false;
+      if (cmd.topic.name.toLowerCase() === 'meals') {
+        const now = new Date();
+        let cf: Record<string, unknown> = {
+          mealDescription: cmd.text, mealType: mealForNow(now), consumedDate: toDateStr(now), consumedTime: nowTime(now), notes: '',
+        };
+        if (aiReady) {
+          try {
+            const filled = await autoNutritionOnSave(cmd.text, cf);
+            if (filled) { cf = filled; estimated = true; }
+          } catch (err) {
+            console.warn('Nutrient estimate failed:', err);
+          }
+        }
+        metadata._customFields = cf;
+      }
       const encrypted = await encryptPost(content, metadata);
       const result = await entriesApi.create({
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
@@ -309,7 +366,7 @@ export function AiChat() {
         createdAt: new Date(result.createdAt as string),
         updatedAt: new Date((result.updatedAt || result.createdAt) as string),
       });
-      push({ role: 'note', text: `Saved to ${cmd.topic.name}.`, savedEntryId: id });
+      push({ role: 'note', text: `Saved to ${cmd.topic.name}${estimated ? ' with AI nutrient estimates' : ''}.`, savedEntryId: id });
     } catch (err) {
       console.error('Chat save failed:', err);
       push({ role: 'note', error: true, text: 'That didn’t save — try again.' });
@@ -376,7 +433,7 @@ export function AiChat() {
             {messages.map(m => (
               <Msg key={m.id} $role={m.role}>
                 {m.error ? <ErrorText>{m.text}</ErrorText>
-                  : m.role === 'assistant' ? renderWithSuggestions(m.text, useSuggestion)
+                  : m.role === 'assistant' ? renderReply(m.text, useSuggestion)
                   : m.text}
                 {m.savedEntryId !== undefined && (
                   <LinkBtn type="button" onClick={() => { openInJournal(m.savedEntryId!); setOpen(false); }}>Open</LinkBtn>
@@ -386,7 +443,7 @@ export function AiChat() {
                 )}
               </Msg>
             ))}
-            {busy && <Msg $role="note">…</Msg>}
+            {busy && <Msg $role="assistant" aria-label="Assistant is replying">…</Msg>}
           </Log>
           <Composer>
             <Input

@@ -19,6 +19,7 @@ const tabs: TabEntry[] = [
   { value: 'date',      icon: 'calendar_month',  label: 'Date',      title: 'Pick a date' },
   { value: 'favorites', icon: 'bookmark',        label: 'Bookmarks', title: 'Bookmarked entries' },
   { value: 'search',    icon: 'search',          label: 'Search',    title: 'Search entries' },
+  { value: 'all',       icon: 'add',             label: 'New',       title: 'New entry',    isNewEntry: true },
 ];
 
 const Container = styled.div`
@@ -144,8 +145,9 @@ export function ViewTabs({ onDateTabClick, onTodayClick, onNewEntry }: ViewTabsP
         return (
           <TabButton
             key={`${tab.label}-${i}`}
-            role="tab"
-            aria-selected={active}
+            role={tab.isNewEntry ? undefined : 'tab'}
+            aria-selected={tab.isNewEntry ? undefined : active}
+            aria-label={tab.title}
             $active={active}
             title={tab.title}
             onClick={() => handleTabClick(tab)}

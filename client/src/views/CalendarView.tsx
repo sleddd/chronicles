@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { calendarDayFor } from '../utils/calendarItems.js';
 import styled from 'styled-components';
 import { CalendarGrid } from '../components/organisms/CalendarGrid.js';
 import { CalendarDayView } from '../components/organisms/CalendarDayView.js';
@@ -79,18 +80,11 @@ export function CalendarView() {
       map.set(key, arr);
     };
 
+    const topicNames = new Map(allTopics.map(t => [t.id, t.name]));
     for (const entry of entries) {
-      const meta = entry.metadata as Record<string, unknown>;
-      const taxId = meta?._taxonomyId as number | undefined;
-      const isEventEntry = taxId !== undefined && eventTopicIds.has(taxId);
-
-      if (isEventEntry) {
-        const cf = meta?._customFields as Record<string, unknown> | undefined;
-        const startDate = cf?.startDate as string | undefined;
-        if (startDate) { addEntry(startDate, entry); continue; }
-      }
-      const d = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
-      addEntry(toDateStr(d), entry);
+      const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
+      const day = calendarDayFor(entry, taxId === undefined ? undefined : topicNames.get(taxId));
+      if (day) addEntry(day, entry);
     }
 
     for (const [key, arr] of map) {
@@ -104,7 +98,7 @@ export function CalendarView() {
     }
 
     return map;
-  }, [entries, eventTopicIds]);
+  }, [entries, allTopics, eventTopicIds]);
 
   const getTopicForEntry = useCallback((entry: typeof entries[number]) => {
     const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;

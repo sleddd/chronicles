@@ -12,6 +12,20 @@ export const MEAL_TYPE_OPTIONS = [
   { value: 'medication', label: 'Medication' },
 ] as const;
 
+/** A sensible meal type for something eaten right now. */
+export function mealForNow(now = new Date()): string {
+  const h = now.getHours();
+  if (h < 11) return 'breakfast';
+  if (h < 15) return 'lunch';
+  if (h >= 17 && h < 21) return 'dinner';
+  return 'snack';
+}
+
+/** Current local time as HH:MM. */
+export function nowTime(now = new Date()): string {
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
 /** One logged food/drink/supplement, flattened for the Meals log. */
 export interface FoodRow {
   id: number;

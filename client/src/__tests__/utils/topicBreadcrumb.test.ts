@@ -22,17 +22,17 @@ describe('getTopicTrail', () => {
     }
   });
 
-  it('gives the food log the full Journal / Health / Food trail', () => {
+  it('gives the food log the full Journal / Health / Meals trail', () => {
     expect(getTopicTrail('Meals')).toEqual([
       JOURNAL,
       { label: 'Health', path: '/health' },
-      { label: 'Food', path: '/health/food' },
+      { label: 'Meals', path: '/health/food' },
     ]);
   });
 
-  it('maps recipes and shopping lists to Journal / Meals', () => {
-    expect(getTopicTrail('Recipe')).toEqual([JOURNAL, { label: 'Meals', path: '/menu' }]);
-    expect(getTopicTrail('Shopping List')).toEqual([JOURNAL, { label: 'Meals', path: '/menu' }]);
+  it('maps recipes and shopping lists to Journal / From the Kitchen', () => {
+    expect(getTopicTrail('Recipe')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
+    expect(getTopicTrail('Shopping List')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
   });
 
   it('maps events and meetings to Journal / Calendar', () => {
@@ -58,7 +58,7 @@ describe('getTopicTrail', () => {
   });
 
   it('is case-insensitive', () => {
-    expect(getTopicTrail('recipe')).toEqual([JOURNAL, { label: 'Meals', path: '/menu' }]);
-    expect(getTopicTrail('RECIPE')).toEqual([JOURNAL, { label: 'Meals', path: '/menu' }]);
+    expect(getTopicTrail('recipe')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
+    expect(getTopicTrail('RECIPE')).toEqual([JOURNAL, { label: 'From the Kitchen', path: '/kitchen' }]);
   });
 });

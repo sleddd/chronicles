@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, darkTheme } from '@shared/theme/tokens';
 import { useUIStore } from './stores/uiStore.js';
@@ -23,8 +23,9 @@ import { TopicEntriesView } from './views/TopicEntriesView.js';
 import { HealthView } from './views/HealthView.js';
 import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsLogView } from './views/MealsLogView.js';
+import { KitchenDashboardView } from './views/KitchenDashboardView.js';
 import { AiChat } from './components/organisms/AiChat.js';
-import { MealsTabBar } from './components/molecules/MealsTabBar.js';
+import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { MedicationScheduleView } from './views/MedicationScheduleView.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
@@ -369,8 +370,9 @@ export function App() {
               <Route path="/goals/todos" element={<R><GoalsView /></R>} />
               <Route path="/goals/filter" element={<R><PlannerFilterView /></R>} />
               <Route path="/menu" element={<R><MenuView /></R>} />
-              <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title="Recipes" tabBar={<MealsTabBar />} /></R>} />
-              <Route path="/menu/meals" element={<R><MealsLogView title="Meals" tabBar={<MealsTabBar />} /></R>} />
+              <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title={KITCHEN_TITLE} tabBar={<MealsTabBar />} /></R>} />
+              <Route path="/kitchen" element={<R><KitchenDashboardView /></R>} />
+              <Route path="/menu/meals" element={<Navigate to="/health/food" replace />} />
               <Route path="/shopping" element={<R><ShoppingListsView /></R>} />
 
               {/* Health */}

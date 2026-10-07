@@ -240,9 +240,9 @@ export function Sidebar() {
           <SrOnly>Calendar</SrOnly>
         </NavIconBtn>
 
-        <NavIconBtn $active={at('/menu') || at('/shopping')} onClick={() => navigate('/menu')} title="Meals">
+        <NavIconBtn $active={at('/kitchen') || startsWith('/menu') || at('/shopping')} onClick={() => navigate('/kitchen')} title="From the Kitchen">
           <MaterialIcon aria-hidden="true">fork_spoon</MaterialIcon>
-          <SrOnly>Meals</SrOnly>
+          <SrOnly>From the Kitchen</SrOnly>
         </NavIconBtn>
 
         <NavIconBtn $active={at('/settings')} onClick={() => navigate('/settings')} title="Settings">

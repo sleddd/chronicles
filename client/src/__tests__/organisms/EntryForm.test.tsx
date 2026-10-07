@@ -143,7 +143,7 @@ describe('EntryForm', () => {
         <EntryForm {...defaultProps} topicId={7}
           topics={[{ id: 7, name: 'Recipe', icon: null, color: null }]} />
       );
-      expect(screen.getByText('Meals')).toBeInTheDocument();
+      expect(screen.getByText('From the Kitchen')).toBeInTheDocument();
       expect(screen.getByTestId('topic-selector')).toBeInTheDocument();
     });
 
@@ -153,8 +153,8 @@ describe('EntryForm', () => {
         <EntryForm {...defaultProps} onNavigate={onNavigate} topicId={7}
           topics={[{ id: 7, name: 'Recipe', icon: null, color: null }]} />
       );
-      fireEvent.click(screen.getByText('Meals'));
-      expect(onNavigate).toHaveBeenCalledWith('/menu');
+      fireEvent.click(screen.getByText('From the Kitchen'));
+      expect(onNavigate).toHaveBeenCalledWith('/kitchen');
     });
 
     it('renders ancestors as non-clickable without onNavigate', () => {
