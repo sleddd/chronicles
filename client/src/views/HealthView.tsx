@@ -16,7 +16,7 @@ import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
-import { builtinEntryName } from '../utils/stripHtml.js';
+import { builtinEntryName, stripHtml } from '../utils/stripHtml.js';
 import { toDateStr, startOfWeek, startOfMonth } from '../utils/dateUtils.js';
 import type { DateFilter } from '../types/health.js';
 
@@ -126,7 +126,69 @@ const List = styled.div`
   flex-direction: column;
 `;
 
+/* Print-only report: a heading + details table replaces the on-screen list,
+   which carries none of the entry's structured fields. */
+const PrintReport = styled.div`
+  display: none;
+  @media print { display: block; }
+`;
+
+const PrintTitle = styled.h1`
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+`;
+
+const PrintDate = styled.p`
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin: 0 0 16px;
+`;
+
+const PrintTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-primary);
+
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 6px 8px 6px 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  th {
+    font-family: var(--font-label);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  tr { break-inside: avoid; }
+`;
+
 /* ── Helpers ── */
+
+/** Human-readable value for a structured field in the print report. */
+function formatFieldValue(key: string, value: unknown): string {
+  if (value == null || value === '') return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.join(', ');
+  if (key === 'severity') return `${value}/10`;
+  if (key === 'duration' && /^\d+$/.test(String(value))) return `${value} min`;
+  const str = String(value);
+  // snake_case enum values (e.g. once_daily) → "Once daily"
+  if (/^[a-z]+(_[a-z]+)+$/.test(str)) {
+    const words = str.replace(/_/g, ' ');
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+  return str;
+}
 
 /* ── Props ── */
 
@@ -145,6 +207,8 @@ interface HealthViewProps {
   summaryFields?: SummaryField[];
   /** Page title — defaults to "Health". */
   title?: string;
+  /** Heading for the printed report — defaults to the page title. */
+  printTitle?: string;
   /** Tab bar shown under the title — defaults to the Health tabs. */
   tabBar?: React.ReactNode;
 }
@@ -155,7 +219,7 @@ interface HealthViewProps {
  * reveal edit/delete; clicking (or swipe-edit) opens the entry in the journal
  * editor — its breadcrumb leads back here.
  */
-export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', tabBar }: HealthViewProps) {
+export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar }: HealthViewProps) {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -243,7 +307,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
     <ContentTemplate>
       <Page>
         <Inner>
-          <Head>
+          <Head data-print-hide={printable || undefined}>
             <Title>{title}</Title>
             {(addTopic || printable) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-print-hide>
@@ -289,10 +353,45 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             </div>
           )}
 
+          {printable && (
+            <PrintReport>
+              <PrintTitle>{printTitle ?? title}</PrintTitle>
+              <PrintDate>Printed {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</PrintDate>
+              {sortedEntries.length === 0 ? (
+                <p>No entries.</p>
+              ) : (
+                <PrintTable>
+                  <thead>
+                    <tr>
+                      <th>Entry</th>
+                      {metaFields.map(f => <th key={f.key}>{f.label}</th>)}
+                      <th>Notes</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedEntries.map(entry => {
+                      const cf = ((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
+                      const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
+                      return (
+                        <tr key={entry.id}>
+                          <td>{stripHtml(entry.content).trim() || builtinEntryName(cf)}</td>
+                          {metaFields.map(f => <td key={f.key}>{formatFieldValue(f.key, cf[f.key])}</td>)}
+                          <td>{formatFieldValue('notes', cf.notes)}</td>
+                          <td>{created.toLocaleDateString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </PrintTable>
+              )}
+            </PrintReport>
+          )}
+
           {sortedEntries.length === 0 ? (
-            <EmptyState message="No entries yet." />
+            <div data-print-hide={printable || undefined}><EmptyState message="No entries yet." /></div>
           ) : (
-            <List>
+            <List data-print-hide={printable || undefined}>
               {sortedEntries.map(entry => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);
