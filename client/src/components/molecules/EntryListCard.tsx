@@ -51,7 +51,7 @@ export function EntryListCard({ content, createdAt, topicName, completed, onClic
   return (
     <Row onClick={onClick}>
       <MetaCell>
-        {topicName && <TopicCell>{topicName}</TopicCell>}
+        {topicName && <TopicCell title={topicName}>{topicName}</TopicCell>}
         <DateCell title={createdAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
           {formatRowDate(createdAt)}
         </DateCell>

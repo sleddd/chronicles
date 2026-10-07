@@ -6,7 +6,7 @@ import styled from 'styled-components';
    EntryListCard (topic, task and health lists) so every list lines up. */
 
 /** Topic over Date | Entry | trailing controls */
-export const ENTRY_ROW_COLUMNS = 'minmax(0, 112px) minmax(0, 1fr) auto';
+export const ENTRY_ROW_COLUMNS = 'minmax(0, 88px) minmax(0, 1fr) auto';
 
 /** "Oct 7" this year, "Oct 7 '25" for other years. */
 export function formatRowDate(d: Date, now = new Date()): string {

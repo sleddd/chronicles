@@ -127,7 +127,7 @@ export function EntryCard({
             {topicName}
           </TopicButton>
         ) : topicName ? (
-          <TopicCell $active={active}>{topicName}</TopicCell>
+          <TopicCell $active={active} title={topicName}>{topicName}</TopicCell>
         ) : null}
         <DateCell title={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
           {formatRowDate(d)}
