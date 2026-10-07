@@ -504,6 +504,8 @@ function foodDescription(text: string, cf: Record<string, unknown>): string {
 export function nutrientsToEstimate(
   text: string, cf: Record<string, unknown>, opts: { refreshAi?: boolean } = {},
 ): NutrientKey[] {
+  // A medication dose has no nutrients worth estimating
+  if (String(cf.mealType ?? '').toLowerCase() === 'medication') return [];
   const stale = cf.nutritionBasis !== undefined
     ? cf.nutritionBasis !== nutritionBasis(text, cf)
     : cf.calorieBasis !== undefined && cf.calorieBasis !== nutritionBasis(text, cf);

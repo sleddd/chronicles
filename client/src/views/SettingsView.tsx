@@ -23,6 +23,7 @@ import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.j
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
 import { AiSettings } from '../components/organisms/AiSettings.js';
+import { DailyLogImport } from '../components/organisms/DailyLogImport.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -1193,6 +1194,7 @@ export function SettingsView() {
           }
         />
         {importResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: importResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{importResult}</div>}
+        <DailyLogImport />
       </SettingsCard>
 
       {/* Privacy */}
