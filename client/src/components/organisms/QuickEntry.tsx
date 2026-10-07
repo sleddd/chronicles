@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -105,7 +105,7 @@ const SubmitButton = styled.button<{ $disabled?: boolean }>`
   }
 `;
 
-export function QuickEntry({ onCreateEntry }: QuickEntryProps) {
+export const QuickEntry = memo(function QuickEntry({ onCreateEntry }: QuickEntryProps) {
   const topics = useEntriesStore((s) => s.topics);
   const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
 
@@ -162,4 +162,4 @@ export function QuickEntry({ onCreateEntry }: QuickEntryProps) {
       </FooterRow>
     </Container>
   );
-}
+});

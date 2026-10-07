@@ -12,6 +12,11 @@ vi.mock('@/stores/entriesStore', () => ({
     }),
 }));
 
+// Dose → Meals sync is covered by its own helpers; stub it here
+vi.mock('@/hooks/useDoseToMeals', () => ({
+  useDoseToMeals: () => ({ onTaken: vi.fn().mockResolvedValue(undefined), onUntaken: vi.fn().mockResolvedValue(undefined) }),
+}));
+
 vi.mock('@/stores/uiStore', () => ({
   useUIStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ headerColor: '#4A5568' }),

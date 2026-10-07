@@ -7,6 +7,8 @@ import { Textarea } from '../../atoms/Textarea.js';
 import { Checkbox } from '../../atoms/Checkbox.js';
 import { Button } from '../../atoms/Button.js';
 import { FormField } from '../FormField.js';
+import { UnitLabel } from '../../atoms/UnitLabel.js';
+import { DOSE_NUTRIENTS, parseMedNutrients } from '../../../utils/medNutrients.js';
 import type { MedicationFieldValues } from '../../../types/fields.js';
 export type { MedicationFieldValues } from '../../../types/fields.js';
 
@@ -54,12 +56,36 @@ const RemoveBtn = styled.button`
   &:hover { background: rgba(239, 68, 68, 0.1); }
 `;
 
+const SubHead = styled.div`
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-top: 4px;
+`;
+
+const SubNote = styled.p`
+  margin: -8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-tertiary);
+`;
+
 interface MedicationFieldsProps {
   values: MedicationFieldValues;
   onChange: (values: MedicationFieldValues) => void;
+  /** The medication's name (entry text) — lets "Vitamin D3 1000 IU" prefill its nutrients. */
+  entryName?: string;
 }
 
-export function MedicationFields({ values, onChange }: MedicationFieldsProps) {
+export function MedicationFields({ values, onChange, entryName = '' }: MedicationFieldsProps) {
+  const cf = values as unknown as Record<string, unknown>;
+  const detected = parseMedNutrients(entryName, values.dosage ?? '');
+  const setNutrient = (key: string, v: string) =>
+    onChange({ ...cf, [key]: v, doseNutrientSource: 'manual' } as unknown as MedicationFieldValues);
+
   const addTime = () => {
     onChange({ ...values, scheduleTimes: [...values.scheduleTimes, '08:00'] });
   };
@@ -97,6 +123,27 @@ export function MedicationFields({ values, onChange }: MedicationFieldsProps) {
           </Select>
         </FormField>
       </Row>
+      <SubHead>Nutrients per dose</SubHead>
+      <SubNote>Vitamins and iron here count in your Meals log when you mark a dose taken. Leave blank to fill from the name and dosage{detected && Object.keys(detected).length ? ' (detected below)' : ''}, or by the AI assistant.</SubNote>
+      {DOSE_NUTRIENTS.map(n => {
+        const auto = detected[n.key];
+        const isAi = cf.doseNutrientSource === 'ai' && !!String(cf[n.key] ?? '');
+        return (
+          <FormField key={n.key} label={<UnitLabel label={n.label} unit={n.unit} />}>
+            <TextInput
+              type="number"
+              step={n.step}
+              min="0"
+              inputMode="decimal"
+              value={String(cf[n.key] ?? '')}
+              onChange={e => setNutrient(n.key, e.target.value)}
+              placeholder={auto !== undefined ? `${auto} (from name)` : n.unit}
+              aria-label={`${n.label} per dose (${n.unit})`}
+              hint={isAi ? 'AI estimate — edit to override' : undefined}
+            />
+          </FormField>
+        );
+      })}
       <FormField label="Schedule Times">
         {values.scheduleTimes.map((time, i) => (
           <TimeRow key={i}>

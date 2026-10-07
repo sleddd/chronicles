@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
 import { useUIStore } from '../../stores/uiStore.js';
@@ -25,15 +26,7 @@ interface EntryCardProps {
 }
 
 function extractTitle(html: string, fallback?: string): string {
-  const headingMatch = html.match(/<h[1-4][^>]*>(.*?)<\/h[1-4]>/i);
-  if (headingMatch) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = headingMatch[1];
-    const text = (tmp.textContent || tmp.innerText || '').trim();
-    if (text) return text;
-  }
-  const plain = stripHtml(html).trim();
-  return plain.slice(0, 70) || fallback || 'Untitled entry';
+  return entryTitleText(html) || fallback || 'Untitled entry';
 }
 
 

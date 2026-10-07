@@ -212,6 +212,8 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
 
   // Keep a stable ref to the editor for the dictation callback
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  // Last HTML this editor emitted via onChange
+  const lastEmittedRef = useRef<string | null>(null);
 
   const handleFinalResult = useCallback((text: string) => {
     const ed = editorRef.current;
@@ -277,15 +279,19 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
     content,
     editable: !readOnly,
     onUpdate: ({ editor: ed }) => {
-      onChange(ed.getHTML());
+      const html = ed.getHTML();
+      lastEmittedRef.current = html;
+      onChange(html);
     },
   });
 
   // Keep editorRef current so the dictation callback always has the latest instance
   editorRef.current = editor;
 
-  // Sync content from parent without emitting an update (prevents onChange→re-render loop)
+  // Sync content from parent without emitting an update (prevents onChange→re-render loop).
+  // Content we just emitted is already in the editor — skip re-serializing it.
   useEffect(() => {
+    if (content === lastEmittedRef.current) return;
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content, false);
     }

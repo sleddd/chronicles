@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import type { ReactNode } from 'react';
 import { Header } from '../organisms/Header.js';
 import { Sidebar } from '../organisms/Sidebar.js';
@@ -14,7 +15,7 @@ const Layout = styled.div<{ $focusMode?: boolean }>`
   height: 100dvh; /* iOS Safari: 100vh extends behind the bottom toolbar */
   overflow: hidden;
 
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     padding-top: ${({ $focusMode }) => $focusMode ? '0' : '56px'};
   }
 `;
@@ -28,7 +29,7 @@ const MainColumn = styled.div<{ $navOpen?: boolean }>`
   min-width: 0;
   min-height: 0;
 
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     position: relative;
     z-index: 2;
     background: var(--bg-app);

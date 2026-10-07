@@ -8,6 +8,7 @@ import { Spinner } from '../atoms/Spinner.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { doses as dosesApi } from '../../services/api.js';
+import { useDoseToMeals } from '../../hooks/useDoseToMeals.js';
 import { stripHtml } from '../../utils/stripHtml.js';
 import { toDateStr, formatTime12h, formatDateDisplay } from '../../utils/dateUtils.js';
 import type { DoseLogRecord } from '../../services/api.js';
@@ -175,6 +176,7 @@ export function MedicationSchedule({ isReady }: MedicationScheduleProps) {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [savingDose, setSavingDose] = useState<string | null>(null);
   const [doseError, setDoseError] = useState<string | null>(null);
+  const doseToMeals = useDoseToMeals();
 
   const medicationTopicId = useMemo(
     () => allTopics.find(t => t.name.toLowerCase() === 'medication')?.id,
@@ -259,6 +261,9 @@ export function MedicationSchedule({ isReady }: MedicationScheduleProps) {
 
       const normalizedLog = { ...log, scheduledTime: log.scheduledTime.substring(0, 5) };
       setDoseLogs(prev => ({ ...prev, [key]: normalizedLog }));
+      // Vitamins/iron in this dose count toward the day's Meals totals
+      const sync = newStatus === 'taken' ? doseToMeals.onTaken : doseToMeals.onUntaken;
+      void sync(dose.medicationPostId, viewDate, normalizedTime).catch(err => console.warn('Dose → Meals sync failed:', err));
     } catch (err) {
       console.error('Failed to update dose:', err);
       setDoseError(`Failed to update ${dose.medicationName}`);

@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { stripHtml } from '../../utils/stripHtml.js';
 
@@ -20,14 +21,7 @@ interface EntryListCardProps {
    Hairline divider between rows. Used by Tasks, Todos, and Topics lists. */
 
 function extractTitle(html: string, fallback?: string): string {
-  const headingMatch = html.match(/<h[1-4][^>]*>(.*?)<\/h[1-4]>/i);
-  if (headingMatch) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = headingMatch[1];
-    const text = (tmp.textContent || tmp.innerText || '').trim();
-    if (text) return text;
-  }
-  return stripHtml(html).trim().slice(0, 70) || fallback || 'Untitled';
+  return entryTitleText(html) || fallback || 'Untitled';
 }
 
 const Row = styled.div`

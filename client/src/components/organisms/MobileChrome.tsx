@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
@@ -18,7 +19,7 @@ const MobileNavBar = styled.div`
   right: 0;
   z-index: 52;
 
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     display: flex;
   }
 `;
@@ -64,7 +65,7 @@ const MenuButton = styled.button`
 const Overlay = styled.div<{ $open: boolean }>`
   display: none;
 
-  @media (max-width: 768px) {
+  ${NAV_COMPACT} {
     display: ${({ $open }) => ($open ? 'block' : 'none')};
     position: fixed;
     top: 56px;
