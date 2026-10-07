@@ -114,6 +114,10 @@ export interface FoodFieldValues {
   consumedTime: string;
   ingredients: string;
   calories: string;
+  /** 'ai' when the calories came from the AI assistant, 'manual' when typed */
+  caloriesSource?: 'ai' | 'manual';
+  /** Inputs the AI estimate was based on — a change triggers a re-estimate */
+  calorieBasis?: string;
   notes: string;
 }
 
@@ -140,6 +144,10 @@ export interface ExerciseFieldValues {
   distance: string;
   distanceUnit: 'miles' | 'km';
   calories: string;
+  /** 'ai' when the calories burned came from the AI assistant, 'manual' when typed */
+  caloriesSource?: 'ai' | 'manual';
+  /** Inputs the AI estimate was based on — a change triggers a re-estimate */
+  calorieBasis?: string;
   performedDate: string;
   performedTime: string;
   notes: string;

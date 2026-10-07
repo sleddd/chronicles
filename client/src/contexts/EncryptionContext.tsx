@@ -4,6 +4,7 @@ import { toNonExtractable } from '@shared/crypto/primitives.js';
 import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import type { EncryptedPostData, DecryptedPost, EncryptedPost, SetupEncryptionResult } from '@shared/crypto/types.js';
 import { clearImageCache, rederiveImageStorageConfig } from '../services/imageStorage.js';
+import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
 
 export interface EncryptionParams {
   kekSalt: string;
@@ -59,6 +60,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // Restore the in-memory R2 credentials (cleared on lock) from their
     // master-key-encrypted blob so image display/cleanup keeps working
     void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
     setIsUnlocked(true);
   }, []);
 
@@ -68,6 +70,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     encryptionParamsRef.current = null;
     // Revoke decrypted image object URLs — they hold plaintext image bytes
     clearImageCache();
+    // Drop the decrypted AI provider credentials too
+    clearAiConfig();
     setIsUnlocked(false);
   }, []);
 
@@ -120,6 +124,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     masterKeyRef.current = key;
     encryptionParamsRef.current = null; // Recovery path — no stored params
     void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
     setIsUnlocked(true);
   }, []);
 

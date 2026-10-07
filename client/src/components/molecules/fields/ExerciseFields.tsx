@@ -4,6 +4,7 @@ import { TextInput } from '../../atoms/TextInput.js';
 import { Textarea } from '../../atoms/Textarea.js';
 import { DateTimeInput } from '../../atoms/DateTimeInput.js';
 import { FormField } from '../FormField.js';
+import { CalorieInput } from './CalorieInput.js';
 import type { ExerciseFieldValues } from '../../../types/fields.js';
 export type { ExerciseFieldValues } from '../../../types/fields.js';
 
@@ -23,9 +24,13 @@ const Row = styled.div`
 interface ExerciseFieldsProps {
   values: ExerciseFieldValues;
   onChange: (values: ExerciseFieldValues) => void;
+  /** AI calorie estimate — the button shows only when this is provided */
+  onEstimateCalories?: () => void;
+  estimatingCalories?: boolean;
+  calorieError?: string;
 }
 
-export function ExerciseFields({ values, onChange }: ExerciseFieldsProps) {
+export function ExerciseFields({ values, onChange, onEstimateCalories, estimatingCalories, calorieError }: ExerciseFieldsProps) {
   return (
     <Wrapper>
       <Row>
@@ -65,11 +70,13 @@ export function ExerciseFields({ values, onChange }: ExerciseFieldsProps) {
           />
         </FormField>
         <FormField label="Calories">
-          <TextInput
-            type="number"
+          <CalorieInput
             value={values.calories}
-            onChange={e => onChange({ ...values, calories: e.target.value })}
-            placeholder="kcal"
+            onChange={v => onChange({ ...values, calories: v, caloriesSource: 'manual' })}
+            onEstimate={onEstimateCalories}
+            estimating={estimatingCalories}
+            isAiEstimate={values.caloriesSource === 'ai'}
+            error={calorieError}
           />
         </FormField>
       </Row>
