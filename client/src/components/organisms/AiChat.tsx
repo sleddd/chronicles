@@ -15,6 +15,7 @@ import { toDateStr } from '../../utils/dateUtils.js';
 import { chatSystemPrompt, parseSaveCommand, textToEntryHtml, type TopicRef } from '../../utils/chatSave.js';
 import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
+import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../utils/chatStyle.js';
 
 /* ── Styles (floating overlay: the one place a shadow is allowed) ── */
 
@@ -394,8 +395,21 @@ export function AiChat() {
     push({ role: 'user', text });
     setBusy(true);
     try {
-      const reply = await chatReply(chatSystemPrompt(topicRefs.map(t => t.name)), history);
-      push({ role: 'assistant', text: reply.trim() || '…' });
+      const system = chatSystemPrompt(topicRefs.map(t => t.name));
+      let reply = (await chatReply(system, history)).trim();
+      // House style: if a banned phrase slipped through, ask for one quiet
+      // rewrite; whatever still remains is removed before display
+      const found = findBanned(reply);
+      if (found.length) {
+        try {
+          const rewritten = (await chatReply(system, [
+            ...history, { role: 'assistant', content: reply }, { role: 'user', content: rewriteInstruction(found) },
+          ])).trim();
+          if (rewritten) reply = rewritten;
+        } catch { /* keep the original; it's scrubbed below */ }
+      }
+      reply = limitEmojis(findBanned(reply).length ? scrubBanned(reply) : reply);
+      push({ role: 'assistant', text: reply || '…' });
     } catch (err) {
       push({ role: 'note', error: true, text: err instanceof Error ? err.message : 'The assistant didn’t answer — try again.' });
     } finally {
