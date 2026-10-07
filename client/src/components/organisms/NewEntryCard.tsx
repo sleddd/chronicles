@@ -10,6 +10,9 @@ import { FoodFields } from '../molecules/fields/FoodFields.js';
 import { MedicationFields } from '../molecules/fields/MedicationFields.js';
 import { SymptomFields } from '../molecules/fields/SymptomFields.js';
 import { AllergyFields } from '../molecules/fields/AllergyFields.js';
+import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
+import { autoCaloriesOnSave } from '../../services/aiAssistant.js';
+import { stripHtml } from '../../utils/stripHtml.js';
 import { ExerciseFields } from '../molecules/fields/ExerciseFields.js';
 import { EventFields } from '../molecules/fields/EventFields.js';
 import { MeetingFields } from '../molecules/fields/MeetingFields.js';
@@ -126,6 +129,8 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
   const [status, setStatus] = useState('');
 
   const customType = getCustomType(topic.name);
+  const calorieKind = customType === 'food' || customType === 'exercise' ? customType : null;
+  const calorieEstimate = useCalorieEstimate(calorieKind, content, customFields, setCustomFields);
 
   const handleSave = async () => {
     const isWellness = customType === 'wellness';
@@ -147,8 +152,16 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
       finalContent = `<p>${parts.join(' · ') || 'Wellness check-in'}</p>`;
     }
     try {
+      // AI assistant: fill blank (or stale AI) calories before saving — a
+      // failed estimate never blocks the save
+      let fields = customFields;
+      if (calorieKind) {
+        setStatus('Estimating calories…');
+        fields = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields).catch(() => null) ?? customFields;
+        setStatus('');
+      }
       const metadata: Record<string, unknown> = { _taxonomyId: topic.id, _widgetType: 'wellness-checkin' };
-      if (Object.keys(customFields).length > 0) metadata._customFields = customFields;
+      if (Object.keys(fields).length > 0) metadata._customFields = fields;
       if (!isWellness) delete metadata._widgetType;
       const encrypted = await encryptPost(finalContent, metadata);
       const result = await entriesApi.create({
@@ -181,11 +194,11 @@ export function NewEntryCard({ topic, accentColor, onCreated, hideButton, isOpen
       case 'task': return <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: true, parentGoalId: null, parentMilestoneId: null, deadline: '', priority: 'none', ...customFields } as never} onChange={onChange as never} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />;
       case 'goal': return <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as never} onChange={onChange as never} />;
       case 'milestone': return <MilestoneFields values={{ milestoneStatus: 'active', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as never} onChange={onChange as never} goalOptions={goalOptions} />;
-      case 'food': return <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
+      case 'food': return <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as never} onChange={onChange as never} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />;
       case 'medication': return <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'symptom': return <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
       case 'allergy': return <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
-      case 'exercise': return <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as never} onChange={onChange as never} />;
+      case 'exercise': return <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as never} onChange={onChange as never} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />;
       case 'event': return <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as never} onChange={onChange as never} showCalendarSync={calendarSyncEnabled} />;
       case 'meeting': return <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as never} onChange={onChange as never} showCalendarSync={calendarSyncEnabled} />;
       case 'wellness': return <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={onChange as never} cycleTrackingEnabled={cycleTrackingEnabled} />;

@@ -5,6 +5,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
 import { loadImageStorageConfig } from '../services/imageStorage.js';
+import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 
 /**
@@ -82,6 +83,8 @@ export function useInitializeData() {
         loadImageStorageConfig(settingsMap.imageStorageConfig, decryptBytes)
           .then(setImagesConfigured)
           .catch(() => setImagesConfigured(false));
+        // AI provider credentials — also a master-key-encrypted setting
+        void loadAiConfig(settingsMap.aiConfig, decryptBytes);
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.googleCalendarId === 'string') setGoogleCalendarId(settingsMap.googleCalendarId);
         if (typeof settingsMap.googleSyncToken === 'string') setGoogleSyncToken(settingsMap.googleSyncToken);

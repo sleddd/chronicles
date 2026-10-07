@@ -22,6 +22,7 @@ import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
+import { AiSettings } from '../components/organisms/AiSettings.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -235,7 +236,8 @@ export function SettingsView() {
       if (typeof map.backgroundOpacity === 'string') setBackgroundOpacity(parseFloat(map.backgroundOpacity as string));
       const f: Record<string, boolean> = {};
       for (const feat of FEATURES) {
-        f[feat.key] = map[feat.key] === true;
+        // Unset flags default to enabled, matching useInitializeData
+        f[feat.key] = map[feat.key] !== false;
       }
       setFeatures(f);
       setFeatureFlags(f);
@@ -815,6 +817,10 @@ export function SettingsView() {
       {/* Entry Images */}
       <SectionTitle>Entry Images</SectionTitle>
       <ImageStorageSettings themeMode={themeMode} />
+
+      {/* AI Assistant */}
+      <SectionTitle>AI Assistant</SectionTitle>
+      <AiSettings themeMode={themeMode} />
 
       {/* Theme */}
       <SectionTitle>Theme</SectionTitle>

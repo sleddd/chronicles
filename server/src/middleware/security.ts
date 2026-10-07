@@ -11,7 +11,7 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: blob:; " +
-    "connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://www.googleapis.com https://*.r2.cloudflarestorage.com; " +
+    "connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://www.googleapis.com https://*.r2.cloudflarestorage.com https://api.anthropic.com https://api.openai.com https://*.api.aws; " +
     "frame-ancestors 'none'"
   );
   // Prevent MIME type sniffing

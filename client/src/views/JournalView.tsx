@@ -26,6 +26,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { loadAiConfig, autoCaloriesOnSave } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
 import { getOrCreateJournalTopic } from '../utils/getOrCreateJournalTopic.js';
@@ -412,6 +413,8 @@ export function JournalView() {
         loadImageStorageConfig(settingsMap.imageStorageConfig, decryptBytes)
           .then(setImagesConfigured)
           .catch(() => setImagesConfigured(false));
+        // AI provider credentials — also a master-key-encrypted setting
+        void loadAiConfig(settingsMap.aiConfig, decryptBytes);
         // Extract feature flags and store them (must be set before setTopics so filtering works)
         const flags: Record<string, boolean> = {};
         for (const key of Object.keys(settingsMap)) {
@@ -519,10 +522,21 @@ export function JournalView() {
     }
 
     try {
+      // AI assistant: fill blank calories on Meals/Exercise entries, or refresh
+      // an earlier AI estimate whose inputs changed. A failed estimate never
+      // blocks the save.
+      let fieldsToSave = customFields;
+      const topicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
+      const calorieKind = topicName === 'meals' ? 'food' : topicName === 'exercise' ? 'exercise' : null;
+      if (calorieKind) {
+        const estimated = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields).catch(() => null);
+        if (estimated) { fieldsToSave = estimated; setCustomFields(estimated); }
+      }
+
       const metadata: Record<string, unknown> = {};
       if (effectiveTopicId) metadata._taxonomyId = effectiveTopicId;
       if (widgetType) metadata._widgetType = widgetType;
-      if (Object.keys(customFields).length > 0) metadata._customFields = customFields;
+      if (Object.keys(fieldsToSave).length > 0) metadata._customFields = fieldsToSave;
       if (entryImages.length > 0) {
         metadata._images = entryImages;
         if (featuredKey) metadata._featuredKey = featuredKey;
@@ -549,11 +563,11 @@ export function JournalView() {
         setPendingEntryDate(null);
         setSelectedEntryId(result.id as number);
       }
-      loadedStateRef.current = { content: finalContent, customFields: JSON.stringify(customFields), images: imagesSig(entryImages, featuredKey) };
+      loadedStateRef.current = { content: finalContent, customFields: JSON.stringify(fieldsToSave), images: imagesSig(entryImages, featuredKey) };
       setLastSavedAt(new Date());
     } catch (err) { console.error('Save failed:', err); setSaveStatus('Save failed'); }
     finally { setIsSaving(false); }
-  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, setSelectedEntryId, setShowMobileEditor]);
+  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, setSelectedEntryId, setShowMobileEditor]);
 
   /** Persist the image set into an existing entry's encrypted metadata.
    *  Rebuilds from the store entry (mirrors handleBookmark) so it is safe to
