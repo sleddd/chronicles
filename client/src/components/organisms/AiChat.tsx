@@ -9,7 +9,7 @@ import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { entries as entriesApi } from '../../services/api.js';
-import { autoNutritionOnSave, chatReply, type ChatTurn } from '../../services/aiAssistant.js';
+import { autoNutritionOnSave, chatReply, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
 import { mealForNow, nowTime } from '../../utils/foodLog.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { chatSystemPrompt, parseSaveCommand, textToEntryHtml, type TopicRef } from '../../utils/chatSave.js';
@@ -395,7 +395,7 @@ export function AiChat() {
     push({ role: 'user', text });
     setBusy(true);
     try {
-      const system = chatSystemPrompt(topicRefs.map(t => t.name));
+      const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '');
       let reply = (await chatReply(system, history)).trim();
       // House style: if a banned phrase slipped through, ask for one quiet
       // rewrite; whatever still remains is removed before display

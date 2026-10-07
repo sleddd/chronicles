@@ -39,6 +39,8 @@ export interface AiConfig {
   /** Optional — improves calories-burned estimates */
   bodyWeight: string;
   weightUnit: 'lb' | 'kg';
+  /** The user's own notes for the AI chat (about them, how they like to be talked to) */
+  chatNotes: string;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -54,6 +56,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   awsSessionToken: '',
   bodyWeight: '',
   weightUnit: 'lb',
+  chatNotes: '',
 };
 
 /** Suggested models per provider — the Settings form also accepts any model ID. */
