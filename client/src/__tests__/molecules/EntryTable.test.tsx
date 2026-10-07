@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen } from '@testing-library/react';
-import { EntryTableHead, formatRowDate } from '@/components/molecules/EntryTable';
+import { formatRowDate } from '@/components/molecules/EntryTable';
 import { EntryListCard } from '@/components/molecules/EntryListCard';
 import { renderWithTheme } from '../testUtils';
 
@@ -14,14 +14,6 @@ describe('formatRowDate', () => {
 
   it('adds a short year for other years', () => {
     expect(formatRowDate(new Date(2025, 11, 24), now)).toBe("Dec 24 '25");
-  });
-});
-
-describe('EntryTableHead', () => {
-  it('labels the Topic / Date and Entry columns', () => {
-    renderWithTheme(<EntryTableHead />);
-    expect(screen.getByText('Topic / Date')).toBeInTheDocument();
-    expect(screen.getByText('Entry')).toBeInTheDocument();
   });
 });
 
