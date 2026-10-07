@@ -53,6 +53,7 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
             <option value="dinner">Dinner</option>
             <option value="snack">Snack</option>
             <option value="supplement">Supplement</option>
+            <option value="medication">Medication</option>
           </Select>
         </FormField>
         <FormField label="Calories">

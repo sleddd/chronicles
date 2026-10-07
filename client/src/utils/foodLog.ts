@@ -9,6 +9,7 @@ export const MEAL_TYPE_OPTIONS = [
   { value: 'dinner', label: 'Dinner' },
   { value: 'snack', label: 'Snack' },
   { value: 'supplement', label: 'Supplement' },
+  { value: 'medication', label: 'Medication' },
 ] as const;
 
 /** One logged food/drink/supplement, flattened for the Meals log. */

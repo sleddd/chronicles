@@ -109,7 +109,7 @@ export interface MilestoneFieldValues {
 export interface FoodFieldValues {
   /** Primary label — shown when the entry has no text content. */
   mealDescription?: string;
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'supplement';
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'supplement' | 'medication';
   consumedDate: string;
   consumedTime: string;
   ingredients: string;

@@ -622,7 +622,7 @@ export function FoodDayList({ rows, goals, actions, aiReady, onStatus }: FoodDay
                 })}
                 <td onClick={stop}>
                   <RowActions className="actions">
-                    {aiReady && (
+                    {aiReady && row.mealType !== 'medication' && (
                       <RowAction type="button" disabled={busy} onClick={() => void actions.fill(row.id, { refreshAi: true })} title="Re-estimate AI values (typed values are kept)">
                         {busy ? 'Estimating…' : 'Estimate'}
                       </RowAction>
@@ -734,7 +734,7 @@ export function FoodTotalsTable({ days, goals, selected, onOpen }: FoodTotalsTab
           </GoalRow>
           {days.map(({ day, rows, noticed }) => {
             const summary = summarizeDay(rows);
-            const took = countNames(rows.filter(r => r.mealType === 'supplement').map(r => r.item));
+            const took = countNames(rows.filter(r => r.mealType === 'supplement' || r.mealType === 'medication').map(r => r.item));
             return (
               <DayRow
                 key={day}
