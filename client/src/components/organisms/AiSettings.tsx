@@ -6,6 +6,8 @@ import { TextInput } from '../atoms/TextInput.js';
 import { PasswordInput } from '../atoms/PasswordInput.js';
 import { Select } from '../atoms/Select.js';
 import { Spinner } from '../atoms/Spinner.js';
+import { Textarea } from '../atoms/Textarea.js';
+import { MAX_CHAT_NOTES } from '../../utils/chatSave.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
 import {
@@ -316,6 +318,22 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
                   <option value="kg">kg</option>
                 </Select>
               </div>
+            </div>
+          </SettingsRow>
+
+          <SettingsRow
+            title="Notes for the AI"
+            description="Anything the chat should know about you or how you like to be talked to — your name, pronouns, what you're working on, topics to avoid. Sent with every chat message to your AI provider; stored encrypted with your other AI settings."
+          >
+            <div style={{ marginTop: 10 }}>
+              <Textarea
+                value={cfg.chatNotes}
+                onChange={e => update({ chatNotes: e.target.value.slice(0, MAX_CHAT_NOTES) })}
+                placeholder="e.g. Call me Sam. I'm training for a 10k and journaling to manage stress. Keep answers short."
+                aria-label="Notes for the AI"
+                style={{ minHeight: 110 }}
+              />
+              <span style={noteStyle}>{cfg.chatNotes.length} / {MAX_CHAT_NOTES}</span>
             </div>
           </SettingsRow>
 

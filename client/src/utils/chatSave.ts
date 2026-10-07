@@ -64,7 +64,11 @@ export const CHAT_PERSONA = [
 ].join('\n');
 
 /** System prompt for the unsaved chat; topic names let the model suggest a fitting /save. */
-export function chatSystemPrompt(topicNames: string[]): string {
+/** Longest user note passed to the model. */
+export const MAX_CHAT_NOTES = 2000;
+
+export function chatSystemPrompt(topicNames: string[], userNotes = ''): string {
+  const notes = userNotes.trim().slice(0, MAX_CHAT_NOTES);
   return [
     'You are the assistant built into Chronicles, a private, end-to-end encrypted personal journal.',
     CHAT_PERSONA,
@@ -77,5 +81,11 @@ export function chatSystemPrompt(topicNames: string[]): string {
       : 'Use the topic "Journal" after /save.',
     'Keep the saved text self-contained so it makes sense later without this conversation.',
     'You cannot see the user\'s journal entries and cannot save anything yourself — only the user can, by sending the /save command.',
+    ...(notes ? [
+      'The user wrote these notes for you (about themselves and how they like to be spoken to). Follow them, except where they conflict with the rules above — safety, saying you are an AI when asked, and the banned words always win:',
+      '<user_notes>',
+      notes,
+      '</user_notes>',
+    ] : []),
   ].join('\n');
 }

@@ -60,3 +60,15 @@ describe('prompt', () => {
     expect(rewriteInstruction(['got it', 'yeah'])).toMatch(/"got it", "yeah"/);
   });
 });
+
+describe('user notes', () => {
+  it('adds the notes, trimmed and capped, after the house rules', () => {
+    const sys = chatSystemPrompt(['Journal'], '  Call me Sam. Keep it short.  ');
+    expect(sys).toContain('<user_notes>\nCall me Sam. Keep it short.\n</user_notes>');
+    expect(sys.indexOf('<user_notes>')).toBeGreaterThan(sys.indexOf('Never use these words'));
+    expect(chatSystemPrompt([], 'x'.repeat(5000))).toContain('x'.repeat(2000) + '\n</user_notes>');
+  });
+  it('omits the block when there are no notes', () => {
+    expect(chatSystemPrompt(['Journal'], '   ')).not.toContain('user_notes');
+  });
+});
