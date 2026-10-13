@@ -16,6 +16,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useUIStore } from '../stores/uiStore.js';
 import type { DecryptedPost } from '@shared/crypto/types';
+import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
 
 /* ── Layout (mirrors TopicDetailView / TopicsView) ── */
 
@@ -126,6 +127,8 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   ), [entries, topicIds]);
+  // Topic labels only when the list spans more than one topic
+  const mixedTopics = useMemo(() => hasMixedTopics(entryTopicIds(filtered)), [filtered]);
 
   const getTopicForEntry = useCallback((entry: DecryptedPost) => {
     const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
@@ -220,7 +223,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
                     <EntryListCard
                       content={entry.content}
                       createdAt={created}
-                      topicName={topic?.name}
+                      topicName={mixedTopics ? topic?.name : undefined}
                       topicColor={topic?.color || accentColor}
                       fallbackTitle={fallbackTitle}
                       preview={preview}

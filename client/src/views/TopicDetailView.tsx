@@ -203,7 +203,6 @@ export function TopicDetailView() {
                     <EntryListCard
                       content={entry.content}
                       createdAt={created}
-                      topicName={topic.name}
                       topicColor={topic.color || accentColor}
                       fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
                       onClick={() => openInJournal(entry.id)}

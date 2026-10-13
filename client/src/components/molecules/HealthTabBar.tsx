@@ -42,7 +42,6 @@ export function HealthTabBar() {
   const ff = useEntriesStore(s => s.featureFlags);
 
   const tabs: { label: string; path: string }[] = [{ label: 'Dashboard', path: '/health' }];
-  if (ff.medicationEnabled !== false) tabs.push({ label: 'Meds', path: '/health/schedule' });
   if (ff.foodEnabled !== false) tabs.push({ label: 'Meals', path: '/health/food' });
   if (ff.exerciseEnabled !== false) tabs.push({ label: 'Exercise', path: '/health/exercise' });
   tabs.push({ label: 'Symptoms', path: '/health/symptoms' });

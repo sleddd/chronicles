@@ -80,11 +80,10 @@ function useCreateEntry() {
   };
 }
 
-const FieldGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 32px;
-  @media (max-width: 720px) { grid-template-columns: 1fr; }
+/* One field per row. */
+const FieldStack = styled.div`
+  display: flex;
+  flex-direction: column;
 `;
 
 const FormFooter = styled.div`
@@ -165,10 +164,10 @@ export function ExerciseQuickLog() {
 
   return (
     <div>
-      <FormField label="Activity">
-        <TextInput aria-label="Activity" placeholder="Optional — e.g. Morning run around the park" value={what} onChange={e => setWhat(e.target.value)} onKeyDown={onEnter} autoComplete="off" />
+      <FormField label="What did you do?">
+        <TextInput aria-label="What did you do?" placeholder="Optional — e.g. Morning run around the park" value={what} onChange={e => setWhat(e.target.value)} onKeyDown={onEnter} autoComplete="off" />
       </FormField>
-      <FieldGrid>
+      <FieldStack>
         <FormField label="Type">
           <Select aria-label="Exercise type" value={exerciseType} onChange={e => setExerciseType(e.target.value)}>
             {EXERCISE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -186,7 +185,7 @@ export function ExerciseQuickLog() {
             <option value="km">Kilometers</option>
           </Select>
         </FormField>
-      </FieldGrid>
+      </FieldStack>
       <FormFooter>
         <Note role="status">{status}</Note>
         <PillButton type="button" onClick={() => void handleSubmit()} disabled={saving || !canSave}>{saving ? 'Logging…' : 'Log exercise'}</PillButton>

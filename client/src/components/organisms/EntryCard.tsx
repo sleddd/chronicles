@@ -6,7 +6,6 @@ import {
   ENTRY_ROW_COLUMNS, ENTRY_ROW_INSET_PADDING, formatRowDate,
   MetaCell, DateCell, TopicCell, EntryCell, EntryTitle,
 } from '../molecules/EntryTable.js';
-import { Checkbox } from '../atoms/Checkbox.js';
 import { useUIStore } from '../../stores/uiStore.js';
 
 interface EntryCardProps {
@@ -20,9 +19,7 @@ interface EntryCardProps {
   onClick: () => void;
   onDelete?: () => void;
   onTopicClick?: (topicId: number) => void;
-  onToggleComplete?: (id: number, completed: boolean) => void;
   onToggleBookmark?: (id: number, isFavorite: boolean) => void;
-  hasCheckbox?: boolean;
   isCompleted?: boolean;
   isFavorite?: boolean;
   customType?: string;
@@ -90,11 +87,6 @@ const EndCol = styled.div`
   color: var(--text-tertiary);
 `;
 
-const CheckWrap = styled.span`
-  display: inline-flex;
-  align-items: center;
-`;
-
 const BookmarkIcon = styled.span`
   color: var(--color-accent);
   font-size: 11px;
@@ -106,8 +98,8 @@ const BookmarkIcon = styled.span`
 
 export function EntryCard({
   id, content, date, topicName,
-  topicId, active, onClick, onDelete, onTopicClick, onToggleComplete, onToggleBookmark,
-  hasCheckbox, isCompleted, isFavorite, previewText,
+  topicId, active, onClick, onDelete, onTopicClick, onToggleBookmark,
+  isCompleted, isFavorite, previewText,
 }: EntryCardProps) {
   const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
 
@@ -137,14 +129,6 @@ export function EntryCard({
         <EntryTitle $completed={isCompleted}>{title}</EntryTitle>
       </EntryCell>
       <EndCol>
-        {hasCheckbox && onToggleComplete && (
-          <CheckWrap
-            onClick={e => e.stopPropagation()}
-            title={isCompleted ? 'Mark not done' : 'Mark done'}
-          >
-            <Checkbox checked={!!isCompleted} onChange={checked => onToggleComplete(id, checked)} />
-          </CheckWrap>
-        )}
         {isFavorite && (
           <BookmarkIcon
             onClick={e => { e.stopPropagation(); onToggleBookmark?.(id, false); }}

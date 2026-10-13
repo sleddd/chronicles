@@ -10,6 +10,7 @@ import {
   NutritionGoalsPanel, Section, SectionHead, SectionLabel, SectionNote, TotalsWindowTabs, longDay,
   useFoodLogActions, type TotalWindow,
 } from '../components/organisms/FoodLog.js';
+import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { useAiReady } from '../hooks/useAiReady.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -71,6 +72,12 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
+/* Right-aligned "Fill N missing with AI"; collapses to nothing when the action is hidden. */
+const FillRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  &:not(:empty) { margin-bottom: 12px; }
+`;
 
 interface MealsLogViewProps {
   /** Page title — defaults to "Health". */
@@ -155,23 +162,21 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
           {tabBar ?? <HealthTabBar />}
 
           <Section aria-label="Day" ref={sheetRef} style={{ borderTop: 'none', marginTop: 28 }}>
-            <SectionHead>
-              <SectionLabel>{day === today ? 'Today' : 'Day'}</SectionLabel>
+            <SectionHead style={{ marginBottom: 32 }}>
+              <DayTitle style={{ margin: 0 }}>{longDay(day).replace(/^Today — /, '')}</DayTitle>
               <DayNavigator day={day} onChange={setDay} />
             </SectionHead>
-            <DayTitle>{longDay(day).replace(/^Today — /, '')}</DayTitle>
             <DayAtAGlance rows={dayRows} goals={goals} />
           </Section>
 
           {/* No rule under the day's tallies */}
           <Section aria-label="Logged items" style={{ borderTop: 'none', marginTop: 28 }}>
-            <SectionHead>
-              <SectionLabel>Logged{dayRows.length ? ` · ${dayRows.length}` : ''}</SectionLabel>
-              <FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} />
-            </SectionHead>
-            <AiErrorNote actions={actions} />
-            <FoodDayList rows={dayRows} goals={goals} actions={actions} aiReady={aiReady} onStatus={say} />
-            {dayRows.length > 0 && <SectionNote style={{ marginTop: 10 }}>Select an item to edit it. Grey italic numbers are AI estimates.</SectionNote>}
+            <CollapsibleCard id="logged" title={day === today ? 'Review what you logged today' : 'Review what you logged'} storageKey="meals-log-collapsed" defaultOpen={false}>
+              <FillRow><FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} /></FillRow>
+              <AiErrorNote actions={actions} />
+              <FoodDayList rows={dayRows} goals={goals} actions={actions} aiReady={aiReady} onStatus={say} />
+              {dayRows.length > 0 && <SectionNote style={{ marginTop: 10 }}>Select an item to edit it. Grey italic numbers are AI estimates.</SectionNote>}
+            </CollapsibleCard>
           </Section>
 
           {/* No rule between the Logged list and this section */}
@@ -188,9 +193,10 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
                 </>}
           </Section>
 
-          <Section aria-label="Daily goals">
-            <SectionHead><SectionLabel>Daily goals</SectionLabel></SectionHead>
-            <NutritionGoalsPanel goals={goals} onChange={saveGoals} />
+          <Section aria-label="Daily nutrition goals" style={{ borderTop: 'none' }}>
+            <CollapsibleCard id="nutrition-goals" title="Adjust Your Daily Nutrition Goals" storageKey="meals-log-collapsed" defaultOpen={false}>
+              <NutritionGoalsPanel goals={goals} onChange={saveGoals} />
+            </CollapsibleCard>
           </Section>
         </Inner>
       </Page>

@@ -43,31 +43,17 @@ describe('HealthReport', () => {
     accentColor: '#4281a4',
   };
 
-  it('renders summary stat cards', () => {
-    renderWithTheme(<HealthReport {...defaultProps} />);
-    expect(screen.getByText('Symptoms')).toBeInTheDocument();
-    expect(screen.getByText('Food Entries')).toBeInTheDocument();
-    expect(screen.getByText('Doses Taken')).toBeInTheDocument();
-    expect(screen.getByText('Workouts')).toBeInTheDocument();
-  });
-
-  it('renders zero counts when no data', () => {
-    renderWithTheme(<HealthReport {...defaultProps} />);
-    const zeros = screen.getAllByText('0');
-    expect(zeros.length).toBe(4);
-  });
-
-  it('renders counts from data', () => {
+  it('does not render the count tiles or calorie summary', () => {
     renderWithTheme(
       <HealthReport
         {...defaultProps}
-        symptoms={[{ name: 'headache', severity: 5, occurredAt: '2024-01-01T00:00:00Z' }] as never[]}
         foods={[{ name: 'pasta', calories: 500, ingredients: ['flour'], consumedAt: '2024-01-01', mealType: 'lunch' }] as never[]}
       />
     );
-    // Multiple elements may show "1" (symptoms=1, foods=1)
-    const ones = screen.getAllByText('1');
-    expect(ones.length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Food Entries')).not.toBeInTheDocument();
+    expect(screen.queryByText('Doses Taken')).not.toBeInTheDocument();
+    expect(screen.queryByText('Workouts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Calorie Summary')).not.toBeInTheDocument();
   });
 
   it('renders chart components', () => {

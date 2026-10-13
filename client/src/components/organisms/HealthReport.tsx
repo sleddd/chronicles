@@ -28,18 +28,10 @@ import React, { useMemo, useState } from 'react';
 
 /* ── Styled ── */
 
-const StatsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  column-gap: 24px;
-  row-gap: 16px;
-`;
-
+/* Plain bordered cards — no fill or shadow (matches the Health dashboard cards). */
 const StatCard = styled.div`
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-hover);
-  box-shadow: var(--shadow-2), var(--shadow-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg, 2px);
   padding: 14px;
   text-align: center;
 `;
@@ -64,10 +56,8 @@ const StatSub = styled.div`
 `;
 
 const SectionCard = styled.div`
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-hover);
-  box-shadow: var(--shadow-2), var(--shadow-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg, 2px);
   padding: 16px;
 `;
 
@@ -136,41 +126,6 @@ const CoMeta = styled.div`
   text-align: right;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const CalorieGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 12px;
-`;
-
-const CalorieStat = styled.div`
-  text-align: center;
-`;
-
-const CalorieValue = styled.div<{ $color: string }>`
-  font-family: var(--font-display);
-  font-size: 25px;
-  font-weight: 300;
-  color: ${({ $color }) => $color};
-`;
-
-const CalorieLabel = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const HDivider = styled.div`
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  padding-top: 10px;
-`;
-
-const SubTitle = styled.h4`
-  font-size: 15px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text};
-  margin: 0 0 8px;
 `;
 
 const ExFreqRow = styled.div`
@@ -407,18 +362,6 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
   const exerciseFrequency = useMemo(() =>
     exercises.length > 0 ? calculateExerciseFrequency(exercises, period === 'year' ? 'month' : 'week') : [], [exercises, period]);
 
-  const calorieSummary = useMemo(() => {
-    const withCal = foods.filter(f => f.calories && f.calories > 0);
-    if (withCal.length === 0) return null;
-    const total = withCal.reduce((s, f) => s + (f.calories || 0), 0);
-    const avgPerMeal = Math.round(total / withCal.length);
-    const byDate = withCal.reduce((acc, f) => { const d = f.consumedAt.split('T')[0]; acc[d] = (acc[d] || 0) + (f.calories || 0); return acc; }, {} as Record<string, number>);
-    const daily = Object.values(byDate);
-    const avgDaily = daily.length > 0 ? Math.round(daily.reduce((a, b) => a + b, 0) / daily.length) : 0;
-    const byMeal = withCal.reduce((acc, f) => { const m = f.mealType || 'unknown'; if (!acc[m]) acc[m] = { count: 0, cal: 0 }; acc[m].count++; acc[m].cal += f.calories || 0; return acc; }, {} as Record<string, { count: number; cal: number }>);
-    return { total, avgPerMeal, avgDaily, byMeal };
-  }, [foods]);
-
   const exerciseSummary = useMemo(() => {
     if (exercises.length === 0) return null;
     const byType = exercises.reduce((acc, e) => {
@@ -442,8 +385,6 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
     for (const f of foods) for (const ing of f.ingredients) { const k = ing.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [foods]);
-
-  const totalExerciseMin = exercises.reduce((s, e) => s + e.duration, 0);
 
   const wellnessTrend: WellnessTrendPoint[] = useMemo(() =>
     wellness.length > 0 ? calculateWellnessTrend(wellness) : [], [wellness]);
@@ -469,28 +410,6 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
 
   return (
     <ScrollList $gap="24px" $padding="16px 0">
-      {/* Summary stats */}
-      <StatsGrid>
-        <StatCard>
-          <StatValue $color={accentColor}>{symptoms.length}</StatValue>
-          <StatLabel>Symptoms</StatLabel>
-        </StatCard>
-        <StatCard>
-          <StatValue $color={accentColor}>{foods.length}</StatValue>
-          <StatLabel>Food Entries</StatLabel>
-          {calorieSummary && <StatSub>{calorieSummary.total.toLocaleString()} cal total</StatSub>}
-        </StatCard>
-        <StatCard>
-          <StatValue $color={accentColor}>{medLogs.length}</StatValue>
-          <StatLabel>Doses Taken</StatLabel>
-        </StatCard>
-        <StatCard>
-          <StatValue $color={accentColor}>{exercises.length}</StatValue>
-          <StatLabel>Workouts</StatLabel>
-          {totalExerciseMin > 0 && <StatSub>{totalExerciseMin} min total</StatSub>}
-        </StatCard>
-      </StatsGrid>
-
       {/* Wellness summary stats */}
       {wellnessSummary && (
         <WellnessGrid>
@@ -617,28 +536,6 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
           {topIngredients.map(([name, count]) => (
             <ListRow key={name}><ListLabel>{name}</ListLabel><ListValue>{count} time{count !== 1 ? 's' : ''}</ListValue></ListRow>
           ))}
-        </SectionCard>
-      )}
-
-      {/* Calorie summary */}
-      {calorieSummary && (
-        <SectionCard>
-          <SectionTitle>Calorie Summary</SectionTitle>
-          <CalorieGrid>
-            <CalorieStat><CalorieValue $color={accentColor}>{calorieSummary.total.toLocaleString()}</CalorieValue><CalorieLabel>Total Calories</CalorieLabel></CalorieStat>
-            <CalorieStat><CalorieValue $color={accentColor}>{calorieSummary.avgDaily.toLocaleString()}</CalorieValue><CalorieLabel>Avg Daily</CalorieLabel></CalorieStat>
-            <CalorieStat><CalorieValue $color={accentColor}>{calorieSummary.avgPerMeal.toLocaleString()}</CalorieValue><CalorieLabel>Avg per Meal</CalorieLabel></CalorieStat>
-          </CalorieGrid>
-          {Object.keys(calorieSummary.byMeal).length > 0 && (
-            <HDivider>
-              <SubTitle>By Meal Type</SubTitle>
-              {Object.entries(calorieSummary.byMeal)
-                .sort((a, b) => b[1].cal - a[1].cal)
-                .map(([meal, data]) => (
-                  <ListRow key={meal}><ListLabel>{meal}</ListLabel><ListValue>{data.cal.toLocaleString()} cal ({data.count} meal{data.count !== 1 ? 's' : ''})</ListValue></ListRow>
-                ))}
-            </HDivider>
-          )}
         </SectionCard>
       )}
 
