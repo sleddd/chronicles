@@ -79,11 +79,10 @@ const ErrorNote = styled(SectionNote)`
 `;
 
 /* Two FormField columns that collapse to one on narrow screens. */
-const FieldGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 32px;
-  @media (max-width: 720px) { grid-template-columns: 1fr; }
+/* One field per row. */
+const FieldStack = styled.div`
+  display: flex;
+  flex-direction: column;
 `;
 
 const FormFooter = styled.div`
@@ -329,12 +328,12 @@ export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Lo
 
   return (
     <div>
-      <FormField label="Item">
-        <TextInput value={item} onChange={e => setItem(e.target.value)} onKeyDown={onEnter} placeholder="e.g. Chicken sausage, 1 link" autoComplete="off" aria-label="Item" />
+      <FormField label="What did you eat?">
+        <TextInput value={item} onChange={e => setItem(e.target.value)} onKeyDown={onEnter} placeholder="e.g. Chicken sausage, 1 link" autoComplete="off" aria-label="What did you eat?" />
       </FormField>
-      <FieldGrid>
-        <FormField label="Type">
-          <Select value={mealType} onChange={e => setMealType(e.target.value)} aria-label="Type">
+      <FieldStack>
+        <FormField label="Meal time">
+          <Select value={mealType} onChange={e => setMealType(e.target.value)} aria-label="Meal time">
             {MEAL_TYPE_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </Select>
         </FormField>
@@ -343,7 +342,7 @@ export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Lo
         {nutrientField('vitaminD')}
         {nutrientField('vitaminB12')}
         {nutrientField('vitaminC')}
-      </FieldGrid>
+      </FieldStack>
       <FormField label="Notes">
         <TextInput value={notes} onChange={e => setNotes(e.target.value)} onKeyDown={onEnter} placeholder="Optional" autoComplete="off" aria-label="Notes" />
       </FormField>
@@ -646,18 +645,19 @@ export function FoodDayList({ rows, goals, actions, aiReady, onStatus }: FoodDay
   );
 }
 
-/** "Fill missing with AI (n)" for a day's rows; renders nothing when AI is off. */
+/** "Fill N missing with AI" for a day's rows; renders nothing when AI is off or nothing is missing. */
 export function FillMissingAction({ rows, actions, aiReady }: { rows: FoodRow[]; actions: FoodLogActions; aiReady: boolean }) {
   if (!aiReady) return null;
   const missing = rows.filter(r => nutrientsToEstimate(r.item, r.cf).length > 0);
   const busy = actions.pending.size > 0;
+  if (!missing.length && !busy) return null;
   return (
     <TextAction
       type="button"
-      disabled={missing.length === 0 || busy}
+      disabled={busy}
       onClick={async () => { for (const r of missing) await actions.fill(r.id); }}
     >
-      {busy ? 'Estimating…' : missing.length ? `Fill ${missing.length} missing with AI` : 'All nutrients filled'}
+      {busy ? 'Estimating…' : `Fill ${missing.length} missing with AI`}
     </TextAction>
   );
 }
@@ -769,7 +769,7 @@ interface NutritionGoalsPanelProps {
 /** Daily targets in field rows; each saves when you leave the field. */
 export function NutritionGoalsPanel({ goals, onChange }: NutritionGoalsPanelProps) {
   return (
-    <FieldGrid>
+    <FieldStack>
       {NUTRIENTS.map(n => (
         <FormField key={`${n.key}-${goals[n.key] ?? ''}`} label={<UnitLabel label={n.label} unit={n.key === 'calories' ? 'at least' : n.unit || undefined} />}>
           <TextInput
@@ -785,6 +785,6 @@ export function NutritionGoalsPanel({ goals, onChange }: NutritionGoalsPanelProp
           />
         </FormField>
       ))}
-    </FieldGrid>
+    </FieldStack>
   );
 }

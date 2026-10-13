@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
-import { useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { ExerciseQuickLog } from '../components/organisms/HealthQuickLog.js';
+import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
+import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
+import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { DayAtAGlance, FoodAddForm, useFoodLogActions } from '../components/organisms/FoodLog.js';
 import { useAiReady } from '../hooks/useAiReady.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
@@ -14,6 +16,7 @@ import { foodRowsFrom } from '../utils/foodLog.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 
 /* ── Layout (mirrors HealthView) ── */
@@ -51,63 +54,37 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Dashboard section: flat, borderless — a top rule + tracked label row. */
-const Section = styled.section`
-  margin-top: 32px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
+/* Meal and exercise cards side by side on desktop; stacked on tablet and phone. */
+const LogGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+  ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); }
 `;
 
-const SectionHead = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+const WellnessWrap = styled.div`
+  margin-top: 24px;
 `;
 
-const SectionLabel = styled.h2`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin: 0;
-`;
-
-const SectionLink = styled.button`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  &:hover { opacity: 0.7; }
+const MedsWrap = styled.div`
+  margin-top: 24px;
 `;
 
 /* ── Helpers ── */
 
-function DashSection({ label, action, children }: { label: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <Section aria-label={label}>
-      <SectionHead>
-        <SectionLabel>{label}</SectionLabel>
-        {action}
-      </SectionHead>
-      {children}
-    </Section>
-  );
+
+const CARDS_KEY = 'health-dashboard-collapsed-v2';
+
+function LogPanel(props: { id: string; title: string; defaultOpen?: boolean; children: ReactNode }) {
+  return <CollapsibleCard storageKey={CARDS_KEY} {...props} />;
 }
 
 /* ── Food ── */
 
 const GlanceWrap = styled.div`
-  padding: 4px 0 18px;
+  margin-top: 32px;
 `;
 
 const Toast = styled.div<{ $show: boolean }>`
@@ -130,13 +107,23 @@ const Toast = styled.div<{ $show: boolean }>`
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
-/** Today's nutrient totals, the shared Log food form, and what's been eaten today. */
-function FoodPanel() {
+/** Today's nutrient totals against the daily goals. */
+function FoodGlance() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
+  const [goals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
+
+  const today = toDateStr(new Date());
+  const mealsTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'meals')?.id, [allTopics]);
+  const todayRows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
+
+  return <GlanceWrap><DayAtAGlance rows={todayRows} goals={goals} /></GlanceWrap>;
+}
+
+/** The shared Log food form for today, with a status toast. */
+function MealLog() {
   const aiReady = useAiReady();
   const actions = useFoodLogActions('Meals');
-  const [goals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
   const [status, setStatus] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -146,17 +133,28 @@ function FoodPanel() {
     timer.current = setTimeout(() => setStatus(''), 2600);
   };
 
-  const today = toDateStr(new Date());
-  const mealsTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'meals')?.id, [allTopics]);
-  const todayRows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
-
   return (
     <>
-      <GlanceWrap><DayAtAGlance rows={todayRows} goals={goals} /></GlanceWrap>
-      <FoodAddForm day={today} actions={actions} aiReady={aiReady} onStatus={say} />
+      <FoodAddForm day={toDateStr(new Date())} actions={actions} aiReady={aiReady} onStatus={say} />
       <Toast $show={!!status} role="status" aria-live="polite">{status}</Toast>
     </>
   );
+}
+
+/** True when an active medication has at least one scheduled dose time. */
+function useHasScheduledMeds(): boolean {
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  return useMemo(() => {
+    const medId = allTopics.find(t => t.name.toLowerCase() === 'medication')?.id;
+    if (!medId) return false;
+    return entries.some(e => {
+      const meta = e.metadata as Record<string, unknown> | undefined;
+      if (!meta || meta._taxonomyId !== medId) return false;
+      const cf = (meta._customFields as Record<string, unknown>) || {};
+      return cf.isActive !== false && Array.isArray(cf.scheduleTimes) && cf.scheduleTimes.length > 0;
+    });
+  }, [entries, allTopics]);
 }
 
 /* ── View ── */
@@ -168,7 +166,7 @@ function FoodPanel() {
 export function HealthDashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const ff = useEntriesStore(s => s.featureFlags);
-  const navigate = useNavigate();
+  const hasMeds = useHasScheduledMeds();
 
   if (needsUnlock) return (
     <>
@@ -185,7 +183,8 @@ export function HealthDashboardView() {
     </ContentTemplate>
   );
 
-  const seeAll = (path: string) => <SectionLink type="button" onClick={() => navigate(path)}>See all</SectionLink>;
+  const food = ff.foodEnabled !== false;
+  const exercise = ff.exerciseEnabled !== false;
 
   return (
     <ContentTemplate>
@@ -196,16 +195,21 @@ export function HealthDashboardView() {
           </Head>
           <HealthTabBar />
 
-          {ff.foodEnabled !== false && (
-            <DashSection label="Food" action={seeAll('/health/food')}>
-              <FoodPanel />
-            </DashSection>
-          )}
+          {food && <FoodGlance />}
 
-          {ff.exerciseEnabled !== false && (
-            <DashSection label="Exercise" action={seeAll('/health/exercise')}>
-              <ExerciseQuickLog />
-            </DashSection>
+          <WellnessWrap>
+            <LogPanel id="wellness" title="Wellness Check-in"><WellnessCheckIn /></LogPanel>
+          </WellnessWrap>
+
+          <LogGrid>
+            {food && <LogPanel id="meal" title="Log a Meal" defaultOpen={false}><MealLog /></LogPanel>}
+            {exercise && <LogPanel id="exercise" title="Log Exercise" defaultOpen={false}><ExerciseQuickLog /></LogPanel>}
+          </LogGrid>
+
+          {hasMeds && ff.medicationEnabled !== false && (
+            <MedsWrap>
+              <LogPanel id="meds" title="Medication Schedule"><MedicationSchedule isReady={isReady} /></LogPanel>
+            </MedsWrap>
           )}
 
         </Inner>

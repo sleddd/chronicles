@@ -19,6 +19,7 @@ import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName, stripHtml } from '../utils/stripHtml.js';
 import { toDateStr, startOfWeek, startOfMonth } from '../utils/dateUtils.js';
 import type { DateFilter } from '../types/health.js';
+import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
 
 const DATE_FILTERS = [
   { value: 'all' as const, label: 'All' },
@@ -263,6 +264,8 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
     () => [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [filtered]
   );
+  // Topic labels only when the list spans more than one topic
+  const mixedTopics = useMemo(() => hasMixedTopics(entryTopicIds(sortedEntries)), [sortedEntries]);
 
   const getTopicForEntry = useCallback((entry: typeof entries[number]) => {
     const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
@@ -405,7 +408,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
                     <EntryListCard
                       content={entry.content}
                       createdAt={created}
-                      topicName={topic?.name}
+                      topicName={mixedTopics ? topic?.name : undefined}
                       fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
                       onClick={() => openInJournal(entry.id)}
                     />

@@ -15,9 +15,9 @@ export function formatRowDate(d: Date, now = new Date()): string {
 }
 
 /** Shared row padding. */
-export const ENTRY_ROW_PADDING = '12px 10px 12px 4px';
+export const ENTRY_ROW_PADDING = '16px 10px 16px 4px';
 /** Inset variant for edge-to-edge panels (journal list) — matches its 20px toolbar gutter. */
-export const ENTRY_ROW_INSET_PADDING = '12px 20px';
+export const ENTRY_ROW_INSET_PADDING = '16px 20px';
 
 /* Cell pieces both row components use */
 

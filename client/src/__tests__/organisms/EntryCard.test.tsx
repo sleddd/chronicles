@@ -58,7 +58,7 @@ describe('EntryCard', () => {
 
   it('shows strikethrough for completed tasks', () => {
     renderWithTheme(
-      <EntryCard {...defaultProps} hasCheckbox={true} isCompleted={true} />
+      <EntryCard {...defaultProps} isCompleted={true} />
     );
     const preview = screen.getByText('This is a journal entry');
     expect(preview).toHaveStyle('text-decoration: line-through');
@@ -89,26 +89,8 @@ describe('EntryCard', () => {
     expect(screen.queryByRole('button', { name: 'Work' })).not.toBeInTheDocument();
   });
 
-  it('toggles completion from the checkbox without opening the entry', () => {
-    const onToggleComplete = vi.fn();
-    const onClick = vi.fn();
-    renderWithTheme(
-      <EntryCard {...defaultProps} onClick={onClick} hasCheckbox isCompleted={false} onToggleComplete={onToggleComplete} />
-    );
-    fireEvent.click(screen.getByRole('checkbox'));
-    expect(onToggleComplete).toHaveBeenCalledWith(1, true);
-    expect(onClick).not.toHaveBeenCalled();
-  });
-
-  it('shows a checked box for completed tasks', () => {
-    renderWithTheme(
-      <EntryCard {...defaultProps} hasCheckbox isCompleted onToggleComplete={vi.fn()} />
-    );
-    expect(screen.getByRole('checkbox')).toBeChecked();
-  });
-
-  it('has no checkbox for entries that are not checkable', () => {
-    renderWithTheme(<EntryCard {...defaultProps} onToggleComplete={vi.fn()} />);
+  it('has no completion checkbox', () => {
+    renderWithTheme(<EntryCard {...defaultProps} isCompleted />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });

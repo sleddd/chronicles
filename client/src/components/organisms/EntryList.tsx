@@ -198,16 +198,6 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
     }
   }, [entries, removeEntry]);
 
-  const handleToggleComplete = useCallback((entryId: number, completed: boolean) => {
-    const entry = entries.find(e => e.id === entryId);
-    if (!entry) return;
-    const meta = entry.metadata as Record<string, unknown>;
-    const existingFields = (meta?._customFields as Record<string, unknown>) || {};
-    const updatedFields = { ...existingFields, isCompleted: completed };
-    const updatedMeta = { ...meta, _customFields: updatedFields };
-    updateDecryptedEntry(entryId, { metadata: updatedMeta });
-  }, [entries, updateDecryptedEntry]);
-
   const getTopicForEntry = (entry: { metadata: Record<string, unknown> }) => {
     const taxId = entry.metadata?._taxonomyId as number | undefined;
     return taxId ? topics.find(t => t.id === taxId) : undefined;
@@ -393,8 +383,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
               const customFields = meta?._customFields as Record<string, unknown> | undefined;
               const topic = getTopicForEntry(entry);
               const customType = getCustomType(topic?.name);
-              const hasCheckbox = customType !== null && CHECKABLE_TYPES.has(customType);
-              const isCompleted = hasCheckbox && !!customFields?.isCompleted;
+              const isCompleted = customType !== null && CHECKABLE_TYPES.has(customType) && !!customFields?.isCompleted;
               const isFavorite = !!customFields?._isFavorite;
 
               let previewText: string | undefined;
@@ -421,16 +410,14 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
                   id={entry.id}
                   content={entry.content}
                   date={entry.createdAt instanceof Date ? entry.createdAt.toISOString() : String(entry.createdAt)}
-                  topicName={topic?.name}
+                  topicName={selectedTopicId !== null ? undefined : topic?.name}
                   topicColor={topicBarColor(topic?.name, topic?.color)}
                   topicId={topic?.id}
                   active={selectMode ? selectedIds.has(entry.id) : selectedEntryId === entry.id}
                   onClick={() => (selectMode ? toggleSelected(entry.id) : setSelectedEntryId(entry.id))}
                   onDelete={selectMode ? undefined : () => handleDelete(entry.id)}
                   onTopicClick={selectMode ? undefined : handleTopicClick}
-                  onToggleComplete={hasCheckbox && !selectMode ? handleToggleComplete : undefined}
                   onToggleBookmark={selectMode ? undefined : handleToggleBookmarkLocal}
-                  hasCheckbox={hasCheckbox}
                   isCompleted={isCompleted}
                   isFavorite={isFavorite}
                   customType={customType || undefined}

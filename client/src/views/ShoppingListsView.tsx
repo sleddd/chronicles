@@ -201,7 +201,6 @@ export function ShoppingListsView() {
                     <EntryListCard
                       content={entry.content}
                       createdAt={created}
-                      topicName={shoppingListTopic?.name}
                       completed={completed}
                       fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
                       onClick={() => openInJournal(entry.id)}

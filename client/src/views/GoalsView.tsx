@@ -28,6 +28,7 @@ import { journalOriginState } from '../utils/topicBreadcrumb.js';
 import type { GoalEntry, MilestoneEntryData, TaskEntryData, RoadmapStatus } from '../types/goals.js';
 import { ROADMAP_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus, milestoneFieldsForStatus } from '../types/goals.js';
 import { useDroppable } from '@dnd-kit/core';
+import { hasMixedTopics } from '../utils/mixedTopics.js';
 
 /* ── Layout (mirrors Health) ── */
 
@@ -258,6 +259,9 @@ export function GoalsView() {
 
   // Todos have no parent goal or milestone connection
   const todos = useMemo(() => tasks.filter(t => !t.parentMilestoneId && !t.parentGoalId), [tasks]);
+  // Topic labels only when a list spans more than one topic
+  const tasksMixed = useMemo(() => hasMixedTopics(tasks.map(t => t.taxonomyId)), [tasks]);
+  const todosMixed = useMemo(() => hasMixedTopics(todos.map(t => t.taxonomyId)), [todos]);
 
   const goalOptions = useMemo(() => goals.map(g => ({ id: g.id, title: g.title })), [goals]);
   const goalTitles = useMemo(() => new Map(goals.map(g => [g.id, g.title])), [goals]);
@@ -657,7 +661,7 @@ export function GoalsView() {
                     <EntryListCard
                       content={entry.content}
                       createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
-                      topicName={topic?.name}
+                      topicName={tasksMixed ? topic?.name : undefined}
                       topicColor={topic?.color || accentColor}
                       completed={t.isCompleted}
                       fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
@@ -679,7 +683,7 @@ export function GoalsView() {
                     <EntryListCard
                       content={entry.content}
                       createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
-                      topicName={topic?.name}
+                      topicName={todosMixed ? topic?.name : undefined}
                       topicColor={topic?.color || accentColor}
                       completed={t.isCompleted}
                       fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
