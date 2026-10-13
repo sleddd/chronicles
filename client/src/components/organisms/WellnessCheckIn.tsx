@@ -5,6 +5,7 @@ import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
+import { predictNextPeriod } from '../../utils/cyclePrediction.js';
 
 const WATER_GOAL = 8;
 const SLEEP_GOAL = 10;
@@ -74,6 +75,15 @@ const MoodBtn = styled(TapBtn)`
   padding: 2px;
 `;
 
+const Prediction = styled.p`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 300;
+  color: var(--text-secondary);
+  margin: 0;
+`;
+
 const Count = styled.span`
   font-family: var(--font-sans);
   font-size: 13px;
@@ -94,7 +104,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
 
 /**
  * Today's wellness check-in — tap-to-fill water glasses, mood, sleep hours
- * and period flow. Saves the same `wellness-checkin` entry the journal edits
+ * and period flow, with the next expected period. Saves the same `wellness-checkin` entry the journal edits
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
@@ -127,6 +137,17 @@ export function WellnessCheckIn() {
   const sleep = stored ? (Number(stored.sleepHours) || 0) : pendingSleep;
   const flow = stored ? ((stored.flowIntensity as FlowIntensity) || '') : pendingFlow;
   const mood = stored ? (Number(stored.moodScore) || 0) : pendingMood;
+
+  // Next period from every logged check-in, with today's live value overlaid
+  const prediction = useMemo(() => {
+    const days = decryptedEntries.flatMap(e => {
+      const meta = e.metadata as Record<string, unknown>;
+      if (meta._widgetType !== 'wellness-checkin') return [];
+      const cf = (meta._customFields as Record<string, unknown>) ?? {};
+      return typeof cf.date === 'string' ? [{ date: cf.date, period: !!cf.periodToday }] : [];
+    });
+    return predictNextPeriod([...days, { date: today, period: flow !== '' }]);
+  }, [decryptedEntries, today, flow]);
 
   const entryIdRef = useRef<number | null>(null);
   useEffect(() => { if (entry) entryIdRef.current = entry.id; }, [entry]);
@@ -284,6 +305,11 @@ export function WellnessCheckIn() {
           ))}
           <Count>{flow || 'None'}</Count>
         </Taps>
+        <Prediction>
+          {prediction
+            ? `Estimated Next Period: ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
+            : 'Estimated Next Period: log a period day to estimate'}
+        </Prediction>
       </Row>
     </Rows>
   );
