@@ -5,22 +5,23 @@ import { Textarea } from '../../atoms/Textarea.js';
 import { DateTimeInput } from '../../atoms/DateTimeInput.js';
 import { FormField } from '../FormField.js';
 import { CalorieInput } from './CalorieInput.js';
-import { UnitLabel } from '../../atoms/UnitLabel.js';
-import { NUTRIENTS, nutrientSourceOf, withManualNutrient } from '../../../types/nutrition.js';
+import { NutrientGrid } from '../NutrientGrid.js';
+import { NUTRIENTS, nutrientSourceOf, withManualNutrient, type NutrientKey } from '../../../types/nutrition.js';
+
+/** Everything but calories, which has its own field with the AI Estimate button */
+const MICRONUTRIENTS = NUTRIENTS.filter(n => n.key !== 'calories');
 import type { FoodFieldValues } from '../../../types/fields.js';
 export type { FoodFieldValues } from '../../../types/fields.js';
 
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 8px;
 `;
 
+/* Single column: paired fields join the form's column so every label lines up */
 const Row = styled.div`
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  & > * { flex: 1; min-width: 0; }
+  display: contents;
 `;
 
 interface FoodFieldsProps {
@@ -67,25 +68,17 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
           />
         </FormField>
       </Row>
-      {NUTRIENTS.filter(n => n.key !== 'calories').map(n => {
-        const cf = values as unknown as Record<string, unknown>;
-        const isAi = nutrientSourceOf(cf, n.key) === 'ai' && !!String(cf[n.key] ?? '');
-        return (
-          <FormField key={n.key} label={<UnitLabel label={n.label} unit={n.unit} />}>
-            <TextInput
-              type="number"
-              step={n.step}
-              min="0"
-              inputMode="decimal"
-              value={String(cf[n.key] ?? '')}
-              onChange={e => onChange(withManualNutrient(cf, n.key, e.target.value) as unknown as FoodFieldValues)}
-              placeholder={onEstimateCalories ? 'Auto' : n.unit}
-              aria-label={`${n.label} (${n.unit})${isAi ? ', AI estimate' : ''}`}
-              hint={isAi ? 'AI estimate — edit to override' : undefined}
-            />
-          </FormField>
-        );
-      })}
+      <FormField label="Nutrients">
+        <NutrientGrid
+          nutrients={MICRONUTRIENTS}
+          values={values as unknown as Record<string, unknown>}
+          onChange={(key, v) => onChange(withManualNutrient(values as unknown as Record<string, unknown>, key as NutrientKey, v) as unknown as FoodFieldValues)}
+          placeholders={onEstimateCalories ? Object.fromEntries(MICRONUTRIENTS.map(n => [n.key, 'Auto'])) : undefined}
+          aiKeys={new Set(MICRONUTRIENTS
+            .filter(n => nutrientSourceOf(values as unknown as Record<string, unknown>, n.key) === 'ai' && !!String((values as unknown as Record<string, unknown>)[n.key] ?? ''))
+            .map(n => n.key as string))}
+        />
+      </FormField>
       <FormField label="Time Consumed">
         <DateTimeInput
           dateValue={values.consumedDate}

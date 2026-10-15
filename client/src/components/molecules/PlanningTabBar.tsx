@@ -13,7 +13,7 @@ const Bar = styled.nav`
 const TabBtn = styled.button<{ $active?: boolean }>`
   padding: 5px 12px;
   font-family: var(--sans, 'Lato', sans-serif);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: ${({ $active }) => $active ? 600 : 400};
   text-transform: uppercase;
   letter-spacing: 0.08em;

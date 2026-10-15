@@ -54,6 +54,13 @@ const Taps = styled.div`
   flex-wrap: wrap;
 `;
 
+/* Water (8), sleep (10) and mood (5) sit in two rows — 4, 5 and 3 across */
+const IconGrid = styled.div<{ $cols: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, auto);
+  gap: 2px 4px;
+`;
+
 const TapBtn = styled.button<{ $filled: boolean }>`
   background: none;
   border: none;
@@ -258,12 +265,14 @@ export function WellnessCheckIn() {
       <Row>
         <RowLabel>Water</RowLabel>
         <Taps>
-          {Array.from({ length: WATER_GOAL }, (_, i) => (
-            <TapBtn key={i} type="button" $filled={i < water} onClick={() => tapWater(i)}
-              aria-label={`${i + 1} glass${i ? 'es' : ''} of water`} aria-pressed={i < water}>
-              <Icon name="droplet" size={18} strokeWidth={1.6} />
-            </TapBtn>
-          ))}
+          <IconGrid $cols={Math.ceil(WATER_GOAL / 2)}>
+            {Array.from({ length: WATER_GOAL }, (_, i) => (
+              <TapBtn key={i} type="button" $filled={i < water} onClick={() => tapWater(i)}
+                aria-label={`${i + 1} glass${i ? 'es' : ''} of water`} aria-pressed={i < water}>
+                <Icon name="droplet" size={18} strokeWidth={1.6} />
+              </TapBtn>
+            ))}
+          </IconGrid>
           <Count>{water}/{WATER_GOAL}</Count>
         </Taps>
       </Row>
@@ -271,12 +280,15 @@ export function WellnessCheckIn() {
       <Row>
         <RowLabel>Mood</RowLabel>
         <Taps>
-          {MOOD_ICONS.map((name, i) => (
-            <MoodBtn key={name} type="button" $filled={mood === i + 1} onClick={() => tapMood(i + 1)}
-              aria-label={`Mood: ${MOOD_LABELS[i]}`} aria-pressed={mood === i + 1}>
-              <Icon name={name} size={22} strokeWidth={1.8} />
-            </MoodBtn>
-          ))}
+          {/* Five faces: a row of three, then two */}
+          <IconGrid $cols={3}>
+            {MOOD_ICONS.map((name, i) => (
+              <MoodBtn key={name} type="button" $filled={mood === i + 1} onClick={() => tapMood(i + 1)}
+                aria-label={`Mood: ${MOOD_LABELS[i]}`} aria-pressed={mood === i + 1}>
+                <Icon name={name} size={22} strokeWidth={1.8} />
+              </MoodBtn>
+            ))}
+          </IconGrid>
           <Count>{mood ? MOOD_LABELS[mood - 1] : '—'}</Count>
         </Taps>
       </Row>
@@ -284,12 +296,14 @@ export function WellnessCheckIn() {
       <Row>
         <RowLabel>Sleep</RowLabel>
         <Taps>
-          {Array.from({ length: SLEEP_GOAL }, (_, i) => (
-            <TapBtn key={i} type="button" $filled={i < sleep} onClick={() => tapSleep(i)}
-              aria-label={`${i + 1} hour${i ? 's' : ''} of sleep`} aria-pressed={i < sleep}>
-              <Icon name="moon" size={18} strokeWidth={1.6} />
-            </TapBtn>
-          ))}
+          <IconGrid $cols={Math.ceil(SLEEP_GOAL / 2)}>
+            {Array.from({ length: SLEEP_GOAL }, (_, i) => (
+              <TapBtn key={i} type="button" $filled={i < sleep} onClick={() => tapSleep(i)}
+                aria-label={`${i + 1} hour${i ? 's' : ''} of sleep`} aria-pressed={i < sleep}>
+                <Icon name="moon" size={18} strokeWidth={1.6} />
+              </TapBtn>
+            ))}
+          </IconGrid>
           <Count>{sleep > 0 ? `${sleep}h` : '—'}</Count>
         </Taps>
       </Row>

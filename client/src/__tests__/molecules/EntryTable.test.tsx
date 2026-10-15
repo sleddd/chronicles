@@ -1,35 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
-import { formatRowDate } from '@/components/molecules/EntryTable';
+import { screen, fireEvent } from '@testing-library/react';
+import { formatListDate } from '@/components/molecules/EntryTable';
 import { EntryListCard } from '@/components/molecules/EntryListCard';
 import { renderWithTheme } from '../testUtils';
 
-describe('formatRowDate', () => {
-  const now = new Date(2026, 9, 7);
-
-  it('shows month and day for dates this year', () => {
-    expect(formatRowDate(new Date(2026, 9, 7), now)).toBe('Oct 7');
-    expect(formatRowDate(new Date(2026, 0, 31), now)).toBe('Jan 31');
-  });
-
-  it('adds a short year for other years', () => {
-    expect(formatRowDate(new Date(2025, 11, 24), now)).toBe("Dec 24 '25");
+describe('formatListDate', () => {
+  it('shows an uppercase month, day and full year', () => {
+    expect(formatListDate(new Date(2026, 9, 11))).toBe('OCT 11, 2026');
   });
 });
 
 describe('EntryListCard (spreadsheet row)', () => {
-  it('stacks the topic over the date, then the title and preview', () => {
-    const createdAt = new Date();
+  it('shows the topic, then the title and preview, then the date on the right', () => {
+    const createdAt = new Date(2026, 9, 11);
     const { container } = renderWithTheme(
       <EntryListCard content="<p>Buy milk</p>" createdAt={createdAt} topicName="Task" preview="Due Friday" />
     );
-    const date = formatRowDate(createdAt);
-    expect(screen.getByText(date)).toBeInTheDocument();
+    expect(screen.getByText('OCT 11, 2026')).toBeInTheDocument();
     const text = container.textContent ?? '';
-    expect(text.indexOf('Task')).toBeLessThan(text.indexOf(date));
-    expect(text.indexOf(date)).toBeLessThan(text.indexOf('Buy milk'));
-    expect(screen.getByText('Task').parentElement).toBe(screen.getByText(date).parentElement);
-    expect(screen.getByText('Due Friday')).toBeInTheDocument();
+    expect(text.indexOf('Task')).toBeLessThan(text.indexOf('Buy milk'));
+    expect(text.indexOf('Due Friday')).toBeLessThan(text.indexOf('OCT 11, 2026'));
+    expect(screen.getByText('Buy milk')).toHaveStyle('font-size: 16px');
+  });
+
+  it('hovering a row hands the highlight from the first-row hint to hover', () => {
+    renderWithTheme(<EntryListCard content="<p>First</p>" createdAt={new Date()} hint />);
+    const row = screen.getByText('First').closest('div[class]')!.parentElement!;
+    fireEvent.mouseEnter(row);
+    expect(document.documentElement.dataset.entryRowHover).toBe('1');
+    fireEvent.mouseLeave(row);
+    expect(document.documentElement.dataset.entryRowHover).toBeUndefined();
   });
 
   it('shows completed entries struck through', () => {

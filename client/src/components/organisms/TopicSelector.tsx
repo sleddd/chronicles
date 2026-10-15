@@ -20,9 +20,11 @@ const Trigger = styled.button<{ $filled?: boolean }>`
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
+  /* Standard body size; icon, name and chevron share one centred line */
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: ${({ theme }) => theme.fontWeight.medium};
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 400;
   text-transform: capitalize;
   letter-spacing: normal;
   border: 1px solid var(--rule, #d4cfc5);
@@ -49,16 +51,16 @@ const TopicIcon = styled.span<{ $color?: string }>`
 
 const Placeholder = styled.span`
   color: ${({ theme }) => theme.colors.text};
-  padding-bottom: 7px;
 `;
 
 const ChevronIcon = styled.span<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
   margin-left: auto;
-  font-size: 12px;
+  font-size: 11px;
   color: ${({ theme }) => theme.colors.textMuted};
   transition: transform 0.15s;
   transform: ${({ $open }) => $open ? 'rotate(180deg)' : 'rotate(0)'};
-  padding-bottom: 7px;
 `;
 
 const Dropdown = styled.div`
@@ -185,7 +187,7 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, allowNone 
       <Trigger $filled={filled ?? selectedId !== null} onClick={() => setOpen(!open)}>
         {selected ? (
           <>
-            {!hideIcon && <TopicIcon $color={accentColor}><TopicGlyph name={selected.icon} size={15} /></TopicIcon>}
+            {!hideIcon && <TopicIcon $color={accentColor}><TopicGlyph name={selected.icon} size={17} /></TopicIcon>}
             {selected.name}
           </>
         ) : (

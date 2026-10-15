@@ -45,7 +45,8 @@ const ListContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0;
+  /* Room above the first row (sitewide entry-list spacing) */
+  padding: 12px 0 0;
   flex-shrink: 0;
   background: transparent;
 `;
@@ -82,7 +83,7 @@ const BulkButton = styled.button<{ $danger?: boolean }>`
   color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-secondary)')};
   background: transparent;
   border: 1px solid var(--border-default, ${({ theme }) => theme.colors.border});
-  border-radius: var(--r-md, 1px);
+  border-radius: 4px; /* just a little round, like the search fields */
   cursor: pointer;
   &:hover { background: var(--bg-hover); }
   &:disabled { opacity: 0.5; cursor: default; }

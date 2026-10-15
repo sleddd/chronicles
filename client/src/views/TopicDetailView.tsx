@@ -6,12 +6,12 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { PillButton } from '../components/atoms/PillButton.js';
+import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -46,23 +46,37 @@ const Head = styled.div`
 const TitleBlock = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
   min-width: 0;
 `;
 
+/* Back caret matched to the thin 44px title beside it (34px on phones): the
+   chevron glyph only fills part of its em box, so it's set larger to reach close
+   to the capitals' height, at the title's thin weight. Its side bearings are pulled
+   in so the stroke lines up with the page edge and sits close to the title. */
 const BackBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-left: -6px;
+  height: 44px;
+  margin-left: -20px;
+  margin-right: -10px;
+  padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--r-md, 4px);
-  color: var(--text-tertiary);
+  color: var(--text-primary);
   cursor: pointer;
-  &:hover { background: var(--bg-hover); color: var(--text-primary); }
+  &:hover { color: var(--color-accent); }
+  & > span {
+    font-size: 56px;
+    font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48;
+  }
+  @media (max-width: 480px) {
+    height: 34px;
+    margin-left: -16px;
+    margin-right: -7px;
+    & > span { font-size: 44px; }
+  }
 `;
 
 const Title = styled.h1`
@@ -71,31 +85,14 @@ const Title = styled.h1`
   font-weight: 200;
   line-height: 1;
   color: var(--text-primary);
-  margin: 0;
+  /* overflow: hidden (for the ellipsis) clips descenders at line-height 1 —
+     room below for g/p/y, given back with a negative margin so layout holds */
+  padding-bottom: 0.2em;
+  margin: 0 0 -0.2em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   @media (max-width: 480px) { font-size: 34px; }
-`;
-
-const NewBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 9px 4px;
-  font-family: var(--font-label);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.7; }
 `;
 
 /* ── Rows ── */
@@ -103,10 +100,8 @@ const NewBtn = styled.button`
 const List = styled.div`
   display: flex;
   flex-direction: column;
-`;
-
-const AddWrap = styled.div`
-  padding: 8px 0 0;
+  /* Breathing room between the topic title and its entries */
+  margin-top: 28px;
 `;
 
 /* ── View ── */
@@ -122,7 +117,7 @@ export function TopicDetailView() {
 
   const topic = allTopics.find(t => String(t.id) === String(topicId));
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const newEntry = useNewEntryInJournal();
 
   const handleDeleteEntry = useCallback(async (id: number) => {
     try {
@@ -165,33 +160,21 @@ export function TopicDetailView() {
           <Head>
             <TitleBlock>
               <BackBtn onClick={() => navigate('/topics')} aria-label="Back to topics">
-                <MaterialIcon $size={22} aria-hidden="true">chevron_left</MaterialIcon>
+                <MaterialIcon $size={56} aria-hidden="true">chevron_left</MaterialIcon>
               </BackBtn>
               <Title>{topic.name}</Title>
             </TitleBlock>
-            <NewBtn onClick={() => setIsAddOpen(true)}>
-              <MaterialIcon $size={16} aria-hidden="true">add</MaterialIcon>
+            <PillButton type="button" onClick={() => newEntry(topic.id)} style={{ flexShrink: 0 }}>
               New entry
-            </NewBtn>
+            </PillButton>
           </Head>
 
-          {isAddOpen && (
-            <AddWrap>
-              <NewEntryCard
-                topic={topic}
-                accentColor={accentColor}
-                hideButton
-                isOpen={isAddOpen}
-                onOpenChange={setIsAddOpen}
-              />
-            </AddWrap>
-          )}
 
           {topicEntries.length === 0 ? (
             <EmptyState message={`No ${topic.name.toLowerCase()} entries yet.`} />
           ) : (
             <List>
-              {topicEntries.map((entry: DecryptedPost) => {
+              {topicEntries.map((entry: DecryptedPost, i: number) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 return (
                   <SwipeActions
@@ -201,6 +184,7 @@ export function TopicDetailView() {
                     onDelete={() => handleDeleteEntry(entry.id)}
                   >
                     <EntryListCard
+                      hint={i === 0}
                       content={entry.content}
                       createdAt={created}
                       topicColor={topic.color || accentColor}

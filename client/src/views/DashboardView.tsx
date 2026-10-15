@@ -11,7 +11,8 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
-import { stripHtml, summarizeUserFields } from '../utils/stripHtml.js';
+import { stripHtml } from '../utils/stripHtml.js';
+import { generatedEntryText } from '../utils/entryText.js';
 import { TopicSelector } from '../components/organisms/TopicSelector.js';
 import { Editor, type DictationControls } from '../components/organisms/Editor.js';
 import type { Topic } from '../types/topics.js';
@@ -326,6 +327,8 @@ const QuickEntryDashCard = styled(DashCard)`
     border: none;
     border-radius: 0;
     background: transparent;
+    /* Flush left so the topic lines up with the entry text and field labels */
+    padding-left: 0;
   }
   & .qe-topic-picker > div > button:hover { background: transparent; }
   /* Dropdown menu: the absolutely-positioned div inside the picker wrapper. */
@@ -336,7 +339,6 @@ const QuickEditorWrap = styled.div`
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--border-strong);
   background: transparent;
   margin-bottom: 0;
 
@@ -345,7 +347,8 @@ const QuickEditorWrap = styled.div`
   div:has(> .tiptap) { flex: 1; display: flex; flex-direction: column; }
 
   .tiptap {
-    padding: 16px;
+    /* Flush left — the text starts on the same edge as the topic picker */
+    padding: 16px 16px 16px 0;
     font-family: var(--font-display);
     font-style: italic;
     font-size: 17px;
@@ -362,14 +365,24 @@ const QuickEditorWrap = styled.div`
   }
 `;
 
+/* Rule above the fields only when the editor sits above them — with no text
+   area the fields follow the topic picker directly (like the journal editor) */
+const FieldsBlock = styled.div<{ $ruled: boolean }>`
+  margin-top: 8px;
+  padding-top: ${({ $ruled }) => ($ruled ? '8px' : '0')};
+  border-top: ${({ $ruled }) => ($ruled ? '1px solid var(--border-strong)' : 'none')};
+`;
+
+/* Always a rule above Save — the card's one consistent bottom edge */
 const SaveRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 8px;
+  padding-top: 12px;
   padding-bottom: 8px;
   margin-top: 8px;
+  border-top: 1px solid var(--border-strong);
 `;
 
 /* Topic picker on the left, dictation + formatting toggles across from it. */
@@ -433,10 +446,19 @@ const StatusText = styled.span`
 type FieldType = 'text' | 'number' | 'boolean' | 'date' | 'time' | 'select';
 interface FieldDef { key: string; label: string; type: FieldType; options?: string[]; unit?: string; }
 
+/* Topics that are written in their fields, not a text area — the same set the
+   journal editor hides its text area for (where Quick Entry has the fields).
+   Their text is generated on save (utils/entryText). */
+const QE_FIELDS_ONLY = new Set([
+  'meals', 'medication', 'allergy', 'exercise', 'event', 'events', 'meeting', 'meetings',
+  'book', 'books', 'quote', 'quotes', 'music',
+]);
+
 const TOPIC_FIELDS: Record<string, FieldDef[]> = {
   'medication':  [],
   'symptom':     [{ key: 'severity', label: 'Severity', type: 'select', options: ['Mild', 'Moderate', 'Severe'] }, { key: 'duration', label: 'Duration', type: 'text' }],
   'meals':       [
+    { key: 'mealDescription', label: 'Meal Description', type: 'text' },
     { key: 'mealType', label: 'Meal', type: 'select', options: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Supplement'] },
     { key: 'calories', label: 'Calories', type: 'number' },
     { key: 'iron', label: 'Iron', type: 'number', unit: 'mg' },
@@ -448,9 +470,13 @@ const TOPIC_FIELDS: Record<string, FieldDef[]> = {
   'exercise':    [{ key: 'exerciseType', label: 'Type', type: 'text' }, { key: 'duration', label: 'Duration (min)', type: 'number' }, { key: 'intensity', label: 'Intensity', type: 'select', options: ['Low', 'Medium', 'High'] }],
   'allergy':     [{ key: 'allergen', label: 'Allergen', type: 'text' }, { key: 'severity', label: 'Severity', type: 'select', options: ['Mild', 'Moderate', 'Severe'] }, { key: 'reaction', label: 'Reaction', type: 'text' }],
   'task':        [{ key: 'priority', label: 'Priority', type: 'select', options: ['urgent', 'high', 'medium', 'low', 'none'] }],
-  'event':       [{ key: 'startDate', label: 'Date', type: 'date' }, { key: 'startTime', label: 'Time', type: 'time' }],
-  'meeting':     [{ key: 'startDate', label: 'Date', type: 'date' }, { key: 'startTime', label: 'Time', type: 'time' }],
+  'event':       [{ key: 'eventName', label: 'Event Name', type: 'text' }, { key: 'startDate', label: 'Date', type: 'date' }, { key: 'startTime', label: 'Time', type: 'time' }],
+  'meeting':     [{ key: 'meetingName', label: 'Meeting Name', type: 'text' }, { key: 'startDate', label: 'Date', type: 'date' }, { key: 'startTime', label: 'Time', type: 'time' }],
 };
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 /* ── Widget: Quick Entry ── */
 
@@ -509,9 +535,18 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
 
   const hasContent = !!stripHtml(content).trim();
   const userFields = (customFields._userFields as Record<string, unknown>) ?? {};
-  const hasUserFieldValues = userFieldDefs.length > 0 && summarizeUserFields(userFieldDefs, userFields) !== '';
-  const hasBuiltInFieldValues = fieldDefs.length > 0 || isMedicationTopic || isTaskTopic;
-  const canSave = hasContent || hasUserFieldValues || (hasBuiltInFieldValues && selectedTopic !== null);
+  const topicHideText = useUIStore(s => s.topicHideText);
+  const topicLower = selectedTopic?.name.toLowerCase() ?? '';
+  // Same as the journal editor: no text area for field-written topics (and
+  // custom topics set to hide it), unless text was already typed
+  const fieldsOnly = selectedTopic !== null && !hasContent
+    && (QE_FIELDS_ONLY.has(topicLower) || (!!topicHideText[selectedTopic.id] && userFieldDefs.length > 0));
+  const generatedText = selectedTopic ? generatedEntryText(topicLower, customFields, userFieldDefs) : '';
+  const isFilled = (v: unknown) => v !== '' && v != null && v !== false && !(Array.isArray(v) && v.length === 0);
+  const hasFieldValue = Object.entries(customFields).some(([k, v]) => !k.startsWith('_') && isFilled(v))
+    || Object.values(userFields).some(isFilled);
+  const canSave = hasContent || !!generatedText || (selectedTopic !== null && hasFieldValue);
+  const hasFieldsBelow = fieldDefs.length > 0 || isTaskTopic || isMedicationTopic || userFieldDefs.length > 0;
 
   const setField = (key: string, value: unknown) => setCustomFields(prev => ({ ...prev, [key]: value }));
 
@@ -524,7 +559,8 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
     if (!canSave) return;
     setSaving(true);
     try {
-      const finalContent = content;
+      // Fields-only entries carry generated text as their title in every list
+      const finalContent = !hasContent && generatedText ? `<p>${escapeHtml(generatedText)}</p>` : content;
       const effectiveTopicId = selectedTopic ? selectedTopic.id : await getOrCreateJournalTopic();
       const metadata: Record<string, unknown> = { _taxonomyId: effectiveTopicId };
       // Meals: with the AI assistant on, blank nutrients are filled in (typed ones are kept)
@@ -558,7 +594,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
           <div className="qe-topic-picker">
             <TopicSelector selectedId={selectedTopicId} onSelect={handleTopicChange} topics={topics} filled allowNone={false} />
           </div>
-          <TopicRowActions>
+          {!fieldsOnly && <TopicRowActions>
             <FooterIconBtn
               title={isListening ? 'Stop dictation' : 'Dictate'}
               $active={isListening}
@@ -575,26 +611,30 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
             >
               <MaterialIcon $size={25}>stylus_fountain_pen</MaterialIcon>
             </FooterIconBtn>
-          </TopicRowActions>
+          </TopicRowActions>}
         </TopicRow>
-        <QuickEditorWrap>
-          <Editor
-            content={content}
-            onChange={setContent}
-            placeholder={selectedTopicId === null ? reflectionPrompt : 'Add a note...'}
-            onEnterSave={handleSave}
-            hideToolbarToggle
-            toolbarOpen={toolbarOpen}
-            onToolbarToggle={setToolbarOpen}
-            dictationControlRef={dictationControlRef}
-            onDictationChange={(listening, interim) => { setIsListening(listening); setDictationInterim(interim); }}
-          />
-        </QuickEditorWrap>
+        {!fieldsOnly && (
+          <QuickEditorWrap>
+            <Editor
+              content={content}
+              onChange={setContent}
+              placeholder={selectedTopicId === null ? reflectionPrompt : 'Add a note...'}
+              onEnterSave={handleSave}
+              hideToolbarToggle
+              toolbarOpen={toolbarOpen}
+              onToolbarToggle={setToolbarOpen}
+              dictationControlRef={dictationControlRef}
+              onDictationChange={(listening, interim) => { setIsListening(listening); setDictationInterim(interim); }}
+            />
+          </QuickEditorWrap>
+        )}
         {dictationInterim && (
           <div style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--ink-4)', padding: '2px 0 4px' }}>
             {dictationInterim}
           </div>
         )}
+        {/* The topic's fields sit under a rule when the editor is above them */}
+        {hasFieldsBelow && <FieldsBlock $ruled={!fieldsOnly}>
         <FieldRowLayoutContext.Provider value={true}>
         {fieldDefs.length > 0 && fieldDefs.map(f => (
           <FormField key={f.key} label={f.unit ? <UnitLabel label={f.label} unit={f.unit} /> : f.label}>
@@ -643,6 +683,14 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
         )}
         {isMedicationTopic && (
           <>
+            <FormField label="Medication Name">
+              <TextInput
+                type="text"
+                placeholder="e.g. Montelukast"
+                value={(customFields.medicationName as string) ?? ''}
+                onChange={e => setField('medicationName', e.target.value)}
+              />
+            </FormField>
             <FormField label="Dosage">
               <TextInput
                 type="text"
@@ -702,14 +750,10 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
           />
         )}
         </FieldRowLayoutContext.Provider>
+        </FieldsBlock>}
         <SaveRow>
           <SaveBtn $accent={accentColor} $active={canSave} onClick={handleSave} disabled={saving || !canSave}>
-            {saving ? <Spinner size={10} /> : (
-              <>
-                <Icon name="plus" size={12} strokeWidth={2.5} />
-                Save
-              </>
-            )}
+            {saving ? <Spinner size={10} /> : 'Save'}
           </SaveBtn>
         </SaveRow>
       </CardBody>

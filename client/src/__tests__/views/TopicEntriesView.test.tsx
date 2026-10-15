@@ -33,7 +33,7 @@ vi.mock('@/stores/entriesStore', () => ({
 
 vi.mock('@/stores/uiStore', () => ({
   useUIStore: vi.fn((selector: (s: any) => any) =>
-    selector({ headerColor: '#4A5568' })
+    selector({ headerColor: '#4A5568', setSelectedEntryId: () => {}, setShowMobileEditor: () => {} })
   ),
 }));
 
@@ -86,10 +86,6 @@ vi.mock('@/components/organisms/EditableEntryCard', () => ({
   EditableEntryCard: () => <div data-testid="editable-entry-card" />,
 }));
 
-vi.mock('@/components/organisms/NewEntryCard', () => ({
-  NewEntryCard: () => <div data-testid="new-entry-card" />,
-}));
-
 vi.mock('@/components/organisms/UnlockDialog', () => ({
   UnlockDialog: () => <div data-testid="unlock-dialog" />,
 }));
@@ -129,13 +125,14 @@ describe('TopicEntriesView', () => {
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
   });
 
-  it('opens the new entry card from the New entry button for a single topic', () => {
+  it('New entry opens a new journal entry for the topic (no inline form)', () => {
     renderWithTheme(
       <TopicEntriesView title="Food" topicNames={['Food']} />
     );
-    expect(screen.queryByTestId('new-entry-card')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('New entry'));
-    expect(screen.getByTestId('new-entry-card')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/journal', {
+      state: { newEntryTopicId: 1, from: '/entertainment/music' },
+    });
   });
 
   it('hides New entry when the names match no single topic', () => {

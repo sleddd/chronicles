@@ -5,9 +5,8 @@ import { TextInput } from '../../atoms/TextInput.js';
 import { Select } from '../../atoms/Select.js';
 import { Textarea } from '../../atoms/Textarea.js';
 import { Checkbox } from '../../atoms/Checkbox.js';
-import { Button } from '../../atoms/Button.js';
 import { FormField } from '../FormField.js';
-import { UnitLabel } from '../../atoms/UnitLabel.js';
+import { NutrientGrid } from '../NutrientGrid.js';
 import { DOSE_NUTRIENTS, parseMedNutrients } from '../../../utils/medNutrients.js';
 import type { MedicationFieldValues } from '../../../types/fields.js';
 export type { MedicationFieldValues } from '../../../types/fields.js';
@@ -15,63 +14,57 @@ export type { MedicationFieldValues } from '../../../types/fields.js';
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 8px;
 `;
 
+/* Single column: paired fields join the form's column so every label lines up */
 const Row = styled.div`
+  display: contents;
+`;
+
+/* Times sit inline (filled boxes from FormField) with "+ Add time" after them */
+const Times = styled.div`
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  & > * { flex: 1; min-width: 0; margin-top: 0; }
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 `;
 
 const TimeRow = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm}px;
-  margin-bottom: 8px;
+  gap: 4px;
 `;
 
 const TimeInput = styled.input`
-  padding: 8px 12px;
-  font-size: ${({ theme }) => theme.fontSize.sm}px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
-  color: ${({ theme }) => theme.colors.text};
-  outline: none;
-
-  &:focus {
-    border-color: var(--focus-color, ${({ theme }) => theme.colors.text});
-  }
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
 `;
 
 const RemoveBtn = styled.button`
+  display: flex;
   padding: 4px;
-  color: ${({ theme }) => theme.colors.danger};
+  color: var(--text-tertiary);
   background: none;
   border: none;
   cursor: pointer;
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  &:hover { background: rgba(239, 68, 68, 0.1); }
+  &:hover { color: var(--color-danger); }
 `;
 
-const SubHead = styled.div`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin-top: 4px;
-`;
-
-const SubNote = styled.p`
-  margin: -8px 0 0;
+const AddLink = styled.button`
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-tertiary);
+  font-size: 14px;
+  color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 `;
+
 
 interface MedicationFieldsProps {
   values: MedicationFieldValues;
@@ -83,6 +76,12 @@ interface MedicationFieldsProps {
 export function MedicationFields({ values, onChange, entryName = '' }: MedicationFieldsProps) {
   const cf = values as unknown as Record<string, unknown>;
   const detected = parseMedNutrients(entryName, values.dosage ?? '');
+  const [notesOpen, setNotesOpen] = useState(false);
+  const showNotes = notesOpen || !!values.notes;
+  const aiKeys = new Set(cf.doseNutrientSource === 'ai'
+    ? DOSE_NUTRIENTS.filter(n => String(cf[n.key] ?? '') !== '').map(n => n.key as string)
+    : []);
+  const placeholders = Object.fromEntries(DOSE_NUTRIENTS.map(n => [n.key, detected[n.key] !== undefined ? String(detected[n.key]) : '']));
   const setNutrient = (key: string, v: string) =>
     onChange({ ...cf, [key]: v, doseNutrientSource: 'manual' } as unknown as MedicationFieldValues);
 
@@ -102,6 +101,13 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
 
   return (
     <Wrapper>
+      <FormField label="Medication Name">
+        <TextInput
+          value={values.medicationName ?? ''}
+          onChange={e => onChange({ ...values, medicationName: e.target.value })}
+          placeholder="e.g. Montelukast"
+        />
+      </FormField>
       <Row>
         <FormField label="Dosage">
           <TextInput
@@ -123,59 +129,62 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
           </Select>
         </FormField>
       </Row>
-      <SubHead>Nutrients per dose</SubHead>
-      <SubNote>Vitamins and iron here count in your Meals log when you mark a dose taken. Leave blank to fill from the name and dosage{detected && Object.keys(detected).length ? ' (detected below)' : ''}, or by the AI assistant.</SubNote>
-      {DOSE_NUTRIENTS.map(n => {
-        const auto = detected[n.key];
-        const isAi = cf.doseNutrientSource === 'ai' && !!String(cf[n.key] ?? '');
-        return (
-          <FormField key={n.key} label={<UnitLabel label={n.label} unit={n.unit} />}>
-            <TextInput
-              type="number"
-              step={n.step}
-              min="0"
-              inputMode="decimal"
-              value={String(cf[n.key] ?? '')}
-              onChange={e => setNutrient(n.key, e.target.value)}
-              placeholder={auto !== undefined ? `${auto} (from name)` : n.unit}
-              aria-label={`${n.label} per dose (${n.unit})`}
-              hint={isAi ? 'AI estimate — edit to override' : undefined}
-            />
-          </FormField>
-        );
-      })}
-      <FormField label="Schedule Times">
-        {values.scheduleTimes.map((time, i) => (
-          <TimeRow key={i}>
-            <TimeInput
-              type="time"
-              value={time}
-              onChange={e => updateTime(i, e.target.value)}
-            />
-            <RemoveBtn onClick={() => removeTime(i)}>
-              <Icon name="x" size={14} strokeWidth={2} />
-            </RemoveBtn>
-          </TimeRow>
-        ))}
-        <Button variant="ghost" onClick={addTime} style={{ alignSelf: 'flex-start', padding: '4px 8px', fontSize: 12 }}>
-          <Icon name="plus" size={12} strokeWidth={2} /> Add time
-        </Button>
+      <FormField label="Nutrients per dose">
+        <NutrientGrid
+          nutrients={DOSE_NUTRIENTS}
+          values={cf}
+          onChange={setNutrient}
+          placeholders={placeholders}
+          aiKeys={aiKeys}
+          note="Counted in your Meals log when you mark a dose taken. Leave blank to fill from the name and dosage, or by the AI assistant."
+        />
       </FormField>
-      <div>
+      <FormField label="Schedule">
+        <Times>
+          {values.scheduleTimes.map((time, i) => (
+            <TimeRow key={i}>
+              <TimeInput
+                type="time"
+                value={time}
+                onChange={e => updateTime(i, e.target.value)}
+                aria-label={`Dose time ${i + 1}`}
+              />
+              <RemoveBtn type="button" onClick={() => removeTime(i)} aria-label={`Remove ${time}`}>
+                <Icon name="x" size={14} strokeWidth={2} />
+              </RemoveBtn>
+            </TimeRow>
+          ))}
+          <AddLink type="button" onClick={addTime}>
+            <Icon name="plus" size={13} strokeWidth={2} /> Add time
+          </AddLink>
+        </Times>
+      </FormField>
+      <FormField label="Status">
         <Checkbox
           checked={values.isActive}
           onChange={v => onChange({ ...values, isActive: v })}
           label="Currently active"
         />
-      </div>
-      <FormField label="Notes">
-        <Textarea
-          value={values.notes}
-          onChange={e => onChange({ ...values, notes: e.target.value })}
-          placeholder="e.g. Take with food"
-          style={{ minHeight: 60 }}
-        />
       </FormField>
+      {showNotes ? (
+        <FormField label="Notes">
+          <Textarea
+            value={values.notes}
+            onChange={e => onChange({ ...values, notes: e.target.value })}
+            placeholder="e.g. Take with food"
+            style={{ minHeight: 60 }}
+            autoFocus={notesOpen && !values.notes}
+          />
+        </FormField>
+      ) : (
+        <FormField label="Notes">
+          <div>
+            <AddLink type="button" onClick={() => setNotesOpen(true)}>
+              <Icon name="plus" size={13} strokeWidth={2} /> Add notes
+            </AddLink>
+          </div>
+        </FormField>
+      )}
     </Wrapper>
   );
 }

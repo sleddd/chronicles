@@ -18,6 +18,22 @@ export const ActionButton = styled.button`
 
 export const SignOutButton = styled(ActionButton)``;
 
+/** Inline text link under a settings row (e.g. "Download example"). */
+export const RowLink = styled.button`
+  display: inline-block;
+  margin-top: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  &:hover { color: var(--color-accent-hover); }
+`;
+
 export const SelectedColorLabel = styled.div`
   font-size: 15px;
   color: ${({ theme }) => theme.colors.textMuted};

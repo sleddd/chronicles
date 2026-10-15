@@ -10,21 +10,11 @@ import { entries as entriesApi, topics as topicsApi } from '../../services/api.j
 import { toDateStr } from '../../utils/dateUtils.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { estimateEntryCalories } from '../../services/aiAssistant.js';
+import { EXERCISE_TYPES, exerciseSummary } from '../../utils/exerciseSummary.js';
 
 /* ── Styled ── */
 
 /* ── Helpers ── */
-
-const EXERCISE_TYPES = [
-  { value: 'walking', label: 'Walking' },
-  { value: 'running', label: 'Running' },
-  { value: 'cycling', label: 'Cycling' },
-  { value: 'swimming', label: 'Swimming' },
-  { value: 'strength', label: 'Strength Training' },
-  { value: 'yoga', label: 'Yoga' },
-  { value: 'cardio', label: 'Cardio' },
-  { value: 'other', label: 'Other' },
-];
 
 /** Meal that fits the current time of day — the form's starting choice. */
 function mealForNow(): string {
@@ -38,11 +28,6 @@ function mealForNow(): string {
 function nowTime(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function labelFor(options: { value: string; label: string }[], value: unknown): string {
-  const v = String(value ?? '').toLowerCase();
-  return options.find(o => o.value === v)?.label ?? String(value ?? '');
 }
 
 function escapeHtml(s: string): string {
@@ -123,13 +108,7 @@ export function ExerciseQuickLog() {
     if (!canSave || saving) return;
     setSaving(true); setStatus('');
     try {
-      const typeLabel = labelFor(EXERCISE_TYPES, exerciseType);
-      const unitLabel = distanceUnit === 'km' ? 'km' : 'mi';
-      const text = what.trim() || [
-        typeLabel,
-        duration.trim() ? `${duration.trim()} min` : '',
-        distance.trim() ? `${distance.trim()} ${unitLabel}` : '',
-      ].filter(Boolean).join(' · ');
+      const text = what.trim() || exerciseSummary({ exerciseType, duration, distance, distanceUnit });
       let fields: Record<string, unknown> = {
         exerciseType,
         duration: duration.trim(),

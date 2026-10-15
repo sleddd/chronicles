@@ -97,12 +97,14 @@ const DayNumber = styled.div<{ $isToday?: boolean; $isSelected?: boolean; $accen
   font-weight: ${({ $isToday }) => $isToday ? 700 : 400};
   color: ${({ $isToday, $isSelected, $accentColor }) =>
     $isToday ? $accentColor : $isSelected ? $accentColor : 'var(--text-secondary)'};
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+  /* Today: a thin accent circle around the number */
+  border: 1px solid ${({ $isToday, $accentColor }) => ($isToday ? $accentColor : 'transparent')};
   background: transparent;
   flex-shrink: 0;
   margin-bottom: 3px;
@@ -180,6 +182,14 @@ const MobileDayNum = styled.span<{ $isToday: boolean; $accentColor: string }>`
   line-height: 1;
   color: ${({ $isToday, $accentColor }) => $isToday ? $accentColor : 'var(--text-primary)'};
   letter-spacing: -0.01em;
+  /* Today: a thin accent circle around the number */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  border: 1px solid ${({ $isToday, $accentColor }) => ($isToday ? $accentColor : 'transparent')};
 `;
 
 const MobileDayName = styled.span`

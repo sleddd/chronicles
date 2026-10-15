@@ -80,7 +80,7 @@ const DateFilterClear = styled.button`
   color: var(--ink-3, ${({ theme }) => theme.colors.text});
   background: transparent;
   border: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
-  border-radius: var(--r-sm, 2px);
+  border-radius: 4px;
   cursor: pointer;
   &:hover { background: var(--paper-hover); }
 `;
@@ -158,6 +158,10 @@ const SearchPillInput = styled.input`
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
   JSON.stringify([imgs.map(i => i.key), featured]);
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function JournalView() {
   const { encryptionData } = useAuth();
   const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
@@ -171,6 +175,9 @@ export function JournalView() {
   const showMobileEditor = useUIStore(s => s.showMobileEditor);
   const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
   const viewMode = useUIStore(s => s.viewMode);
+  // Topic filter (from a row's topic label or the search panel) — shown as a bar with Clear
+  const selectedTopicId = useUIStore(s => s.selectedTopicId);
+  const setSelectedTopicId = useUIStore(s => s.setSelectedTopicId);
   const setViewMode = useUIStore(s => s.setViewMode);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const setAccentColor = useUIStore(s => s.setAccentColor);
@@ -221,9 +228,44 @@ export function JournalView() {
   // this flag makes that first run skip clearing the pending date
   const calendarArrivalRef = useRef(false);
   const location = useLocation();
+  /* Opened from another view (router state `from`) = "edit view": the editor
+     starts full width, the list shows only the edited entry's topic, and Save
+     returns to that view. Plain /journal keeps the full list. */
+  const originPath = (location.state as { from?: string } | null)?.from;
+  // A new entry started from a list page ("New entry") arrives with its topic
+  // preset; kept here so the editor reset for "no entry selected" keeps it
+  const [pendingNewTopicId, setPendingNewTopicId] = useState<number | null>(null);
 
   useEffect(() => {
-    const state = location.state as { newEntryDate?: string; from?: string } | null;
+    if (originPath) setEditorExpanded(true);
+    else setPendingNewTopicId(null); // left edit view — later blank entries start topic-less
+  }, [location.key]);
+
+  // Topic filter the journal had before edit view took over, restored after
+  const preEditTopicRef = useRef<number | null | undefined>(undefined);
+  useEffect(() => {
+    const ui = useUIStore.getState();
+    if (originPath && editorTopicId) {
+      if (preEditTopicRef.current === undefined) preEditTopicRef.current = ui.selectedTopicId;
+      ui.setSelectedTopicId(editorTopicId);
+    } else if (!originPath && preEditTopicRef.current !== undefined) {
+      ui.setSelectedTopicId(preEditTopicRef.current);
+      preEditTopicRef.current = undefined;
+    }
+  }, [originPath, editorTopicId]);
+  useEffect(() => () => {
+    if (preEditTopicRef.current !== undefined) useUIStore.getState().setSelectedTopicId(preEditTopicRef.current);
+  }, []);
+
+  useEffect(() => {
+    const state = location.state as { newEntryDate?: string; newEntryTopicId?: number; from?: string } | null;
+    if (state?.newEntryTopicId) {
+      setSelectedEntryId(null);
+      setPendingNewTopicId(state.newEntryTopicId);
+      setShowMobileEditor(true);
+      navigate(location.pathname, { replace: true, state: state.from ? { from: state.from } : null });
+      return;
+    }
     if (state?.newEntryDate) {
       const dateStr = state.newEntryDate;
       calendarArrivalRef.current = true;
@@ -236,6 +278,8 @@ export function JournalView() {
       navigate(location.pathname, { replace: true, state: state.from ? { from: state.from } : null });
     }
   }, [location.state]);
+
+  const filterTopic = selectedTopicId != null ? topics.find(t => t.id === selectedTopicId) ?? null : null;
 
   const isWellnessEntry = useMemo(() => {
     if (!editorTopicId) return false;
@@ -320,6 +364,12 @@ export function JournalView() {
       effectiveTopicId = await getOrCreateJournalTopic();
       setEditorTopicId(effectiveTopicId);
     }
+    // Shopping lists have no text area — give an untitled one its dated title
+    let contentToSave = currentContent;
+    if (!hasText && !hasDrawing && topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase() === 'shopping list') {
+      contentToSave = `<p>${defaultShoppingListTitle()}</p>`;
+      setEditorContent(contentToSave);
+    }
     const metadata: Record<string, unknown> = {};
     if (effectiveTopicId) metadata._taxonomyId = effectiveTopicId;
     if (widgetType) metadata._widgetType = widgetType;
@@ -329,14 +379,14 @@ export function JournalView() {
       if (featuredKey) metadata._featuredKey = featuredKey;
     }
     try {
-      const encrypted = await encryptPost(currentContent, metadata);
+      const encrypted = await encryptPost(contentToSave, metadata);
       if (selectedEntryId) {
         await entriesApi.update(selectedEntryId, {
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           taxonomyIds: effectiveTopicId ? [effectiveTopicId] : [],
         });
-        updateDecryptedEntry(selectedEntryId, { content: currentContent, metadata });
+        updateDecryptedEntry(selectedEntryId, { content: contentToSave, metadata });
       } else {
         const result = await entriesApi.create({
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
@@ -345,12 +395,12 @@ export function JournalView() {
           ...(pendingEntryDate ? { createdAt: new Date(pendingEntryDate + 'T12:00:00').toISOString() } : {}),
         });
         const newId = result.id as number;
-        addDecryptedEntry({ id: newId, content: currentContent, metadata, isEncrypted: true,
+        addDecryptedEntry({ id: newId, content: contentToSave, metadata, isEncrypted: true,
           createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string) });
         setPendingEntryDate(null);
         setSelectedEntryId(newId);
       }
-      loadedStateRef.current = { content: currentContent, customFields: currentFields, images: currentImages };
+      loadedStateRef.current = { content: contentToSave, customFields: currentFields, images: currentImages };
       setLastSavedAt(new Date());
     } catch (err) { console.error('Auto-save failed:', err); }
   };
@@ -360,9 +410,22 @@ export function JournalView() {
     return () => clearTimeout(timer);
   }, [editorContent, customFields, entryImages, featuredKey]);
 
+  /* × / Escape on the full-width editor: in edit view (opened from another
+     page) it closes the entry and returns there, like Save; in the plain
+     journal it just collapses back to the list + editor layout. */
+  const collapseEditor = () => {
+    setEditorExpanded(false);
+    if (originPath) {
+      setShowMobileEditor(false);
+      navigate(originPath);
+    }
+  };
+  const collapseEditorRef = useRef(collapseEditor);
+  collapseEditorRef.current = collapseEditor;
+
   useEffect(() => {
     if (!editorExpanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEditorExpanded(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') collapseEditorRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [editorExpanded]);
@@ -496,10 +559,11 @@ export function JournalView() {
         setLastSavedAt(null);
         if (calendarArrivalRef.current) calendarArrivalRef.current = false;
         else setPendingEntryDate(null);
+        setPendingNewTopicId(null); // the new entry exists now
       }
     } else {
       setEditorContent('');
-      setEditorTopicId(null);
+      setEditorTopicId(pendingNewTopicId);
       setCustomFields({});
       setWidgetType(null);
       setEntryImages([]);
@@ -509,7 +573,7 @@ export function JournalView() {
       setLastSavedAt(null);
       calendarArrivalRef.current = false;
     }
-  }, [selectedEntryId, decryptedEntries]);
+  }, [selectedEntryId, decryptedEntries, pendingNewTopicId]);
 
   const handleSave = useCallback(async () => {
     const hasDrawing = editorContent.includes('data-type="drawing"');
@@ -538,6 +602,10 @@ export function JournalView() {
       // A shopping list saved without a title gets a dated one
       if (!hasText && !hasDrawing && topicName === 'shopping list') {
         finalContent = `<p>${defaultShoppingListTitle()}</p>`;
+        setEditorContent(finalContent);
+      } else if (!hasText && !hasDrawing && hasFieldValues) {
+        // Fields-only entries (no text area) still get a readable title in every list
+        finalContent = `<p>${escapeHtml(summarizeUserFields(userFieldDefs, userFieldValues))}</p>`;
         setEditorContent(finalContent);
       }
       const calorieKind = topicName === 'meals' ? 'food' : topicName === 'exercise' ? 'exercise' : null;
@@ -578,9 +646,15 @@ export function JournalView() {
       }
       loadedStateRef.current = { content: finalContent, customFields: JSON.stringify(fieldsToSave), images: imagesSig(entryImages, featuredKey) };
       setLastSavedAt(new Date());
+      // Edit view: saving closes the editor and returns to the view it came from
+      if (originPath) {
+        setEditorExpanded(false);
+        setShowMobileEditor(false);
+        navigate(originPath);
+      }
     } catch (err) { console.error('Save failed:', err); setSaveStatus('Save failed'); }
     finally { setIsSaving(false); }
-  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, setSelectedEntryId, setShowMobileEditor]);
+  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate]);
 
   /** Persist the image set into an existing entry's encrypted metadata.
    *  Rebuilds from the store entry (mirrors handleBookmark) so it is safe to
@@ -782,8 +856,12 @@ export function JournalView() {
     setEntryImages([]); setFeaturedKey(null); setImageError('');
     setLastSavedAt(null);
     setPendingEntryDate(null);
+    setPendingNewTopicId(null);
     setShowMobileEditor(false);
     setEditorExpanded(false);
+    // Edit view (opened from another page): "+ New" / "Discard changes" close
+    // the editor and return to that page, same as Save
+    if (originPath) navigate(originPath);
   };
 
   const handleMobileBack = () => {
@@ -945,6 +1023,14 @@ export function JournalView() {
                 </DateFilterClear>
               </DateFilterBar>
             )}
+            {filterTopic && (
+              <DateFilterBar aria-label="Topic filter">
+                {filterTopic.name}
+                <DateFilterClear onClick={() => setSelectedTopicId(null)}>
+                  <FontAwesomeIcon icon={faXmark} size="xs" /> Clear
+                </DateFilterClear>
+              </DateFilterBar>
+            )}
             {viewMode === 'date' && calendarExpanded && (
               <MiniCalendar
                 selectedDate={selectedDate}
@@ -968,7 +1054,7 @@ export function JournalView() {
               onPointerDown={e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); }}
             >
             {editorExpanded && (
-              <EditorCollapseBtn title="Collapse" onClick={() => setEditorExpanded(false)} type="button">
+              <EditorCollapseBtn title={originPath ? 'Close' : 'Collapse'} onClick={collapseEditor} type="button">
                 <Icon name="x" size={18} strokeWidth={2} />
               </EditorCollapseBtn>
             )}
@@ -991,7 +1077,7 @@ export function JournalView() {
               onDelete={selectedEntryId ? handleDelete : undefined}
               onNew={handleNew}
               onBookmark={handleBookmark}
-              originPath={(location.state as { from?: string } | null)?.from}
+              originPath={originPath}
               onNavigate={path => {
                 // The Journal crumb returns to the entry list — on mobile
                 // that means closing the editor so the list is full-width

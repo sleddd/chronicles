@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject } from 'react';
+import { PillButton } from '../atoms/PillButton.js';
 import styled from 'styled-components';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
+import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
 import { getEntryTrail } from '../../utils/topicBreadcrumb.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { Editor, type DictationControls } from './Editor.js';
@@ -15,6 +17,7 @@ import { MilestoneFields, type MilestoneFieldValues } from '../molecules/fields/
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { FoodFields, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
 import { MedicationFields, type MedicationFieldValues } from '../molecules/fields/MedicationFields.js';
+import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/MenuPlanFields.js';
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
 import { ExerciseFields, type ExerciseFieldValues } from '../molecules/fields/ExerciseFields.js';
 import { EventFields, type EventFieldValues } from '../molecules/fields/EventFields.js';
@@ -29,6 +32,10 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { EntryHeroBanner, EntryImageStrip, EntryLightbox } from './EntryImageGallery.js';
 import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 /* ── Styled components ── */
 
@@ -276,11 +283,14 @@ const EdTitle = styled.div`
 `;
 
 /* cf-card: the card that wraps each custom-fields section */
-const CustomFieldsSection = styled.div`
+const CustomFieldsSection = styled.div<{ $noRule?: boolean }>`
   background: transparent;
   border: none;
+  /* Hairline separating the writing area from the topic's fields — only
+     when there IS a writing area above */
+  border-top: ${({ $noRule }) => ($noRule ? 'none' : '1px solid var(--border-subtle)')};
   border-radius: 0;
-  padding: var(--s-5, 20px) 0;
+  padding: ${({ $noRule }) => ($noRule ? '0' : 'var(--s-6, 24px)')} 0 var(--s-5, 20px);
   position: relative;
   margin-top: var(--s-5, 20px);
 `;
@@ -295,6 +305,9 @@ const EditorArea = styled.div<{ $hidden?: boolean }>`
   flex-direction: column;
   overflow: hidden;
   margin-top: 24px;
+  /* A real writing area even when the entry is one line (journal editor only —
+     Quick Entry and cards share Editor and stay compact) */
+  .tiptap { min-height: 220px; }
 `;
 
 /* "+ NEW" — accent text button opening a fresh entry, leads the action bar. */
@@ -345,21 +358,14 @@ const ImageErrorText = styled.div`
   color: var(--color-danger, #c0392b);
 `;
 
-/* Catch-all delete in the footer — quiet gray text that turns red on hover. */
-const FooterDeleteBtn = styled.button`
-  padding: 6px 0;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-disabled);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s;
-  &:hover { color: var(--color-danger, #dc3232); }
+/* Delete in the footer — the standard rounded pill, neutral until hovered,
+   then danger red (outline + text) so it still reads as destructive. */
+const FooterDeleteBtn = styled(PillButton)`
+  &&:hover:not(:disabled) {
+    color: var(--color-danger, #dc3232);
+    border-color: var(--color-danger, #dc3232);
+    background: transparent;
+  }
 `;
 
 const FooterLeft = styled.div`
@@ -456,7 +462,13 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   exercise: 'exercise', event: 'event', events: 'event', meeting: 'meeting',
   allergy: 'allergy', 'shopping list': 'shopping_list',
   recipe: 'recipe', recipes: 'recipe',
-  priorities: 'priorities', wellness: 'wellness',
+  priorities: 'priorities', wellness: 'wellness', 'menu plan': 'menu_plan',
+};
+
+/** Topics whose entry name is a field rather than the text (see nameKey below) */
+const NAME_FIELD_BY_TYPE: Record<string, string> = {
+  food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
+  goal: 'goalObjective', milestone: 'milestoneObjective',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -642,8 +654,13 @@ export function EntryForm({
   };
 
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
+  // Any filled-in field makes an entry saveable — topics without a text area
+  // (books, exercise, custom topics with only yes/no fields…) must still save
+  const isFilled = (v: unknown) => v !== '' && v != null && v !== false && !(Array.isArray(v) && v.length === 0);
+  const hasFieldValue = Object.entries(customFields).some(([k, v]) => !k.startsWith('_') && isFilled(v))
+    || Object.values(userFieldValues).some(isFilled);
   const canSave = stripHtml(content).length > 0
-    || (userFieldDefs.length > 0 && summarizeUserFields(userFieldDefs, userFieldValues) !== '')
+    || hasFieldValue
     || builtinEntryName(customFields) !== ''
     || images.length > 0;
 
@@ -660,10 +677,54 @@ export function EntryForm({
   // Quote/Books/Music entries live in their custom fields — no text area
   const fieldLedTopic = ['quote', 'quotes', 'book', 'books', 'music']
     .includes(selectedTopic?.name.toLowerCase() ?? '');
+  // Shopping lists: the text is only ever a title, which is automated
+  // ("Shopping list created on Oct 7, 2026") — so no text area at all.
+  // Tasks: the opposite — the text area IS the task (room for longer notes).
+  // Name-led topics: a field is the entry's name (Meals → Meal Description,
+  // Medication → Medication Name, Allergy → Allergen), so no text area —
+  // the hidden text mirrors the name so every list shows it. Writing already
+  // on an entry beyond the name is kept (hidden, never overwritten).
+  const nameKey = customType ? NAME_FIELD_BY_TYPE[customType] : undefined;
+  const nameValue = nameKey && typeof customFields[nameKey] === 'string'
+    ? (customFields[nameKey] as string).trim() : '';
+  const contentText = stripHtml(content).trim();
+  // Menu plans too: their text is just "Menu: Oct 12 – Oct 18"
+  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || !!nameKey;
   const editorCollapsed = !notesExpanded && (
-    customType === 'event' ||
-    (!hasTextContent && !isJournalTopic && (customType !== null || hideByTopicOption || fieldLedTopic))
+    customType === 'event' || titleOnlyTopic ||
+    (!hasTextContent && !isJournalTopic && customType !== 'task'
+      && (customType !== null || hideByTopicOption || fieldLedTopic))
   );
+
+  // Tasks used to have a separate "Task description" field; a task whose words
+  // live only there gets them moved into the text area once, when opened.
+  const migratedTaskRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (customType !== 'task' || entryId == null || migratedTaskRef.current === entryId) return;
+    migratedTaskRef.current = entryId;
+    const desc = typeof customFields.taskDescription === 'string' ? customFields.taskDescription.trim() : '';
+    if (desc && !hasTextContent) {
+      onContentChange(`<p>${escapeHtml(desc)}</p>`);
+    }
+  }, [entryId, customType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // An entry whose name lives only in its text gets it copied into the name
+  // field once, when opened. After that, editing the name keeps the (hidden)
+  // text in step — only while the text is just the name.
+  const migratedNameRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!nameKey || entryId == null || migratedNameRef.current === entryId) return;
+    migratedNameRef.current = entryId;
+    if (!nameValue && contentText) onCustomFieldsChange({ ...customFields, [nameKey]: contentText });
+  }, [entryId, nameKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastNameRef = useRef<{ id: number | null; key: string | undefined; name: string } | null>(null);
+  useEffect(() => {
+    if (!nameKey) return;
+    const prev = lastNameRef.current;
+    lastNameRef.current = { id: entryId, key: nameKey, name: nameValue };
+    if (!prev || prev.id !== entryId || prev.key !== nameKey || prev.name === nameValue) return;
+    if (!contentText || contentText === prev.name) onContentChange(nameValue ? `<p>${escapeHtml(nameValue)}</p>` : '');
+  }, [nameValue, entryId, nameKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recipes render as a formatted page (RecipeEntry) once they have content;
   // empty/new recipes start in the fields editor. "Edit recipe" flips back.
@@ -737,6 +798,47 @@ export function EntryForm({
     return typeof v === 'string' ? v.trim() : v != null ? String(v) : '';
   };
 
+  // Books and quotes have no text area: their text is generated from the
+  // fields — "Title — Author" / "“Quote” — Author" — so every list, the
+  // calendar and search show that line. Text that is only an earlier summary
+  // (or the old "a · b" auto-summary) is replaced; anything else is real
+  // writing and stays visible and untouched.
+  const isBookTopic = topicNameLower === 'book' || topicNameLower === 'books';
+  // Exercise likewise: "Running · 30 min · 3 mi" (notes have their own field)
+  const isExerciseTopic = customType === 'exercise';
+  const summaryLedTopic = isQuoteTopic || isBookTopic || isExerciseTopic;
+  const quoteDef = isQuoteTopic ? userFieldDefs.find(d => ['quote', 'text'].some(p => d.label.toLowerCase().includes(p))) : undefined;
+  // Same rules as the dashboard Quick Entry (utils/entryText)
+  const fieldSummary = isQuoteTopic || isBookTopic
+    ? fieldLedSummary(topicNameLower, userFieldDefs, userFieldValues)
+    : isExerciseTopic ? generatedEntryText('exercise', customFields) : '';
+  const legacySummary = isQuoteTopic || isBookTopic ? summarizeUserFields(userFieldDefs, userFieldValues) : '';
+  const lastSummaryRef = useRef<{ id: number | null; text: string }>({ id: null, text: '' });
+  const prevSummary = lastSummaryRef.current.id === entryId ? lastSummaryRef.current.text : '';
+  const quoteValue = quoteDef ? String(userFieldValues[quoteDef.id] ?? '').trim() : '';
+  const contentIsSummary = !contentText || contentText === fieldSummary
+    || contentText === legacySummary || (!!prevSummary && contentText === prevSummary)
+    || (!!quoteValue && contentText === quoteValue);
+  // Books, quotes and exercise never show the text area — just their fields.
+  // Other writing already on an entry is kept as-is (never deleted), only hidden.
+  const summaryHidesEditor = summaryLedTopic;
+  // A quote typed into the text area (Quote field empty) moves into the field once
+  const migratedQuoteRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isQuoteTopic || !quoteDef || entryId == null || migratedQuoteRef.current === entryId) return;
+    migratedQuoteRef.current = entryId;
+    if (!quoteValue && contentText && !contentIsSummary) {
+      onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [quoteDef.id]: contentText } });
+    }
+  }, [entryId, isQuoteTopic, quoteDef?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!summaryLedTopic) return;
+    lastSummaryRef.current = { id: entryId, text: fieldSummary };
+    if (fieldSummary && contentIsSummary && contentText !== fieldSummary) {
+      onContentChange(`<p>${escapeHtml(fieldSummary)}</p>`);
+    }
+  }, [fieldSummary, entryId, summaryLedTopic]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Single detail line under the title: date · time · location for
   // events/meetings; the author for quotes and books
   const headerDetails = (() => {
@@ -767,6 +869,7 @@ export function EntryForm({
   })();
 
   const showTitleHeader = (!!headerTitle || !!headerQuote) && !recipeViewMode;
+  const editorHidden = editorCollapsed || recipeViewMode || (summaryHidesEditor && !notesExpanded);
 
   const saveStatusNode = (() => {
     if (saveStatus === 'Save failed') return <StatusText>Save failed</StatusText>;
@@ -946,7 +1049,7 @@ export function EntryForm({
           )}
 
           {/* Rich text editor — hidden entirely for structured topics */}
-          <EditorArea $hidden={editorCollapsed || recipeViewMode}>
+          <EditorArea $hidden={editorHidden}>
             <Editor
               content={content}
               onChange={onContentChange}
@@ -962,7 +1065,7 @@ export function EntryForm({
           {/* Custom fields, below editor — recipes in view mode render the
               formatted page instead; "Edit recipe" brings the fields back */}
           {customType && !recipeViewMode && (
-            <CustomFieldsSection>
+            <CustomFieldsSection $noRule={editorHidden}>
                 {isRecipe && recipeHasContent && (
                   <ViewRecipeBtn type="button" onClick={() => setRecipeEditing(false)}>
                     <Icon name="check" size={12} strokeWidth={2.5} />
@@ -975,12 +1078,13 @@ export function EntryForm({
                   {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
                   {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
                   {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
-                  {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={content.replace(/<[^>]+>/g, ' ').trim()} />}
+                  {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
                   {customType === 'symptom' && <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
                   {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
                   {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
                   {customType === 'meeting' && <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as MeetingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
                   {customType === 'allergy' && <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as AllergyFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+                  {customType === 'menu_plan' && <MenuPlanFields values={{ weekStart: '', days: {}, ...(customFields as Partial<MenuPlanFieldValues>) } as MenuPlanFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
                   {customType === 'shopping_list' && <ShoppingListFields values={{ items: [], notes: '', linkedRecipeIds: [], ...(customFields as Partial<ShoppingListFieldValues>) } as ShoppingListFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
                   {customType === 'recipe' && <RecipeFields values={{ servings: '', prepTime: '', cookTime: '', cuisine: '', ingredients: [], instructions: '', linkedShoppingListIds: [], ...(customFields as Partial<RecipeFieldValues>) } as RecipeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} shoppingListOptions={shoppingListOptions} />}
                   {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
@@ -992,7 +1096,7 @@ export function EntryForm({
 
           {/* User-defined custom fields */}
           {userFieldDefs.length > 0 && !recipeViewMode && (
-            <CustomFieldsSection>
+            <CustomFieldsSection $noRule={editorHidden}>
                 <CustomFieldsBody>
                   <FieldRowLayoutContext.Provider value={true}>
                     <UserFieldsForm
@@ -1040,7 +1144,7 @@ export function EntryForm({
       <SaveRow>
         <FooterLeft>
           {entryId && onDelete && (
-            <FooterDeleteBtn type="button" onClick={onDelete} title="Delete entry">
+            <FooterDeleteBtn type="button" $variant="neutral" onClick={onDelete} title="Delete entry">
               Delete
             </FooterDeleteBtn>
           )}

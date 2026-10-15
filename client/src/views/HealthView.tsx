@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { PillButton } from '../components/atoms/PillButton.js';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
@@ -6,15 +7,13 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { PrintButton } from '../components/atoms/PrintButton.js';
-import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName, stripHtml } from '../utils/stripHtml.js';
 import { toDateStr, startOfWeek, startOfMonth } from '../utils/dateUtils.js';
@@ -63,26 +62,6 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-const NewBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 9px 4px;
-  font-family: var(--font-label);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.7; }
-`;
-
 /* Tabs row — full-bleed within the column. */
 const TabsRow = styled.div`
   margin: 0;
@@ -125,6 +104,8 @@ const SumValue = styled.span`
 const List = styled.div`
   display: flex;
   flex-direction: column;
+  /* Room above every entry list (sitewide spacing) */
+  margin-top: 16px;
 `;
 
 /* Print-only report: a heading + details table replaces the on-screen list,
@@ -228,7 +209,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
   const openInJournal = useOpenInJournal();
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const newEntry = useNewEntryInJournal();
 
   // The add affordance appears when the page's names resolve to exactly one
   // real topic — singular/plural aliases (Recipe/Recipes) still count as one
@@ -315,10 +296,9 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             {(addTopic || printable) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-print-hide>
                 {addTopic && (
-                  <NewBtn onClick={() => setIsAddOpen(true)}>
-                    <MaterialIcon $size={16} aria-hidden="true">add</MaterialIcon>
+                  <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
                     New entry
-                  </NewBtn>
+                  </PillButton>
                 )}
                 {printable && <PrintButton />}
               </div>
@@ -344,17 +324,6 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             </SummaryBar>
           )}
 
-          {addTopic && isAddOpen && (
-            <div data-print-hide>
-              <NewEntryCard
-                topic={addTopic}
-                accentColor={accentColor}
-                hideButton
-                isOpen={isAddOpen}
-                onOpenChange={setIsAddOpen}
-              />
-            </div>
-          )}
 
           {printable && (
             <PrintReport>
@@ -395,7 +364,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             <div data-print-hide={printable || undefined}><EmptyState message="No entries yet." /></div>
           ) : (
             <List data-print-hide={printable || undefined}>
-              {sortedEntries.map(entry => {
+              {sortedEntries.map((entry, i) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);
                 return (
@@ -406,6 +375,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
                     onDelete={() => handleDelete(entry.id)}
                   >
                     <EntryListCard
+                      hint={i === 0}
                       content={entry.content}
                       createdAt={created}
                       topicName={mixedTopics ? topic?.name : undefined}

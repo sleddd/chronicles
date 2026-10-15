@@ -8,6 +8,12 @@ const mockSetSearchKeyword = vi.fn();
 const mockSetSearchDateFrom = vi.fn();
 const mockSetSearchDateTo = vi.fn();
 const mockClearSearch = vi.fn();
+const mockSetSelectedTopicId = vi.fn();
+
+vi.mock('@/stores/entriesStore', () => ({
+  useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ topics: [{ id: 3, name: 'Books' }, { id: 2, name: 'Art' }] }),
+}));
 
 vi.mock('@/stores/uiStore', () => ({
   useUIStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -19,6 +25,8 @@ vi.mock('@/stores/uiStore', () => ({
       setSearchDateFrom: mockSetSearchDateFrom,
       setSearchDateTo: mockSetSearchDateTo,
       clearSearch: mockClearSearch,
+      selectedTopicId: null,
+      setSelectedTopicId: mockSetSelectedTopicId,
     }),
 }));
 
@@ -27,14 +35,19 @@ function renderWithTheme(ui: React.ReactElement) {
 }
 
 describe('SearchPanel', () => {
-  it('renders search label', () => {
+  it('has no duplicate keyword box — the journal search pill handles the keyword', () => {
     renderWithTheme(<SearchPanel />);
-    expect(screen.getByText('Search')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search entries...')).not.toBeInTheDocument();
   });
 
-  it('renders search input', () => {
+  it('searches by keyword and filters by topic', () => {
     renderWithTheme(<SearchPanel />);
-    expect(screen.getByPlaceholderText('Search entries...')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Words in the entry'), { target: { value: 'garden' } });
+    expect(mockSetSearchKeyword).toHaveBeenCalledWith('garden');
+    const select = screen.getByDisplayValue('All topics');
+    expect(Array.from((select as HTMLSelectElement).options).map(o => o.text)).toEqual(['All topics', 'Art', 'Books']);
+    fireEvent.change(select, { target: { value: '3' } });
+    expect(mockSetSelectedTopicId).toHaveBeenCalledWith(3);
   });
 
   it('renders date range inputs', () => {
@@ -45,6 +58,6 @@ describe('SearchPanel', () => {
 
   it('does not render clear button when no filters active', () => {
     renderWithTheme(<SearchPanel />);
-    expect(screen.queryByText('Clear')).not.toBeInTheDocument();
+    expect(screen.queryByText('Clear filters')).not.toBeInTheDocument();
   });
 });

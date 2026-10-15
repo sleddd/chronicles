@@ -1,98 +1,124 @@
 import styled from 'styled-components';
-import { faXmark } from '@fortawesome/free-solid-svg-icons';
-import { TextInput } from '../atoms/TextInput.js';
 import { DateInput } from '../atoms/DateInput.js';
-import { Icon } from '../atoms/Icon.js';
-import { FormField } from '../molecules/FormField.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { useEntriesStore } from '../../stores/entriesStore.js';
+
+/* Search panel under the journal's tabs: keyword (shared with the search
+   pill above), topic, and a From / To date range. Compact stacked labels to
+   fit the narrow journal list panel. */
 
 const Panel = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing.md}px;
-  padding: ${({ theme }) => theme.spacing.lg}px ${({ theme }) => theme.spacing.lg}px ${({ theme }) => theme.spacing.xl}px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  background: transparent;
+  gap: 10px;
+  padding: 12px 20px 16px;
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 const DateRow = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.sm}px;
-
-  & > * {
-    flex: 1;
-    min-width: 0;
-    margin-top: 0 !important;
-  }
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
 `;
 
-const SearchRow = styled.div`
-  position: relative;
+const Field = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  /* Filled DS box (GlobalStyle flattens inputs to transparent) */
+  input, select {
+    width: 100%;
+    min-height: 38px;
+    padding: 0 10px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    background-color: var(--bg-sunken) !important;
+    border-radius: 4px; /* just a little round */
+  }
+  select {
+    appearance: none;
+    cursor: pointer;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2390909a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  input:focus, select:focus { outline: 1px solid var(--color-accent) !important; outline-offset: -1px; }
+`;
+
+const FieldLabel = styled.span`
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 `;
 
 const ClearBtn = styled.button`
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 6px;
-  min-width: 28px;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.textMuted};
+  align-self: flex-start;
+  padding: 0;
   background: none;
   border: none;
   cursor: pointer;
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  &:hover { color: ${({ theme }) => theme.colors.text}; }
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-accent);
+  &:hover { color: var(--color-accent-hover); }
 `;
 
 export function SearchPanel() {
   const searchKeyword = useUIStore(s => s.searchKeyword);
+  const setSearchKeyword = useUIStore(s => s.setSearchKeyword);
+  const selectedTopicId = useUIStore(s => s.selectedTopicId);
+  const setSelectedTopicId = useUIStore(s => s.setSelectedTopicId);
+  const topics = useEntriesStore(s => s.topics);
   const searchDateFrom = useUIStore(s => s.searchDateFrom);
   const searchDateTo = useUIStore(s => s.searchDateTo);
-  const setSearchKeyword = useUIStore(s => s.setSearchKeyword);
   const setSearchDateFrom = useUIStore(s => s.setSearchDateFrom);
   const setSearchDateTo = useUIStore(s => s.setSearchDateTo);
   const clearSearch = useUIStore(s => s.clearSearch);
 
-  const hasFilters = searchKeyword || searchDateFrom || searchDateTo;
+  const hasFilters = searchKeyword || searchDateFrom || searchDateTo || selectedTopicId != null;
 
   return (
     <Panel>
-      <div style={{ marginBottom: 8 }}>
-        <FormField label="Search">
-          <SearchRow>
-            <TextInput
-              value={searchKeyword}
-              onChange={e => setSearchKeyword(e.target.value)}
-              placeholder="Search entries..."
-              style={{ paddingRight: hasFilters ? 32 : undefined }}
-            />
-            {hasFilters && (
-              <ClearBtn onClick={clearSearch} aria-label="Clear search">
-                <Icon icon={faXmark} size="sm" />
-              </ClearBtn>
-            )}
-          </SearchRow>
-        </FormField>
-      </div>
+      <Field>
+        <FieldLabel>Keyword</FieldLabel>
+        <input
+          type="search"
+          value={searchKeyword}
+          onChange={e => setSearchKeyword(e.target.value)}
+          placeholder="Words in the entry"
+        />
+      </Field>
+      <Field>
+        <FieldLabel>Topic</FieldLabel>
+        <select
+          value={selectedTopicId ?? ''}
+          onChange={e => setSelectedTopicId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">All topics</option>
+          {[...topics].sort((a, b) => a.name.localeCompare(b.name)).map(t => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      </Field>
       <DateRow>
-        <FormField label="From">
-          <DateInput
-            value={searchDateFrom}
-            onChange={e => setSearchDateFrom(e.target.value)}
-          />
-        </FormField>
-        <FormField label="To">
-          <DateInput
-            value={searchDateTo}
-            onChange={e => setSearchDateTo(e.target.value)}
-          />
-        </FormField>
+        <Field>
+          <FieldLabel>From</FieldLabel>
+          <DateInput value={searchDateFrom} onChange={e => setSearchDateFrom(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel>To</FieldLabel>
+          <DateInput value={searchDateTo} onChange={e => setSearchDateTo(e.target.value)} />
+        </Field>
       </DateRow>
+      {hasFilters && (
+        <ClearBtn type="button" onClick={() => { clearSearch(); setSelectedTopicId(null); }}>Clear filters</ClearBtn>
+      )}
     </Panel>
   );
 }

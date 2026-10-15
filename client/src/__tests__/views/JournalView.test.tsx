@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { JournalView } from '@/views/JournalView';
 import { renderWithTheme } from '../testUtils';
 import { useEncryption } from '@/contexts/EncryptionContext';
+import { entries as entriesApi } from '@/services/api';
 
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => vi.fn()),
@@ -149,7 +151,17 @@ vi.mock('@/components/organisms/EntryList', () => ({
 }));
 
 vi.mock('@/components/organisms/EntryForm', () => ({
-  EntryForm: () => <div data-testid="entry-form" />,
+  EntryForm: ({ onContentChange, onSave, onNew, topicId }: any) => (
+    <div data-testid="entry-form" data-topic={String(topicId)}>
+      <button onClick={onNew}>new</button>
+      <button onClick={() => onContentChange('<p>Hi</p>')}>type</button>
+      <button onClick={onSave}>save</button>
+    </div>
+  ),
+}));
+
+vi.mock('@/utils/getOrCreateJournalTopic', () => ({
+  getOrCreateJournalTopic: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock('@/components/organisms/SearchPanel', () => ({
@@ -233,6 +245,70 @@ describe('JournalView (unlocked, loaded)', () => {
   it('renders the quick entry component', () => {
     renderWithTheme(<JournalView />);
     expect(screen.getByTestId('quick-entry')).toBeInTheDocument();
+  });
+});
+
+describe('JournalView (edit view — opened from another view)', () => {
+  const unlocked = () => (useEncryption as any).mockReturnValue({
+    isUnlocked: true, unlock: vi.fn(), decryptPosts: vi.fn().mockResolvedValue([]),
+    encryptPost: vi.fn().mockResolvedValue({ contentEncrypted: 'c', contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' }),
+  });
+
+  it('opens the editor full width when arriving from another view', () => {
+    unlocked();
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/health/symptoms' }, key: 'k1' } as any);
+    renderWithTheme(<JournalView />);
+    expect(screen.getByTitle('Close')).toBeInTheDocument();
+  });
+
+  it('keeps the plain journal collapsed', () => {
+    unlocked();
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: null, key: 'k2' } as any);
+    renderWithTheme(<JournalView />);
+    expect(screen.queryByTitle('Close')).not.toBeInTheDocument();
+  });
+
+  it('returns to the originating view on New / Discard', () => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/topics/4' }, key: 'k4' } as any);
+    renderWithTheme(<JournalView />);
+    fireEvent.click(screen.getByText('new'));
+    expect(nav).toHaveBeenCalledWith('/topics/4');
+  });
+
+  it('the × on the full-width editor returns to the originating view', () => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/topics/4' }, key: 'k5' } as any);
+    renderWithTheme(<JournalView />);
+    fireEvent.click(screen.getByTitle('Close'));
+    expect(nav).toHaveBeenCalledWith('/topics/4');
+  });
+
+  it('returns to the originating view on save', async () => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/health/symptoms' }, key: 'k3' } as any);
+    vi.mocked(entriesApi.create).mockResolvedValue({ id: 5, createdAt: new Date().toISOString() } as any);
+    renderWithTheme(<JournalView />);
+    fireEvent.click(screen.getByText('type'));
+    fireEvent.click(screen.getByText('save'));
+    await waitFor(() => expect(nav).toHaveBeenCalledWith('/health/symptoms'));
+  });
+});
+
+describe('JournalView (new entry from a list page)', () => {
+  it('starts a blank entry with the topic preset', () => {
+    (useEncryption as any).mockReturnValue({
+      isUnlocked: true, unlock: vi.fn(), decryptPosts: vi.fn().mockResolvedValue([]), encryptPost: vi.fn(),
+    });
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { newEntryTopicId: 4, from: '/topics/4' }, key: 'n1' } as any);
+    renderWithTheme(<JournalView />);
+    expect(screen.getByTestId('entry-form')).toHaveAttribute('data-topic', '4');
   });
 });
 

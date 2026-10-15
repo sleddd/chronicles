@@ -91,6 +91,14 @@ const DayBigNum = styled.span<{ $isToday: boolean; $accentColor: string }>`
   line-height: 1;
   color: ${({ $isToday, $accentColor }) => $isToday ? $accentColor : 'var(--text-primary)'};
   letter-spacing: -0.01em;
+  /* Today: a thin accent circle around the number */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  border: 1px solid ${({ $isToday, $accentColor }) => ($isToday ? $accentColor : 'transparent')};
 `;
 
 const DayWeekday = styled.span`

@@ -99,8 +99,8 @@ export const lightTheme = {
     surfaceOverlayBlur: 'rgba(255, 255, 255, 0.7)',
 
     text: '#18181c',
-    textSecondary: '#56565f',
-    textMuted: '#74747f',
+    textSecondary: '#2b2b31',
+    textMuted: '#3a3a42',
     textFaint: '#a0a0aa',
     textInverse: '#ffffff',
 

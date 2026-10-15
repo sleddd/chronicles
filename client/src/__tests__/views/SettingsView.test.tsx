@@ -126,6 +126,7 @@ vi.mock('@/components/atoms/SettingsAtoms', () => ({
   SignOutButton: ({ children, ...props }: any) => <button data-testid="sign-out-btn" {...props}>{children}</button>,
   SelectedColorLabel: ({ children }: any) => <span>{children}</span>,
   BackLink: ({ children, to }: any) => <a href={to}>{children}</a>,
+  RowLink: ({ children, ...props }: any) => <button {...props}>{children}</button>,
 }));
 
 vi.mock('@/components/atoms/Toggle', () => ({
@@ -219,27 +220,33 @@ describe('SettingsView', () => {
 
   it('renders security section', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByText('Security')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Security' })).toBeInTheDocument();
     expect(screen.getByText('Password')).toBeInTheDocument();
     expect(screen.getByText('Active Sessions')).toBeInTheDocument();
   });
 
   it('renders features section with toggles', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByText('Features')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Features' })).toBeInTheDocument();
     expect(screen.getByText('Meals')).toBeInTheDocument();
     expect(screen.getByText('Medication')).toBeInTheDocument();
   });
 
   it('renders privacy card', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByTestId('privacy-card')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Privacy' })).toHaveTextContent('Zero-Knowledge Encryption');
   });
 
-  it('renders danger zone with sign out', () => {
+  it('renders sign out in its own card', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByTestId('danger-card')).toBeInTheDocument();
-    expect(screen.getByTestId('sign-out-btn')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Sign Out' })).toContainElement(screen.getByTestId('sign-out-btn'));
+  });
+
+  it('contains every section in its own card', () => {
+    renderWithTheme(<SettingsView />);
+    for (const name of ['Account', 'Preferences', 'Calendar Sync', 'Entry Images', 'AI Assistant', 'Theme', 'Security', 'Features', 'Data', 'Privacy', 'Sign Out']) {
+      expect(screen.getByRole('region', { name })).toBeInTheDocument();
+    }
   });
 
   it('renders the theme mode and accent presets', () => {

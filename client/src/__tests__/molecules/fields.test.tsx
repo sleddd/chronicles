@@ -254,6 +254,17 @@ describe('MeetingFields', () => {
   });
 });
 
+describe('FoodFields nutrient grid', () => {
+  it('shows the micronutrients as one grid and records typed values as manual', () => {
+    const onChange = vi.fn();
+    const values = { mealType: 'lunch', ingredients: '', notes: '', consumedDate: '', consumedTime: '', calories: '' } as unknown as FoodFieldValues;
+    renderWithTheme(<FoodFields values={values} onChange={onChange} />);
+    expect(screen.getByText('Nutrients')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Vitamin D (mcg)'), { target: { value: '15' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ vitaminD: '15' }));
+  });
+});
+
 /* ═══════════════════════ MedicationFields ═══════════════════════ */
 
 describe('MedicationFields', () => {
@@ -269,9 +280,30 @@ describe('MedicationFields', () => {
     renderWithTheme(<MedicationFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByText('Dosage')).toBeInTheDocument();
     expect(screen.getByText('Frequency')).toBeInTheDocument();
-    expect(screen.getByText('Schedule Times')).toBeInTheDocument();
+    expect(screen.getByText('Schedule')).toBeInTheDocument();
     expect(screen.getByText('Currently active')).toBeInTheDocument();
-    expect(screen.getByText('Notes')).toBeInTheDocument();
+    // Empty notes stay tucked behind a link until asked for
+    expect(screen.queryByPlaceholderText('e.g. Take with food')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Add notes/));
+    expect(screen.getByPlaceholderText('e.g. Take with food')).toBeInTheDocument();
+  });
+
+  it('shows saved notes without the extra click', () => {
+    renderWithTheme(<MedicationFields values={{ ...defaultValues, notes: 'With food' }} onChange={() => {}} />);
+    expect(screen.getByDisplayValue('With food')).toBeInTheDocument();
+  });
+
+  it('shows the nutrients per dose as editable boxes', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<MedicationFields values={{ ...defaultValues, vitaminC: '0.5' } as MedicationFieldValues} onChange={onChange} />);
+    expect(screen.getByDisplayValue('0.5')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Iron (mg)'), { target: { value: '18' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ iron: '18', doseNutrientSource: 'manual' }));
+  });
+
+  it('suggests nutrients implied by the name as placeholders', () => {
+    renderWithTheme(<MedicationFields values={defaultValues} onChange={() => {}} entryName="Vitamin D3 1,000 IU" />);
+    expect(screen.getByLabelText('Vitamin D (mcg)')).toHaveAttribute('placeholder', '25');
   });
 
   it('calls onChange when dosage changes', () => {

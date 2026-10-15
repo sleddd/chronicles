@@ -12,10 +12,21 @@ const Card = styled.section`
 
 const Heading = styled.h3`
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`;
+
+/* Optional header action (e.g. "See all"), between the title and chevron. */
+const Action = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 `;
 
 const Toggle = styled.button`
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -41,6 +52,14 @@ const Chevron = styled.span<{ $open: boolean }>`
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
+const ChevronBtn = styled.button`
+  display: flex;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+`;
+
 const Body = styled.div`
   padding: 16px 0 4px;
 `;
@@ -57,6 +76,8 @@ interface CollapsibleCardProps {
   /** localStorage key holding `{ [id]: collapsed }` for a page's cards. */
   storageKey: string;
   defaultOpen?: boolean;
+  /** Control shown in the title row, left of the chevron (kept outside the toggle button). */
+  action?: ReactNode;
   children: ReactNode;
 }
 
@@ -65,7 +86,7 @@ interface CollapsibleCardProps {
  * card in this browser (falls back to `defaultOpen`). The body stays mounted
  * while hidden so form drafts survive collapsing.
  */
-export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, children }: CollapsibleCardProps) {
+export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, action, children }: CollapsibleCardProps) {
   const [open, setOpen] = useState(() => {
     const saved = readCollapsed(storageKey)[id];
     return saved === undefined ? defaultOpen : !saved;
@@ -81,8 +102,17 @@ export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, chi
       <Heading>
         <Toggle type="button" onClick={toggle} aria-expanded={open} aria-controls={bodyId}>
           {title}
-          <Chevron $open={open} aria-hidden="true"><Icon name="chevron-down" size={18} strokeWidth={1.8} /></Chevron>
+          {!action && <Chevron $open={open} aria-hidden="true"><Icon name="chevron-down" size={18} strokeWidth={1.8} /></Chevron>}
         </Toggle>
+        {action && (
+          <>
+            <Action>{action}</Action>
+            {/* Second hit target for the chevron; the title button is the accessible toggle */}
+            <ChevronBtn type="button" onClick={toggle} tabIndex={-1} aria-hidden="true">
+              <Chevron $open={open}><Icon name="chevron-down" size={18} strokeWidth={1.8} /></Chevron>
+            </ChevronBtn>
+          </>
+        )}
       </Heading>
       <Body id={bodyId} hidden={!open}>{children}</Body>
     </Card>

@@ -135,10 +135,12 @@ export function CalendarView() {
     });
   }, [viewMode]);
 
+  // Today: jump straight to today's day view, from any view
   const goToToday = useCallback(() => {
     const today = new Date();
     setCurrentDate(today);
     setSelectedDate(toDateStr(today));
+    setViewMode('day');
   }, []);
 
   const handleViewMode = useCallback((mode: CalendarViewMode) => {

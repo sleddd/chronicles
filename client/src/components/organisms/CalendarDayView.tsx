@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { PillButton } from '../atoms/PillButton.js';
 import { useNavigate } from 'react-router-dom';
 import { CalendarHeader } from './CalendarHeader.js';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
@@ -44,24 +45,10 @@ const DateSubtitle = styled.div`
   @media (max-width: 768px) { display: none; }
 `;
 
-const AddEntryRow = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 16px 24px;
-  background: transparent;
-  border: none;
+/* Row holding the Add entry pill, ruled off from the day's list */
+const AddEntryRow = styled.div`
+  padding: 14px 24px;
   border-bottom: 1px solid var(--border-subtle);
-  cursor: pointer;
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  transition: background 120ms ease;
-  &:hover { background: var(--bg-hover); color: var(--text-secondary); }
 `;
 
 const Divider = styled.div`
@@ -219,11 +206,10 @@ export function CalendarDayView({
       <Divider />
 
       <List>
-        <AddEntryRow onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add entry
+        <AddEntryRow>
+          <PillButton type="button" onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
+            Add entry
+          </PillButton>
         </AddEntryRow>
         {entries.length === 0 ? (
           <EmptyMsg>No entries for this day.</EmptyMsg>

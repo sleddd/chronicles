@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, Fragment } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react';
 import styled from 'styled-components';
 import { faChevronLeft, faChevronRight, faCartShopping, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -430,11 +430,10 @@ export function MenuView() {
   const weekStartStr = toDateStr(weekStart);
 
   const menuPlanTopicId     = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'menu plan')?.id,    [allTopics]);
-  // Prefer the current "Recipes" topic; the retired singular "Recipe" topic
-  // is only a fallback so menu link options never mix in stale entries
-  const recipeTopicId       = useMemo(() => (
-    allTopics.find(t => t.name.toLowerCase() === 'recipes')?.id
-      ?? allTopics.find(t => t.name.toLowerCase() === 'recipe')?.id
+  // Recipes live under "Recipes" or the older "Recipe" topic (accounts can
+  // have both) — read both, like the Recipes tab, so none go missing
+  const recipeTopicIds      = useMemo(() => new Set(
+    allTopics.filter(t => ['recipes', 'recipe'].includes(t.name.toLowerCase())).map(t => t.id)
   ), [allTopics]);
   const shoppingListTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'shopping list')?.id, [allTopics]);
 
@@ -448,17 +447,21 @@ export function MenuView() {
   }, [entries, menuPlanTopicId, weekStartStr]);
 
   const recipes = useMemo(() => {
-    if (!recipeTopicId) return [];
+    if (recipeTopicIds.size === 0) return [];
     return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === recipeTopicId)
+      .filter(e => recipeTopicIds.has((e.metadata as Record<string, unknown>)?._taxonomyId as number))
       .map(e => {
         const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
         const name = typeof cf?.recipeName === 'string' ? cf.recipeName.trim() : '';
         return { id: e.id, title: name || stripHtml(e.content).slice(0, 60) || `Recipe #${e.id}` };
       });
-  }, [entries, recipeTopicId]);
+  }, [entries, recipeTopicIds]);
 
+  // Id of a week entry this page just created — loading it back would wipe
+  // anything typed while that first save was in flight
+  const createdEntryIdRef = useRef<number | null>(null);
   useEffect(() => {
+    if (menuPlanEntry && menuPlanEntry.id === createdEntryIdRef.current) return;
     if (menuPlanEntry) {
       const cf = (menuPlanEntry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>;
       setMeals((cf?.days as Record<string, MenuPlanDay>) || {});
@@ -467,7 +470,32 @@ export function MenuView() {
     }
   }, [menuPlanEntry?.id, weekStartStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Autosave: edits schedule a save (short after a recipe pick, longer while
+     typing a meal name). Saves run one at a time so the first save of a new
+     week can't create the menu entry twice. */
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const handleSaveRef = useRef<() => Promise<void>>(async () => {});
+  const runSave = useCallback(() => {
+    // Bind now: a flush before a week switch must save the week being left
+    const save = handleSaveRef.current;
+    saveChainRef.current = saveChainRef.current.then(save);
+  }, []);
+  const scheduleSave = useCallback((delayMs: number) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => { saveTimerRef.current = null; runSave(); }, delayMs);
+  }, [runSave]);
+  /** Save a pending edit right away (before switching weeks or leaving). */
+  const flushSave = useCallback(() => {
+    if (!saveTimerRef.current) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    runSave();
+  }, [runSave]);
+  useEffect(() => () => flushSave(), [flushSave]);
+
   const updateSlot = useCallback((dateStr: string, slot: MealSlotType, patch: Partial<MenuMealSlot>) => {
+    scheduleSave(1000);
     setMeals(prev => ({
       ...prev,
       [dateStr]: {
@@ -475,7 +503,7 @@ export function MenuView() {
         [slot]: { ...(prev[dateStr]?.[slot] || emptySlot()), ...patch },
       },
     }));
-  }, []);
+  }, [scheduleSave]);
 
   const handleMealNameChange = useCallback((dateStr: string, slot: MealSlotType, mealName: string) => {
     updateSlot(dateStr, slot, { mealName });
@@ -483,6 +511,7 @@ export function MenuView() {
 
   const handleRecipeChange = useCallback((dateStr: string, slot: MealSlotType, recipeId: number | null) => {
     const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
+    scheduleSave(150);
     setMeals(prev => {
       const existing = prev[dateStr]?.[slot] || emptySlot();
       // Clearing the link empties the whole slot, including the meal name.
@@ -502,7 +531,7 @@ export function MenuView() {
         },
       };
     });
-  }, [recipes]);
+  }, [recipes, scheduleSave]);
 
   const handleSave = useCallback(async () => {
     if (!menuPlanTopicId) return;
@@ -513,6 +542,14 @@ export function MenuView() {
       const content  = `<p>Menu: ${fmtShort(weekStart)} – ${fmtShort(weekEnd)}</p>`;
       const customFields = { weekStart: weekStartStr, days: meals };
       const metadata: Record<string, unknown> = { _taxonomyId: menuPlanTopicId, _customFields: customFields };
+
+      // Read the week's entry from the store, not the render closure — an
+      // autosave queued behind the first save must update the entry it created
+      const menuPlanEntry = useEntriesStore.getState().decryptedEntries.find(e => {
+        const meta = e.metadata as Record<string, unknown>;
+        const cf   = meta?._customFields as Record<string, unknown> | undefined;
+        return meta?._taxonomyId === menuPlanTopicId && cf?.weekStart === weekStartStr;
+      });
 
       if (menuPlanEntry) {
         updateDecryptedEntry(menuPlanEntry.id, { metadata });
@@ -529,6 +566,7 @@ export function MenuView() {
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: [menuPlanTopicId],
         });
+        createdEntryIdRef.current = result.id as number;
         addDecryptedEntry({
           id: result.id as number, content, metadata, isEncrypted: true,
           createdAt: new Date(result.createdAt as string),
@@ -542,7 +580,8 @@ export function MenuView() {
     } finally {
       setIsSaving(false);
     }
-  }, [menuPlanTopicId, menuPlanEntry, weekStart, weekStartStr, meals, encryptPost, updateDecryptedEntry, addDecryptedEntry]);
+  }, [menuPlanTopicId, weekStart, weekStartStr, meals, encryptPost, updateDecryptedEntry, addDecryptedEntry]);
+  handleSaveRef.current = handleSave;
 
   const handleGenerateShoppingList = useCallback(async () => {
     if (!shoppingListTopicId) return;
@@ -663,7 +702,8 @@ export function MenuView() {
             )}
           </RecipeSelectWrap>
         ) : (
-          <LinkRecipeBtn onClick={() => navigate('/')}>+ Link recipe</LinkRecipeBtn>
+          // No recipes yet — send them to the Recipes tab to add one
+          <LinkRecipeBtn type="button" onClick={() => navigate('/menu/recipes')}>+ Link recipe</LinkRecipeBtn>
         )}
       </>
     );
@@ -709,11 +749,11 @@ export function MenuView() {
             <Title>{KITCHEN_TITLE}</Title>
             <HeadActions>
               <WeekNav>
-                <NavBtn onClick={() => setWeekStart(w => addDays(w, -7))} aria-label="Previous week">
+                <NavBtn onClick={() => { flushSave(); setWeekStart(w => addDays(w, -7)); }} aria-label="Previous week">
                   <FontAwesomeIcon icon={faChevronLeft} size="xs" />
                 </NavBtn>
                 <WeekLabel>{fmtShort(weekStart)} – {fmtShort(addDays(weekStart, 6))}</WeekLabel>
-                <NavBtn onClick={() => setWeekStart(w => addDays(w, 7))} aria-label="Next week">
+                <NavBtn onClick={() => { flushSave(); setWeekStart(w => addDays(w, 7)); }} aria-label="Next week">
                   <FontAwesomeIcon icon={faChevronRight} size="xs" />
                 </NavBtn>
               </WeekNav>

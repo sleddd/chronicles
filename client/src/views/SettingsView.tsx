@@ -1,15 +1,13 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChevronDown, faChevronUp, faChevronLeft } from '@fortawesome/free-solid-svg-icons';
+import { useState, useEffect, useRef, Fragment, type ReactNode } from 'react';
+import styled from 'styled-components';
 import { SettingsTemplate } from '../components/templates/SettingsTemplate.js';
 import { SettingsCard, SettingsRow } from '../components/molecules/SettingsCard.js';
 import {
-  HeaderRow, Title, SectionTitle, SectionDescription, DangerTitle,
-  CollapsibleHeader, CollapsibleTitle, CollapsibleDesc, CollapsibleBody,
-  PrivacyCard, DangerCard, PasswordForm, SessionsList, SessionItem,
+  HeaderRow, Title, SectionDescription,
+  PasswordForm, SessionsList, SessionItem,
   ColorSection, ColorSectionTitle, ColorSectionDesc,
 } from '../components/molecules/SettingsSection.js';
-import { ActionButton, SignOutButton, BackLink } from '../components/atoms/SettingsAtoms.js';
+import { ActionButton, SignOutButton, RowLink } from '../components/atoms/SettingsAtoms.js';
 import { Toggle } from '../components/atoms/Toggle.js';
 import { Select } from '../components/atoms/Select.js';
 import { PasswordInput } from '../components/atoms/PasswordInput.js';
@@ -24,6 +22,7 @@ import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettin
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
 import { AiSettings } from '../components/organisms/AiSettings.js';
 import { DailyLogImport } from '../components/organisms/DailyLogImport.js';
+import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -35,59 +34,8 @@ import { useNavigate } from 'react-router-dom';
 import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, ApiError } from '../services/api.js';
 import { seedTestData } from '../utils/seedTestData.js';
 import { stripHtml } from '../utils/stripHtml.js';
-
-function parseCsvRow(line: string): string[] {
-  const fields: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ',') {
-        fields.push(current);
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-  }
-  fields.push(current);
-  return fields;
-}
-
-function splitCsvLines(text: string): string[] {
-  const lines: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '"') {
-      inQuotes = !inQuotes;
-      current += ch;
-    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
-      if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++;
-      if (current.trim()) lines.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  if (current.trim()) lines.push(current);
-  return lines;
-}
+import { parseCsvRow, splitCsvLines } from '../utils/csv.js';
+import { downloadEntriesExample } from '../utils/importExamples.js';
 
 const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
@@ -109,6 +57,47 @@ const TIMEZONES = [
   { value: 'UTC', label: 'UTC' },
 ];
 
+/* Accent presets, ordered by hue then neutrals. All toned to roughly the same
+   muted chroma as the original Teal so any of them sits calmly on the canvas. */
+const ACCENT_PRESETS: { name: string; color: string }[] = [
+  // Reds & pinks
+  { name: 'Brick', color: '#b54a3c' },
+  { name: 'Rose', color: '#b8455e' },
+  { name: 'Berry', color: '#9c3f6b' },
+  { name: 'Blush', color: '#c06f86' },
+  // Oranges & yellows
+  { name: 'Coral', color: '#c9694f' },
+  { name: 'Terracotta', color: '#b0653f' },
+  { name: 'Amber', color: '#b8853d' },
+  { name: 'Ochre', color: '#9f8a35' },
+  // Greens
+  { name: 'Olive', color: '#7d8a3e' },
+  { name: 'Sage', color: '#6f9a58' },
+  { name: 'Moss', color: '#5b7a4a' },
+  { name: 'Forest', color: '#3f6e4f' },
+  { name: 'Jade', color: '#3c8f73' },
+  { name: 'Mint', color: '#4fa38a' },
+  // Blues
+  { name: 'Teal', color: '#34a5a2' },
+  { name: 'Ocean', color: '#2f7f9e' },
+  { name: 'Sky', color: '#4a8fc0' },
+  { name: 'Steel', color: '#4f7390' },
+  { name: 'Denim', color: '#3d64b8' },
+  { name: 'Navy', color: '#2e4a7d' },
+  // Purples
+  { name: 'Indigo', color: '#4d4fa3' },
+  { name: 'Purple', color: '#6e53ac' },
+  { name: 'Lavender', color: '#8a74b8' },
+  { name: 'Violet', color: '#8a4fa3' },
+  { name: 'Plum', color: '#7e4a7f' },
+  // Neutrals
+  { name: 'Slate', color: '#5a6b7d' },
+  { name: 'Taupe', color: '#8a7564' },
+  { name: 'Cocoa', color: '#6e4f3f' },
+  { name: 'Graphite', color: '#4a4a4a' },
+  { name: 'Ink', color: '#1f2937' },
+];
+
 const FEATURES = [
   { key: 'foodEnabled', title: 'Meals', description: 'Track meals and nutrition' },
   { key: 'medicationEnabled', title: 'Medication', description: 'Track medications and health' },
@@ -119,6 +108,30 @@ const FEATURES = [
   { key: 'entertainmentEnabled', title: 'Entertainment', description: 'Track music, books, and TV/movies' },
   { key: 'inspirationEnabled', title: 'Inspiration', description: 'Save research, ideas, and quotes' },
 ];
+
+/* ── Layout: each section is a bordered, collapsible card like the dashboards ── */
+
+const Sections = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`;
+
+const SETTINGS_CARDS_KEY = 'settings-collapsed-v1';
+
+/* All sections start collapsed; each card remembers being opened */
+function Section(props: { id: string; title: string; children: ReactNode }) {
+  return <CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} />;
+}
+
+/* Prose inside a card (the guide, the privacy note) */
+const GuideBody = styled.div`
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  strong { color: var(--text-primary); font-weight: 600; }
+`;
 
 /* ── View ── */
 
@@ -146,7 +159,6 @@ export function SettingsView() {
   const navigate = useNavigate();
 
   // How to Use
-  const [showHowToUse, setShowHowToUse] = useState(false);
 
   // Display name
   const displayName = useUIStore(s => s.displayName);
@@ -658,8 +670,8 @@ export function SettingsView() {
         <Title>Settings</Title>
       </HeaderRow>
 
-      {/* Account */}
-      <SectionTitle>Account</SectionTitle>
+      <Sections>
+      <Section id="account" title="Account">
       <SettingsCard>
         <SettingsRow
           title="Username"
@@ -735,49 +747,10 @@ export function SettingsView() {
         </SettingsRow>
         {emailMessage && <div style={{ padding: '0 0 12px', fontSize: 13, color: emailError ? '#9B4444' : '#5A8A6A' }}>{emailMessage}</div>}
       </SettingsCard>
-
-      {/* How to Use */}
-      <SectionTitle>How to Use Chronicles</SectionTitle>
-      <CollapsibleHeader onClick={() => setShowHowToUse(!showHowToUse)} style={showHowToUse ? { borderRadius: '12px 12px 0 0' } : undefined}>
-        <div>
-          <CollapsibleTitle>Getting Started Guide</CollapsibleTitle>
-          <CollapsibleDesc>Learn how to use Chronicles effectively</CollapsibleDesc>
-        </div>
-        <FontAwesomeIcon icon={showHowToUse ? faChevronUp : faChevronDown} color="#6b7280" />
-      </CollapsibleHeader>
-      {showHowToUse && (
-        <CollapsibleBody>
-          <p><strong>Chronicles</strong> is a zero-knowledge encrypted journal — your entries are encrypted on your device before they ever leave it. No one, not even the server, can read your data.</p>
-
-          <p style={{ marginTop: 16 }}><strong>Getting Started</strong></p>
-          <ul style={{ marginTop: 8, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <li>Click <strong>New Entry</strong> in the header or press <strong>Ctrl+N</strong> (Cmd+N) to start writing.</li>
-            <li>Assign a <strong>topic</strong> from the dropdown in the editor to categorize your entry. Topics like Task, Goal, Meals, and Medication unlock extra fields.</li>
-            <li>Use <strong>Ctrl+D</strong> (Cmd+D) to delete the selected entry, and <strong>Enter</strong> to save in compact mode.</li>
-          </ul>
-
-          <p style={{ marginTop: 16 }}><strong>Topics</strong></p>
-          <p style={{ marginTop: 4 }}>Topics organize your entries with icons and colors. Manage them from the <strong>Topics</strong> page in the navigation. Some topics are special — selecting Task, Goal, Milestone, Meals, Medication, Symptom, Exercise, Event, or Meeting will reveal additional fields for tracking details.</p>
-
-          <p style={{ marginTop: 16 }}><strong>Quick Tab Filters</strong></p>
-          <ul style={{ marginTop: 8, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <li><strong>Date</strong> — browse entries one day at a time. Tap the date tab to toggle the mini calendar.</li>
-            <li><strong>Tasks</strong> — shows only task entries so you can focus on what needs doing.</li>
-            <li><strong>All</strong> — every entry in reverse chronological order.</li>
-            <li><strong>Bookmarks</strong> — entries you've starred for quick reference.</li>
-            <li><strong>Search</strong> — filter by keyword and date range across all entries.</li>
-          </ul>
-
-          <p style={{ marginTop: 16 }}><strong>Planning &amp; Health</strong></p>
-          <p style={{ marginTop: 4 }}>Enable features like Goals, Milestones, Medication Tracking, Meals Logging, and more from the <strong>Features</strong> section below. Each feature adds a dedicated view accessible from the navigation bar.</p>
-
-          <p style={{ marginTop: 16 }}><strong>Security</strong></p>
-          <p style={{ marginTop: 4 }}>Your master encryption key never leaves your browser. If you forget your password, use your <strong>recovery key</strong> (shown once at registration) to regain access. You can manage active sessions and change your password from the Security section below.</p>
-        </CollapsibleBody>
-      )}
+      </Section>
 
       {/* Preferences */}
-      <SectionTitle>Preferences</SectionTitle>
+      <Section id="preferences" title="Preferences">
       <SettingsCard>
         <SettingsRow
           title="Timezone"
@@ -818,21 +791,9 @@ export function SettingsView() {
           )}
         </SettingsRow>
       </SettingsCard>
+      </Section>
 
-      {/* Calendar Sync */}
-      <SectionTitle>Calendar Sync</SectionTitle>
-      <CalendarSyncSettings themeMode={themeMode} />
-
-      {/* Entry Images */}
-      <SectionTitle>Entry Images</SectionTitle>
-      <ImageStorageSettings themeMode={themeMode} />
-
-      {/* AI Assistant */}
-      <SectionTitle>AI Assistant</SectionTitle>
-      <AiSettings themeMode={themeMode} />
-
-      {/* Theme */}
-      <SectionTitle>Theme</SectionTitle>
+      <Section id="theme" title="Theme">
       <SettingsCard>
         <ColorSection>
           <ColorSectionTitle>Appearance</ColorSectionTitle>
@@ -869,16 +830,7 @@ export function SettingsView() {
           <ColorSectionTitle>Accent Color</ColorSectionTitle>
           <ColorSectionDesc>Choose an accent color for highlights and interactive elements</ColorSectionDesc>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {[
-              /* All presets toned to the teal's muted chroma (~50% sat) */
-              { name: 'Teal', color: '#34a5a2' },
-              { name: 'Ink', color: '#1f2937' },
-              { name: 'Rose', color: '#b8455e' },
-              { name: 'Amber', color: '#b8853d' },
-              { name: 'Sage', color: '#6f9a58' },
-              { name: 'Denim', color: '#3d64b8' },
-              { name: 'Purple', color: '#6e53ac' },
-            ].map(a => (
+            {ACCENT_PRESETS.map(a => (
               <button
                 key={a.color}
                 onClick={() => handleAccentColorChange(a.color)}
@@ -898,9 +850,49 @@ export function SettingsView() {
           </div>
         </ColorSection>
       </SettingsCard>
+      </Section>
 
-      {/* Security */}
-      <SectionTitle>Security</SectionTitle>
+      <Section id="features" title="Features">
+      <SectionDescription>Enable optional topics for specialized tracking</SectionDescription>
+      <SettingsCard>
+        {FEATURES.map(feat => (
+          <Fragment key={feat.key}>
+            <SettingsRow
+              title={feat.title}
+              description={feat.description}
+              action={<Toggle checked={features[feat.key] ?? false} onChange={v => handleFeatureToggle(feat.key, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
+            />
+            {feat.key === 'allergiesEnabled' && (
+              <SettingsRow
+                title="Cycle Tracking"
+                description="Add period and flow tracking to the daily wellness check-in"
+                action={
+                  <Toggle
+                    checked={cycleTrackingEnabled}
+                    onChange={handleCycleTrackingToggle}
+                    activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'}
+                  />
+                }
+              />
+            )}
+          </Fragment>
+        ))}
+      </SettingsCard>
+      </Section>
+
+      <Section id="calendar-sync" title="Calendar Sync">
+        <CalendarSyncSettings themeMode={themeMode} />
+      </Section>
+
+      <Section id="entry-images" title="Entry Images">
+        <ImageStorageSettings themeMode={themeMode} />
+      </Section>
+
+      <Section id="ai" title="AI Assistant">
+        <AiSettings themeMode={themeMode} />
+      </Section>
+
+      <Section id="security" title="Security">
       <SettingsCard>
         <SettingsRow
           title="Remember me"
@@ -1113,37 +1105,9 @@ export function SettingsView() {
           )}
         </SettingsRow>
       </SettingsCard>
+      </Section>
 
-      {/* Features */}
-      <SectionTitle>Features</SectionTitle>
-      <SectionDescription>Enable optional topics for specialized tracking</SectionDescription>
-      <SettingsCard>
-        {FEATURES.map(feat => (
-          <Fragment key={feat.key}>
-            <SettingsRow
-              title={feat.title}
-              description={feat.description}
-              action={<Toggle checked={features[feat.key] ?? false} onChange={v => handleFeatureToggle(feat.key, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
-            />
-            {feat.key === 'allergiesEnabled' && (
-              <SettingsRow
-                title="Cycle Tracking"
-                description="Add period and flow tracking to the daily wellness check-in"
-                action={
-                  <Toggle
-                    checked={cycleTrackingEnabled}
-                    onChange={handleCycleTrackingToggle}
-                    activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'}
-                  />
-                }
-              />
-            )}
-          </Fragment>
-        ))}
-      </SettingsCard>
-
-      {/* Data */}
-      <SectionTitle>Data</SectionTitle>
+      <Section id="data" title="Data">
       <SettingsCard>
         <SettingsRow
           title="Default Topics"
@@ -1189,7 +1153,7 @@ export function SettingsView() {
         />
         <SettingsRow
           title="Import Entries"
-          description="Import entries from a CSV file (Date, Topic, Content, Bookmarked)"
+          description="Import entries from a CSV file (Date, Topic, Content, Bookmarked). Topic names must match your existing topics; any other column becomes a custom field."
           action={
             <>
               <input
@@ -1207,25 +1171,30 @@ export function SettingsView() {
               </ActionButton>
             </>
           }
-        />
+        >
+          <div><RowLink type="button" onClick={downloadEntriesExample}>Download example CSV</RowLink></div>
+        </SettingsRow>
         {importResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: importResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{importResult}</div>}
         <DailyLogImport />
       </SettingsCard>
+      </Section>
 
-      {/* Privacy */}
-      <SectionTitle>Privacy</SectionTitle>
-      <PrivacyCard>
-        <strong>Zero-Knowledge Encryption:</strong> Your journal entries are encrypted in your browser before being sent to the server. We cannot read your data. If you lose your password, your data cannot be recovered.
-      </PrivacyCard>
+      <Section id="privacy" title="Privacy">
+        <GuideBody>
+          <strong>Zero-Knowledge Encryption:</strong> Your journal entries are encrypted in your browser before being sent to the server. We cannot read your data. If you lose your password, your data cannot be recovered.
+        </GuideBody>
+      </Section>
 
-      <DangerTitle />
-      <DangerCard>
-        <SettingsRow
-          title="Sign Out"
-          description="Sign out of your account on this device"
-          action={<SignOutButton onClick={handleSignOut}>Sign Out</SignOutButton>}
-        />
-      </DangerCard>
+      <Section id="sign-out" title="Sign Out">
+        <SettingsCard>
+          <SettingsRow
+            title="This device"
+            description="Sign out of your account on this device"
+            action={<SignOutButton onClick={handleSignOut}>Sign Out</SignOutButton>}
+          />
+        </SettingsCard>
+      </Section>
+      </Sections>
 
       <div style={{ height: 48 }} />
     </SettingsTemplate>

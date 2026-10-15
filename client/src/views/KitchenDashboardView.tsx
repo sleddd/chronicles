@@ -7,6 +7,8 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { Checkbox } from '../components/atoms/Checkbox.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
+import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
+import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -50,30 +52,18 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Flat, borderless section: a top rule + tracked label row. */
-const Section = styled.section`
-  margin-top: 32px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
+/* Bordered collapsible cards like the Health dashboard: side by side on
+   desktop, stacked on tablet and phone. */
+const CardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+  ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); }
 `;
 
-const SectionHead = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-`;
-
-const SectionLabel = styled.h2`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin: 0;
-`;
+const CARDS_KEY = 'kitchen-dashboard-collapsed-v1';
 
 const SectionLink = styled.button`
   font-family: var(--font-label);
@@ -96,24 +86,8 @@ const Note = styled.p`
   margin: 0;
 `;
 
-const SubTitle = styled.div`
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 300;
-  color: var(--text-primary);
-  margin: 0 0 12px;
-`;
-
-function DashSection({ label, action, children }: { label: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <Section aria-label={label}>
-      <SectionHead>
-        <SectionLabel>{label}</SectionLabel>
-        {action}
-      </SectionHead>
-      {children}
-    </Section>
-  );
+function DashCard(props: { id: string; title: string; action?: ReactNode; children: ReactNode }) {
+  return <CollapsibleCard storageKey={CARDS_KEY} {...props} />;
 }
 
 /* ── Today's meals ── */
@@ -149,18 +123,24 @@ const MealName = styled.button<{ $link: boolean }>`
   &:hover { ${({ $link }) => ($link ? 'color: var(--color-accent);' : '')} }
 `;
 
-function UpcomingMeals() {
+/** Today's planned meals, else the next planned day within two weeks. */
+function useUpcomingMeals() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const openInJournal = useOpenInJournal();
   const today = toDateStr(new Date());
   const menuTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'menu plan')?.id, [allTopics]);
   const next = useMemo(() => upcomingMeals(menuDays(entries, menuTopicId), today), [entries, menuTopicId, today]);
+  // The card title: "Today", or the day the shown meals are planned for
+  const title = next && next.day !== today ? longDay(next.day) : 'Today';
+  return { next, title };
+}
+
+function UpcomingMeals({ next }: { next: ReturnType<typeof useUpcomingMeals>['next'] }) {
+  const openInJournal = useOpenInJournal();
 
   if (!next) return <Note>Nothing planned for the next two weeks. Plan meals on the Menu tab.</Note>;
   return (
     <>
-      <SubTitle>{next.day === today ? 'Today' : longDay(next.day)}</SubTitle>
       {next.meals.map(m => (
         <MealRow key={m.slot}>
           <SlotLabel>{m.label}</SlotLabel>
@@ -198,19 +178,29 @@ const AddRow = styled.form`
   gap: 10px;
   margin-top: 12px;
   align-items: center;
+  /* Phones: the field takes the full width; Add / Open list wrap beneath it, sharing the row */
+  @media (max-width: 768px) {
+    flex-wrap: wrap;
+    row-gap: 20px;
+    & > input { flex-basis: 100%; }
+    & > button { flex: 1; }
+  }
 `;
 
 const AddInput = styled.input`
   flex: 1;
   min-width: 0;
-  padding: 8px 10px;
+  /* Underlined, not filled: a single rule that turns accent on focus.
+     Needs the data-underline attribute — GlobalStyle strips input borders otherwise. */
+  padding: 8px 0;
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-primary);
-  background: var(--bg-sunken);
+  background: transparent;
   border: none;
-  border-radius: var(--r-md, 1px);
-  &:focus { outline: 2px solid var(--color-accent); outline-offset: 0; }
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  &:focus { outline: none; border-bottom-color: var(--color-accent); box-shadow: 0 1px 0 var(--color-accent); }
   &::placeholder { color: var(--text-tertiary); }
 `;
 
@@ -219,18 +209,24 @@ const ErrorNote = styled(Note)`
   margin-top: 8px;
 `;
 
-function ShoppingChecklist() {
+/** The newest shopping list with unchecked items, and its name for the card title. */
+function useOpenShoppingList() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
+  const listTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'shopping list')?.id, [allTopics]);
+  const list = useMemo(() => latestOpenList(entries, listTopicId), [entries, listTopicId]);
+  const cf = ((list?.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {};
+  const title = list ? (stripHtml(list.content).trim() || builtinEntryName(cf) || 'Shopping List') : 'Shopping List';
+  return { list, title };
+}
+
+function ShoppingChecklist({ list }: { list: ReturnType<typeof useOpenShoppingList>['list'] }) {
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
   const { encryptPost } = useEncryption();
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
-
-  const listTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'shopping list')?.id, [allTopics]);
-  const list = useMemo(() => latestOpenList(entries, listTopicId), [entries, listTopicId]);
 
   if (!list) {
     return (
@@ -245,7 +241,6 @@ function ShoppingChecklist() {
   const cf = (meta._customFields as Record<string, unknown>) ?? {};
   const items = (cf.items as ShoppingItem[] | undefined) ?? [];
   const left = items.filter(i => !i.checked).length;
-  const name = stripHtml(list.content).trim() || builtinEntryName(cf) || 'Shopping list';
 
   const saveItems = async (next: ShoppingItem[]) => {
     const prev = list.metadata;
@@ -280,7 +275,6 @@ function ShoppingChecklist() {
 
   return (
     <>
-      <SubTitle>{name}</SubTitle>
       <Note style={{ marginBottom: 8 }}>
         {items.length === 0 ? 'No items yet.' : `${left} of ${items.length} left to get`}
       </Note>
@@ -294,7 +288,7 @@ function ShoppingChecklist() {
         </ItemRow>
       ))}
       <AddRow onSubmit={add}>
-        <AddInput value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item" />
+        <AddInput data-underline value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item" />
         <PillButton type="submit" disabled={!draft.trim()}>Add</PillButton>
         <PillButton type="button" $variant="neutral" onClick={() => openInJournal(list.id)}>Open list</PillButton>
       </AddRow>
@@ -312,6 +306,9 @@ function ShoppingChecklist() {
 export function KitchenDashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const navigate = useNavigate();
+  // Cards are titled by what they show: "Today" (or the next planned day) and the list's own name
+  const meals = useUpcomingMeals();
+  const shopping = useOpenShoppingList();
 
   if (needsUnlock) return (
     <>
@@ -337,13 +334,15 @@ export function KitchenDashboardView() {
           <Head><Title>{KITCHEN_TITLE}</Title></Head>
           <MealsTabBar />
 
-          <DashSection label="Meals" action={seeAll('/menu')}>
-            <UpcomingMeals />
-          </DashSection>
+          <CardGrid>
+            <DashCard id="meals" title={meals.title} action={seeAll('/menu')}>
+              <UpcomingMeals next={meals.next} />
+            </DashCard>
 
-          <DashSection label="Shopping list" action={seeAll('/shopping')}>
-            <ShoppingChecklist />
-          </DashSection>
+            <DashCard id="shopping" title={shopping.title} action={seeAll('/shopping')}>
+              <ShoppingChecklist list={shopping.list} />
+            </DashCard>
+          </CardGrid>
         </Inner>
       </Page>
     </ContentTemplate>

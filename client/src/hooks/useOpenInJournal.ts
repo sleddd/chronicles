@@ -23,3 +23,21 @@ export function useOpenInJournal() {
     navigate('/journal', { state: journalOriginState(location.pathname, location.search) });
   }, [navigate, location.pathname, location.search, setSelectedEntryId, setShowMobileEditor, setViewMode]);
 }
+
+/**
+ * Start a NEW entry for a topic in the journal editor (no inline forms on
+ * list pages). Opens in edit view: full-width editor, list filtered to the
+ * topic, and Save returns to the page it came from.
+ */
+export function useNewEntryInJournal() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
+  const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
+
+  return useCallback((topicId: number) => {
+    setSelectedEntryId(null);
+    setShowMobileEditor(true);
+    navigate('/journal', { state: { newEntryTopicId: topicId, ...journalOriginState(location.pathname, location.search) } });
+  }, [navigate, location.pathname, location.search, setSelectedEntryId, setShowMobileEditor]);
+}

@@ -158,11 +158,11 @@ export const GlobalStyle = createGlobalStyle`
     /* Paper is white: dark-theme tokens would print pale grey on white */
     html[data-theme="dark"] {
       --text-primary: #18181c !important;
-      --text-secondary: #4c4c55 !important;
-      --text-tertiary: #74747f !important;
+      --text-secondary: #26262c !important;
+      --text-tertiary: #3a3a42 !important;
       --ink: #18181c !important;
-      --ink-2: #56565f !important;
-      --ink-3: #74747f !important;
+      --ink-2: #2b2b31 !important;
+      --ink-3: #3a3a42 !important;
       --border-subtle: #e4e6ec !important;
       --border-default: #d8dae2 !important;
       --rule: #e4e6ec !important;

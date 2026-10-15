@@ -42,6 +42,8 @@ import { DashboardView } from './views/DashboardView.js';
    names (--bg-*, --text-*, --border-*, --color-accent*) directly.
    ─────────────────────────────────────────────────────────────────────────── */
 
+/* Light greys are darkened a step for readability on the white canvas
+   (tertiary ≈ 6:1, disabled/placeholder ≈ 3.7:1). */
 const LIGHT_CSS_VARS: Record<string, string> = {
   /* DS semantic surfaces */
   '--bg-app':            '#ffffff',
@@ -53,9 +55,9 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--bg-inverse':        '#1b1d26',
   /* DS text */
   '--text-primary':      '#18181c',
-  '--text-secondary':    '#4c4c55',
-  '--text-tertiary':     '#74747f',
-  '--text-disabled':     '#a0a0aa',
+  '--text-secondary':    '#26262c',
+  '--text-tertiary':     '#3a3a42',
+  '--text-disabled':     '#57575f',
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
   '--border-subtle':     '#e4e6ec',
@@ -78,9 +80,9 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--paper-well':        '#f0f2f5',
   '--paper-hover':       '#f8f9fa',
   '--ink':               '#18181c',
-  '--ink-2':             '#56565f',
-  '--ink-3':             '#74747f',
-  '--ink-4':             '#a0a0aa',
+  '--ink-2':             '#2b2b31',
+  '--ink-3':             '#3a3a42',
+  '--ink-4':             '#57575f',
   '--rule':              '#e4e6ec',
   '--rule-2':            '#e4e6ec',
   '--btn-primary':       '#18181c',

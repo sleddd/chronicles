@@ -13,11 +13,9 @@ const Wrapper = styled.div`
   gap: 15px;
 `;
 
+/* Single column: paired fields join the form's column so every label lines up */
 const Row = styled.div`
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  & > * { flex: 1; min-width: 0; }
+  display: contents;
 `;
 
 interface SymptomFieldsProps {

@@ -7,16 +7,18 @@ const Wrap = styled.div`
   min-width: 0;
 `;
 
-const SearchInput = styled.input`
+/* 'sm' (default) fits the Menu planner's grid cells; 'md' is a regular form
+   field (filled box from FormField, body-size text) */
+const SearchInput = styled.input<{ $size: 'sm' | 'md' }>`
   width: 100%;
   box-sizing: border-box;
-  font-size: 12px;
+  font-size: ${({ $size }) => ($size === 'md' ? '15px' : '12px')};
   padding: 3px 0;
   border: none;
   border-bottom: 1px solid transparent;
   background: transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-label);
+  color: ${({ $size }) => ($size === 'md' ? 'var(--text-primary)' : 'var(--text-secondary)')};
+  font-family: ${({ $size }) => ($size === 'md' ? 'var(--font-sans)' : 'var(--font-label)')};
   &::placeholder { color: var(--text-tertiary); }
   &:focus { outline: none; border-bottom-color: var(--color-accent); }
 `;
@@ -61,10 +63,11 @@ interface RecipeAutocompleteProps {
   recipes: { id: number; title: string }[];
   onSelect: (id: number) => void;
   placeholder?: string;
+  size?: 'sm' | 'md';
 }
 
 /** Type-to-search recipe picker: filters titles as you type, arrow keys + Enter or click to select. */
-export function RecipeAutocomplete({ recipes, onSelect, placeholder = 'Link recipe…' }: RecipeAutocompleteProps) {
+export function RecipeAutocomplete({ recipes, onSelect, placeholder = 'Link recipe…', size = 'sm' }: RecipeAutocompleteProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -84,6 +87,7 @@ export function RecipeAutocomplete({ recipes, onSelect, placeholder = 'Link reci
   return (
     <Wrap>
       <SearchInput
+        $size={size}
         value={query}
         placeholder={placeholder}
         onChange={e => { setQuery(e.target.value); setOpen(true); setHighlight(0); }}

@@ -37,64 +37,31 @@ function fmtDay(d: Date): string {
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
-`;
-
-const DaySection = styled.div`
-  border: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  overflow: hidden;
-`;
-
-const DayHeader = styled.div`
-  font-family: var(--ui, 'Montserrat', sans-serif);
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 10px 12px;
-  background: var(--paper-well, ${({ theme }) => theme.colors.surface});
-  border-bottom: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
-`;
-
-const SlotRow = styled.div`
-  display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--rule-2, #e5dfd2);
-  &:last-child { border-bottom: none; }
 `;
 
-const SlotLabel = styled.div`
-  font-family: var(--ui, 'Montserrat', sans-serif);
+/* One day: a tracked label, then a field row per meal (no boxes or rules) */
+const DaySection = styled.section`
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+`;
+
+const DayHeader = styled.h4`
+  margin: 0 0 4px;
+  font-family: var(--font-label);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-3, ${({ theme }) => theme.colors.textSecondary});
-  width: 70px;
-  flex-shrink: 0;
+  color: var(--text-secondary);
 `;
 
 const SlotInputs = styled.div`
-  flex: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: 8px;
-  min-width: 0;
-  @media (max-width: 480px) {
-    flex-direction: column;
-  }
-`;
-
-const MealInput = styled(TextInput)`
-  flex: 1;
-  min-width: 0;
-`;
-
-const RecipeSelect = styled(Select)`
-  flex: 1;
-  min-width: 0;
+  @media (max-width: 480px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 interface MenuPlanFieldsProps {
@@ -151,32 +118,33 @@ export function MenuPlanFields({ values, onChange, recipeOptions = [] }: MenuPla
       {weekDays.map(day => {
         const dateStr = toDateStr(day);
         return (
-          <DaySection key={dateStr}>
+          <DaySection key={dateStr} aria-label={fmtDay(day)}>
             <DayHeader>{fmtDay(day)}</DayHeader>
             {MEAL_SLOTS.map(({ key, label }) => {
               const slot = days[dateStr]?.[key] || emptySlot();
               return (
-                <SlotRow key={key}>
-                  <SlotLabel>{label}</SlotLabel>
+                <FormField key={key} label={label}>
                   <SlotInputs>
-                    <MealInput
+                    <TextInput
                       value={slot.mealName}
                       onChange={e => updateSlot(dateStr, key, { mealName: e.target.value })}
-                      placeholder="Meal name"
+                      placeholder="Meal"
+                      aria-label={`${fmtDay(day)} ${label}`}
                     />
                     {recipeOptions.length > 0 && (
-                      <RecipeSelect
+                      <Select
                         value={slot.recipeId?.toString() || ''}
                         onChange={e => handleRecipeChange(dateStr, key, e.target.value ? parseInt(e.target.value) : null)}
+                        aria-label={`${fmtDay(day)} ${label} recipe`}
                       >
                         <option value="">Link recipe…</option>
                         {recipeOptions.map(r => (
                           <option key={r.id} value={r.id}>{r.title}</option>
                         ))}
-                      </RecipeSelect>
+                      </Select>
                     )}
                   </SlotInputs>
-                </SlotRow>
+                </FormField>
               );
             })}
           </DaySection>

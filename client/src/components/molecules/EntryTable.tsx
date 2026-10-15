@@ -2,16 +2,15 @@ import styled from 'styled-components';
 
 /* Spreadsheet-style entry lists, matching the Meals log table: one row per
    entry with a stacked Topic-over-Date column and an Entry column, hairline
-   rules and 14px text — no header row. Shared by EntryCard (journal list) and
+   rules and 16px entry text — no header row. Shared by EntryCard (journal list) and
    EntryListCard (topic, task and health lists) so every list lines up. */
 
 /** Topic over Date | Entry | trailing controls */
 export const ENTRY_ROW_COLUMNS = 'minmax(0, 88px) minmax(0, 1fr) auto';
 
-/** "Oct 7" this year, "Oct 7 '25" for other years. */
-export function formatRowDate(d: Date, now = new Date()): string {
-  const md = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return d.getFullYear() === now.getFullYear() ? md : `${md} '${String(d.getFullYear()).slice(-2)}`;
+/** "OCT 7, 2026" — the row date on every entry list (journal and the rest). */
+export function formatListDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
 }
 
 /** Shared row padding. */
@@ -58,7 +57,7 @@ export const EntryCell = styled.div`
 
 export const EntryTitle = styled.div<{ $completed?: boolean }>`
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   line-height: 1.35;
   color: ${({ $completed }) => ($completed ? 'var(--text-tertiary)' : 'var(--text-primary)')};

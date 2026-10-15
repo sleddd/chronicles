@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { PillButton } from '../components/atoms/PillButton.js';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
@@ -6,11 +7,9 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
-import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
-import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { entries as entriesApi } from '../services/api.js';
@@ -58,26 +57,6 @@ const TabsRow = styled.div`
   margin: 0;
 `;
 
-const NewBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 9px 4px;
-  font-family: var(--font-label);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.7; }
-`;
-
 const SubTabs = styled.div`
   padding: 10px 0 4px;
 `;
@@ -85,6 +64,8 @@ const SubTabs = styled.div`
 const List = styled.div`
   display: flex;
   flex-direction: column;
+  /* Room above every entry list (sitewide spacing) */
+  margin-top: 16px;
 `;
 
 /* ── Tabs ── */
@@ -105,7 +86,7 @@ export function ShoppingListsView() {
   const openInJournal = useOpenInJournal();
 
   const [tab, setTab] = useState<Tab>('current');
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const newEntry = useNewEntryInJournal();
 
   const handleDelete = useCallback(async (id: number) => {
     try {
@@ -159,10 +140,9 @@ export function ShoppingListsView() {
           <Head>
             <Title>{KITCHEN_TITLE}</Title>
             {shoppingListTopic && (
-              <NewBtn onClick={() => setIsAddOpen(true)}>
-                <MaterialIcon $size={16} aria-hidden="true">add</MaterialIcon>
+              <PillButton type="button" onClick={() => shoppingListTopic && newEntry(shoppingListTopic.id)}>
                 New list
-              </NewBtn>
+              </PillButton>
             )}
           </Head>
 
@@ -172,15 +152,6 @@ export function ShoppingListsView() {
             <FilterTabs options={TABS} active={tab} onChange={v => setTab(v as Tab)} flush bordered={false} />
           </SubTabs>
 
-          {shoppingListTopic && isAddOpen && (
-            <NewEntryCard
-              topic={shoppingListTopic}
-              accentColor={accentColor}
-              hideButton
-              isOpen={isAddOpen}
-              onOpenChange={setIsAddOpen}
-            />
-          )}
 
           {visible.length === 0 ? (
             <EmptyState
@@ -189,7 +160,7 @@ export function ShoppingListsView() {
             />
           ) : (
             <List>
-              {visible.map(({ entry, completed }) => {
+              {visible.map(({ entry, completed }, i) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 return (
                   <SwipeActions
@@ -199,6 +170,7 @@ export function ShoppingListsView() {
                     onDelete={() => handleDelete(entry.id)}
                   >
                     <EntryListCard
+                      hint={i === 0}
                       content={entry.content}
                       createdAt={created}
                       completed={completed}

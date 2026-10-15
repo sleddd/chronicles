@@ -1,20 +1,24 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { PillButton } from '../components/atoms/PillButton.js';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBookmark, faXmark, faPlus, faSlidersH, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
+import { faSlidersH } from '@fortawesome/free-solid-svg-icons';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
+import { FormField } from '../components/molecules/FormField.js';
+import { TextInput } from '../components/atoms/TextInput.js';
+import { Select } from '../components/atoms/Select.js';
+import { Icon } from '../../../design-system/components/core/Icon.jsx';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { entries as entriesApi, settings as settingsApi } from '../services/api.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
@@ -66,257 +70,111 @@ const Body = styled.div`
   padding-top: 8px;
 `;
 
-const FilterPanel = styled.div`
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+/* ── Filter card (matches the dashboards' bordered collapsible cards) ── */
+
+const FilterCard = styled.section`
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg, 2px);
+  padding: 20px 24px;
+  margin-top: 8px;
+  @media (max-width: 480px) { padding: 16px; }
 `;
 
-const FilterToggleRow = styled.button`
+const CardHead = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 0;
+  gap: 16px;
+`;
+
+const CardToggle = styled.button`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 0;
   background: none;
   border: none;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   cursor: pointer;
   text-align: left;
-  color: ${({ theme }) => theme.colors.text};
-  &:hover { background: rgba(0, 0, 0, 0.03); }
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--text-primary);
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
 `;
 
-const ToggleLabel = styled.span`
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text};
-  flex-shrink: 0;
-`;
-
+/* Collapsed: what's filtered, beside the title */
 const FilterSummary = styled.span`
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
 `;
 
-const FilterBody = styled.div`
-  padding: 12px 0;
+const ChevronBtn = styled.button<{ $open: boolean }>`
+  display: inline-flex;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg);
+  transition: transform 150ms ease;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
+
+const CardBody = styled.div`
   display: flex;
   flex-direction: column;
+  padding-top: 16px;
+`;
+
+/* A control plus its small actions on one line (select + Delete, name + Save/Cancel) */
+const InlineControls = styled.div`
+  display: flex;
+  align-items: center;
   gap: 10px;
+  & > :first-child { flex: 1; min-width: 0; }
 `;
 
-const Row = styled.div`
+const Chips = styled.div`
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
-`;
-
-const FieldLabel = styled.span`
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06rem;
-  color: ${({ theme }) => theme.colors.textMuted};
-  white-space: nowrap;
-  min-width: 72px;
-`;
-
-const KeywordInput = styled.input`
-  flex: 1;
-  min-width: 160px;
-  padding: 6px 10px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text};
-  background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  outline: none;
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
-  &::placeholder { color: ${({ theme }) => theme.colors.textMuted}; }
-`;
-
-const TypeChip = styled.button<{ $active: boolean; $color: string }>`
-  padding: 5px 12px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  border: 1px solid ${({ $active, $color, theme }) => $active ? $color : theme.colors.border};
-  background: transparent;
-  color: ${({ $active, $color, theme }) => $active ? $color : theme.colors.textSecondary};
-  cursor: pointer;
-  white-space: nowrap;
-`;
-
-const FilterSelect = styled.select`
-  padding: 6px 8px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text};
-  background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  outline: none;
-  cursor: pointer;
-`;
-
-const Divider = styled.div`
-  height: 1px;
-  background: ${({ theme }) => theme.colors.border};
-  margin: 2px 0;
-`;
-
-/* ── Saved filters dropdown ── */
-
-const SavedRow = styled.div`
-  display: flex;
-  align-items: center;
   gap: 8px;
 `;
 
-const SavedDropdown = styled.select<{ $active: boolean; $color: string }>`
-  flex: 1;
-  padding: 6px 10px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text};
-  background: transparent;
-  border: 1px solid ${({ $active, $color, theme }) => $active ? $color : theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.15s;
+/* Type toggle: the standard pill; selected = accent outline + faint accent fill */
+const ChipPill = styled(PillButton)<{ $on: boolean }>`
+  min-width: 0;
+  padding: 7px 16px;
+  background: ${({ $on }) => ($on ? 'var(--color-accent-subtle)' : 'transparent')};
 `;
 
-const IconOnlyBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: none;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 12px;
+const TextLink = styled.button<{ $danger?: boolean }>`
   flex-shrink: 0;
-  &:hover { color: ${({ theme }) => theme.colors.danger}; border-color: ${({ theme }) => theme.colors.danger}; }
-  &:disabled { opacity: 0.3; cursor: default; &:hover { color: ${({ theme }) => theme.colors.textMuted}; border-color: ${({ theme }) => theme.colors.border}; } }
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $danger }) => ($danger ? 'var(--text-tertiary)' : 'var(--color-accent)')};
+  &:hover { color: ${({ $danger }) => ($danger ? 'var(--color-danger, #dc3232)' : 'var(--color-accent-hover)')}; }
 `;
 
-/* ── Action row ── */
-
-const ActionRow = styled.div`
+const CardActions = styled.div`
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: wrap;
-`;
-
-const ActionLeft = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const ApplyBtn = styled.button<{ $color: string; $pending: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 18px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 11px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.08rem;
-  color: white;
-  background: ${({ $color, $pending }) => $pending ? $color : $color + 'aa'};
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-  box-shadow: ${({ $pending, $color }) => $pending ? `0 2px 8px ${$color}55` : 'none'};
-  transform: ${({ $pending }) => $pending ? 'scale(1.02)' : 'scale(1)'};
-  &:hover { filter: brightness(1.1); }
-  &:active { transform: scale(0.98); }
-`;
-
-
-const GhostBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 14px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  background: none;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  cursor: pointer;
-  &:hover { background: rgba(0, 0, 0, 0.04); }
-  &:disabled { opacity: 0.4; cursor: default; }
-`;
-
-const ClearBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  background: none;
-  border: none;
-  cursor: pointer;
-  margin-left: auto;
-  &:hover { opacity: 0.7; }
-`;
-
-const SaveRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-`;
-
-const SaveInput = styled.input`
-  flex: 1;
-  min-width: 180px;
-  padding: 6px 10px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text};
-  background: ${({ theme }) => theme.colors.surfaceOverlay};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  outline: none;
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
-  &::placeholder { color: ${({ theme }) => theme.colors.textMuted}; }
-`;
-
-const SaveBtn = styled.button<{ $color: string }>`
-  padding: 6px 16px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 11px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.08rem;
-  color: white;
-  background: ${({ $color }) => $color};
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  cursor: pointer;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
 `;
 
 /* ── Results section header ── */
@@ -330,6 +188,8 @@ const SectionHeader = styled.div<{ $color: string }>`
   letter-spacing: 0.07rem;
   color: ${({ theme }) => theme.colors.textSecondary};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  /* Room above the rows (sitewide entry-list spacing) */
+  margin-bottom: 12px;
 `;
 
 const ResultCount = styled.span`
@@ -456,7 +316,7 @@ export function PlannerFilterView() {
 
   // Add new item state
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);
-  const [addType, setAddType] = useState<'goal' | 'milestone' | 'task' | null>(null);
+  const newEntry = useNewEntryInJournal();
   const addDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close add dropdown on outside click
@@ -639,9 +499,13 @@ export function PlannerFilterView() {
   }, []);
 
   // Unified result row — click or swipe-edit opens the entry in the journal editor.
+  // The first row rendered (across all sections) carries the "rows open" hint.
+  let hinted = false;
   const renderResultCard = (id: number, taxonomyId: number, completed: boolean) => {
     const entry = entries.find(e => e.id === id);
     if (!entry) return null;
+    const hint = !hinted;
+    hinted = true;
     const topic = allTopics.find(tp => tp.id === taxonomyId);
     return (
       <SwipeActions key={id} accentColor={accentColor} onEdit={() => openInJournal(id)} onDelete={() => handleDeleteEntry(id)}>
@@ -650,6 +514,7 @@ export function PlannerFilterView() {
           createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
           topicName={topic?.name}
           completed={completed}
+          hint={hint}
           fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
           onClick={() => openInJournal(id)}
         />
@@ -729,7 +594,6 @@ export function PlannerFilterView() {
   const goalTopic = allTopics.find(t => t.name.toLowerCase() === 'goal');
   const milestoneTopic = allTopics.find(t => t.name.toLowerCase() === 'milestone');
   const taskTopic = allTopics.find(t => t.name.toLowerCase() === 'task');
-  const activeTopic = addType === 'goal' ? goalTopic : addType === 'milestone' ? milestoneTopic : addType === 'task' ? taskTopic : undefined;
 
   return (
     <ContentTemplate>
@@ -738,24 +602,23 @@ export function PlannerFilterView() {
           <Head>
             <Title>Planning</Title>
             <AddBtnWrap ref={addDropdownRef}>
-              <AddBtn onClick={() => setAddDropdownOpen(o => !o)}>
-                <FontAwesomeIcon icon={faPlus} />
-                Add
-              </AddBtn>
+              <PillButton type="button" onClick={() => setAddDropdownOpen(o => !o)} aria-expanded={addDropdownOpen}>
+                New
+              </PillButton>
               {addDropdownOpen && (
                 <AddDropdown>
                   {goalTopic && (
-                    <AddDropdownItem onClick={() => { setAddType('goal'); setAddDropdownOpen(false); }}>
+                    <AddDropdownItem onClick={() => { setAddDropdownOpen(false); if (goalTopic) newEntry(goalTopic.id); }}>
                       Goal
                     </AddDropdownItem>
                   )}
                   {milestoneTopic && (
-                    <AddDropdownItem onClick={() => { setAddType('milestone'); setAddDropdownOpen(false); }}>
+                    <AddDropdownItem onClick={() => { setAddDropdownOpen(false); if (milestoneTopic) newEntry(milestoneTopic.id); }}>
                       Milestone
                     </AddDropdownItem>
                   )}
                   {taskTopic && (
-                    <AddDropdownItem onClick={() => { setAddType('task'); setAddDropdownOpen(false); }}>
+                    <AddDropdownItem onClick={() => { setAddDropdownOpen(false); if (taskTopic) newEntry(taskTopic.id); }}>
                       Task / Todo
                     </AddDropdownItem>
                   )}
@@ -767,146 +630,129 @@ export function PlannerFilterView() {
           <TabsRow><PlanningTabBar /></TabsRow>
 
           <Body>
-      {activeTopic && (
-        <NewEntryCard
-          topic={activeTopic}
-          accentColor={accentColor}
-          onCreated={() => setAddType(null)}
-          hideButton
-          isOpen={addType !== null}
-          onOpenChange={(open) => { if (!open) setAddType(null); }}
-        />
-      )}
 
-      {/* Filter panel */}
-      <FilterPanel>
-        <FilterToggleRow onClick={() => setPanelOpen(o => !o)}>
-          <ToggleLabel>Filters</ToggleLabel>
-          {!panelOpen && filterSummary && <FilterSummary>{filterSummary}</FilterSummary>}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {isApplied && (
-              <ClearBtn as="span" onClick={e => { e.stopPropagation(); handleClear(); }}>
-                <FontAwesomeIcon icon={faXmark} size="xs" /> Clear
-              </ClearBtn>
-            )}
-            <FontAwesomeIcon icon={panelOpen ? faChevronUp : faChevronDown} style={{ fontSize: 11, color: 'inherit', opacity: 0.5 }} />
-          </div>
-        </FilterToggleRow>
+      {/* Filter panel — a bordered card like the dashboards; one column of
+          standard field rows (filled boxes), pill toggles and pill actions */}
+      <FilterCard>
+        <CardHead>
+          <CardToggle type="button" onClick={() => setPanelOpen(o => !o)} aria-expanded={panelOpen}>
+            Filters
+            {!panelOpen && filterSummary && <FilterSummary>{filterSummary}</FilterSummary>}
+          </CardToggle>
+          {isApplied && <TextLink type="button" onClick={handleClear}>Clear</TextLink>}
+          <ChevronBtn type="button" onClick={() => setPanelOpen(o => !o)} tabIndex={-1} aria-hidden="true" $open={panelOpen}>
+            <Icon name="chevron-down" size={18} strokeWidth={1.8} />
+          </ChevronBtn>
+        </CardHead>
 
         {panelOpen && (
-          <FilterBody>
+          <CardBody>
             {savedFilters.length > 0 && (
-              <SavedRow>
-                <FieldLabel>Filter</FieldLabel>
-                <SavedDropdown
-                  $active={activeSavedId !== null}
-                  $color={accentColor}
-                  value={activeSavedId ?? ''}
-                  onChange={e => {
-                    const sf = savedFilters.find(f => f.id === e.target.value);
-                    if (sf) handleApplySaved(sf);
-                    else { setPending(EMPTY_PLANNER_FILTER); setFilter(EMPTY_PLANNER_FILTER); setActiveSavedId(null); }
-                  }}
-                >
-                  <option value="">— No saved filter —</option>
-                  {savedFilters.map(sf => <option key={sf.id} value={sf.id}>{sf.name}</option>)}
-                </SavedDropdown>
-                <IconOnlyBtn
-                  title="Delete this saved filter"
-                  disabled={activeSavedId === null}
-                  onClick={() => activeSavedId && handleDeleteSaved(activeSavedId)}
-                >
-                  <FontAwesomeIcon icon={faXmark} />
-                </IconOnlyBtn>
-              </SavedRow>
+              <FormField label="Saved filter">
+                <InlineControls>
+                  <Select
+                    value={activeSavedId ?? ''}
+                    onChange={e => {
+                      const sf = savedFilters.find(f => f.id === e.target.value);
+                      if (sf) handleApplySaved(sf);
+                      else { setPending(EMPTY_PLANNER_FILTER); setFilter(EMPTY_PLANNER_FILTER); setActiveSavedId(null); }
+                    }}
+                  >
+                    <option value="">None</option>
+                    {savedFilters.map(sf => <option key={sf.id} value={sf.id}>{sf.name}</option>)}
+                  </Select>
+                  {activeSavedId !== null && (
+                    <TextLink type="button" $danger onClick={() => handleDeleteSaved(activeSavedId)}>Delete</TextLink>
+                  )}
+                </InlineControls>
+              </FormField>
             )}
 
-            <Row>
-              <FieldLabel>Keyword</FieldLabel>
-              <KeywordInput
+            <FormField label="Keyword">
+              <TextInput
                 type="text"
-                placeholder="Search across all planner items…"
+                placeholder="Search goals, milestones, tasks and todos"
                 value={pending.keyword}
                 onChange={e => updateFilter({ keyword: e.target.value })}
               />
-            </Row>
+            </FormField>
 
-            <Row>
-              <FieldLabel>Show</FieldLabel>
-              {ITEM_TYPES.map(({ value, label }) => (
-                <TypeChip key={value} $active={pending.itemTypes.includes(value)} $color={accentColor} onClick={() => toggleType(value)}>
-                  {label}
-                </TypeChip>
-              ))}
-            </Row>
+            <FormField label="Show">
+              <Chips>
+                {ITEM_TYPES.map(({ value, label }) => {
+                  const on = pending.itemTypes.includes(value);
+                  return (
+                    <ChipPill key={value} type="button" $variant={on ? 'accent' : 'neutral'} $on={on}
+                      aria-pressed={on} onClick={() => toggleType(value)}>
+                      {label}
+                    </ChipPill>
+                  );
+                })}
+              </Chips>
+            </FormField>
 
-            <Row>
-              <FieldLabel>Status</FieldLabel>
-              <FilterSelect value={pending.goalStatus} onChange={e => updateFilter({ goalStatus: e.target.value, taskStatus: e.target.value })}>
+            <FormField label="Status">
+              <Select value={pending.goalStatus} onChange={e => updateFilter({ goalStatus: e.target.value, taskStatus: e.target.value })}>
                 {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </FilterSelect>
-              <FieldLabel style={{ minWidth: 'unset' }}>Priority</FieldLabel>
-              <FilterSelect value={pending.priority} onChange={e => updateFilter({ priority: e.target.value })}>
-                {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </FilterSelect>
-            </Row>
+              </Select>
+            </FormField>
 
-            <Row>
-              <FieldLabel>Goal</FieldLabel>
-              <FilterSelect
+            <FormField label="Priority">
+              <Select value={pending.priority} onChange={e => updateFilter({ priority: e.target.value })}>
+                {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+            </FormField>
+
+            <FormField label="Goal">
+              <Select
                 value={pending.parentGoalId ?? ''}
                 onChange={e => updateFilter({ parentGoalId: e.target.value ? Number(e.target.value) : null, parentMilestoneId: null })}
               >
-                <option value="">Any Goal</option>
+                <option value="">Any goal</option>
                 {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-              </FilterSelect>
-              <FieldLabel style={{ minWidth: 'unset' }}>Milestone</FieldLabel>
-              <FilterSelect
+              </Select>
+            </FormField>
+
+            <FormField label="Milestone">
+              <Select
                 value={pending.parentMilestoneId ?? ''}
                 onChange={e => updateFilter({ parentMilestoneId: e.target.value ? Number(e.target.value) : null })}
               >
-                <option value="">Any Milestone</option>
+                <option value="">Any milestone</option>
                 {visibleMilestoneOptions.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-              </FilterSelect>
-            </Row>
-
-            <Divider />
+              </Select>
+            </FormField>
 
             {showSaveInput ? (
-              <SaveRow>
-                <SaveInput
-                  autoFocus
-                  placeholder="Name this filter…"
-                  value={saveName}
-                  onChange={e => setSaveName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleSave();
-                    if (e.key === 'Escape') { setShowSaveInput(false); setSaveName(''); }
-                  }}
-                />
-                <SaveBtn $color={accentColor} onClick={handleSave}>Save</SaveBtn>
-                <GhostBtn onClick={() => { setShowSaveInput(false); setSaveName(''); }}>Cancel</GhostBtn>
-              </SaveRow>
+              <FormField label="Name">
+                <InlineControls>
+                  <TextInput
+                    autoFocus
+                    placeholder="Name this filter"
+                    value={saveName}
+                    onChange={e => setSaveName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSave();
+                      if (e.key === 'Escape') { setShowSaveInput(false); setSaveName(''); }
+                    }}
+                  />
+                  <PillButton type="button" onClick={handleSave}>Save</PillButton>
+                  <PillButton type="button" $variant="neutral" onClick={() => { setShowSaveInput(false); setSaveName(''); }}>Cancel</PillButton>
+                </InlineControls>
+              </FormField>
             ) : (
-              <ActionRow>
-                <ActionLeft>
-                  <GhostBtn onClick={() => setShowSaveInput(true)} disabled={isFilterEmpty(pending)}>
-                    <FontAwesomeIcon icon={faPlus} style={{ fontSize: 10 }} /> Save
-                  </GhostBtn>
-                </ActionLeft>
-                <ApplyBtn
-                  $color={accentColor}
-                  $pending={hasPendingChanges || (!isApplied && !isFilterEmpty(pending))}
-                  onClick={handleApply}
-                  disabled={isFilterEmpty(pending)}
-                >
-                  Apply Filter
-                </ApplyBtn>
-              </ActionRow>
+              <CardActions>
+                <PillButton type="button" $variant="neutral" onClick={() => setShowSaveInput(true)} disabled={isFilterEmpty(pending)}>
+                  Save filter
+                </PillButton>
+                <PillButton type="button" onClick={handleApply} disabled={isFilterEmpty(pending)}>
+                  Apply filter
+                </PillButton>
+              </CardActions>
             )}
-          </FilterBody>
+          </CardBody>
         )}
-      </FilterPanel>
+      </FilterCard>
 
       {/* Results */}
       <div>

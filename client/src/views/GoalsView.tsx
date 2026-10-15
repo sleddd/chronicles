@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { PillButton } from '../components/atoms/PillButton.js';
+import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -8,14 +10,12 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import { GoalCard } from '../components/organisms/GoalCard.js';
 import { MilestoneCard } from '../components/organisms/MilestoneCard.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
@@ -65,32 +65,19 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-const NewBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 9px 4px;
-  font-family: var(--font-label);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.7; }
-`;
-
 const TabsRow = styled.div`
   margin: 0;
 `;
 
 const Body = styled.div`
   padding-top: 8px;
+`;
+
+/* Tasks / Todos rows — same room above the list as entry lists elsewhere */
+const RowList = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
 `;
 
 /* ── Roadmap (Kanban) board ── */
@@ -551,7 +538,7 @@ export function GoalsView() {
     navigate('/journal', { state: journalOriginState(location.pathname, location.search) });
   }, [setSelectedEntryId, setShowMobileEditor, navigate, location.pathname, location.search]);
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const newEntry = useNewEntryInJournal();
   const activeAddTopic = tab === 'goals' ? allTopics.find(t => t.id === goalTopicId)
     : tab === 'milestones' ? allTopics.find(t => t.id === milestoneTopicId)
     : allTopics.find(t => t.id === taskTopicId);
@@ -573,25 +560,15 @@ export function GoalsView() {
           <Head>
             <Title>Planning</Title>
             {activeAddTopic && (
-              <NewBtn onClick={() => setIsAddOpen(true)}>
-                <MaterialIcon $size={16} aria-hidden="true">add</MaterialIcon>
+              <PillButton type="button" onClick={() => activeAddTopic && newEntry(activeAddTopic.id)}>
                 {addLabel}
-              </NewBtn>
+              </PillButton>
             )}
           </Head>
 
           <TabsRow><PlanningTabBar /></TabsRow>
 
           <Body>
-        {activeAddTopic && (
-          <NewEntryCard
-            topic={activeAddTopic}
-            accentColor={accentColor}
-            hideButton
-            isOpen={isAddOpen}
-            onOpenChange={setIsAddOpen}
-          />
-        )}
 
         {tab === 'goals' && (orderedGoals.length === 0
           ? <EmptyState message="No goals found." submessage="Create a journal entry with the Goal topic to get started." />
@@ -652,13 +629,14 @@ export function GoalsView() {
 
         {tab === 'tasks' && (tasks.length === 0
             ? <EmptyState message="No tasks found." submessage="Create a journal entry with the Task topic to get started." />
-            : [...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(t => {
+            : <RowList>{[...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((t, i) => {
                 const entry = entries.find(e => e.id === t.id);
                 if (!entry) return null;
                 const topic = allTopics.find(tp => tp.id === t.taxonomyId);
                 return (
                   <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
                     <EntryListCard
+                      hint={i === 0}
                       content={entry.content}
                       createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
                       topicName={tasksMixed ? topic?.name : undefined}
@@ -669,18 +647,19 @@ export function GoalsView() {
                     />
                   </SwipeActions>
                 );
-              })
+              })}</RowList>
         )}
 
         {tab === 'todos' && (todos.length === 0
             ? <EmptyState message="No todos found." submessage="Create a task without linking it to a milestone or goal." />
-            : [...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(t => {
+            : <RowList>{[...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((t, i) => {
                 const entry = entries.find(e => e.id === t.id);
                 if (!entry) return null;
                 const topic = allTopics.find(tp => tp.id === t.taxonomyId);
                 return (
                   <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
                     <EntryListCard
+                      hint={i === 0}
                       content={entry.content}
                       createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
                       topicName={todosMixed ? topic?.name : undefined}
@@ -691,7 +670,7 @@ export function GoalsView() {
                     />
                   </SwipeActions>
                 );
-              })
+              })}</RowList>
         )}
           </Body>
         </Inner>

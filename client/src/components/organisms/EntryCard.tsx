@@ -3,7 +3,7 @@ import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../../../../design-system/components/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
 import {
-  ENTRY_ROW_COLUMNS, ENTRY_ROW_INSET_PADDING, formatRowDate,
+  ENTRY_ROW_COLUMNS, ENTRY_ROW_INSET_PADDING, formatListDate,
   MetaCell, DateCell, TopicCell, EntryCell, EntryTitle,
 } from '../molecules/EntryTable.js';
 import { useUIStore } from '../../stores/uiStore.js';
@@ -122,7 +122,7 @@ export function EntryCard({
           <TopicCell $active={active} title={topicName}>{topicName}</TopicCell>
         ) : null}
         <DateCell title={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
-          {formatRowDate(d)}
+          {formatListDate(d)}
         </DateCell>
       </MetaCell>
       <EntryCell>

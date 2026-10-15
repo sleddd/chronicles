@@ -1,15 +1,14 @@
 import { useState, useMemo, useCallback } from 'react';
+import { PillButton } from '../components/atoms/PillButton.js';
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
-import { NewEntryCard } from '../components/organisms/NewEntryCard.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName, stripHtml, summarizeUserFields } from '../utils/stripHtml.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -49,40 +48,20 @@ const Title = styled.h1`
   font-weight: 200;
   line-height: 1;
   color: var(--text-primary);
-  margin: 0;
+  /* Room for descenders (g/p/y), which overflow: hidden would clip */
+  padding-bottom: 0.2em;
+  margin: 0 0 -0.2em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-const NewBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 9px 4px;
-  font-family: var(--font-label);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.7; }
-`;
-
 const List = styled.div`
   display: flex;
   flex-direction: column;
-`;
-
-const AddWrap = styled.div`
-  padding: 8px 0 0;
+  /* Breathing room between the topic title and its entries */
+  margin-top: 28px;
 `;
 
 /* ── View ── */
@@ -106,7 +85,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const openInJournal = useOpenInJournal();
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const newEntry = useNewEntryInJournal();
 
   // The add affordance appears when the names resolve to exactly one topic
   const addTopic = useMemo(() => {
@@ -163,32 +142,20 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
           <Head>
             <Title>{title}</Title>
             {addTopic && (
-              <NewBtn onClick={() => setIsAddOpen(true)}>
-                <MaterialIcon $size={16} aria-hidden="true">add</MaterialIcon>
+              <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
                 New entry
-              </NewBtn>
+              </PillButton>
             )}
           </Head>
 
           {navBar}
 
-          {addTopic && isAddOpen && (
-            <AddWrap>
-              <NewEntryCard
-                topic={addTopic}
-                accentColor={accentColor}
-                hideButton
-                isOpen={isAddOpen}
-                onOpenChange={setIsAddOpen}
-              />
-            </AddWrap>
-          )}
 
           {filtered.length === 0 ? (
             <EmptyState message={`No ${title.toLowerCase()} entries yet.`} />
           ) : (
             <List>
-              {filtered.map(entry => {
+              {filtered.map((entry, i) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);
 
@@ -221,6 +188,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
                     onDelete={() => handleDeleteEntry(entry.id)}
                   >
                     <EntryListCard
+                      hint={i === 0}
                       content={entry.content}
                       createdAt={created}
                       topicName={mixedTopics ? topic?.name : undefined}

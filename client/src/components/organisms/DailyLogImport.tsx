@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { SettingsRow } from '../molecules/SettingsCard.js';
-import { ActionButton } from '../atoms/SettingsAtoms.js';
+import { ActionButton, RowLink } from '../atoms/SettingsAtoms.js';
+import { downloadDailyLogExample } from '../../utils/importExamples.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -132,7 +133,9 @@ export function DailyLogImport() {
             </>
           )
         }
-      />
+      >
+        <div><RowLink type="button" onClick={downloadDailyLogExample}>Download example JSON</RowLink></div>
+      </SettingsRow>
       {(summary || result) && (
         <div
           role="status"

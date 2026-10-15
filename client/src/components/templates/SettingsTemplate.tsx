@@ -13,6 +13,7 @@ const Layout = styled.div`
   display: flex;
   flex-direction: row;
   height: 100vh;
+  height: 100dvh; /* iOS Safari: 100vh extends behind the bottom toolbar */
   overflow: hidden;
 
   ${NAV_COMPACT} {
@@ -20,12 +21,24 @@ const Layout = styled.div`
   }
 `;
 
-const MainColumn = styled.div`
+/* Same mobile reveal as ContentTemplate/AppTemplate: the column sits above the
+   fixed nav bar and slides right to expose it. Without this the drawer and its
+   tap-to-close overlay don't line up, so the menu can't be closed. */
+const MainColumn = styled.div<{ $navOpen?: boolean }>`
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
+
+  ${NAV_COMPACT} {
+    position: relative;
+    z-index: 2;
+    background: var(--bg-app);
+    transform: translateX(${({ $navOpen }) => ($navOpen ? '240px' : '0')});
+    transition: transform 220ms ease-out;
+    box-shadow: ${({ $navOpen }) => ($navOpen ? '-2px 0 20px rgba(0,0,0,0.25)' : 'none')};
+  }
 `;
 
 const Body = styled.div<{ $hasBackground?: boolean; $lightBg?: boolean }>`
@@ -63,13 +76,14 @@ interface SettingsTemplateProps {
 export function SettingsTemplate({ title, children }: SettingsTemplateProps) {
   const backgroundImage = useUIStore(s => s.backgroundImage);
   const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
+  const navOpen = useUIStore(s => s.mobileNavOpen);
   return (
     <>
       <Background />
       <div data-print-hide><MobileChrome /></div>
       <Layout>
         <div data-print-hide><Sidebar /></div>
-        <MainColumn>
+        <MainColumn $navOpen={navOpen}>
           <Header />
           <Body $hasBackground={!!backgroundImage} $lightBg={isLightBg}>
             <Content>

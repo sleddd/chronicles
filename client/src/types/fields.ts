@@ -131,6 +131,8 @@ export interface FoodFieldValues {
 }
 
 export interface MedicationFieldValues {
+  /** The medication's name — the entry's title (its text mirrors it) */
+  medicationName?: string;
   dosage: string;
   frequency: 'once_daily' | 'twice_daily' | 'three_daily' | 'as_needed' | 'custom';
   scheduleTimes: string[];

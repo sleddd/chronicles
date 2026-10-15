@@ -56,13 +56,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
 
   return (
     <Wrapper>
-      <FormField label="Task Description">
-        <TextInput
-          value={values.taskDescription ?? ''}
-          onChange={e => onChange({ ...values, taskDescription: e.target.value })}
-          placeholder="What needs to be done?"
-        />
-      </FormField>
+      {/* No separate description field — the task is written in the main text area */}
       {goalOptions.length > 0 && (
         <FormField label="Linked Goal">
           <Select
