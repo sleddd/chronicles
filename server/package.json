@@ -14,7 +14,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "migrate:tenants": "tsx src/db/migrationOrchestrator.ts"
+    "migrate:tenants": "tsx src/db/migrationOrchestrator.ts",
+    "clear:topic-links": "tsx src/db/clearTopicLinks.ts"
   },
   "dependencies": {
     "@chronicles/shared": "*",

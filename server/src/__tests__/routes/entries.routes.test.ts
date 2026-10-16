@@ -142,32 +142,16 @@ describe('Entry Routes', () => {
       expect(createPost).not.toHaveBeenCalled();
     });
 
-    it('sets taxonomy IDs when provided', async () => {
+    it('accepts but never stores a plaintext topic link', async () => {
       (createPost as any).mockResolvedValue({ ...mockPost, id: 4 });
-      (getAllTaxonomies as any).mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
-      (setPostTaxonomies as any).mockResolvedValue(undefined);
 
       const res = await request(app)
         .post('/api/entries')
-        .send({
-          ...ENCRYPTED_BODY,
-          taxonomyIds: [1, 2],
-        });
+        .send({ ...ENCRYPTED_BODY, taxonomyIds: [1, 2] });
 
       expect(res.status).toBe(201);
-      expect(setPostTaxonomies).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 4, [1, 2]);
-    });
-
-    it('filters out invalid taxonomy IDs', async () => {
-      (createPost as any).mockResolvedValue({ ...mockPost, id: 5 });
-      (getAllTaxonomies as any).mockResolvedValue([{ id: 1 }]);
-      (setPostTaxonomies as any).mockResolvedValue(undefined);
-
-      await request(app)
-        .post('/api/entries')
-        .send({ ...ENCRYPTED_BODY, taxonomyIds: [1, 999] });
-
-      expect(setPostTaxonomies).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 5, [1]);
+      expect(setPostTaxonomies).not.toHaveBeenCalled();
+      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.not.objectContaining({ taxonomyIds: expect.anything() }));
     });
 
     it('returns 400 when encrypted post is missing required fields', async () => {
@@ -198,15 +182,15 @@ describe('Entry Routes', () => {
   // GET /api/entries/:id
   // =========================================================================
   describe('GET /api/entries/:id', () => {
-    it('returns a single entry with taxonomies', async () => {
+    it('returns a single entry without any plaintext topic link', async () => {
       (getPost as any).mockResolvedValue(mockPost);
-      (getPostTaxonomies as any).mockResolvedValue([{ id: 1, name: 'Task' }]);
 
       const res = await request(app).get('/api/entries/1');
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(1);
-      expect(res.body.taxonomies).toEqual([{ id: 1, name: 'Task' }]);
+      expect(res.body.taxonomies).toBeUndefined();
+      expect(getPostTaxonomies).not.toHaveBeenCalled();
     });
 
     it('returns 404 when entry not found', async () => {
@@ -249,16 +233,15 @@ describe('Entry Routes', () => {
       expect(updatePost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, expect.any(Object));
     });
 
-    it('updates taxonomy IDs when provided', async () => {
+    it('ignores a plaintext topic link on update', async () => {
       (updatePost as any).mockResolvedValue(mockPost);
-      (getAllTaxonomies as any).mockResolvedValue([{ id: 1 }, { id: 2 }]);
-      (setPostTaxonomies as any).mockResolvedValue(undefined);
 
       await request(app)
         .put('/api/entries/1')
         .send({ content: 'Updated', taxonomyIds: [1] });
 
-      expect(setPostTaxonomies).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, [1]);
+      expect(setPostTaxonomies).not.toHaveBeenCalled();
+      expect(getAllTaxonomies).not.toHaveBeenCalled();
     });
 
     it('returns 400 for invalid ID', async () => {

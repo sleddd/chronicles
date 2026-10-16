@@ -8,6 +8,7 @@ import { loadImageStorageConfig } from '../services/imageStorage.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
+import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -16,7 +17,7 @@ import { featureFlagsFrom } from '../utils/featureFlags.js';
  */
 export function useInitializeData() {
   const { encryptionData } = useAuth();
-  const { isUnlocked, isRestoring, unlock, decryptPosts, decryptBytes } = useEncryption();
+  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptBytes, decryptBytes } = useEncryption();
   const {
     setDecryptedEntries, setRawEntries, setTopics, setFeatureFlags,
     isInitialized, setLoading, isLoading,
@@ -61,6 +62,9 @@ export function useInitializeData() {
         // Apply theme settings
         const settingsMap: Record<string, unknown> = {};
         for (const s of settingsData) settingsMap[s.key] = s.value;
+        // Personal settings are master-key encrypted; old plaintext ones get sealed now
+        const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
+        if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') {
           setAccentColor(settingsMap.accentColor);
           document.documentElement.style.setProperty('--color-accent', settingsMap.accentColor);

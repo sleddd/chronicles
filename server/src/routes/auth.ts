@@ -5,12 +5,12 @@ import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
-import { registerTenant } from '../db/schemaManager.js';
+import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
 
@@ -88,6 +88,30 @@ function recordTwoFAFailure(accountId: number): void {
   else f.count++;
 }
 
+// Per-email cap on wrong passwords, on top of the per-IP limit, so guesses
+// spread across many IPs still run out. Keyed by the normalized email whether
+// or not an account exists, so a lockout never reveals which emails are real.
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const loginFailures = new Map<string, { count: number; resetAt: number }>();
+
+function loginLocked(email: string): boolean {
+  const f = loginFailures.get(email);
+  if (!f) return false;
+  if (f.resetAt <= Date.now()) { loginFailures.delete(email); return false; }
+  return f.count >= LOGIN_MAX_FAILURES;
+}
+
+function recordLoginFailure(email: string): void {
+  const now = Date.now();
+  if (loginFailures.size > 50_000) {
+    for (const [k, v] of loginFailures) if (v.resetAt <= now) loginFailures.delete(k);
+  }
+  const f = loginFailures.get(email);
+  if (!f || f.resetAt <= now) loginFailures.set(email, { count: 1, resetAt: now + LOGIN_LOCK_MS });
+  else f.count++;
+}
+
 /**
  * Check an authenticator code or a backup code. A used backup code is removed.
  * Returns which factor matched, or null.
@@ -120,10 +144,16 @@ async function verifySecondFactor(
     recordTwoFAFailure(account.id);
     return null;
   }
-  await prisma.account.update({
-    where: { id: account.id },
-    data: { totpBackupCodes: account.totpBackupCodes.filter((_, i) => i !== matchIndex) },
-  });
+  // Consume atomically: only the request that actually removes the code wins,
+  // so two concurrent requests can't both spend the same backup code
+  const used = account.totpBackupCodes[matchIndex];
+  const consumed = await prisma.$executeRaw`
+    UPDATE "accounts" SET totp_backup_codes = array_remove(totp_backup_codes, ${used})
+    WHERE id = ${account.id} AND ${used} = ANY(totp_backup_codes)`;
+  if (consumed === 0) {
+    recordTwoFAFailure(account.id);
+    return null;
+  }
   twoFAFailures.delete(account.id);
   return 'backup';
 }
@@ -168,9 +198,16 @@ const COOKIE_OPTIONS = {
 // the server secret when configured, else a per-process key.
 const DECOY_KEY = (() => {
   const configured = process.env.SECRETS_ENCRYPTION_KEY || process.env.CALENDAR_TOKEN_KEY;
-  return configured
-    ? crypto.createHmac('sha256', Buffer.from(configured, 'base64')).update('chronicles:recovery-decoy').digest()
-    : crypto.randomBytes(32);
+  if (configured) {
+    return crypto.createHmac('sha256', Buffer.from(configured, 'base64')).update('chronicles:recovery-decoy').digest();
+  }
+  // No secrets key: derive from DATABASE_URL (it holds the DB password) so
+  // decoys stay the same across restarts — a per-process key would change them
+  // and give unknown emails away. Random only when neither is set (dev/tests).
+  if (process.env.DATABASE_URL) {
+    return crypto.createHmac('sha256', process.env.DATABASE_URL).update('chronicles:recovery-decoy').digest();
+  }
+  return crypto.randomBytes(32);
 })();
 
 function decoyBytes(email: string, label: string, length: number): string {
@@ -315,9 +352,16 @@ router.post('/login', authLimiter, async (req, res) => {
     const { email, password } = parsed.data;
 
     const normalizedEmail = email.toLowerCase();
+    if (loginLocked(normalizedEmail)) {
+      logSecurityEvent('login_locked', { ip: req.ip });
+      await constantTimeDelay(startTime);
+      res.status(429).json({ error: 'Too many failed sign-in attempts. Try again in 15 minutes.' });
+      return;
+    }
     const account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
     if (!account) {
       logSecurityEvent('login_failed_no_account', { ip: req.ip });
+      recordLoginFailure(normalizedEmail);
       // Constant-time delay to prevent timing-based email enumeration
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
@@ -327,11 +371,14 @@ router.post('/login', authLimiter, async (req, res) => {
 
     const valid = await bcrypt.compare(password, account.passwordHash);
     if (!valid) {
+      recordLoginFailure(normalizedEmail);
       logSecurityEvent('login_failed_bad_password', { accountId: account.id, ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
+
+    loginFailures.delete(normalizedEmail);
 
     // 2FA check — if enabled, return a pending token instead of a session
     if (account.totpEnabled) {
@@ -813,13 +860,13 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
   try {
     const parsed = disable2FASchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Password is required' });
+      res.status(400).json({ error: 'Password and a code from your authenticator app (or a backup code) are required' });
       return;
     }
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { passwordHash: true },
+      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
@@ -831,6 +878,19 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
       logSecurityEvent('2fa_disable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
       return;
+    }
+
+    if (account.totpEnabled && account.totpSecret) {
+      if (twoFALocked(account.id)) {
+        res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
+        return;
+      }
+      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code);
+      if (!factor) {
+        logSecurityEvent('2fa_disable_failed', { accountId: account.id, ip: req.ip, details: { reason: 'bad_code' } });
+        res.status(401).json({ error: 'Invalid code' });
+        return;
+      }
     }
 
     await prisma.account.update({
@@ -845,6 +905,62 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('2FA disable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: '2FA disable failed' });
+  }
+});
+
+// =============================================================================
+// DELETE /api/auth/account — permanently delete the account and all its data
+// =============================================================================
+router.delete('/account', strictLimiter, authMiddleware, async (req, res) => {
+  try {
+    const parsed = deleteAccountSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Password is required' });
+      return;
+    }
+
+    const account = await prisma.account.findUnique({
+      where: { id: req.auth!.accountId },
+      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+    });
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+    if (!(await bcrypt.compare(parsed.data.password, account.passwordHash))) {
+      logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip });
+      res.status(401).json({ error: 'Incorrect password' });
+      return;
+    }
+    if (account.totpEnabled && account.totpSecret) {
+      if (twoFALocked(account.id)) {
+        res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
+        return;
+      }
+      if (!parsed.data.code) {
+        res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
+        return;
+      }
+      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code);
+      if (!factor) {
+        logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip, details: { reason: 'bad_code' } });
+        res.status(401).json({ error: 'Invalid code', requires2FA: true });
+        return;
+      }
+    }
+
+    revokeGrantsForAccount(account.id);
+    await deleteAccountById(account.id);
+    lastTotpStep.delete(account.id);
+    twoFAFailures.delete(account.id);
+
+    logSecurityEvent('account_deleted', { accountId: account.id, ip: req.ip });
+    res.clearCookie(COOKIE_NAME, { path: '/', secure: IS_PRODUCTION, sameSite: 'strict' as const });
+    clearRememberCookie(res);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Account delete error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Account deletion failed' });
   }
 });
 

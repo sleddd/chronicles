@@ -16,10 +16,11 @@ vi.mock('../../db/prisma.js', () => ({
     },
     session: { updateMany: vi.fn() },
     $transaction: vi.fn(),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   },
 }));
 
-vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn() }));
+vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAccountById: vi.fn() }));
 
 vi.mock('../../middleware/auth.js', () => ({
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
@@ -50,6 +51,7 @@ vi.mock('bcryptjs', () => ({
 import authRouter from '../../routes/auth.js';
 import { prisma } from '../../db/prisma.js';
 import { decryptToken } from '../../services/tokenCrypto.js';
+import { deleteAccountById } from '../../db/schemaManager.js';
 import bcrypt from 'bcryptjs';
 
 function buildApp() {
@@ -195,10 +197,19 @@ describe('2FA hardening', () => {
         .send({ pendingToken: await pendingTokenFor(app, account), code: 'aaaaaa-bbbbbb' });
 
       expect(res.status).toBe(200);
-      expect(prisma.account.update).toHaveBeenCalledWith({
-        where: { id: account.id },
-        data: { totpBackupCodes: [sha256('cccccc-dddddd')] },
-      });
+      const [, used, id] = (prisma.$executeRaw as any).mock.calls[0];
+      expect(used).toBe(sha256('aaaaaa-bbbbbb'));
+      expect(id).toBe(account.id);
+    });
+
+    it('rejects a backup code a concurrent request already spent', async () => {
+      const account = twoFAAccount(generateSecret(), [sha256('aaaaaa-bbbbbb')]);
+      (prisma.$executeRaw as any).mockResolvedValueOnce(0);
+
+      const res = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: 'aaaaaa-bbbbbb' });
+
+      expect(res.status).toBe(401);
     });
   });
 
@@ -274,6 +285,67 @@ describe('2FA hardening', () => {
 
       expect(res.status).toBe(401);
       expect(tx.account.update).not.toHaveBeenCalled();
+    }, 30000);
+  });
+
+  describe('DELETE /api/auth/2fa', () => {
+    it('needs a valid authenticator or backup code as well as the password', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+
+      const noCode = await request(app).delete('/api/auth/2fa').send({ password: 'pw' });
+      expect(noCode.status).toBe(400);
+
+      const wrong = await request(app).delete('/api/auth/2fa').send({ password: 'pw', code: '000000' });
+      expect(wrong.status).toBe(401);
+      expect(prisma.account.update).not.toHaveBeenCalled();
+
+      const ok = await request(app).delete('/api/auth/2fa').send({ password: 'pw', code: generateSync({ secret }) });
+      expect(ok.status).toBe(200);
+      expect(prisma.account.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { totpSecret: null, totpEnabled: false, totpBackupCodes: [] },
+      });
+    });
+  });
+
+  describe('DELETE /api/auth/account', () => {
+    it('refuses a wrong password', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...twoFAAccount(generateSecret()), totpEnabled: false, totpSecret: null });
+      (bcrypt.compare as any).mockResolvedValue(false);
+
+      const res = await request(app).delete('/api/auth/account').send({ password: 'nope' });
+      expect(res.status).toBe(401);
+      expect(deleteAccountById).not.toHaveBeenCalled();
+    });
+
+    it('asks for a 2FA code when 2FA is on, then deletes', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+
+      const noCode = await request(app).delete('/api/auth/account').send({ password: 'pw' });
+      expect(noCode.status).toBe(401);
+      expect(noCode.body.requires2FA).toBe(true);
+      expect(deleteAccountById).not.toHaveBeenCalled();
+
+      const ok = await request(app).delete('/api/auth/account').send({ password: 'pw', code: generateSync({ secret }) });
+      expect(ok.status).toBe(200);
+      expect(deleteAccountById).toHaveBeenCalledWith(account.id);
+    });
+  });
+
+  describe('per-email sign-in limit', () => {
+    it('locks an email after 10 wrong passwords, whether or not the account exists', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+      for (let i = 0; i < 10; i++) {
+        const r = await request(app).post('/api/auth/login').send({ email: 'ghost@example.com', password: 'x' });
+        expect(r.status).toBe(401);
+      }
+      const locked = await request(app).post('/api/auth/login').send({ email: 'Ghost@example.com', password: 'x' });
+      expect(locked.status).toBe(429);
+      expect(prisma.account.findUnique).toHaveBeenCalledTimes(10);
     }, 30000);
   });
 });

@@ -26,6 +26,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, retryDelayMs } from '../services/api.js';
+import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
 import { loadAiConfig, autoCaloriesOnSave } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
@@ -431,6 +432,8 @@ export function JournalView() {
         // Apply saved theme settings
         const settingsMap: Record<string, unknown> = {};
         for (const s of settingsData) settingsMap[s.key] = s.value;
+        const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
+        if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') setAccentColor(settingsMap.accentColor);
         if (settingsMap.themeMode === 'light' || settingsMap.themeMode === 'dark') setThemeMode(settingsMap.themeMode);
         if (typeof settingsMap.backgroundImage === 'string') setBackgroundImage(settingsMap.backgroundImage);

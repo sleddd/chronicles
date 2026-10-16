@@ -157,10 +157,13 @@ export const auth = {
   enable2FA: (data: { secret: string; code: string; currentPassword: string }) =>
     request<{ backupCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: data }),
 
-  disable2FA: (data: { password: string }) =>
+  disable2FA: (data: { password: string; code: string }) =>
     request<{ success: boolean }>('/auth/2fa', { method: 'DELETE', body: data }),
 
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
+
+  deleteAccount: (data: { password: string; code?: string }) =>
+    request<{ success: boolean }>('/auth/account', { method: 'DELETE', body: data }),
 
   changePassword: (data: {
     currentPassword: string;
@@ -210,16 +213,24 @@ export const auth = {
 // Entries
 // =============================================================================
 
+function withoutTopicLink(data: Record<string, unknown>): Record<string, unknown> {
+  const { taxonomyIds: _omit, ...rest } = data;
+  return rest;
+}
+
 export const entries = {
   getAll: () => request<Record<string, unknown>[]>('/entries?limit=5000'),
 
   get: (id: number) => request<Record<string, unknown>>(`/entries/${id}`),
 
+  // An entry's topic lives only in its encrypted metadata (`_taxonomyId`);
+  // the plaintext topic link is never sent, so the server can't tell which
+  // entries are, say, Medication or Symptom
   create: (data: Record<string, unknown>) =>
-    request<Record<string, unknown>>('/entries', { method: 'POST', body: data }),
+    request<Record<string, unknown>>('/entries', { method: 'POST', body: withoutTopicLink(data) }),
 
   update: (id: number, data: Record<string, unknown>) =>
-    request<Record<string, unknown>>(`/entries/${id}`, { method: 'PUT', body: data }),
+    request<Record<string, unknown>>(`/entries/${id}`, { method: 'PUT', body: withoutTopicLink(data) }),
 
   delete: (id: number) =>
     request<{ success: boolean }>(`/entries/${id}`, { method: 'DELETE' }),

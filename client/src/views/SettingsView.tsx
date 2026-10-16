@@ -31,10 +31,11 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useNavigate } from 'react-router-dom';
+import { usePrivateSettings } from '../services/privateSettings.js';
 import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, ApiError } from '../services/api.js';
 import { seedTestData } from '../utils/seedTestData.js';
 import { stripHtml } from '../utils/stripHtml.js';
-import { parseCsvRow, splitCsvLines } from '../utils/csv.js';
+import { parseCsvRow, splitCsvLines, csvCell } from '../utils/csv.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
 
 const TIMEZONES = [
@@ -153,6 +154,7 @@ const GuideBody = styled.div`
 export function SettingsView() {
   const { user, logout, encryptionData } = useAuth();
   const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost } = useEncryption();
+  const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
   const { needsUnlock, handleUnlock } = useInitializeData();
@@ -234,6 +236,14 @@ export function SettingsView() {
   const [twoFAError, setTwoFAError] = useState('');
   const [disabling2FA, setDisabling2FA] = useState(false);
   const [disable2FAPassword, setDisable2FAPassword] = useState('');
+  const [disable2FACode, setDisable2FACode] = useState('');
+
+  // Account deletion (inline confirmation — never window.confirm)
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteCode, setDeleteCode] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [disable2FAError, setDisable2FAError] = useState('');
 
   // Recovery key regeneration
@@ -255,9 +265,7 @@ export function SettingsView() {
 
   // Load settings
   useEffect(() => {
-    settingsApi.getAll().then(settings => {
-      const map: Record<string, unknown> = {};
-      for (const s of settings) map[s.key] = s.value;
+    loadPrivateSettings().then(map => {
       if (typeof map.timezone === 'string') setTimezone(map.timezone);
       if (map.themeMode === 'light' || map.themeMode === 'dark') setThemeMode(map.themeMode);
       if (typeof map.accentColor === 'string') setAccentColor(map.accentColor);
@@ -277,7 +285,7 @@ export function SettingsView() {
   const handleSaveDisplayName = async () => {
     setDisplayNameSaving(true);
     try {
-      await settingsApi.upsert('displayName', draftDisplayName.trim());
+      await savePrivateSetting('displayName', draftDisplayName.trim());
       setDisplayName(draftDisplayName.trim());
       setEditingDisplayName(false);
     } catch {
@@ -309,7 +317,7 @@ export function SettingsView() {
 
   const handleTimezoneChange = async (tz: string) => {
     setTimezone(tz);
-    await settingsApi.upsert('timezone', tz).catch(() => {});
+    await savePrivateSetting('timezone', tz).catch(() => {});
   };
 
   const handleWeatherToggle = async (enabled: boolean) => {
@@ -323,7 +331,7 @@ export function SettingsView() {
     if (!city) return;
     setWeatherCitySaving(true);
     try {
-      await settingsApi.upsert('weatherCity', city);
+      await savePrivateSetting('weatherCity', city);
       setWeatherCity(city);
     } catch { /* ignore */ } finally {
       setWeatherCitySaving(false);
@@ -447,10 +455,11 @@ export function SettingsView() {
     setTwoFALoading(true);
     setDisable2FAError('');
     try {
-      await authApi.disable2FA({ password: disable2FAPassword });
+      await authApi.disable2FA({ password: disable2FAPassword, code: disable2FACode.trim() });
       setTotpEnabled(false);
       setDisabling2FA(false);
       setDisable2FAPassword('');
+      setDisable2FACode('');
     } catch (err) {
       setDisable2FAError(err instanceof ApiError ? err.message : 'Failed to disable 2FA');
     } finally {
@@ -495,12 +504,7 @@ export function SettingsView() {
       const topicMap = new Map(allTopics.map(t => [t.id, t.name]));
 
 
-      const escCsv = (val: string) => {
-        if (val.includes('"') || val.includes(',') || val.includes('\n')) {
-          return `"${val.replace(/"/g, '""')}"`;
-        }
-        return val;
-      };
+      const escCsv = csvCell;
 
       // Collect all custom field keys across entries
       const cfKeySet = new Set<string>();
@@ -668,6 +672,18 @@ export function SettingsView() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await authApi.deleteAccount({ password: deletePassword, ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
+      lock(); clearAll(); await logout(); navigate('/login');
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Failed to delete account');
+      setDeleteLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     lock(); clearAll(); await logout(); navigate('/login');
   };
@@ -752,6 +768,50 @@ export function SettingsView() {
           </>
         )}
         {emailMessage && <div style={{ padding: '0 0 12px', fontSize: 13, color: emailError ? '#9B4444' : '#5A8A6A' }}>{emailMessage}</div>}
+        {!deletingAccount ? (
+          <FormField label="Delete account">
+            <ActionButton onClick={() => { setDeletingAccount(true); setDeletePassword(''); setDeleteCode(''); setDeleteError(''); }}>
+              Delete account…
+            </ActionButton>
+          </FormField>
+        ) : (
+          <>
+            <div style={{ padding: '4px 0 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+              This permanently deletes your account, every entry, topic and setting, your share links and your calendar feed. It can't be undone.
+              Images in your own R2 bucket and events already synced to Google Calendar are not touched — remove those yourself if you want them gone.
+            </div>
+            <FormField label="Password">
+              <PasswordInput
+                value={deletePassword}
+                onChange={e => setDeletePassword(e.target.value)}
+                placeholder="Current password"
+                autoComplete="current-password"
+                autoFocus
+              />
+            </FormField>
+            {totpEnabled && (
+              <FormField label="2FA code">
+                <TextInput
+                  value={deleteCode}
+                  onChange={e => setDeleteCode(e.target.value.slice(0, 64))}
+                  placeholder="Authenticator or backup code"
+                  autoComplete="one-time-code"
+                />
+              </FormField>
+            )}
+            {deleteError && <div style={{ padding: '0 0 8px', fontSize: 13, color: '#9B4444' }}>{deleteError}</div>}
+            <EditActions>
+              <ActionButton onClick={() => setDeletingAccount(false)} disabled={deleteLoading}>Cancel</ActionButton>
+              <ActionButton
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading || !deletePassword || (totpEnabled && !deleteCode.trim())}
+                style={{ background: '#9B4444', color: '#fff' }}
+              >
+                {deleteLoading ? <Spinner size={14} /> : 'Delete forever'}
+              </ActionButton>
+            </EditActions>
+          </>
+        )}
       </SettingsCard>
       </Section>
 
@@ -1004,14 +1064,14 @@ export function SettingsView() {
           action={
             totpEnabled ? (
               !disabling2FA ? (
-                <ActionButton onClick={() => { setDisabling2FA(true); setDisable2FAPassword(''); setDisable2FAError(''); }}>
+                <ActionButton onClick={() => { setDisabling2FA(true); setDisable2FAPassword(''); setDisable2FACode(''); setDisable2FAError(''); }}>
                   Disable
                 </ActionButton>
               ) : (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <ActionButton
                     onClick={handleDisable2FA}
-                    disabled={twoFALoading || !disable2FAPassword}
+                    disabled={twoFALoading || !disable2FAPassword || !disable2FACode.trim()}
                     style={{ background: '#9B4444', color: '#fff' }}
                   >
                     {twoFALoading ? <Spinner size={14} /> : 'Confirm disable'}
@@ -1036,6 +1096,13 @@ export function SettingsView() {
                 placeholder="Enter your password to confirm"
                 autoFocus
                 autoComplete="current-password"
+              />
+              <TextInput
+                value={disable2FACode}
+                onChange={e => setDisable2FACode(e.target.value.slice(0, 64))}
+                placeholder="Authenticator or backup code"
+                autoComplete="one-time-code"
+                style={{ marginTop: 8 }}
               />
             </div>
           )}

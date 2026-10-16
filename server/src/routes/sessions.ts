@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma.js';
 import { revokeAllSessions } from '../middleware/auth.js';
+import { revokeGrantsForSession } from '../services/rememberGrants.js';
 import { parseId } from '../middleware/parseId.js';
 import type { SessionInfo } from '@chronicles/shared';
 
@@ -72,6 +73,10 @@ router.post('/:id/revoke', async (req, res) => {
       res.status(404).json({ error: 'Session not found' });
       return;
     }
+
+    // Its "remember me" grant goes with it
+    const revoked = await prisma.session.findUnique({ where: { id: sessionId }, select: { selector: true } });
+    if (revoked) revokeGrantsForSession(revoked.selector);
 
     res.json({ success: true });
   } catch (err) {

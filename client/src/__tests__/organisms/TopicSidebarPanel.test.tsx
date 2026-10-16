@@ -4,6 +4,9 @@ import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
 import { TopicSidebarPanel } from '@/components/organisms/TopicSidebarPanel';
 
+vi.mock('../../services/privateSettings.js', () => ({
+  usePrivateSettings: () => ({ savePrivateSetting: vi.fn().mockResolvedValue(undefined), loadPrivateSettings: vi.fn().mockResolvedValue({}) }),
+}));
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   closestCenter: vi.fn(),
