@@ -18,6 +18,7 @@ import { FormField } from '../components/molecules/FormField.js';
 import { BackgroundPicker } from '../components/molecules/BackgroundPicker.js';
 import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
+import { deriveAuthSecret, newRecoveryProof, passwordSchema } from '@chronicles/shared';
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
 import { AiSettings } from '../components/organisms/AiSettings.js';
@@ -301,7 +302,12 @@ export function SettingsView() {
     setEmailMessage('');
     setEmailError(false);
     try {
-      const result = await authApi.changeEmail({ newEmail: newEmail.trim(), currentPassword: emailPassword });
+      // The sign-in secret is salted with the email, so the new one goes too
+      const [currentAuthSecret, newAuthSecret] = await Promise.all([
+        deriveAuthSecret(emailPassword, user?.email ?? ''),
+        deriveAuthSecret(emailPassword, newEmail),
+      ]);
+      const result = await authApi.changeEmail({ newEmail: newEmail.trim(), currentAuthSecret, newAuthSecret });
       setEmailMessage('Email updated');
       setEditingEmail(false);
       setNewEmail('');
@@ -369,11 +375,16 @@ export function SettingsView() {
   const handleChangePassword = async () => {
     setPwMessage(''); setPwError(false);
     if (newPw !== confirmPw) { setPwMessage('Passwords do not match'); setPwError(true); return; }
-    if (newPw.length < 12) { setPwMessage('Minimum 12 characters'); setPwError(true); return; }
+    const rules = passwordSchema.safeParse(newPw);
+    if (!rules.success) { setPwMessage(rules.error.errors[0].message); setPwError(true); return; }
     setPwLoading(true);
     try {
       const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPw, currentPw);
-      await authApi.changePassword({ currentPassword: currentPw, newPassword: newPw, newEncryptedMasterKey: wrappedMK, newKekSalt: salt, newKekWrapIv: wrapIv });
+      const [currentAuthSecret, newAuthSecret] = await Promise.all([
+        deriveAuthSecret(currentPw, user?.email ?? ''),
+        deriveAuthSecret(newPw, user?.email ?? ''),
+      ]);
+      await authApi.changePassword({ currentAuthSecret, newAuthSecret, newEncryptedMasterKey: wrappedMK, newKekSalt: salt, newKekWrapIv: wrapIv });
       setPwMessage('Password changed'); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setShowPassword(false);
     } catch (err) { setPwMessage(err instanceof Error ? err.message : 'Failed'); setPwError(true); }
     finally { setPwLoading(false); }
@@ -389,14 +400,12 @@ export function SettingsView() {
         : undefined;
       const { recoveryKey, recoveryWrappedMK, recoveryWrapIv } = await generateRecoveryKey(recoveryKeyPw, fallbackParams);
 
-      // Hash the recovery key for server-side verification
-      const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-      const saltHex = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-      const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(recoveryKey), 'PBKDF2', false, ['deriveBits']);
-      const derivedBits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: 600000, hash: 'SHA-256' }, keyMaterial, 256);
-      const keyHash = Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const [currentAuthSecret, { recoveryKeyHash, recoveryKeySalt }] = await Promise.all([
+        deriveAuthSecret(recoveryKeyPw, user?.email ?? ''),
+        newRecoveryProof(recoveryKey),
+      ]);
 
-      await authApi.saveRecoveryKey({ currentPassword: recoveryKeyPw, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash: keyHash, recoveryKeySalt: saltHex });
+      await authApi.saveRecoveryKey({ currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt });
       setGeneratedRecoveryKey(recoveryKey);
       setRecoveryKeyPw('');
     } catch (err) {
@@ -438,7 +447,8 @@ export function SettingsView() {
     setTwoFALoading(true);
     setTwoFAError('');
     try {
-      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, currentPassword: twoFAPassword });
+      const currentAuthSecret = await deriveAuthSecret(twoFAPassword, user?.email ?? '');
+      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, currentAuthSecret });
       setTwoFABackupCodes(backupCodes);
       setTotpEnabled(true);
       setTwoFAStep('codes');
@@ -455,7 +465,8 @@ export function SettingsView() {
     setTwoFALoading(true);
     setDisable2FAError('');
     try {
-      await authApi.disable2FA({ password: disable2FAPassword, code: disable2FACode.trim() });
+      const authSecret = await deriveAuthSecret(disable2FAPassword, user?.email ?? '');
+      await authApi.disable2FA({ authSecret, code: disable2FACode.trim() });
       setTotpEnabled(false);
       setDisabling2FA(false);
       setDisable2FAPassword('');
@@ -676,7 +687,8 @@ export function SettingsView() {
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      await authApi.deleteAccount({ password: deletePassword, ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
+      const authSecret = await deriveAuthSecret(deletePassword, user?.email ?? '');
+      await authApi.deleteAccount({ authSecret, ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
       lock(); clearAll(); await logout(); navigate('/login');
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : 'Failed to delete account');

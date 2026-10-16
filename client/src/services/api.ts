@@ -106,7 +106,7 @@ export const auth = {
   register: (data: {
     email: string;
     username: string;
-    password: string;
+    authSecret: string;
     encryptedMasterKey: string;
     kekSalt: string;
     kekWrapIv: string;
@@ -116,7 +116,9 @@ export const auth = {
     recoveryKeySalt: string;
   }) => request<{ user: { email: string; username: string } }>('/auth/register', { method: 'POST', body: data }),
 
-  login: (data: { email: string; password: string }) =>
+  // authSecret comes from deriveAuthSecret — the password itself is only ever
+  // sent as legacyPassword, once, when the server answers `legacyAuth`
+  login: (data: { email: string; authSecret: string; legacyPassword?: string }) =>
     request<
       | {
           requires2FA: true;
@@ -154,38 +156,40 @@ export const auth = {
   setup2FA: () =>
     request<{ secret: string; qrCodeUrl: string }>('/auth/2fa/setup', { method: 'POST' }),
 
-  enable2FA: (data: { secret: string; code: string; currentPassword: string }) =>
+  enable2FA: (data: { secret: string; code: string; currentAuthSecret: string }) =>
     request<{ backupCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: data }),
 
-  disable2FA: (data: { password: string; code: string }) =>
+  disable2FA: (data: { authSecret: string; code: string }) =>
     request<{ success: boolean }>('/auth/2fa', { method: 'DELETE', body: data }),
 
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 
-  deleteAccount: (data: { password: string; code?: string }) =>
+  deleteAccount: (data: { authSecret: string; code?: string }) =>
     request<{ success: boolean }>('/auth/account', { method: 'DELETE', body: data }),
 
   changePassword: (data: {
-    currentPassword: string;
-    newPassword: string;
+    currentAuthSecret: string;
+    newAuthSecret: string;
     newEncryptedMasterKey: string;
     newKekSalt: string;
     newKekWrapIv: string;
   }) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
 
-  changeEmail: (data: { newEmail: string; currentPassword: string }) =>
+  changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
 
   getRecoveryParams: (email: string) =>
     request<{
       recoveryWrappedMK: string | null;
       recoveryWrapIv: string | null;
+      recoveryKeySalt: string | null;
     }>('/auth/recovery-params', { params: { email } }),
 
   recover: (data: {
     email: string;
-    recoveryKey: string;
-    newPassword: string;
+    /** deriveRecoveryProof(recoveryKey, recoveryKeySalt) — never the key itself */
+    recoveryProof: string;
+    newAuthSecret: string;
     newEncryptedMasterKey: string;
     newKekSalt: string;
     newKekWrapIv: string;
@@ -201,7 +205,7 @@ export const auth = {
   }>('/auth/recover', { method: 'POST', body: data }),
 
   saveRecoveryKey: (data: {
-    currentPassword: string;
+    currentAuthSecret: string;
     recoveryWrappedMK: string;
     recoveryWrapIv: string;
     recoveryKeyHash: string;

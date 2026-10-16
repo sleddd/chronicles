@@ -7,6 +7,7 @@ import { FormField } from '../molecules/FormField.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { auth as authApi } from '../../services/api.js';
+import { deriveAuthSecret, passwordSchema } from '@chronicles/shared';
 
 const Section = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.xl}px;
@@ -47,7 +48,7 @@ const Message = styled.div<{ $error?: boolean }>`
 
 export function ChangePassword() {
   const { rewrapMasterKey } = useEncryption();
-  const { encryptionData } = useAuth();
+  const { encryptionData, user } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -66,8 +67,9 @@ export function ChangePassword() {
       return;
     }
 
-    if (newPassword.length < 12) {
-      setMessage('Password must be at least 12 characters');
+    const rules = passwordSchema.safeParse(newPassword);
+    if (!rules.success) {
+      setMessage(rules.error.errors[0].message);
       setIsError(true);
       return;
     }
@@ -82,9 +84,13 @@ export function ChangePassword() {
       } : undefined;
       const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPassword, currentPassword, fallbackParams);
 
+      const [currentAuthSecret, newAuthSecret] = await Promise.all([
+        deriveAuthSecret(currentPassword, user?.email ?? ''),
+        deriveAuthSecret(newPassword, user?.email ?? ''),
+      ]);
       await authApi.changePassword({
-        currentPassword,
-        newPassword,
+        currentAuthSecret,
+        newAuthSecret,
         newEncryptedMasterKey: wrappedMK,
         newKekSalt: salt,
         newKekWrapIv: wrapIv,

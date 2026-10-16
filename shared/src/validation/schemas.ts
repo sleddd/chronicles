@@ -10,43 +10,57 @@ export const passwordSchema = z.string()
   .regex(/[0-9]/, 'Must contain at least one number')
   .regex(/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/, 'Must contain at least one special character');
 
+// The server never receives the password or the recovery key — only secrets
+// derived from them (`deriveAuthSecret` / `deriveRecoveryProof` in
+// shared/src/crypto/authSecret.ts). Password rules are therefore checked on
+// the client with passwordSchema; the server can only check the shape.
+export const authSecretSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid credentials');
+const recoveryProofSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid recovery key hash');
+const recoverySaltSchema = z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery key salt');
+// Base64 key material: a wrapped 32-byte key is ~64 chars, salts and IVs ~24
+const wrappedKeySchema = z.string().min(1).max(1024);
+const saltOrIvSchema = z.string().min(1).max(64);
+
 export const registerSchema = z.object({
   email: emailSchema,
   username: usernameSchema,
-  password: passwordSchema,
-  encryptedMasterKey: z.string().min(1),
-  kekSalt: z.string().min(1),
-  kekWrapIv: z.string().min(1),
-  recoveryWrappedMK: z.string().min(1),
-  recoveryWrapIv: z.string().min(1),
-  recoveryKeyHash: z.string().min(1),
-  recoveryKeySalt: z.string().min(1),
+  authSecret: authSecretSchema,
+  encryptedMasterKey: wrappedKeySchema,
+  kekSalt: saltOrIvSchema,
+  kekWrapIv: saltOrIvSchema,
+  recoveryWrappedMK: wrappedKeySchema,
+  recoveryWrapIv: saltOrIvSchema,
+  recoveryKeyHash: recoveryProofSchema,
+  recoveryKeySalt: recoverySaltSchema,
 });
 
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, 'Password is required'),
+  authSecret: authSecretSchema,
+  // Sent once, only when the server answers `legacyAuth`: accounts created
+  // before derived secrets still hold a hash of the password itself
+  legacyPassword: z.string().min(1).max(1024).optional(),
 });
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: passwordSchema,
-  newEncryptedMasterKey: z.string().min(1),
-  newKekSalt: z.string().min(1),
-  newKekWrapIv: z.string().min(1),
+  currentAuthSecret: authSecretSchema,
+  newAuthSecret: authSecretSchema,
+  newEncryptedMasterKey: wrappedKeySchema,
+  newKekSalt: saltOrIvSchema,
+  newKekWrapIv: saltOrIvSchema,
 });
 
 export const recoverSchema = z.object({
   email: emailSchema,
-  recoveryKey: z.string().min(1, 'Recovery key is required'),
-  newPassword: passwordSchema,
-  newEncryptedMasterKey: z.string().min(1),
-  newKekSalt: z.string().min(1),
-  newKekWrapIv: z.string().min(1),
-  newRecoveryWrappedMK: z.string().min(1),
-  newRecoveryWrapIv: z.string().min(1),
-  newRecoveryKeyHash: z.string().min(1),
-  newRecoveryKeySalt: z.string().min(1),
+  recoveryProof: recoveryProofSchema,
+  newAuthSecret: authSecretSchema,
+  newEncryptedMasterKey: wrappedKeySchema,
+  newKekSalt: saltOrIvSchema,
+  newKekWrapIv: saltOrIvSchema,
+  newRecoveryWrappedMK: wrappedKeySchema,
+  newRecoveryWrapIv: saltOrIvSchema,
+  newRecoveryKeyHash: recoveryProofSchema,
+  newRecoveryKeySalt: recoverySaltSchema,
   // Authenticator or backup code — required when the account has 2FA on, so a
   // recovery key alone can't bypass two-factor
   code: z.string().min(1).max(64).optional(),
@@ -64,19 +78,19 @@ export const twoFALoginSchema = z.object({
 export const enable2FASchema = z.object({
   secret: z.string().regex(/^[A-Z2-7]{16,128}=*$/, 'Invalid secret'),
   code: z.string().length(6),
-  currentPassword: z.string().min(1, 'Current password is required'),
+  currentAuthSecret: authSecretSchema,
 });
 
 // Turning 2FA off needs the password AND a current authenticator/backup code,
 // so a stolen session plus a phished password isn't enough to strip it
 export const disable2FASchema = z.object({
-  password: z.string().min(1),
+  authSecret: authSecretSchema,
   code: z.string().min(1).max(64),
 });
 
 // Deleting the account is permanent: password, plus a 2FA code when 2FA is on
 export const deleteAccountSchema = z.object({
-  password: z.string().min(1, 'Password is required'),
+  authSecret: authSecretSchema,
   code: z.string().min(1).max(64).optional(),
 });
 
@@ -84,15 +98,17 @@ export const deleteAccountSchema = z.object({
 // so a session left signed in on an unattended device isn't enough
 export const changeEmailSchema = z.object({
   newEmail: z.string().min(1, 'Email is required').max(254),
-  currentPassword: z.string().min(1, 'Current password is required'),
+  currentAuthSecret: authSecretSchema,
+  // The sign-in secret is salted with the email, so it changes with it
+  newAuthSecret: authSecretSchema,
 });
 
 export const saveRecoveryKeySchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  recoveryWrappedMK: z.string().min(1).max(1024),
-  recoveryWrapIv: z.string().min(1).max(64),
-  recoveryKeyHash: z.string().regex(/^[a-f0-9]{64}$/, 'Invalid recovery key hash'),
-  recoveryKeySalt: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery key salt'),
+  currentAuthSecret: authSecretSchema,
+  recoveryWrappedMK: wrappedKeySchema,
+  recoveryWrapIv: saltOrIvSchema,
+  recoveryKeyHash: recoveryProofSchema,
+  recoveryKeySalt: recoverySaltSchema,
 });
 
 // Shares validation — shared content is stored as plaintext by design; the
@@ -137,13 +153,13 @@ export const updatePostSchema = z.object({
 // Taxonomy validation
 export const createTaxonomySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  icon: z.string().optional(),
+  icon: z.string().max(64).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid hex color').optional(),
 });
 
 export const updateTaxonomySchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  icon: z.string().optional(),
+  icon: z.string().max(64).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 

@@ -154,14 +154,14 @@ describe('registerSchema', () => {
   const validRegister = {
     email: 'user@example.com',
     username: 'testuser',
-    password: 'SecurePass1!xy',
+    authSecret: 'a'.repeat(64),
     encryptedMasterKey: 'abc123',
     kekSalt: 'salt123',
     kekWrapIv: 'iv123',
     recoveryWrappedMK: 'recovmk',
     recoveryWrapIv: 'recoviv',
-    recoveryKeyHash: 'hash123',
-    recoveryKeySalt: 'rsalt123',
+    recoveryKeyHash: 'b'.repeat(64),
+    recoveryKeySalt: 'c'.repeat(32),
   };
 
   it('accepts valid registration data', () => {
@@ -178,8 +178,8 @@ describe('registerSchema', () => {
     expect(registerSchema.safeParse(rest).success).toBe(false);
   });
 
-  it('rejects missing password', () => {
-    const { password, ...rest } = validRegister;
+  it('rejects a missing sign-in secret', () => {
+    const { authSecret, ...rest } = validRegister;
     expect(registerSchema.safeParse(rest).success).toBe(false);
   });
 
@@ -205,8 +205,13 @@ describe('registerSchema', () => {
     }
   });
 
-  it('applies password validation rules', () => {
-    expect(registerSchema.safeParse({ ...validRegister, password: 'weak' }).success).toBe(false);
+  it('refuses a raw password in place of the derived secret', () => {
+    expect(registerSchema.safeParse({ ...validRegister, authSecret: 'SecurePass1!xy' }).success).toBe(false);
+  });
+
+  it('checks the recovery proof and salt are hex of the right length', () => {
+    expect(registerSchema.safeParse({ ...validRegister, recoveryKeyHash: 'hash123' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...validRegister, recoveryKeySalt: 'rsalt123' }).success).toBe(false);
   });
 });
 
@@ -214,33 +219,30 @@ describe('registerSchema', () => {
 // loginSchema
 // ============================================================================
 describe('loginSchema', () => {
-  it('accepts valid login', () => {
-    expect(loginSchema.safeParse({ email: 'user@example.com', password: 'anything' }).success).toBe(true);
+  const secret = 'a'.repeat(64);
+
+  it('accepts an email and derived secret', () => {
+    expect(loginSchema.safeParse({ email: 'user@example.com', authSecret: secret }).success).toBe(true);
   });
 
   it('rejects missing email', () => {
-    expect(loginSchema.safeParse({ password: 'test' }).success).toBe(false);
+    expect(loginSchema.safeParse({ authSecret: secret }).success).toBe(false);
   });
 
-  it('rejects missing password', () => {
+  it('rejects a missing secret', () => {
     expect(loginSchema.safeParse({ email: 'user@example.com' }).success).toBe(false);
   });
 
-  it('rejects empty password', () => {
-    const result = loginSchema.safeParse({ email: 'user@example.com', password: '' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe('Password is required');
-    }
+  it('refuses a raw password as the secret', () => {
+    expect(loginSchema.safeParse({ email: 'user@example.com', authSecret: 'anything' }).success).toBe(false);
   });
 
   it('rejects invalid email', () => {
-    expect(loginSchema.safeParse({ email: 'notanemail', password: 'test' }).success).toBe(false);
+    expect(loginSchema.safeParse({ email: 'notanemail', authSecret: secret }).success).toBe(false);
   });
 
-  it('does not enforce password strength (login only checks presence)', () => {
-    // Login schema uses min(1), not passwordSchema
-    expect(loginSchema.safeParse({ email: 'user@example.com', password: 'x' }).success).toBe(true);
+  it('accepts the one-time legacy password alongside the secret', () => {
+    expect(loginSchema.safeParse({ email: 'user@example.com', authSecret: secret, legacyPassword: 'x' }).success).toBe(true);
   });
 });
 
@@ -249,8 +251,8 @@ describe('loginSchema', () => {
 // ============================================================================
 describe('changePasswordSchema', () => {
   const valid = {
-    currentPassword: 'old-password',
-    newPassword: 'NewSecure1!abc',
+    currentAuthSecret: 'a'.repeat(64),
+    newAuthSecret: 'b'.repeat(64),
     newEncryptedMasterKey: 'enc123',
     newKekSalt: 'salt123',
     newKekWrapIv: 'iv123',
@@ -260,13 +262,13 @@ describe('changePasswordSchema', () => {
     expect(changePasswordSchema.safeParse(valid).success).toBe(true);
   });
 
-  it('rejects missing currentPassword', () => {
-    const { currentPassword, ...rest } = valid;
+  it('rejects a missing current secret', () => {
+    const { currentAuthSecret, ...rest } = valid;
     expect(changePasswordSchema.safeParse(rest).success).toBe(false);
   });
 
-  it('applies password strength validation to newPassword', () => {
-    expect(changePasswordSchema.safeParse({ ...valid, newPassword: 'weak' }).success).toBe(false);
+  it('refuses a raw new password', () => {
+    expect(changePasswordSchema.safeParse({ ...valid, newAuthSecret: 'NewSecure1!abc' }).success).toBe(false);
   });
 
   it('rejects empty encryption fields', () => {
@@ -282,23 +284,23 @@ describe('changePasswordSchema', () => {
 describe('recoverSchema', () => {
   const valid = {
     email: 'user@example.com',
-    recoveryKey: 'recovery-key-value',
-    newPassword: 'NewSecure1!abc',
+    recoveryProof: 'a'.repeat(64),
+    newAuthSecret: 'b'.repeat(64),
     newEncryptedMasterKey: 'enc123',
     newKekSalt: 'salt123',
     newKekWrapIv: 'iv123',
     newRecoveryWrappedMK: 'rwmk123',
     newRecoveryWrapIv: 'riv123',
-    newRecoveryKeyHash: 'rhash123',
-    newRecoveryKeySalt: 'rsalt123',
+    newRecoveryKeyHash: 'c'.repeat(64),
+    newRecoveryKeySalt: 'd'.repeat(32),
   };
 
   it('accepts valid recovery data', () => {
     expect(recoverSchema.safeParse(valid).success).toBe(true);
   });
 
-  it('rejects missing recoveryKey', () => {
-    const { recoveryKey, ...rest } = valid;
+  it('rejects a missing recovery proof', () => {
+    const { recoveryProof, ...rest } = valid;
     expect(recoverSchema.safeParse(rest).success).toBe(false);
   });
 
@@ -307,16 +309,12 @@ describe('recoverSchema', () => {
     expect(recoverSchema.safeParse(rest).success).toBe(false);
   });
 
-  it('rejects empty recoveryKey', () => {
-    const result = recoverSchema.safeParse({ ...valid, recoveryKey: '' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe('Recovery key is required');
-    }
+  it('refuses the raw recovery key in place of the proof', () => {
+    expect(recoverSchema.safeParse({ ...valid, recoveryProof: 'recovery-key-value' }).success).toBe(false);
   });
 
-  it('applies password strength validation to newPassword', () => {
-    expect(recoverSchema.safeParse({ ...valid, newPassword: 'weak' }).success).toBe(false);
+  it('refuses a raw new password', () => {
+    expect(recoverSchema.safeParse({ ...valid, newAuthSecret: 'NewSecure1!abc' }).success).toBe(false);
   });
 
   it('rejects invalid email', () => {

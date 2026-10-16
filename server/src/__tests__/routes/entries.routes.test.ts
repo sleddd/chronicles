@@ -14,6 +14,8 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getAllTaxonomies: vi.fn(),
 }));
 
+vi.mock('../../db/shareQueries.js', () => ({ deleteSharesForEntry: vi.fn().mockResolvedValue(0) }));
+
 // Mock parseId (use real implementation)
 vi.mock('../../middleware/parseId.js', async () => {
   return {
@@ -27,6 +29,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 
 import entriesRouter from '../../routes/entries.js';
 import { getAllPosts, getPost, createPost, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies } from '../../db/tenantQueries.js';
+import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
 const app = createTestApp('/api/entries', entriesRouter);
 
@@ -277,6 +280,14 @@ describe('Entry Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(deletePost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1);
+    });
+
+    it("deletes the entry's public share links with it", async () => {
+      (deletePost as any).mockResolvedValue(undefined);
+
+      await request(app).delete('/api/entries/7');
+
+      expect(deleteSharesForEntry).toHaveBeenCalledWith(TEST_AUTH.accountId, 7);
     });
 
     it('returns 400 for invalid ID', async () => {

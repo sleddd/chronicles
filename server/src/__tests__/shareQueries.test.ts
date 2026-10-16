@@ -23,6 +23,8 @@ import {
   createShare,
   getShareByToken,
   revokeShare,
+  deleteSharesForEntry,
+  purgeDeadShares,
   getSharesByAccount,
 } from '../db/shareQueries.js';
 
@@ -188,6 +190,41 @@ describe('revokeShare', () => {
 
     // The mock is called with a tagged template, so we verify it was called
     expect(mockExecuteRaw).toHaveBeenCalledOnce();
+  });
+
+  it('deletes the row — revoked plaintext is not kept', async () => {
+    mockExecuteRaw.mockResolvedValue(1);
+
+    await revokeShare('my-token', 99);
+
+    const sql = (mockExecuteRaw.mock.calls[0][0] as string[]).join('?');
+    expect(sql).toMatch(/DELETE FROM public\.shares/);
+    expect(sql).toMatch(/account_id = \?/);
+    expect(sql).not.toMatch(/is_active = FALSE/);
+    expect(mockExecuteRaw.mock.calls[0].slice(1)).toEqual(['my-token', 99]);
+  });
+});
+
+describe('deleteSharesForEntry', () => {
+  it("deletes the owner's shares of that entry", async () => {
+    mockExecuteRaw.mockResolvedValue(2);
+
+    expect(await deleteSharesForEntry(42, 7)).toBe(2);
+    const sql = (mockExecuteRaw.mock.calls[0][0] as string[]).join('?');
+    expect(sql).toMatch(/DELETE FROM public\.shares WHERE account_id = \? AND entry_id = \?/);
+    expect(mockExecuteRaw.mock.calls[0].slice(1)).toEqual([42, 7]);
+  });
+});
+
+describe('purgeDeadShares', () => {
+  it('deletes switched-off and expired shares', async () => {
+    mockExecuteRaw.mockResolvedValue(3);
+
+    expect(await purgeDeadShares()).toBe(3);
+    const sql = (mockExecuteRaw.mock.calls[0][0] as string[]).join('?');
+    expect(sql).toMatch(/DELETE FROM public\.shares/);
+    expect(sql).toMatch(/is_active = FALSE/);
+    expect(sql).toMatch(/expires_at <= NOW\(\)/);
   });
 });
 

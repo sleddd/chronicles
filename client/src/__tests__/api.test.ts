@@ -112,7 +112,7 @@ describe('auth', () => {
     const regData = {
       email: 'a@b.com',
       username: 'alice',
-      password: 'StrongPass123!',
+      authSecret: 'a'.repeat(64),
       encryptedMasterKey: 'emk',
       kekSalt: 'salt',
       kekWrapIv: 'iv',
@@ -149,7 +149,7 @@ describe('auth', () => {
     fetchSpy = mockFetchResponse(loginResp);
     vi.stubGlobal('fetch', fetchSpy);
 
-    const result = await auth.login({ email: 'a@b.com', password: 'pw' });
+    const result = await auth.login({ email: 'a@b.com', authSecret: 'a'.repeat(64) });
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/api/auth/login');
@@ -168,22 +168,22 @@ describe('auth', () => {
     expect(init.method).toBe('POST');
   });
 
-  it('changeEmail sends the current password along', async () => {
+  it('changeEmail sends the current and new sign-in secrets', async () => {
     fetchSpy = mockFetchResponse({ success: true, email: 'n@b.com' });
     vi.stubGlobal('fetch', fetchSpy);
 
-    await auth.changeEmail({ newEmail: 'n@b.com', currentPassword: 'pw' });
+    await auth.changeEmail({ newEmail: 'n@b.com', currentAuthSecret: 'cur', newAuthSecret: 'new' });
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/api/auth/change-email');
-    expect(JSON.parse(init.body)).toEqual({ newEmail: 'n@b.com', currentPassword: 'pw' });
+    expect(JSON.parse(init.body)).toEqual({ newEmail: 'n@b.com', currentAuthSecret: 'cur', newAuthSecret: 'new' });
   });
 
   it('changePassword sends POST with body', async () => {
     fetchSpy = mockFetchResponse({ success: true });
     vi.stubGlobal('fetch', fetchSpy);
 
-    const data = { currentPassword: 'old', newPassword: 'new', newEncryptedMasterKey: 'emk', newKekSalt: 's', newKekWrapIv: 'iv' };
+    const data = { currentAuthSecret: 'old', newAuthSecret: 'new', newEncryptedMasterKey: 'emk', newKekSalt: 's', newKekWrapIv: 'iv' };
     await auth.changePassword(data);
 
     const [url, init] = fetchSpy.mock.calls[0];
@@ -207,7 +207,7 @@ describe('auth', () => {
     vi.stubGlobal('fetch', fetchSpy);
 
     await auth.recover({
-      email: 'a@b.com', recoveryKey: 'rk', newPassword: 'np',
+      email: 'a@b.com', recoveryProof: 'rp', newAuthSecret: 'np',
       newEncryptedMasterKey: 'emk', newKekSalt: 's', newKekWrapIv: 'iv',
       newRecoveryWrappedMK: 'rwmk', newRecoveryWrapIv: 'rwiv',
       newRecoveryKeyHash: 'rkh', newRecoveryKeySalt: 'rks',

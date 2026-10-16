@@ -12,6 +12,7 @@ import { ErrorBanner } from '../components/atoms/ErrorBanner.js';
 import { FormField } from '../components/molecules/FormField.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import type { RecoverStep } from '../types/health.js';
+import { deriveAuthSecret, deriveRecoveryProof, newRecoveryProof, passwordSchema } from '@chronicles/shared';
 
 export function RecoverView() {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export function RecoverView() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recoveryParams, setRecoveryParams] = useState<{ recoveryWrappedMK: string; recoveryWrapIv: string } | null>(null);
+  const [recoveryParams, setRecoveryParams] = useState<{ recoveryWrappedMK: string; recoveryWrapIv: string; recoveryKeySalt: string } | null>(null);
   const [newRecoveryKey, setNewRecoveryKey] = useState('');
   // Accounts with 2FA also need an authenticator or backup code — the server
   // asks for it only once the recovery key checks out
@@ -36,10 +37,10 @@ export function RecoverView() {
     setLoading(true);
     try {
       const params = await authApi.getRecoveryParams(email);
-      if (!params.recoveryWrappedMK || !params.recoveryWrapIv) {
+      if (!params.recoveryWrappedMK || !params.recoveryWrapIv || !params.recoveryKeySalt) {
         throw new Error('No recovery key set for this account');
       }
-      setRecoveryParams({ recoveryWrappedMK: params.recoveryWrappedMK, recoveryWrapIv: params.recoveryWrapIv });
+      setRecoveryParams({ recoveryWrappedMK: params.recoveryWrappedMK, recoveryWrapIv: params.recoveryWrapIv, recoveryKeySalt: params.recoveryKeySalt });
       setStep('recovery');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to find account');
@@ -68,8 +69,10 @@ export function RecoverView() {
       setError('Passwords do not match');
       return;
     }
-    if (newPassword.length < 12) {
-      setError('Password must be at least 12 characters');
+    // The server only sees a secret derived from the password, so the rules are checked here
+    const rules = passwordSchema.safeParse(newPassword);
+    if (!rules.success) {
+      setError(rules.error.errors[0].message);
       return;
     }
 
@@ -85,32 +88,19 @@ export function RecoverView() {
         newPassword,
       );
 
-      // Hash the new recovery key for server-side verification (same as registration)
-      const newRecoveryKeySaltBytes = crypto.getRandomValues(new Uint8Array(16));
-      const newRecoveryKeySalt = Array.from(newRecoveryKeySaltBytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-      const keyMaterial = await crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(freshRecoveryKey),
-        'PBKDF2',
-        false,
-        ['deriveBits']
-      );
-      const derivedBits = await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', salt: newRecoveryKeySaltBytes, iterations: 600000, hash: 'SHA-256' },
-        keyMaterial,
-        256
-      );
-      const newRecoveryKeyHash = Array.from(new Uint8Array(derivedBits))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
+      // Proofs only: the recovery key would unwrap the stored recoveryWrappedMK
+      // and the password the new wrapped key, so neither is sent
+      const [recoveryProof, newAuthSecret, { recoveryKeyHash: newRecoveryKeyHash, recoveryKeySalt: newRecoveryKeySalt }] = await Promise.all([
+        deriveRecoveryProof(cleanKey, recoveryParams!.recoveryKeySalt),
+        deriveAuthSecret(newPassword, email),
+        newRecoveryProof(freshRecoveryKey),
+      ]);
 
       // Send to server
       await authApi.recover({
         email,
-        recoveryKey: cleanKey,
-        newPassword,
+        recoveryProof,
+        newAuthSecret,
         newEncryptedMasterKey: wrappedMK,
         newKekSalt: salt,
         newKekWrapIv: wrapIv,

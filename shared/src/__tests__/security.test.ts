@@ -294,13 +294,13 @@ describe('Validation schema security', () => {
     const result = registerSchema.safeParse({
       email: 'test@example.com',
       username: 'testuser',
-      password: 'TestPassword123!',
+      authSecret: 'a'.repeat(64),
       encryptedMasterKey: 'abc',
       kekSalt: 'abc',
       kekWrapIv: 'abc',
       recoveryWrappedMK: 'abc',
       recoveryWrapIv: 'abc',
-      recoveryKeyHash: 'abc',
+      recoveryKeyHash: 'b'.repeat(64),
       // Missing recoveryKeySalt
     });
 
@@ -313,14 +313,14 @@ describe('Validation schema security', () => {
     const result = registerSchema.safeParse({
       email: 'test@example.com',
       username: 'testuser',
-      password: 'TestPassword123!',
+      authSecret: 'a'.repeat(64),
       encryptedMasterKey: 'abc',
       kekSalt: 'abc',
       kekWrapIv: 'abc',
       recoveryWrappedMK: 'abc',
       recoveryWrapIv: 'abc',
-      recoveryKeyHash: 'abc',
-      recoveryKeySalt: 'abc',
+      recoveryKeyHash: 'b'.repeat(64),
+      recoveryKeySalt: 'c'.repeat(32),
     });
 
     expect(result.success).toBe(true);

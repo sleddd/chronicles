@@ -13,6 +13,7 @@ vi.mock('../../db/prisma.js', () => ({
     account: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     session: { updateMany: vi.fn() },
     $transaction: vi.fn(),
@@ -64,6 +65,10 @@ function buildApp() {
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 
+// Derived sign-in secret (the server never receives the password)
+const SECRET = 'a'.repeat(64);
+const AUTH_HASH = 'auth1$$2a$12$hashedpassword';
+
 // Each test uses its own account id: replay and lockout state is per account, in memory
 let nextAccountId = 100;
 
@@ -72,7 +77,7 @@ function twoFAAccount(secret: string, backupCodes: string[] = []) {
     id: nextAccountId++,
     email: 'test@example.com',
     username: 'testuser',
-    passwordHash: '$2a$12$hashedpassword',
+    passwordHash: AUTH_HASH,
     tenantSchemaName: 'usr_1_a1b2c3',
     totpEnabled: true,
     totpSecret: secret,
@@ -83,10 +88,10 @@ function twoFAAccount(secret: string, backupCodes: string[] = []) {
   };
 }
 
-/** Sign in with the password to get a pending 2FA token for this account. */
+/** Sign in with the derived secret to get a pending 2FA token for this account. */
 async function pendingTokenFor(app: express.Express, account: ReturnType<typeof twoFAAccount>): Promise<string> {
   (prisma.account.findUnique as any).mockResolvedValue(account);
-  const res = await request(app).post('/api/auth/login').send({ email: account.email, password: 'whatever' });
+  const res = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
   expect(res.body.requires2FA).toBe(true);
   return res.body.pendingToken;
 }
@@ -103,11 +108,11 @@ describe('2FA hardening', () => {
   describe('POST /api/auth/2fa/enable', () => {
     it('requires the current password — a stolen session cannot swap the authenticator', async () => {
       const secret = generateSecret();
-      (prisma.account.findUnique as any).mockResolvedValue({ passwordHash: 'x', totpEnabled: false });
+      (prisma.account.findUnique as any).mockResolvedValue({ passwordHash: AUTH_HASH, totpEnabled: false });
       (bcrypt.compare as any).mockResolvedValue(false);
 
       const res = await request(app).post('/api/auth/2fa/enable')
-        .send({ secret, code: generateSync({ secret }), currentPassword: 'wrong' });
+        .send({ secret, code: generateSync({ secret }), currentAuthSecret: SECRET });
 
       expect(res.status).toBe(401);
       expect(prisma.account.update).not.toHaveBeenCalled();
@@ -124,10 +129,10 @@ describe('2FA hardening', () => {
 
     it('refuses to replace an authenticator that is already on', async () => {
       const secret = generateSecret();
-      (prisma.account.findUnique as any).mockResolvedValue({ passwordHash: 'x', totpEnabled: true });
+      (prisma.account.findUnique as any).mockResolvedValue({ passwordHash: AUTH_HASH, totpEnabled: true });
 
       const res = await request(app).post('/api/auth/2fa/enable')
-        .send({ secret, code: generateSync({ secret }), currentPassword: 'right' });
+        .send({ secret, code: generateSync({ secret }), currentAuthSecret: SECRET });
 
       expect(res.status).toBe(409);
       expect(prisma.account.update).not.toHaveBeenCalled();
@@ -135,10 +140,10 @@ describe('2FA hardening', () => {
 
     it('stores the secret encrypted and the backup codes salted + scrypt-hashed', async () => {
       const secret = generateSecret();
-      (prisma.account.findUnique as any).mockResolvedValue({ passwordHash: 'x', totpEnabled: false });
+      (prisma.account.findUnique as any).mockResolvedValue({ passwordHash: AUTH_HASH, totpEnabled: false });
 
       const res = await request(app).post('/api/auth/2fa/enable')
-        .send({ secret, code: generateSync({ secret }), currentPassword: 'right' });
+        .send({ secret, code: generateSync({ secret }), currentAuthSecret: SECRET });
 
       expect(res.status).toBe(200);
       expect(res.body.backupCodes).toHaveLength(8);
@@ -214,20 +219,21 @@ describe('2FA hardening', () => {
   });
 
   describe('POST /api/auth/recover with 2FA on', () => {
-    const recoveryKey = 'my-recovery-key-value';
+    // The client sends PBKDF2(recoveryKey, salt); the server stores SHA-256 of it
+    const recoveryProof = 'c'.repeat(64);
     const salt = crypto.randomBytes(16);
-    const recoveryKeyHash = crypto.pbkdf2Sync(recoveryKey, salt, 600000, 32, 'sha256').toString('hex');
+    const recoveryKeyHash = 'v2$' + sha256(recoveryProof);
     const body = {
       email: 'test@example.com',
-      recoveryKey,
-      newPassword: 'NewRecovered1!xyz',
+      recoveryProof,
+      newAuthSecret: 'b'.repeat(64),
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
       newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
       newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
       newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
-      newRecoveryKeyHash: 'newrecoveryhash',
-      newRecoveryKeySalt: 'newrecoverysalt',
+      newRecoveryKeyHash: 'e'.repeat(64),
+      newRecoveryKeySalt: 'f'.repeat(32),
     };
 
     function recoverableAccount(secret: string) {
@@ -253,7 +259,7 @@ describe('2FA hardening', () => {
       expect(res.status).toBe(401);
       expect(res.body.requires2FA).toBe(true);
       expect(tx.account.update).not.toHaveBeenCalled();
-    }, 30000);
+    });
 
     it('rejects a wrong code', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(recoverableAccount(generateSecret()));
@@ -294,14 +300,14 @@ describe('2FA hardening', () => {
       const account = twoFAAccount(secret);
       (prisma.account.findUnique as any).mockResolvedValue(account);
 
-      const noCode = await request(app).delete('/api/auth/2fa').send({ password: 'pw' });
+      const noCode = await request(app).delete('/api/auth/2fa').send({ authSecret: SECRET });
       expect(noCode.status).toBe(400);
 
-      const wrong = await request(app).delete('/api/auth/2fa').send({ password: 'pw', code: '000000' });
+      const wrong = await request(app).delete('/api/auth/2fa').send({ authSecret: SECRET, code: '000000' });
       expect(wrong.status).toBe(401);
       expect(prisma.account.update).not.toHaveBeenCalled();
 
-      const ok = await request(app).delete('/api/auth/2fa').send({ password: 'pw', code: generateSync({ secret }) });
+      const ok = await request(app).delete('/api/auth/2fa').send({ authSecret: SECRET, code: generateSync({ secret }) });
       expect(ok.status).toBe(200);
       expect(prisma.account.update).toHaveBeenCalledWith({
         where: { id: 1 },
@@ -315,7 +321,7 @@ describe('2FA hardening', () => {
       (prisma.account.findUnique as any).mockResolvedValue({ ...twoFAAccount(generateSecret()), totpEnabled: false, totpSecret: null });
       (bcrypt.compare as any).mockResolvedValue(false);
 
-      const res = await request(app).delete('/api/auth/account').send({ password: 'nope' });
+      const res = await request(app).delete('/api/auth/account').send({ authSecret: SECRET });
       expect(res.status).toBe(401);
       expect(deleteAccountById).not.toHaveBeenCalled();
     });
@@ -325,12 +331,12 @@ describe('2FA hardening', () => {
       const account = twoFAAccount(secret);
       (prisma.account.findUnique as any).mockResolvedValue(account);
 
-      const noCode = await request(app).delete('/api/auth/account').send({ password: 'pw' });
+      const noCode = await request(app).delete('/api/auth/account').send({ authSecret: SECRET });
       expect(noCode.status).toBe(401);
       expect(noCode.body.requires2FA).toBe(true);
       expect(deleteAccountById).not.toHaveBeenCalled();
 
-      const ok = await request(app).delete('/api/auth/account').send({ password: 'pw', code: generateSync({ secret }) });
+      const ok = await request(app).delete('/api/auth/account').send({ authSecret: SECRET, code: generateSync({ secret }) });
       expect(ok.status).toBe(200);
       expect(deleteAccountById).toHaveBeenCalledWith(account.id);
     });
@@ -339,13 +345,90 @@ describe('2FA hardening', () => {
   describe('per-email sign-in limit', () => {
     it('locks an email after 10 wrong passwords, whether or not the account exists', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
+      const attempt = { email: 'ghost@example.com', authSecret: SECRET, legacyPassword: 'x' };
       for (let i = 0; i < 10; i++) {
-        const r = await request(app).post('/api/auth/login').send({ email: 'ghost@example.com', password: 'x' });
+        const r = await request(app).post('/api/auth/login').send(attempt);
         expect(r.status).toBe(401);
       }
-      const locked = await request(app).post('/api/auth/login').send({ email: 'Ghost@example.com', password: 'x' });
+      const locked = await request(app).post('/api/auth/login').send({ ...attempt, email: 'Ghost@example.com' });
       expect(locked.status).toBe(429);
       expect(prisma.account.findUnique).toHaveBeenCalledTimes(10);
     }, 30000);
+
+    it("someone else's wrong guesses don't lock out the owner's known browser", async () => {
+      const account = { ...twoFAAccount(generateSecret()), email: 'owner@example.com', totpEnabled: false, totpSecret: null };
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+
+      // The owner signed in from this browser before
+      const first = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const deviceCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+      expect(deviceCookie).toBeDefined();
+
+      // An attacker elsewhere burns through the email's shared bucket
+      (bcrypt.compare as any).mockResolvedValue(false);
+      for (let i = 0; i < 10; i++) await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const attacker = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      expect(attacker.status).toBe(429);
+
+      // A forged device cookie is just another stranger
+      const forged = await request(app).post('/api/auth/login').set('Cookie', deviceCookie.replace(/.$/, c => c === 'A' ? 'B' : 'A'))
+        .send({ email: account.email, authSecret: SECRET });
+      expect(forged.status).toBe(429);
+
+      // The owner's browser still gets in — the password is still checked
+      const wrongFromOwner = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: account.email, authSecret: SECRET });
+      expect(wrongFromOwner.status).toBe(401);
+      (bcrypt.compare as any).mockResolvedValue(true);
+      const owner = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: account.email, authSecret: SECRET });
+      expect(owner.status).toBe(200);
+    }, 30000);
+
+    it('a known-device cookie for another email does not help', async () => {
+      const account = { ...twoFAAccount(generateSecret()), email: 'other@example.com', totpEnabled: false, totpSecret: null };
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      const first = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const deviceCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+
+      (prisma.account.findUnique as any).mockResolvedValue({ ...account, email: 'target@example.com' });
+      (bcrypt.compare as any).mockResolvedValue(false);
+      for (let i = 0; i < 10; i++) await request(app).post('/api/auth/login').send({ email: 'target@example.com', authSecret: SECRET });
+      const res = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: 'target@example.com', authSecret: SECRET });
+      expect(res.status).toBe(429);
+    }, 30000);
+
+    it('does not count the legacy check, where nothing was verified', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+      for (let i = 0; i < 11; i++) {
+        const r = await request(app).post('/api/auth/login').send({ email: 'probe@example.com', authSecret: SECRET });
+        expect(r.body.legacyAuth).toBe(true);
+      }
+    }, 30000);
+  });
+
+  describe('legacy account with 2FA', () => {
+    it('keeps the old password hash until the second factor passes', async () => {
+      const secret = generateSecret();
+      const account = { ...twoFAAccount(secret), passwordHash: '$2a$12$legacy' };
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+
+      const login = await request(app).post('/api/auth/login')
+        .send({ email: account.email, authSecret: SECRET, legacyPassword: 'OldPassword1!xyz' });
+      expect(login.body.requires2FA).toBe(true);
+      expect(prisma.account.updateMany).not.toHaveBeenCalled();
+
+      const wrong = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: '000000' });
+      expect(wrong.status).toBe(401);
+      expect(prisma.account.updateMany).not.toHaveBeenCalled();
+
+      const again = await request(app).post('/api/auth/login')
+        .send({ email: account.email, authSecret: SECRET, legacyPassword: 'OldPassword1!xyz' });
+      const ok = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: again.body.pendingToken, code: generateSync({ secret }) });
+      expect(ok.status).toBe(200);
+      expect(prisma.account.updateMany).toHaveBeenCalledWith({
+        where: { id: account.id, passwordHash: '$2a$12$legacy' },
+        data: { passwordHash: AUTH_HASH },
+      });
+    });
   });
 });

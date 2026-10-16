@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import { securityHeaders } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
-import authRoutes from './routes/auth.js';
+import authRoutes, { upgradeStoredCredentials } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
@@ -15,7 +15,7 @@ import sessionsRoutes from './routes/sessions.js';
 import sharesRoutes from './routes/shares.js';
 import dosesRoutes from './routes/doses.js';
 import calendarRoutes from './routes/calendar.js';
-import { initSharesTable } from './db/shareQueries.js';
+import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -23,6 +23,7 @@ import { initSharesTable } from './db/shareQueries.js';
 };
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 3001;
 // Bind to loopback only outside production so the dev server is never reachable
 // from the network. In production (Render etc.) the platform needs 0.0.0.0.
@@ -108,13 +109,20 @@ app.get('{/*path}', (_req, res) => {
 });
 
 // Init + periodic cleanup + listen
-initSharesTable().catch(err => console.error('Failed to init shares table:', err));
+initSharesTable()
+  .then(() => purgeDeadShares())
+  .then(count => { if (count > 0) console.log(`Deleted ${count} revoked/expired share(s)`); })
+  .catch(err => console.error('Failed to init shares table:', err));
+upgradeStoredCredentials().then(({ recoverySealed, sessionsRevoked }) => {
+  if (recoverySealed || sessionsRevoked) console.log(`Credential upgrade: ${recoverySealed} recovery check(s) sealed, ${sessionsRevoked} legacy session(s) signed out`);
+}).catch(err => console.error('Credential upgrade failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});
 
 setInterval(() => {
   cleanupSessions().catch(() => {});
+  purgeDeadShares().catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 app.listen(typeof PORT === 'string' ? parseInt(PORT, 10) : PORT, HOST, () => {

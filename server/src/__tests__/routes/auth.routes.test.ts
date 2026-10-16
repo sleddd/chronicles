@@ -12,6 +12,7 @@ vi.mock('../../db/prisma.js', () => ({
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     session: {
       updateMany: vi.fn(),
@@ -67,6 +68,16 @@ import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
 import bcrypt from 'bcryptjs';
+import { createHash } from 'crypto';
+
+// Derived secrets (64 hex) — the server never receives a password or recovery key
+const SECRET = 'a'.repeat(64);
+const NEW_SECRET = 'b'.repeat(64);
+const PROOF = 'c'.repeat(64);
+const sealed = (proof: string) => 'v2$' + createHash('sha256').update(proof).digest('hex');
+// A sign-in hash of the derived secret, and an old one of the password itself
+const AUTH_HASH = 'auth1$$2a$12$hashedsecret';
+const LEGACY_HASH = '$2a$12$hashedpassword';
 
 // Build the test app (auth routes handle their own authMiddleware internally)
 function buildApp() {
@@ -81,20 +92,20 @@ function buildApp() {
 const validRegisterBody = {
   email: 'test@example.com',
   username: 'testuser',
-  password: 'StrongPass1!xyz',
+  authSecret: SECRET,
   encryptedMasterKey: Buffer.from('masterkey').toString('base64'),
   kekSalt: Buffer.from('saltsaltsaltsalt').toString('base64'),
   kekWrapIv: Buffer.from('iviviviviviv').toString('base64'),
   recoveryWrappedMK: Buffer.from('recoverymk').toString('base64'),
   recoveryWrapIv: Buffer.from('recoveryiv12').toString('base64'),
-  recoveryKeyHash: 'abc123hash',
-  recoveryKeySalt: 'abc123salt',
+  recoveryKeyHash: PROOF,
+  recoveryKeySalt: 'd'.repeat(32),
 };
 
 // Valid login payload
 const validLoginBody = {
   email: 'test@example.com',
-  password: 'anypassword1',
+  authSecret: SECRET,
 };
 
 describe('Auth Routes', () => {
@@ -125,6 +136,29 @@ describe('Auth Routes', () => {
       expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.any(Object));
     });
 
+    it('stores a hash of the derived secret and a sealed recovery check', async () => {
+      (registerTenant as any).mockResolvedValue({
+        account: { id: 1, email: 'test@example.com', username: 'testuser' },
+        schemaName: 'usr_1_a1b2c3',
+      });
+
+      await request(app).post('/api/auth/register').send(validRegisterBody);
+
+      const [, , passwordHash, enc] = (registerTenant as any).mock.calls[0];
+      expect(passwordHash).toBe('auth1$$2a$12$hashedpassword');
+      expect(bcrypt.hash).toHaveBeenCalledWith(SECRET, 12);
+      expect(enc.recoveryKeyHash).toBe(sealed(PROOF));
+    });
+
+    it('refuses a raw password in place of the derived secret', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ ...validRegisterBody, authSecret: 'StrongPass1!xyz' });
+
+      expect(res.status).toBe(400);
+      expect(registerTenant).not.toHaveBeenCalled();
+    });
+
     it('returns 409 when the email already exists', async () => {
       (prisma.account.findUnique as any).mockResolvedValueOnce({ id: 99, email: 'test@example.com' });
 
@@ -151,13 +185,13 @@ describe('Auth Routes', () => {
       expect(registerTenant).not.toHaveBeenCalled();
     });
 
-    it('returns 400 for invalid password (too short)', async () => {
+    it('returns 400 for a malformed secret', async () => {
       const res = await request(app)
         .post('/api/auth/register')
-        .send({ ...validRegisterBody, password: 'short' });
+        .send({ ...validRegisterBody, authSecret: 'short' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('Password does not meet requirements');
+      expect(res.body.error).toBe('Invalid registration details');
     });
 
     it('returns 400 for missing fields', async () => {
@@ -189,7 +223,7 @@ describe('Auth Routes', () => {
       id: 1,
       email: 'test@example.com',
       username: 'testuser',
-      passwordHash: '$2a$12$hashedpassword',
+      passwordHash: AUTH_HASH,
       tenantSchemaName: 'usr_1_a1b2c3',
       encryptionEnabled: true,
       kekSalt: Buffer.from('salt'),
@@ -213,20 +247,77 @@ describe('Auth Routes', () => {
       expect(res.body.encryption).toBeDefined();
       expect(res.body.encryption.encryptionEnabled).toBe(true);
       expect(res.body.encryption.kekSalt).toBe(Buffer.from('salt').toString('base64'));
+      expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
     });
 
-    it('returns 401 when user not found', async () => {
+    it('answers an unknown email exactly like a legacy account', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+      const unknown = await request(app).post('/api/auth/login').send(validLoginBody);
+
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
+      const legacy = await request(app).post('/api/auth/login').send(validLoginBody);
+
+      expect(unknown.status).toBe(401);
+      expect(unknown.body).toEqual({ error: 'Invalid credentials', legacyAuth: true });
+      expect(legacy.status).toBe(401);
+      expect(legacy.body).toEqual(unknown.body);
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(createSession).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when the unknown email retries with a password', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
 
       const res = await request(app)
         .post('/api/auth/login')
-        .send(validLoginBody);
+        .send({ ...validLoginBody, legacyPassword: 'Whatever1!xyz' });
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe('Invalid credentials');
+      expect(res.body).toEqual({ error: 'Invalid credentials' });
     });
 
-    it('returns 401 when password is wrong', async () => {
+    it('upgrades a legacy account on its one password sign-in', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH, totpEnabled: false });
+      (bcrypt.compare as any).mockResolvedValue(true);
+
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ ...validLoginBody, legacyPassword: 'OldPassword1!xyz' });
+
+      expect(res.status).toBe(200);
+      expect(bcrypt.compare).toHaveBeenCalledWith('OldPassword1!xyz', LEGACY_HASH);
+      expect(bcrypt.hash).toHaveBeenCalledWith(SECRET, 12);
+      // Conditional on the hash it checked, so a concurrent change wins
+      expect(prisma.account.updateMany).toHaveBeenCalledWith({
+        where: { id: 1, passwordHash: LEGACY_HASH },
+        data: { passwordHash: 'auth1$$2a$12$hashedpassword' },
+      });
+    });
+
+    it('does not upgrade a legacy account when the password is wrong', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
+      (bcrypt.compare as any).mockResolvedValue(false);
+
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ ...validLoginBody, legacyPassword: 'Wrong1!xyzabc' });
+
+      expect(res.status).toBe(401);
+      expect(prisma.account.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('ignores a password sent for an upgraded account', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+      (bcrypt.compare as any).mockResolvedValue(true);
+
+      await request(app).post('/api/auth/login').send({ ...validLoginBody, legacyPassword: 'OldPassword1!xyz' });
+
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+      expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
+      expect(prisma.account.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 without legacyAuth when the secret is wrong', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
       (bcrypt.compare as any).mockResolvedValue(false);
 
@@ -235,7 +326,7 @@ describe('Auth Routes', () => {
         .send(validLoginBody);
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe('Invalid credentials');
+      expect(res.body).toEqual({ error: 'Invalid credentials' });
     });
 
     it('returns 400 for invalid body', async () => {
@@ -322,11 +413,11 @@ describe('Auth Routes', () => {
   // POST /api/auth/change-email
   // =========================================================================
   describe('POST /api/auth/change-email', () => {
-    const body = { newEmail: 'New@Example.com', currentPassword: 'StrongPass1!xyz' };
+    const body = { newEmail: 'New@Example.com', currentAuthSecret: SECRET, newAuthSecret: NEW_SECRET };
 
-    it('changes the email when the current password is correct', async () => {
+    it('changes the email — and the email-salted secret — when the current secret is correct', async () => {
       (prisma.account.findUnique as any)
-        .mockResolvedValueOnce({ passwordHash: '$2a$12$hash' }) // password check
+        .mockResolvedValueOnce({ passwordHash: AUTH_HASH }) // secret check
         .mockResolvedValueOnce(null); // email not taken
       (bcrypt.compare as any).mockResolvedValueOnce(true);
 
@@ -334,11 +425,25 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.email).toBe('new@example.com');
-      expect(prisma.account.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { email: 'new@example.com' } });
+      expect(bcrypt.hash).toHaveBeenCalledWith(NEW_SECRET, 12);
+      expect(prisma.account.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { email: 'new@example.com', passwordHash: 'auth1$$2a$12$hashedpassword' },
+      });
+    });
+
+    it('refuses a legacy password hash (those sessions are signed out to upgrade)', async () => {
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: LEGACY_HASH });
+
+      const res = await request(app).post('/api/auth/change-email').send(body);
+
+      expect(res.status).toBe(401);
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
     it('rejects a wrong password without changing anything', async () => {
-      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: '$2a$12$hash' });
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: AUTH_HASH });
       (bcrypt.compare as any).mockResolvedValueOnce(false);
 
       const res = await request(app).post('/api/auth/change-email').send(body);
@@ -347,8 +452,8 @@ describe('Auth Routes', () => {
       expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
-    it('requires the current password', async () => {
-      const res = await request(app).post('/api/auth/change-email').send({ newEmail: 'new@example.com' });
+    it('requires the current and new secrets', async () => {
+      const res = await request(app).post('/api/auth/change-email').send({ newEmail: 'new@example.com', currentAuthSecret: SECRET });
 
       expect(res.status).toBe(400);
       expect(prisma.account.update).not.toHaveBeenCalled();
@@ -356,7 +461,7 @@ describe('Auth Routes', () => {
 
     it('returns 409 when the email belongs to another account', async () => {
       (prisma.account.findUnique as any)
-        .mockResolvedValueOnce({ passwordHash: '$2a$12$hash' })
+        .mockResolvedValueOnce({ passwordHash: AUTH_HASH })
         .mockResolvedValueOnce({ id: 99 });
       (bcrypt.compare as any).mockResolvedValueOnce(true);
 
@@ -372,15 +477,15 @@ describe('Auth Routes', () => {
   // =========================================================================
   describe('POST /api/auth/recovery-key', () => {
     const body = {
-      currentPassword: 'StrongPass1!xyz',
+      currentAuthSecret: SECRET,
       recoveryWrappedMK: Buffer.from('wrapped').toString('base64'),
       recoveryWrapIv: Buffer.from('iv12345678ab').toString('base64'),
       recoveryKeyHash: 'a'.repeat(64),
       recoveryKeySalt: 'b'.repeat(32),
     };
 
-    it('saves the new recovery key when the current password is correct', async () => {
-      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: '$2a$12$hash' });
+    it('saves the new recovery key, sealed, when the current secret is correct', async () => {
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: AUTH_HASH });
       (bcrypt.compare as any).mockResolvedValueOnce(true);
 
       const res = await request(app).post('/api/auth/recovery-key').send(body);
@@ -388,12 +493,12 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(200);
       expect(prisma.account.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 1 },
-        data: expect.objectContaining({ recoveryKeyHash: 'a'.repeat(64), recoveryKeySalt: 'b'.repeat(32) }),
+        data: expect.objectContaining({ recoveryKeyHash: sealed('a'.repeat(64)), recoveryKeySalt: 'b'.repeat(32) }),
       }));
     });
 
     it('rejects a wrong password — a session alone cannot replace the recovery key', async () => {
-      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: '$2a$12$hash' });
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: AUTH_HASH });
       (bcrypt.compare as any).mockResolvedValueOnce(false);
 
       const res = await request(app).post('/api/auth/recovery-key').send(body);
@@ -402,8 +507,8 @@ describe('Auth Routes', () => {
       expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
-    it('requires the current password', async () => {
-      const { currentPassword, ...rest } = body;
+    it('requires the current secret', async () => {
+      const { currentAuthSecret, ...rest } = body;
       const res = await request(app).post('/api/auth/recovery-key').send(rest);
 
       expect(res.status).toBe(400);
@@ -423,21 +528,16 @@ describe('Auth Routes', () => {
   // =========================================================================
   describe('POST /api/auth/change-password', () => {
     const changePasswordBody = {
-      currentPassword: 'OldPassword1!xyz',
-      newPassword: 'NewPassword2!xyz',
+      currentAuthSecret: SECRET,
+      newAuthSecret: NEW_SECRET,
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
       newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
-      // Recovery rotates in a fresh recovery key so it can be used again
-      newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
-      newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
-      newRecoveryKeyHash: 'newrecoveryhash',
-      newRecoveryKeySalt: 'newrecoverysalt',
     };
 
     const mockAccount = {
       id: 1,
-      passwordHash: '$2a$12$hashedpassword',
+      passwordHash: AUTH_HASH,
       tenantSchemaName: 'usr_1_a1b2c3',
     };
 
@@ -456,6 +556,11 @@ describe('Auth Routes', () => {
       expect(res.body.success).toBe(true);
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(createSession).toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
+      expect(bcrypt.hash).toHaveBeenCalledWith(NEW_SECRET, 12);
+      expect(prisma.account.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ passwordHash: 'auth1$$2a$12$hashedpassword' }),
+      }));
     });
 
     it('returns 401 when current password is wrong', async () => {
@@ -485,12 +590,12 @@ describe('Auth Routes', () => {
       expect(res.body.error).toBe('Account not found');
     });
 
-    it('returns 400 when new password is weak', async () => {
+    it('refuses a raw new password in place of the derived secret', async () => {
       const res = await request(app)
         .post('/api/auth/change-password')
         .set('X-Requested-With', 'XMLHttpRequest')
         .set('Cookie', 'chronicle_session=aabbccddee11verifier1234567890123456789012')
-        .send({ ...changePasswordBody, newPassword: 'weak' });
+        .send({ ...changePasswordBody, newAuthSecret: 'NewPassword2!xyz' });
 
       expect(res.status).toBe(400);
     });
@@ -502,16 +607,16 @@ describe('Auth Routes', () => {
   describe('POST /api/auth/recover', () => {
     const recoverBody = {
       email: 'test@example.com',
-      recoveryKey: 'my-recovery-key-value',
-      newPassword: 'NewRecovered1!xyz',
+      recoveryProof: PROOF,
+      newAuthSecret: NEW_SECRET,
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
       newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
       // Recovery rotates in a fresh recovery key so it can be used again
       newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
       newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
-      newRecoveryKeyHash: 'newrecoveryhash',
-      newRecoveryKeySalt: 'newrecoverysalt',
+      newRecoveryKeyHash: 'e'.repeat(64),
+      newRecoveryKeySalt: 'f'.repeat(32),
     };
 
     it('returns 401 when account not found', async () => {
@@ -541,27 +646,40 @@ describe('Auth Routes', () => {
       expect(res.body.error).toBe('Recovery failed');
     });
 
-    it('returns 401 when recovery key does not match', async () => {
-      // Create a real hash for a different key to test mismatch
-      const crypto = await import('crypto');
-      const salt = crypto.randomBytes(16);
-      const correctHash = crypto.pbkdf2Sync('correct-key', salt, 600000, 32, 'sha256').toString('hex');
-
+    it('returns 401 when the recovery proof does not match', async () => {
       (prisma.account.findUnique as any).mockResolvedValue({
         id: 1,
         email: 'test@example.com',
-        recoveryKeyHash: correctHash,
-        recoveryKeySalt: salt.toString('hex'),
+        recoveryKeyHash: sealed('9'.repeat(64)),
+        recoveryKeySalt: 'd'.repeat(32),
         tenantSchemaName: 'usr_1_a1b2c3',
       });
 
-      const res = await request(app)
-        .post('/api/auth/recover')
-        .send({ ...recoverBody, recoveryKey: 'wrong-key' });
+      const res = await request(app).post('/api/auth/recover').send(recoverBody);
 
       expect(res.status).toBe(401);
       expect(res.body.error).toBe('Recovery failed');
-    }, 30000);
+    });
+
+    it('does not accept the stored (sealed) value itself as the proof', async () => {
+      const stored = sealed(PROOF);
+      (prisma.account.findUnique as any).mockResolvedValue({
+        id: 1, email: 'test@example.com', recoveryKeyHash: stored, recoveryKeySalt: 'd'.repeat(32), tenantSchemaName: 'usr_1_a1b2c3',
+      });
+
+      const res = await request(app).post('/api/auth/recover').send({ ...recoverBody, recoveryProof: stored.slice(3) });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('refuses the raw recovery key in place of the proof', async () => {
+      const res = await request(app)
+        .post('/api/auth/recover')
+        .send({ ...recoverBody, recoveryProof: 'my-recovery-key-value' });
+
+      expect(res.status).toBe(400);
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
+    });
 
     it('returns 400 for invalid body', async () => {
       const res = await request(app)
@@ -569,20 +687,35 @@ describe('Auth Routes', () => {
         .send({ email: 'test@example.com' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Password does not meet requirements');
+      expect(res.body.error).toBe('Recovery failed');
+    });
+
+    it('still accepts a not-yet-sealed recovery check', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({
+        id: 1, email: 'test@example.com', username: 'testuser', recoveryKeyHash: PROOF, recoveryKeySalt: 'd'.repeat(32),
+        tenantSchemaName: 'usr_1_a1b2c3', encryptionEnabled: true, kekIterations: 600000,
+      });
+      const tx = {
+        $queryRawUnsafe: vi.fn().mockResolvedValue([{ id: 1, recovery_key_hash: PROOF }]),
+        account: { update: vi.fn().mockResolvedValue({}) },
+        session: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      };
+      (prisma.$transaction as any).mockImplementation(async (fn: any) => fn(tx));
+
+      const res = await request(app).post('/api/auth/recover').send(recoverBody);
+
+      expect(res.status).toBe(200);
     });
 
     it('returns user data on successful recovery', async () => {
-      const crypto = await import('crypto');
-      const salt = crypto.randomBytes(16);
-      const correctHash = crypto.pbkdf2Sync('my-recovery-key-value', salt, 600000, 32, 'sha256').toString('hex');
+      const correctHash = sealed(PROOF);
 
       (prisma.account.findUnique as any).mockResolvedValue({
         id: 1,
         email: 'test@example.com',
         username: 'testuser',
         recoveryKeyHash: correctHash,
-        recoveryKeySalt: salt.toString('hex'),
+        recoveryKeySalt: 'd'.repeat(32),
         tenantSchemaName: 'usr_1_a1b2c3',
         encryptionEnabled: true,
         kekIterations: 600000,
@@ -603,8 +736,9 @@ describe('Auth Routes', () => {
       expect(tx.account.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 1 },
         data: expect.objectContaining({
-          recoveryKeyHash: 'newrecoveryhash',
-          recoveryKeySalt: 'newrecoverysalt',
+          passwordHash: 'auth1$$2a$12$hashedpassword',
+          recoveryKeyHash: sealed('e'.repeat(64)),
+          recoveryKeySalt: 'f'.repeat(32),
           recoveryKeyUsedAt: expect.any(Date),
         }),
       }));
@@ -615,7 +749,7 @@ describe('Auth Routes', () => {
       expect(res.body.user).toEqual({ email: 'test@example.com', username: 'testuser' });
       expect(res.body.encryption).toBeDefined();
       expect(res.body.encryption.recoveryWrappedMK).toBeNull();
-    }, 30000);
+    });
   });
 
   // =========================================================================
@@ -626,6 +760,7 @@ describe('Auth Routes', () => {
       (prisma.account.findUnique as any).mockResolvedValue({
         recoveryWrappedMK: Buffer.from('wrappedmk'),
         recoveryWrapIv: Buffer.from('wrapiv'),
+        recoveryKeySalt: 'd'.repeat(32),
         encryptionEnabled: true,
       });
 
@@ -636,6 +771,8 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.recoveryWrappedMK).toBe(Buffer.from('wrappedmk').toString('base64'));
       expect(res.body.recoveryWrapIv).toBe(Buffer.from('wrapiv').toString('base64'));
+      // The client computes the recovery proof itself, so it needs the salt
+      expect(res.body.recoveryKeySalt).toBe('d'.repeat(32));
     });
 
     it('returns decoy params for a non-existing user, shaped like real ones', async () => {
@@ -649,6 +786,7 @@ describe('Auth Routes', () => {
       // Same sizes as a real AES-GCM-wrapped 32-byte key and its 12-byte IV
       expect(Buffer.from(res.body.recoveryWrappedMK, 'base64')).toHaveLength(48);
       expect(Buffer.from(res.body.recoveryWrapIv, 'base64')).toHaveLength(12);
+      expect(res.body.recoveryKeySalt).toMatch(/^[a-f0-9]{32}$/);
     });
 
     it('returns the SAME decoy every time for the same unknown email', async () => {

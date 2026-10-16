@@ -183,10 +183,15 @@ PostgreSQL Database
 
 ### Two-Layer Security Model
 
-1. **Authentication Layer (Server)**: bcrypt password hash (12 rounds), split-token database sessions with immediate revocation, optional TOTP 2FA
+1. **Authentication Layer (Server)**: bcrypt hash (12 rounds) of a **derived sign-in secret**, split-token database sessions with immediate revocation, optional TOTP 2FA
 2. **Encryption Layer (Client)**: AES-256-GCM with auto-generated master key wrapped by password-derived KEK (PBKDF2-SHA256, 600k iterations)
 
 Password changes only re-wrap the master key (instant). Data is never re-encrypted on password change.
+
+**The server never receives the password or the recovery key** (`shared/src/crypto/authSecret.ts`). Either one would let it unwrap the master key it stores. Instead:
+- `authSecret = PBKDF2(password, "chronicles:auth:v1:" + normalizedEmail, 600k)` (`deriveAuthSecret`) is what `/register`, `/login` and every password-confirmed action (change password/email, recovery key, 2FA enable/disable, delete account) send — `authSecret`, `currentAuthSecret`, `newAuthSecret`. It uses a different salt from the KEK, so it doesn't give the KEK. Its salt is the email, so `/change-email` sends a new secret too. Password rules (`passwordSchema`) are checked **on the client**; the server only checks the 64-hex shape
+- Stored as `auth1$` + bcrypt(authSecret). A bare bcrypt hash (`$2…`) is a pre-upgrade hash of the password itself: `/login` answers `{ legacyAuth: true }` (an unknown email answers the same), the client retries once with `legacyPassword`, and the hash is replaced — after the 2FA code when 2FA is on. Confirm endpoints never accept legacy hashes; `upgradeStoredCredentials()` signs out legacy accounts' sessions at startup
+- Recovery sends `recoveryProof = PBKDF2(recoveryKey, recoveryKeySalt, 600k)` (`deriveRecoveryProof`; the salt comes from `/recovery-params`, with a stable decoy for unknown emails). The server stores `v2$` + SHA-256(proof), so a leaked row can't be replayed; older rows are sealed at startup
 
 ### TOTP Two-Factor Authentication
 
@@ -198,12 +203,12 @@ Implemented via `otplib` — no external services required.
 - `POST /api/auth/login/2fa` verifies the code and issues the real split-token session
 - Pending tokens are stored in-memory with 5-minute TTL (single-instance safe for Render)
 - A TOTP code is accepted once (otplib `afterTimeStep`); 5 wrong codes lock that account's 2FA for 15 minutes. Both are in memory, like pending tokens
-- `POST /api/auth/recover` on a 2FA account also needs an authenticator/backup `code` (answered with `requires2FA: true` once the recovery key checks out); recovery uses async PBKDF2
+- `POST /api/auth/recover` on a 2FA account also needs an authenticator/backup `code` (answered with `requires2FA: true` once the recovery proof checks out)
 
 **Setup flow (Settings → Security):**
 1. `POST /api/auth/2fa/setup` — generates TOTP secret + QR code (not saved yet)
 2. User scans QR code and enters confirmation code
-3. `POST /api/auth/2fa/enable` — needs the **current password** and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify; a used code is removed with one conditional `array_remove` UPDATE so concurrent requests can't spend it twice)
+3. `POST /api/auth/2fa/enable` — needs the **current password** (as `currentAuthSecret`) and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify; a used code is removed with one conditional `array_remove` UPDATE so concurrent requests can't spend it twice)
 4. `DELETE /api/auth/2fa` — disables 2FA; needs the password **and** a current authenticator or backup code
 
 **Schema**: `totpSecret` and `totpEnabled` added to `accounts` table.
@@ -228,6 +233,7 @@ At registration:
 - Master key wrapped with password-derived key (stored as `encryptedMasterKey`)
 - Master key also wrapped with recovery key (stored as `recoveryWrappedMK`)
 - Recovery key shown once to user — must be saved
+- The server stores only a check of a PBKDF2 proof of the recovery key (see Two-Layer Security Model); the key itself never leaves the browser
 
 ### Encryption Specification
 
@@ -512,13 +518,14 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - Changing the email (`/change-email`), the recovery key (`/recovery-key`) or turning on 2FA (`/2fa/enable`) requires the **current password**, like change-password and 2FA disable — a signed-in session alone must not be able to lock the owner out
 - Google OAuth: the signed `state` also carries the hash of a nonce kept in an HttpOnly `SameSite=Lax` cookie (`__Host-chronicle_oauth`), so the callback only succeeds in the browser that started the flow
 - `trust proxy` is on in production (`TRUST_PROXY`, default 1 hop) so per-IP rate limits see the real client IP behind Render's proxy
-- Sign-in has a per-email cap on top of the per-IP limit: 10 wrong passwords lock that email for 15 minutes (in memory, keyed by the normalized email whether or not an account exists, so a lockout reveals nothing)
+- Sign-in has a per-email cap on top of the per-IP limit: 10 wrong passwords lock that email for 15 minutes (in memory, keyed by the normalized email whether or not an account exists, so a lockout reveals nothing). A browser that has signed in to that email carries a signed HttpOnly **known-device** cookie (`__Host-chronicle_device`, 90 days, HMAC of email + nonce) and counts its failures in its own bucket, so a stranger's guesses can't lock the owner out of their own browser — the password and 2FA are still checked
+- Public share links hold plaintext: revoking one **deletes** the row, deleting an entry deletes its shares (`deleteSharesForEntry`), and revoked/expired rows are purged at startup and every 6 hours (`purgeDeadShares`)
 - `DELETE /api/auth/account` deletes the account (tenant schema dropped, then the account row; sessions, shares and the calendar integration cascade). Needs the password, plus a 2FA code when 2FA is on. Settings → Account → Delete account (inline confirmation). Images in the user's R2 bucket and events already pushed to Google Calendar are not touched
 - Recovery decoys use `SECRETS_ENCRYPTION_KEY`, else an HMAC of `DATABASE_URL`, so they stay stable across restarts
 - Account enumeration: `/recovery-params` answers an unknown email with **stable** decoy params (HMAC of the email, same sizes as real ones) — never random-per-request. Sign-up must say an email is taken (no email verification), so `/register` has its own `registerLimiter` (10/hour per IP)
 
 ### Rate limiting
-- `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out
+- `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters; `strictLimiter` — 5 / 15 min — counts each route separately, so typos on one action don't block another). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out
 - Client: identical in-flight GETs share one request (`request` in `services/api.ts`; followers get a `structuredClone`). A 429's `Retry-After` is carried on `ApiError.retryAfterSec`; initial loads (`useInitializeData`, `JournalView`) retry with `retryDelayMs` — Retry-After on 429 (5s–15min), else 10s→60s backoff — and never fall back to an empty journal
 
 ### CSRF Protection
@@ -529,7 +536,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 ### Password Strength
 - Minimum 12 characters
 - Uppercase, lowercase, number required
-- Validated via Zod schemas (`shared/src/validation/schemas.ts`)
+- Validated on the client with `passwordSchema` (`shared/src/validation/schemas.ts`) — the server never sees the password, so it can't
 
 ## State Management
 

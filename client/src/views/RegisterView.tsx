@@ -5,6 +5,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
 import { RegisterForm } from '../components/organisms/RegisterForm.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
+import { deriveAuthSecret, newRecoveryProof } from '@chronicles/shared';
 
 export function RegisterView() {
   const navigate = useNavigate();
@@ -16,33 +17,17 @@ export function RegisterView() {
     // Setup encryption — generates master key, wraps with password + recovery key
     const result = await setupEncryption(password);
 
-    // Hash the recovery key with PBKDF2 (salted + iterated) for server-side verification
-    const recoveryKeySaltBytes = crypto.getRandomValues(new Uint8Array(16));
-    const recoveryKeySalt = Array.from(recoveryKeySaltBytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(result.recoveryKey),
-      'PBKDF2',
-      false,
-      ['deriveBits']
-    );
-    const derivedBits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt: recoveryKeySaltBytes, iterations: 600000, hash: 'SHA-256' },
-      keyMaterial,
-      256
-    );
-    const recoveryKeyHash = Array.from(new Uint8Array(derivedBits))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // The server gets only derived secrets — never the password or recovery key
+    const [authSecret, { recoveryKeyHash, recoveryKeySalt }] = await Promise.all([
+      deriveAuthSecret(password, email),
+      newRecoveryProof(result.recoveryKey),
+    ]);
 
     // Register with server
     await register({
       email,
       username,
-      password,
+      authSecret,
       encryptedMasterKey: result.wrappedMK,
       kekSalt: result.salt,
       kekWrapIv: result.wrapIv,

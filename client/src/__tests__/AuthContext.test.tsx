@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
+import { deriveAuthSecret } from '@chronicles/shared';
 import { AuthProvider, useAuth } from '../contexts/AuthContext.js';
 
 // ---------------------------------------------------------------------------
@@ -19,9 +20,11 @@ vi.mock('../services/api.js', () => ({
   },
   ApiError: class ApiError extends Error {
     status: number;
-    constructor(status: number, message: string) {
+    body: Record<string, unknown>;
+    constructor(status: number, message: string, _retryAfterSec?: number, body: Record<string, unknown> = {}) {
       super(message);
       this.status = status;
+      this.body = body;
       this.name = 'ApiError';
     }
   },
@@ -115,6 +118,35 @@ describe('AuthProvider – login', () => {
     expect(result.current.encryptionData).toEqual(encryptionData);
     expect(returned).toEqual(encryptionData);
   });
+
+  it('sends a derived secret, never the password', async () => {
+    mockLogin.mockResolvedValue({ user: { email: 'a@b.com', username: 'alice' }, encryption: {} });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => { await result.current.login('A@B.com ', 'password'); });
+
+    expect(mockLogin).toHaveBeenCalledTimes(1);
+    const sent = mockLogin.mock.calls[0][0];
+    expect(sent).toEqual({ email: 'A@B.com ', authSecret: await deriveAuthSecret('password', 'a@b.com') });
+    expect(JSON.stringify(sent)).not.toContain('password');
+  });
+
+  it('sends the password once, as legacyPassword, only when the server asks', async () => {
+    const { ApiError } = await import('../services/api.js');
+    mockLogin
+      .mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', undefined, { legacyAuth: true }))
+      .mockResolvedValueOnce({ user: { email: 'a@b.com', username: 'alice' }, encryption: {} });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => { await result.current.login('a@b.com', 'password'); });
+
+    expect(mockLogin).toHaveBeenCalledTimes(2);
+    expect(mockLogin.mock.calls[0][0].legacyPassword).toBeUndefined();
+    expect(mockLogin.mock.calls[1][0].legacyPassword).toBe('password');
+    expect(result.current.isAuthenticated).toBe(true);
+  });
 });
 
 describe('AuthProvider – register', () => {
@@ -130,7 +162,7 @@ describe('AuthProvider – register', () => {
       await result.current.register({
         email: 'new@b.com',
         username: 'newuser',
-        password: 'StrongPass123!',
+        authSecret: 'a'.repeat(64),
         encryptedMasterKey: 'emk',
         kekSalt: 'salt',
         kekWrapIv: 'iv',
