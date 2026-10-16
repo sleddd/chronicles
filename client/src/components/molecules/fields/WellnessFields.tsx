@@ -44,9 +44,10 @@ const GlassBtn = styled.button<{ $filled: boolean }>`
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
-  color: ${({ $filled, theme }) => $filled ? theme.colors.text : theme.colors.border};
+  /* Selected = accent (same as the dashboard check-in); unselected = light grey */
+  color: ${({ $filled }) => ($filled ? 'var(--color-accent)' : 'var(--border-strong)')};
   transition: color 0.1s, transform 0.1s;
-  &:hover { color: ${({ theme }) => theme.colors.text}; transform: scale(1.15); }
+  &:hover { color: var(--color-accent); transform: scale(1.15); }
   &:active { transform: scale(0.88); }
 `;
 
@@ -70,9 +71,9 @@ const MoodBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
   font-size: 25px;
   line-height: 1;
-  color: ${({ $active, theme }) => $active ? theme.colors.text : theme.colors.border};
+  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-strong)')};
   transition: color 0.1s, transform 0.1s;
-  &:hover { color: ${({ theme }) => theme.colors.text}; transform: scale(1.15); }
+  &:hover { color: var(--color-accent); transform: scale(1.15); }
   &:active { transform: scale(0.88); }
 `;
 

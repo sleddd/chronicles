@@ -286,6 +286,8 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
     // Sort groups descending (newest first)
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredEntries]);
+  // An open entry in view is the active row — then the first row needs no hint
+  const openRowVisible = selectedEntryId != null && filteredEntries.some(e => e.id === selectedEntryId);
 
   const selectedEntries = useMemo(
     () => filteredEntries.filter(e => selectedIds.has(e.id)),
@@ -377,7 +379,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
           </>
         )}
       </BulkBar>
-      {/* First row always carries the active hint (like every list) */}
+      {/* First row carries the active hint only while no (visible) entry is open */}
       {groups.map(([dateKey, groupEntries], groupIndex) => {
         return (
           <div key={dateKey}>
@@ -409,7 +411,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
 
               const card = (
                 <EntryCard
-                  hint={groupIndex === 0 && rowIndex === 0}
+                  hint={groupIndex === 0 && rowIndex === 0 && !openRowVisible}
                   key={selectMode ? undefined : entry.id}
                   id={entry.id}
                   content={entry.content}
