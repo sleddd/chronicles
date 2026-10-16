@@ -57,20 +57,20 @@ describe('EncryptionContext recovery key lifecycle', () => {
 // 3. RegisterView — PBKDF2 recovery key hashing
 // ============================================================================
 describe('RegisterView PBKDF2 recovery key hashing', () => {
-  it('uses PBKDF2 instead of SHA-256 for recovery key hash', () => {
+  // The PBKDF2 itself (600k iterations, random 16-byte salt) is tested in
+  // shared/src/__tests__/authSecret.test.ts
+  it('hashes the recovery key with the shared PBKDF2 helper, not SHA-256', () => {
     const content = readSrc('views/RegisterView.tsx');
-    expect(content).toContain('PBKDF2');
-    expect(content).toContain('deriveBits');
-    expect(content).toContain('iterations: 600000');
-    // Should NOT use SHA-256 digest directly
-    expect(content).not.toContain("crypto.subtle.digest(\n      'SHA-256'");
+    expect(content).toContain('newRecoveryProof(result.recoveryKey)');
+    expect(content).not.toContain("crypto.subtle.digest(");
   });
 
-  it('generates a random salt for recovery key hashing', () => {
+  it('sends a derived sign-in secret, never the password', () => {
     const content = readSrc('views/RegisterView.tsx');
-    expect(content).toContain('recoveryKeySaltBytes');
-    expect(content).toContain('crypto.getRandomValues');
-    expect(content).toContain('new Uint8Array(16)');
+    expect(content).toContain('deriveAuthSecret(password, email)');
+    const registerCall = content.split('await register({')[1]?.split('});')[0] || '';
+    expect(registerCall).toContain('authSecret');
+    expect(registerCall).not.toMatch(/\bpassword\b/);
   });
 
   it('sends recoveryKeySalt to server on register', () => {
@@ -148,12 +148,13 @@ describe('PBKDF2 downgrade protection', () => {
 // ============================================================================
 // 8. RegisterView — recovery key PBKDF2 uses 600,000 iterations
 // ============================================================================
-describe('RegisterView recovery key iterations', () => {
-  it('uses 600000 iterations for recovery key PBKDF2 hashing', () => {
-    const content = readSrc('views/RegisterView.tsx');
-    expect(content).toContain('iterations: 600000');
-    // Should NOT use old 100000 iterations
-    expect(content).not.toContain('iterations: 100000');
+describe('Recovery never sends the recovery key or password', () => {
+  it('RecoverView sends a proof and a derived secret', () => {
+    const content = readSrc('views/RecoverView.tsx');
+    const recoverCall = content.split('await authApi.recover({')[1]?.split('});')[0] || '';
+    expect(recoverCall).toContain('recoveryProof');
+    expect(recoverCall).toContain('newAuthSecret');
+    expect(recoverCall).not.toMatch(/\brecoveryKey\b|\bnewPassword\b/);
   });
 });
 

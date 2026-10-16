@@ -183,10 +183,15 @@ PostgreSQL Database
 
 ### Two-Layer Security Model
 
-1. **Authentication Layer (Server)**: bcrypt password hash (12 rounds), split-token database sessions with immediate revocation, optional TOTP 2FA
+1. **Authentication Layer (Server)**: bcrypt hash (12 rounds) of a **derived sign-in secret**, split-token database sessions with immediate revocation, optional TOTP 2FA
 2. **Encryption Layer (Client)**: AES-256-GCM with auto-generated master key wrapped by password-derived KEK (PBKDF2-SHA256, 600k iterations)
 
 Password changes only re-wrap the master key (instant). Data is never re-encrypted on password change.
+
+**The server never receives the password or the recovery key** (`shared/src/crypto/authSecret.ts`). Either one would let it unwrap the master key it stores. Instead:
+- `authSecret = PBKDF2(password, "chronicles:auth:v1:" + normalizedEmail, 600k)` (`deriveAuthSecret`) is what `/register`, `/login` and every password-confirmed action (change password/email, recovery key, 2FA enable/disable, delete account) send — `authSecret`, `currentAuthSecret`, `newAuthSecret`. It uses a different salt from the KEK, so it doesn't give the KEK. Its salt is the email, so `/change-email` sends a new secret too. Password rules (`passwordSchema`) are checked **on the client**; the server only checks the 64-hex shape
+- Stored as `auth1$` + bcrypt(authSecret). A bare bcrypt hash (`$2…`) is a pre-upgrade hash of the password itself: `/login` answers `{ legacyAuth: true }` (an unknown email answers the same), the client retries once with `legacyPassword`, and the hash is replaced — after the 2FA code when 2FA is on. Confirm endpoints never accept legacy hashes; `upgradeStoredCredentials()` signs out legacy accounts' sessions at startup
+- Recovery sends `recoveryProof = PBKDF2(recoveryKey, recoveryKeySalt, 600k)` (`deriveRecoveryProof`; the salt comes from `/recovery-params`, with a stable decoy for unknown emails). The server stores `v2$` + SHA-256(proof), so a leaked row can't be replayed; older rows are sealed at startup
 
 ### TOTP Two-Factor Authentication
 
@@ -198,12 +203,12 @@ Implemented via `otplib` — no external services required.
 - `POST /api/auth/login/2fa` verifies the code and issues the real split-token session
 - Pending tokens are stored in-memory with 5-minute TTL (single-instance safe for Render)
 - A TOTP code is accepted once (otplib `afterTimeStep`); 5 wrong codes lock that account's 2FA for 15 minutes. Both are in memory, like pending tokens
-- `POST /api/auth/recover` on a 2FA account also needs an authenticator/backup `code` (answered with `requires2FA: true` once the recovery key checks out); recovery uses async PBKDF2
+- `POST /api/auth/recover` on a 2FA account also needs an authenticator/backup `code` (answered with `requires2FA: true` once the recovery proof checks out)
 
 **Setup flow (Settings → Security):**
 1. `POST /api/auth/2fa/setup` — generates TOTP secret + QR code (not saved yet)
 2. User scans QR code and enters confirmation code
-3. `POST /api/auth/2fa/enable` — needs the **current password** and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify; a used code is removed with one conditional `array_remove` UPDATE so concurrent requests can't spend it twice)
+3. `POST /api/auth/2fa/enable` — needs the **current password** (as `currentAuthSecret`) and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify; a used code is removed with one conditional `array_remove` UPDATE so concurrent requests can't spend it twice)
 4. `DELETE /api/auth/2fa` — disables 2FA; needs the password **and** a current authenticator or backup code
 
 **Schema**: `totpSecret` and `totpEnabled` added to `accounts` table.
@@ -228,6 +233,7 @@ At registration:
 - Master key wrapped with password-derived key (stored as `encryptedMasterKey`)
 - Master key also wrapped with recovery key (stored as `recoveryWrappedMK`)
 - Recovery key shown once to user — must be saved
+- The server stores only a check of a PBKDF2 proof of the recovery key (see Two-Layer Security Model); the key itself never leaves the browser
 
 ### Encryption Specification
 
@@ -529,7 +535,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 ### Password Strength
 - Minimum 12 characters
 - Uppercase, lowercase, number required
-- Validated via Zod schemas (`shared/src/validation/schemas.ts`)
+- Validated on the client with `passwordSchema` (`shared/src/validation/schemas.ts`) — the server never sees the password, so it can't
 
 ## State Management
 

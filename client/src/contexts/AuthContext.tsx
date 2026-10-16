@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { auth as authApi, ApiError } from '../services/api.js';
+import { deriveAuthSecret } from '@chronicles/shared';
 
 interface User {
   email: string;
@@ -32,7 +33,7 @@ interface AuthContextValue {
   register: (data: {
     email: string;
     username: string;
-    password: string;
+    authSecret: string;
     encryptedMasterKey: string;
     kekSalt: string;
     kekWrapIv: string;
@@ -73,7 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<EncryptionData | null> => {
-    const result = await authApi.login({ email, password });
+    const authSecret = await deriveAuthSecret(password, email);
+    let result;
+    try {
+      result = await authApi.login({ email, authSecret });
+    } catch (err) {
+      // An account from before derived secrets is checked against the password
+      // once; that sign-in replaces its hash, so it's never sent again
+      if (!(err instanceof ApiError && err.body.legacyAuth)) throw err;
+      result = await authApi.login({ email, authSecret, legacyPassword: password });
+    }
     if (result.requires2FA) {
       setPending2FA({ pendingToken: result.pendingToken });
       return null;

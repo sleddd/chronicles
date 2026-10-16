@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import { securityHeaders } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
-import authRoutes from './routes/auth.js';
+import authRoutes, { upgradeStoredCredentials } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
@@ -109,6 +109,9 @@ app.get('{/*path}', (_req, res) => {
 
 // Init + periodic cleanup + listen
 initSharesTable().catch(err => console.error('Failed to init shares table:', err));
+upgradeStoredCredentials().then(({ recoverySealed, sessionsRevoked }) => {
+  if (recoverySealed || sessionsRevoked) console.log(`Credential upgrade: ${recoverySealed} recovery check(s) sealed, ${sessionsRevoked} legacy session(s) signed out`);
+}).catch(err => console.error('Credential upgrade failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});

@@ -10,12 +10,13 @@ import { createSession, revokeSession, revokeAllSessions, authMiddleware } from 
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, normalizeEmail } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
 
-// In-memory map for pending 2FA sessions (single-instance safe for Render)
-const pendingTwoFA = new Map<string, { accountId: number; expiresAt: Date }>();
+// In-memory map for pending 2FA sessions (single-instance safe for Render).
+// upgradedHash: a legacy account's new sign-in hash, saved once 2FA passes.
+const pendingTwoFA = new Map<string, { accountId: number; expiresAt: Date; upgradedHash?: string }>();
 
 function cleanExpiredPending() {
   const now = new Date();
@@ -24,7 +25,6 @@ function cleanExpiredPending() {
   }
 }
 
-const pbkdf2 = promisify(crypto.pbkdf2);
 const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 // Backup codes are salted + scrypt-hashed (48 bits of entropy is too little for
@@ -222,6 +222,75 @@ function longDecoyBytes(email: string, label: string, length: number): string {
   return Buffer.concat([a, b]).subarray(0, length).toString('base64');
 }
 
+// =============================================================================
+// Credentials the server can check but can't use to decrypt
+// =============================================================================
+//
+// The client sends authSecret = PBKDF2(password, email salt), never the
+// password: the master key is wrapped under PBKDF2(password, kekSalt), so a
+// server that saw the password could unwrap it (shared/src/crypto/authSecret.ts).
+// Sign-in hashes are bcrypt(authSecret) marked with AUTH_PREFIX. A bare bcrypt
+// hash ($2…) is a legacy hash of the password itself; /login upgrades it.
+export const AUTH_PREFIX = 'auth1$';
+
+export const isLegacyAuthHash = (stored: string) => !stored.startsWith(AUTH_PREFIX);
+
+async function hashAuthSecret(authSecret: string): Promise<string> {
+  return AUTH_PREFIX + await bcrypt.hash(authSecret, BCRYPT_ROUNDS);
+}
+
+/** Check a derived sign-in secret. Legacy hashes never match (their sessions are revoked at startup). */
+async function checkAuthSecret(stored: string, authSecret: string): Promise<boolean> {
+  if (isLegacyAuthHash(stored)) return false;
+  return bcrypt.compare(authSecret, stored.slice(AUTH_PREFIX.length));
+}
+
+/** Replace a legacy password hash — only if it's still the one that was checked. */
+async function upgradeAuthHash(accountId: number, checkedHash: string, upgradedHash: string): Promise<void> {
+  if (!isLegacyAuthHash(checkedHash)) return;
+  await prisma.account.updateMany({ where: { id: accountId, passwordHash: checkedHash }, data: { passwordHash: upgradedHash } });
+  logSecurityEvent('auth_hash_upgraded', { accountId });
+}
+
+// The recovery check stores SHA-256 of the client's proof (PBKDF2 of the
+// recovery key), so a leaked row can't be replayed as the proof. Rows from
+// before hold the proof itself; upgradeStoredCredentials() rewrites them.
+const RECOVERY_PREFIX = 'v2$';
+const sha256Hex = (v: string) => crypto.createHash('sha256').update(v).digest('hex');
+const sealRecoveryProof = (proof: string) => RECOVERY_PREFIX + sha256Hex(proof);
+
+function recoveryProofMatches(stored: string, proof: string): boolean {
+  const sealed = stored.startsWith(RECOVERY_PREFIX);
+  const a = Buffer.from(sealed ? sha256Hex(proof) : proof);
+  const b = Buffer.from(sealed ? stored.slice(RECOVERY_PREFIX.length) : stored);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Startup: seal old recovery checks, and sign out every account that still
+ * has a legacy password hash — its next sign-in replaces the hash, and the
+ * password-confirmed actions (change password, 2FA, delete…) only accept
+ * derived secrets.
+ */
+export async function upgradeStoredCredentials(): Promise<{ recoverySealed: number; sessionsRevoked: number }> {
+  const unsealed = await prisma.account.findMany({
+    where: { recoveryKeyHash: { not: null }, NOT: { recoveryKeyHash: { startsWith: RECOVERY_PREFIX } } },
+    select: { id: true, recoveryKeyHash: true },
+  });
+  for (const a of unsealed) {
+    // Conditional, so a recovery racing this can't be overwritten
+    await prisma.account.updateMany({
+      where: { id: a.id, recoveryKeyHash: a.recoveryKeyHash },
+      data: { recoveryKeyHash: sealRecoveryProof(a.recoveryKeyHash!) },
+    });
+  }
+  const revoked = await prisma.session.updateMany({
+    where: { revokedAt: null, account: { NOT: { passwordHash: { startsWith: AUTH_PREFIX } } } },
+    data: { revokedAt: new Date(), revokedReason: 'auth_upgrade' },
+  });
+  return { recoverySealed: unsealed.length, sessionsRevoked: revoked.count };
+}
+
 /** Enforce a constant-time floor on endpoint response time to prevent timing-based enumeration */
 async function constantTimeDelay(startTime: number, minMs = 200): Promise<void> {
   const elapsed = Date.now() - startTime;
@@ -237,12 +306,12 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
   try {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Password does not meet requirements' });
+      res.status(400).json({ error: 'Invalid registration details' });
       return;
     }
 
-    const { email: rawEmail, username, password, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
-    const email = rawEmail.toLowerCase();
+    const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
+    const email = normalizeEmail(rawEmail);
 
     // Whitelist check — if REGISTRATION_WHITELIST is set, only allow listed emails
     const whitelist = process.env.REGISTRATION_WHITELIST;
@@ -272,7 +341,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const passwordHash = await hashAuthSecret(authSecret);
 
     const { account, schemaName } = await registerTenant(email, username, passwordHash, {
       kekSalt: new Uint8Array(Buffer.from(kekSalt, 'base64')),
@@ -280,7 +349,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       kekWrapIv: new Uint8Array(Buffer.from(kekWrapIv, 'base64')),
       recoveryWrappedMK: new Uint8Array(Buffer.from(recoveryWrappedMK, 'base64')),
       recoveryWrapIv: new Uint8Array(Buffer.from(recoveryWrapIv, 'base64')),
-      recoveryKeyHash,
+      recoveryKeyHash: sealRecoveryProof(recoveryKeyHash),
       recoveryKeySalt,
     });
 
@@ -349,9 +418,9 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    const { email, password } = parsed.data;
+    const { email, authSecret, legacyPassword } = parsed.data;
 
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     if (loginLocked(normalizedEmail)) {
       logSecurityEvent('login_locked', { ip: req.ip });
       await constantTimeDelay(startTime);
@@ -359,6 +428,16 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
     const account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
+    const legacy = !account || isLegacyAuthHash(account.passwordHash);
+    if (legacy && !legacyPassword) {
+      // A legacy account can only be checked against the password, so ask the
+      // client for it once. Nothing was checked, so nothing counts as a
+      // failure. An unknown email answers exactly like a legacy account.
+      await bcrypt.hash('dummy', BCRYPT_ROUNDS);
+      await constantTimeDelay(startTime);
+      res.status(401).json({ error: 'Invalid credentials', legacyAuth: true });
+      return;
+    }
     if (!account) {
       logSecurityEvent('login_failed_no_account', { ip: req.ip });
       recordLoginFailure(normalizedEmail);
@@ -369,7 +448,9 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    const valid = await bcrypt.compare(password, account.passwordHash);
+    const valid = legacy
+      ? await bcrypt.compare(legacyPassword!, account.passwordHash)
+      : await checkAuthSecret(account.passwordHash, authSecret);
     if (!valid) {
       recordLoginFailure(normalizedEmail);
       logSecurityEvent('login_failed_bad_password', { accountId: account.id, ip: req.ip });
@@ -380,16 +461,23 @@ router.post('/login', authLimiter, async (req, res) => {
 
     loginFailures.delete(normalizedEmail);
 
+    // A legacy account swaps its password hash for one of the derived secret.
+    // With 2FA on this waits until the code checks out, so someone holding
+    // only the password can't swap in a secret and lock the owner out.
+    const upgradedHash = legacy ? await hashAuthSecret(authSecret) : undefined;
+
     // 2FA check — if enabled, return a pending token instead of a session
     if (account.totpEnabled) {
       cleanExpiredPending();
       const pendingToken = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-      pendingTwoFA.set(pendingToken, { accountId: account.id, expiresAt });
+      pendingTwoFA.set(pendingToken, { accountId: account.id, expiresAt, upgradedHash });
       logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip });
       res.json({ requires2FA: true, pendingToken });
       return;
     }
+
+    if (upgradedHash) await upgradeAuthHash(account.id, account.passwordHash, upgradedHash);
 
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
@@ -441,21 +529,21 @@ router.post('/change-password', strictLimiter, authMiddleware, async (req, res) 
       return;
     }
 
-    const { currentPassword, newPassword, newEncryptedMasterKey, newKekSalt, newKekWrapIv } = parsed.data;
+    const { currentAuthSecret, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv } = parsed.data;
     const account = await prisma.account.findUnique({ where: { id: req.auth!.accountId } });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;
     }
 
-    const valid = await bcrypt.compare(currentPassword, account.passwordHash);
+    const valid = await checkAuthSecret(account.passwordHash, currentAuthSecret);
     if (!valid) {
       logSecurityEvent('password_change_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const passwordHash = await hashAuthSecret(newAuthSecret);
 
     // Atomic: update password + revoke ALL sessions (including current) in a single transaction
     await prisma.$transaction([
@@ -505,7 +593,7 @@ router.post('/change-email', strictLimiter, authMiddleware, async (req, res) => 
       return;
     }
 
-    const normalizedEmail = parsed.data.newEmail.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(parsed.data.newEmail);
     const emailParsed = emailSchema.safeParse(normalizedEmail);
     if (!emailParsed.success) {
       res.status(400).json({ error: 'Invalid email format' });
@@ -517,7 +605,7 @@ router.post('/change-email', strictLimiter, authMiddleware, async (req, res) => 
       where: { id: req.auth!.accountId },
       select: { passwordHash: true },
     });
-    if (!account || !(await bcrypt.compare(parsed.data.currentPassword, account.passwordHash))) {
+    if (!account || !(await checkAuthSecret(account.passwordHash, parsed.data.currentAuthSecret))) {
       logSecurityEvent('email_change_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -532,7 +620,8 @@ router.post('/change-email', strictLimiter, authMiddleware, async (req, res) => 
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },
-      data: { email: normalizedEmail },
+      // The sign-in secret is salted with the email, so it's replaced too
+      data: { email: normalizedEmail, passwordHash: await hashAuthSecret(parsed.data.newAuthSecret) },
     });
 
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
@@ -551,17 +640,16 @@ router.post('/recover', strictLimiter, async (req, res) => {
   try {
     const parsed = recoverSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Password does not meet requirements' });
+      res.status(400).json({ error: 'Recovery failed' });
       return;
     }
 
-    const { email: rawEmail, recoveryKey, newPassword, newEncryptedMasterKey, newKekSalt, newKekWrapIv, newRecoveryWrappedMK, newRecoveryWrapIv, newRecoveryKeyHash, newRecoveryKeySalt, code } = parsed.data;
-    const email = rawEmail.toLowerCase();
+    const { email: rawEmail, recoveryProof, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv, newRecoveryWrappedMK, newRecoveryWrapIv, newRecoveryKeyHash, newRecoveryKeySalt, code } = parsed.data;
+    const email = normalizeEmail(rawEmail);
 
     const account = await prisma.account.findUnique({ where: { email } });
     if (!account) {
       // Constant-time delay to prevent timing-based enumeration
-      await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Recovery failed' });
       return;
@@ -575,15 +663,10 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
-    // Verify recovery key using PBKDF2 (salted + iterated). Async: 600k
-    // iterations would otherwise block the event loop for every request.
-    const recoveryKeySalt = Buffer.from(account.recoveryKeySalt, 'hex');
-    const providedHash = (await pbkdf2(recoveryKey, recoveryKeySalt, 600000, 32, 'sha256')).toString('hex');
+    // The client sends PBKDF2(recoveryKey, recoveryKeySalt) — never the key,
+    // which would unwrap recoveryWrappedMK
     const verifiedHash = account.recoveryKeyHash;
-
-    const a = Buffer.from(providedHash);
-    const b = Buffer.from(verifiedHash);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    if (!recoveryProofMatches(verifiedHash, recoveryProof)) {
       logSecurityEvent('recovery_failed', { accountId: account.id, ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Recovery failed' });
@@ -609,7 +692,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
       }
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const passwordHash = await hashAuthSecret(newAuthSecret);
 
     // Interactive transaction with row-level locking to prevent concurrent recovery race condition
     const txResult = await prisma.$transaction(async (tx) => {
@@ -632,7 +715,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
           encryptedMasterKey: new Uint8Array(Buffer.from(newEncryptedMasterKey, 'base64')),
           kekSalt: new Uint8Array(Buffer.from(newKekSalt, 'base64')),
           kekWrapIv: new Uint8Array(Buffer.from(newKekWrapIv, 'base64')),
-          recoveryKeyHash: newRecoveryKeyHash,
+          recoveryKeyHash: sealRecoveryProof(newRecoveryKeyHash),
           recoveryKeySalt: newRecoveryKeySalt,
           recoveryWrappedMK: new Uint8Array(Buffer.from(newRecoveryWrappedMK, 'base64')),
           recoveryWrapIv: new Uint8Array(Buffer.from(newRecoveryWrapIv, 'base64')),
@@ -717,6 +800,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
         totpSecret: true,
         totpEnabled: true,
         totpBackupCodes: true,
+        passwordHash: true,
         encryptionEnabled: true,
         kekSalt: true,
         encryptedMasterKey: true,
@@ -747,6 +831,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     if (factor === 'backup') {
       logSecurityEvent('login_2fa_backup_code_used', { accountId: account.id, ip: req.ip });
     }
+    if (pending.upgradedHash) await upgradeAuthHash(account.id, account.passwordHash, pending.upgradedHash);
 
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
@@ -800,13 +885,13 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, async (req, res) => {
       return;
     }
 
-    const { secret, code, currentPassword } = parsed.data;
+    const { secret, code, currentAuthSecret } = parsed.data;
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
       select: { passwordHash: true, totpEnabled: true },
     });
-    if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+    if (!account || !(await checkAuthSecret(account.passwordHash, currentAuthSecret))) {
       logSecurityEvent('2fa_enable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -873,7 +958,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
       return;
     }
 
-    const valid = await bcrypt.compare(parsed.data.password, account.passwordHash);
+    const valid = await checkAuthSecret(account.passwordHash, parsed.data.authSecret);
     if (!valid) {
       logSecurityEvent('2fa_disable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
@@ -927,7 +1012,7 @@ router.delete('/account', strictLimiter, authMiddleware, async (req, res) => {
       res.status(404).json({ error: 'Account not found' });
       return;
     }
-    if (!(await bcrypt.compare(parsed.data.password, account.passwordHash))) {
+    if (!(await checkAuthSecret(account.passwordHash, parsed.data.authSecret))) {
       logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
       return;
@@ -980,24 +1065,26 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
       res.status(400).json({ error: 'Invalid email' });
       return;
     }
-    const email = rawEmail.toLowerCase();
+    const email = normalizeEmail(rawEmail);
 
     const account = await prisma.account.findUnique({
       where: { email },
       select: {
         recoveryWrappedMK: true,
         recoveryWrapIv: true,
+        recoveryKeySalt: true,
         encryptionEnabled: true,
       },
     });
 
-    if (!account || !account.encryptionEnabled || !account.recoveryWrappedMK || !account.recoveryWrapIv) {
+    if (!account || !account.encryptionEnabled || !account.recoveryWrappedMK || !account.recoveryWrapIv || !account.recoveryKeySalt) {
       // Stable decoy params (same size as a real AES-GCM-wrapped 32-byte key)
       // so an unknown email is indistinguishable from a real one
       await constantTimeDelay(startTime);
       res.json({
         recoveryWrappedMK: longDecoyBytes(email, 'wrapped-mk', 48),
         recoveryWrapIv: decoyBytes(email, 'wrap-iv', 12),
+        recoveryKeySalt: Buffer.from(decoyBytes(email, 'recovery-salt', 16), 'base64').toString('hex'),
       });
       return;
     }
@@ -1006,6 +1093,8 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
     res.json({
       recoveryWrappedMK: Buffer.from(account.recoveryWrappedMK).toString('base64'),
       recoveryWrapIv: Buffer.from(account.recoveryWrapIv).toString('base64'),
+      // Salt for the recovery proof, which the client now computes itself
+      recoveryKeySalt: account.recoveryKeySalt,
     });
   } catch (err) {
     console.error('Recovery params error:', err instanceof Error ? err.message : 'Unknown error');
@@ -1023,7 +1112,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, async (req, res) => 
       res.status(400).json({ error: parsed.error.errors[0].message });
       return;
     }
-    const { currentPassword, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
+    const { currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
 
     // Whoever sets the recovery key can later reset the password with it, so
     // a signed-in session alone must not be enough to replace it
@@ -1031,7 +1120,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, async (req, res) => 
       where: { id: req.auth!.accountId },
       select: { passwordHash: true },
     });
-    if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+    if (!account || !(await checkAuthSecret(account.passwordHash, currentAuthSecret))) {
       logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -1042,7 +1131,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, async (req, res) => 
       data: {
         recoveryWrappedMK: new Uint8Array(Buffer.from(recoveryWrappedMK, 'base64')),
         recoveryWrapIv: new Uint8Array(Buffer.from(recoveryWrapIv, 'base64')),
-        recoveryKeyHash,
+        recoveryKeyHash: sealRecoveryProof(recoveryKeyHash),
         recoveryKeySalt,
       },
     });

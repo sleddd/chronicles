@@ -127,21 +127,22 @@ describe('Password change session revocation', () => {
 });
 
 // ============================================================================
-// 6. Recovery key uses PBKDF2 hashing (not plain SHA-256)
+// 6. Recovery: the server checks a proof, never sees the recovery key
 // ============================================================================
 describe('Recovery key PBKDF2 hashing', () => {
-  it('server recovery endpoint uses async pbkdf2 (never blocks the event loop), not createHash', async () => {
+  it('server recovery endpoint takes a proof, not the recovery key, and checks it sealed', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
     const recoverSection = authContent.split("router.post('/recover'")[1]?.split("router.")[0] || '';
-    expect(recoverSection).toContain('await pbkdf2(');
+    // The raw key would unwrap recoveryWrappedMK — it must never reach the server
+    const recoverCode = recoverSection.replace(/\/\/.*$/gm, '');
+    expect(recoverCode).not.toMatch(/\brecoveryKey\b(?!Hash|Salt|UsedAt)/);
+    expect(recoverSection).toContain('recoveryProofMatches(verifiedHash, recoveryProof)');
+    expect(recoverSection).toContain('recoveryKeyHash: sealRecoveryProof(newRecoveryKeyHash)');
     expect(recoverSection).not.toContain('pbkdf2Sync');
-    expect(recoverSection).not.toContain("createHash('sha256')");
-    expect(recoverSection).toContain('recoveryKeySalt');
-    expect(recoverSection).toContain('600000'); // iterations
   });
 
   it('PBKDF2 hash produces correct output', () => {
@@ -176,7 +177,7 @@ describe('Recovery key single-use enforcement', () => {
     expect(recoverSection).toContain('recoveryKeyUsedAt: new Date()');
     // The used recovery key is replaced by a fresh one in the same transaction,
     // so the old key can never unlock the account again
-    expect(recoverSection).toContain('recoveryKeyHash: newRecoveryKeyHash');
+    expect(recoverSection).toContain('recoveryKeyHash: sealRecoveryProof(newRecoveryKeyHash)');
     expect(recoverSection).toContain('recoveryKeySalt: newRecoveryKeySalt');
     expect(recoverSection).toContain('recoveryWrappedMK: new Uint8Array(Buffer.from(newRecoveryWrappedMK');
     // Row lock re-checks the key wasn't consumed by a concurrent request
@@ -199,7 +200,7 @@ describe('Recovery key single-use enforcement', () => {
 });
 
 // ============================================================================
-// 8. Password validation errors are generic (don't leak requirements)
+// 8. Validation errors are generic (don't leak requirements)
 // ============================================================================
 describe('Generic password validation errors', () => {
   it('register endpoint returns generic validation error', async () => {
@@ -210,7 +211,7 @@ describe('Generic password validation errors', () => {
     );
     // Register should return generic message
     const registerSection = authContent.split("router.post('/register'")[1]?.split("router.")[0] || '';
-    expect(registerSection).toContain("'Password does not meet requirements'");
+    expect(registerSection).toContain("'Invalid registration details'");
     expect(registerSection).not.toContain('parsed.error.errors[0].message');
   });
 
@@ -231,7 +232,7 @@ describe('Generic password validation errors', () => {
       'utf8'
     );
     const recoverSection = authContent.split("router.post('/recover'")[1]?.split("router.")[0] || '';
-    expect(recoverSection).toContain("'Password does not meet requirements'");
+    expect(recoverSection).toContain("res.status(400).json({ error: 'Recovery failed' })");
   });
 });
 
@@ -363,7 +364,7 @@ describe('Register schema includes recoveryKeySalt', () => {
       new URL('../../../shared/src/validation/schemas.ts', import.meta.url).pathname.replace('/server/src/__tests__', ''),
       'utf8'
     );
-    expect(content).toContain("recoveryKeySalt: z.string().min(1)");
+    expect(content).toContain('recoveryKeySalt: recoverySaltSchema');
   });
 });
 
@@ -480,15 +481,28 @@ describe('Activity debounce interval', () => {
 // 22. Recovery PBKDF2 iterations increased to 600,000
 // ============================================================================
 describe('Recovery PBKDF2 iterations', () => {
-  it('server recovery endpoint uses 600000 iterations', async () => {
+  it('the client-side recovery proof uses 600000 iterations', async () => {
+    const { RECOVERY_PBKDF2_ITERATIONS } = await import('@chronicles/shared');
+    expect(RECOVERY_PBKDF2_ITERATIONS).toBe(600000);
+  });
+});
+
+// ============================================================================
+// 23. The server never receives the password
+// ============================================================================
+describe('Password never sent to the server', () => {
+  it('auth routes read derived secrets, and the password only as the one-time legacyPassword', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    const recoverSection = authContent.split("router.post('/recover'")[1]?.split("router.")[0] || '';
-    expect(recoverSection).toContain('pbkdf2(recoveryKey, recoveryKeySalt, 600000');
-    // Should NOT use old 100000 iterations
-    expect(recoverSection).not.toContain('100000');
+    for (const field of ['password', 'currentPassword', 'newPassword', 'recoveryKey']) {
+      expect(authContent).not.toMatch(new RegExp(`parsed\\.data\\.${field}\\b`));
+      expect(authContent).not.toMatch(new RegExp(`[{,]\\s*${field}\\s*[,}][^\\n]*= parsed\\.data`));
+    }
+    // The only bcrypt.compare on a raw password is the legacy-upgrade path
+    expect(authContent.match(/bcrypt\.compare\(/g)).toHaveLength(2);
+    expect(authContent).toContain('bcrypt.compare(legacyPassword!, account.passwordHash)');
   });
 });
