@@ -33,6 +33,16 @@ describe('securityHeaders middleware', () => {
     expect(res.headers['Content-Security-Policy']).toContain("object-src 'none'");
   });
 
+  it('keeps API responses out of the browser cache, but not the app shell', () => {
+    const api = createMockRes() as any;
+    securityHeaders({ path: '/api/auth/me' } as any, api, vi.fn());
+    expect(api.headers['Cache-Control']).toBe('no-store');
+
+    const page = createMockRes() as any;
+    securityHeaders({ path: '/journal' } as any, page, vi.fn());
+    expect(page.headers['Cache-Control']).toBeUndefined();
+  });
+
   it('allows Bedrock per region host, never every amazonaws.com host (e.g. S3 buckets)', () => {
     const res = createMockRes() as any;
     securityHeaders({} as any, res, vi.fn());

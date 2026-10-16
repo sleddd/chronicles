@@ -16,6 +16,7 @@ vi.mock('../../db/prisma.js', () => ({
     },
     session: { updateMany: vi.fn() },
     $transaction: vi.fn(),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   },
 }));
 
@@ -195,10 +196,19 @@ describe('2FA hardening', () => {
         .send({ pendingToken: await pendingTokenFor(app, account), code: 'aaaaaa-bbbbbb' });
 
       expect(res.status).toBe(200);
-      expect(prisma.account.update).toHaveBeenCalledWith({
-        where: { id: account.id },
-        data: { totpBackupCodes: [sha256('cccccc-dddddd')] },
-      });
+      const [, used, id] = (prisma.$executeRaw as any).mock.calls[0];
+      expect(used).toBe(sha256('aaaaaa-bbbbbb'));
+      expect(id).toBe(account.id);
+    });
+
+    it('rejects a backup code a concurrent request already spent', async () => {
+      const account = twoFAAccount(generateSecret(), [sha256('aaaaaa-bbbbbb')]);
+      (prisma.$executeRaw as any).mockResolvedValueOnce(0);
+
+      const res = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: 'aaaaaa-bbbbbb' });
+
+      expect(res.status).toBe(401);
     });
   });
 

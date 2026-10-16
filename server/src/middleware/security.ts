@@ -16,7 +16,11 @@ const CONNECT_SRC = [
   ...bedrockOrigins(),
 ].join(' ');
 
-export function securityHeaders(_req: Request, res: Response, next: NextFunction): void {
+export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
+  // API responses carry the wrapped master key + salt (/me, /login), encrypted
+  // entries and settings — keep them out of the browser's disk cache, where they
+  // would outlive sign-out on a shared computer. Routes may override (ICS feed).
+  if (req.path?.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   // Prevent XSS from stealing in-memory key
   // Note: style-src 'unsafe-inline' is required by styled-components (CSS-in-JS).
   // CSP nonces can't be used here because Express is API-only — the HTML page is served

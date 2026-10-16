@@ -120,10 +120,16 @@ async function verifySecondFactor(
     recordTwoFAFailure(account.id);
     return null;
   }
-  await prisma.account.update({
-    where: { id: account.id },
-    data: { totpBackupCodes: account.totpBackupCodes.filter((_, i) => i !== matchIndex) },
-  });
+  // Consume atomically: only the request that actually removes the code wins,
+  // so two concurrent requests can't both spend the same backup code
+  const used = account.totpBackupCodes[matchIndex];
+  const consumed = await prisma.$executeRaw`
+    UPDATE "accounts" SET totp_backup_codes = array_remove(totp_backup_codes, ${used})
+    WHERE id = ${account.id} AND ${used} = ANY(totp_backup_codes)`;
+  if (consumed === 0) {
+    recordTwoFAFailure(account.id);
+    return null;
+  }
   twoFAFailures.delete(account.id);
   return 'backup';
 }

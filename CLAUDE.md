@@ -203,7 +203,7 @@ Implemented via `otplib` — no external services required.
 **Setup flow (Settings → Security):**
 1. `POST /api/auth/2fa/setup` — generates TOTP secret + QR code (not saved yet)
 2. User scans QR code and enters confirmation code
-3. `POST /api/auth/2fa/enable` — needs the **current password** and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify)
+3. `POST /api/auth/2fa/enable` — needs the **current password** and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify; a used code is removed with one conditional `array_remove` UPDATE so concurrent requests can't spend it twice)
 4. `DELETE /api/auth/2fa` — disables 2FA after password confirmation
 
 **Schema**: `totpSecret` and `totpEnabled` added to `accounts` table.
@@ -498,6 +498,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - `img-src 'self' data: blob:` — images from same origin and data URIs
 - `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket (`*.r2.cloudflarestorage.com` — the account ID is encrypted, so it can't be pinned), and the AI providers (`api.anthropic.com`, `api.openai.com`, and `bedrock`/`bedrock-runtime` hosts for each region in `BEDROCK_REGIONS`, `shared/src/validation/awsRegions.ts` — never `*.amazonaws.com`; AI settings reject unlisted regions)
 - `frame-ancestors 'none'` — prevent clickjacking; plus `base-uri 'self'`, `form-action 'self'`, `object-src 'none'`
+- Every `/api/*` response is `Cache-Control: no-store` (set in `securityHeaders`; the ICS feed overrides it) so wrapped keys, ciphertext and settings never land in the browser's disk cache
 - `Permissions-Policy` keeps `microphone=(self)` (voice dictation); camera, geolocation etc. are off
 
 ### Account-change rules
