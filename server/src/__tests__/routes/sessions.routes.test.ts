@@ -8,6 +8,7 @@ vi.mock('../../db/prisma.js', () => ({
     session: {
       findMany: vi.fn(),
       updateMany: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ selector: 'aabbccddee11' }),
     },
   },
 }));

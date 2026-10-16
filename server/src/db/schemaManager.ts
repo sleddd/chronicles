@@ -202,6 +202,15 @@ export async function deleteTenant(userId: string): Promise<void> {
   await prisma.account.delete({ where: { userId } });
 }
 
+/** Delete an account by id: its tenant schema first, then the account row
+ *  (sessions, shares and the calendar integration cascade). */
+export async function deleteAccountById(accountId: number): Promise<void> {
+  const account = await prisma.account.findUnique({ where: { id: accountId }, select: { tenantSchemaName: true } });
+  if (!account) throw new Error('Account not found');
+  await dropTenantSchema(account.tenantSchemaName);
+  await prisma.account.delete({ where: { id: accountId } });
+}
+
 export async function getTenantSchema(userId: string): Promise<string | null> {
   const account = await prisma.account.findUnique({
     where: { userId },

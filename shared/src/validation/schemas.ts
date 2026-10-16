@@ -67,8 +67,17 @@ export const enable2FASchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
 });
 
+// Turning 2FA off needs the password AND a current authenticator/backup code,
+// so a stolen session plus a phished password isn't enough to strip it
 export const disable2FASchema = z.object({
   password: z.string().min(1),
+  code: z.string().min(1).max(64),
+});
+
+// Deleting the account is permanent: password, plus a 2FA code when 2FA is on
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+  code: z.string().min(1).max(64).optional(),
 });
 
 // Account changes that could lock the owner out require the current password,

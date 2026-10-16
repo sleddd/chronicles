@@ -1,9 +1,14 @@
 import { Router } from 'express';
-import { createPost, getPost, getAllPosts, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies } from '../db/tenantQueries.js';
+import { createPost, getPost, getAllPosts, updatePost, deletePost } from '../db/tenantQueries.js';
 import { createPostSchema, updatePostSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 
 const router = Router();
+
+// Entry→topic links are no longer stored in plaintext (post_taxonomies told
+// the server which entries were Medication, Symptom, etc.). The topic lives
+// only in the entry's encrypted metadata; `taxonomyIds` from older clients is
+// accepted and ignored.
 
 // Helper to serialize Buffer/Uint8Array fields to base64 for JSON response
 function serializePost(post: Record<string, unknown>) {
@@ -40,7 +45,7 @@ router.post('/', async (req, res) => {
     }
 
     // The schema only admits encrypted posts — the server never stores plaintext
-    const { taxonomyIds, createdAt, ...postData } = parsed.data;
+    const { taxonomyIds: _ignored, createdAt, ...postData } = parsed.data;
     const input: Record<string, unknown> = {
       isEncrypted: true,
       contentEncrypted: Buffer.from(postData.contentEncrypted, 'base64'),
@@ -54,16 +59,6 @@ router.post('/', async (req, res) => {
     }
 
     const post = await createPost(req.auth!.tenantSchemaName, input as Parameters<typeof createPost>[1]);
-
-    if (taxonomyIds?.length) {
-      // Validate taxonomy IDs belong to this tenant
-      const existing = await getAllTaxonomies(req.auth!.tenantSchemaName);
-      const existingIds = new Set(existing.map(t => t.id));
-      const validIds = taxonomyIds.filter(id => existingIds.has(id));
-      if (validIds.length > 0) {
-        await setPostTaxonomies(req.auth!.tenantSchemaName, post.id, validIds);
-      }
-    }
 
     res.status(201).json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
@@ -83,8 +78,7 @@ router.get('/:id', async (req, res) => {
       return;
     }
 
-    const taxonomies = await getPostTaxonomies(req.auth!.tenantSchemaName, id);
-    res.json({ ...serializePost(post as unknown as Record<string, unknown>), taxonomies });
+    res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
     console.error('Get entry error:', err);
     res.status(500).json({ error: 'Failed to fetch entry' });
@@ -102,7 +96,7 @@ router.put('/:id', async (req, res) => {
       return;
     }
 
-    const { taxonomyIds, ...updates } = parsed.data;
+    const { taxonomyIds: _ignored, ...updates } = parsed.data;
     const input: Record<string, unknown> = {};
 
     if (updates.contentEncrypted !== undefined) input.contentEncrypted = Buffer.from(updates.contentEncrypted, 'base64');
@@ -111,14 +105,6 @@ router.put('/:id', async (req, res) => {
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
     const post = await updatePost(req.auth!.tenantSchemaName, id, input as Parameters<typeof updatePost>[2]);
-
-    if (taxonomyIds !== undefined) {
-      // Validate taxonomy IDs belong to this tenant
-      const existing = await getAllTaxonomies(req.auth!.tenantSchemaName);
-      const existingIds = new Set(existing.map(t => t.id));
-      const validIds = taxonomyIds.filter(id => existingIds.has(id));
-      await setPostTaxonomies(req.auth!.tenantSchemaName, id, validIds);
-    }
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {

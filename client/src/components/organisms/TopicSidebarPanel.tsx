@@ -15,6 +15,7 @@ import type { Topic } from '../../types/topics.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { settings as settingsApi } from '../../services/api.js';
+import { usePrivateSettings } from '../../services/privateSettings.js';
 import type { UserFieldDef } from '../../types/userFields.js';
 import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
@@ -282,14 +283,15 @@ export function TopicSidebarPanel({
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const topicHideText = useUIStore(s => s.topicHideText);
   const updateTopicFields = useUIStore(s => s.updateTopicFields);
+  const { savePrivateSetting } = usePrivateSettings();
 
   const handleFieldDefsChange = useCallback((topicId: number, defs: UserFieldDef[]) => {
     updateTopicFields(topicId, defs);
     const currentFields = useUIStore.getState().topicCustomFields;
     const updated = { ...currentFields, [topicId]: defs };
-    settingsApi.upsert('topicCustomFields', updated)
+    savePrivateSetting('topicCustomFields', updated)
       .catch(err => console.error('Failed to save topic fields:', err));
-  }, [updateTopicFields]);
+  }, [updateTopicFields, savePrivateSetting]);
 
   const handleHideTextChange = useCallback((topicId: number, hide: boolean) => {
     useUIStore.getState().updateTopicHideText(topicId, hide);

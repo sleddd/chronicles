@@ -20,7 +20,8 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
-import { entries as entriesApi, settings as settingsApi } from '../services/api.js';
+import { entries as entriesApi } from '../services/api.js';
+import { usePrivateSettings } from '../services/privateSettings.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import type { MilestoneEntryData, TaskEntryData } from '../types/goals.js';
 import type { PlannerFilterConfig, SavedPlannerFilter } from '../types/planner.js';
@@ -305,6 +306,7 @@ export function PlannerFilterView() {
   const openInJournal = useOpenInJournal();
   const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
   const { encryptPost } = useEncryption();
+  const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
 
   // pending = what the user is editing; applied = what actually drives results.
   // The applied filter lives in the URL (?f=…) so it's still there after
@@ -343,18 +345,17 @@ export function PlannerFilterView() {
 
   // Load saved filters
   useEffect(() => {
-    settingsApi.getAll()
-      .then(all => {
-        const rec = all.find(s => s.key === 'plannerFilters');
-        if (rec && Array.isArray(rec.value)) setSavedFilters(rec.value as SavedPlannerFilter[]);
+    loadPrivateSettings()
+      .then(map => {
+        if (Array.isArray(map.plannerFilters)) setSavedFilters(map.plannerFilters as SavedPlannerFilter[]);
       })
       .catch(() => {});
-  }, []);
+  }, [loadPrivateSettings]);
 
   const persistSaved = useCallback(async (filters: SavedPlannerFilter[]) => {
     setSavedFilters(filters);
-    await settingsApi.upsert('plannerFilters', filters).catch(() => {});
-  }, []);
+    await savePrivateSetting('plannerFilters', filters).catch(() => {});
+  }, [savePrivateSetting]);
 
   // Resolve topic IDs
   const goalTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'goal')?.id, [allTopics]);

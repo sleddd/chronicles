@@ -6,6 +6,9 @@ import { useInitializeData } from '@/hooks/useInitializeData';
 
 const mockNavigate = vi.fn();
 
+vi.mock('../../services/privateSettings.js', () => ({
+  usePrivateSettings: () => ({ savePrivateSetting: vi.fn().mockResolvedValue(undefined), loadPrivateSettings: vi.fn().mockResolvedValue({}) }),
+}));
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
 }));
