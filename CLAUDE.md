@@ -366,7 +366,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 
 **Productivity**
 - Goals & milestones with progress tracking; progress bar shown when milestones/tasks are linked; goal "In Progress" status supported; milestone status cycle: `not_started → in_progress → completed` (tap-to-advance on card)
-- Custom Planner Filters (`/goals/filter`) — cross-hierarchy search across goals, milestones, tasks, and todos; filter by keyword, item types (toggle chips), status, priority, parent goal, parent milestone; save named filters persisted to `plannerFilters` setting; collapsible panel with inline filter summary; results shown in sectioned list with counts; filter config types in `client/src/types/planner.ts`
+- Custom Planner Filters (`/goals/filter`) — cross-hierarchy search across goals, milestones, tasks, and todos; filter by keyword, item types (toggle chips), status, priority, parent goal, parent milestone; save named filters persisted to `plannerFilters` setting; the applied filter is kept in the URL (`?f=…`, `encodePlannerFilter`/`decodePlannerFilter` in `types/planner.ts`) so it survives editing a result in the journal and coming back; collapsible panel with inline filter summary; results shown in sectioned list with counts; filter config types in `client/src/types/planner.ts`
 - Tasks with priority levels and milestone linking; completed tasks show line-through in all views
 - Menu planner and shopping lists with recipe linking
 - Drag-and-drop reordering

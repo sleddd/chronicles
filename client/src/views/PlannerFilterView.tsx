@@ -24,7 +24,8 @@ import { entries as entriesApi, settings as settingsApi } from '../services/api.
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import type { MilestoneEntryData, TaskEntryData } from '../types/goals.js';
 import type { PlannerFilterConfig, SavedPlannerFilter } from '../types/planner.js';
-import { EMPTY_PLANNER_FILTER, isFilterEmpty, filtersEqual } from '../types/planner.js';
+import { EMPTY_PLANNER_FILTER, isFilterEmpty, filtersEqual, encodePlannerFilter, decodePlannerFilter } from '../types/planner.js';
+import { useSearchParams } from 'react-router-dom';
 
 /* ── Styled components ── */
 
@@ -305,14 +306,23 @@ export function PlannerFilterView() {
   const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
   const { encryptPost } = useEncryption();
 
-  // pending = what the user is editing; applied = what actually drives results
-  const [pending, setPending] = useState<PlannerFilterConfig>(EMPTY_PLANNER_FILTER);
-  const [filter, setFilter] = useState<PlannerFilterConfig>(EMPTY_PLANNER_FILTER);
+  // pending = what the user is editing; applied = what actually drives results.
+  // The applied filter lives in the URL (?f=…) so it's still there after
+  // opening a result in the journal and coming back (or reloading).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlFilter = decodePlannerFilter(searchParams.get('f'));
+  const [pending, setPending] = useState<PlannerFilterConfig>(() => urlFilter ?? EMPTY_PLANNER_FILTER);
+  const [filter, setFilterState] = useState<PlannerFilterConfig>(() => urlFilter ?? EMPTY_PLANNER_FILTER);
+  const setFilter = (f: PlannerFilterConfig) => {
+    setFilterState(f);
+    setSearchParams(isFilterEmpty(f) ? {} : { f: encodePlannerFilter(f) }, { replace: true });
+  };
   const [savedFilters, setSavedFilters] = useState<SavedPlannerFilter[]>([]);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [showSaveInput, setShowSaveInput] = useState(false);
   const [saveName, setSaveName] = useState('');
-  const [panelOpen, setPanelOpen] = useState(true);
+  // Coming back with a filter applied: show the results, panel folded away
+  const [panelOpen, setPanelOpen] = useState(() => !urlFilter || isFilterEmpty(urlFilter));
 
   // Add new item state
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);

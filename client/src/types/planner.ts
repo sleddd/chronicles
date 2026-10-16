@@ -48,3 +48,33 @@ export function isFilterEmpty(f: PlannerFilterConfig): boolean {
     f.parentMilestoneId === null
   );
 }
+
+const ITEM_TYPES = ['goals', 'milestones', 'tasks', 'todos'] as const;
+
+/** The applied filter as a URL value (`?f=…`), so it survives opening an
+ *  entry in the journal and coming back (the return path keeps the query). */
+export function encodePlannerFilter(f: PlannerFilterConfig): string {
+  return JSON.stringify(f);
+}
+
+/** Parse `?f=…` back into a filter; null when missing or malformed. */
+export function decodePlannerFilter(raw: string | null): PlannerFilterConfig | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<PlannerFilterConfig>;
+    if (!v || typeof v !== 'object') return null;
+    const id = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+    const str = (x: unknown, d: string) => (typeof x === 'string' ? x : d);
+    return {
+      keyword: str(v.keyword, ''),
+      itemTypes: Array.isArray(v.itemTypes) ? v.itemTypes.filter((t): t is PlannerFilterConfig['itemTypes'][number] => (ITEM_TYPES as readonly string[]).includes(t as string)) : [],
+      goalStatus: str(v.goalStatus, 'all'),
+      taskStatus: str(v.taskStatus, 'all'),
+      priority: str(v.priority, 'all'),
+      parentGoalId: id(v.parentGoalId),
+      parentMilestoneId: id(v.parentMilestoneId),
+    };
+  } catch {
+    return null;
+  }
+}
