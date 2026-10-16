@@ -2,7 +2,41 @@
 
 A zero-knowledge encrypted journal and digital day planner for those too busy to journal. Capture the key moments of your day, organize with topics, and track health, goals, and more — all encrypted on your device before it ever leaves the browser.
 
-## Features
+## Screenshots
+
+Chronicles is in active design and development, with a phone app via React Native planned. These screenshots are from June 2026 — the UI has been refined since (filled form fields, fields-first entries, collapsible settings, and more).
+
+### Dark and Light Theme
+<img width="1428" height="600" alt="Screenshot 2026-10-15 at 5 13 06 PM" src="https://github.com/user-attachments/assets/cfbbdba4-d1f8-4db3-b758-2d1a4450b869" />
+<img width="1409" height="602" alt="Screenshot 2026-10-15 at 5 12 40 PM" src="https://github.com/user-attachments/assets/5edc0822-b543-4480-94d7-7512568e64a1" />
+
+### Health View - Meal, Exercise, Medication, Allergy, Wellness, and Symptom Tracking with basic reporting
+<img width="1426" height="673" alt="Screenshot 2026-10-15 at 5 22 52 PM" src="https://github.com/user-attachments/assets/e2c21317-9501-4e85-85ba-b65944e69d27" />
+<img width="1420" height="682" alt="Screenshot 2026-10-15 at 5 22 23 PM" src="https://github.com/user-attachments/assets/fb06eb42-32e9-4cb7-a322-de3cacc6a167" />
+<img width="1433" height="682" alt="Screenshot 2026-10-15 at 5 22 10 PM" src="https://github.com/user-attachments/assets/ebc1f06e-e8cb-4d60-b4cc-ccfd4054b0fb" />
+<img width="1435" height="681" alt="Screenshot 2026-10-15 at 5 23 33 PM" src="https://github.com/user-attachments/assets/8b308267-921d-4a2f-8fc1-1e04bf758250" />
+<img width="1173" height="592" alt="Screenshot 2026-10-15 at 5 23 16 PM" src="https://github.com/user-attachments/assets/392af49e-70ea-47af-8a2b-4785edfdaba7" />
+
+### AI integration for calorie estimation and chat. It will auto-generate save suggestions and provide app assistance.
+<img width="1423" height="689" alt="Screenshot 2026-10-15 at 5 15 49 PM" src="https://github.com/user-attachments/assets/dbe67482-2abf-4124-b3a5-509824c8e975" />
+
+### Browse by topic or full journal view
+<img width="1417" height="685" alt="Screenshot 2026-10-15 at 5 25 47 PM" src="https://github.com/user-attachments/assets/f738a65c-d25a-4b9c-ac73-17b0b7fdcacc" />
+
+### Sort your kitchen with shopping checklists, meal planning, and recipe integration
+<img width="1417" height="680" alt="Screenshot 2026-10-15 at 5 25 16 PM" src="https://github.com/user-attachments/assets/69f5f816-df57-4a6f-a643-e0d1750be78f" />
+<img width="1410" height="689" alt="Screenshot 2026-10-15 at 5 43 06 PM" src="https://github.com/user-attachments/assets/c5b7571c-e97b-45e5-b51b-126f62e72c94" />
+<img width="1438" height="596" alt="Screenshot 2026-10-15 at 5 43 16 PM" src="https://github.com/user-attachments/assets/cb8ca3ce-de2f-4bb4-bb07-ceee0b0098ec" />
+
+### Calendar for meetings, tasks, and events with Google and Apple Calendar integration
+<img width="1428" height="684" alt="Screenshot 2026-10-15 at 5 24 23 PM" src="https://github.com/user-attachments/assets/fcdd4d6c-8fec-44c8-9dbf-22bb090b7979" />
+
+### Kanban for life planning with goals and milestones. Also allows tasks and todos with custom filtering view for quickly checking outstanding project tasks. 
+<img width="1427" height="681" alt="Screenshot 2026-10-15 at 5 24 08 PM" src="https://github.com/user-attachments/assets/59d38a45-4b1d-4dbf-8101-da8b505dc041" />
+<img width="1431" height="683" alt="Screenshot 2026-10-15 at 5 24 01 PM" src="https://github.com/user-attachments/assets/ad04acb3-5377-471a-8c2e-885f77fc94e0" />
+
+
+## Full Feature List
 
 - **Zero-Knowledge Encryption** - AES-256-GCM client-side encryption with non-extractable keys; server never sees plaintext
 - **Two-Factor Authentication** - TOTP-based 2FA (authenticator app); inline setup wizard with QR code, confirmation step, and 8 backup codes; disable with password confirmation
@@ -65,22 +99,6 @@ A zero-knowledge encrypted journal and digital day planner for those too busy to
 - **Recurring Calendar Events** - Events and meetings that repeat on a schedule
 - **Calorie Correlation Reporting** - How meals and calories relate to symptoms, mood, and sleep in Health Reports
 - **Phone App** - A native iOS/Android app built with React Native, sharing the same encrypted account
-
-## Screenshots
-
-Chronicles is in active design and development, with a phone app via React Native planned. These screenshots are from June 2026 — the UI has been refined since (filled form fields, fields-first entries, collapsible settings, and more).
-<img width="1374" height="720" alt="Screenshot 2026-06-24 at 11 45 57 PM" src="https://github.com/user-attachments/assets/9c574af0-c97b-4dd2-9dd5-194044513e7e" />
-<img width="1374" height="722" alt="Screenshot 2026-06-24 at 11 47 51 PM" src="https://github.com/user-attachments/assets/fcef5215-b3eb-4f76-b7d2-65aa8b4e0f2b" />
-<img width="1382" height="718" alt="Screenshot 2026-06-24 at 11 48 00 PM" src="https://github.com/user-attachments/assets/dc28747f-120f-431c-8ac4-343d26efae7d" />
-<img width="1367" height="707" alt="Screenshot 2026-06-24 at 11 48 28 PM" src="https://github.com/user-attachments/assets/c7481ecb-735f-4de4-82c4-ac3674f59483" />
-<img width="1372" height="723" alt="Screenshot 2026-06-24 at 11 49 25 PM" src="https://github.com/user-attachments/assets/97e33025-ade1-41b6-bb0a-17f853c1d448" />
-<img width="1370" height="700" alt="Screenshot 2026-06-24 at 11 49 55 PM" src="https://github.com/user-attachments/assets/45d5a801-b54d-4ff1-8da8-23433498eac9" />
-<img width="1374" height="709" alt="Screenshot 2026-06-24 at 11 50 17 PM" src="https://github.com/user-attachments/assets/4ac9fd6e-2a0b-47a0-8101-56342ae40cc8" />
-<img width="1376" height="689" alt="Screenshot 2026-06-24 at 11 50 27 PM" src="https://github.com/user-attachments/assets/f9036d87-8593-4b32-855a-783c042f5330" />
-<img width="1373" height="701" alt="Screenshot 2026-06-24 at 11 50 42 PM" src="https://github.com/user-attachments/assets/5d3b70b8-9dbd-4e3f-8ad5-40b8fc4a2e86" />
-<img width="1378" height="708" alt="Screenshot 2026-06-24 at 11 51 49 PM" src="https://github.com/user-attachments/assets/3fb1861a-254f-41a7-8eb9-e9a0dd441787" />
-<img width="1383" height="720" alt="Screenshot 2026-06-24 at 11 52 00 PM" src="https://github.com/user-attachments/assets/bef2ad9d-c12f-40c9-8bb4-84c7a1d5810f" />
-<img width="1381" height="721" alt="Screenshot 2026-06-24 at 11 52 19 PM" src="https://github.com/user-attachments/assets/f5f9938c-7022-4986-a1aa-05c7f2cda893" />
 
 
 ## Architecture
