@@ -58,6 +58,14 @@ A zero-knowledge encrypted journal and digital day planner for those too busy to
 - **Remember me** (opt-in, for personal devices) — stay unlocked until the browser closes; the browser keeps only an encrypted copy of the key, and the server holds the matching secret in memory only, never on disk
 - **AI is optional and bring-your-own** — when you turn it on, the meal or exercise description you're estimating (or your chat message) goes from your browser straight to the provider you chose; nothing passes through the Chronicles server
 
+## Upcoming Features
+
+- **Finance** - Views for bills, savings, and financial goals, plus checkbook reconciliation. Entirely manual by design: no bank integrations, so your financial data stays encrypted in Chronicles like everything else
+- **Text to Journal** - Add journal entries by sending a text message
+- **Recurring Calendar Events** - Events and meetings that repeat on a schedule
+- **Calorie Correlation Reporting** - How meals and calories relate to symptoms, mood, and sleep in Health Reports
+- **Phone App** - A native iOS/Android app built with React Native, sharing the same encrypted account
+
 ## Screenshots
 
 Chronicles is in active design and development, with a phone app via React Native planned. These screenshots are from June 2026 — the UI has been refined since (filled form fields, fields-first entries, collapsible settings, and more).
