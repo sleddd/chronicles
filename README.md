@@ -12,11 +12,11 @@ Chronicles is in active design and development, with a phone app via React Nativ
 These screenshots are from October 2026, but subject to change.
 
 ### Main view for quick entry
-<img width="1430" height="689" alt="Screenshot 2026-10-15 at 5 51 06 PM" src="https://github.com/user-attachments/assets/2e9c9c38-1b8c-4e64-ba37-475611fb8d9a" />
+<img width="1423" height="672" alt="Screenshot 2026-10-15 at 7 07 39 PM" src="https://github.com/user-attachments/assets/571b20b3-4284-4e3d-ae5d-94d9cf6e428b" />
 
 ### Journal View - to sort, search, edit, and filter with. App comes with dark and light theme
-<img width="1431" height="697" alt="Screenshot 2026-10-15 at 6 45 13 PM" src="https://github.com/user-attachments/assets/97318d91-29a6-4ecc-961d-7d3e508259cc" />
-<img width="1426" height="701" alt="Screenshot 2026-10-15 at 6 45 25 PM" src="https://github.com/user-attachments/assets/96932194-4409-4d38-941b-e28c54a171e1" />
+<img width="1428" height="690" alt="Screenshot 2026-10-15 at 7 06 50 PM" src="https://github.com/user-attachments/assets/b7cca347-6b0f-4c27-ad7c-a2749c4d7527" />
+<img width="1433" height="686" alt="Screenshot 2026-10-15 at 6 58 46 PM" src="https://github.com/user-attachments/assets/536d91dd-7769-4bfb-8205-ccaea0e62b3f" />
 
 ### Health View - Meal, Exercise, Medication, Allergy, Wellness, and Symptom Tracking with basic reporting
 <img width="1426" height="673" alt="Screenshot 2026-10-15 at 5 22 52 PM" src="https://github.com/user-attachments/assets/e2c21317-9501-4e85-85ba-b65944e69d27" />
@@ -26,7 +26,7 @@ These screenshots are from October 2026, but subject to change.
 <img width="1173" height="592" alt="Screenshot 2026-10-15 at 5 23 16 PM" src="https://github.com/user-attachments/assets/392af49e-70ea-47af-8a2b-4785edfdaba7" />
 
 ### AI integration for calorie estimation and chat. It will auto-generate save suggestions and provide app assistance. AI has no access to your journal entries ensuring no private information gets to the AI unless you send it. It has no memory beyond chat context, so your chats are not remembered once they are cleared or you logout. However, there is a specific section for notes in your settings where you can add things you want your AI to always know. You must provide your own AI key via OpenAI, Claude/Anthropic, or AWS Bedrock.
-<img width="1423" height="689" alt="Screenshot 2026-10-15 at 5 15 49 PM" src="https://github.com/user-attachments/assets/dbe67482-2abf-4124-b3a5-509824c8e975" />
+<img width="1427" height="704" alt="Screenshot 2026-10-15 at 6 59 47 PM" src="https://github.com/user-attachments/assets/32dd8bb1-93a8-463b-9fb9-1e8273028ae8" />
 
 ### Browse by topic or full journal view
 <img width="1417" height="685" alt="Screenshot 2026-10-15 at 5 25 47 PM" src="https://github.com/user-attachments/assets/f738a65c-d25a-4b9c-ac73-17b0b7fdcacc" />
