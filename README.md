@@ -25,7 +25,7 @@ These screenshots are from October 2026, but subject to change.
 <img width="1435" height="681" alt="Screenshot 2026-10-15 at 5 23 33 PM" src="https://github.com/user-attachments/assets/8b308267-921d-4a2f-8fc1-1e04bf758250" />
 <img width="1173" height="592" alt="Screenshot 2026-10-15 at 5 23 16 PM" src="https://github.com/user-attachments/assets/392af49e-70ea-47af-8a2b-4785edfdaba7" />
 
-### AI integration for calorie estimation and chat. It will auto-generate save suggestions and provide app assistance. AI has no access to your journal entries or memory AI designated chat context ensuring no private information gets to the AI unless you send it. Your chats are not saved or remembered.
+### AI integration for calorie estimation and chat. It will auto-generate save suggestions and provide app assistance. AI has no access to your journal entries ensuring no private information gets to the AI unless you send it. It has no memory beyond chat context, so your chats are not remembered once they are cleared or you logout.
 <img width="1423" height="689" alt="Screenshot 2026-10-15 at 5 15 49 PM" src="https://github.com/user-attachments/assets/dbe67482-2abf-4124-b3a5-509824c8e975" />
 
 ### Browse by topic or full journal view
