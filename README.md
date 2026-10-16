@@ -6,11 +6,15 @@ Capture the key moments of your day, organize with topics, and track health, goa
 
 All it takes is opening it up, select a topic, and enter one line for the day. Filters and code do the rest by sorting everything into views or you.
 
+Chronicles is in active design and development, with a phone app via React Native planned. 
+
 ## Screenshots
+These screenshots are from October 2026, but subject to change.
 
-Chronicles is in active design and development, with a phone app via React Native planned. These screenshots are from October 2026 — the UI has been refined since (filled form fields, fields-first entries, collapsible settings, and more).
+### Main view for quick entry
+<img width="1430" height="689" alt="Screenshot 2026-10-15 at 5 51 06 PM" src="https://github.com/user-attachments/assets/2e9c9c38-1b8c-4e64-ba37-475611fb8d9a" />
 
-### Dark and Light Theme
+### Journal View - to sort, search, edit, and filter with. App comes with dark and light theme
 <img width="1428" height="600" alt="Screenshot 2026-10-15 at 5 13 06 PM" src="https://github.com/user-attachments/assets/cfbbdba4-d1f8-4db3-b758-2d1a4450b869" />
 <img width="1409" height="602" alt="Screenshot 2026-10-15 at 5 12 40 PM" src="https://github.com/user-attachments/assets/5edc0822-b543-4480-94d7-7512568e64a1" />
 
