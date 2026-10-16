@@ -17,16 +17,19 @@ export const passwordSchema = z.string()
 export const authSecretSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid credentials');
 const recoveryProofSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid recovery key hash');
 const recoverySaltSchema = z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery key salt');
+// Base64 key material: a wrapped 32-byte key is ~64 chars, salts and IVs ~24
+const wrappedKeySchema = z.string().min(1).max(1024);
+const saltOrIvSchema = z.string().min(1).max(64);
 
 export const registerSchema = z.object({
   email: emailSchema,
   username: usernameSchema,
   authSecret: authSecretSchema,
-  encryptedMasterKey: z.string().min(1),
-  kekSalt: z.string().min(1),
-  kekWrapIv: z.string().min(1),
-  recoveryWrappedMK: z.string().min(1),
-  recoveryWrapIv: z.string().min(1),
+  encryptedMasterKey: wrappedKeySchema,
+  kekSalt: saltOrIvSchema,
+  kekWrapIv: saltOrIvSchema,
+  recoveryWrappedMK: wrappedKeySchema,
+  recoveryWrapIv: saltOrIvSchema,
   recoveryKeyHash: recoveryProofSchema,
   recoveryKeySalt: recoverySaltSchema,
 });
@@ -42,20 +45,20 @@ export const loginSchema = z.object({
 export const changePasswordSchema = z.object({
   currentAuthSecret: authSecretSchema,
   newAuthSecret: authSecretSchema,
-  newEncryptedMasterKey: z.string().min(1),
-  newKekSalt: z.string().min(1),
-  newKekWrapIv: z.string().min(1),
+  newEncryptedMasterKey: wrappedKeySchema,
+  newKekSalt: saltOrIvSchema,
+  newKekWrapIv: saltOrIvSchema,
 });
 
 export const recoverSchema = z.object({
   email: emailSchema,
   recoveryProof: recoveryProofSchema,
   newAuthSecret: authSecretSchema,
-  newEncryptedMasterKey: z.string().min(1),
-  newKekSalt: z.string().min(1),
-  newKekWrapIv: z.string().min(1),
-  newRecoveryWrappedMK: z.string().min(1),
-  newRecoveryWrapIv: z.string().min(1),
+  newEncryptedMasterKey: wrappedKeySchema,
+  newKekSalt: saltOrIvSchema,
+  newKekWrapIv: saltOrIvSchema,
+  newRecoveryWrappedMK: wrappedKeySchema,
+  newRecoveryWrapIv: saltOrIvSchema,
   newRecoveryKeyHash: recoveryProofSchema,
   newRecoveryKeySalt: recoverySaltSchema,
   // Authenticator or backup code — required when the account has 2FA on, so a
@@ -102,8 +105,8 @@ export const changeEmailSchema = z.object({
 
 export const saveRecoveryKeySchema = z.object({
   currentAuthSecret: authSecretSchema,
-  recoveryWrappedMK: z.string().min(1).max(1024),
-  recoveryWrapIv: z.string().min(1).max(64),
+  recoveryWrappedMK: wrappedKeySchema,
+  recoveryWrapIv: saltOrIvSchema,
   recoveryKeyHash: recoveryProofSchema,
   recoveryKeySalt: recoverySaltSchema,
 });
@@ -150,13 +153,13 @@ export const updatePostSchema = z.object({
 // Taxonomy validation
 export const createTaxonomySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  icon: z.string().optional(),
+  icon: z.string().max(64).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid hex color').optional(),
 });
 
 export const updateTaxonomySchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  icon: z.string().optional(),
+  icon: z.string().max(64).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 

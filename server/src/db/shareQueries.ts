@@ -93,14 +93,36 @@ export async function getShareByToken(token: string): Promise<Share | null> {
   return rows[0] ?? null;
 }
 
-/** Revoke a share — only the owner can do this */
+/**
+ * Revoke a share — only the owner can do this. The row (and its plaintext)
+ * is deleted, not just switched off.
+ */
 export async function revokeShare(token: string, accountId: number): Promise<boolean> {
   const result = await prisma.$executeRaw`
-    UPDATE public.shares
-    SET is_active = FALSE
+    DELETE FROM public.shares
     WHERE token = ${token} AND account_id = ${accountId}
   `;
   return (result as unknown as number) > 0;
+}
+
+/** Delete every share made from an entry — its plaintext must not outlive the entry. */
+export async function deleteSharesForEntry(accountId: number, entryId: number): Promise<number> {
+  const result = await prisma.$executeRaw`
+    DELETE FROM public.shares WHERE account_id = ${accountId} AND entry_id = ${entryId}
+  `;
+  return result as unknown as number;
+}
+
+/**
+ * Delete shares that can no longer be viewed: expired ones, and rows left
+ * switched off by the old soft revoke. Run at startup and periodically.
+ */
+export async function purgeDeadShares(): Promise<number> {
+  const result = await prisma.$executeRaw`
+    DELETE FROM public.shares
+    WHERE is_active = FALSE OR (expires_at IS NOT NULL AND expires_at <= NOW())
+  `;
+  return result as unknown as number;
 }
 
 /** List all active shares for an account (content omitted — list metadata only) */

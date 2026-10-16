@@ -324,7 +324,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
           {/* ── Apple Calendar (ICS feed) ── */}
           <SettingsRow
             title="Apple Calendar feed"
-            description="Subscribe to your events from Apple Calendar (one-way: changes made in Apple Calendar don't sync back)"
+            description="Subscribe to your events from Apple Calendar (one-way: changes made in Apple Calendar don't sync back). Turning this on stores your events unencrypted on the Chronicles server so Apple Calendar can fetch them; turning it off deletes that copy."
             action={icsBusy
               ? <Spinner size={14} />
               : <Toggle checked={!!status?.icsEnabled} onChange={handleIcsToggle} activeColor={toggleColor} />}

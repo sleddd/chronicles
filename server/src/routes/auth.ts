@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { promisify } from 'util';
@@ -192,23 +192,54 @@ const COOKIE_OPTIONS = {
   path: '/',
 };
 
+// A server key for one purpose, from the server secret when configured.
+// Without one it's derived from DATABASE_URL (it holds the DB password) so it
+// stays the same across restarts; random only when neither is set (dev/tests).
+function serverKey(label: string): Buffer {
+  const configured = process.env.SECRETS_ENCRYPTION_KEY || process.env.CALENDAR_TOKEN_KEY;
+  if (configured) return crypto.createHmac('sha256', Buffer.from(configured, 'base64')).update(label).digest();
+  if (process.env.DATABASE_URL) return crypto.createHmac('sha256', process.env.DATABASE_URL).update(label).digest();
+  return crypto.randomBytes(32);
+}
+
 // Decoy recovery params for emails with no account must look exactly like a
 // real account's: the same bytes every time for the same email (random-per-
-// request decoys gave the game away — real params never change). Derived from
-// the server secret when configured, else a per-process key.
-const DECOY_KEY = (() => {
-  const configured = process.env.SECRETS_ENCRYPTION_KEY || process.env.CALENDAR_TOKEN_KEY;
-  if (configured) {
-    return crypto.createHmac('sha256', Buffer.from(configured, 'base64')).update('chronicles:recovery-decoy').digest();
-  }
-  // No secrets key: derive from DATABASE_URL (it holds the DB password) so
-  // decoys stay the same across restarts — a per-process key would change them
-  // and give unknown emails away. Random only when neither is set (dev/tests).
-  if (process.env.DATABASE_URL) {
-    return crypto.createHmac('sha256', process.env.DATABASE_URL).update('chronicles:recovery-decoy').digest();
-  }
-  return crypto.randomBytes(32);
-})();
+// request decoys gave the game away — real params never change).
+const DECOY_KEY = serverKey('chronicles:recovery-decoy');
+
+// Known devices: a browser that has signed in to an email gets a signed,
+// HttpOnly cookie, and its wrong passwords count in their own bucket. Someone
+// guessing an email's password from elsewhere can then lock out only
+// themselves, not the owner's own browser (the per-email cap was a lockout
+// anyone could trigger). The cookie only skips that shared bucket — the
+// password and 2FA are still checked as always.
+const DEVICE_KEY = serverKey('chronicles:known-device');
+const DEVICE_COOKIE = IS_PRODUCTION ? '__Host-chronicle_device' : 'chronicle_device';
+const DEVICE_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: IS_PRODUCTION,
+  sameSite: 'strict' as const,
+  maxAge: 90 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+const deviceMac = (email: string, nonce: string) =>
+  crypto.createHmac('sha256', DEVICE_KEY).update(`${email}\n${nonce}`).digest('base64url');
+
+function rememberKnownDevice(res: Response, email: string): void {
+  const nonce = crypto.randomBytes(16).toString('base64url');
+  res.cookie(DEVICE_COOKIE, `${nonce}.${deviceMac(email, nonce)}`, DEVICE_COOKIE_OPTIONS);
+}
+
+/** The failure bucket for this attempt: the device's own when it's known for this email. */
+function loginFailureKey(req: Request, email: string): string {
+  const raw = req.cookies?.[DEVICE_COOKIE];
+  if (typeof raw !== 'string' || raw.length > 128) return email;
+  const [nonce, mac] = raw.split('.');
+  if (!nonce || !mac) return email;
+  const a = Buffer.from(mac);
+  const b = Buffer.from(deviceMac(email, nonce));
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? `${email}#${nonce}` : email;
+}
 
 function decoyBytes(email: string, label: string, length: number): string {
   return crypto.createHmac('sha256', DECOY_KEY).update(`${label}:${email}`).digest()
@@ -360,6 +391,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('register_success', { accountId: account.id, ip: req.ip });
+    rememberKnownDevice(res, email);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.status(201).json({
       user: { email: account.email, username: account.username },
@@ -421,7 +453,8 @@ router.post('/login', authLimiter, async (req, res) => {
     const { email, authSecret, legacyPassword } = parsed.data;
 
     const normalizedEmail = normalizeEmail(email);
-    if (loginLocked(normalizedEmail)) {
+    const failureKey = loginFailureKey(req, normalizedEmail);
+    if (loginLocked(failureKey)) {
       logSecurityEvent('login_locked', { ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(429).json({ error: 'Too many failed sign-in attempts. Try again in 15 minutes.' });
@@ -440,7 +473,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
     if (!account) {
       logSecurityEvent('login_failed_no_account', { ip: req.ip });
-      recordLoginFailure(normalizedEmail);
+      recordLoginFailure(failureKey);
       // Constant-time delay to prevent timing-based email enumeration
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
@@ -452,14 +485,14 @@ router.post('/login', authLimiter, async (req, res) => {
       ? await bcrypt.compare(legacyPassword!, account.passwordHash)
       : await checkAuthSecret(account.passwordHash, authSecret);
     if (!valid) {
-      recordLoginFailure(normalizedEmail);
+      recordLoginFailure(failureKey);
       logSecurityEvent('login_failed_bad_password', { accountId: account.id, ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
-    loginFailures.delete(normalizedEmail);
+    loginFailures.delete(failureKey);
 
     // A legacy account swaps its password hash for one of the derived secret.
     // With 2FA on this waits until the code checks out, so someone holding
@@ -485,6 +518,7 @@ router.post('/login', authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
+    rememberKnownDevice(res, account.email);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
@@ -740,6 +774,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
 
     revokeGrantsForAccount(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
+    rememberKnownDevice(res, email);
 
     // Create new session after revoking all old ones
     const token = await createSession(account.id, account.tenantSchemaName, {
@@ -839,6 +874,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
+    rememberKnownDevice(res, account.email);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },

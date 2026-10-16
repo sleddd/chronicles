@@ -56,3 +56,17 @@ describe('registerLimiter', () => {
     expect(blocked.body.error).toMatch(/sign-up/i);
   });
 });
+
+describe('strictLimiter counts each route separately', () => {
+  it('using up one action does not block another', async () => {
+    const { default: express } = await import('express');
+    const { default: request } = await import('supertest');
+    const app = express();
+    app.post('/api/auth/change-password', strictLimiter, (_req, res) => { res.json({ ok: true }); });
+    app.post('/api/auth/2fa/enable', strictLimiter, (_req, res) => { res.json({ ok: true }); });
+
+    for (let i = 0; i < 5; i++) expect((await request(app).post('/api/auth/change-password')).status).toBe(200);
+    expect((await request(app).post('/api/auth/change-password')).status).toBe(429);
+    expect((await request(app).post('/api/auth/2fa/enable')).status).toBe(200);
+  });
+});

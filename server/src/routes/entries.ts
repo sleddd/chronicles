@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createPost, getPost, getAllPosts, updatePost, deletePost } from '../db/tenantQueries.js';
 import { createPostSchema, updatePostSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
+import { deleteSharesForEntry } from '../db/shareQueries.js';
 
 const router = Router();
 
@@ -119,6 +120,8 @@ router.delete('/:id', async (req, res) => {
     const id = parseId(req.params.id);
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
     await deletePost(req.auth!.tenantSchemaName, id);
+    // Public links hold the entry as plaintext — they go with it
+    await deleteSharesForEntry(req.auth!.accountId, id);
     res.json({ success: true });
   } catch (err) {
     console.error('Delete entry error:', err);

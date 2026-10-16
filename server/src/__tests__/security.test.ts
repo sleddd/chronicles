@@ -506,3 +506,14 @@ describe('Password never sent to the server', () => {
     expect(authContent).toContain('bcrypt.compare(legacyPassword!, account.passwordHash)');
   });
 });
+
+// ============================================================================
+// 24. No framework fingerprint header
+// ============================================================================
+describe('X-Powered-By', () => {
+  it('the app turns the Express header off', async () => {
+    const fs = await import('fs');
+    const content = fs.readFileSync(new URL('../index.ts', import.meta.url).pathname.replace('/__tests__', ''), 'utf8');
+    expect(content).toContain("app.disable('x-powered-by')");
+  });
+});

@@ -355,6 +355,47 @@ describe('2FA hardening', () => {
       expect(prisma.account.findUnique).toHaveBeenCalledTimes(10);
     }, 30000);
 
+    it("someone else's wrong guesses don't lock out the owner's known browser", async () => {
+      const account = { ...twoFAAccount(generateSecret()), email: 'owner@example.com', totpEnabled: false, totpSecret: null };
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+
+      // The owner signed in from this browser before
+      const first = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const deviceCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+      expect(deviceCookie).toBeDefined();
+
+      // An attacker elsewhere burns through the email's shared bucket
+      (bcrypt.compare as any).mockResolvedValue(false);
+      for (let i = 0; i < 10; i++) await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const attacker = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      expect(attacker.status).toBe(429);
+
+      // A forged device cookie is just another stranger
+      const forged = await request(app).post('/api/auth/login').set('Cookie', deviceCookie.replace(/.$/, c => c === 'A' ? 'B' : 'A'))
+        .send({ email: account.email, authSecret: SECRET });
+      expect(forged.status).toBe(429);
+
+      // The owner's browser still gets in — the password is still checked
+      const wrongFromOwner = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: account.email, authSecret: SECRET });
+      expect(wrongFromOwner.status).toBe(401);
+      (bcrypt.compare as any).mockResolvedValue(true);
+      const owner = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: account.email, authSecret: SECRET });
+      expect(owner.status).toBe(200);
+    }, 30000);
+
+    it('a known-device cookie for another email does not help', async () => {
+      const account = { ...twoFAAccount(generateSecret()), email: 'other@example.com', totpEnabled: false, totpSecret: null };
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      const first = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const deviceCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+
+      (prisma.account.findUnique as any).mockResolvedValue({ ...account, email: 'target@example.com' });
+      (bcrypt.compare as any).mockResolvedValue(false);
+      for (let i = 0; i < 10; i++) await request(app).post('/api/auth/login').send({ email: 'target@example.com', authSecret: SECRET });
+      const res = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: 'target@example.com', authSecret: SECRET });
+      expect(res.status).toBe(429);
+    }, 30000);
+
     it('does not count the legacy check, where nothing was verified', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
       for (let i = 0; i < 11; i++) {
