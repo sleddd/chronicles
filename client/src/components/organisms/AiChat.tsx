@@ -19,10 +19,20 @@ import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../
 
 /* ── Styles (floating overlay: the one place a shadow is allowed) ── */
 
-const Bubble = styled.button<{ $lifted: boolean }>`
+/* High enough to clear the bottom Save bars (journal editor, forms); the
+   dashboard sits higher still — Quick Entry fills that page, so its Save bar
+   is in the bottom-right corner. The panel opens just above the bubble
+   (bubble + 52px + 12px gap). */
+const POS = {
+  default: { bubble: '112px', bubblePhone: '96px', panel: '176px', panelPhone: '160px' },
+  dashboard: { bubble: '168px', bubblePhone: '168px', panel: '232px', panelPhone: '232px' },
+};
+type Pos = typeof POS.default;
+
+const Bubble = styled.button<{ $pos: Pos }>`
   position: fixed;
   right: 24px;
-  bottom: ${({ $lifted }) => ($lifted ? '88px' : '24px')};
+  bottom: ${({ $pos }) => $pos.bubble};
   z-index: 900;
   width: 52px;
   height: 52px;
@@ -38,19 +48,19 @@ const Bubble = styled.button<{ $lifted: boolean }>`
   transition: transform 150ms ease-out, background 150ms;
   &:hover { background: var(--color-accent-hover, var(--color-accent)); transform: translateY(-1px); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
-  @media (max-width: 640px) { right: 16px; bottom: ${({ $lifted }) => ($lifted ? '80px' : '16px')}; }
+  @media (max-width: 640px) { right: 16px; bottom: ${({ $pos }) => $pos.bubblePhone}; }
   @media (prefers-reduced-motion: reduce) { transition: none; &:hover { transform: none; } }
   @media print { display: none; }
 `;
 
-const Panel = styled.section<{ $lifted: boolean }>`
+const Panel = styled.section<{ $pos: Pos }>`
   position: fixed;
   right: 24px;
-  bottom: ${({ $lifted }) => ($lifted ? '152px' : '88px')};
+  bottom: ${({ $pos }) => $pos.panel};
   z-index: 900;
   width: 380px;
   /* Top edge stays at least 3rem below the top of the screen */
-  height: min(560px, calc(100dvh - ${({ $lifted }) => ($lifted ? '152px' : '88px')} - 3rem));
+  height: min(560px, calc(100dvh - ${({ $pos }) => $pos.panel} - 3rem));
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -63,8 +73,8 @@ const Panel = styled.section<{ $lifted: boolean }>`
     right: 12px;
     left: 12px;
     width: auto;
-    bottom: ${({ $lifted }) => ($lifted ? '144px' : '80px')};
-    height: min(70dvh, calc(100dvh - ${({ $lifted }) => ($lifted ? '144px' : '80px')} - 3rem));
+    bottom: ${({ $pos }) => $pos.panelPhone};
+    height: min(70dvh, calc(100dvh - ${({ $pos }) => $pos.panelPhone} - 3rem));
   }
   @media print { display: none; }
 `;
@@ -279,6 +289,7 @@ export function AiChat() {
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
   const location = useLocation();
+  const pos = location.pathname === '/' ? POS.dashboard : POS.default;
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -288,7 +299,6 @@ export function AiChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Clear the journal's bottom save bar
-  const lifted = location.pathname.startsWith('/journal');
 
   // "Journal" is the app's default home for notes — always offer it, creating
   // the topic on first save (JOURNAL_PLACEHOLDER_ID) if it doesn't exist yet
@@ -430,7 +440,7 @@ export function AiChat() {
   return (
     <>
       {open && (
-        <Panel $lifted={lifted} role="dialog" aria-label="In-App AI chat">
+        <Panel $pos={pos} role="dialog" aria-label="In-App AI chat">
           <Head>
             <Title>In-App AI<span>Not saved</span></Title>
             {messages.length > 0 && <HeadBtn type="button" onClick={() => setMessages([])}>Clear</HeadBtn>}
@@ -477,8 +487,8 @@ export function AiChat() {
         </Panel>
       )}
       <Bubble
+        $pos={pos}
         type="button"
-        $lifted={lifted}
         onClick={() => setOpen(o => !o)}
         aria-label={open ? 'Close In-App AI' : 'Open In-App AI'}
         aria-expanded={open}
