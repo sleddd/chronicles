@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { entryRowPlain, rowHoverHandlers, clearRowHover } from '../styles/entryRow.js';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -56,19 +57,20 @@ const List = styled.div`
   flex-direction: column;
 `;
 
-const Row = styled.button`
+/* Shared row style (styles/entryRow) — same as every entry list. */
+const Row = styled.button<{ $hint?: boolean }>`
   display: grid;
   grid-template-columns: 32px 1fr auto 20px;
   align-items: center;
   gap: 16px;
   width: 100%;
-  padding: 20px 4px;
-  background: transparent;
+  padding: 20px 16px;
   border: none;
   border-top: 1px solid var(--border-subtle);
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
+  ${entryRowPlain}
 `;
 
 const RowIcon = styled.span`
@@ -86,10 +88,6 @@ const RowName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 120ms ease;
-
-  /* Hover: the title picks up the accent — no full-row highlight. */
-  ${Row}:hover & { color: var(--color-accent); }
 `;
 
 const RowCount = styled.span`
@@ -274,7 +272,7 @@ export function TopicsView() {
           </Head>
 
           <List>
-            {topics.map(topic => {
+            {topics.map((topic, i) => {
               const count = entryCounts.get(topic.id) ?? 0;
               return (
                 <div key={topic.id}>
@@ -283,7 +281,7 @@ export function TopicsView() {
                     onEdit={() => startEdit(topic)}
                     onDelete={() => { setConfirmDeleteId(topic.id); setEditingId(null); }}
                   >
-                    <Row onClick={() => navigate(`/topics/${topic.id}`)}>
+                    <Row $hint={i === 0} onClick={() => { clearRowHover(); navigate(`/topics/${topic.id}`); }} {...rowHoverHandlers}>
                       <RowIcon><TopicIcon name={topic.icon} size={22} /></RowIcon>
                       <RowName>{topic.name}</RowName>
                       <RowCount>{count.toLocaleString()} {count === 1 ? 'entry' : 'entries'}</RowCount>

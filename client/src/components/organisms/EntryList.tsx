@@ -377,10 +377,11 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
           </>
         )}
       </BulkBar>
-      {groups.map(([dateKey, groupEntries]) => {
+      {/* First row always carries the active hint (like every list) */}
+      {groups.map(([dateKey, groupEntries], groupIndex) => {
         return (
           <div key={dateKey}>
-            {groupEntries.map(entry => {
+            {groupEntries.map((entry, rowIndex) => {
               const meta = entry.metadata as Record<string, unknown>;
               const customFields = meta?._customFields as Record<string, unknown> | undefined;
               const topic = getTopicForEntry(entry);
@@ -408,6 +409,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
 
               const card = (
                 <EntryCard
+                  hint={groupIndex === 0 && rowIndex === 0}
                   key={selectMode ? undefined : entry.id}
                   id={entry.id}
                   content={entry.content}

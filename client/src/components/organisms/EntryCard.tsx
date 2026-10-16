@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { entryRow, rowHoverHandlers, clearRowHover } from '../../styles/entryRow.js';
 import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
@@ -24,6 +25,8 @@ interface EntryCardProps {
   isFavorite?: boolean;
   customType?: string;
   previewText?: string;
+  /** First row of the list: shown active until the pointer is over a row */
+  hint?: boolean;
 }
 
 function extractTitle(html: string, fallback?: string): string {
@@ -31,9 +34,9 @@ function extractTitle(html: string, fallback?: string): string {
 }
 
 /* Spreadsheet row (see EntryTable): Topic over Date | Entry | controls.
-   Hairline rule between rows; the selected row gets a faint fill and a
-   2px accent left bar. */
-const Row = styled.div<{ $active?: boolean }>`
+   Shared row style (styles/entryRow): sunken rows; the open entry, the
+   hovered row and the first-row hint use the page colour + accent bar. */
+const Row = styled.div<{ $active?: boolean; $hint?: boolean }>`
   position: relative;
   display: grid;
   grid-template-columns: ${ENTRY_ROW_COLUMNS};
@@ -43,22 +46,7 @@ const Row = styled.div<{ $active?: boolean }>`
   cursor: pointer;
   padding: ${ENTRY_ROW_INSET_PADDING};
   border-bottom: 1px solid var(--border-subtle);
-  background: ${({ $active }) => $active ? 'var(--bg-active)' : 'transparent'};
-  transition: background 120ms;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: ${({ $active }) => $active ? 'var(--color-accent)' : 'transparent'};
-  }
-
-  &:hover {
-    background: var(--bg-hover);
-  }
+  ${entryRow}
 `;
 
 /* Tapping the topic filters the list to that topic */
@@ -99,7 +87,7 @@ const BookmarkIcon = styled.span`
 export function EntryCard({
   id, content, date, topicName,
   topicId, active, onClick, onDelete, onTopicClick, onToggleBookmark,
-  isCompleted, isFavorite, previewText,
+  isCompleted, isFavorite, previewText, hint,
 }: EntryCardProps) {
   const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
 
@@ -107,7 +95,7 @@ export function EntryCard({
   const title = extractTitle(content, previewText);
 
   const inner = (
-    <Row $active={active} onClick={onClick}>
+    <Row $active={active} $hint={hint} onClick={() => { clearRowHover(); onClick(); }} {...rowHoverHandlers}>
       <MetaCell>
         {topicName && onTopicClick && topicId != null ? (
           <TopicButton

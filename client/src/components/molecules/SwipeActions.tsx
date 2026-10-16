@@ -24,8 +24,7 @@ function muteColor(hex: string, amount = 0.45): string {
 
 /* ── Styled ── */
 
-/* Clip only sideways (the swipe) — `clip` keeps the vertical axis visible, so a
-   row can overlap the rule above it (EntryListCard's accent top border on hover). */
+/* Clip only sideways (the swipe); the vertical axis stays visible. */
 const Outer = styled.div`
   position: relative;
   overflow-x: clip;

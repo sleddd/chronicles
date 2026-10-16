@@ -57,7 +57,7 @@ These screenshots are from October 2026, but subject to change.
 - **Quick Tab Filters** - Today, Date (with active filter bar and clear button), Tasks, All, Bookmarks, and Search views; the Date view lists events and meetings on their scheduled day, matching the calendar
 - **Search** - Search by keyword, topic, and date range from the journal's Search tab; clicking a topic label on any row filters to that topic, with a clear bar to undo it
 - **Edit Anywhere, Return Where You Were** - Opening or creating an entry from any page (topics, health, planning, calendar, shopping) opens it full width in the journal with the list filtered to its topic; Save, New, Discard, or × takes you straight back to the page you came from
-- **Spreadsheet-Style Lists** - Every entry list shows the date as "OCT 11, 2026", highlights the first row as a hint, and outlines rows in your accent color on hover; swipe a row for Edit/Delete on touch devices
+- **Spreadsheet-Style Lists** - Every entry list shows the date as "OCT 11, 2026", highlights the first row as a hint, and highlights rows on hover with a soft grey fill and an accent bar on the left; swipe a row for Edit/Delete on touch devices
 - **Bulk Edit** - Select multiple journal entries (or all of them) and delete them in one go
 - **Breadcrumbs** - The editor's breadcrumb trail remembers where you came from (e.g. Journal / Health / Symptoms) and leads back there
 - **Goals & Milestones** - Track goals with milestone progress and task linking; milestone status cycle (Not Started → In Progress → Completed) with tap-to-advance on the card; goal cards display the entry's featured image as a banner
