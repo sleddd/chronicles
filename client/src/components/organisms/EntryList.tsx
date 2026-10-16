@@ -251,7 +251,8 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
         if (meta?._taxonomyId !== selectedTopicId) return false;
       }
 
-      if (searchKeyword) {
+      // Keyword and date range belong to the Search tab, where they're visible
+      if (viewMode === 'search' && searchKeyword) {
         const keyword = searchKeyword.toLowerCase();
         const contentMatch = entry.content.toLowerCase().includes(keyword);
         const metadataMatch = JSON.stringify(entry.metadata).toLowerCase().includes(keyword);
@@ -260,7 +261,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
         if (!contentMatch && !metadataMatch && !topicMatch) return false;
       }
 
-      if (searchDateFrom || searchDateTo) {
+      if (viewMode === 'search' && (searchDateFrom || searchDateTo)) {
         const entryDate = new Date(entry.createdAt);
         if (searchDateFrom && entryDate < new Date(searchDateFrom)) return false;
         if (searchDateTo) {

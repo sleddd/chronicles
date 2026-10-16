@@ -244,7 +244,7 @@ describe('SettingsView', () => {
 
   it('contains every section in its own card', () => {
     renderWithTheme(<SettingsView />);
-    for (const name of ['Account', 'Preferences', 'Calendar Sync', 'Entry Images', 'AI Assistant', 'Theme', 'Security', 'Features', 'Data', 'Privacy', 'Sign Out']) {
+    for (const name of ['Account', 'Preferences', 'Calendar Sync', 'Entry Images', 'In-App AI', 'Theme', 'Security', 'Features', 'Data', 'Privacy', 'Sign Out']) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument();
     }
   });

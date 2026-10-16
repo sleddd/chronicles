@@ -345,9 +345,9 @@ export function parseCalories(text: string): number {
 }
 
 function requireReady(): AiConfig {
-  if (!aiConfig || !aiConfig.enabled) throw new Error('AI assistant is off');
+  if (!aiConfig || !aiConfig.enabled) throw new Error('In-App AI is off');
   const missing = missingCredentials(aiConfig);
-  if (missing.length) throw new Error(`AI assistant needs: ${missing.join(', ')}`);
+  if (missing.length) throw new Error(`In-App AI needs: ${missing.join(', ')}`);
   return aiConfig;
 }
 

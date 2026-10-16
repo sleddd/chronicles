@@ -49,7 +49,8 @@ const Panel = styled.section<{ $lifted: boolean }>`
   bottom: ${({ $lifted }) => ($lifted ? '152px' : '88px')};
   z-index: 900;
   width: 380px;
-  height: min(560px, calc(100dvh - 140px));
+  /* Top edge stays at least 3rem below the top of the screen */
+  height: min(560px, calc(100dvh - ${({ $lifted }) => ($lifted ? '152px' : '88px')} - 3rem));
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -63,7 +64,7 @@ const Panel = styled.section<{ $lifted: boolean }>`
     left: 12px;
     width: auto;
     bottom: ${({ $lifted }) => ($lifted ? '144px' : '80px')};
-    height: min(70dvh, calc(100dvh - 120px));
+    height: min(70dvh, calc(100dvh - ${({ $lifted }) => ($lifted ? '144px' : '80px')} - 3rem));
   }
   @media print { display: none; }
 `;
@@ -384,7 +385,7 @@ export function AiChat() {
     if (parseSaveCommand(text, topicRefs).kind !== 'none') { await handleSave(text); return; }
 
     if (!aiReady) {
-      push({ role: 'user', text }, { role: 'note', text: 'Set up the AI assistant to chat.', settingsLink: true });
+      push({ role: 'user', text }, { role: 'note', text: 'Set up In-App AI to chat.', settingsLink: true });
       return;
     }
 
@@ -411,7 +412,7 @@ export function AiChat() {
       reply = limitEmojis(findBanned(reply).length ? scrubBanned(reply) : reply);
       push({ role: 'assistant', text: reply || '…' });
     } catch (err) {
-      push({ role: 'note', error: true, text: err instanceof Error ? err.message : 'The assistant didn’t answer — try again.' });
+      push({ role: 'note', error: true, text: err instanceof Error ? err.message : 'In-App AI didn’t answer — try again.' });
     } finally {
       setBusy(false);
     }
@@ -429,9 +430,9 @@ export function AiChat() {
   return (
     <>
       {open && (
-        <Panel $lifted={lifted} role="dialog" aria-label="AI assistant chat">
+        <Panel $lifted={lifted} role="dialog" aria-label="In-App AI chat">
           <Head>
-            <Title>Assistant<span>Not saved</span></Title>
+            <Title>In-App AI<span>Not saved</span></Title>
             {messages.length > 0 && <HeadBtn type="button" onClick={() => setMessages([])}>Clear</HeadBtn>}
             <HeadBtn type="button" onClick={() => setOpen(false)} aria-label="Close chat">
               <Icon name="x" size={18} strokeWidth={2} aria-hidden="true" />
@@ -440,7 +441,7 @@ export function AiChat() {
           <Log ref={logRef} aria-live="polite">
             {messages.length === 0 && (
               <Empty>
-                {aiReady ? 'Ask anything. This chat isn’t saved.' : 'Set up the AI assistant in Settings to chat.'}
+                {aiReady ? 'Ask anything. This chat isn’t saved.' : 'Set up In-App AI in Settings to chat.'}
                 <br />To keep something, type <code>/save topic text</code> — it becomes a journal entry.
               </Empty>
             )}
@@ -457,7 +458,7 @@ export function AiChat() {
                 )}
               </Msg>
             ))}
-            {busy && <Msg $role="assistant" aria-label="Assistant is replying">…</Msg>}
+            {busy && <Msg $role="assistant" aria-label="In-App AI is replying">…</Msg>}
           </Log>
           <Composer>
             <Input
@@ -479,7 +480,7 @@ export function AiChat() {
         type="button"
         $lifted={lifted}
         onClick={() => setOpen(o => !o)}
-        aria-label={open ? 'Close assistant chat' : 'Open assistant chat'}
+        aria-label={open ? 'Close In-App AI' : 'Open In-App AI'}
         aria-expanded={open}
       >
         {open

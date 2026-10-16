@@ -75,8 +75,8 @@ These screenshots are from October 2026, but subject to change.
 - **Entry Images** - Attach up to 7 photos per entry, stored **zero-knowledge in your own Cloudflare R2 bucket**; images are encrypted in the browser with your master key before upload, so your bucket only ever holds ciphertext; thumbnail strip, tap-to-open lightbox, and an optional featured image that renders as a hero banner above the entry
 - **Entry Sharing** - Share entries via public links; the share dialog manages the links for that entry (create, copy, revoke). Shared copies are stored unencrypted on the server by design — creating a link is an explicit opt-out of zero-knowledge for that entry, and revoking it removes access. Sharing is hidden for entries with images, except recipes, which share their formatted text while the photo stays private
 - **Title-Led Entry Headers** - Events, meetings, quotes, books, music, goals, and milestones open with their own name in place of the date block — events/meetings add a date · time · location line, quotes render formatted with author attribution, books show title and author
-- **AI Assistant (bring your own key)** - Optional calorie and nutrient estimates for meals and exercise using your own Claude (Anthropic), Amazon Bedrock, or OpenAI credentials, which are encrypted with your master key; requests go straight from your browser to the provider, and typed values are never overwritten
-- **AI Chat** - A small chat bubble for talking things through; chats are never saved, and `/save <topic> <text>` turns a thought into an encrypted journal entry
+- **In-App AI (bring your own key)** - Optional calorie and nutrient estimates for meals and exercise using your own Claude (Anthropic), Amazon Bedrock, or OpenAI credentials, which are encrypted with your master key; requests go straight from your browser to the provider, and typed values are never overwritten
+- **In-App AI Chat** - A small chat bubble for talking things through; chats are never saved, and `/save <topic> <text>` turns a thought into an encrypted journal entry
 - **PWA Support** - Installable as a standalone app with offline shell caching
 - **Customizable Theme** - Light/dark mode with 30 muted accent color presets (reds, oranges, greens, blues, purples, and neutrals) that recolor the whole app; high-contrast text on the white light theme
 - **Display Name** - Edit your display name in place in Settings; it's shown in the dashboard greeting
@@ -209,7 +209,7 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
 - **Features** - Enable/disable health tracking, planning, entertainment, cycle tracking, and more
 - **Calendar Sync** - Connect Google Calendar, choose the target calendar, toggle imports, manage the Apple ICS feed, and clean up old events
 - **Entry Images** - Toggle the feature, enter your Cloudflare R2 credentials (autosaved and master-key encrypted), test the connection, and follow the built-in setup guide
-- **AI Assistant** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant
+- **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant
 - **Security** - Remember me, change password, active sessions, recovery key, and two-factor authentication (TOTP setup wizard with QR code and backup codes)
 - **Data** - Default topics, seed test data, export to CSV, import entries (CSV) and a Daily Log (JSON) — each import has a downloadable example file
 - **Privacy** and **Sign Out**

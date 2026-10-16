@@ -136,7 +136,7 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
           onChange={setNutrient}
           placeholders={placeholders}
           aiKeys={aiKeys}
-          note="Counted in your Meals log when you mark a dose taken. Leave blank to fill from the name and dosage, or by the AI assistant."
+          note="Counted in your Meals log when you mark a dose taken. Leave blank to fill from the name and dosage, or by In-App AI."
         />
       </FormField>
       <FormField label="Schedule">

@@ -3,9 +3,10 @@ import { DateInput } from '../atoms/DateInput.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 
-/* Search panel under the journal's tabs: keyword (shared with the search
-   pill above), topic, and a From / To date range. Compact stacked labels to
-   fit the narrow journal list panel. */
+/* The journal's Search tab: keyword, topic and a From / To date range.
+   Keyword and dates apply while this tab is open; the topic filter stays on
+   across tabs (with its own Clear bar). Compact stacked labels to fit the
+   narrow journal list panel. */
 
 const Panel = styled.div`
   display: flex;

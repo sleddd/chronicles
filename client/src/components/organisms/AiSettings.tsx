@@ -214,7 +214,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   return (
     <SettingsCard>
       <SettingsRow
-        title="AI assistant"
+        title="In-App AI"
         description="Estimate calories for the food you log and the calories your workouts burn, using your own AI account"
         action={<Toggle checked={cfg.enabled} onChange={v => update({ enabled: v }, true)} activeColor={toggleColor} />}
       />

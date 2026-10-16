@@ -22,16 +22,22 @@ const tabs: TabEntry[] = [
   { value: 'all',       icon: 'add',             label: 'New',       title: 'New entry',    isNewEntry: true },
 ];
 
+/* First row of the journal list: exactly the sidebar logo block's height
+   (60px incl. its rule) so the two rules line up across the page. */
 const Container = styled.div`
   display: flex;
-  border-bottom: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 60px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
   padding: 0 var(--s-4, 16px);
 `;
 
 const TabButton = styled.button<{ $active?: boolean }>`
   flex: 1;
   min-width: 0;
-  padding: 12px 4px;
+  padding: 0 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

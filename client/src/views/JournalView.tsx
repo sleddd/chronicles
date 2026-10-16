@@ -126,34 +126,6 @@ const EditorCollapseBtn = styled.button`
   &:hover { color: var(--text-primary); }
 `;
 
-/* DS rail search — pill-shaped, icon + input, sunken fill. */
-const SearchBlock = styled.div`
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-`;
-
-const SearchPill = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--r-full, 999px);
-  background: var(--bg-sunken);
-`;
-
-const SearchPillInput = styled.input`
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-primary);
-  &::placeholder { color: var(--text-tertiary); }
-`;
-
 /** Compact change-detection signature for the entry's image set. */
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
   JSON.stringify([imgs.map(i => i.key), featured]);
@@ -185,8 +157,6 @@ export function JournalView() {
   const setBackgroundImage = useUIStore(s => s.setBackgroundImage);
   const setBackgroundOpacity = useUIStore(s => s.setBackgroundOpacity);
   const setTopicCustomFields = useUIStore(s => s.setTopicCustomFields);
-  const searchKeyword = useUIStore(s => s.searchKeyword);
-  const setSearchKeyword = useUIStore(s => s.setSearchKeyword);
   const imagesEnabled = useUIStore(s => s.imagesEnabled);
   const imagesConfigured = useUIStore(s => s.imagesConfigured);
   const setImagesEnabled = useUIStore(s => s.setImagesEnabled);
@@ -990,23 +960,6 @@ export function JournalView() {
       <JournalTemplate
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>
-            <SearchBlock>
-              <SearchPill>
-                <Icon name="search" size={14} strokeWidth={2} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-                <SearchPillInput
-                  placeholder="Search or filter"
-                  value={searchKeyword}
-                  onChange={e => setSearchKeyword(e.target.value)}
-                />
-                {searchKeyword && (
-                  <FontAwesomeIcon
-                    icon={faXmark}
-                    style={{ cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 12 }}
-                    onClick={() => setSearchKeyword('')}
-                  />
-                )}
-              </SearchPill>
-            </SearchBlock>
             <ViewTabs
               onDateTabClick={() => setCalendarExpanded(prev => !prev)}
               onTodayClick={() => setCalendarExpanded(false)}

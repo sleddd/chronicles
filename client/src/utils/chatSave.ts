@@ -70,7 +70,7 @@ export const MAX_CHAT_NOTES = 2000;
 export function chatSystemPrompt(topicNames: string[], userNotes = ''): string {
   const notes = userNotes.trim().slice(0, MAX_CHAT_NOTES);
   return [
-    'You are the assistant built into Chronicles, a private, end-to-end encrypted personal journal.',
+    'You are In-App AI, the assistant built into Chronicles, a private, end-to-end encrypted personal journal.',
     CHAT_PERSONA,
     'Keep replies clear and fairly short. Basic Markdown is fine: short paragraphs, bullet or numbered lists, **bold** and *italic*. No tables or images.',
     'This chat is not saved — it disappears when the window closes or the journal locks.',

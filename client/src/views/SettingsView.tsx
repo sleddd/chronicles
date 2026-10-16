@@ -893,7 +893,7 @@ export function SettingsView() {
         <ImageStorageSettings themeMode={themeMode} />
       </Section>
 
-      <Section id="ai" title="AI Assistant">
+      <Section id="ai" title="In-App AI">
         <AiSettings themeMode={themeMode} />
       </Section>
 
