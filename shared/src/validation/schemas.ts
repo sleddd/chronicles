@@ -47,17 +47,24 @@ export const recoverSchema = z.object({
   newRecoveryWrapIv: z.string().min(1),
   newRecoveryKeyHash: z.string().min(1),
   newRecoveryKeySalt: z.string().min(1),
+  // Authenticator or backup code — required when the account has 2FA on, so a
+  // recovery key alone can't bypass two-factor
+  code: z.string().min(1).max(64).optional(),
 });
 
 // 2FA / TOTP validation
 export const twoFALoginSchema = z.object({
-  pendingToken: z.string().min(1),
-  code: z.string().min(1),
+  pendingToken: z.string().min(1).max(128),
+  code: z.string().min(1).max(64),
 });
 
+// Turning 2FA on replaces the authenticator secret and backup codes, so it
+// needs the current password — a stolen session alone must not be able to
+// swap in an attacker's authenticator and lock the owner out
 export const enable2FASchema = z.object({
-  secret: z.string().min(1),
+  secret: z.string().regex(/^[A-Z2-7]{16,128}=*$/, 'Invalid secret'),
   code: z.string().length(6),
+  currentPassword: z.string().min(1, 'Current password is required'),
 });
 
 export const disable2FASchema = z.object({
@@ -87,41 +94,36 @@ export const createShareSchema = z.object({
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
-// Post validation
-const metadataSchema = z.record(z.unknown()).optional().refine(
-  (val) => !val || JSON.stringify(val).length <= 10000,
-  { message: 'Metadata too large (max 10KB)' }
-);
+// Entries are always end-to-end encrypted: the server never accepts plaintext
+// content or metadata (the client also refuses to display plaintext posts).
+const ENCRYPTED_FIELD = z.string().min(1).max(2_000_000);
+const IV_FIELD = z.string().min(1).max(64);
 
 export const createPostSchema = z.object({
-  content: z.string().optional(),
-  metadata: metadataSchema,
-  contentEncrypted: z.string().optional(),
-  contentIv: z.string().optional(),
-  metadataEncrypted: z.string().optional(),
-  metadataIv: z.string().optional(),
-  isEncrypted: z.boolean().optional(),
+  contentEncrypted: ENCRYPTED_FIELD,
+  contentIv: IV_FIELD,
+  metadataEncrypted: ENCRYPTED_FIELD,
+  metadataIv: IV_FIELD,
+  isEncrypted: z.literal(true, { errorMap: () => ({ message: 'Entries must be encrypted' }) }),
   taxonomyIds: z.array(z.number()).optional(),
   createdAt: z.string().optional(),
-}).refine(
-  (data) => {
-    if (data.isEncrypted) {
-      return data.contentEncrypted && data.contentIv && data.metadataEncrypted && data.metadataIv;
-    }
-    return true;
-  },
-  { message: 'Encrypted posts must include contentEncrypted, contentIv, metadataEncrypted, and metadataIv' }
-);
-
-export const updatePostSchema = z.object({
-  content: z.string().optional(),
-  metadata: metadataSchema,
-  contentEncrypted: z.string().optional(),
-  contentIv: z.string().optional(),
-  metadataEncrypted: z.string().max(20000, 'Metadata too large').optional(),
-  metadataIv: z.string().optional(),
-  taxonomyIds: z.array(z.number()).optional(),
 });
+
+// Content and metadata are encrypted as a bound pair (each one's AAD names the
+// other's IV), so an update replaces all four fields together or none of them
+export const updatePostSchema = z.object({
+  contentEncrypted: ENCRYPTED_FIELD.optional(),
+  contentIv: IV_FIELD.optional(),
+  metadataEncrypted: z.string().min(1).max(20000, 'Metadata too large').optional(),
+  metadataIv: IV_FIELD.optional(),
+  taxonomyIds: z.array(z.number()).optional(),
+}).refine(
+  (d) => {
+    const n = [d.contentEncrypted, d.contentIv, d.metadataEncrypted, d.metadataIv].filter(v => v !== undefined).length;
+    return n === 0 || n === 4;
+  },
+  { message: 'Encrypted updates must include contentEncrypted, contentIv, metadataEncrypted, and metadataIv' }
+);
 
 // Taxonomy validation
 export const createTaxonomySchema = z.object({

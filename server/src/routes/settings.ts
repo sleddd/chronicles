@@ -4,6 +4,10 @@ import { upsertSettingSchema } from '@chronicles/shared';
 
 const router = Router();
 
+// Ceiling on distinct setting keys per account. The app uses a few dozen; this
+// only stops a signed-in client from filling the database with junk keys.
+const MAX_SETTING_KEYS = 500;
+
 // GET /api/settings
 router.get('/', async (req, res) => {
   try {
@@ -24,6 +28,11 @@ router.put('/', async (req, res) => {
       return;
     }
     const { key, value } = parsed.data;
+    const existing = await getAllSettings(req.auth!.tenantSchemaName);
+    if (existing.length >= MAX_SETTING_KEYS && !existing.some(st => st.key === key)) {
+      res.status(400).json({ error: 'Too many settings' });
+      return;
+    }
     const setting = await upsertSetting(req.auth!.tenantSchemaName, key, value);
     res.json(setting);
   } catch (err) {

@@ -269,8 +269,12 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
   []);
 
   const editor = useEditor({
+    // v3 stopped re-rendering on every transaction; the toolbar's active and
+    // undo/redo states read the editor during render, so keep v2's behaviour
+    shouldRerenderOnTransaction: true,
     extensions: [
-      StarterKit,
+      // v3's StarterKit added these; off so entries save the same HTML as before
+      StarterKit.configure({ link: false, underline: false, trailingNode: false }),
       Placeholder.configure({ placeholder }),
       charLimitExtension,
       enterSaveExtension,
@@ -293,7 +297,7 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
   useEffect(() => {
     if (content === lastEmittedRef.current) return;
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content, false);
+      editor.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editor]);
 

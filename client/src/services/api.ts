@@ -12,7 +12,13 @@ interface RequestOptions {
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string, public retryAfterSec?: number) {
+  constructor(
+    public status: number,
+    message: string,
+    public retryAfterSec?: number,
+    /** The error response's JSON body, for routes that return extra fields (e.g. requires2FA). */
+    public body: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -75,7 +81,7 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: 'Request failed' }));
-    throw new ApiError(res.status, data.error || 'Request failed', res.status === 429 ? retryAfterFrom(res) : undefined);
+    throw new ApiError(res.status, data.error || 'Request failed', res.status === 429 ? retryAfterFrom(res) : undefined, data);
   }
 
   const contentType = res.headers.get('content-type');
@@ -148,7 +154,7 @@ export const auth = {
   setup2FA: () =>
     request<{ secret: string; qrCodeUrl: string }>('/auth/2fa/setup', { method: 'POST' }),
 
-  enable2FA: (data: { secret: string; code: string }) =>
+  enable2FA: (data: { secret: string; code: string; currentPassword: string }) =>
     request<{ backupCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: data }),
 
   disable2FA: (data: { password: string }) =>
@@ -184,6 +190,8 @@ export const auth = {
     newRecoveryWrapIv: string;
     newRecoveryKeyHash: string;
     newRecoveryKeySalt: string;
+    /** Authenticator or backup code — required when the account has 2FA on */
+    code?: string;
   }) => request<{
     user: { email: string; username: string };
     encryption: Record<string, unknown>;

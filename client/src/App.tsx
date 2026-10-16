@@ -25,6 +25,7 @@ import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsLogView } from './views/MealsLogView.js';
 import { KitchenDashboardView } from './views/KitchenDashboardView.js';
 import { AiChat } from './components/organisms/AiChat.js';
+import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
@@ -396,6 +397,7 @@ export function App() {
               <Route path="/inspiration/quotes" element={<R><TopicEntriesView title="Quotes" topicNames={['Quote']} showDateFilter={false} /></R>} />
             </Routes>
             <ChatGate />
+            <UpdatePrompt />
           </BrowserRouter>
         </EncryptionProvider>
       </AuthProvider>

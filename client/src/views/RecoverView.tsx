@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEncryption } from '../contexts/EncryptionContext.js';
-import { auth as authApi } from '../services/api.js';
+import { auth as authApi, ApiError } from '../services/api.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
 import { TextInput } from '../components/atoms/TextInput.js';
 import { PasswordInput } from '../components/atoms/PasswordInput.js';
@@ -25,6 +25,10 @@ export function RecoverView() {
   const [loading, setLoading] = useState(false);
   const [recoveryParams, setRecoveryParams] = useState<{ recoveryWrappedMK: string; recoveryWrapIv: string } | null>(null);
   const [newRecoveryKey, setNewRecoveryKey] = useState('');
+  // Accounts with 2FA also need an authenticator or backup code — the server
+  // asks for it only once the recovery key checks out
+  const [needs2FA, setNeeds2FA] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
 
   const handleEmailStep = async (e: FormEvent) => {
     e.preventDefault();
@@ -114,12 +118,14 @@ export function RecoverView() {
         newRecoveryWrapIv,
         newRecoveryKeyHash,
         newRecoveryKeySalt,
+        ...(needs2FA && twoFACode.trim() && { code: twoFACode.trim() }),
       });
 
       // Show the new recovery key before navigating away
       setNewRecoveryKey(freshRecoveryKey);
       setStep('newKey');
     } catch (err) {
+      if (err instanceof ApiError && err.body.requires2FA) setNeeds2FA(true);
       setError(err instanceof Error ? err.message : 'Invalid recovery key or recovery failed');
     } finally {
       setLoading(false);
@@ -188,6 +194,19 @@ export function RecoverView() {
               required
             />
           </FormField>
+          {needs2FA && (
+            <FormField label="Authenticator or backup code" htmlFor="recover-2fa">
+              <TextInput
+                id="recover-2fa"
+                value={twoFACode}
+                onChange={e => setTwoFACode(e.target.value)}
+                placeholder="123456 or xxxxxx-xxxxxx"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+              />
+            </FormField>
+          )}
           <Button type="submit" fullWidth disabled={loading}>
             {loading ? <Spinner size={18} /> : 'Reset password'}
           </Button>

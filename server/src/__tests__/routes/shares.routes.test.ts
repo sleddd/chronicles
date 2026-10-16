@@ -27,6 +27,7 @@ vi.mock('../../middleware/auth.js', () => ({
 // Mock rate limiters
 vi.mock('../../middleware/rateLimiter.js', () => ({
   shareLimiter: (_req: any, _res: any, next: any) => next(),
+  apiLimiter: (_req: any, _res: any, next: any) => next(),
 }));
 
 import sharesRouter from '../../routes/shares.js';

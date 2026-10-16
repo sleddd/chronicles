@@ -130,14 +130,15 @@ describe('Password change session revocation', () => {
 // 6. Recovery key uses PBKDF2 hashing (not plain SHA-256)
 // ============================================================================
 describe('Recovery key PBKDF2 hashing', () => {
-  it('server recovery endpoint uses pbkdf2Sync, not createHash', async () => {
+  it('server recovery endpoint uses async pbkdf2 (never blocks the event loop), not createHash', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
     const recoverSection = authContent.split("router.post('/recover'")[1]?.split("router.")[0] || '';
-    expect(recoverSection).toContain('pbkdf2Sync');
+    expect(recoverSection).toContain('await pbkdf2(');
+    expect(recoverSection).not.toContain('pbkdf2Sync');
     expect(recoverSection).not.toContain("createHash('sha256')");
     expect(recoverSection).toContain('recoveryKeySalt');
     expect(recoverSection).toContain('600000'); // iterations
@@ -341,14 +342,14 @@ describe('Dose route post ownership validation', () => {
 // 14. Metadata size limit in validation schemas
 // ============================================================================
 describe('Metadata size limit', () => {
-  it('createPostSchema and updatePostSchema enforce metadata size limit', async () => {
+  it('post schemas only admit encrypted entries and cap encrypted metadata', async () => {
     const fs = await import('fs');
     const content = fs.readFileSync(
       new URL('../../../shared/src/validation/schemas.ts', import.meta.url).pathname.replace('/server/src/__tests__', ''),
       'utf8'
     );
-    expect(content).toContain('Metadata too large (max 10KB)');
-    expect(content).toContain('JSON.stringify(val).length <= 10000');
+    expect(content).toContain("isEncrypted: z.literal(true");
+    expect(content).toContain("max(20000, 'Metadata too large')");
   });
 });
 
@@ -486,7 +487,7 @@ describe('Recovery PBKDF2 iterations', () => {
       'utf8'
     );
     const recoverSection = authContent.split("router.post('/recover'")[1]?.split("router.")[0] || '';
-    expect(recoverSection).toContain('pbkdf2Sync(recoveryKey, recoveryKeySalt, 600000');
+    expect(recoverSection).toContain('pbkdf2(recoveryKey, recoveryKeySalt, 600000');
     // Should NOT use old 100000 iterations
     expect(recoverSection).not.toContain('100000');
   });

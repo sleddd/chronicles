@@ -228,6 +228,7 @@ export function SettingsView() {
   const [twoFASecret, setTwoFASecret] = useState('');
   const [twoFAQrUrl, setTwoFAQrUrl] = useState('');
   const [twoFACode, setTwoFACode] = useState('');
+  const [twoFAPassword, setTwoFAPassword] = useState('');
   const [twoFABackupCodes, setTwoFABackupCodes] = useState<string[]>([]);
   const [twoFALoading, setTwoFALoading] = useState(false);
   const [twoFAError, setTwoFAError] = useState('');
@@ -429,11 +430,12 @@ export function SettingsView() {
     setTwoFALoading(true);
     setTwoFAError('');
     try {
-      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode });
+      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, currentPassword: twoFAPassword });
       setTwoFABackupCodes(backupCodes);
       setTotpEnabled(true);
       setTwoFAStep('codes');
       setTwoFACode('');
+      setTwoFAPassword('');
     } catch (err) {
       setTwoFAError(err instanceof ApiError ? err.message : 'Invalid code');
     } finally {
@@ -1061,7 +1063,7 @@ export function SettingsView() {
           {!totpEnabled && twoFAStep === 'confirm' && (
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 13, color: 'var(--text-muted, #6b7280)' }}>
-                Enter the 6-digit code from your authenticator app to confirm setup.
+                Enter the 6-digit code from your authenticator app and your password to confirm setup.
               </div>
               {twoFAError && <div style={{ fontSize: 13, color: '#9B4444' }}>{twoFAError}</div>}
               <TextInput
@@ -1072,13 +1074,19 @@ export function SettingsView() {
                 inputMode="numeric"
                 maxLength={6}
                 style={{ fontSize: 20, letterSpacing: 6, textAlign: 'center', width: 160 }}
-                onKeyDown={e => e.key === 'Enter' && twoFACode.length === 6 && handleConfirm2FA()}
+              />
+              <PasswordInput
+                value={twoFAPassword}
+                onChange={e => setTwoFAPassword(e.target.value)}
+                placeholder="Your password"
+                autoComplete="current-password"
+                onKeyDown={e => e.key === 'Enter' && twoFACode.length === 6 && twoFAPassword && handleConfirm2FA()}
               />
               <div style={{ display: 'flex', gap: 8 }}>
-                <ActionButton onClick={handleConfirm2FA} disabled={twoFALoading || twoFACode.length !== 6}>
+                <ActionButton onClick={handleConfirm2FA} disabled={twoFALoading || twoFACode.length !== 6 || !twoFAPassword}>
                   {twoFALoading ? <Spinner size={14} /> : 'Confirm'}
                 </ActionButton>
-                <ActionButton onClick={() => { setTwoFAStep('qr'); setTwoFACode(''); setTwoFAError(''); }}>Back</ActionButton>
+                <ActionButton onClick={() => { setTwoFAStep('qr'); setTwoFACode(''); setTwoFAPassword(''); setTwoFAError(''); }}>Back</ActionButton>
               </div>
             </div>
           )}

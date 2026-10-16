@@ -39,19 +39,15 @@ router.post('/', async (req, res) => {
       return;
     }
 
+    // The schema only admits encrypted posts — the server never stores plaintext
     const { taxonomyIds, createdAt, ...postData } = parsed.data;
-    const input: Record<string, unknown> = {};
-
-    if (postData.isEncrypted) {
-      input.isEncrypted = true;
-      input.contentEncrypted = postData.contentEncrypted ? Buffer.from(postData.contentEncrypted, 'base64') : undefined;
-      input.contentIv = postData.contentIv ? Buffer.from(postData.contentIv, 'base64') : undefined;
-      input.metadataEncrypted = postData.metadataEncrypted ? Buffer.from(postData.metadataEncrypted, 'base64') : undefined;
-      input.metadataIv = postData.metadataIv ? Buffer.from(postData.metadataIv, 'base64') : undefined;
-    } else {
-      input.content = postData.content;
-      input.metadata = postData.metadata;
-    }
+    const input: Record<string, unknown> = {
+      isEncrypted: true,
+      contentEncrypted: Buffer.from(postData.contentEncrypted, 'base64'),
+      contentIv: Buffer.from(postData.contentIv, 'base64'),
+      metadataEncrypted: Buffer.from(postData.metadataEncrypted, 'base64'),
+      metadataIv: Buffer.from(postData.metadataIv, 'base64'),
+    };
 
     if (createdAt) {
       input.createdAt = new Date(createdAt);
@@ -113,8 +109,6 @@ router.put('/:id', async (req, res) => {
     if (updates.contentIv !== undefined) input.contentIv = Buffer.from(updates.contentIv, 'base64');
     if (updates.metadataEncrypted !== undefined) input.metadataEncrypted = Buffer.from(updates.metadataEncrypted, 'base64');
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
-    if (updates.content !== undefined) input.content = updates.content;
-    if (updates.metadata !== undefined) input.metadata = updates.metadata;
 
     const post = await updatePost(req.auth!.tenantSchemaName, id, input as Parameters<typeof updatePost>[2]);
 

@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
 import { registerTenant } from '../db/schemaManager.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
+import { revokeGrantsForAccount } from '../services/rememberGrants.js';
+import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
 import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
@@ -21,8 +24,108 @@ function cleanExpiredPending() {
   }
 }
 
-function hashBackupCode(code: string): string {
-  return crypto.createHash('sha256').update(code).digest('hex');
+const pbkdf2 = promisify(crypto.pbkdf2);
+const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
+
+// Backup codes are salted + scrypt-hashed (48 bits of entropy is too little for
+// a bare SHA-256 to survive a database leak). Older codes stored as plain
+// SHA-256 hex still verify until they're used or replaced.
+async function hashBackupCode(code: string): Promise<string> {
+  const salt = crypto.randomBytes(16);
+  const hash = await scrypt(code, salt, 32);
+  return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
+async function findBackupCode(code: string, stored: string[]): Promise<number> {
+  const legacy = crypto.createHash('sha256').update(code).digest();
+  for (let i = 0; i < stored.length; i++) {
+    const entry = stored[i];
+    if (entry.startsWith('scrypt$')) {
+      const [, saltHex, hashHex] = entry.split('$');
+      const expected = Buffer.from(hashHex ?? '', 'hex');
+      const actual = await scrypt(code, Buffer.from(saltHex ?? '', 'hex'), 32);
+      if (expected.length === actual.length && crypto.timingSafeEqual(expected, actual)) return i;
+    } else {
+      const expected = Buffer.from(entry, 'hex');
+      if (expected.length === legacy.length && crypto.timingSafeEqual(expected, legacy)) return i;
+    }
+  }
+  return -1;
+}
+
+// The TOTP secret is encrypted at rest with the server secrets key when one is
+// configured. Base32 secrets never contain ':', which marks the encrypted form.
+function sealTotpSecret(secret: string): string {
+  return isTokenCryptoConfigured() ? encryptToken(secret) : secret;
+}
+
+function openTotpSecret(stored: string): string {
+  return stored.includes(':') ? decryptToken(stored) : stored;
+}
+
+// Replay protection: a TOTP code is accepted at most once (its time step must
+// be newer than the last one used). In memory, like pendingTwoFA — a restart
+// only reopens a code's own 30-second window.
+const lastTotpStep = new Map<number, number>();
+
+// Per-account cap on wrong second-factor codes, on top of the per-IP limits,
+// so guesses spread across many IPs still run out
+const TWO_FA_MAX_FAILURES = 5;
+const TWO_FA_LOCK_MS = 15 * 60 * 1000;
+const twoFAFailures = new Map<number, { count: number; resetAt: number }>();
+
+function twoFALocked(accountId: number): boolean {
+  const f = twoFAFailures.get(accountId);
+  if (!f) return false;
+  if (f.resetAt <= Date.now()) { twoFAFailures.delete(accountId); return false; }
+  return f.count >= TWO_FA_MAX_FAILURES;
+}
+
+function recordTwoFAFailure(accountId: number): void {
+  const now = Date.now();
+  const f = twoFAFailures.get(accountId);
+  if (!f || f.resetAt <= now) twoFAFailures.set(accountId, { count: 1, resetAt: now + TWO_FA_LOCK_MS });
+  else f.count++;
+}
+
+/**
+ * Check an authenticator code or a backup code. A used backup code is removed.
+ * Returns which factor matched, or null.
+ */
+async function verifySecondFactor(
+  account: { id: number; totpSecret: string; totpBackupCodes: string[] },
+  code: string,
+): Promise<'totp' | 'backup' | null> {
+  if (/^\d{6}$/.test(code)) {
+    try {
+      const last = lastTotpStep.get(account.id);
+      const result = verifySync({
+        token: code,
+        secret: openTotpSecret(account.totpSecret),
+        ...(last !== undefined && { afterTimeStep: last }),
+      });
+      // TOTP results carry timeStep (HOTP's don't — the union covers both)
+      if (result.valid && 'timeStep' in result) {
+        lastTotpStep.set(account.id, result.timeStep);
+        twoFAFailures.delete(account.id);
+        return 'totp';
+      }
+    } catch {
+      // malformed secret/token — fall through to backup codes
+    }
+  }
+
+  const matchIndex = await findBackupCode(code.trim(), account.totpBackupCodes);
+  if (matchIndex === -1) {
+    recordTwoFAFailure(account.id);
+    return null;
+  }
+  await prisma.account.update({
+    where: { id: account.id },
+    data: { totpBackupCodes: account.totpBackupCodes.filter((_, i) => i !== matchIndex) },
+  });
+  twoFAFailures.delete(account.id);
+  return 'backup';
 }
 
 function buildEncryptionResponse(account: {
@@ -327,6 +430,8 @@ router.post('/change-password', strictLimiter, authMiddleware, async (req, res) 
       }),
     ]);
 
+    revokeGrantsForAccount(account.id);
+
     // Create a fresh session after revoking all old ones (prevents race condition)
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
@@ -403,7 +508,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
-    const { email: rawEmail, recoveryKey, newPassword, newEncryptedMasterKey, newKekSalt, newKekWrapIv, newRecoveryWrappedMK, newRecoveryWrapIv, newRecoveryKeyHash, newRecoveryKeySalt } = parsed.data;
+    const { email: rawEmail, recoveryKey, newPassword, newEncryptedMasterKey, newKekSalt, newKekWrapIv, newRecoveryWrappedMK, newRecoveryWrapIv, newRecoveryKeyHash, newRecoveryKeySalt, code } = parsed.data;
     const email = rawEmail.toLowerCase();
 
     const account = await prisma.account.findUnique({ where: { email } });
@@ -423,15 +528,38 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
-    // Verify recovery key using PBKDF2 (salted + iterated)
+    // Verify recovery key using PBKDF2 (salted + iterated). Async: 600k
+    // iterations would otherwise block the event loop for every request.
     const recoveryKeySalt = Buffer.from(account.recoveryKeySalt, 'hex');
-    const providedHash = crypto.pbkdf2Sync(recoveryKey, recoveryKeySalt, 600000, 32, 'sha256').toString('hex');
+    const providedHash = (await pbkdf2(recoveryKey, recoveryKeySalt, 600000, 32, 'sha256')).toString('hex');
+    const verifiedHash = account.recoveryKeyHash;
 
-    if (!crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(account.recoveryKeyHash))) {
+    const a = Buffer.from(providedHash);
+    const b = Buffer.from(verifiedHash);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
       logSecurityEvent('recovery_failed', { accountId: account.id, ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Recovery failed' });
       return;
+    }
+
+    // With 2FA on, the recovery key alone isn't enough: also need an
+    // authenticator or backup code (asked for only after the key checks out)
+    if (account.totpEnabled && account.totpSecret) {
+      if (twoFALocked(account.id)) {
+        res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.', requires2FA: true });
+        return;
+      }
+      if (!code) {
+        res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
+        return;
+      }
+      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code);
+      if (!factor) {
+        logSecurityEvent('recovery_2fa_failed', { accountId: account.id, ip: req.ip });
+        res.status(401).json({ error: 'Invalid code', requires2FA: true });
+        return;
+      }
     }
 
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
@@ -444,8 +572,9 @@ router.post('/recover', strictLimiter, async (req, res) => {
         account.id
       );
 
-      // Re-check recovery key hasn't been used by a concurrent request
-      if (!locked[0]?.recovery_key_hash) {
+      // Re-check the recovery key we verified is still the stored one — a
+      // concurrent recovery replaces it, and only the first may win
+      if (locked[0]?.recovery_key_hash !== verifiedHash) {
         return null; // Recovery already consumed by another request
       }
 
@@ -479,6 +608,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
+    revokeGrantsForAccount(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
 
     // Create new session after revoking all old ones
@@ -555,25 +685,19 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
 
-    // Try TOTP code first
-    const totpResult = verifySync({ token: code, secret: account.totpSecret });
-    const totpValid = totpResult.valid;
+    if (twoFALocked(account.id)) {
+      logSecurityEvent('login_2fa_locked', { accountId: account.id, ip: req.ip });
+      res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
+      return;
+    }
 
-    if (!totpValid) {
-      // Try backup codes
-      const codeHash = hashBackupCode(code);
-      const matchIndex = account.totpBackupCodes.indexOf(codeHash);
-      if (matchIndex === -1) {
-        logSecurityEvent('login_2fa_failed', { accountId: account.id, ip: req.ip });
-        res.status(401).json({ error: 'Invalid code' });
-        return;
-      }
-      // Consume the backup code (single-use)
-      const updatedCodes = account.totpBackupCodes.filter((_, i) => i !== matchIndex);
-      await prisma.account.update({
-        where: { id: account.id },
-        data: { totpBackupCodes: updatedCodes },
-      });
+    const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code);
+    if (!factor) {
+      logSecurityEvent('login_2fa_failed', { accountId: account.id, ip: req.ip });
+      res.status(401).json({ error: 'Invalid code' });
+      return;
+    }
+    if (factor === 'backup') {
       logSecurityEvent('login_2fa_backup_code_used', { accountId: account.id, ip: req.ip });
     }
 
@@ -597,7 +721,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
 // =============================================================================
 // POST /api/auth/2fa/setup — Generate TOTP secret and QR code (not saved yet)
 // =============================================================================
-router.post('/2fa/setup', authMiddleware, async (req, res) => {
+router.post('/2fa/setup', authLimiter, authMiddleware, async (req, res) => {
   try {
     const secret = generateSecret();
     const account = await prisma.account.findUnique({
@@ -629,9 +753,30 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, async (req, res) => {
       return;
     }
 
-    const { secret, code } = parsed.data;
-    const verifyResult = verifySync({ token: code, secret });
-    if (!verifyResult.valid) {
+    const { secret, code, currentPassword } = parsed.data;
+
+    const account = await prisma.account.findUnique({
+      where: { id: req.auth!.accountId },
+      select: { passwordHash: true, totpEnabled: true },
+    });
+    if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+      logSecurityEvent('2fa_enable_failed', { accountId: req.auth!.accountId, ip: req.ip });
+      res.status(401).json({ error: 'Current password incorrect' });
+      return;
+    }
+    // Replacing a live authenticator goes through disable (password) first
+    if (account.totpEnabled) {
+      res.status(409).json({ error: 'Two-factor authentication is already on' });
+      return;
+    }
+
+    let valid = false;
+    try {
+      valid = verifySync({ token: code, secret }).valid;
+    } catch {
+      valid = false;
+    }
+    if (!valid) {
       res.status(400).json({ error: 'Invalid code — check your authenticator app and try again' });
       return;
     }
@@ -643,13 +788,15 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, async (req, res) => {
       const raw = crypto.randomBytes(6).toString('hex'); // 12 hex chars
       const formatted = `${raw.slice(0, 6)}-${raw.slice(6)}`; // xxxxxx-xxxxxx
       backupCodes.push(formatted);
-      hashedCodes.push(hashBackupCode(formatted));
+      hashedCodes.push(await hashBackupCode(formatted));
     }
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },
-      data: { totpSecret: secret, totpEnabled: true, totpBackupCodes: hashedCodes },
+      data: { totpSecret: sealTotpSecret(secret), totpEnabled: true, totpBackupCodes: hashedCodes },
     });
+    lastTotpStep.delete(req.auth!.accountId);
+    twoFAFailures.delete(req.auth!.accountId);
 
     logSecurityEvent('2fa_enabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ backupCodes });
@@ -690,6 +837,8 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
       where: { id: req.auth!.accountId },
       data: { totpSecret: null, totpEnabled: false, totpBackupCodes: [] },
     });
+    lastTotpStep.delete(req.auth!.accountId);
+    twoFAFailures.delete(req.auth!.accountId);
 
     logSecurityEvent('2fa_disabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });

@@ -236,16 +236,23 @@ class EncryptionService {
   }
 
   /**
-   * Encrypt post content and metadata
+   * Encrypt post content and metadata as a bound pair: each half's AAD names
+   * the other half's IV, so a server can't splice one entry's content onto
+   * another entry's metadata (or swap the two fields) without decryption
+   * failing. Content and metadata must therefore always be saved together.
    */
   async encryptPost(
     masterKey: CryptoKey,
     content: string,
     metadata: Record<string, unknown>
   ): Promise<EncryptedPostData> {
+    const contentIv = generateIv();
+    const metadataIv = generateIv();
+    const contentIvB64 = uint8ArrayToBase64(contentIv);
+    const metadataIvB64 = uint8ArrayToBase64(metadataIv);
     const [contentResult, metadataResult] = await Promise.all([
-      encrypt(masterKey, content),
-      encrypt(masterKey, JSON.stringify(metadata)),
+      encrypt(masterKey, content, { iv: contentIv, aad: postAad('content', metadataIvB64) }),
+      encrypt(masterKey, JSON.stringify(metadata), { iv: metadataIv, aad: postAad('metadata', contentIvB64) }),
     ]);
 
     return {
@@ -257,31 +264,38 @@ class EncryptionService {
   }
 
   /**
-   * Decrypt a single post. Passes through plaintext posts unchanged.
+   * Decrypt a single post. Plaintext posts are refused: every entry is
+   * encrypted client-side, so a plaintext one can only have been planted by
+   * whoever controls the server or database.
    */
   async decryptPost(
     masterKey: CryptoKey,
     post: EncryptedPost
   ): Promise<DecryptedPost> {
     if (!post.isEncrypted) {
-      return {
-        id: post.id,
-        content: post.content || '',
-        metadata: post.metadata || {},
-        isEncrypted: false,
-        createdAt: post.createdAt,
-        updatedAt: post.updatedAt,
-      };
+      throw new Error('Refusing unencrypted post');
     }
 
     if (!post.contentEncrypted || !post.contentIv || !post.metadataEncrypted || !post.metadataIv) {
       throw new Error('Encrypted post missing required fields');
     }
+    const { contentEncrypted, contentIv, metadataEncrypted, metadataIv } = post;
 
-    const [content, metadataStr] = await Promise.all([
-      decrypt(masterKey, post.contentEncrypted, post.contentIv),
-      decrypt(masterKey, post.metadataEncrypted, post.metadataIv),
-    ]);
+    let content: string;
+    let metadataStr: string;
+    try {
+      [content, metadataStr] = await Promise.all([
+        decrypt(masterKey, contentEncrypted, contentIv, postAad('content', metadataIv)),
+        decrypt(masterKey, metadataEncrypted, metadataIv, postAad('metadata', contentIv)),
+      ]);
+    } catch {
+      // Entries saved before AAD binding: both halves must be legacy — a bound
+      // half never decrypts without its AAD, so this can't be used to unpair one
+      [content, metadataStr] = await Promise.all([
+        decrypt(masterKey, contentEncrypted, contentIv),
+        decrypt(masterKey, metadataEncrypted, metadataIv),
+      ]);
+    }
 
     let metadata: Record<string, unknown>;
     try {
@@ -336,6 +350,11 @@ class EncryptionService {
   ): Promise<DecryptedPost[]> {
     return Promise.all(posts.map((post) => this.decryptPost(masterKey, post)));
   }
+}
+
+/** AAD for one half of an encrypted post, naming the other half's IV. */
+function postAad(part: 'content' | 'metadata', otherIv: string): string {
+  return `chronicles:post:v2:${part}:${otherIv}`;
 }
 
 export const encryptionService = new EncryptionService();
