@@ -15,8 +15,8 @@ These screenshots are from October 2026, but subject to change.
 <img width="1430" height="689" alt="Screenshot 2026-10-15 at 5 51 06 PM" src="https://github.com/user-attachments/assets/2e9c9c38-1b8c-4e64-ba37-475611fb8d9a" />
 
 ### Journal View - to sort, search, edit, and filter with. App comes with dark and light theme
-<img width="1428" height="600" alt="Screenshot 2026-10-15 at 5 13 06 PM" src="https://github.com/user-attachments/assets/cfbbdba4-d1f8-4db3-b758-2d1a4450b869" />
-<img width="1409" height="602" alt="Screenshot 2026-10-15 at 5 12 40 PM" src="https://github.com/user-attachments/assets/5edc0822-b543-4480-94d7-7512568e64a1" />
+<img width="1432" height="699" alt="Screenshot 2026-10-15 at 6 16 32 PM" src="https://github.com/user-attachments/assets/1559f1fe-e16b-4a26-988d-0b3c14b2d8d5" />
+<img width="1430" height="696" alt="Screenshot 2026-10-15 at 6 16 46 PM" src="https://github.com/user-attachments/assets/c1b8c49a-7d2b-4962-b0f8-9ad7cf72255b" />
 
 ### Health View - Meal, Exercise, Medication, Allergy, Wellness, and Symptom Tracking with basic reporting
 <img width="1426" height="673" alt="Screenshot 2026-10-15 at 5 22 52 PM" src="https://github.com/user-attachments/assets/e2c21317-9501-4e85-85ba-b65944e69d27" />
