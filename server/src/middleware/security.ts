@@ -1,4 +1,20 @@
 import type { Request, Response, NextFunction } from 'express';
+import { bedrockOrigins } from '@chronicles/shared';
+
+// Bedrock is allowed per region host rather than `*.amazonaws.com`, which
+// would also allow every S3 bucket — an easy exfiltration channel for any
+// injected script. R2 keeps a wildcard: the bucket's account ID is encrypted
+// client-side, so the server can't name the one host to allow.
+const CONNECT_SRC = [
+  "'self'",
+  'https://api.open-meteo.com',
+  'https://geocoding-api.open-meteo.com',
+  'https://www.googleapis.com',
+  'https://*.r2.cloudflarestorage.com',
+  'https://api.anthropic.com',
+  'https://api.openai.com',
+  ...bedrockOrigins(),
+].join(' ');
 
 export function securityHeaders(_req: Request, res: Response, next: NextFunction): void {
   // Prevent XSS from stealing in-memory key
@@ -11,7 +27,7 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: blob:; " +
-    "connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://www.googleapis.com https://*.r2.cloudflarestorage.com https://api.anthropic.com https://api.openai.com https://*.amazonaws.com; " +
+    `connect-src ${CONNECT_SRC}; ` +
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
   );
   // Prevent MIME type sniffing

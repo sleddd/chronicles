@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
-import { shareLimiter } from '../middleware/rateLimiter.js';
+import { apiLimiter, shareLimiter } from '../middleware/rateLimiter.js';
 import { createShare, getShareByToken, revokeShare, getSharesByAccount, type Share } from '../db/shareQueries.js';
 import { createShareSchema } from '@chronicles/shared';
 
@@ -44,7 +44,7 @@ router.get('/:token', shareLimiter, async (req, res) => {
 });
 
 // POST /api/shares — Create a share (protected)
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, apiLimiter, async (req, res) => {
   try {
     const parsed = createShareSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -69,7 +69,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/shares/:token — Revoke a share (protected)
-router.delete('/:token', authMiddleware, async (req, res) => {
+router.delete('/:token', authMiddleware, apiLimiter, async (req, res) => {
   try {
     const revoked = await revokeShare(String(req.params.token), req.auth!.accountId);
     if (!revoked) {
@@ -84,7 +84,7 @@ router.delete('/:token', authMiddleware, async (req, res) => {
 });
 
 // GET /api/shares — List my shares (protected)
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, apiLimiter, async (req, res) => {
   try {
     const shares = await getSharesByAccount(req.auth!.accountId);
     res.json(shares.map(ownedShare));

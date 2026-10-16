@@ -95,6 +95,14 @@ describe('Entry Routes', () => {
   // POST /api/entries
   // =========================================================================
   describe('POST /api/entries', () => {
+    const ENCRYPTED_BODY = {
+      isEncrypted: true,
+      contentEncrypted: Buffer.from('encrypted').toString('base64'),
+      contentIv: Buffer.from('iv12345678ab').toString('base64'),
+      metadataEncrypted: Buffer.from('metaenc').toString('base64'),
+      metadataIv: Buffer.from('metaiv123456').toString('base64'),
+    };
+
     it('creates an encrypted entry', async () => {
       const newPost = { ...mockPost, id: 2 };
       (createPost as any).mockResolvedValue(newPost);
@@ -116,15 +124,22 @@ describe('Entry Routes', () => {
       }));
     });
 
-    it('creates a plaintext entry', async () => {
-      const plainPost = { ...mockPost, id: 3, isEncrypted: false, content: 'Hello', contentEncrypted: null, contentIv: null, metadataEncrypted: null, metadataIv: null };
-      (createPost as any).mockResolvedValue(plainPost);
-
+    it('rejects a plaintext entry', async () => {
       const res = await request(app)
         .post('/api/entries')
         .send({ content: 'Hello', metadata: { title: 'Test' } });
 
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(400);
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    it('rejects isEncrypted: false even with ciphertext fields', async () => {
+      const res = await request(app)
+        .post('/api/entries')
+        .send({ ...ENCRYPTED_BODY, isEncrypted: false });
+
+      expect(res.status).toBe(400);
+      expect(createPost).not.toHaveBeenCalled();
     });
 
     it('sets taxonomy IDs when provided', async () => {
@@ -135,7 +150,7 @@ describe('Entry Routes', () => {
       const res = await request(app)
         .post('/api/entries')
         .send({
-          content: 'Hello',
+          ...ENCRYPTED_BODY,
           taxonomyIds: [1, 2],
         });
 
@@ -150,7 +165,7 @@ describe('Entry Routes', () => {
 
       await request(app)
         .post('/api/entries')
-        .send({ content: 'Hello', taxonomyIds: [1, 999] });
+        .send({ ...ENCRYPTED_BODY, taxonomyIds: [1, 999] });
 
       expect(setPostTaxonomies).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 5, [1]);
     });
@@ -172,7 +187,7 @@ describe('Entry Routes', () => {
 
       const res = await request(app)
         .post('/api/entries')
-        .send({ content: 'Hello' });
+        .send(ENCRYPTED_BODY);
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Failed to create entry');

@@ -9,6 +9,7 @@
  * Used today for calorie estimates on food and exercise entries.
  */
 
+import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
 import {
   bedrockConverse,
@@ -111,7 +112,10 @@ export function subscribeAi(listener: () => void): () => void {
 export function missingCredentials(cfg: AiConfig): string[] {
   const missing: string[] = [];
   if (cfg.provider === 'bedrock') {
-    if (!cfg.bedrockRegion.trim()) missing.push('AWS region');
+    const region = cfg.bedrockRegion.trim();
+    if (!region) missing.push('AWS region');
+    // The CSP only allows the listed regions' Bedrock hosts
+    else if (!isBedrockRegion(region)) missing.push('a supported AWS region (e.g. us-east-1)');
     if (cfg.bedrockAuth === 'apiKey') {
       if (!cfg.bedrockApiKey.trim()) missing.push('Bedrock API key');
     } else {
@@ -258,7 +262,7 @@ async function completeClaude(cfg: AiConfig, system: string, turns: ChatTurn[], 
 
 function bedrockCreds(cfg: AiConfig): BedrockCredentials {
   return {
-    region: cfg.bedrockRegion,
+    region: cfg.bedrockRegion.trim(),
     auth: cfg.bedrockAuth,
     apiKey: cfg.bedrockApiKey,
     accessKeyId: cfg.awsAccessKeyId,

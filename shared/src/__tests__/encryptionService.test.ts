@@ -22,6 +22,20 @@ import type { EncryptedPost } from '../crypto/types.js';
 // Use low iterations for fast tests
 const TEST_ITERATIONS = 1000;
 
+
+/** Decrypt an encryptPost() result's content (the halves are AAD-bound, so go through decryptPost). */
+async function decryptContent(key: CryptoKey, enc: { contentEncrypted: string; contentIv: string; metadataEncrypted: string; metadataIv: string }): Promise<string> {
+  const post = await encryptionService.decryptPost(key, { id: 0, ...enc, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() });
+  return post.content;
+}
+
+/** Content half of a post saved before AAD binding. */
+async function legacyContent(key: CryptoKey, text: string): Promise<{ contentEncrypted: string; contentIv: string }> {
+  const { encrypt } = await import('../crypto/primitives.js');
+  const { ciphertext, iv } = await encrypt(key, text);
+  return { contentEncrypted: ciphertext, contentIv: iv };
+}
+
 // ============================================================================
 // setupEncryption
 // ============================================================================
@@ -138,7 +152,7 @@ describe('unwrapMasterKey', () => {
       PBKDF2_ITERATIONS
     );
 
-    const contentDecrypted = await decrypt(unwrappedKey, encrypted.contentEncrypted, encrypted.contentIv);
+    const contentDecrypted = await decryptContent(unwrappedKey, encrypted);
     expect(contentDecrypted).toBe('secret content');
   });
 });
@@ -189,7 +203,7 @@ describe('unwrapWithRecoveryKey', () => {
     );
 
     const nonExtractable = await toNonExtractable(recovered);
-    const content = await decrypt(nonExtractable, encrypted.contentEncrypted, encrypted.contentIv);
+    const content = await decryptContent(nonExtractable, encrypted);
     expect(content).toBe('recovery test');
   });
 });
@@ -288,7 +302,7 @@ describe('rewrapFromParams', () => {
     );
 
     // Verify can decrypt data
-    const content = await decrypt(newKey, encrypted.contentEncrypted, encrypted.contentIv);
+    const content = await decryptContent(newKey, encrypted);
     expect(content).toBe('important journal entry');
   });
 
@@ -402,7 +416,7 @@ describe('decryptPost', () => {
     expect(decrypted.updatedAt).toEqual(new Date('2024-01-02'));
   });
 
-  it('passes through non-encrypted posts', async () => {
+  it('refuses non-encrypted posts (only a compromised server could plant one)', async () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
@@ -419,30 +433,89 @@ describe('decryptPost', () => {
       updatedAt: new Date('2024-06-01'),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post);
-    expect(decrypted.content).toBe('plaintext content');
-    expect(decrypted.metadata).toEqual({ title: 'Plain' });
-    expect(decrypted.isEncrypted).toBe(false);
+    await expect(encryptionService.decryptPost(nonExtKey, post)).rejects.toThrow('Refusing unencrypted post');
   });
 
-  it('passes through non-encrypted post with missing content/metadata', async () => {
-    const key = await generateMasterKey();
-    const nonExtKey = await toNonExtractable(key);
+  it('rejects content spliced onto another entry\'s metadata', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const a = await encryptionService.encryptPost(key, 'entry A', { title: 'A' });
+    const b = await encryptionService.encryptPost(key, 'entry B', { title: 'B' });
 
-    const post: EncryptedPost = {
-      id: 2,
-      contentEncrypted: null,
-      contentIv: null,
-      metadataEncrypted: null,
-      metadataIv: null,
-      isEncrypted: false,
+    const spliced: EncryptedPost = {
+      id: 1,
+      contentEncrypted: a.contentEncrypted,
+      contentIv: a.contentIv,
+      metadataEncrypted: b.metadataEncrypted,
+      metadataIv: b.metadataIv,
+      isEncrypted: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post);
-    expect(decrypted.content).toBe('');
-    expect(decrypted.metadata).toEqual({});
+    await expect(encryptionService.decryptPost(key, spliced)).rejects.toThrow();
+  });
+
+  it('rejects content and metadata swapped with each other', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const enc = await encryptionService.encryptPost(key, '{"title":"x"}', { title: 'x' });
+
+    const swapped: EncryptedPost = {
+      id: 1,
+      contentEncrypted: enc.metadataEncrypted,
+      contentIv: enc.metadataIv,
+      metadataEncrypted: enc.contentEncrypted,
+      metadataIv: enc.contentIv,
+      isEncrypted: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await expect(encryptionService.decryptPost(key, swapped)).rejects.toThrow();
+  });
+
+  it('bound halves do not decrypt without their AAD', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const enc = await encryptionService.encryptPost(key, 'secret', { t: 1 });
+    await expect(decrypt(key, enc.contentEncrypted, enc.contentIv)).rejects.toThrow();
+    await expect(decrypt(key, enc.metadataEncrypted, enc.metadataIv)).rejects.toThrow();
+  });
+
+  it('still decrypts entries saved before AAD binding', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const { encrypt } = await import('../crypto/primitives.js');
+    const content = await encrypt(key, '<p>old entry</p>');
+    const meta = await encrypt(key, JSON.stringify({ title: 'Old' }));
+
+    const decrypted = await encryptionService.decryptPost(key, {
+      id: 9,
+      contentEncrypted: content.ciphertext,
+      contentIv: content.iv,
+      metadataEncrypted: meta.ciphertext,
+      metadataIv: meta.iv,
+      isEncrypted: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(decrypted.content).toBe('<p>old entry</p>');
+    expect(decrypted.metadata).toEqual({ title: 'Old' });
+  });
+
+  it('rejects a legacy half paired with a bound half', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const { encrypt } = await import('../crypto/primitives.js');
+    const legacyMeta = await encrypt(key, JSON.stringify({ title: 'Old' }));
+    const bound = await encryptionService.encryptPost(key, 'new', { title: 'New' });
+
+    await expect(encryptionService.decryptPost(key, {
+      id: 10,
+      contentEncrypted: bound.contentEncrypted,
+      contentIv: bound.contentIv,
+      metadataEncrypted: legacyMeta.ciphertext,
+      metadataIv: legacyMeta.iv,
+      isEncrypted: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })).rejects.toThrow();
   });
 
   it('throws when encrypted post is missing required fields', async () => {
@@ -475,7 +548,8 @@ describe('decryptPost', () => {
       return encrypt(nonExtKey, '"just a string"');
     })();
 
-    const encrypted = await encryptionService.encryptPost(nonExtKey, 'content', { a: 1 });
+    // Legacy (pre-AAD) post: both halves encrypted without AAD
+    const encrypted = await legacyContent(nonExtKey, 'content');
 
     const post: EncryptedPost = {
       id: 4,
@@ -499,7 +573,8 @@ describe('decryptPost', () => {
     const { encrypt } = await import('../crypto/primitives.js');
     const { ciphertext: metaCipher, iv: metaIv } = await encrypt(nonExtKey, '[1,2,3]');
 
-    const encrypted = await encryptionService.encryptPost(nonExtKey, 'content', { a: 1 });
+    // Legacy (pre-AAD) post: both halves encrypted without AAD
+    const encrypted = await legacyContent(nonExtKey, 'content');
 
     const post: EncryptedPost = {
       id: 5,
@@ -523,7 +598,8 @@ describe('decryptPost', () => {
     const { encrypt } = await import('../crypto/primitives.js');
     const { ciphertext: metaCipher, iv: metaIv } = await encrypt(nonExtKey, 'null');
 
-    const encrypted = await encryptionService.encryptPost(nonExtKey, 'content', { a: 1 });
+    // Legacy (pre-AAD) post: both halves encrypted without AAD
+    const encrypted = await legacyContent(nonExtKey, 'content');
 
     const post: EncryptedPost = {
       id: 6,
@@ -547,7 +623,8 @@ describe('decryptPost', () => {
     const { encrypt } = await import('../crypto/primitives.js');
     const { ciphertext: metaCipher, iv: metaIv } = await encrypt(nonExtKey, 'not json at all {{{');
 
-    const encrypted = await encryptionService.encryptPost(nonExtKey, 'content', { a: 1 });
+    // Legacy (pre-AAD) post: both halves encrypted without AAD
+    const encrypted = await legacyContent(nonExtKey, 'content');
 
     const post: EncryptedPost = {
       id: 7,
@@ -607,7 +684,7 @@ describe('decryptPosts', () => {
     expect(decrypted[1].metadata).toEqual({ title: 'Second' });
   });
 
-  it('handles mix of encrypted and non-encrypted posts', async () => {
+  it('refuses a list containing a non-encrypted post', async () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
@@ -638,11 +715,7 @@ describe('decryptPosts', () => {
       },
     ];
 
-    const decrypted = await encryptionService.decryptPosts(nonExtKey, posts);
-    expect(decrypted[0].content).toBe('Encrypted');
-    expect(decrypted[0].isEncrypted).toBe(true);
-    expect(decrypted[1].content).toBe('Plaintext');
-    expect(decrypted[1].isEncrypted).toBe(false);
+    await expect(encryptionService.decryptPosts(nonExtKey, posts)).rejects.toThrow('Refusing unencrypted post');
   });
 
   it('handles empty array', async () => {

@@ -212,11 +212,16 @@ export async function toNonExtractable(key: CryptoKey): Promise<CryptoKey> {
  */
 export async function encrypt(
   masterKey: CryptoKey,
-  plaintext: string
+  plaintext: string,
+  options: { iv?: Uint8Array; aad?: string } = {}
 ): Promise<{ ciphertext: string; iv: string }> {
-  const iv = generateIv();
+  const iv = options.iv ?? generateIv();
   const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    {
+      name: AES_ALGORITHM,
+      iv: iv.buffer as ArrayBuffer,
+      ...(options.aad !== undefined && { additionalData: stringToArrayBuffer(options.aad) }),
+    },
     masterKey,
     stringToArrayBuffer(plaintext)
   );
@@ -266,13 +271,18 @@ export async function decryptBytes(
 export async function decrypt(
   masterKey: CryptoKey,
   ciphertext: string,
-  iv: string
+  iv: string,
+  aad?: string
 ): Promise<string> {
   const ciphertextBuffer = base64ToUint8Array(ciphertext);
   const ivBuffer = base64ToUint8Array(iv);
 
   const plaintextBuffer = await crypto.subtle.decrypt(
-    { name: AES_ALGORITHM, iv: ivBuffer.buffer as ArrayBuffer },
+    {
+      name: AES_ALGORITHM,
+      iv: ivBuffer.buffer as ArrayBuffer,
+      ...(aad !== undefined && { additionalData: stringToArrayBuffer(aad) }),
+    },
     masterKey,
     ciphertextBuffer.buffer as ArrayBuffer
   );

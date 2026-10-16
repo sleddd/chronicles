@@ -61,6 +61,32 @@ describe('Settings Routes', () => {
   // PUT /api/settings
   // =========================================================================
   describe('PUT /api/settings', () => {
+    beforeEach(() => {
+      (getAllSettings as any).mockResolvedValue([]);
+    });
+
+    it('refuses a new key once the account has 500 settings', async () => {
+      (getAllSettings as any).mockResolvedValue(Array.from({ length: 500 }, (_, i) => ({ key: `k${i}`, value: i })));
+
+      const res = await request(app)
+        .put('/api/settings')
+        .send({ key: 'brandNew', value: 1 });
+
+      expect(res.status).toBe(400);
+      expect(upsertSetting).not.toHaveBeenCalled();
+    });
+
+    it('still updates an existing key at the cap', async () => {
+      (getAllSettings as any).mockResolvedValue(Array.from({ length: 500 }, (_, i) => ({ key: `k${i}`, value: i })));
+      (upsertSetting as any).mockResolvedValue({ key: 'k3', value: 9, updatedAt: new Date() });
+
+      const res = await request(app)
+        .put('/api/settings')
+        .send({ key: 'k3', value: 9 });
+
+      expect(res.status).toBe(200);
+    });
+
     it('upserts a string setting', async () => {
       const result = { key: 'headerColor', value: '#FF0000', updatedAt: new Date() };
       (upsertSetting as any).mockResolvedValue(result);

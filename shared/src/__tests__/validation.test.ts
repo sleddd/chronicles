@@ -328,113 +328,88 @@ describe('recoverSchema', () => {
 // createPostSchema
 // ============================================================================
 describe('createPostSchema', () => {
-  it('accepts a minimal unencrypted post', () => {
-    expect(createPostSchema.safeParse({}).success).toBe(true);
-  });
-
-  it('accepts a post with content', () => {
-    expect(createPostSchema.safeParse({ content: 'Hello world' }).success).toBe(true);
-  });
+  const encrypted = {
+    isEncrypted: true,
+    contentEncrypted: 'enc-content',
+    contentIv: 'iv1',
+    metadataEncrypted: 'enc-meta',
+    metadataIv: 'iv2',
+  };
 
   it('accepts a fully encrypted post', () => {
-    const encrypted = {
-      isEncrypted: true,
-      contentEncrypted: 'enc-content',
-      contentIv: 'iv1',
-      metadataEncrypted: 'enc-meta',
-      metadataIv: 'iv2',
-    };
     expect(createPostSchema.safeParse(encrypted).success).toBe(true);
   });
 
-  it('rejects encrypted post missing required encrypted fields', () => {
-    const incomplete = {
-      isEncrypted: true,
-      contentEncrypted: 'enc-content',
-      // missing contentIv, metadataEncrypted, metadataIv
-    };
-    const result = createPostSchema.safeParse(incomplete);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain('Encrypted posts must include');
+  it('rejects an unencrypted post', () => {
+    expect(createPostSchema.safeParse({}).success).toBe(false);
+    expect(createPostSchema.safeParse({ content: 'Hello world' }).success).toBe(false);
+    expect(createPostSchema.safeParse({ ...encrypted, isEncrypted: false }).success).toBe(false);
+  });
+
+  it('never passes plaintext content or metadata through', () => {
+    const result = createPostSchema.safeParse({ ...encrypted, content: 'plain', metadata: { a: 1 } });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('content');
+      expect(result.data).not.toHaveProperty('metadata');
     }
   });
 
+  it('rejects encrypted post missing required encrypted fields', () => {
+    expect(createPostSchema.safeParse({ isEncrypted: true, contentEncrypted: 'enc-content' }).success).toBe(false);
+  });
+
   it('rejects encrypted post missing only metadataIv', () => {
-    const incomplete = {
-      isEncrypted: true,
-      contentEncrypted: 'enc-content',
-      contentIv: 'iv1',
-      metadataEncrypted: 'enc-meta',
-      // missing metadataIv
-    };
+    const { metadataIv: _omit, ...incomplete } = encrypted;
     expect(createPostSchema.safeParse(incomplete).success).toBe(false);
   });
 
   it('accepts taxonomyIds as an array of numbers', () => {
-    expect(createPostSchema.safeParse({ taxonomyIds: [1, 2, 3] }).success).toBe(true);
+    expect(createPostSchema.safeParse({ ...encrypted, taxonomyIds: [1, 2, 3] }).success).toBe(true);
   });
 
   it('rejects taxonomyIds with non-number values', () => {
-    expect(createPostSchema.safeParse({ taxonomyIds: ['a', 'b'] }).success).toBe(false);
-  });
-
-  it('accepts metadata object', () => {
-    expect(createPostSchema.safeParse({ metadata: { title: 'test', date: '2024-01-01' } }).success).toBe(true);
-  });
-
-  it('rejects metadata exceeding 10KB', () => {
-    const largeMetadata: Record<string, string> = {};
-    // Create a metadata object that serializes to > 10000 bytes
-    largeMetadata.data = 'x'.repeat(10001);
-    const result = createPostSchema.safeParse({ metadata: largeMetadata });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.some(i => i.message.includes('Metadata too large'))).toBe(true);
-    }
-  });
-
-  it('accepts metadata just under 10KB', () => {
-    const metadata = { data: 'x'.repeat(9980) };
-    expect(createPostSchema.safeParse({ metadata }).success).toBe(true);
+    expect(createPostSchema.safeParse({ ...encrypted, taxonomyIds: ['a', 'b'] }).success).toBe(false);
   });
 });
 
-// ============================================================================
-// updatePostSchema
-// ============================================================================
 describe('updatePostSchema', () => {
-  it('accepts a partial update with content only', () => {
-    expect(updatePostSchema.safeParse({ content: 'Updated content' }).success).toBe(true);
-  });
+  const fields = {
+    contentEncrypted: 'enc',
+    contentIv: 'iv',
+    metadataEncrypted: 'meta-enc',
+    metadataIv: 'meta-iv',
+  };
 
   it('accepts empty object', () => {
     expect(updatePostSchema.safeParse({}).success).toBe(true);
   });
 
-  it('accepts encrypted fields', () => {
-    expect(updatePostSchema.safeParse({
-      contentEncrypted: 'enc',
-      contentIv: 'iv',
-      metadataEncrypted: 'meta-enc',
-      metadataIv: 'meta-iv',
-    }).success).toBe(true);
+  it('accepts all four encrypted fields together', () => {
+    expect(updatePostSchema.safeParse(fields).success).toBe(true);
+  });
+
+  it('rejects a partial encrypted update (content and metadata are a bound pair)', () => {
+    expect(updatePostSchema.safeParse({ contentEncrypted: 'enc' }).success).toBe(false);
+    const { metadataIv: _omit, ...three } = fields;
+    expect(updatePostSchema.safeParse(three).success).toBe(false);
+  });
+
+  it('drops plaintext content and metadata', () => {
+    const result = updatePostSchema.safeParse({ content: 'Updated content', metadata: { a: 1 } });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toEqual({});
   });
 
   it('accepts taxonomyIds', () => {
     expect(updatePostSchema.safeParse({ taxonomyIds: [1] }).success).toBe(true);
   });
 
-  it('rejects metadata exceeding 10KB', () => {
-    const result = updatePostSchema.safeParse({ metadata: { data: 'x'.repeat(10001) } });
-    expect(result.success).toBe(false);
-  });
-
-  it('does not have isEncrypted field (no refinement check)', () => {
-    // updatePostSchema does not include isEncrypted, so it has no encrypted-post refinement
-    expect(updatePostSchema.safeParse({ contentEncrypted: 'enc' }).success).toBe(true);
+  it('rejects encrypted metadata over 20000 chars', () => {
+    expect(updatePostSchema.safeParse({ ...fields, metadataEncrypted: 'x'.repeat(20001) }).success).toBe(false);
   });
 });
+
 
 // ============================================================================
 // createTaxonomySchema

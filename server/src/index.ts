@@ -48,6 +48,12 @@ if (process.env.CLIENT_URL) {
   }
 }
 
+// Every sign-up creates a whole Postgres schema; a personal deployment should
+// list who may register
+if (process.env.NODE_ENV === 'production' && !process.env.REGISTRATION_WHITELIST) {
+  console.warn('WARNING: REGISTRATION_WHITELIST is not set — anyone can create an account on this server');
+}
+
 // Behind a hosting proxy (Render etc.) every request arrives from the proxy's
 // address; without this, per-IP rate limits would see one shared IP — one
 // visitor could exhaust the login limit for everyone. TRUST_PROXY sets the

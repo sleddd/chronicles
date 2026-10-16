@@ -33,6 +33,16 @@ describe('securityHeaders middleware', () => {
     expect(res.headers['Content-Security-Policy']).toContain("object-src 'none'");
   });
 
+  it('allows Bedrock per region host, never every amazonaws.com host (e.g. S3 buckets)', () => {
+    const res = createMockRes() as any;
+    securityHeaders({} as any, res, vi.fn());
+    const csp: string = res.headers['Content-Security-Policy'];
+
+    expect(csp).not.toContain('*.amazonaws.com');
+    expect(csp).toContain('https://bedrock-runtime.us-east-1.amazonaws.com');
+    expect(csp).toContain('https://bedrock.eu-west-1.amazonaws.com');
+  });
+
   it('sets X-Content-Type-Options to nosniff', () => {
     const req = {} as any;
     const res = createMockRes() as any;

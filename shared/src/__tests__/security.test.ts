@@ -277,23 +277,7 @@ describe('Encrypt/Decrypt round-trip', () => {
 // 9. Validation schemas — metadata size limit
 // ============================================================================
 describe('Validation schema security', () => {
-  it('metadata field rejects payloads over 10KB', async () => {
-    const { createPostSchema } = await import('../validation/schemas.js');
-
-    const largeMetadata: Record<string, string> = {};
-    for (let i = 0; i < 200; i++) {
-      largeMetadata[`key_${i}`] = 'x'.repeat(100);
-    }
-
-    const result = createPostSchema.safeParse({
-      content: 'test',
-      metadata: largeMetadata,
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('metadata field accepts normal-sized payloads', async () => {
+  it('post schemas refuse plaintext entries', async () => {
     const { createPostSchema } = await import('../validation/schemas.js');
 
     const result = createPostSchema.safeParse({
@@ -301,7 +285,7 @@ describe('Validation schema security', () => {
       metadata: { title: 'My Entry', tags: ['a', 'b'] },
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
   it('registerSchema requires recoveryKeySalt', async () => {
