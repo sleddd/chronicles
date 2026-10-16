@@ -397,7 +397,7 @@ describe('2FA hardening', () => {
     }, 30000);
 
     it('does not count the legacy check, where nothing was verified', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue(null);
+      (prisma.account.findUnique as any).mockResolvedValue({ ...twoFAAccount(generateSecret()), email: 'probe@example.com', passwordHash: '$2a$12$legacyhash' });
       for (let i = 0; i < 11; i++) {
         const r = await request(app).post('/api/auth/login').send({ email: 'probe@example.com', authSecret: SECRET });
         expect(r.body.legacyAuth).toBe(true);

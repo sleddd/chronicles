@@ -250,17 +250,27 @@ describe('Auth Routes', () => {
       expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
     });
 
-    it('answers an unknown email exactly like a legacy account', async () => {
+    it('answers an unknown email like an upgraded account with a wrong secret', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
       const unknown = await request(app).post('/api/auth/login').send(validLoginBody);
 
+      (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+      (bcrypt.compare as any).mockResolvedValue(false);
+      const upgraded = await request(app).post('/api/auth/login').send(validLoginBody);
+
+      expect(unknown.status).toBe(401);
+      expect(unknown.body).toEqual({ error: 'Invalid credentials' });
+      expect(upgraded.status).toBe(401);
+      expect(upgraded.body).toEqual(unknown.body);
+      expect(createSession).not.toHaveBeenCalled();
+    });
+
+    it('asks a legacy account for its password once', async () => {
       (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
       const legacy = await request(app).post('/api/auth/login').send(validLoginBody);
 
-      expect(unknown.status).toBe(401);
-      expect(unknown.body).toEqual({ error: 'Invalid credentials', legacyAuth: true });
       expect(legacy.status).toBe(401);
-      expect(legacy.body).toEqual(unknown.body);
+      expect(legacy.body).toEqual({ error: 'Invalid credentials', legacyAuth: true });
       expect(bcrypt.compare).not.toHaveBeenCalled();
       expect(createSession).not.toHaveBeenCalled();
     });

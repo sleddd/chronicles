@@ -22,6 +22,8 @@ async function ensureSortOrderColumn(schemaName: string): Promise<void> {
 
 const router = Router();
 
+const MAX_REORDER_IDS = 1000;
+
 const DEFAULT_TOPICS = [
   { name: 'Task', icon: 'circle-check', color: '#3B82F6' },
   { name: 'Goal', icon: 'bullseye', color: '#8B5CF6' },
@@ -75,7 +77,8 @@ router.get('/', async (req, res) => {
 router.post('/reorder', async (req, res) => {
   try {
     const { topicIds } = req.body;
-    if (!Array.isArray(topicIds) || !topicIds.every((id: unknown) => typeof id === 'number')) {
+    // Capped: each id is one UPDATE inside a single transaction
+    if (!Array.isArray(topicIds) || topicIds.length > MAX_REORDER_IDS || !topicIds.every((id: unknown) => typeof id === 'number')) {
       res.status(400).json({ error: 'topicIds must be an array of numbers' });
       return;
     }

@@ -461,11 +461,13 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
     const account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
-    const legacy = !account || isLegacyAuthHash(account.passwordHash);
+    const legacy = !!account && isLegacyAuthHash(account.passwordHash);
     if (legacy && !legacyPassword) {
       // A legacy account can only be checked against the password, so ask the
       // client for it once. Nothing was checked, so nothing counts as a
-      // failure. An unknown email answers exactly like a legacy account.
+      // failure. An unknown email answers like an upgraded account with a
+      // wrong secret, not like this: upgraded accounts are nearly all of them,
+      // so "legacyAuth for unknown emails" told anyone which emails are real.
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials', legacyAuth: true });

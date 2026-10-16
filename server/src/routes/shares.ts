@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { apiLimiter, shareLimiter } from '../middleware/rateLimiter.js';
 import { createShare, getShareByToken, revokeShare, getSharesByAccount, type Share } from '../db/shareQueries.js';
 import { createShareSchema } from '@chronicles/shared';
+import { getPost } from '../db/tenantQueries.js';
 
 const router = Router();
 
@@ -53,6 +54,13 @@ router.post('/', authMiddleware, apiLimiter, async (req, res) => {
     }
 
     const { content, entryId, expiresAt } = parsed.data;
+
+    // A link must belong to one of your entries, so deleting that entry
+    // (deleteSharesForEntry) is what removes its plaintext
+    if (!(await getPost(req.auth!.tenantSchemaName, entryId))) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
 
     const share = await createShare({
       accountId: req.auth!.accountId,

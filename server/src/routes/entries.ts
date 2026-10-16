@@ -106,6 +106,10 @@ router.put('/:id', async (req, res) => {
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
     const post = await updatePost(req.auth!.tenantSchemaName, id, input as Parameters<typeof updatePost>[2]);
+    if (!post) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {

@@ -88,6 +88,11 @@ app.use('/api/doses', authMiddleware, apiLimiter, dosesRoutes);
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 
+// Unknown API paths are a JSON 404, not the SPA's index.html
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // Global error handler — sanitize errors in production
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (process.env.NODE_ENV === 'production') {

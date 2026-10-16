@@ -11,6 +11,11 @@ vi.mock('../../db/shareQueries.js', () => ({
   getSharesByAccount: vi.fn(),
 }));
 
+// The entry being shared must exist in the caller's schema
+vi.mock('../../db/tenantQueries.js', () => ({
+  getPost: vi.fn(),
+}));
+
 // Mock auth middleware
 vi.mock('../../middleware/auth.js', () => ({
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
@@ -32,6 +37,7 @@ vi.mock('../../middleware/rateLimiter.js', () => ({
 
 import sharesRouter from '../../routes/shares.js';
 import { getShareByToken, createShare, revokeShare, getSharesByAccount } from '../../db/shareQueries.js';
+import { getPost } from '../../db/tenantQueries.js';
 
 // Build test app — shares has mixed auth (some routes public, some use authMiddleware inline)
 function buildApp() {
@@ -63,6 +69,7 @@ describe('Share Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (getPost as any).mockResolvedValue({ id: 7 });
     app = buildApp();
   });
 
@@ -117,6 +124,14 @@ describe('Share Routes', () => {
   // =========================================================================
   describe('POST /api/shares', () => {
     const validShareBody = { content: '<p>Shared entry</p>', entryId: 7 };
+
+    it('refuses a share for an entry that is not yours', async () => {
+      (getPost as any).mockResolvedValue(null);
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
+      expect(res.status).toBe(404);
+      expect(getPost).toHaveBeenCalledWith('usr_1_a1b2c3', 7);
+      expect(createShare).not.toHaveBeenCalled();
+    });
 
     it('creates a share and returns 201', async () => {
       (createShare as any).mockResolvedValue(mockShare);
