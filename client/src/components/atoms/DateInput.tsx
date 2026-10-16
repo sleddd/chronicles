@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes } from 'react';
-import { Input as DSInput } from '../../../../design-system/components/core/Input.jsx';
+import { Input as DSInput } from './core/Input.jsx';
 
 interface DateInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;

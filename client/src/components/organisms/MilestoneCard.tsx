@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { ProgressBar } from '../atoms/ProgressBar.js';
 import { Badge } from '../atoms/Badge.js';
 import { Checkbox } from '../atoms/Checkbox.js';

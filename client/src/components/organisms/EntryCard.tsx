@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { entryTitleText } from '../../utils/entryTitle.js';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
 import {
   ENTRY_ROW_COLUMNS, ENTRY_ROW_INSET_PADDING, formatListDate,

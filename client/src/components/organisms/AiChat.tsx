@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, typ
 import styled from 'styled-components';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { PillButton } from '../atoms/PillButton.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';

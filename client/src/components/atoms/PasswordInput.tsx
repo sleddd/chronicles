@@ -1,6 +1,6 @@
 import { useState, type InputHTMLAttributes } from 'react';
 import styled from 'styled-components';
-import { Input as DSInput } from '../../../../design-system/components/core/Input.jsx';
+import { Input as DSInput } from './core/Input.jsx';
 
 interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   error?: boolean | string;

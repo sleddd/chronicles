@@ -1,6 +1,6 @@
 import React, { type TextareaHTMLAttributes } from 'react';
-import { Textarea as DSTextarea } from '../../../../design-system/components/core/Textarea.jsx';
-import type { TextareaProps as DSTextareaProps } from '../../../../design-system/components/core/Textarea.d';
+import { Textarea as DSTextarea } from './core/Textarea.jsx';
+import type { TextareaProps as DSTextareaProps } from './core/Textarea.d';
 
 interface TextareaProps extends Omit<DSTextareaProps, 'error'> {
   /** @deprecated Use error prop as string message */
@@ -8,7 +8,7 @@ interface TextareaProps extends Omit<DSTextareaProps, 'error'> {
 }
 
 /**
- * Multi-line text area wrapping the design-system Textarea component.
+ * Multi-line text area wrapping the core Textarea primitive (atoms/core).
  * Supports optional label, hint, and error message.
  */
 export function Textarea({ error, ...props }: TextareaProps) {

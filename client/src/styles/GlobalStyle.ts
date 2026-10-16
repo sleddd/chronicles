@@ -1,7 +1,7 @@
 import { createGlobalStyle } from 'styled-components';
 
-/* Import design-system component styles */
-import '../../../design-system/components/core.css';
+/* Base styles for the core primitives (components/atoms/core, ch-* classes) */
+import './core.css';
 
 export const GlobalStyle = createGlobalStyle`
   *, *::before, *::after {

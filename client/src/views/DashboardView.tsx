@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../components/atoms/core/Icon.jsx';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';

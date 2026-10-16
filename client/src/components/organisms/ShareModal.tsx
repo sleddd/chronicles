@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { Modal } from '../atoms/Modal.js';
 import { shares as sharesApi, type ShareRecord } from '../../services/api.js';
 

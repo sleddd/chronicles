@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { Spinner } from '../atoms/Spinner.js';
 
 function isDark(bg: string): boolean {

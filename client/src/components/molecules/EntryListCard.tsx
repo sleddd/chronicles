@@ -1,6 +1,6 @@
 import styled, { css } from 'styled-components';
 import { entryTitleText } from '../../utils/entryTitle.js';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import {
   formatListDate, DateCell, TopicCell, EntryCell, EntryTitle, EntryPreview,
 } from './EntryTable.js';

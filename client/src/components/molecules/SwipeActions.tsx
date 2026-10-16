@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, type ReactNode } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 
 /* ── Constants ── */
 

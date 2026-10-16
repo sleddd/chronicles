@@ -1,6 +1,6 @@
 import { useState, useId } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 
 const Section = styled.div`
   border-top: 1px solid var(--border-subtle);

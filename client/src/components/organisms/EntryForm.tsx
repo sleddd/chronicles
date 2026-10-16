@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
 import { getEntryTrail } from '../../utils/topicBreadcrumb.js';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { Editor, type DictationControls } from './Editor.js';
 import { RecipeEntry } from './RecipeEntry.js';
 import { ImageLibraryPicker } from './ImageLibraryPicker.js';

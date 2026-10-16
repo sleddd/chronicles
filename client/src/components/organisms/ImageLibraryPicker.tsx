@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import styled from 'styled-components';
 import { Modal } from '../atoms/Modal.js';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { Spinner } from '../atoms/Spinner.js';
 import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';

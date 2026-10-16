@@ -14,11 +14,16 @@ Key privacy guarantees:
 
 ## UI Design Rules
 
-The canonical visual spec is the **`design-system/`** folder — specifically the runnable
-mini-app at `design-system/Chronicles Desktop App/` (`app.jsx` + `index.html`), the binding
-rules in `design-system/CLAUDE.md`, and the token source `design-system/tokens/*.css`. All UI
-implementation must match this. (The old `design_handoff/chronicles-design-system.html`
-paper/serif spec is retired.)
+The design system lives **in the app code** (the separate `design-system/` folder was folded in):
+- **Tokens** — `client/src/App.tsx` (`STATIC_CSS_VARS`, `LIGHT_CSS_VARS`, `DARK_CSS_VARS`, accent
+  derivation): the semantic CSS variables below are the source of truth for colour, type and radii.
+- **Core primitives** — `client/src/components/atoms/core/` (`Icon`, `Input`, `Textarea`, `Select`,
+  `Checkbox`, `Button`, `Badge`; `.jsx` + `.d.ts`) styled by the `ch-*` classes in
+  `client/src/styles/core.css`. App code uses the atom wrappers (`TextInput`, `Select`, …) and
+  `Icon` from `atoms/core/Icon.jsx`.
+- **Shared patterns** — field rows `FormField` + `styles/filledInputs.ts`, `PillButton`,
+  `CollapsibleCard`, `EntryListCard`/`EntryTable`. Reuse these rather than restyling locally.
+All UI must follow the rules below.
 
 ### Design Philosophy
 - **Borderless tonal panels** — Pure-white canvas (light) / deep-charcoal `#1b1d26` (dark).
@@ -28,8 +33,9 @@ paper/serif spec is retired.)
   canonical): a 1px `--border-subtle` *top rule* + a tracked-uppercase label row, with content
   sitting directly on the canvas — NOT bordered/filled tiles. The grid is `2fr / 1fr` with a
   24px gap and **no vertical divider** between columns.
-- **Sharp, squared corners** — Cards/tiles ~2px (`--r-lg`), inputs/buttons ~1px (`--r-md`).
-  Only avatars, switches, dots, and the active-nav nothing-else go round (`--r-full`).
+- **Mostly squared corners** — Cards/tiles ~2px (`--r-lg`), filled inputs ~1px (`--r-md`). Action
+  buttons are the round `PillButton` (`--r-full`); small utility controls (search fields, Clear,
+  bulk-edit buttons) use a slight 4px radius. Avatars, switches and dots are round.
 - **Flat elevation** — Depth is tonal layering, **never shadow** on resting panels. Shadows
   (`--shadow-lg/xl`) are reserved for floating overlays: dropdown menus, dialogs, toasts.
 - **One confident accent** — A single user-selectable accent marks exactly one active/selected
@@ -107,10 +113,6 @@ npm run test             # Vitest
 
 ```
 chronicles-rebuild/
-├── design_handoff/      # Canonical design spec (HTML + screenshots); source of truth for all UI
-│   ├── chronicles-design-system.html  # Full component library with CSS variables
-│   └── screenshots/     # Reference screenshots (desktop/mobile, Paper/Midnight)
-│
 ├── shared/              # Shared code (web + future React Native)
 │   └── src/
 │       ├── crypto/      # Stateless encryption service (AES-256-GCM, PBKDF2)

@@ -1,6 +1,6 @@
 import React, { type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { Button as DSButton } from '../../../../design-system/components/core/Button.jsx';
-import type { ButtonProps as DSButtonProps } from '../../../../design-system/components/core/Button.d';
+import { Button as DSButton } from './core/Button.jsx';
+import type { ButtonProps as DSButtonProps } from './core/Button.d';
 
 interface ButtonProps extends Omit<DSButtonProps, 'size'> {
   /** @deprecated Use size prop from design system ('sm' | 'md' | 'lg') */
@@ -10,7 +10,7 @@ interface ButtonProps extends Omit<DSButtonProps, 'size'> {
 }
 
 /**
- * Primary action button wrapping the design-system Button.
+ * Primary action button wrapping the core Button primitive (atoms/core).
  * Supports variants: primary, secondary, ghost, accentSoft, danger
  * Supports sizes: sm, md, lg
  */

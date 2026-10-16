@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { IconPicker } from './IconPicker.js';
 import { Checkbox } from '../atoms/Checkbox.js';
 import type { UserFieldDef } from '../../types/userFields.js';

@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 import { BACKGROUND_IMAGES } from '@chronicles/shared';
 

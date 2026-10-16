@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import type { InputHTMLAttributes } from 'react';
-import { Input as DSInput } from '../../../../design-system/components/core/Input.jsx';
+import { Input as DSInput } from './core/Input.jsx';
 
 const Wrapper = styled.div`
   display: flex;

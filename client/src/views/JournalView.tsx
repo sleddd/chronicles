@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
-import { Icon } from '../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../components/atoms/core/Icon.jsx';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
 import { JournalTemplate, SidePanel, EditorPanel, MobileBackButton } from '../components/templates/JournalTemplate.js';
 import { LoadingCenter } from '../components/atoms/LoadingCenter.js';

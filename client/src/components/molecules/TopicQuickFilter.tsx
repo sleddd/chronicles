@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { TopicIcon } from './IconPicker.js';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import type { Topic } from '../../types/topics.js';
 
 const Wrap = styled.div`

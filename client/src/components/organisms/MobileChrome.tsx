@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useNavigate } from 'react-router-dom';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 
 /* Top bar shown only on mobile: logo + hamburger. Fixed to the top. */

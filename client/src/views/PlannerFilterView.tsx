@@ -10,7 +10,7 @@ import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import { FormField } from '../components/molecules/FormField.js';
 import { TextInput } from '../components/atoms/TextInput.js';
 import { Select } from '../components/atoms/Select.js';
-import { Icon } from '../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../components/atoms/core/Icon.jsx';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';

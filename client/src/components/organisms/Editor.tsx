@@ -5,7 +5,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import styled, { keyframes, css } from 'styled-components';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useDictation } from '../../hooks/useDictation.js';
 import { DrawingNode } from '../tiptap/DrawingNode.js';

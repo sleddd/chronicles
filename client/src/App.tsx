@@ -32,7 +32,7 @@ import { ShoppingListsView } from './views/ShoppingListsView.js';
 import { DashboardView } from './views/DashboardView.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
-   Ported from design-system/tokens/*.css. Light = pure white canvas; dark =
+   Chronicles design tokens (originally from the design-system package). Light = pure white canvas; dark =
    deep charcoal (#1b1d26). Borderless tonal panels: surfaces separate by FILL,
    not outline; shadows are reserved for floating overlays only.
 
@@ -270,7 +270,7 @@ function mix(hex: string, target: number, amt: number): string {
 
 /* Build the DS accent scale (--accent-100..800) from a single base hex.
    Lighter steps mix toward white, darker steps toward black — mirrors the
-   tonal ramps in design-system/tokens/accents.css. */
+   tonal accent ramps of the original design system. */
 function deriveAccentScale(base: string): Record<string, string> {
   return {
     '--accent-100': mix(base, 255, 0.86),

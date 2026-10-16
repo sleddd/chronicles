@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../../atoms/core/Icon.jsx';
 import { TextInput } from '../../atoms/TextInput.js';
 import { Select } from '../../atoms/Select.js';
 import { Textarea } from '../../atoms/Textarea.js';

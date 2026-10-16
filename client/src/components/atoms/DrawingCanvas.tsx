@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { getStroke } from 'perfect-freehand';
 import styled from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from './core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 
 /* ── SVG helpers ── */

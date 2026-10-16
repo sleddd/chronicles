@@ -1,4 +1,4 @@
-import { Checkbox as DSCheckbox } from '../../../../design-system/components/core/Checkbox.jsx';
+import { Checkbox as DSCheckbox } from './core/Checkbox.jsx';
 
 interface CheckboxProps {
   checked: boolean;

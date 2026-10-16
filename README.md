@@ -117,7 +117,7 @@ This is a complete rebuild combining the best of the original Chronicles UI with
 - **Server**: Express 5 API with TypeScript
 - **Shared**: Crypto, types, validation, and theme tokens shared across platforms
 - **Components**: Atomic Design (atoms -> molecules -> organisms -> templates -> views)
-- **Styling**: styled-components (CSS-in-JS) on the Chronicles design system (`design-system/`): white / deep-charcoal themes, borderless tonal panels, filled inputs, Work Sans display type and Open Sans for UI
+- **Styling**: styled-components (CSS-in-JS) on the Chronicles design system (tokens in `client/src/App.tsx`, core primitives in `client/src/components/atoms/core/`): white / deep-charcoal themes, borderless tonal panels, filled inputs, Work Sans display type and Open Sans for UI
 
 ```
 chronicles-rebuild/

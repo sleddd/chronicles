@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import styled from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { Spinner } from '../atoms/Spinner.js';
 import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
 import type { EntryImage } from '../../services/imageStorage.js';

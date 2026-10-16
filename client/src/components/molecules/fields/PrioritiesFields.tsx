@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { Icon } from '../../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../../atoms/core/Icon.jsx';
 
 export interface PriorityItem { id: string; text: string; done: boolean; }
 export interface PrioritiesFieldValues { priorities: PriorityItem[]; }

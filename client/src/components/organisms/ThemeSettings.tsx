@@ -40,7 +40,7 @@ const ModeButton = styled.button<{ $active: boolean; $mode?: string }>`
   }
 `;
 
-/* DS named accent presets (base/500 from design-system/tokens/accents.css). */
+/* DS named accent presets (base/500 of the original design-system accent ramps). */
 const ACCENT_PRESETS: { value: string; label: string }[] = [
   { value: '#5b53d6', label: 'Ink' },
   { value: '#4c8a5f', label: 'Sage' },

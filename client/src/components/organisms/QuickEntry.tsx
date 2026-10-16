@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../../../design-system/components/core/Icon.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { TopicIcon as TopicGlyph } from '../molecules/IconPicker.js';

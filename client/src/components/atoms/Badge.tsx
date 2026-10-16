@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Badge as DSBadge } from '../../../../design-system/components/core/Badge.jsx';
+import { Badge as DSBadge } from './core/Badge.jsx';
 
 type BadgeVariant = 'default' | 'ink' | 'accent' | 'danger' | 'success' | 'warning';
 
