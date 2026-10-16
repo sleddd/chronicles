@@ -21,7 +21,7 @@ vi.mock('@tiptap/react', () => ({
   ReactNodeViewRenderer: () => () => null,
 }));
 
-vi.mock('@tiptap/starter-kit', () => ({ default: {} }));
+vi.mock('@tiptap/starter-kit', () => ({ default: { configure: () => ({}) } }));
 vi.mock('@tiptap/extension-placeholder', () => ({
   default: { configure: () => ({}) },
 }));

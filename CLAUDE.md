@@ -197,11 +197,13 @@ Implemented via `otplib` — no external services required.
 - Client shows OTP screen; user enters code from authenticator app or a backup code
 - `POST /api/auth/login/2fa` verifies the code and issues the real split-token session
 - Pending tokens are stored in-memory with 5-minute TTL (single-instance safe for Render)
+- A TOTP code is accepted once (otplib `afterTimeStep`); 5 wrong codes lock that account's 2FA for 15 minutes. Both are in memory, like pending tokens
+- `POST /api/auth/recover` on a 2FA account also needs an authenticator/backup `code` (answered with `requires2FA: true` once the recovery key checks out); recovery uses async PBKDF2
 
 **Setup flow (Settings → Security):**
 1. `POST /api/auth/2fa/setup` — generates TOTP secret + QR code (not saved yet)
 2. User scans QR code and enters confirmation code
-3. `POST /api/auth/2fa/enable` — verifies code, saves secret to `accounts` table, issues 8 one-time backup codes
+3. `POST /api/auth/2fa/enable` — needs the **current password** and refuses if 2FA is already on (replace = disable first); verifies code, saves the secret (AES-GCM-sealed with `SECRETS_ENCRYPTION_KEY` when set), issues 8 one-time backup codes (stored salted + scrypt-hashed; old SHA-256 hashes still verify)
 4. `DELETE /api/auth/2fa` — disables 2FA after password confirmation
 
 **Schema**: `totpSecret` and `totpEnabled` added to `accounts` table.
@@ -235,7 +237,10 @@ IV: Random 12 bytes per encryption operation
 Key Derivation: PBKDF2-SHA256, 600,000 iterations (OWASP 2024)
 Salt: 16 bytes random per user
 Master Key: Non-extractable CryptoKey (cannot be exported from Web Crypto)
-Content: Encrypted client-side, stored as BYTEA in PostgreSQL
+Content: Encrypted client-side, stored as BYTEA in PostgreSQL. Content and metadata
+         are a bound pair: each half's AAD is `chronicles:post:v2:<part>:<other half's IV>`
+         (pre-AAD entries still decrypt, but only as a fully-legacy pair), so they are
+         always saved together. Server and client both refuse plaintext posts
 Search: Client-side on decrypted data (no server-side search tokens)
 ```
 
@@ -435,7 +440,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - `client/src/services/aiAssistant.ts` — config lifecycle, provider calls (`@anthropic-ai/sdk` with `dangerouslyAllowBrowser`, Bedrock via `bedrock.ts`, OpenAI chat completions via fetch), `estimateMealCalories` / `estimateExerciseCalories`, `autoCaloriesOnSave`; `useAiReady()` hook; the Anthropic SDK is a lazy-loaded chunk
 - Food: calories auto-estimated on save when blank (Health dashboard quick log, journal Save) + an "Estimate" button beside Calories. Exercise: calories burned calculated on save from type/duration/distance/intensity (+ body weight) and **re-calculated when those inputs change**
 - `caloriesSource: 'ai' | 'manual'` + `calorieBasis` in the entry's custom fields — typed calories are never overwritten; an AI estimate is refreshed only when its inputs changed. A failed estimate never blocks a save. Journal autosave does not call the AI (explicit Save does)
-- CSP `connect-src` allows `https://api.anthropic.com`, `https://api.openai.com`, `https://*.amazonaws.com` (Bedrock runtime + control plane)
+- CSP `connect-src` allows `https://api.anthropic.com`, `https://api.openai.com` and the per-region Bedrock hosts from `BEDROCK_REGIONS` (runtime + control plane)
 
 **In-App AI chat (unsaved)** — the chat and its Settings section are named "In-App AI"
 - `client/src/components/organisms/AiChat.tsx` — floating chat bubble bottom-right (`forum` icon), 112px up (96px on phones) so it clears the bottom Save bars — 168px on the dashboard, where Quick Entry's Save bar sits in the bottom-right corner (`POS` in `AiChat`); the panel opens above it and keeps its top ≥3rem below the screen edge that opens a small pop-up panel. Mounted once in `App.tsx` via `ChatGate` — only when signed in **and** unlocked, never on `/login`, `/register`, `/recover`, `/share`
@@ -491,13 +496,13 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - `script-src 'self'` — no inline scripts
 - `style-src 'self' 'unsafe-inline'` — required for styled-components
 - `img-src 'self' data: blob:` — images from same origin and data URIs
-- `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket, and the AI providers (`api.anthropic.com`, `api.openai.com`, `*.amazonaws.com`)
+- `connect-src 'self'` plus Open-Meteo, Google Calendar, the user's R2 bucket (`*.r2.cloudflarestorage.com` — the account ID is encrypted, so it can't be pinned), and the AI providers (`api.anthropic.com`, `api.openai.com`, and `bedrock`/`bedrock-runtime` hosts for each region in `BEDROCK_REGIONS`, `shared/src/validation/awsRegions.ts` — never `*.amazonaws.com`; AI settings reject unlisted regions)
 - `frame-ancestors 'none'` — prevent clickjacking; plus `base-uri 'self'`, `form-action 'self'`, `object-src 'none'`
 - `Permissions-Policy` keeps `microphone=(self)` (voice dictation); camera, geolocation etc. are off
 
 ### Account-change rules
 - The wrapped master key + salt are returned only by `/login`, `/login/2fa` and `/me` — never by an unauthenticated lookup (that would allow offline password guessing). There is no `/auth/salt`
-- Changing the email (`/change-email`) or the recovery key (`/recovery-key`) requires the **current password**, like change-password and 2FA disable — a signed-in session alone must not be able to lock the owner out
+- Changing the email (`/change-email`), the recovery key (`/recovery-key`) or turning on 2FA (`/2fa/enable`) requires the **current password**, like change-password and 2FA disable — a signed-in session alone must not be able to lock the owner out
 - Google OAuth: the signed `state` also carries the hash of a nonce kept in an HttpOnly `SameSite=Lax` cookie (`__Host-chronicle_oauth`), so the callback only succeeds in the browser that started the flow
 - `trust proxy` is on in production (`TRUST_PROXY`, default 1 hop) so per-IP rate limits see the real client IP behind Render's proxy
 - Account enumeration: `/recovery-params` answers an unknown email with **stable** decoy params (HMAC of the email, same sizes as real ones) — never random-per-request. Sign-up must say an email is taken (no email verification), so `/register` has its own `registerLimiter` (10/hour per IP)
