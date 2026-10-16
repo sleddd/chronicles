@@ -161,38 +161,10 @@ You can create your own topics for anything else. Any topic can have **user-defi
 - **Dashboard** (`/`) - Home view with daily widgets and quick entry
 - **Journal** (`/journal`) - Main entry view with quick tab filters (Today, Date, Tasks, All, Bookmarks, Search)
 - **Topics** - Manage and browse entries by topic
+- **Health** (`/health`) - Health dashboard, Meals log, Exercise, Symptoms, Med List, Allergies, and Reports
 - **Calendar** - Month, week, and day views; today is circled and the Today button opens today's day view
 - **Planning** - Goals, Milestones, Tasks, Todos, and Filters tabs; Custom Filters view at `/goals/filter`
 - **From the Kitchen** (`/kitchen`) - Kitchen dashboard, Menu planner, Recipes, and Shopping Lists
-- **Health** (`/health`) - Health dashboard, Meals log, Exercise, Symptoms, Med List, Allergies, and Reports
-- **Quick Links** - Entertainment and inspiration collections
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl/Cmd + N | New entry |
-| Ctrl/Cmd + D | Delete selected entry |
-| Enter | Save entry (when editor is focused) |
-| Shift + N | New entry (when not typing) |
-| Escape | Collapse the full-width editor (or return to the page you came from) |
-
-### Dashboard Widgets
-
-The dashboard has two columns. Default layout:
-
-| Left | Right |
-|------|-------|
-| Quick Entry | Mini Calendar |
-| Priorities | Affirmations |
-| Events & Meetings | Daily Wellness Check-in |
-| Menu Plan | *(add more from widget tray)* |
-
-Additional widgets available in the tray: Tasks, Shopping List, Medication Schedule, Weather.
-
-Drag to reorder within or across columns. Layout is saved per-browser.
-
-**Quick Entry** works like the journal editor: pick a topic and its fields appear. Field-led topics (meals, medication, allergies, exercise, events, meetings, books, quotes, music) show just their fields — no text area — and are titled from them when saved.
 
 ### Health Reporting
 
