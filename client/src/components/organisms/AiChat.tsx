@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
@@ -202,10 +202,12 @@ const Composer = styled.div`
   border-top: 1px solid var(--border-subtle);
 `;
 
+/* Grows with what you type (see the auto-size effect) up to ~9 lines, then scrolls */
 const Input = styled.textarea`
   flex: 1;
   min-height: 38px;
-  max-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
   resize: none;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -297,6 +299,14 @@ export function AiChat() {
   const [busy, setBusy] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-size the message box to its text (shrinks back after sending)
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [input, open]);
 
   // Clear the journal's bottom save bar
 
