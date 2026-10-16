@@ -30,8 +30,10 @@ const Wrapper = styled.div`
   position: relative;
   width: 100%;
 
+  /* Room for Show/Hide — !important beats the filled-input padding that
+     form containers apply (styles/filledInputs) */
   input {
-    padding-right: 48px;
+    padding-right: 64px !important;
   }
 `;
 

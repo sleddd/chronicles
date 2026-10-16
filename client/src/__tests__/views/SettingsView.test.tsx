@@ -196,7 +196,7 @@ describe('SettingsView', () => {
 
   it('displays user email', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('test@example.com')).toBeInTheDocument();
   });
 
   it('renders account section', () => {

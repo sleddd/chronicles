@@ -1,10 +1,13 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
+import { filledInputs } from '../../styles/filledInputs.js';
 
+/* Settings inputs use the same filled boxes as every other form */
 const Card = styled.div`
   background: transparent;
   overflow: hidden;
   padding: 0;
+  ${filledInputs}
 `;
 
 const Row = styled.div<{ $noBorder?: boolean }>`

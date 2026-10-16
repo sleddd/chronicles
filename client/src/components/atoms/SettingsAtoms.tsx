@@ -1,17 +1,29 @@
 import styled from 'styled-components';
 import { Link } from 'react-router-dom';
 
+/* Settings actions use the app's standard pill (see PillButton, neutral) */
 export const ActionButton = styled.button`
   && {
-    padding: 6px 16px;
-    font-size: 16px;
-    color: ${({ theme }) => theme.colors.text};
-    background: var(--paper-surface);
-    border: 1px solid ${({ theme }) => theme.colors.border};
-    border-radius: ${({ theme }) => theme.borderRadius.md}px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-shrink: 0;
+    padding: 7px 18px;
+    font-family: var(--font-label);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-full, 999px);
     cursor: pointer;
-    transition: background 0.15s, opacity 0.15s;
-    &:hover { background: var(--paper-hover); }
+    transition: background 150ms, opacity 150ms;
+    &:hover:not(:disabled) { background: var(--bg-hover); }
+    &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
     &:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 `;

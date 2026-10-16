@@ -124,6 +124,21 @@ function Section(props: { id: string; title: string; children: ReactNode }) {
   return <CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} />;
 }
 
+/* A field plus its small actions on one line (value + Change / Save) */
+const InlineControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  & > :first-child { flex: 1; min-width: 0; }
+`;
+
+const EditActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 4px 0 12px;
+`;
+
 /* Prose inside a card (the guide, the privacy note) */
 const GuideBody = styled.div`
   font-family: var(--font-sans);
@@ -673,62 +688,41 @@ export function SettingsView() {
       <Sections>
       <Section id="account" title="Account">
       <SettingsCard>
-        <SettingsRow
-          title="Username"
-          description={user?.username || ''}
-        />
-        <SettingsRow
-          title="Display Name"
-          description={!editingDisplayName ? (displayName || 'Not set') : undefined}
-          action={
-            !editingDisplayName ? (
-              <ActionButton onClick={() => { setEditingDisplayName(true); setDraftDisplayName(displayName); }}>
-                {displayName ? 'Change' : 'Set'}
-              </ActionButton>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
+        <FormField label="Username">
+          <TextInput value={user?.username || ''} readOnly aria-label="Username" />
+        </FormField>
+        {/* Display name edits in place — Save appears once it differs */}
+        <FormField label="Display name">
+          <InlineControls>
+            <TextInput
+              value={editingDisplayName ? draftDisplayName : displayName}
+              onChange={e => { setEditingDisplayName(true); setDraftDisplayName(e.target.value); }}
+              placeholder="Your first name or nickname"
+              aria-label="Display name"
+            />
+            {editingDisplayName && draftDisplayName.trim() !== displayName && (
+              <>
                 <ActionButton onClick={handleSaveDisplayName} disabled={displayNameSaving}>
                   {displayNameSaving ? <Spinner size={14} /> : 'Save'}
                 </ActionButton>
-                <ActionButton onClick={() => { setEditingDisplayName(false); setDraftDisplayName(''); }}>
-                  Cancel
-                </ActionButton>
-              </div>
-            )
-          }
-        >
-          {editingDisplayName && (
-            <TextInput
-              value={draftDisplayName}
-              onChange={e => setDraftDisplayName(e.target.value)}
-              placeholder="Your first name or nickname"
-              autoFocus
-              style={{ marginTop: 4 }}
-            />
-          )}
-        </SettingsRow>
-        <SettingsRow
-          title="Email"
-          description={!editingEmail ? (user?.email || 'Unknown') : undefined}
-          action={
-            !editingEmail ? (
+                <ActionButton onClick={() => { setEditingDisplayName(false); setDraftDisplayName(''); }}>Cancel</ActionButton>
+              </>
+            )}
+          </InlineControls>
+        </FormField>
+        {/* Email changes need the current password, so it stays a Change flow */}
+        {!editingEmail ? (
+          <FormField label="Email">
+            <InlineControls>
+              <TextInput value={user?.email || ''} readOnly aria-label="Email" />
               <ActionButton onClick={() => { setEditingEmail(true); setNewEmail(user?.email || ''); setEmailMessage(''); }}>
                 Change
               </ActionButton>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword}>
-                  {emailLoading ? <Spinner size={14} /> : 'Save'}
-                </ActionButton>
-                <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailMessage(''); }}>
-                  Cancel
-                </ActionButton>
-              </div>
-            )
-          }
-        >
-          {editingEmail && (
-            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            </InlineControls>
+          </FormField>
+        ) : (
+          <>
+            <FormField label="New email">
               <TextInput
                 value={newEmail}
                 onChange={e => setNewEmail(e.target.value)}
@@ -736,15 +730,25 @@ export function SettingsView() {
                 type="email"
                 autoFocus
               />
+            </FormField>
+            <FormField label="Password">
               <PasswordInput
                 value={emailPassword}
                 onChange={e => setEmailPassword(e.target.value)}
                 placeholder="Current password"
                 autoComplete="current-password"
               />
-            </div>
-          )}
-        </SettingsRow>
+            </FormField>
+            <EditActions>
+              <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailMessage(''); }}>
+                Cancel
+              </ActionButton>
+              <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword}>
+                {emailLoading ? <Spinner size={14} /> : 'Save email'}
+              </ActionButton>
+            </EditActions>
+          </>
+        )}
         {emailMessage && <div style={{ padding: '0 0 12px', fontSize: 13, color: emailError ? '#9B4444' : '#5A8A6A' }}>{emailMessage}</div>}
       </SettingsCard>
       </Section>
@@ -804,8 +808,9 @@ export function SettingsView() {
               onClick={() => handleThemeModeChange('light')}
               style={{
                 flex: 1,
-                background: themeMode === 'light' ? '#ecebe7' : 'transparent',
-                border: themeMode === 'light' ? '1px solid #b5b3ae' : undefined,
+                // Selected: the same sunken fill as the input boxes
+                background: themeMode === 'light' ? 'var(--bg-sunken)' : 'transparent',
+                border: themeMode === 'light' ? '1px solid transparent' : undefined,
                 fontWeight: themeMode === 'light' ? 600 : 400,
               }}
             >
