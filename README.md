@@ -29,7 +29,7 @@ These screenshots are from October 2026, but subject to change.
 <img width="1427" height="704" alt="Screenshot 2026-10-15 at 6 59 47 PM" src="https://github.com/user-attachments/assets/32dd8bb1-93a8-463b-9fb9-1e8273028ae8" />
 
 ### Browse by topic or full journal view
-<img width="1417" height="685" alt="Screenshot 2026-10-15 at 5 25 47 PM" src="https://github.com/user-attachments/assets/f738a65c-d25a-4b9c-ac73-17b0b7fdcacc" />
+<img width="1424" height="691" alt="Screenshot 2026-10-15 at 7 15 11 PM" src="https://github.com/user-attachments/assets/39e5cbae-5a0b-4615-b007-2efe823b345e" />
 
 ### Sort your kitchen with shopping checklists, meal planning, and recipe integration
 <img width="1417" height="680" alt="Screenshot 2026-10-15 at 5 25 16 PM" src="https://github.com/user-attachments/assets/69f5f816-df57-4a6f-a643-e0d1750be78f" />
@@ -41,7 +41,7 @@ These screenshots are from October 2026, but subject to change.
 
 ### Kanban for life planning with goals and milestones. Also allows tasks and todos with custom filtering view for quickly checking outstanding project tasks. 
 <img width="1427" height="681" alt="Screenshot 2026-10-15 at 5 24 08 PM" src="https://github.com/user-attachments/assets/59d38a45-4b1d-4dbf-8101-da8b505dc041" />
-<img width="1431" height="683" alt="Screenshot 2026-10-15 at 5 24 01 PM" src="https://github.com/user-attachments/assets/ad04acb3-5377-471a-8c2e-885f77fc94e0" />
+<img width="1424" height="695" alt="Screenshot 2026-10-15 at 7 16 36 PM" src="https://github.com/user-attachments/assets/58a8e792-b59e-472e-9d52-d8a29f5deb80" />
 
 
 ## Full Feature List
