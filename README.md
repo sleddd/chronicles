@@ -1,6 +1,10 @@
 # Chronicles - In Active Design/Development
 
-A zero-knowledge encrypted journal and digital day planner for those too busy to journal. Capture the key moments of your day, organize with topics, and track health, goals, and more — all encrypted on your device before it ever leaves the browser.
+A zero-knowledge encrypted journal and digital day planner for those too busy to journal. 
+
+Capture the key moments of your day, organize with topics, and track health, goals, and more — all encrypted on your device before it ever leaves the browser.
+
+All it takes is opening it up, select a topic, and enter one line for the day. Filters and code do the rest by sorting everything into views or you.
 
 ## Screenshots
 
