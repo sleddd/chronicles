@@ -33,11 +33,14 @@ import { useUIStore } from '../stores/uiStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useNavigate } from 'react-router-dom';
 import { usePrivateSettings } from '../services/privateSettings.js';
-import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, ApiError } from '../services/api.js';
+import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, finance as financeApi, ApiError } from '../services/api.js';
 import { seedTestData } from '../utils/seedTestData.js';
+import { seedFinanceData } from '../utils/seedFinanceData.js';
+import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { parseCsvRow, splitCsvLines, csvCell } from '../utils/csv.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
+import { featureFlagsFrom } from '../utils/featureFlags.js';
 
 const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
@@ -109,6 +112,8 @@ const FEATURES = [
   { key: 'allergiesEnabled', title: 'Allergy and Sensitivities', description: 'Track allergies and reactions' },
   { key: 'entertainmentEnabled', title: 'Entertainment', description: 'Track music, books, and TV/movies' },
   { key: 'inspirationEnabled', title: 'Inspiration', description: 'Save research, ideas, and quotes' },
+  { key: 'financeEnabled', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)' },
+  { key: 'reconcileEnabled', title: 'Paycheck reconcile', description: 'Adds a Reconcile tab to Finance: pay bills from each paycheck and tick them off as they clear' },
 ];
 
 /* ── Layout: each section is a bordered, collapsible card like the dashboards ── */
@@ -154,7 +159,7 @@ const GuideBody = styled.div`
 
 export function SettingsView() {
   const { user, logout, encryptionData } = useAuth();
-  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost } = useEncryption();
+  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost, encryptRecord } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
@@ -263,6 +268,9 @@ export function SettingsView() {
   const [seedingEntries, setSeedingEntries] = useState(false);
   const [seedEntriesResult, setSeedEntriesResult] = useState('');
   const [seedConfirmArmed, setSeedConfirmArmed] = useState(false);
+  const [seedingFinance, setSeedingFinance] = useState(false);
+  const [seedFinanceResult, setSeedFinanceResult] = useState('');
+  const [seedFinanceArmed, setSeedFinanceArmed] = useState(false);
 
   // Load settings
   useEffect(() => {
@@ -273,10 +281,9 @@ export function SettingsView() {
       if (typeof map.backgroundImage === 'string') setBackgroundImage(map.backgroundImage);
       if (typeof map.backgroundOpacity === 'string') setBackgroundOpacity(parseFloat(map.backgroundOpacity as string));
       const f: Record<string, boolean> = {};
-      for (const feat of FEATURES) {
-        // Unset flags default to enabled, matching useInitializeData
-        f[feat.key] = map[feat.key] !== false;
-      }
+      // Unset flags get the same defaults as useInitializeData (opt-in ones stay off)
+      const defaults = featureFlagsFrom(map);
+      for (const feat of FEATURES) f[feat.key] = defaults[feat.key];
       setFeatures(f);
       setFeatureFlags(f);
     }).catch(() => {});
@@ -486,6 +493,24 @@ export function SettingsView() {
       setSeedResult('Default topics created');
     } catch { setSeedResult('Failed'); }
     finally { setSeeding(false); }
+  };
+
+  const handleSeedFinance = async () => {
+    setSeedingFinance(true); setSeedFinanceResult('');
+    try {
+      const result = await seedFinanceData({
+        encryptRecord,
+        put: financeApi.put,
+        onProgress: msg => setSeedFinanceResult(msg),
+      });
+      // Finance tabs reload (and decrypt) the new records next time they open
+      clearFinanceCache();
+      setSeedFinanceResult(result);
+    } catch (err) {
+      setSeedFinanceResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingFinance(false);
+    }
   };
 
   const handleSeedEntries = async () => {
@@ -934,7 +959,7 @@ export function SettingsView() {
       <Section id="features" title="Features">
       <SectionDescription>Enable optional topics for specialized tracking</SectionDescription>
       <SettingsCard>
-        {FEATURES.map(feat => (
+        {FEATURES.filter(feat => feat.key !== 'reconcileEnabled' || features.financeEnabled).map(feat => (
           <Fragment key={feat.key}>
             <SettingsRow
               title={feat.title}
@@ -1234,6 +1259,33 @@ export function SettingsView() {
           }
         />
         {seedEntriesResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedEntriesResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedEntriesResult}</div>}
+        {features.financeEnabled && (
+          <>
+            <SettingsRow
+              title="Seed Finance Data"
+              description="Add sample budget categories, bills and subscriptions with payments, spending, savings funds, goals and paydays — adds to existing data, does not delete anything"
+              action={
+                seedFinanceArmed ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <ActionButton
+                      onClick={() => { setSeedFinanceArmed(false); void handleSeedFinance(); }}
+                      disabled={seedingFinance}
+                      style={{ background: '#9B4444', color: '#fff' }}
+                    >
+                      {seedingFinance ? <Spinner size={14} /> : 'Yes, seed'}
+                    </ActionButton>
+                    <ActionButton onClick={() => setSeedFinanceArmed(false)}>Cancel</ActionButton>
+                  </div>
+                ) : (
+                  <ActionButton onClick={() => setSeedFinanceArmed(true)} disabled={seedingFinance}>
+                    Seed Finance
+                  </ActionButton>
+                )
+              }
+            />
+            {seedFinanceResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedFinanceResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedFinanceResult}</div>}
+          </>
+        )}
         <SettingsRow
           title="Export Entries"
           description="Download all entries as a decrypted CSV file"

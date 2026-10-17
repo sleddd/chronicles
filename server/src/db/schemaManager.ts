@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
+import { financeTableStatements } from './tenantQueries.js';
 
 // =============================================================================
 // Tenant Schema Manager
@@ -85,6 +86,9 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
     `CREATE INDEX idx_${s}_dose_logs_date ON ${s}.medication_dose_logs (date)`,
     `CREATE INDEX idx_${s}_dose_logs_med_date ON ${s}.medication_dose_logs (medication_post_id, date)`,
     `CREATE UNIQUE INDEX idx_${s}_dose_logs_unique ON ${s}.medication_dose_logs (medication_post_id, scheduled_time, date)`,
+
+    // Finance records (encrypted payload per row)
+    ...financeTableStatements(s),
 
     // Indexes
     `CREATE INDEX idx_${s}_posts_meta ON ${s}.posts USING GIN (metadata)`,

@@ -4,7 +4,10 @@ export const KNOWN_FEATURE_FLAGS = [
   'exerciseEnabled', 'allergiesEnabled', 'entertainmentEnabled', 'inspirationEnabled',
 ] as const;
 
-/** Feature flags from loaded settings: saved booleans win, unknown-but-known flags default to true. */
+/** Opt-in features — off until the user turns them on in Settings. */
+export const OPT_IN_FEATURE_FLAGS = ['financeEnabled', 'reconcileEnabled'] as const;
+
+/** Feature flags from loaded settings: saved booleans win; known flags default to true, opt-in flags to false. */
 export function featureFlagsFrom(settingsMap: Record<string, unknown>): Record<string, boolean> {
   const flags: Record<string, boolean> = {};
   for (const key of Object.keys(settingsMap)) {
@@ -12,6 +15,9 @@ export function featureFlagsFrom(settingsMap: Record<string, unknown>): Record<s
   }
   for (const key of KNOWN_FEATURE_FLAGS) {
     if (typeof flags[key] !== 'boolean') flags[key] = true;
+  }
+  for (const key of OPT_IN_FEATURE_FLAGS) {
+    if (typeof flags[key] !== 'boolean') flags[key] = false;
   }
   return flags;
 }

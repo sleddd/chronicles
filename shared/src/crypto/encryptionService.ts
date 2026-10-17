@@ -342,6 +342,32 @@ class EncryptionService {
   }
 
   /**
+   * Encrypt one Finance record (a payday, bill, budget category, goal or
+   * savings pot) as JSON. The AAD names the record's kind and id, so the
+   * server can't move a ciphertext to another row or another table.
+   */
+  async encryptRecord(
+    masterKey: CryptoKey,
+    kind: string,
+    id: string,
+    record: unknown
+  ): Promise<{ payload: string; iv: string }> {
+    const { ciphertext, iv } = await encrypt(masterKey, JSON.stringify(record), { aad: recordAad(kind, id) });
+    return { payload: ciphertext, iv };
+  }
+
+  /** Decrypt a Finance record written by encryptRecord (no legacy fallback). */
+  async decryptRecord<T = unknown>(
+    masterKey: CryptoKey,
+    kind: string,
+    id: string,
+    payload: string,
+    iv: string
+  ): Promise<T> {
+    return JSON.parse(await decrypt(masterKey, payload, iv, recordAad(kind, id))) as T;
+  }
+
+  /**
    * Decrypt multiple posts
    */
   async decryptPosts(
@@ -355,6 +381,11 @@ class EncryptionService {
 /** AAD for one half of an encrypted post, naming the other half's IV. */
 function postAad(part: 'content' | 'metadata', otherIv: string): string {
   return `chronicles:post:v2:${part}:${otherIv}`;
+}
+
+/** AAD for a Finance record, binding it to its table (kind) and row id. */
+function recordAad(kind: string, id: string): string {
+  return `chronicles:finance:v1:${kind}:${id}`;
 }
 
 export const encryptionService = new EncryptionService();

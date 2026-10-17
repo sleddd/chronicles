@@ -150,6 +150,18 @@ export const updatePostSchema = z.object({
   { message: 'Encrypted updates must include contentEncrypted, contentIv, metadataEncrypted, and metadataIv' }
 );
 
+// Finance records: one encrypted JSON payload per row, keyed by a client UUID
+// (the UUID is bound into the payload's AAD)
+export const FINANCE_KINDS = ['paydays', 'bills', 'budget', 'expenses', 'goals', 'savings'] as const;
+export type FinanceKind = typeof FINANCE_KINDS[number];
+
+export const financeRecordIdSchema = z.string().uuid('Invalid record id');
+
+export const putFinanceRecordSchema = z.object({
+  payload: z.string().min(1).max(350_000, 'Record too large'),
+  iv: IV_FIELD,
+});
+
 // Taxonomy validation
 export const createTaxonomySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),

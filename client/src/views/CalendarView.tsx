@@ -12,6 +12,10 @@ import { AppTemplate } from '../components/templates/AppTemplate.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
+import { useFinance } from '../hooks/useFinance.js';
+import { useNavigate } from 'react-router-dom';
+import { addDays, billOccurrences } from '../utils/finance.js';
+import type { CalendarBillItem } from '../types/finance.js';
 
 export type CalendarViewMode = 'day' | 'week' | 'month';
 
@@ -99,6 +103,25 @@ export function CalendarView() {
 
     return map;
   }, [entries, allTopics, eventTopicIds]);
+
+  // Bills due (Finance) — loaded only when Finance is switched on
+  const financeOn = useEntriesStore(s => s.featureFlags.financeEnabled === true);
+  const { records: bills } = useFinance('bills', { enabled: financeOn });
+  const navigate = useNavigate();
+  const monthStart = toDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+  const billsByDate = useMemo(() => {
+    const map = new Map<string, CalendarBillItem[]>();
+    if (!financeOn) return map;
+    // The visible month plus a week either side (covers week/day navigation near the edges)
+    const end = toDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+    for (const { bill, date } of billOccurrences(bills, addDays(monthStart, -7), addDays(end, 7))) {
+      const list = map.get(date) ?? [];
+      list.push({ key: `${bill.id}:${date}`, billId: bill.id, name: bill.name, amountCents: bill.amountCents, date });
+      map.set(date, list);
+    }
+    return map;
+  }, [financeOn, bills, monthStart, currentDate]);
+  const openBills = useCallback(() => navigate('/finance'), [navigate]);
 
   const getTopicForEntry = useCallback((entry: typeof entries[number]) => {
     const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
@@ -246,6 +269,8 @@ export function CalendarView() {
             onDayClick={handleDayClick}
             onDayDoubleClick={handleDayDoubleClick}
             getTopicName={entry => getTopicForEntry(entry)?.name}
+            billsByDate={billsByDate}
+            onBillClick={openBills}
           />
         </GridPane>
         <DetailPane>
@@ -257,6 +282,7 @@ export function CalendarView() {
             eventTopicIds={eventTopicIds}
             taskTopicIds={taskTopicIds}
             onClose={() => {}}
+            bills={billsByDate.get(selectedDate)}
           />
         </DetailPane>
       </Layout>

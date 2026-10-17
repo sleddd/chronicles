@@ -3,6 +3,8 @@ import { CalendarHeader } from './CalendarHeader.js';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { CalendarViewMode } from '../../views/CalendarView.js';
+import type { CalendarBillItem } from '../../types/finance.js';
+import { formatCents } from '../../utils/finance.js';
 
 /* ── Helpers ── */
 
@@ -120,6 +122,7 @@ const DayItems = styled.div`
 `;
 
 const DayItem = styled.div`
+  flex-shrink: 0; /* never squash lines into each other — overflow goes to "+N more" */
   font-size: 11px;
   line-height: 1.3;
   color: var(--text-secondary);
@@ -131,7 +134,29 @@ const DayItem = styled.div`
   font-weight: 400;
 `;
 
+/* A bill due that day (Finance): a quiet sunken chip, opens Budget & Bills */
+const BillItem = styled.button`
+  display: block;
+  flex-shrink: 0;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  background: var(--bg-sunken);
+  border: none;
+  padding: 2px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 2px;
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+`;
+
 const MoreLabel = styled.div`
+  flex-shrink: 0;
   font-size: 11px;
   color: var(--text-tertiary);
   padding: 1px 4px;
@@ -225,6 +250,9 @@ const MobileEmptyDay = styled.div`
   color: var(--text-tertiary);
 `;
 
+/** Lines that fit in a desktop month cell (items + the "+N more" line). */
+const MAX_LINES = 3;
+
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 /* ── Component ── */
@@ -244,11 +272,17 @@ interface CalendarGridProps {
   onDayClick: (dateStr: string) => void;
   onDayDoubleClick: (dateStr: string) => void;
   getTopicName: (entry: DecryptedPost) => string | undefined;
+  /** Bill due dates from Finance (only when it's switched on). */
+  billsByDate?: Map<string, CalendarBillItem[]>;
+  onBillClick?: (bill: CalendarBillItem) => void;
 }
+
+const billLabel = (b: CalendarBillItem) => `${b.name} · ${formatCents(b.amountCents)} due`;
 
 export function CalendarGrid({
   currentMonth, selectedDate, entriesByDate, accentColor, eventTopicIds,
   viewMode, onPrev, onNext, onToday, onViewMode, onDayClick, onDayDoubleClick, getTopicName,
+  billsByDate, onBillClick,
 }: CalendarGridProps) {
   const today = new Date();
   const days = getCalendarDays(currentMonth.getFullYear(), currentMonth.getMonth());
@@ -280,6 +314,12 @@ export function CalendarGrid({
             {days.map(({ date, isOutside }, i) => {
               const dateStr = toDateStr(date);
               const dayEntries = entriesByDate.get(dateStr) || [];
+              const dayBills = billsByDate?.get(dateStr) || [];
+              // A cell fits 3 lines: show 3 items, or 2 plus "+N more" when there are more
+              const lines = dayEntries.length + dayBills.length > MAX_LINES ? MAX_LINES - 1 : MAX_LINES;
+              const billSlots = Math.min(dayBills.length, lines);
+              const entrySlots = lines - billSlots;
+              const hidden = dayEntries.length + dayBills.length - billSlots - Math.min(entrySlots, dayEntries.length);
               const isToday = isSameDay(date, today);
               const isSelected = selectedDate === dateStr;
 
@@ -298,12 +338,17 @@ export function CalendarGrid({
                         {date.getDate()}
                       </DayNumber>
                       <DayItems>
-                        {dayEntries.slice(0, 3).map(entry => {
+                        {dayBills.slice(0, billSlots).map(b => (
+                          <BillItem key={b.key} type="button" title={billLabel(b)} onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>
+                            {billLabel(b)}
+                          </BillItem>
+                        ))}
+                        {dayEntries.slice(0, entrySlots).map(entry => {
                           const topicName = getTopicName(entry);
                           const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 30) || topicName || 'Entry';
                           return <DayItem key={entry.id}>{preview}</DayItem>;
                         })}
-                        {dayEntries.length > 3 && <MoreLabel>+{dayEntries.length - 3} more</MoreLabel>}
+                        {hidden > 0 && <MoreLabel>+{hidden} more</MoreLabel>}
                       </DayItems>
                     </>
                   )}
@@ -319,6 +364,7 @@ export function CalendarGrid({
         {days.filter(d => !d.isOutside).map(({ date }) => {
           const dateStr = toDateStr(date);
           const dayEntries = entriesByDate.get(dateStr) || [];
+          const dayBills = billsByDate?.get(dateStr) || [];
           const isToday = isSameDay(date, today);
           const weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
 
@@ -334,8 +380,11 @@ export function CalendarGrid({
                 <MobileDayName>{weekday}</MobileDayName>
               </MobileDateCol>
               <MobileEntries>
+                {dayBills.map(b => (
+                  <BillItem key={b.key} type="button" onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>{billLabel(b)}</BillItem>
+                ))}
                 {dayEntries.length === 0 ? (
-                  <MobileEmptyDay>No entries</MobileEmptyDay>
+                  dayBills.length === 0 && <MobileEmptyDay>No entries</MobileEmptyDay>
                 ) : (
                   dayEntries.map(entry => {
                     const topicName = getTopicName(entry);

@@ -725,3 +725,33 @@ describe('decryptPosts', () => {
     expect(decrypted).toEqual([]);
   });
 });
+
+// ============================================================================
+// encryptRecord / decryptRecord (Finance)
+// ============================================================================
+
+describe('encryptRecord / decryptRecord', () => {
+  const id = '3f1c2a64-8d1e-4f5a-9b2c-0d1e2f3a4b5c';
+
+  it('round-trips a JSON record', async () => {
+    const key = await generateMasterKey();
+    const record = { name: 'Rent', amountCents: 120000, tags: ['home'] };
+    const enc = await encryptionService.encryptRecord(key, 'bills', id, record);
+    expect(enc.payload).not.toContain('Rent');
+    const out = await encryptionService.decryptRecord(key, 'bills', id, enc.payload, enc.iv);
+    expect(out).toEqual(record);
+  });
+
+  it('refuses a record moved to another kind', async () => {
+    const key = await generateMasterKey();
+    const enc = await encryptionService.encryptRecord(key, 'bills', id, { a: 1 });
+    await expect(encryptionService.decryptRecord(key, 'goals', id, enc.payload, enc.iv)).rejects.toThrow();
+  });
+
+  it('refuses a record moved to another id', async () => {
+    const key = await generateMasterKey();
+    const enc = await encryptionService.encryptRecord(key, 'bills', id, { a: 1 });
+    const other = '00000000-0000-4000-8000-000000000000';
+    await expect(encryptionService.decryptRecord(key, 'bills', other, enc.payload, enc.iv)).rejects.toThrow();
+  });
+});

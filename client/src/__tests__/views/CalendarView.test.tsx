@@ -26,6 +26,10 @@ vi.mock('@/hooks/useInitializeData', () => ({
   })),
 }));
 
+vi.mock('@/hooks/useFinance', () => ({
+  useFinance: vi.fn(() => ({ records: [], status: 'idle', unreadable: 0, save: vi.fn(), remove: vi.fn(), reload: vi.fn() })),
+}));
+
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: vi.fn((selector: (s: any) => any) =>
     selector({

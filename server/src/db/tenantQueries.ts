@@ -290,6 +290,90 @@ export async function deletePost(schemaName: string, id: number): Promise<void> 
 }
 
 // =============================================================================
+// Finance records (one encrypted JSON payload per row)
+// =============================================================================
+
+/** Finance kind → table. Table names only ever come from this map. */
+export const FINANCE_TABLES = {
+  paydays: 'finance_paydays',
+  bills: 'finance_bills',
+  budget: 'finance_budget_categories',
+  expenses: 'finance_expenses',
+  goals: 'finance_goals',
+  savings: 'finance_savings',
+} as const;
+
+export type FinanceTableKind = keyof typeof FINANCE_TABLES;
+
+export interface FinanceRecordRow {
+  id: string;
+  payloadEncrypted: Buffer;
+  payloadIv: Buffer;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** DDL for the finance tables (shared by new-tenant setup and the JIT migration). */
+export function financeTableStatements(s: string): string[] {
+  return Object.values(FINANCE_TABLES).map(table => `CREATE TABLE IF NOT EXISTS ${s}.${table} (
+      id TEXT PRIMARY KEY,
+      payload_encrypted BYTEA NOT NULL,
+      payload_iv BYTEA NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+}
+
+const financeReady = new Set<string>();
+
+/** JIT migration: create the finance tables if missing (once per schema per process). */
+export async function ensureFinanceTables(schemaName: string): Promise<void> {
+  const s = escapeSchema(schemaName);
+  if (financeReady.has(s)) return;
+  for (const stmt of financeTableStatements(s)) {
+    await prisma.$executeRawUnsafe(stmt);
+  }
+  financeReady.add(s);
+}
+
+export async function getFinanceRecords(schemaName: string, kind: FinanceTableKind): Promise<FinanceRecordRow[]> {
+  const s = escapeSchema(schemaName);
+  return prisma.$queryRawUnsafe<FinanceRecordRow[]>(
+    `SELECT id, payload_encrypted as "payloadEncrypted", payload_iv as "payloadIv",
+            created_at as "createdAt", updated_at as "updatedAt"
+     FROM ${s}.${FINANCE_TABLES[kind]}
+     ORDER BY created_at ASC`
+  );
+}
+
+export async function upsertFinanceRecord(
+  schemaName: string,
+  kind: FinanceTableKind,
+  id: string,
+  payload: Buffer,
+  iv: Buffer
+): Promise<FinanceRecordRow> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<FinanceRecordRow[]>(
+    `INSERT INTO ${s}.${FINANCE_TABLES[kind]} (id, payload_encrypted, payload_iv)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (id) DO UPDATE SET payload_encrypted = EXCLUDED.payload_encrypted,
+       payload_iv = EXCLUDED.payload_iv, updated_at = NOW()
+     RETURNING id, payload_encrypted as "payloadEncrypted", payload_iv as "payloadIv",
+               created_at as "createdAt", updated_at as "updatedAt"`,
+    id, payload, iv
+  );
+  return rows[0];
+}
+
+/** Returns true when a row was deleted. */
+export async function deleteFinanceRecord(schemaName: string, kind: FinanceTableKind, id: string): Promise<boolean> {
+  const s = escapeSchema(schemaName);
+  const n = await prisma.$executeRawUnsafe(`DELETE FROM ${s}.${FINANCE_TABLES[kind]} WHERE id = $1`, id);
+  return n > 0;
+}
+
+// =============================================================================
 // Medication Dose Logs
 // =============================================================================
 

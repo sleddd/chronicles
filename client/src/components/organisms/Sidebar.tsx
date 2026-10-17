@@ -244,6 +244,13 @@ export const Sidebar = memo(function Sidebar() {
           <SrOnly>Calendar</SrOnly>
         </NavIconBtn>
 
+        {ff.financeEnabled === true && (
+          <NavIconBtn $active={startsWith('/finance')} onClick={() => navigate('/finance')} title="Finance">
+            <MaterialIcon aria-hidden="true">attach_money</MaterialIcon>
+            <SrOnly>Finance</SrOnly>
+          </NavIconBtn>
+        )}
+
         <NavIconBtn $active={at('/kitchen') || startsWith('/menu') || at('/shopping')} onClick={() => navigate('/kitchen')} title="From the Kitchen">
           <MaterialIcon aria-hidden="true">fork_spoon</MaterialIcon>
           <SrOnly>From the Kitchen</SrOnly>

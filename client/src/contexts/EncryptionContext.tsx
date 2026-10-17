@@ -5,6 +5,7 @@ import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import type { EncryptedPostData, DecryptedPost, EncryptedPost, SetupEncryptionResult } from '@shared/crypto/types.js';
 import { clearImageCache, rederiveImageStorageConfig } from '../services/imageStorage.js';
 import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
+import { clearFinanceCache } from '../stores/financeStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
   hasRememberedUnlock, lastActivity, markActivity, startRemembering, storeRemembered,
@@ -33,6 +34,9 @@ interface EncryptionContextValue {
   decryptPosts: (posts: EncryptedPost[]) => Promise<DecryptedPost[]>;
   encryptBytes: (data: ArrayBuffer) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
   decryptBytes: (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+  /** Encrypt one Finance record (AAD bound to kind + id). */
+  encryptRecord: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
+  decryptRecord: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
   unlockWithRecoveryKey: (recoveryKey: string, recoveryWrappedMK: string, recoveryWrapIv: string) => Promise<void>;
   rewrapMasterKey: (newPassword: string, currentPassword?: string, params?: EncryptionParams) => Promise<{ salt: string; wrappedMK: string; wrapIv: string }>;
   /** Generate a new recovery key wrapping using the current password to re-derive the extractable master key. */
@@ -118,6 +122,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearImageCache();
     // Drop the decrypted AI provider credentials too
     clearAiConfig();
+    // And the decrypted Finance records
+    clearFinanceCache();
     setIsUnlocked(false);
   }, []);
 
@@ -164,6 +170,14 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   const decryptBytes = useCallback(async (ciphertext: ArrayBuffer, iv: string) => {
     return encryptionService.decryptFile(getKey(), ciphertext, iv);
   }, []);
+
+  const encryptRecord = useCallback(async (kind: string, id: string, record: unknown) => {
+    return encryptionService.encryptRecord(getKey(), kind, id, record);
+  }, []);
+
+  const decryptRecord = useCallback(async <T,>(kind: string, id: string, payload: string, iv: string) => {
+    return encryptionService.decryptRecord<T>(getKey(), kind, id, payload, iv);
+  }, []) as EncryptionContextValue['decryptRecord'];
 
   // During recovery, we need the extractable key for rewrapping with a new password.
   // Store it separately so masterKeyRef always holds a non-extractable key.
@@ -366,6 +380,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       decryptPosts,
       encryptBytes,
       decryptBytes,
+      encryptRecord,
+      decryptRecord,
       unlockWithRecoveryKey,
       rewrapMasterKey,
       generateRecoveryKey,

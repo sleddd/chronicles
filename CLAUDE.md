@@ -280,6 +280,7 @@ Views     → Route logic + top-level data orchestration
 | `/health/*` | Health tracking views — tabs: Dashboard, Meals (`/health/food`), Exercise, Symptoms, Med List (`/health/meds`), Allergies, Reports; the daily med schedule lives on the Dashboard and `/health/schedule` redirects to `/health` |
 | `/kitchen`, `/menu`, `/menu/recipes`, `/shopping` | From the Kitchen — tabs: Dashboard, Menu, Recipes, Shopping Lists (`MealsTabBar`, title `KITCHEN_TITLE`); `/menu/meals` redirects to `/health/food` |
 | `/entertainment/*`, `/inspiration/*` | Media/inspiration views |
+| `/finance`, `/finance/goals`, `/finance/savings`, `/finance/reports`, `/finance/reconcile` | Finance (opt-in) — tabs: Budget & Bills, Goals, Savings, Reconcile (own opt-in switch), Reports (`FinanceTabBar`, framed by `FinanceShell`) |
 
 ### Key Files
 
@@ -419,6 +420,19 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - On phones/tablets (≤1024px) the journal shows one pane at a time; the editor pane starts with a **‹ Entries** bar (`MobileBackButton` in `JournalTemplate`, wired to `handleMobileBack`) that returns to the list
 - Journal list rows (`EntryCard`): tapping the uppercase topic label filters the list to that topic without opening the entry. No completion checkbox — completed tasks/goals/milestones just show their title struck through
 
+**Finance (opt-in, off by default)**
+- Turned on in Settings → Features (`financeEnabled`); Reconcile has its **own** switch, "Paycheck reconcile" (`reconcileEnabled`, shown under Finance). Both are in `OPT_IN_FEATURE_FLAGS` (`client/src/utils/featureFlags.ts`) so they default to **false**. The Sidebar item (`attach_money`, a $ sign) shows only when Finance is on; `FinanceShell` shows a "turn it on" note on `/finance/*` otherwise (and on `/finance/reconcile` while Reconcile is off). All manual entry — no bank connections
+- Tabs (`FinanceTabBar`): **Budget & Bills** `/finance` (old `/finance/budget` redirects), **Goals** `/finance/goals`, **Savings** `/finance/savings`, **Reconcile** `/finance/reconcile` only when its switch is on, and **Reports** `/finance/reports` last. Budget, Goals and Savings never need Reconcile
+- **Own tables, not `posts`** (a large history never adds to the journal's 5,000-entry load): `finance_paydays`, `finance_bills`, `finance_budget_categories`, `finance_expenses`, `finance_goals`, `finance_savings` — each row is just `id` (client UUID) + `payload_encrypted` + `payload_iv` + timestamps. DDL is `financeTableStatements` in `tenantQueries.ts` (new tenants via `generateTenantSchemaStatements`, existing ones via the memoised JIT `ensureFinanceTables`)
+- API `server/src/routes/finance.ts` (`/api/finance/:kind[/:id]`, GET / PUT upsert / DELETE): `:kind` ∈ `paydays|bills|budget|expenses|goals|savings`, mapped to table names by `FINANCE_TABLES` — never interpolated from input. The server never sees amounts, names or dates
+- Encryption: `encryptionService.encryptRecord/decryptRecord` — JSON payload, AAD `chronicles:finance:v1:<kind>:<id>` (binds a ciphertext to its table and row; no legacy fallback). Exposed by `EncryptionContext`
+- Client: `useFinance(kind, { enabled })` (`client/src/hooks/useFinance.ts`) loads a kind lazily on first use, saves optimistically (rolled back with an inline error), and serialises writes per record; decrypted records live in `stores/financeStore.ts`, wiped on lock (`clearFinanceCache` in `lockLocal`). Money is integer cents; all maths is pure in `client/src/utils/finance.ts` (unit-tested)
+- **Budget & Bills** (`FinanceBudgetView`: `BudgetTable`, `SpendingLog`, `BillsTable`, sharing one month switcher). Budget: categories with a monthly planned amount vs **Bills** (active bills in the category due that month, straight from the bills list — counted as soon as a bill is entered) and **Spending** (the Spending log, plus Reconcile's spending and one-off lines when it's on); Left = planned − bills − spending; payments show as "paid", never counted twice. Bills: frequency, a due date the schedule repeats from (month ends clamp: Jan 31 → Feb 28), monthly-equivalent cost, totals and "Subscriptions $X/mo", status active / paused (out of the budget and Calendar for now) / cancelled (for good). **Mark paid** records a payment for the next unpaid due date on the bill only (`payments: { forDue, paidOn, amountCents }[]`, `markBillPaid` / `undoLastPayment` / `nextUnpaidDue`) — it never posts to Reconcile or anywhere else; unpaid past due dates show "Overdue"
+- **Reconcile** (`FinanceReconcileView` + `PaydayEditor`, behind `reconcileEnabled`) — one *payday* at a time, replacing a notepad: starting balance (bank after everything posted) → bills being paid (pick from Bills, due-soon pre-ticked by `suggestBillsForPayday`, or type a line; **Combined** lines roll small charges into one, e.g. "Uber — 9") → **Leftover to spend**; optional spending lines; tick each line ✓ as it clears; **Check my balance** compares the bank's balance with *start − cleared* ("Matches" / "Off by $X") and shows **Available now** (bank − still waiting). All cleared + matching check = "OK to spend". Closing keeps it in history; a new payday can carry over waiting lines. Independent of Mark paid (no linking either way)
+- **Reports** (`FinanceReportsView`) — search bill payments by name, type (bill/subscription) and category for this/last month, this/last year or custom dates: total, average a month, biggest bill, subscriptions total; cards By bill, By month (every month in the range) and Every payment. Payments come from Mark paid (dated `paidOn`) plus, when Reconcile is on, payday bill lines (dated the payday) — skipped for a bill already marked paid that month, so nothing counts twice (`billPaymentRecords` / `filterPayments` / `reportSummary` / `periodRange` in `utils/finance.ts`)
+- **Goals** (target, date, progress from a linked savings fund or a typed amount) and **Savings** (named **funds** — `SavingsPot` in code — with add / take-out entries)
+- Calendar: active bills' due dates show on the month grid, mobile list and day panel (`billOccurrences`), linking to `/finance`; paused/cancelled bills don't appear
+
 **Media & Inspiration**
 - Entertainment tracking (music, books, TV/movies)
 - Inspiration (research, ideas, quotes)
@@ -428,7 +442,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Account: display name (shown in dashboard greeting), read-only username
 - Security: change password (re-wraps master key, no data re-encryption); TOTP 2FA inline setup wizard
 - Sessions: view and revoke active sessions from any device
-- Features: enable/disable health tracking, planning, entertainment, and more per topic type
+- Features: enable/disable health tracking, planning, entertainment, and more per topic type; opt-in Finance
 - Theme: header color (40+), background image (28), light/dark mode
 - Data: seed test data
 

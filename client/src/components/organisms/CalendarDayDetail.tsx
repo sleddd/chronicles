@@ -3,6 +3,8 @@ import { PillButton } from '../atoms/PillButton.js';
 import { useNavigate } from 'react-router-dom';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { formatCents } from '../../utils/finance.js';
+import type { CalendarBillItem } from '../../types/finance.js';
 
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../../types/topics.js';
@@ -152,10 +154,12 @@ interface CalendarDayDetailProps {
   eventTopicIds: Set<number>;
   taskTopicIds: Set<number>;
   onClose: () => void;
+  /** Bills due this day (Finance, when switched on). */
+  bills?: CalendarBillItem[];
 }
 
 export function CalendarDayDetail({
-  dateStr, entries, allTopics, accentColor, eventTopicIds, taskTopicIds,
+  dateStr, entries, allTopics, accentColor, eventTopicIds, taskTopicIds, bills = [],
 }: CalendarDayDetailProps) {
   const navigate = useNavigate();
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
@@ -217,8 +221,18 @@ export function CalendarDayDetail({
       </DayHeader>
 
       <List>
+        {bills.map(b => (
+          <EventRow key={b.key} $accent={accentColor} onClick={() => navigate('/finance')}>
+            <TimeCol>Due</TimeCol>
+            <AccentBar $color="var(--border-strong)" />
+            <EventContent>
+              <EventTitle>{b.name}</EventTitle>
+              <EventMeta>BILL · {formatCents(b.amountCents)}</EventMeta>
+            </EventContent>
+          </EventRow>
+        ))}
         {rows.length === 0 ? (
-          <EmptyMsg>No entries for this day.</EmptyMsg>
+          bills.length === 0 && <EmptyMsg>No entries for this day.</EmptyMsg>
         ) : (
           rows.map(entry => {
             const meta = entry.metadata as Record<string, unknown>;

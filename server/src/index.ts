@@ -14,6 +14,7 @@ import settingsRoutes from './routes/settings.js';
 import sessionsRoutes from './routes/sessions.js';
 import sharesRoutes from './routes/shares.js';
 import dosesRoutes from './routes/doses.js';
+import financeRoutes from './routes/finance.js';
 import calendarRoutes from './routes/calendar.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
 
@@ -85,6 +86,7 @@ app.use('/api/topics', authMiddleware, apiLimiter, topicsRoutes);
 app.use('/api/settings', authMiddleware, apiLimiter, settingsRoutes);
 app.use('/api/sessions', authMiddleware, apiLimiter, sessionsRoutes);
 app.use('/api/doses', authMiddleware, apiLimiter, dosesRoutes);
+app.use('/api/finance', authMiddleware, apiLimiter, financeRoutes);
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 

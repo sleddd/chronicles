@@ -321,6 +321,31 @@ export const doses = {
 };
 
 // =============================================================================
+// Finance (opaque encrypted records — see stores/financeStore.ts)
+// =============================================================================
+
+export type FinanceKind = 'paydays' | 'bills' | 'budget' | 'expenses' | 'goals' | 'savings';
+
+export interface FinanceRecordWire {
+  id: string;
+  payload: string;
+  iv: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const finance = {
+  list: (kind: FinanceKind) =>
+    request<{ records: FinanceRecordWire[] }>(`/finance/${kind}`),
+
+  put: (kind: FinanceKind, id: string, payload: string, iv: string) =>
+    request<{ record: FinanceRecordWire }>(`/finance/${kind}/${id}`, { method: 'PUT', body: { payload, iv } }),
+
+  remove: (kind: FinanceKind, id: string) =>
+    request<{ success: boolean }>(`/finance/${kind}/${id}`, { method: 'DELETE' }),
+};
+
+// =============================================================================
 // Shares
 // =============================================================================
 
@@ -384,7 +409,7 @@ export const calendar = {
 };
 
 export { ApiError };
-export default { auth, entries, topics, settings, sessions, doses, shares, calendar };
+export default { auth, entries, topics, settings, sessions, doses, finance, shares, calendar };
 
 /**
  * How long to wait before retrying a failed initial load: the server's

@@ -93,6 +93,24 @@ describe('CalendarGrid', () => {
     renderWithTheme(
       <CalendarGrid {...defaultProps} entriesByDate={entriesByDate as never} />
     );
+    // A cell fits 3 lines: 2 entries + the "+N more" line
+    expect(screen.getByText('+3 more')).toBeInTheDocument();
+  });
+
+  it('shows all 3 when there are exactly 3, with no more label', () => {
+    const entries = Array.from({ length: 3 }, (_, i) => ({
+      id: i, content: `<p>Entry ${i}</p>`, createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {},
+    }));
+    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} />);
+    expect(screen.getAllByText('Entry 2').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/more$/)).not.toBeInTheDocument();
+  });
+
+  it('counts bills and entries together toward the 3 lines', () => {
+    const entries = [{ id: 1, content: '<p>Entry A</p>', createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {} }];
+    const bill = (n: number) => ({ key: `b${n}`, billId: `b${n}`, name: `Bill ${n}`, amountCents: 1000, date: '2024-06-15' });
+    const billsByDate = new Map([['2024-06-15', [bill(1), bill(2), bill(3)]]]);
+    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} billsByDate={billsByDate} />);
     expect(screen.getByText('+2 more')).toBeInTheDocument();
   });
 });
