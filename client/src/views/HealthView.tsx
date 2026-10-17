@@ -51,7 +51,7 @@ const Head = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 53px 0 16px;
+  padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
 const Title = styled.h1`
@@ -379,7 +379,9 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
                     onDelete={() => handleDelete(entry.id)}
                   >
                     <EntryListCard
-                      hint={i === 0}
+                      // The first row's top rule marks where the list starts — but not
+                      // straight under the tab bar, whose own hairline would double it
+                      hint={i === 0 && showDateFilter}
                       content={entry.content}
                       createdAt={created}
                       topicName={mixedTopics ? topic?.name : undefined}

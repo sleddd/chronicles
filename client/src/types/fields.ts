@@ -179,6 +179,8 @@ export interface EventFieldValues {
   noCalendarSync?: boolean;
   /** Calendar sync: event title shown in the external calendar (falls back to entry content). */
   calendarTitle?: string;
+  /** All-day: no start/end times */
+  allDay?: boolean;
 }
 
 export interface MeetingFieldValues {
@@ -196,6 +198,8 @@ export interface MeetingFieldValues {
   notes: string;
   /** Calendar sync: opt this entry out of Google/Apple calendar sync. */
   noCalendarSync?: boolean;
+  /** All-day: no start/end times */
+  allDay?: boolean;
 }
 
 export interface AllergyFieldValues {

@@ -1,15 +1,11 @@
 import { memo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
-import { useUIStore } from '../../stores/uiStore.js';
-import { useEntriesStore } from '../../stores/entriesStore.js';
+import { useNavItems } from '../../hooks/useNavItems.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 
-/* Reveal width: how far the main view slides right to expose the mobile bar. */
-const MOBILE_REVEAL_WIDTH = 240;
-
-const SidebarRoot = styled.aside<{ $mobileOpen?: boolean }>`
+const SidebarRoot = styled.aside`
   width: 92px;
   min-width: 92px;
   height: 100%;
@@ -20,17 +16,8 @@ const SidebarRoot = styled.aside<{ $mobileOpen?: boolean }>`
   flex-shrink: 0;
   overflow: hidden;
 
-  /* Mobile = reveal pattern: the bar is pinned under the content at the far
-     left; the main view slides right to expose it. Wider + scrollable. */
-  ${NAV_COMPACT} {
-    position: fixed;
-    left: 0;
-    top: 56px;
-    bottom: 0;
-    width: ${MOBILE_REVEAL_WIDTH}px;
-    min-width: ${MOBILE_REVEAL_WIDTH}px;
-    z-index: 1;
-  }
+  /* Phones/tablets use the drop-down menu in MobileChrome instead */
+  ${NAV_COMPACT} { display: none; }
 `;
 
 /* Active rail item: lifted onto a lighter block with a 4px accent tab on the
@@ -103,13 +90,6 @@ const NavScroll = styled.nav`
   &:hover::-webkit-scrollbar-thumb:hover {
     background: var(--border-default);
   }
-
-  /* Mobile reveal bar: pack items at the top and let the bar scroll. The
-     bottom padding (plus safe-area inset) keeps the last item reachable above
-     the browser chrome / home indicator. */
-  ${NAV_COMPACT} {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-  }
 `;
 
 /* Icon-only rail row — no dividers; the active row is lifted onto
@@ -138,11 +118,6 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
   ${({ $active }) => ($active ? activeTab : '')}
-
-  /* Mobile reveal bar: the list scrolls, so Settings follows the others. */
-  ${NAV_COMPACT} {
-    &:last-of-type { margin-top: 0; }
-  }
 `;
 
 const SrOnly = styled.span`
@@ -177,76 +152,26 @@ const MaterialIcon = styled.span<{ $size?: number }>`
 /* Memoized: it reads its state from the stores, so parents re-rendering
    (e.g. the journal on every keystroke) shouldn't re-render the nav. */
 export const Sidebar = memo(function Sidebar() {
-  const location = useLocation();
-  const rawNavigate = useNavigate();
-  const ff = useEntriesStore(s => s.featureFlags);
-  const setMobileNavOpen = useUIStore(s => s.setMobileNavOpen);
-  const mobileNavOpen = useUIStore(s => s.mobileNavOpen);
-
-  // Wrap navigation so tapping any nav row also closes the mobile drawer.
-  const navigate = (path: string) => {
-    setMobileNavOpen(false);
-    rawNavigate(path);
-  };
-
-  const at = (path: string) => location.pathname === path;
-  const startsWith = (prefix: string) => location.pathname.startsWith(prefix);
-
-  const hasHealth = ff.medicationEnabled || ff.foodEnabled || ff.exerciseEnabled || ff.allergiesEnabled;
+  const navigate = useNavigate();
+  const items = useNavItems();
+  const home = items[0]; // Dashboard — the logo cell
+  const rows = items.slice(1);
 
   return (
-    <SidebarRoot $mobileOpen={mobileNavOpen}>
-      <LogoBtn $active={at('/')} onClick={() => navigate('/')} title="Dashboard" aria-label="Dashboard">
+    <SidebarRoot>
+      <LogoBtn $active={home.active} onClick={() => navigate(home.path)} title={home.label} aria-label={home.label}>
         <BrandMark size={52} gradientId="logo-rail" />
-        <SrOnly>Dashboard</SrOnly>
+        <SrOnly>{home.label}</SrOnly>
       </LogoBtn>
 
       <NavScroll>
-        <NavIconBtn $active={at('/journal')} onClick={() => navigate('/journal')} title="Journal">
-          <MaterialIcon aria-hidden="true">book</MaterialIcon>
-          <SrOnly>Journal</SrOnly>
-        </NavIconBtn>
-
-        <NavIconBtn $active={at('/topics')} onClick={() => navigate('/topics')} title="Topics">
-          <MaterialIcon aria-hidden="true">sell</MaterialIcon>
-          <SrOnly>Topics</SrOnly>
-        </NavIconBtn>
-
-        {hasHealth && (
-          <NavIconBtn $active={startsWith('/health')} onClick={() => navigate('/health')} title="Health">
-            <MaterialIcon aria-hidden="true">cardiology</MaterialIcon>
-            <SrOnly>Health</SrOnly>
+        {rows.map(item => (
+          <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={item.label}>
+            <MaterialIcon aria-hidden="true">{item.icon}</MaterialIcon>
+            <SrOnly>{item.label}</SrOnly>
           </NavIconBtn>
-        )}
-
-        <NavIconBtn $active={startsWith('/goals')} onClick={() => navigate('/goals')} title="Roadmap">
-          <MaterialIcon aria-hidden="true">checklist</MaterialIcon>
-          <SrOnly>Roadmap</SrOnly>
-        </NavIconBtn>
-
-        <NavIconBtn $active={at('/calendar')} onClick={() => navigate('/calendar')} title="Calendar">
-          <MaterialIcon aria-hidden="true">event</MaterialIcon>
-          <SrOnly>Calendar</SrOnly>
-        </NavIconBtn>
-
-        {ff.financeEnabled === true && (
-          <NavIconBtn $active={startsWith('/finance')} onClick={() => navigate('/finance')} title="Finance">
-            <MaterialIcon aria-hidden="true">attach_money</MaterialIcon>
-            <SrOnly>Finance</SrOnly>
-          </NavIconBtn>
-        )}
-
-        <NavIconBtn $active={at('/kitchen') || startsWith('/menu') || at('/shopping')} onClick={() => navigate('/kitchen')} title="From the Kitchen">
-          <MaterialIcon aria-hidden="true">fork_spoon</MaterialIcon>
-          <SrOnly>From the Kitchen</SrOnly>
-        </NavIconBtn>
-
-        <NavIconBtn $active={at('/settings')} onClick={() => navigate('/settings')} title="Settings">
-          <MaterialIcon aria-hidden="true">settings</MaterialIcon>
-          <SrOnly>Settings</SrOnly>
-        </NavIconBtn>
+        ))}
       </NavScroll>
-
     </SidebarRoot>
   );
 });

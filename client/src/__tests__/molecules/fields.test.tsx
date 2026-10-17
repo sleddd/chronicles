@@ -207,14 +207,33 @@ describe('EventFields', () => {
     notes: '',
   };
 
-  it('renders start, end, location, address, phone, and notes fields', () => {
+  it('renders the title, When (starts/ends), Where (venue, address, phone) and Notes', () => {
     renderWithTheme(<EventFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Start')).toBeInTheDocument();
-    expect(screen.getByText('End')).toBeInTheDocument();
-    expect(screen.getByText('Location')).toBeInTheDocument();
-    expect(screen.getByText('Address')).toBeInTheDocument();
-    expect(screen.getByText('Phone')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('What is the event?')).toBeInTheDocument();
+    expect(screen.getByText('When')).toBeInTheDocument();
+    expect(screen.getByText('Starts')).toBeInTheDocument();
+    expect(screen.getByText('Ends')).toBeInTheDocument();
+    expect(screen.getByText('Where')).toBeInTheDocument();
+    expect(screen.getByLabelText('Venue name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Full address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Contact number')).toBeInTheDocument();
     expect(screen.getByText('Notes')).toBeInTheDocument();
+  });
+
+  it('All day drops the times', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<EventFields values={defaultValues} onChange={onChange} />);
+    expect(screen.getByLabelText('Start time')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('All day'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ allDay: true, startTime: '', endTime: '' }));
+  });
+
+  it('shows the Sync to calendar card when sync is on', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<EventFields values={defaultValues} onChange={onChange} showCalendarSync />);
+    expect(screen.getByText('Sync to calendar')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Sync to calendar'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ noCalendarSync: true }));
   });
 
   it('calls onChange when location changes', () => {
@@ -250,10 +269,11 @@ describe('MeetingFields', () => {
 
   it('renders meeting topic, attendees, and time fields', () => {
     renderWithTheme(<MeetingFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Meeting Topic')).toBeInTheDocument();
-    expect(screen.getByText('Attendees')).toBeInTheDocument();
-    expect(screen.getByText('Start')).toBeInTheDocument();
-    expect(screen.getByText('End')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('What is the meeting?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Topic')).toBeInTheDocument();
+    expect(screen.getByLabelText('Attendees')).toBeInTheDocument();
+    expect(screen.getByText('Starts')).toBeInTheDocument();
+    expect(screen.getByText('Ends')).toBeInTheDocument();
   });
 
   it('calls onChange when meeting topic changes', () => {
@@ -266,7 +286,7 @@ describe('MeetingFields', () => {
   it('calls onChange when attendees changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<MeetingFields values={defaultValues} onChange={onChange} />);
-    fireEvent.change(screen.getByPlaceholderText('Comma-separated names'), { target: { value: 'Alice, Bob' } });
+    fireEvent.change(screen.getByLabelText('Attendees'), { target: { value: 'Alice, Bob' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ attendees: 'Alice, Bob' }));
   });
 });

@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react';
 import styled from 'styled-components';
-import { faChevronLeft, faChevronRight, faCartShopping, faXmark } from '@fortawesome/free-solid-svg-icons';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { Icon } from '../components/atoms/core/Icon.jsx';
+import { PillButton } from '../components/atoms/PillButton.js';
+import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
+import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -41,7 +43,15 @@ function fmtShort(d: Date): string {
 }
 
 function fmtDay(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  return d.toLocaleDateString('en-US', { weekday: 'short' });
+}
+
+/** "Oct 12 – 18", or "Oct 30 – Nov 5" across a month end */
+function fmtWeek(start: Date): string {
+  const end = addDays(start, 6);
+  return start.getMonth() === end.getMonth()
+    ? `${fmtShort(start)} – ${end.getDate()}`
+    : `${fmtShort(start)} – ${fmtShort(end)}`;
 }
 
 const MEAL_SLOTS: { key: MealSlotType; label: string }[] = [
@@ -78,7 +88,7 @@ const Head = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 53px 0 16px;
+  padding: 53px 0 28px; /* room under the title before the tabs */
   flex-wrap: wrap;
 `;
 
@@ -95,66 +105,65 @@ const Title = styled.h1`
 const HeadActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 18px;
   flex-wrap: wrap;
 `;
 
+/* ‹ Oct 12 – 18 › in an outlined pill */
 const WeekNav = styled.div`
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 10px;
+  height: 46px;
+  padding: 0 10px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
 `;
 
 const WeekLabel = styled.span`
-  font-family: var(--font-label);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 150px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 120px;
   text-align: center;
+  white-space: nowrap;
 `;
 
 const NavBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   background: none;
   border: none;
+  border-radius: 50%;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--text-soft);
   &:hover { color: var(--text-primary); }
 `;
 
-const ActionBtn = styled.button<{ $primary?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  border-radius: var(--r-md);
-  cursor: pointer;
+const Divider = styled.span`
+  width: 1px;
+  height: 34px;
+  background: var(--border-card);
+  @media (max-width: 768px) { display: none; }
+`;
+
+/* Quiet sentence-case text actions ("New recipe", "Make shopping list") */
+const TextBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-soft);
   white-space: nowrap;
-  transition: opacity 0.15s;
-
-  ${({ $primary }) => $primary ? `
-    background: transparent;
-    color: var(--color-accent);
-    border: 1px solid var(--color-accent);
-    border-radius: var(--r-full);
-  ` : `
-    background: transparent;
-    color: var(--color-accent);
-    border: none;
-  `}
-
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-  &:hover:not(:disabled) { opacity: 0.7; }
+  cursor: pointer;
+  &:hover:not(:disabled) { color: var(--text-primary); }
+  &:disabled { opacity: 0.5; cursor: default; }
 `;
 
 const TabsRow = styled.div`
@@ -167,245 +176,226 @@ const StatusMsg = styled.div`
   padding: 8px 0;
 `;
 
-/* ── Desktop grid ── */
+/* ── Desktop grid: meal slots down the side, days across; no cell rules ── */
 
 const ScrollArea = styled.div`
   overflow: auto;
+  padding: 28px 24px 48px;
+  /* Wide enough for the whole week: no scroll box, so the recipe menu can
+     float past the bottom row instead of being clipped */
+  @media (min-width: 1400px) { overflow: visible; }
   @media (max-width: 640px) { display: none; }
 `;
 
 const PlannerGrid = styled.div`
   display: grid;
-  grid-template-columns: 80px repeat(7, minmax(130px, 1fr));
-  min-width: 760px;
+  grid-template-columns: 130px repeat(7, minmax(150px, 1fr));
+  column-gap: 12px;
+  row-gap: 14px;
+  min-width: 1190px;
 `;
 
-const CornerCell = styled.div`
-  border-bottom: 2px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-app);
-`;
+const CornerCell = styled.div``;
 
+/* "Mon 12" over a 2px rule; today's in the soft accent over an accent rule */
 const HeaderCell = styled.div<{ $isToday?: boolean }>`
-  padding: 10px 10px 0;
-  text-align: center;
-  border-bottom: 2px solid ${({ $isToday }) => $isToday ? 'var(--color-accent)' : 'var(--border-subtle)'};
-  border-right: 1px solid var(--border-subtle);
-  background: ${({ $isToday }) => $isToday ? 'var(--bg-active)' : 'var(--bg-app)'};
-  &:last-child { border-right: none; }
-  padding-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 18px 14px;
+  border-bottom: 2px solid ${({ $isToday }) => ($isToday ? 'var(--color-accent)' : 'var(--border-subtle)')};
 `;
 
-const DayName = styled.div<{ $isToday?: boolean }>`
-  font-family: var(--font-label);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-secondary);
+const DayName = styled.span<{ $isToday?: boolean }>`
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 400;
+  color: ${({ $isToday }) => ($isToday ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
 `;
 
-const DayDate = styled.div`
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
+const DayDate = styled.span<{ $isToday?: boolean }>`
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text-muted);
 `;
 
 const MealLabelCell = styled.div`
-  padding: 10px 8px 10px 0;
-  display: flex;
-  align-items: flex-start;
-  padding-top: 14px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-tertiary);
-  border-bottom: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-app);
+  padding-top: 22px;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text-muted);
 `;
 
+/* A day's slot. Today's column sits on a faint band. */
 const MealCell = styled.div<{ $isToday?: boolean }>`
-  padding: 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: ${({ $isToday }) => $isToday ? 'var(--bg-active)' : 'transparent'};
-  &:last-child { border-right: none; }
+  min-height: 176px;
+  padding: 6px;
+  border-radius: 10px;
+  background: ${({ $isToday }) => ($isToday ? 'var(--bg-today-col)' : 'transparent')};
 `;
 
-const MealNameBlock = styled.div<{ $hasContent: boolean }>`
+/* Empty slot: just a quiet + to add a meal */
+const AddSlotBtn = styled.button`
+  flex: 1;
   display: flex;
-  gap: 0;
-  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border: 1.5px dashed transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+  /* Hover: a dashed outline (no fill) and a brighter + */
+  &:hover { color: var(--text-soft); border-color: var(--border-dashed); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
-const MealAccentBar = styled.div`
-  width: 3px;
-  border-radius: 2px;
-  background: var(--color-accent);
-  margin-right: 8px;
-  flex-shrink: 0;
-  align-self: stretch;
+/* A planned meal: a filled tile with its name, a × to clear it, and the recipe link */
+const MealTile = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 8px;
+  background: var(--bg-tile);
 `;
 
-const MealNameArea = styled.div`
+const TileTop = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+`;
+
+const MealTitle = styled.button`
   flex: 1;
   min-width: 0;
-`;
-
-const MealTitle = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.35;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
+  cursor: text;
 `;
 
-const MealPlaceholder = styled.div`
-  font-size: 13px;
-  color: var(--text-tertiary);
+const MealPlaceholder = styled(MealTitle)`
+  color: var(--text-placeholder);
   font-style: italic;
-  line-height: 1.35;
-  padding-top: 2px;
 `;
 
 const MealInput = styled.textarea`
+  flex: 1;
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
-  font-size: 14px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.4;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--text-primary);
-  font-family: inherit;
+  color: var(--text-secondary);
   resize: none;
   overflow: hidden;
-  min-height: 20px;
-  line-height: 1.35;
+  min-height: 24px;
   field-sizing: content;
-  &::placeholder { color: var(--text-tertiary); font-style: italic; font-weight: 400; }
+  &::placeholder { color: var(--text-placeholder); font-style: italic; }
   &:focus { outline: none; }
 `;
 
-const RecipeSelectWrap = styled.div`
-  position: relative;
-  display: flex;
-  align-items: center;
-`;
-
-const LinkedRecipeName = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  padding: 4px 0;
-  color: var(--text-secondary);
-  font-family: var(--font-label);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const ClearRecipeBtn = styled.button`
+const RemoveBtn = styled.button`
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
-  flex-shrink: 0;
-  background: none;
+  margin: 1px -4px 0 0;
+  padding: 0;
   border: none;
+  background: none;
+  color: var(--control-border);
   cursor: pointer;
-  color: var(--text-tertiary);
   &:hover { color: var(--text-primary); }
 `;
 
-const LinkRecipeBtn = styled.button`
-  display: flex;
+/* "🔗 Recipe" — opens the linked recipe, or links one */
+const RecipeLink = styled.button`
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
-  background: none;
+  gap: 8px;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0;
   border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--color-accent-link);
   cursor: pointer;
-  padding: 2px 0;
-  &:hover { color: var(--text-secondary); }
+  &:hover { text-decoration: underline; }
 `;
 
-/* ── Mobile cards ── */
+const RecipePicker = styled.div`
+  margin-top: auto;
+`;
+
+/* ── Mobile: one card per day ── */
 
 const MobileArea = styled.div`
   display: none;
   flex-direction: column;
+  gap: 18px;
+  padding: 20px 0 40px;
   @media (max-width: 640px) { display: flex; }
 `;
 
-const DayCard = styled.div`
-  border-bottom: 1px solid var(--border-subtle);
-`;
+const DayCard = styled.div``;
 
 const DayCardHeader = styled.div<{ $isToday?: boolean }>`
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 10px 16px 6px;
-  background: ${({ $isToday }) => $isToday ? 'var(--bg-active)' : 'var(--bg-surface)'};
-  border-bottom: 1px solid var(--border-subtle);
-  border-left: 3px solid ${({ $isToday }) => $isToday ? 'var(--color-accent)' : 'transparent'};
-`;
-
-const DayCardName = styled.span`
-  font-family: var(--font-label);
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-secondary);
-`;
-
-const DayCardDate = styled.span`
-  font-size: 13px;
-  color: var(--text-tertiary);
+  gap: 10px;
+  padding: 0 4px 10px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid ${({ $isToday }) => ($isToday ? 'var(--color-accent)' : 'var(--border-subtle)')};
 `;
 
 const MobileSlotRow = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  &:last-child { border-bottom: none; }
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 4px 0;
 `;
 
 const MobileSlotLabel = styled.div`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-tertiary);
-  width: 65px;
-  flex-shrink: 0;
-  padding-top: 3px;
+  padding-top: 16px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
 `;
 
 const MobileSlotInputs = styled.div`
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
   min-width: 0;
+  & ${AddSlotBtn} { min-height: 52px; justify-content: flex-start; padding-left: 14px; }
 `;
 
 /* ── Component ── */
@@ -425,6 +415,12 @@ export function MenuView() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMsg, setStatusMsg]   = useState('');
   const [editingCell, setEditingCell] = useState<string | null>(null);
+  // The slot whose recipe picker is open
+  const [linkingCell, setLinkingCell] = useState<string | null>(null);
+  // The empty slot opened from its + (meal box with recipe suggestions)
+  const [pickingCell, setPickingCell] = useState<string | null>(null);
+  const openInJournal = useOpenInJournal();
+  const newEntry = useNewEntryInJournal();
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -641,10 +637,12 @@ export function MenuView() {
 
   /* ── Render helpers ── */
 
-  const renderSlot = (dateStr: string, slotKey: MealSlotType, compact = false) => {
+  const renderSlot = (dateStr: string, slotKey: MealSlotType) => {
     const slot = meals[dateStr]?.[slotKey] || emptySlot();
     const cellKey = `${dateStr}-${slotKey}`;
     const isEditing = editingCell === cellKey;
+    const isLinking = linkingCell === cellKey;
+    const label = MEAL_SLOTS.find(m => m.key === slotKey)?.label ?? slotKey;
     const placeholderMap: Record<MealSlotType, string> = {
       breakfast: "What's for breakfast?",
       lunch: "What's for lunch?",
@@ -652,60 +650,88 @@ export function MenuView() {
       snack: "What's for a snack?",
     };
 
-    return (
-      <>
-        <MealNameBlock $hasContent={!!slot.mealName}>
-          <MealNameArea>
-            {isEditing ? (
-              <MealInput
-                autoFocus
-                rows={1}
-                value={slot.mealName}
-                onChange={e => {
-                  const el = e.target as HTMLTextAreaElement;
-                  el.style.height = 'auto';
-                  el.style.height = el.scrollHeight + 'px';
-                  handleMealNameChange(dateStr, slotKey, el.value);
-                }}
-                onBlur={() => setEditingCell(null)}
-                placeholder={placeholderMap[slotKey]}
-              />
-            ) : slot.mealName ? (
-              <MealTitle onClick={() => setEditingCell(cellKey)}>{slot.mealName}</MealTitle>
-            ) : (
-              <MealPlaceholder onClick={() => setEditingCell(cellKey)}>
-                {compact ? placeholderMap[slotKey] : placeholderMap[slotKey]}
-              </MealPlaceholder>
-            )}
-          </MealNameArea>
-        </MealNameBlock>
+    // Opened from its +: a meal box that also suggests recipes (pick one to link it)
+    if (pickingCell === cellKey) {
+      return (
+        <RecipeAutocomplete
+          autoFocus
+          recipes={recipes}
+          value={slot.mealName}
+          onQueryChange={name => handleMealNameChange(dateStr, slotKey, name)}
+          onSelect={id => { setPickingCell(null); handleRecipeChange(dateStr, slotKey, id); }}
+          onCommit={() => setPickingCell(null)}
+          onBlur={() => setPickingCell(null)}
+          placeholder={placeholderMap[slotKey]}
+          ariaLabel={`${label} for ${dateStr}`}
+        />
+      );
+    }
 
-        {recipes.length > 0 ? (
-          <RecipeSelectWrap>
-            {slot.recipeId != null ? (
-              <>
-                <LinkedRecipeName title={slot.recipeName}>{slot.recipeName}</LinkedRecipeName>
-                <ClearRecipeBtn
-                  type="button"
-                  onClick={() => handleRecipeChange(dateStr, slotKey, null)}
-                  aria-label="Remove linked recipe"
-                  title="Remove linked recipe"
-                >
-                  <FontAwesomeIcon icon={faXmark} size="xs" />
-                </ClearRecipeBtn>
-              </>
-            ) : (
-              <RecipeAutocomplete
-                recipes={recipes}
-                onSelect={id => handleRecipeChange(dateStr, slotKey, id)}
-              />
-            )}
-          </RecipeSelectWrap>
+    // Empty slot: a quiet + that opens it for a meal name
+    if (!slot.mealName && slot.recipeId == null && !isEditing && !isLinking) {
+      return (
+        <AddSlotBtn type="button" aria-label={`Add ${label.toLowerCase()} for ${dateStr}`} onClick={() => setPickingCell(cellKey)}>
+          <Icon name="plus" size={22} strokeWidth={1.5} />
+        </AddSlotBtn>
+      );
+    }
+
+    return (
+      <MealTile>
+        <TileTop>
+          {isEditing ? (
+            <MealInput
+              autoFocus
+              rows={1}
+              value={slot.mealName}
+              onChange={e => handleMealNameChange(dateStr, slotKey, e.target.value)}
+              onBlur={() => setEditingCell(null)}
+              onKeyDown={e => { if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+              placeholder={placeholderMap[slotKey]}
+              aria-label={`${label} for ${dateStr}`}
+            />
+          ) : slot.mealName ? (
+            <MealTitle type="button" onClick={() => setEditingCell(cellKey)}>{slot.mealName}</MealTitle>
+          ) : (
+            <MealPlaceholder type="button" onClick={() => setEditingCell(cellKey)}>{placeholderMap[slotKey]}</MealPlaceholder>
+          )}
+          <RemoveBtn
+            type="button"
+            aria-label={`Clear ${label.toLowerCase()}`}
+            title="Clear"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => { setEditingCell(null); setLinkingCell(null); handleRecipeChange(dateStr, slotKey, null); }}
+          >
+            <Icon name="x" size={14} strokeWidth={2} />
+          </RemoveBtn>
+        </TileTop>
+
+        {slot.recipeId != null ? (
+          <RecipeLink type="button" onClick={() => openInJournal(slot.recipeId as number)} title={slot.recipeName}>
+            <MaterialIcon $size={18} aria-hidden="true">link</MaterialIcon>
+            Recipe
+          </RecipeLink>
+        ) : isLinking && recipes.length > 0 ? (
+          <RecipePicker>
+            <RecipeAutocomplete
+              autoFocus
+              recipes={recipes}
+              onSelect={id => { setLinkingCell(null); handleRecipeChange(dateStr, slotKey, id); }}
+              onBlur={() => setLinkingCell(null)}
+            />
+          </RecipePicker>
         ) : (
-          // No recipes yet — send them to the Recipes tab to add one
-          <LinkRecipeBtn type="button" onClick={() => navigate('/menu/recipes')}>+ Link recipe</LinkRecipeBtn>
+          <RecipeLink
+            type="button"
+            // Keep the name field's blur from closing the tile before this click lands
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => (recipes.length > 0 ? setLinkingCell(cellKey) : navigate('/menu/recipes'))}
+          >
+            <MaterialIcon $size={18} aria-hidden="true">link</MaterialIcon>
+            {recipes.length > 0 ? 'Link recipe' : 'Add a recipe'}
+          </RecipeLink>
         )}
-      </>
+      </MealTile>
     );
   };
 
@@ -750,21 +776,25 @@ export function MenuView() {
             <HeadActions>
               <WeekNav>
                 <NavBtn onClick={() => { flushSave(); setWeekStart(w => addDays(w, -7)); }} aria-label="Previous week">
-                  <FontAwesomeIcon icon={faChevronLeft} size="xs" />
+                  <Icon name="chevron-left" size={16} strokeWidth={2} />
                 </NavBtn>
-                <WeekLabel>{fmtShort(weekStart)} – {fmtShort(addDays(weekStart, 6))}</WeekLabel>
+                <WeekLabel>{fmtWeek(weekStart)}</WeekLabel>
                 <NavBtn onClick={() => { flushSave(); setWeekStart(w => addDays(w, 7)); }} aria-label="Next week">
-                  <FontAwesomeIcon icon={faChevronRight} size="xs" />
+                  <Icon name="chevron-right" size={16} strokeWidth={2} />
                 </NavBtn>
               </WeekNav>
-              <ActionBtn onClick={() => navigate('/')}>+ New Recipe</ActionBtn>
-              <ActionBtn onClick={handleGenerateShoppingList} disabled={isGenerating}>
-                <FontAwesomeIcon icon={faCartShopping} size="xs" />
-                {isGenerating ? 'Generating…' : 'Generate Shopping List'}
-              </ActionBtn>
-              <ActionBtn $primary onClick={handleSave} disabled={isSaving}>
-                {isSaving ? 'Saving…' : 'Save Menu'}
-              </ActionBtn>
+              <Divider aria-hidden="true" />
+              <TextBtn type="button" onClick={() => {
+                const recipeTopic = allTopics.find(t => recipeTopicIds.has(t.id));
+                if (recipeTopic) newEntry(recipeTopic.id); else navigate('/menu/recipes');
+              }}>New recipe</TextBtn>
+              <TextBtn type="button" onClick={handleGenerateShoppingList} disabled={isGenerating}>
+                {isGenerating ? 'Making list…' : 'Make shopping list'}
+              </TextBtn>
+              {/* The app's standard outlined action pill */}
+              <PillButton type="button" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save menu'}
+              </PillButton>
             </HeadActions>
           </Head>
 
@@ -783,7 +813,7 @@ export function MenuView() {
               return (
                 <HeaderCell key={ds} $isToday={isToday}>
                   <DayName $isToday={isToday}>{fmtDay(day)}</DayName>
-                  <DayDate>{fmtShort(day)}</DayDate>
+                  <DayDate>{day.getDate()}</DayDate>
                 </HeaderCell>
               );
             })}
@@ -811,14 +841,14 @@ export function MenuView() {
               return (
                 <DayCard key={dateStr}>
                   <DayCardHeader $isToday={isToday}>
-                    <DayCardName>{fmtDay(day)}</DayCardName>
-                    <DayCardDate>{fmtShort(day)}</DayCardDate>
+                    <DayName $isToday={isToday}>{fmtDay(day)}</DayName>
+                    <DayDate>{day.getDate()}</DayDate>
                   </DayCardHeader>
                   {MEAL_SLOTS.map(({ key, label }) => (
                     <MobileSlotRow key={key}>
                       <MobileSlotLabel>{label}</MobileSlotLabel>
                       <MobileSlotInputs>
-                        {renderSlot(dateStr, key, true)}
+                        {renderSlot(dateStr, key)}
                       </MobileSlotInputs>
                     </MobileSlotRow>
                   ))}

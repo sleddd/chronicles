@@ -59,9 +59,9 @@ const Layout = styled.div<{ $hideAccentStripe?: boolean; $focusMode?: boolean }>
   }
 `;
 
-/* Main column: header bar + content, to the right of the sidebar.
-   On mobile it slides right to reveal the sidebar bar underneath. */
-const MainColumn = styled.div<{ $navOpen?: boolean }>`
+/* Main column: header bar + content, to the right of the sidebar (desktop).
+   On phones/tablets it fills the width; the menu drops down over it. */
+const MainColumn = styled.div`
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -70,11 +70,7 @@ const MainColumn = styled.div<{ $navOpen?: boolean }>`
 
   ${NAV_COMPACT} {
     position: relative;
-    z-index: 2;
     background: var(--bg-app);
-    transform: translateX(${({ $navOpen }) => ($navOpen ? '240px' : '0')});
-    transition: transform 220ms ease-out;
-    box-shadow: ${({ $navOpen }) => ($navOpen ? '-2px 0 20px rgba(0,0,0,0.25)' : 'none')};
   }
 `;
 
@@ -99,11 +95,8 @@ interface AppTemplateProps {
 export function AppTemplate({ children, hideSidebar, transparentContent, hideAccentStripe }: AppTemplateProps) {
   const backgroundImage = useUIStore(s => s.backgroundImage);
   const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
-  const navOpen = useUIStore(s => s.mobileNavOpen);
-  /* Mobile: MainColumn's transform makes it the containing block for the
-     fixed full-view editor overlay, and its stacking context sits below the
-     fixed nav bar — so while the overlay is open, hide the mobile chrome and
-     let the overlay fill the whole viewport. */
+  /* Mobile: while the full-view editor overlay is open, hide the mobile
+     chrome and let the overlay fill the whole viewport. */
   const focusMode = useUIStore(s => s.editorFocusMode);
 
   return (
@@ -114,7 +107,7 @@ export function AppTemplate({ children, hideSidebar, transparentContent, hideAcc
       <Layout $hideAccentStripe={hideAccentStripe} $focusMode={focusMode}>
         <SkipLink href="#main-content">Skip to content</SkipLink>
         {!hideSidebar && <Sidebar />}
-        <MainColumn $navOpen={!hideSidebar && navOpen}>
+        <MainColumn>
           <Header />
           <MainContent id="main-content" $transparent={transparentContent} $hasBackground={!!backgroundImage} $lightBg={isLightBg}>{children}</MainContent>
         </MainColumn>

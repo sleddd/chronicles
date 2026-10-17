@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { PillButton } from '../atoms/PillButton.js';
 import { NUTRIENTS, type NutrientKey } from '../../types/nutrition.js';
 
 /* The nutrition panel shared by every meal form (journal editor, Health → Log a
@@ -30,21 +31,8 @@ export const SectionTitle = styled.h3`
   color: var(--text-tertiary);
 `;
 
-export const PillBtn = styled.button`
-  padding: 8px 18px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-accent);
-  background: var(--color-accent-subtle);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  &:hover:not(:disabled) { border-color: var(--color-accent); }
-  &:disabled { opacity: 0.6; cursor: wait; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-`;
+/* Estimate / Re-estimate: the app's outlined accent pill (PillButton) */
+export const PillBtn = PillButton;
 
 /* Panel + its note; the space below separates it from the next field's label */
 const Block = styled.div`

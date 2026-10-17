@@ -67,6 +67,18 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--text-disabled':     '#57575f',
   '--text-tab':          '#3a3a42',  /* inactive section tabs */
   '--text-meta':         '#8a8c95',  /* list-row topic + date: recede behind the entry */
+  '--text-muted':        '#8a8c95',  /* card subtitles, chevrons, + icons */
+  '--text-placeholder':  '#a0a3ab',
+  '--control-border':    '#c4c7d2',  /* unticked round checks */
+  '--border-card':       '#e4e6ec',  /* card outlines + their inner rules/boxes */
+  '--bg-row-hover':      '#f3f4f7',  /* a row lifting inside a card on hover */
+  '--text-soft':         '#6b6e77',  /* toolbar text buttons, chevrons */
+  '--text-faint':        '#c4c7d2',  /* quiet + marks in empty slots */
+  '--bg-tile':           '#f3f4f7',  /* a filled tile on the canvas (menu meals) */
+  '--bg-today-col':      '#f7f8fa',  /* today's column band */
+  '--border-pop':        '#e4e6ec',  /* floating menus' outline */
+  '--border-dashed':     '#d8dae2',  /* dashed outline of an empty slot on hover */
+  '--text-hint':         '#b3b6bd',  /* placeholders in big borderless fields */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
   '--border-subtle':     '#e4e6ec',
@@ -137,8 +149,20 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-disabled':     '#a3a9b5',
   '--text-tab':          '#aeb4bf',  /* inactive section tabs — a step under tertiary */
   '--text-meta':         '#a9b0c8',  /* list-row topic + date: recede behind the entry */
+  '--text-muted':        '#7c7f88',  /* card subtitles, chevrons, + icons */
+  '--text-placeholder':  '#6c6f78',
+  '--control-border':    '#5b5f69',  /* unticked round checks */
+  '--border-card':       '#31343d',  /* card outlines + their inner rules/boxes */
+  '--bg-row-hover':      '#2f313a',  /* a row lifting inside a card on hover */
+  '--text-soft':         '#a5a8b0',  /* toolbar text buttons, chevrons */
+  '--text-faint':        '#464a54',  /* quiet + marks in empty slots */
+  '--bg-tile':           '#2c2e37',  /* a filled tile on the canvas (menu meals) */
+  '--bg-today-col':      '#262831',  /* today's column band */
+  '--border-pop':        '#373a44',  /* floating menus' outline */
+  '--border-dashed':     '#3b3f49',  /* dashed outline of an empty slot on hover */
+  '--text-hint':         '#60636c',  /* placeholders in big borderless fields */
   '--text-inverse':      '#14161b',
-  '--border-subtle':     '#272a34',
+  '--border-subtle':     '#2c2f3a',
   '--border-default':    '#343844',
   '--border-strong':     '#3e4350',
   '--border-field':      '#30333f',  /* faint outline on styled-form boxes + nutrition panel */
@@ -171,8 +195,8 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--ink-2':             '#e6e9ee',
   '--ink-3':             '#cdd2da',
   '--ink-4':             '#a3a9b5',
-  '--rule':              '#272a34',
-  '--rule-2':            '#272a34',
+  '--rule':              '#2c2f3a',
+  '--rule-2':            '#2c2f3a',
   '--btn-primary':       '#f7f8fa',
   '--btn-primary-ink':   '#20232a',
   '--btn-primary-hover': '#d4d7df',
@@ -297,12 +321,6 @@ function mix(hex: string, target: number, amt: number): string {
   return `rgb(${m(r)},${m(g)},${m(b)})`;
 }
 
-function mixHex(hex: string, target: number, amt: number): string {
-  const [r, g, b] = hexToRgbParts(hex);
-  const m = (c: number) => Math.round(c + (target - c) * amt).toString(16).padStart(2, '0');
-  return `#${m(r)}${m(g)}${m(b)}`;
-}
-
 /** White text on an accent fill, unless the fill is light enough that white
     fades (< 2:1 — yellows, pastels, light greys); then near-black. The muted
     mid-tone presets (teal, coral, blue…) keep white. */
@@ -319,39 +337,6 @@ function luminance(hex: string): number {
 function contrast(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
-}
-function toHsl(hex: string): [number, number, number] {
-  const [r, g, b] = hexToRgbParts(hex).map(v => v / 255);
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-  const l = (mx + mn) / 2;
-  if (mx === mn) return [0, 0, l];
-  const d = mx - mn;
-  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
-  const h = (mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) / 6;
-  return [h, s, l];
-}
-function fromHsl(h: number, s: number, l: number): string {
-  const f = (n: number) => {
-    const k = (n + h * 12) % 12;
-    const a = s * Math.min(l, 1 - l);
-    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
-  };
-  return '#' + [f(0), f(8), f(4)].map(v => v.toString(16).padStart(2, '0')).join('');
-}
-
-/* Nav accent: the SAME hue, a touch more vivid (its own saturation × 1.3), then
-   lightened only until it reaches `ratio` against the active rail block (dark) or
-   darkened until it does on white (light). Mixing with white instead drained the
-   colour into a pastel; this keeps it recognisably the user's accent. */
-function navAccent(color: string, bg: string, ratio: number, isDark: boolean): string {
-  const [h, s, l] = toHsl(color);
-  const sat = Math.min(0.95, s * 1.3);
-  for (let i = 0; i <= 60; i++) {
-    const light = isDark ? Math.min(0.9, l + i * 0.01) : Math.max(0.1, l - i * 0.01);
-    const c = fromHsl(h, sat, light);
-    if (contrast(c, bg) >= ratio) return c;
-  }
-  return fromHsl(h, sat, isDark ? 0.9 : 0.1);
 }
 
 /* Build the DS accent scale (--accent-100..800) from a single base hex.
@@ -413,32 +398,31 @@ export function App() {
     root.style.setProperty('--logo-low', isDark ? color : mix(color, 0, 0.15));
     root.style.setProperty('--logo-end', isDark ? mix(color, 0, 0.15) : color);
 
-    /* DS interactive accent tokens. In dark, brighten one notch (use the
-       lighter 400/300 steps) for legibility on the charcoal canvas. */
-    // Text on a solid accent fill: white unless the fill is too light for it
-    // (judged on the fill actually shown — dark mode lightens the accent)
-    const onAccent = onAccentFor(isDark ? mixHex(color, 255, 0.22) : color);
-    root.style.setProperty('--color-accent',        isDark ? mix(color, 255, 0.22) : color);
-    root.style.setProperty('--color-accent-hover',  isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.85));
-    root.style.setProperty('--color-accent-active', isDark ? mix(color, 255, 0.58) : deriveDarker(color, 0.70));
+    /* DS interactive accent tokens: the user's exact accent in both themes (no
+       dark-mode lift). Hover/pressed step lighter in dark, darker in light. */
+    // Text on a solid accent fill: white unless the accent is too light for it
+    const onAccent = onAccentFor(color);
+    root.style.setProperty('--color-accent',        color);
+    root.style.setProperty('--color-accent-hover',  isDark ? mix(color, 255, 0.18) : deriveDarker(color, 0.85));
+    root.style.setProperty('--color-accent-active', isDark ? mix(color, 255, 0.34) : deriveDarker(color, 0.70));
     root.style.setProperty('--color-accent-subtle', isDark ? `rgba(${r},${g},${b},0.22)` : `rgba(${r},${g},${b},0.10)`);
-    root.style.setProperty('--color-accent-text',   isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.78));
+    root.style.setProperty('--color-accent-text',   isDark ? color : deriveDarker(color, 0.78));
     root.style.setProperty('--on-accent', onAccent);
+    // Lighter accent shades for text on dark (links, today's label); deeper in light
+    root.style.setProperty('--color-accent-link', isDark ? mix(color, 255, 0.24) : deriveDarker(color, 0.85));
+    root.style.setProperty('--color-accent-soft', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.78));
 
-    /* Nav accent (active rail icon + tab): same hue, more vivid, lifted to 3.5:1
-       on the active rail block — icons need 3:1; 4.5 forced muted presets pastel. */
-    root.style.setProperty('--color-accent-nav', isDark
-      ? navAccent(color, DARK_CSS_VARS['--bg-rail-active'], 3.5, true)
-      : navAccent(color, LIGHT_CSS_VARS['--bg-rail-active'], 3.5, false));
+    /* Nav accent (active rail icon + tab): the exact accent too */
+    root.style.setProperty('--color-accent-nav', color);
 
     /* Legacy accent tokens (existing components still read these) */
-    root.style.setProperty('--accent', isDark ? mix(color, 255, 0.22) : color);
-    root.style.setProperty('--accent-hover', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.85));
+    root.style.setProperty('--accent', color);
+    root.style.setProperty('--accent-hover', isDark ? mix(color, 255, 0.18) : deriveDarker(color, 0.85));
     root.style.setProperty('--accent-tint', isDark ? `rgba(${r},${g},${b},0.22)` : `rgba(${r},${g},${b},0.12)`);
     root.style.setProperty('--accent-stroke', deriveAccentStroke(color));
-    root.style.setProperty('--accent-fill', isDark ? mix(color, 255, 0.22) : color);
+    root.style.setProperty('--accent-fill', color);
     root.style.setProperty('--accent-fill-ink', onAccent);
-    root.style.setProperty('--h-active', isDark ? mix(color, 255, 0.22) : color);
+    root.style.setProperty('--h-active', color);
     root.style.setProperty('--h-active-ink', onAccent);
     root.style.setProperty('--focus', `0 0 0 3px rgba(${r},${g},${b},0.28)`);
     root.style.setProperty('--ring', `rgba(${r},${g},${b},0.55)`);

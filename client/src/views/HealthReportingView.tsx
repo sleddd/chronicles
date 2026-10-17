@@ -61,7 +61,7 @@ const Inner = styled.div`
 `;
 
 const Head = styled.div`
-  padding: 53px 0 16px;
+  padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
 const Title = styled.h1`

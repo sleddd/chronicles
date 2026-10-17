@@ -22,7 +22,15 @@ import { MilestoneFields } from '../components/molecules/fields/MilestoneFields.
 import { MenuPlanFields, type MenuPlanFieldValues } from '../components/molecules/fields/MenuPlanFields.js';
 import { ShoppingListFields } from '../components/molecules/fields/ShoppingListFields.js';
 import { RecipeFields } from '../components/molecules/fields/RecipeFields.js';
-import type { GoalFieldValues, MilestoneFieldValues, RecipeFieldValues, ShoppingListFieldValues } from '../types/fields.js';
+import { FoodFields } from '../components/molecules/fields/FoodFields.js';
+import { SymptomFields } from '../components/molecules/fields/SymptomFields.js';
+import { ExerciseFields } from '../components/molecules/fields/ExerciseFields.js';
+import { EventFields } from '../components/molecules/fields/EventFields.js';
+import { MeetingFields } from '../components/molecules/fields/MeetingFields.js';
+import { AllergyFields } from '../components/molecules/fields/AllergyFields.js';
+import { TaskFields } from '../components/molecules/fields/TaskFields.js';
+import { MedicationFields } from '../components/molecules/fields/MedicationFields.js';
+import type { GoalFieldValues, MilestoneFieldValues, RecipeFieldValues, ShoppingListFieldValues, FoodFieldValues, SymptomFieldValues, ExerciseFieldValues, EventFieldValues, MeetingFieldValues, AllergyFieldValues, TaskFieldValues, MedicationFieldValues } from '../types/fields.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
 import { TextInput } from '../components/atoms/TextInput.js';
 import { Select } from '../components/atoms/Select.js';
@@ -123,7 +131,8 @@ const Page = styled.div`
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
-  @media (max-width: 640px) { padding: 44px 56px 72px; }
+  /* Phones: narrow side margins so Quick Entry uses the width */
+  @media (max-width: 640px) { padding: 28px 18px 56px; }
 `;
 
 /* DS dashboard header: big date numeral left, weather right, under a hairline rule. */
@@ -132,19 +141,20 @@ const PageHeader = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 24px;
-  padding-bottom: 28px;
+  margin-bottom: 22px;
+  padding-bottom: 36px;
   border-bottom: 1px solid var(--border-subtle);
   flex-wrap: nowrap;
-  @media (max-width: 640px) { gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 640px) { gap: 12px; margin-bottom: 18px; padding-bottom: 28px; }
 `;
 
 const GreetingBlock = styled.div`
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: 16px;
+  gap: 32px;
   min-width: 0;
+  @media (max-width: 640px) { gap: 16px; }
 `;
 
 const SidebarToggleBtn = styled.button`
@@ -182,7 +192,8 @@ const DateNumeral = styled.div`
 const DateInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  min-width: 0;
   /* Nudge the text block down so its first line aligns with the visible top
      of the big numeral (which has font ascent space above the digit). */
   padding-top: 12px;
@@ -206,8 +217,13 @@ const DailyPrompt = styled.p`
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.6;
-  max-width: 360px;
-  @media (max-width: 640px) { max-width: 200px; }
+  max-width: 720px;
+`;
+
+/* The quote's author on its own line, a step dimmer (same type as the quote) */
+const QuoteBy = styled(DailyPrompt)`
+  margin-top: -4px;
+  color: var(--text-tertiary);
 `;
 
 const Greeting = styled.h1`
@@ -239,18 +255,28 @@ const DateLineRow = styled.div`
   gap: 10px;
 `;
 
+/* Sun icon beside a column of temperature over city, right-aligned */
 const InlineWeatherWrap = styled.div`
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  gap: 14px;
   flex-shrink: 0;
 `;
 
-/* Keep the weather vertically centered while the date block top-aligns. */
+const WeatherText = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+`;
+
+/* Weather sits up at the top, level with the date line */
 const WeatherSlot = styled.div`
-  align-self: center;
+  align-self: flex-start;
+  padding-top: 12px;
   flex-shrink: 0;
+  /* Phones: leave the header to the date and quote */
+  @media (max-width: 640px) { display: none; }
 `;
 
 const InlineTemp = styled.div`
@@ -267,9 +293,7 @@ const WeatherCity = styled.div`
   font-weight: 400;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
+  text-align: right;
 `;
 
 const InlineHiLo = styled.span`
@@ -335,14 +359,15 @@ const QuickEntryDashCard = styled(DashCard)`
   }
 
   /* Topic picker trigger only (direct child button), not dropdown options. */
+  /* An outlined pill; the entry text below starts on its left edge */
   & .qe-topic-picker > div > button {
-    border: none;
-    border-radius: 0;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
     background: transparent;
-    /* Flush left so the topic lines up with the entry text and field labels */
-    padding-left: 0;
+    padding: 8px 16px 8px 18px;
+    gap: 14px;
   }
-  & .qe-topic-picker > div > button:hover { background: transparent; }
+  & .qe-topic-picker > div > button:hover { background: transparent; border-color: var(--border-strong); }
   /* Dropdown menu: the absolutely-positioned div inside the picker wrapper. */
   & .qe-topic-picker > div > div { border: none; }
 `;
@@ -360,7 +385,7 @@ const QuickEditorWrap = styled.div`
 
   .tiptap {
     /* Flush left — the text starts on the same edge as the topic picker */
-    padding: 16px 16px 16px 0;
+    padding: 24px 16px 16px 0;
     font-family: var(--font-display);
     font-style: italic;
     font-size: 17px;
@@ -403,7 +428,7 @@ const TopicRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
 `;
 
 const TopicRowActions = styled.div`
@@ -463,6 +488,13 @@ interface FieldDef { key: string; label: string; type: FieldType; options?: stri
    Their text is generated on save (utils/entryText). */
 /** Meals nutrients — shown together in the nutrition panel */
 const NUTRIENT_KEYS = new Set<string>(NUTRIENTS.map(n => n.key));
+
+/** Topics whose Quick Entry fields are the journal editor's own field forms */
+const JOURNAL_FIELDS: Record<string, string> = {
+  meals: 'food', medication: 'medication', symptom: 'symptom', exercise: 'exercise',
+  event: 'event', events: 'event', meeting: 'meeting', meetings: 'meeting',
+  allergy: 'allergy', task: 'task',
+};
 
 const QE_FIELDS_ONLY = new Set([
   'meals', 'medication', 'allergy', 'exercise', 'event', 'events', 'meeting', 'meetings',
@@ -527,7 +559,10 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
   const allEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const selectedTopic = topics.find(t => t.id === selectedTopicId) ?? null;
-  const fieldDefs = selectedTopic ? (TOPIC_FIELDS[selectedTopic.name.toLowerCase()] ?? []) : [];
+  // Same field forms as the journal editor where there is one; the generic rows otherwise
+  const journalType = selectedTopic ? JOURNAL_FIELDS[selectedTopic.name.toLowerCase()] : undefined;
+  const fieldDefs = selectedTopic && !journalType ? (TOPIC_FIELDS[selectedTopic.name.toLowerCase()] ?? []) : [];
+  const calendarSyncEnabled = useUIStore(s => s.calendarSyncEnabled);
   const isMealsTopic = selectedTopic?.name.toLowerCase() === 'meals';
   const aiReady = useAiReady();
   const userFieldDefs = selectedTopicId != null ? (topicCustomFields[selectedTopicId] ?? []) : [];
@@ -605,7 +640,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
     || Object.keys((customFields.days as Record<string, unknown>) ?? {}).length > 0;
   const canSave = hasContent || ((isShoppingTopic || isMenuPlanTopic) ? hasPlanOrList : !!generatedText)
     || (selectedTopic !== null && hasFieldValue);
-  const hasFieldsBelow = fieldDefs.length > 0 || isTaskTopic || isMedicationTopic || isWellnessTopic || isGoalTopic || isMilestoneTopic || isShoppingTopic || isMenuPlanTopic || isRecipeTopic || userFieldDefs.length > 0;
+  const hasFieldsBelow = fieldDefs.length > 0 || !!journalType || isTaskTopic || isMedicationTopic || isWellnessTopic || isGoalTopic || isMilestoneTopic || isShoppingTopic || isMenuPlanTopic || isRecipeTopic || userFieldDefs.length > 0;
 
   const setField = (key: string, value: unknown) => setCustomFields(prev => ({ ...prev, [key]: value }));
 
@@ -680,7 +715,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
       if (isMealsTopic && aiReady) {
         fieldsToSave = (await autoNutritionOnSave(stripHtml(finalContent), customFields).catch(() => null)) ?? customFields;
       }
-      if ((fieldDefs.length > 0 || userFieldDefs.length > 0 || isMedicationTopic || isTaskTopic || isGoalTopic || isMilestoneTopic || isShoppingTopic || isMenuPlanTopic || isRecipeTopic) && selectedTopic) metadata._customFields = fieldsToSave;
+      if ((fieldDefs.length > 0 || !!journalType || userFieldDefs.length > 0 || isMedicationTopic || isTaskTopic || isGoalTopic || isMilestoneTopic || isShoppingTopic || isMenuPlanTopic || isRecipeTopic) && selectedTopic) metadata._customFields = fieldsToSave;
       const encrypted = await encryptPost(finalContent, metadata);
       const result = await entriesApi.create({
         contentEncrypted: encrypted.contentEncrypted,
@@ -749,6 +784,21 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
         {/* The topic's fields sit under a rule when the editor is above them */}
         {hasFieldsBelow && <FieldsBlock $ruled={!fieldsOnly}>
         <FieldRowLayoutContext.Provider value={true}>
+        {journalType && (() => {
+          const cf = customFields;
+          const set = (v: unknown) => setCustomFields(v as Record<string, unknown>);
+          switch (journalType) {
+            case 'food': return <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...cf } as FoodFieldValues} onChange={set} />;
+            case 'medication': return <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...cf } as MedicationFieldValues} onChange={set} entryName={typeof cf.medicationName === 'string' ? cf.medicationName.trim() : ''} />;
+            case 'symptom': return <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...cf } as SymptomFieldValues} onChange={set} />;
+            case 'exercise': return <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...cf } as ExerciseFieldValues} onChange={set} />;
+            case 'event': return <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...cf } as EventFieldValues} onChange={set} showCalendarSync={calendarSyncEnabled} />;
+            case 'meeting': return <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...cf } as MeetingFieldValues} onChange={set} showCalendarSync={calendarSyncEnabled} />;
+            case 'allergy': return <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...cf } as AllergyFieldValues} onChange={set} />;
+            case 'task': return <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: true, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...cf } as TaskFieldValues} onChange={set} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />;
+            default: return null;
+          }
+        })()}
         {fieldDefs.length > 0 && fieldDefs.map(f => isMealsTopic && NUTRIENT_KEYS.has(f.key) ? (
           // Meals: the nutrients share one panel, placed where calories sit
           f.key === 'calories' && (
@@ -781,7 +831,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
             )}
           </FormField>
         ))}
-        {isTaskTopic && (
+        {isTaskTopic && !journalType && (
           <>
             <FormField label="Goal">
               <Select
@@ -803,7 +853,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
             </FormField>
           </>
         )}
-        {isMedicationTopic && (
+        {isMedicationTopic && !journalType && (
           <>
             <FormField label="Medication Name">
               <TextInput
@@ -1020,15 +1070,11 @@ function InlineWeather() {
   const condition = current.code === 0 ? 'Sunny' : 'Cloudy';
   return (
     <InlineWeatherWrap>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Icon name="sun" size={33} strokeWidth={1.3} style={{ color: 'var(--color-accent)' }} />
+      <Icon name="sun" size={33} strokeWidth={1.3} style={{ color: 'var(--color-accent)' }} />
+      <WeatherText>
         <InlineTemp>{current.temp}°</InlineTemp>
-      </div>
-      <WeatherCity>
-        {(cityName ? cityName.split(',')[0].trim() : '').split('').map((ch, i) => (
-          <span key={i}>{ch === ' ' ? ' ' : ch}</span>
-        ))}
-      </WeatherCity>
+        <WeatherCity>{cityName ? cityName.split(',')[0].trim() : ''}</WeatherCity>
+      </WeatherText>
     </InlineWeatherWrap>
   );
 }
@@ -1065,7 +1111,8 @@ export function DashboardView() {
             <DateNumeral>{today.getDate()}</DateNumeral>
             <DateInfo>
               <DateLabel>{`${today.toLocaleDateString('en-US', { weekday: 'long' })}, ${today.toLocaleDateString('en-US', { month: 'long' })}`}</DateLabel>
-              <DailyPrompt>{getDailyQuote().text} — {getDailyQuote().author}</DailyPrompt>
+              <DailyPrompt>{getDailyQuote().text}</DailyPrompt>
+              <QuoteBy>— {getDailyQuote().author}</QuoteBy>
             </DateInfo>
           </GreetingBlock>
           <WeatherSlot><InlineWeather /></WeatherSlot>

@@ -130,7 +130,23 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   /* Print styles — hide app chrome, show content */
+  /* Recipe print sheet (RecipeEntry → Print): hidden on screen; on paper it
+     replaces the whole app, in light ink */
+  #print-sheet { display: none; }
+
   @media print {
+    html.print-sheet-open #root { display: none !important; }
+    html.print-sheet-open #print-sheet {
+      display: block !important;
+      padding: 0 8mm;
+      color-scheme: light;
+      --text-primary: #111318; --text-secondary: #1f2228; --text-tertiary: #4a4e57;
+      --text-muted: #5b5f69; --text-soft: #3a3e47; --text-disabled: #6b6f78;
+      --bg-app: #ffffff; --bg-surface: #ffffff; --bg-sunken: #f3f4f6;
+      --border-subtle: #d9dbe1; --border-default: #c9ccd4; --border-card: #d9dbe1;
+      --color-accent: #333842; --color-accent-soft: #333842; --color-accent-link: #333842;
+    }
+
     body {
       background: white !important;
       color: black !important;

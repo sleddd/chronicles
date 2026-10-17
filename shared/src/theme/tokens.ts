@@ -146,8 +146,8 @@ export const darkTheme = {
     textFaint: '#a3a9b5',
     textInverse: '#14161b',
 
-    border: '#272a34',
-    borderSoft: '#272a34',
+    border: '#2c2f3a',
+    borderSoft: '#2c2f3a',
     borderFocus: '#8a82e6',
     accentStroke: '#8a82e6',
 

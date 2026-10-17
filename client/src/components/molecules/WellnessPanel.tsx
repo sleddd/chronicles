@@ -3,10 +3,10 @@ import { MaterialIcon } from '../atoms/MaterialIcon.js';
 
 /* The wellness check-in, one look everywhere (Health dashboard card + the
    journal's Wellness fields): Water and Sleep as tiles — a tinted round icon,
-   a large thin Work Sans figure, −/+ round buttons and a coloured progress
-   rule — then Mood as five Material faces (the chosen one on a tinted disc,
-   its name on the right in the mood's colour), then Cycle as pill chips.
-   Hairlines separate the sections. Props only. */
+   a large thin Work Sans figure, −/+ round buttons and a progress rule —
+   then Mood as five Material faces (the chosen one on a tinted disc, its name
+   on the right), then Cycle as pill chips. Everything coloured uses the
+   accent. Hairlines separate the sections. Props only. */
 
 export const WATER_GOAL = 8;
 export const SLEEP_GOAL = 8;
@@ -205,10 +205,10 @@ const Chip = styled.button<{ $active: boolean }>`
   border-radius: 999px;
   cursor: pointer;
   border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-default)')};
-  /* Chosen = solid accent with --on-accent text (white, or dark on a light accent); never a see-through tint */
-  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
-  color: ${({ $active }) => ($active ? 'var(--on-accent, #ffffff)' : 'var(--text-tertiary)')};
-  transition: border-color 120ms, color 120ms;
+  /* Outline pill (like PillButton): chosen = accent outline + accent text, no fill */
+  background: transparent;
+  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-tertiary)')};
+  transition: border-color 120ms, color 120ms, background 120ms;
   &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-strong)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
@@ -303,13 +303,14 @@ export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
   onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact,
 }: WellnessPanelProps) {
-  const moodColor = mood ? `var(--mood-${mood})` : 'var(--text-disabled)';
+  // One colour throughout: the accent (no per-metric blues, violets or mood hues)
+  const accent = 'var(--color-accent)';
   return (
     <PanelRoot $compact={compact}>
       <PairRow>
-        <MeterTile label="Water" icon="water_drop" color="var(--chart-blue)" value={water} goal={waterGoal}
+        <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
           max={WATER_MAX} unit={`of ${waterGoal} glasses`} noun="glasses of water" onChange={onWater} />
-        <MeterTile label="Sleep" icon="dark_mode" color="var(--chart-violet)" value={sleep} goal={SLEEP_GOAL}
+        <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
           max={SLEEP_MAX} unit="hours" noun="hours of sleep" onChange={onSleep} />
       </PairRow>
 
@@ -318,11 +319,11 @@ export function WellnessPanel({
         <Cell>
           <Head>
             <Label>Mood</Label>
-            {mood > 0 && <MoodName $color={moodColor}>{MOODS[mood - 1].label}</MoodName>}
+            {mood > 0 && <MoodName $color={accent}>{MOODS[mood - 1].label}</MoodName>}
           </Head>
           <Faces role="group" aria-label="Mood">
             {MOODS.map((m, i) => (
-              <FaceBtn key={m.icon} type="button" $active={mood === i + 1} $color={`var(--mood-${i + 1})`}
+              <FaceBtn key={m.icon} type="button" $active={mood === i + 1} $color={accent}
                 aria-label={`Mood: ${m.label}`} aria-pressed={mood === i + 1}
                 onClick={() => onMood(mood === i + 1 ? 0 : i + 1)}>
                 <MaterialIcon $size={40}>{m.icon}</MaterialIcon>

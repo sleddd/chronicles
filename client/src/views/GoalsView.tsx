@@ -58,7 +58,7 @@ const Head = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 53px 0 16px;
+  padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
 const Title = styled.h1`
@@ -756,7 +756,9 @@ export function GoalsView() {
       return (
         <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
           <EntryListCard
-            hint={i === 0}
+            // First-row top rule only when filters sit between it and the tabs
+            // (straight under the tab bar its hairline would double up)
+            hint={i === 0 && (compact ? filtersOpen : showRow)}
             content={entry.content}
             createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
             topicName={mixed ? topic?.name : undefined}

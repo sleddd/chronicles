@@ -144,36 +144,23 @@ describe('EntryForm', () => {
     expect(onSave).toHaveBeenCalled();
   });
 
-  describe('breadcrumb', () => {
-    it('shows the Journal crumb for entries with no mapped topic', () => {
-      renderWithTheme(<EntryForm {...defaultProps} />);
-      expect(screen.getByText('Journal')).toBeInTheDocument();
-      expect(screen.getByLabelText('Entry location')).toBeInTheDocument();
-    });
+  it('offers Expand in the toolbar only when the view allows it', () => {
+    const onToggleExpand = vi.fn();
+    const { unmount } = renderWithTheme(<EntryForm {...defaultProps} onToggleExpand={onToggleExpand} />);
+    fireEvent.click(screen.getByLabelText('Expand editor'));
+    expect(onToggleExpand).toHaveBeenCalled();
+    unmount();
+    renderWithTheme(<EntryForm {...defaultProps} />);
+    expect(screen.queryByLabelText('Expand editor')).not.toBeInTheDocument();
+  });
 
-    it('derives ancestors from the topic and keeps the picker as last crumb', () => {
-      renderWithTheme(
-        <EntryForm {...defaultProps} topicId={7}
-          topics={[{ id: 7, name: 'Recipe', icon: null, color: null }]} />
-      );
-      expect(screen.getByText('From the Kitchen')).toBeInTheDocument();
-      expect(screen.getByTestId('topic-selector')).toBeInTheDocument();
-    });
-
-    it('navigates when an ancestor crumb is clicked', () => {
-      const onNavigate = vi.fn();
-      renderWithTheme(
-        <EntryForm {...defaultProps} onNavigate={onNavigate} topicId={7}
-          topics={[{ id: 7, name: 'Recipe', icon: null, color: null }]} />
-      );
-      fireEvent.click(screen.getByText('From the Kitchen'));
-      expect(onNavigate).toHaveBeenCalledWith('/kitchen');
-    });
-
-    it('renders ancestors as non-clickable without onNavigate', () => {
-      renderWithTheme(<EntryForm {...defaultProps} />);
-      expect(screen.getByText('Journal')).toBeDisabled();
-    });
+  it('keeps the topic picker above the writing area', () => {
+    renderWithTheme(
+      <EntryForm {...defaultProps} topicId={7}
+        topics={[{ id: 7, name: 'Recipe', icon: null, color: null }]} />
+    );
+    expect(screen.getByTestId('topic-selector')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Entry location')).not.toBeInTheDocument();
   });
 
   describe('hidden text area for structured topics', () => {
@@ -385,10 +372,11 @@ describe('EntryForm', () => {
     });
 
     it('keeps existing text content visible on structured topics', () => {
-      // (Events are the exception — they keep notes in their own Notes field)
+      // (Name-led topics — events, meetings, meals, recipes… — are the exception:
+      // their text becomes the name field)
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={3}
-          topics={[{ id: 3, name: 'Meeting', icon: null, color: null }]} content="<p>Some notes</p>" />
+          topics={[{ id: 3, name: 'Symptom', icon: null, color: null }]} content="<p>Some notes</p>" />
       );
       expect(screen.getByTestId('editor')).toBeVisible();
     });

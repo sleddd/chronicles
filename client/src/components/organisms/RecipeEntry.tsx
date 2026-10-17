@@ -1,6 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import type { RecipeFieldValues, RecipeIngredient, RecipeStep } from '../../types/fields.js';
 
 /* =============================================================================
@@ -82,6 +84,33 @@ const Title = styled.h1`
   margin: 0 0 14px;
 `;
 
+/* Title with an accent edit (pencil) icon across from it */
+const TitleRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  & > h1 { flex: 1 1 auto; min-width: 0; }
+`;
+
+const EditIconBtn = styled.button`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+  &:hover { background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
 const Description = styled.p`
   font-family: var(--font-sans);
   font-style: italic;
@@ -102,6 +131,7 @@ const StatsRow = styled.div`
 `;
 
 const StatCell = styled.div`
+  position: relative;
   flex: 1;
   min-width: 90px;
   padding: 14px 18px 16px;
@@ -149,6 +179,26 @@ const StepBtn = styled.button`
   color: var(--text-tertiary);
   border-radius: var(--r-md, 1px);
   &:hover { color: var(--text-primary); background: var(--bg-hover); }
+`;
+
+/* Print — a small icon in the top-right corner of the Serves cell */
+const PrintIconBtn = styled.button`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 /* Featured-image slot — sits 20px under the stats bar, 20px above the columns.
@@ -301,60 +351,13 @@ const FreeTextMethod = styled.div`
   padding: 14px 0;
 `;
 
-/* Footer actions */
-const FooterRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 40px;
-  padding-top: 8px;
-`;
 
-const QuietBtn = styled.button`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 10px 12px;
-  transition: color 120ms ease;
-  &:hover { color: var(--text-primary); }
-`;
 
-const DangerQuietBtn = styled(QuietBtn)`
-  &:hover { color: var(--color-danger, #c0392b); }
-`;
 
-const TintBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: var(--color-accent-subtle, transparent);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--r-full, 999px);
-  padding: 10px 20px;
-  cursor: pointer;
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.75; }
-  &:disabled { opacity: 0.4; cursor: default; }
-`;
-
-const SolidBtn = styled(TintBtn)`
-  color: var(--on-accent, #fff);
-  background: var(--color-accent);
-  &:hover { background: var(--color-accent-hover); opacity: 1; }
+/* While printing, the recipe is drawn again into a sheet on <body> that
+   replaces the app on paper (see GlobalStyle: html.print-sheet-open) */
+const PrintSheet = styled.div`
+  display: none;
 `;
 
 /* ── Component ───────────────────────────────────────────────────────────── */
@@ -370,14 +373,25 @@ interface RecipeEntryProps {
   hero?: ReactNode;
   onToggleIngredient: (id: string) => void;
   onEdit: () => void;
-  onDelete?: () => void;
-  onAddToShoppingList?: () => void;
-  onAddToMenu?: () => void;
+  /** Print layout: no footer actions (used for the print sheet) */
+  printView?: boolean;
 }
 
 export function RecipeEntry({
-  values, hero, onToggleIngredient, onEdit, onDelete, onAddToShoppingList, onAddToMenu,
+  values, hero, onToggleIngredient, onEdit, printView,
 }: RecipeEntryProps) {
+  // Print: draw the recipe into the print sheet, print, then take it away
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    if (!printing) return;
+    const html = document.documentElement;
+    html.classList.add('print-sheet-open');
+    const done = () => { html.classList.remove('print-sheet-open'); setPrinting(false); };
+    window.addEventListener('afterprint', done, { once: true });
+    const t = window.setTimeout(() => window.print(), 50); // let the sheet render first
+    return () => { window.clearTimeout(t); window.removeEventListener('afterprint', done); html.classList.remove('print-sheet-open'); };
+  }, [printing]);
+
   const ingredients: RecipeIngredient[] = values.ingredients ?? [];
   const steps: RecipeStep[] = values.steps ?? [];
 
@@ -394,7 +408,14 @@ export function RecipeEntry({
   return (
     <Wrap>
       {values.category && <Kicker>{CATEGORY_LABEL[values.category] ?? values.category}</Kicker>}
-      <Title>{values.recipeName?.trim() || 'Untitled recipe'}</Title>
+      <TitleRow>
+        <Title>{values.recipeName?.trim() || 'Untitled recipe'}</Title>
+        {!printView && (
+          <EditIconBtn type="button" onClick={onEdit} aria-label="Edit recipe" title="Edit recipe" data-print-hide>
+            <Icon name="pencil" size={18} strokeWidth={2} />
+          </EditIconBtn>
+        )}
+      </TitleRow>
       {values.description?.trim() && <Description>{values.description}</Description>}
 
       <StatsRow>
@@ -411,6 +432,11 @@ export function RecipeEntry({
           </StatCell>
         )}
         <StatCell>
+          {!printView && (
+            <PrintIconBtn type="button" aria-label="Print recipe" title="Print" onClick={() => setPrinting(true)} data-print-hide>
+              <MaterialIcon $size={18} aria-hidden="true">print</MaterialIcon>
+            </PrintIconBtn>
+          )}
           <StatLabel>Serves</StatLabel>
           <StatValue>
             <StepBtn type="button" aria-label="Fewer servings" onClick={() => setServings(s => Math.max(1, s - 1))}>
@@ -486,22 +512,12 @@ export function RecipeEntry({
         </div>
       </Columns>
 
-      <FooterRow>
-        {onDelete && <DangerQuietBtn type="button" onClick={onDelete}>Delete recipe</DangerQuietBtn>}
-        <QuietBtn type="button" onClick={onEdit}>Edit recipe</QuietBtn>
-        {onAddToShoppingList && (
-          <TintBtn type="button" onClick={onAddToShoppingList} disabled={ingredients.length === 0}>
-            <Icon name="list" size={13} strokeWidth={2} />
-            Add to shopping list
-          </TintBtn>
-        )}
-        {onAddToMenu && (
-          <SolidBtn type="button" onClick={onAddToMenu}>
-            <Icon name="plus" size={13} strokeWidth={2.5} />
-            Add to menu
-          </SolidBtn>
-        )}
-      </FooterRow>
+      {printing && !printView && createPortal(
+        <PrintSheet id="print-sheet">
+          <RecipeEntry values={values} hero={hero} onToggleIngredient={() => {}} onEdit={() => {}} printView />
+        </PrintSheet>,
+        document.body,
+      )}
     </Wrap>
   );
 }

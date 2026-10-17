@@ -33,6 +33,12 @@ describe('ViewTabs', () => {
     }
   });
 
+  it('leads with Today, then All', () => {
+    renderWithTheme(<ViewTabs />);
+    const tabs = screen.getAllByRole('tab').map(t => t.getAttribute('aria-label'));
+    expect(tabs.slice(0, 2)).toEqual(['Today', 'All entries']);
+  });
+
   it('calls setViewMode when a tab is clicked', () => {
     renderWithTheme(<ViewTabs />);
     fireEvent.click(screen.getByLabelText('Bookmarked entries'));

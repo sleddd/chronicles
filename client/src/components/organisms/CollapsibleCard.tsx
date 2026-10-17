@@ -6,7 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
    hairline and slightly rounded corners; the title row collapses it. */
 const Card = styled.section<{ $outlined?: boolean }>`
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-card, var(--border-subtle));
   /* Outlined variant (Health dashboard): no fill, a brighter outline instead */
   ${({ $outlined }) => $outlined && 'background: transparent; border-color: var(--border-default);'}
   border-radius: var(--r-lg, 6px);
@@ -44,13 +44,13 @@ const Toggle = styled.button`
   font-size: 20px;
   font-weight: 300;
   line-height: 1.2;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
 `;
 
 const Chevron = styled.span<{ $open: boolean }>`
   display: inline-flex;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg);
   transition: transform 150ms ease;
   @media (prefers-reduced-motion: reduce) { transition: none; }
@@ -62,6 +62,14 @@ const ChevronBtn = styled.button`
   background: none;
   border: none;
   cursor: pointer;
+`;
+
+/* Small grey line under the title (e.g. "Oct 12 – 18 · 3 left to get") */
+const Subtitle = styled.p`
+  margin: 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
 /* Clear space under the card's title before its content */
@@ -85,6 +93,8 @@ interface CollapsibleCardProps {
   action?: ReactNode;
   /** No fill, a brighter outline (Health dashboard) */
   outlined?: boolean;
+  /** Small grey line under the title */
+  subtitle?: ReactNode;
   children: ReactNode;
 }
 
@@ -93,7 +103,7 @@ interface CollapsibleCardProps {
  * card in this browser (falls back to `defaultOpen`). The body stays mounted
  * while hidden so form drafts survive collapsing.
  */
-export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, action, outlined, children }: CollapsibleCardProps) {
+export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, action, outlined, subtitle, children }: CollapsibleCardProps) {
   const [open, setOpen] = useState(() => {
     const saved = readCollapsed(storageKey)[id];
     return saved === undefined ? defaultOpen : !saved;
@@ -121,6 +131,7 @@ export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, act
           </>
         )}
       </Heading>
+      {subtitle && <Subtitle>{subtitle}</Subtitle>}
       <Body id={bodyId} hidden={!open}>{children}</Body>
     </Card>
   );

@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
-import { Icon } from '../components/atoms/core/Icon.jsx';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
 import { JournalTemplate, SidePanel, EditorPanel, MobileBackButton } from '../components/templates/JournalTemplate.js';
 import { LoadingCenter } from '../components/atoms/LoadingCenter.js';
@@ -14,6 +13,8 @@ import { ViewTabs } from '../components/organisms/ViewTabs.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
 import { EntryList } from '../components/organisms/EntryList.js';
 import { EntryForm } from '../components/organisms/EntryForm.js';
+import { EntryBreadcrumb } from '../components/molecules/EntryBreadcrumb.js';
+import { getEntryTrail } from '../utils/topicBreadcrumb.js';
 import type { DictationControls } from '../components/organisms/Editor.js';
 import { SearchPanel } from '../components/organisms/SearchPanel.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
@@ -89,8 +90,10 @@ const editorExpandIn = keyframes`
   to   { opacity: 1;   transform: scale(1); }
 `;
 
-/* Wraps the editor panel content; clicking into the entry text expands it
-   to a full-screen focus overlay, collapsed again on save/Escape/close. */
+/* Wraps the editor panel content. Full-screen focus overlay when expanded:
+   in the journal only via the toolbar's Expand button; an entry opened from
+   another view starts expanded (and clicking into its text re-expands it).
+   Collapsed again on save/Escape/close. */
 const EditorFocusWrap = styled.div<{ $expanded?: boolean }>`
   position: relative;
   display: flex;
@@ -107,23 +110,6 @@ const EditorFocusWrap = styled.div<{ $expanded?: boolean }>`
   `}
 `;
 
-const EditorCollapseBtn = styled.button`
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: color 120ms ease;
-  &:hover { color: var(--text-primary); }
-`;
 
 /** Compact change-detection signature for the entry's image set. */
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
@@ -240,6 +226,18 @@ export function JournalView() {
       navigate(location.pathname, { replace: true, state: state.from ? { from: state.from } : null });
     }
   }, [location.state]);
+
+  // The journal opens on today (the Today tab) — unless you arrive to edit an
+  // entry from another view, or a day was already picked (mini calendar)
+  useEffect(() => {
+    const state = location.state as { from?: string; newEntryTopicId?: number; newEntryDate?: string } | null;
+    if (state?.from || state?.newEntryTopicId || state?.newEntryDate) return;
+    const ui = useUIStore.getState();
+    if (ui.viewMode !== 'date') {
+      ui.setSelectedDate(new Date());
+      ui.setViewMode('date');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filterTopic = selectedTopicId != null ? topics.find(t => t.id === selectedTopicId) ?? null : null;
 
@@ -743,75 +741,10 @@ export function JournalView() {
       setEntryImages([]); setFeaturedKey(null); setImageError('');
       setShowMobileEditor(false);
       setEditorExpanded(false);
+      // Edit view (opened from another page): deleting returns there, like Save
+      if (originPath) navigate(originPath);
     } catch (err) { console.error('Delete failed:', err); }
-  }, [selectedEntryId]);
-
-  /** Recipe view: append the recipe's ingredients to the most recent shopping
-   *  list (creating one if none exists), cross-link both entries, then jump
-   *  to the shopping lists view. */
-  const handleAddToShoppingList = useCallback(async (recipe: RecipeFieldValues) => {
-    try {
-      const slTopic = topics.find(t => ['shopping list', 'shopping lists'].includes(t.name.toLowerCase()));
-      if (!slTopic) return;
-      const newItems = (recipe.ingredients ?? [])
-        .filter(i => i.name.trim())
-        .map(i => ({
-          id: crypto.randomUUID(),
-          name: [i.amount?.trim(), i.name.trim()].filter(Boolean).join(' '),
-          category: 'other' as const,
-          checked: false,
-        }));
-      if (newItems.length === 0) return;
-
-      const target = useEntriesStore.getState().decryptedEntries
-        .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === slTopic.id)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-
-      let listId: number;
-      if (target) {
-        const meta = { ...(target.metadata as Record<string, unknown>) };
-        const cf = { ...((meta._customFields as Record<string, unknown>) ?? {}) };
-        cf.items = [...(Array.isArray(cf.items) ? (cf.items as unknown[]) : []), ...newItems];
-        const linked = Array.isArray(cf.linkedRecipeIds) ? (cf.linkedRecipeIds as number[]) : [];
-        if (selectedEntryId && !linked.includes(selectedEntryId)) cf.linkedRecipeIds = [...linked, selectedEntryId];
-        meta._customFields = cf;
-        const encrypted = await encryptPost(target.content, meta);
-        await entriesApi.update(target.id, {
-          contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
-          metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
-          taxonomyIds: [slTopic.id],
-        });
-        updateDecryptedEntry(target.id, { content: target.content, metadata: meta });
-        listId = target.id;
-      } else {
-        const content = '<p>Groceries</p>';
-        const metadata: Record<string, unknown> = {
-          _taxonomyId: slTopic.id,
-          _customFields: { items: newItems, notes: '', linkedRecipeIds: selectedEntryId ? [selectedEntryId] : [] },
-        };
-        const encrypted = await encryptPost(content, metadata);
-        const result = await entriesApi.create({
-          contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
-          metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
-          taxonomyIds: [slTopic.id],
-        });
-        addDecryptedEntry({
-          id: result.id as number, content, metadata, isEncrypted: true,
-          createdAt: new Date(result.createdAt as string),
-          updatedAt: new Date((result.updatedAt || result.createdAt) as string),
-        });
-        listId = result.id as number;
-      }
-
-      // Link the shopping list back onto the recipe (autosave persists it)
-      if (selectedEntryId) {
-        const cur = Array.isArray(customFields.linkedShoppingListIds) ? (customFields.linkedShoppingListIds as number[]) : [];
-        if (!cur.includes(listId)) setCustomFields({ ...customFields, linkedShoppingListIds: [...cur, listId] });
-      }
-
-      navigate('/shopping');
-    } catch (err) { console.error('Add to shopping list failed:', err); }
-  }, [topics, selectedEntryId, customFields, encryptPost, updateDecryptedEntry, addDecryptedEntry, navigate]);
+  }, [selectedEntryId, originPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNew = () => {
     // Discarding a never-saved entry: clean up any already-uploaded R2 objects
@@ -951,9 +884,24 @@ export function JournalView() {
     return (<AppTemplate><LoadingCenter><Spinner size={40} /></LoadingCenter></AppTemplate>);
   }
 
+  // Where the open entry lives (VIEW / SUBVIEW) — shown in the title row; the
+  // lone "Journal" crumb is left out since the title already says it
+  const entryTrail = getEntryTrail(topics.find(t => t.id === editorTopicId)?.name, originPath);
+
   return (
     <AppTemplate transparentContent hideAccentStripe>
       <JournalTemplate
+        headerAside={entryTrail.length > 1 && (
+          <EntryBreadcrumb
+            trail={entryTrail}
+            onNavigate={path => {
+              // The Journal crumb returns to the entry list — on mobile
+              // that means closing the editor so the list is full-width
+              if (path === '/journal') handleMobileBack();
+              navigate(path);
+            }}
+          />
+        )}
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>
             <ViewTabs
@@ -990,14 +938,9 @@ export function JournalView() {
             <MobileBackButton onClick={handleMobileBack} />
             <EditorFocusWrap
               $expanded={editorExpanded}
-              onFocus={e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); }}
-              onPointerDown={e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); }}
+              onFocus={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}
+              onPointerDown={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}
             >
-            {editorExpanded && (
-              <EditorCollapseBtn title={originPath ? 'Close' : 'Collapse'} onClick={collapseEditor} type="button">
-                <Icon name="x" size={18} strokeWidth={2} />
-              </EditorCollapseBtn>
-            )}
             {pendingEntryDate && selectedEntryId === null && (
               <NewEntryDateNote>
                 New entry for {new Date(pendingEntryDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -1017,17 +960,13 @@ export function JournalView() {
               onDelete={selectedEntryId ? handleDelete : undefined}
               onNew={handleNew}
               onBookmark={handleBookmark}
-              originPath={originPath}
-              onNavigate={path => {
-                // The Journal crumb returns to the entry list — on mobile
-                // that means closing the editor so the list is full-width
-                if (path === '/journal') handleMobileBack();
-                navigate(path);
-              }}
               onShare={entryImages.length > 0 && !isRecipeEntry ? undefined : () => setShareOpen(true)}
-              onAddToShoppingList={handleAddToShoppingList}
-              onAddToMenu={() => navigate('/menu')}
               onBack={handleMobileBack}
+              // Plain journal: expand only on request; edit view (from another page) is already full screen
+              expanded={editorExpanded}
+              onToggleExpand={originPath ? undefined : () => (editorExpanded ? collapseEditor() : setEditorExpanded(true))}
+              // Edit view's full screen closes from the toolbar (the journal uses Exit full screen)
+              onClose={originPath && editorExpanded ? collapseEditor : undefined}
               isEditing={selectedEntryId !== null}
               isSaving={isSaving}
               saveStatus={saveStatus}
@@ -1083,6 +1022,8 @@ export function JournalView() {
               setEditorContent(''); setEditorTopicId(null); setCustomFields({});
               setEntryImages([]); setFeaturedKey(null); setImageError('');
               setEditorExpanded(false);
+              // Edit view (opened from another page): deleting returns there, like Save
+              if (originPath) navigate(originPath);
             }).catch(err => console.error('Delete failed:', err));
           }
           setPendingDeleteId(null);

@@ -3,7 +3,6 @@ import { PillButton } from '../atoms/PillButton.js';
 import styled from 'styled-components';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
-import { getEntryTrail } from '../../utils/topicBreadcrumb.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { Editor, type DictationControls } from './Editor.js';
 import { RecipeEntry } from './RecipeEntry.js';
@@ -48,19 +47,28 @@ const FormWrapper = styled.div`
   overflow: hidden;
 `;
 
+/* Editor top bar — continues the journal list's quick-tabs bar (ViewTabs):
+   same 60px height and --border-subtle hairline, edge to edge, so the two
+   read as one seamless bar. Topic picker left, entry actions right. */
+const EdToolRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-sizing: border-box;
+  height: 60px;
+  flex-shrink: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-subtle);
+`;
+
 const EdActions = styled.div`
   display: flex;
   gap: 6px;
   align-items: center;
   margin-left: auto;
-
-  /* Mobile: the action icons wrap under the breadcrumbs, aligned left */
-  @media (max-width: 768px) {
-    flex-basis: 100%;
-    margin-left: 0;
-    justify-content: flex-start;
-    padding-top: 4px;
-  }
+  min-width: 0;
+  overflow-x: auto; /* narrow screens: scroll the icons rather than break the bar */
 `;
 
 const IconBtn = styled.button<{ $active?: boolean; $activeColor?: string; $danger?: boolean }>`
@@ -98,137 +106,10 @@ const EdBody = styled.div`
   max-width: 90%;
   width: 100%;
   margin: 0 auto;
-  padding: var(--s-6, 24px) var(--s-5, 20px) var(--s-4, 16px);
+  padding: var(--s-4, 16px) var(--s-5, 20px) var(--s-4, 16px);
 `;
 
-/* DS date block — large thin numeral + weekday, under a 2px accent bottom rule. */
-const EdDateBlock = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  justify-content: space-between;
-  margin-top: 14px;
-  margin-bottom: 0;
-  padding-top: 26px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid var(--border-default);
-`;
-
-const EdDateContent = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-`;
-
-const EdDateNum = styled.span`
-  font-family: var(--font-display);
-  font-size: 72px;
-  font-weight: 200;
-  line-height: 0.82;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-`;
-
-const EdDateMeta = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-bottom: 8px;
-`;
-
-const EdDateMonth = styled.span`
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-`;
-
-const EdDateDow = styled.span`
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-`;
-
-/* Title-led header — replaces the date block on topics whose entries lead
-   with their own name (events, meetings, quotes, books, music, goals,
-   milestones). Same block metrics as EdDateBlock so the layout doesn't shift. */
-const EdTitleBlock = styled.div`
-  margin-top: 14px;
-  padding-top: 26px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid var(--border-default);
-`;
-
-const EdTitleText = styled.h1`
-  font-family: var(--font-display);
-  font-weight: 300;
-  font-size: clamp(26px, 3.5vw, 38px);
-  line-height: 1.15;
-  color: var(--text-primary);
-  margin: 0;
-`;
-
-const EdTitleDetails = styled.div`
-  margin-top: 10px;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  color: var(--text-secondary);
-`;
-
-const EdQuoteText = styled.blockquote`
-  font-family: var(--font-display);
-  font-weight: 300;
-  font-style: italic;
-  font-size: clamp(22px, 3vw, 30px);
-  line-height: 1.4;
-  color: var(--text-primary);
-  margin: 0;
-`;
-
-/* Breadcrumb at the very top of the entry: VIEW / SUBVIEW / TOPIC on the
-   left, the entry action bar on the right. Ancestors derive from the topic's
-   home view; the topic is the last crumb. */
-/* Top padding is 0 so the row's divider lines up with the sidebar search
-   block's bottom border (EdBody's 24px top pad + 32px icons + 10px = 66px,
-   matching the search block's 16 + 34 + 16). */
-const EdCrumbRow = styled.nav`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 0 0 10px;
-  border-bottom: 1px solid var(--border-subtle);
-`;
-
-const CrumbLink = styled.button`
-  padding: 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  transition: color 120ms ease;
-  &:hover { color: var(--text-primary); }
-  &:disabled { cursor: default; }
-  &:disabled:hover { color: var(--text-tertiary); }
-`;
-
-const CrumbSep = styled.span`
-  font-family: var(--font-label);
-  font-size: 11px;
-  color: var(--text-tertiary);
-`;
-
-/* The topic is the last crumb AND the topic picker — restyle the
+/* The topic picker (left of the action row) — restyle the
    TopicSelector trigger to read as bright tracked-uppercase crumb text,
    keeping its dropdown intact. */
 const CrumbTopic = styled.div`
@@ -261,27 +142,7 @@ const CrumbTopic = styled.div`
 `;
 
 
-const TopicHint = styled.span`
-  font-family: var(--mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-4, ${({ theme }) => theme.colors.textFaint});
-`;
 
-/* Title — the most prominent element */
-const EdTitle = styled.div`
-  font-family: var(--font-display, sans-serif);
-  font-size: 38px;
-  font-weight: 200;
-  letter-spacing: -0.01em;
-  color: var(--text-primary, ${({ theme }) => theme.colors.text});
-  line-height: 1.1;
-  margin: 15px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
 
 /* cf-card: the card that wraps each custom-fields section */
 const CustomFieldsSection = styled.div<{ $noRule?: boolean }>`
@@ -310,25 +171,6 @@ const EditorArea = styled.div<{ $hidden?: boolean }>`
   /* A real writing area even when the entry is one line (journal editor only —
      Quick Entry and cards share Editor and stay compact) */
   .tiptap { min-height: 220px; }
-`;
-
-/* "+ NEW" — accent text button opening a fresh entry, leads the action bar. */
-const NewEntryBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  transition: opacity 120ms ease;
-  &:hover { opacity: 0.7; }
 `;
 
 /* "Done editing — view recipe" — accent text button above the recipe fields. */
@@ -448,16 +290,6 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
 
 /* ── Helpers ── */
 
-function extractTitle(html: string): string {
-  const headingMatch = html.match(/<h[1-4][^>]*>(.*?)<\/h[1-4]>/i);
-  if (headingMatch) {
-    // Sanitized text extraction — never parse raw entry HTML into the live DOM
-    const text = stripHtml(headingMatch[1]).trim();
-    if (text) return text;
-  }
-  return stripHtml(html).trim().slice(0, 80) || '';
-}
-
 const TOPIC_TO_TYPE: Record<string, string> = {
   task: 'task', goal: 'goal', milestone: 'milestone',
   meals: 'food', medication: 'medication', symptom: 'symptom',
@@ -470,7 +302,8 @@ const TOPIC_TO_TYPE: Record<string, string> = {
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
 const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
-  goal: 'goalObjective', milestone: 'milestoneObjective',
+  goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
+  event: 'eventName', meeting: 'meetingName',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -498,12 +331,11 @@ interface EntryFormProps {
   onShare?: () => void;
   onBack?: () => void;
   /** Recipe view actions (injected by JournalView) */
-  onAddToShoppingList?: (values: RecipeFieldValues) => void;
-  onAddToMenu?: () => void;
-  /** Navigate to a breadcrumb ancestor (router injected by the view). */
-  onNavigate?: (path: string) => void;
-  /** The view this entry was opened from (router state) — shown as the breadcrumb so you can go back. */
-  originPath?: string;
+  /** Full-screen editor toggle in the toolbar (journal only — other views open expanded) */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  /** × at the end of the toolbar (edit view: close and go back) */
+  onClose?: () => void;
   isEditing: boolean;
   isSaving: boolean;
   saveStatus: string;
@@ -526,7 +358,7 @@ interface EntryFormProps {
 export function EntryForm({
   entryId, content, onContentChange, topicId, onTopicChange, topics,
   customFields, onCustomFieldsChange, onSave, onAutoSave, onDelete, onNew,
-  onBookmark, onShare, onBack, onNavigate, originPath, onAddToShoppingList, onAddToMenu,
+  onBookmark, onShare, onBack, expanded, onToggleExpand, onClose,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured,
@@ -566,7 +398,6 @@ export function EntryForm({
     customType === 'food' || customType === 'exercise' ? customType : null,
     content, customFields, onCustomFieldsChange,
   );
-  const trail = getEntryTrail(selectedTopic?.name, originPath);
 
   // Build goal options for milestone linking
   const goalOptions = useMemo(() => entries
@@ -751,57 +582,8 @@ export function EntryForm({
     });
   };
 
-  // Entry meta data for datestrip
-  const currentEntry = entryId ? entries.find(e => e.id === entryId) : null;
-  const entryCreatedAt = currentEntry ? new Date(currentEntry.createdAt) : null;
-
-  const entryTitle = entryId ? extractTitle(content) : null;
-
-  // ── Title-led headers ──
-  // These topics swap the date block for the entry's own name (like recipes):
-  // events/meetings (name + one detail line), quotes (the quote, formatted),
-  // books (book name), music (artist), goals and milestones (objective).
   const topicNameLower = selectedTopic?.name.toLowerCase() ?? '';
-  const cfStr = (k: string) => {
-    const v = (customFields as Record<string, unknown>)[k];
-    return typeof v === 'string' ? v.trim() : '';
-  };
-  // Books/Music/Quote keep their data in user-defined custom fields — prefer
-  // the field whose label matches the topic's primary (Book/Artist/Quote),
-  // else the first field with a value
-  const firstUserFieldValue = (preferredLabels: string[]): string => {
-    const preferred = userFieldDefs.find(d => preferredLabels.some(p => d.label.toLowerCase().includes(p)));
-    const ordered = preferred ? [preferred, ...userFieldDefs.filter(d => d !== preferred)] : userFieldDefs;
-    for (const def of ordered) {
-      const v = userFieldValues[def.id];
-      if (typeof v === 'string' && v.trim()) return v.trim();
-      if (typeof v === 'number') return String(v);
-    }
-    return '';
-  };
-
   const isQuoteTopic = topicNameLower === 'quote' || topicNameLower === 'quotes';
-  const headerQuote = isQuoteTopic ? firstUserFieldValue(['quote']) : '';
-  const headerTitle = (() => {
-    switch (topicNameLower) {
-      case 'event': case 'events': return cfStr('eventName');
-      case 'meeting': case 'meetings': return cfStr('meetingName');
-      case 'goal': case 'goals': return cfStr('goalObjective');
-      case 'milestone': case 'milestones': return cfStr('milestoneObjective');
-      case 'book': case 'books': return firstUserFieldValue(['book', 'title', 'name']);
-      case 'music': return firstUserFieldValue(['artist', 'musician', 'band']);
-      default: return '';
-    }
-  })();
-
-  // Strict label match into the user fields (no first-filled fallback)
-  const userFieldByLabel = (labels: string[]): string => {
-    const def = userFieldDefs.find(d => labels.some(p => d.label.toLowerCase().includes(p)));
-    if (!def) return '';
-    const v = userFieldValues[def.id];
-    return typeof v === 'string' ? v.trim() : v != null ? String(v) : '';
-  };
-
   // Books and quotes have no text area: their text is generated from the
   // fields — "Title — Author" / "“Quote” — Author" — so every list, the
   // calendar and search show that line. Text that is only an earlier summary
@@ -843,36 +625,6 @@ export function EntryForm({
     }
   }, [fieldSummary, entryId, summaryLedTopic]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Single detail line under the title: date · time · location for
-  // events/meetings; the author for quotes and books
-  const headerDetails = (() => {
-    if (['quote', 'quotes'].includes(topicNameLower)) {
-      const author = userFieldByLabel(['author', 'by', 'source', 'who']);
-      return author ? `— ${author}` : '';
-    }
-    if (['book', 'books'].includes(topicNameLower)) {
-      return userFieldByLabel(['author', 'by', 'writer']);
-    }
-    if (!['event', 'events', 'meeting', 'meetings'].includes(topicNameLower)) return '';
-    const parts: string[] = [];
-    const sd = cfStr('startDate');
-    if (sd) {
-      const d = new Date(`${sd}T00:00`);
-      if (!isNaN(d.getTime())) {
-        let label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        const st = cfStr('startTime');
-        if (st) {
-          const t = new Date(`${sd}T${st}`);
-          if (!isNaN(t.getTime())) label += ` · ${t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
-        }
-        parts.push(label);
-      }
-    }
-    if (cfStr('location')) parts.push(cfStr('location'));
-    return parts.join(' · ');
-  })();
-
-  const showTitleHeader = (!!headerTitle || !!headerQuote) && !recipeViewMode;
   const editorHidden = editorCollapsed || recipeViewMode || (summaryHidesEditor && !notesExpanded);
 
   const saveStatusNode = (() => {
@@ -895,39 +647,19 @@ export function EntryForm({
 
   return (
     <FormWrapper>
-      {/* Scrollable body */}
-      <ScrollArea>
-        <EdBody>
-          {/* Breadcrumb: view / subview / topic — the topic crumb is the picker */}
-          <EdCrumbRow aria-label="Entry location">
-            {trail.map(crumb => (
-              <Fragment key={crumb.label}>
-                <CrumbLink
-                  type="button"
-                  disabled={!crumb.path || !onNavigate}
-                  onClick={() => crumb.path && onNavigate?.(crumb.path)}
-                >
-                  {crumb.label}
-                </CrumbLink>
-                <CrumbSep>/</CrumbSep>
-              </Fragment>
-            ))}
-            <CrumbTopic>
-              <TopicSelector
-                selectedId={topicId}
-                onSelect={id => onTopicChange(id)}
-                topics={topics}
-                allowNone={false}
-                hideIcon
-              />
-            </CrumbTopic>
-
-            {/* Entry action bar — right of the breadcrumbs on desktop,
-                wrapped underneath and left-aligned on mobile */}
-            <EdActions>
-              <NewEntryBtn type="button" onClick={onNew} title="New entry">
-                + New
-              </NewEntryBtn>
+          {/* Top bar, outside the scroll: topic picker left, entry actions right — same
+          60px height and hairline as the list's quick tabs, so the two read as one bar */}
+          <EdToolRow>
+          <CrumbTopic>
+            <TopicSelector
+              selectedId={topicId}
+              onSelect={id => onTopicChange(id)}
+              topics={topics}
+              allowNone={false}
+              hideIcon
+            />
+          </CrumbTopic>
+          <EdActions aria-label="Entry actions">
               <IconBtn
                 type="button"
                 $active={isFavorite}
@@ -1009,31 +741,29 @@ export function EntryForm({
               >
                 <Icon name="pencil" size={16} strokeWidth={2} />
               </IconBtn>
-            </EdActions>
-          </EdCrumbRow>
-
-          {/* DS date block — big numeral + weekday under a 2px accent rule.
-              Recipes in view mode lead with the recipe title instead. */}
-          {showTitleHeader ? (
-            <EdTitleBlock>
-              {headerQuote
-                ? <EdQuoteText>&ldquo;{headerQuote}&rdquo;</EdQuoteText>
-                : <EdTitleText>{headerTitle}</EdTitleText>}
-              {headerDetails && <EdTitleDetails>{headerDetails}</EdTitleDetails>}
-            </EdTitleBlock>
-          ) : (entryCreatedAt || !entryId) && !recipeViewMode && (
-            <EdDateBlock>
-              <EdDateContent>
-                <EdDateNum>{(entryCreatedAt || new Date()).getDate()}</EdDateNum>
-                <EdDateMeta>
-                  <EdDateDow>{(entryCreatedAt || new Date()).toLocaleDateString('en-US', { weekday: 'long' })}</EdDateDow>
-                  <EdDateMonth>{(entryCreatedAt || new Date()).toLocaleDateString('en-US', { month: 'long' })}</EdDateMonth>
-                </EdDateMeta>
-              </EdDateContent>
-            </EdDateBlock>
-          )}
-
-          {/* Featured image hero — under the date header, above the text area
+              {onToggleExpand && (
+                <IconBtn
+                  type="button"
+                  $active={expanded}
+                  aria-label={expanded ? 'Exit full screen' : 'Expand editor'}
+                  title={expanded ? 'Exit full screen' : 'Expand'}
+                  aria-pressed={!!expanded}
+                  onClick={onToggleExpand}
+                >
+                  <Icon name={expanded ? 'minimize' : 'maximize'} size={16} strokeWidth={2} />
+                </IconBtn>
+              )}
+              {onClose && (
+                <IconBtn type="button" aria-label="Close" title="Close" onClick={onClose}>
+                  <Icon name="x" size={16} strokeWidth={2} />
+                </IconBtn>
+              )}
+          </EdActions>
+          </EdToolRow>
+      {/* Scrollable body */}
+      <ScrollArea>
+        <EdBody>
+          {/* Featured image hero — at the top, above the topic / actions row
               (recipes place it inside their own layout) */}
           {featuredImage && !recipeViewMode && <EntryHeroBanner image={featuredImage} />}
 
@@ -1046,11 +776,9 @@ export function EntryForm({
               hero={featuredImage ? <EntryHeroBanner image={featuredImage} /> : null}
               onToggleIngredient={toggleRecipeIngredient}
               onEdit={() => setRecipeEditing(true)}
-              onDelete={entryId && onDelete ? () => onDelete() : undefined}
-              onAddToShoppingList={onAddToShoppingList ? () => onAddToShoppingList(recipeValues) : undefined}
-              onAddToMenu={onAddToMenu}
             />
           )}
+
 
           {/* Rich text editor — hidden entirely for structured topics */}
           <EditorArea $hidden={editorHidden}>

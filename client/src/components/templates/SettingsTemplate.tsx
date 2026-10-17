@@ -21,10 +21,8 @@ const Layout = styled.div`
   }
 `;
 
-/* Same mobile reveal as ContentTemplate/AppTemplate: the column sits above the
-   fixed nav bar and slides right to expose it. Without this the drawer and its
-   tap-to-close overlay don't line up, so the menu can't be closed. */
-const MainColumn = styled.div<{ $navOpen?: boolean }>`
+/* Main column: fills the width on phones/tablets; the menu drops down over it. */
+const MainColumn = styled.div`
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -35,9 +33,6 @@ const MainColumn = styled.div<{ $navOpen?: boolean }>`
     position: relative;
     z-index: 2;
     background: var(--bg-app);
-    transform: translateX(${({ $navOpen }) => ($navOpen ? '240px' : '0')});
-    transition: transform 220ms ease-out;
-    box-shadow: ${({ $navOpen }) => ($navOpen ? '-2px 0 20px rgba(0,0,0,0.25)' : 'none')};
   }
 `;
 
@@ -76,14 +71,13 @@ interface SettingsTemplateProps {
 export function SettingsTemplate({ title, children }: SettingsTemplateProps) {
   const backgroundImage = useUIStore(s => s.backgroundImage);
   const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
-  const navOpen = useUIStore(s => s.mobileNavOpen);
   return (
     <>
       <Background />
       <div data-print-hide><MobileChrome /></div>
       <Layout>
         <div data-print-hide><Sidebar /></div>
-        <MainColumn $navOpen={navOpen}>
+        <MainColumn>
           <Header />
           <Body $hasBackground={!!backgroundImage} $lightBg={isLightBg}>
             <Content>

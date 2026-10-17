@@ -9,7 +9,8 @@ export type IconName =
   | "quote" | "feather" | "trophy" | "utensils" | "coffee" | "heart" | "pill"
   | "droplet" | "cloud" | "cloud-sun" | "mic" | "type" | "bold" | "italic"
   | "leaf" | "smile" | "activity" | "map-pin" | "check-circle" | "plus-circle" | "moon2"
-  | "mood-1" | "mood-2" | "mood-3" | "mood-4" | "mood-5" | "image";
+  | "mood-1" | "mood-2" | "mood-3" | "mood-4" | "mood-5" | "image"
+  | "maximize" | "minimize";
 
 export interface IconProps {
   /** Icon name from the curated Lucide set. */

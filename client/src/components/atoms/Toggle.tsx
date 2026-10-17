@@ -50,10 +50,11 @@ const LabelText = styled.span`
   color: var(--text-primary);
 `;
 
-export function Toggle({ checked, onChange, label }: ToggleProps) {
+export function Toggle({ checked, onChange, label, ...rest }: ToggleProps) {
   return (
     <Label>
       <HiddenInput
+        aria-label={(rest['aria-label'] as string | undefined) ?? label}
         checked={checked}
         onChange={e => onChange(e.target.checked)}
       />

@@ -3,7 +3,7 @@ import type { WellnessFieldValues } from '../../../types/fields.js';
 export type { WellnessFieldValues } from '../../../types/fields.js';
 
 /* Wellness check-in fields in the journal editor — the same WellnessPanel as
-   the Health dashboard card, with no title above it. */
+   the Health dashboard card, in its compact size, with no title above it. */
 
 interface WellnessFieldsProps {
   values: WellnessFieldValues;
@@ -30,6 +30,7 @@ export function WellnessFields({ values, onChange, cycleTrackingEnabled, onAutoS
       onMood={v => change({ ...values, moodScore: v })}
       onFlow={f => change({ ...values, flowIntensity: f, periodToday: f !== '' })}
       showCycle={!!cycleTrackingEnabled}
+      compact
     />
   );
 }

@@ -151,8 +151,10 @@ vi.mock('@/components/organisms/EntryList', () => ({
 }));
 
 vi.mock('@/components/organisms/EntryForm', () => ({
-  EntryForm: ({ onContentChange, onSave, onNew, topicId }: any) => (
+  EntryForm: ({ onContentChange, onSave, onNew, onClose, onDelete, topicId }: any) => (
     <div data-testid="entry-form" data-topic={String(topicId)}>
+      {onDelete && <button onClick={onDelete}>delete</button>}
+      {onClose && <button title="Close" onClick={onClose}>close</button>}
       <button onClick={onNew}>new</button>
       <button onClick={() => onContentChange('<p>Hi</p>')}>type</button>
       <button onClick={onSave}>save</button>
@@ -286,6 +288,25 @@ describe('JournalView (edit view — opened from another view)', () => {
     renderWithTheme(<JournalView />);
     fireEvent.click(screen.getByTitle('Close'));
     expect(nav).toHaveBeenCalledWith('/topics/4');
+  });
+
+  it('returns to the originating view after deleting the entry', async () => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/topics/4' }, key: 'k6' } as any);
+    vi.mocked(entriesApi.delete).mockResolvedValue(undefined as any);
+    const entry = { id: 7, content: '<p>Toast</p>', metadata: {}, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() };
+    entriesState.decryptedEntries = [entry];
+    (uiState as any).selectedEntryId = 7;
+    try {
+      renderWithTheme(<JournalView />);
+      fireEvent.click(screen.getByText('delete'));
+      await waitFor(() => expect(nav).toHaveBeenCalledWith('/topics/4'));
+    } finally {
+      entriesState.decryptedEntries = [];
+      (uiState as any).selectedEntryId = null;
+    }
   });
 
   it('returns to the originating view on save', async () => {

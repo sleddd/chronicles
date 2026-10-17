@@ -40,21 +40,20 @@ describe('Sidebar', () => {
 
   it('renders every nav destination', () => {
     renderAt();
-    for (const title of ['Dashboard', 'Journal', 'Topics', 'Health', 'Roadmap', 'Calendar', 'From the Kitchen', 'Settings']) {
+    for (const title of ['Dashboard', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByTitle(title)).toBeInTheDocument();
     }
   });
 
-  it('navigates and closes the mobile drawer when a nav item is clicked', () => {
+  it('navigates when a nav item is clicked', () => {
     renderAt();
     fireEvent.click(screen.getByTitle('Journal'));
     expect(mockNavigate).toHaveBeenCalledWith('/journal');
-    expect(mockSetMobileNavOpen).toHaveBeenCalledWith(false);
   });
 
   it('routes the Kitchen and Health icons to their dashboards', () => {
     renderAt();
-    fireEvent.click(screen.getByTitle('From the Kitchen'));
+    fireEvent.click(screen.getByTitle('Kitchen'));
     fireEvent.click(screen.getByTitle('Health'));
     expect(mockNavigate).toHaveBeenCalledWith('/kitchen');
     expect(mockNavigate).toHaveBeenCalledWith('/health');

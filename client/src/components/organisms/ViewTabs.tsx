@@ -14,8 +14,8 @@ type TabEntry = {
 };
 
 const tabs: TabEntry[] = [
-  { value: 'all',       icon: 'list',            label: 'All',       title: 'All entries' },
   { value: 'date',      icon: 'wb_sunny',        label: 'Today',     title: 'Today',        isToday: true },
+  { value: 'all',       icon: 'list',            label: 'All',       title: 'All entries' },
   { value: 'favorites', icon: 'bookmark',        label: 'Bookmarks', title: 'Bookmarked entries' },
   { value: 'search',    icon: 'search',          label: 'Search',    title: 'Search entries' },
   { value: 'all',       icon: 'add',             label: 'New',       title: 'New entry',    isNewEntry: true },
