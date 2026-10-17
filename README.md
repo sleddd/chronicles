@@ -313,4 +313,6 @@ npm run test:coverage    # Run tests with coverage
 
 ## License
 
-© 2025/2026 Claudette Raynor. All rights reserved.You may not use this for any commercial purpose. You can download this application for personal use only, but you may not modify it.
+© 2025–2026 Claudette Raynor. All rights reserved.
+
+You may download and use this application for personal use only. Commercial use, redistribution, and modification of any kind are strictly prohibited.
