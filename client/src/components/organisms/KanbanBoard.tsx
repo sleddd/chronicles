@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable,
+  DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor, useDroppable,
   useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -38,10 +38,17 @@ export interface BoardColumn<K extends string> {
 
 /* ── Styles ── */
 
+/* Columns always sit side by side; narrow screens scroll the row sideways
+   (snapping to a column, the next one peeking in) — never stacked */
 const Scroll = styled.div`
   overflow-x: auto;
   margin: 0 -4px;
   padding: 20px 4px 8px;
+  -webkit-overflow-scrolling: touch;
+  @media (max-width: 768px) {
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0 4px;
+  }
 `;
 
 const Board = styled.div<{ $cols: number }>`
@@ -49,7 +56,11 @@ const Board = styled.div<{ $cols: number }>`
   grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(250px, 1fr));
   gap: 16px;
   align-items: start;
-  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(${({ $cols }) => $cols}, min(80vw, 300px));
+    gap: 12px;
+    & > * { scroll-snap-align: start; }
+  }
 `;
 
 const Column = styled.section<{ $over?: boolean }>`
@@ -128,6 +139,9 @@ const Card = styled.article<{ $dragging?: boolean }>`
   cursor: pointer;
   opacity: ${({ $dragging }) => ($dragging ? 0.5 : 1)};
   touch-action: manipulation;
+  /* Press-and-hold picks the card up — no iOS callout or text selection */
+  -webkit-touch-callout: none;
+  user-select: none;
   transition: border-color 120ms;
   &:hover { border-color: var(--border-strong); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -283,8 +297,11 @@ interface KanbanBoardProps<K extends string> {
 }
 
 export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, onReorder, onAdd }: KanbanBoardProps<K>) {
+  // Mouse drags after a small move; on touch a card is picked up by a short
+  // press-and-hold, so a quick swipe still scrolls the board sideways
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 

@@ -280,11 +280,6 @@ function hexToRgbParts(hex: string): [number, number, number] {
   ];
 }
 
-function isLightHex(hex: string): boolean {
-  const [r, g, b] = hexToRgbParts(hex);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.75;
-}
-
 function deriveAccentStroke(hex: string): string {
   const [r, g, b] = hexToRgbParts(hex);
   return `rgb(${Math.round(r * 0.75)},${Math.round(g * 0.75)},${Math.round(b * 0.75)})`;
@@ -300,6 +295,19 @@ function mix(hex: string, target: number, amt: number): string {
   const [r, g, b] = hexToRgbParts(hex);
   const m = (c: number) => Math.round(c + (target - c) * amt);
   return `rgb(${m(r)},${m(g)},${m(b)})`;
+}
+
+function mixHex(hex: string, target: number, amt: number): string {
+  const [r, g, b] = hexToRgbParts(hex);
+  const m = (c: number) => Math.round(c + (target - c) * amt).toString(16).padStart(2, '0');
+  return `#${m(r)}${m(g)}${m(b)}`;
+}
+
+/** White text on an accent fill, unless the fill is light enough that white
+    fades (< 2:1 — yellows, pastels, light greys); then near-black. The muted
+    mid-tone presets (teal, coral, blue…) keep white. */
+function onAccentFor(fill: string): string {
+  return contrast('#ffffff', fill) >= 2 ? '#ffffff' : '#18181c';
 }
 
 /* WCAG relative luminance / contrast of two hex colours. */
@@ -407,7 +415,9 @@ export function App() {
 
     /* DS interactive accent tokens. In dark, brighten one notch (use the
        lighter 400/300 steps) for legibility on the charcoal canvas. */
-    const onAccent = isLightHex(color) ? '#18181c' : '#ffffff';
+    // Text on a solid accent fill: white unless the fill is too light for it
+    // (judged on the fill actually shown — dark mode lightens the accent)
+    const onAccent = onAccentFor(isDark ? mixHex(color, 255, 0.22) : color);
     root.style.setProperty('--color-accent',        isDark ? mix(color, 255, 0.22) : color);
     root.style.setProperty('--color-accent-hover',  isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.85));
     root.style.setProperty('--color-accent-active', isDark ? mix(color, 255, 0.58) : deriveDarker(color, 0.70));

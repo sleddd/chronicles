@@ -22,3 +22,21 @@ describe('searchAndSort', () => {
     expect(run('nothing', 'newest')).toEqual([]);
   });
 });
+
+import { isSameView, parseSavedViews, type PlanViewState } from '@/utils/planningView';
+
+describe('saved planning views', () => {
+  const base: PlanViewState = { tab: 'tasks', view: 'board', query: '', sort: 'newest', goalId: 4, milestoneId: null, status: 'in_progress' };
+
+  it('recognises the current setup as a saved view', () => {
+    expect(isSameView(base, { ...base, query: '  ' })).toBe(true);
+    expect(isSameView(base, { ...base, status: 'done' })).toBe(false);
+    expect(isSameView(base, { ...base, tab: 'todos' })).toBe(false);
+  });
+
+  it('keeps only well-formed saved views from the setting', () => {
+    const good = { id: 'a', name: 'Launch', ...base };
+    expect(parseSavedViews([good, { id: 1 }, null, { id: 'b', name: 'x', tab: 'nope' }])).toEqual([good]);
+    expect(parseSavedViews('junk')).toEqual([]);
+  });
+});

@@ -205,8 +205,9 @@ const Chip = styled.button<{ $active: boolean }>`
   border-radius: 999px;
   cursor: pointer;
   border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-default)')};
-  background: ${({ $active }) => ($active ? 'var(--color-accent-subtle)' : 'transparent')};
-  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-tertiary)')};
+  /* Chosen = solid accent with --on-accent text (white, or dark on a light accent); never a see-through tint */
+  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
+  color: ${({ $active }) => ($active ? 'var(--on-accent, #ffffff)' : 'var(--text-tertiary)')};
   transition: border-color 120ms, color 120ms;
   &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-strong)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }

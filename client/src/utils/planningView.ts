@@ -44,3 +44,40 @@ export function searchAndSort<T>(items: T[], row: (t: T) => PlanRow, query: stri
   };
   return [...matched].sort(cmp[sort]).map(x => x.item);
 }
+
+/* ── Saved views: a named Planning setup to reopen in one click ── */
+
+export type PlanTabKey = 'goals' | 'milestones' | 'tasks' | 'todos';
+
+export interface SavedPlanView {
+  id: string;
+  name: string;
+  tab: PlanTabKey;
+  view: 'board' | 'list';
+  query: string;
+  sort: PlanSort;
+  goalId: number | null;
+  milestoneId: number | null;
+  status: '' | 'todo' | 'in_progress' | 'done';
+}
+
+export type PlanViewState = Omit<SavedPlanView, 'id' | 'name'>;
+
+export const PLAN_TAB_PATHS: Record<PlanTabKey, string> = {
+  goals: '/goals', milestones: '/goals/milestones', tasks: '/goals/tasks', todos: '/goals/todos',
+};
+
+/** True when the current setup is exactly the saved one */
+export function isSameView(a: PlanViewState, b: PlanViewState): boolean {
+  return a.tab === b.tab && a.view === b.view && a.query.trim() === b.query.trim() && a.sort === b.sort
+    && a.goalId === b.goalId && a.milestoneId === b.milestoneId && a.status === b.status;
+}
+
+/** Keep only well-formed saved views (the setting is user data from the server) */
+export function parseSavedViews(raw: unknown): SavedPlanView[] {
+  if (!Array.isArray(raw)) return [];
+  const tabs = Object.keys(PLAN_TAB_PATHS);
+  return raw.filter((v): v is SavedPlanView =>
+    !!v && typeof v === 'object' && typeof (v as SavedPlanView).id === 'string'
+    && typeof (v as SavedPlanView).name === 'string' && tabs.includes((v as SavedPlanView).tab));
+}

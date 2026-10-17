@@ -10,7 +10,7 @@ import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encodin
  * before this was introduced are still plaintext on the server: `openPrivateSettings`
  * reads them as-is and `migratePrivateSettings` re-saves them sealed.
  */
-export const PRIVATE_SETTING_KEYS = ['displayName', 'weatherCity', 'timezone', 'plannerFilters', 'topicCustomFields'] as const;
+export const PRIVATE_SETTING_KEYS = ['displayName', 'weatherCity', 'timezone', 'plannerFilters', 'topicCustomFields', 'planningViews'] as const;
 export type PrivateSettingKey = typeof PRIVATE_SETTING_KEYS[number];
 
 export interface SealedValue { ciphertext: string; iv: string }

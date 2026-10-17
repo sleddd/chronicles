@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { screen, fireEvent } from '@testing-library/react';
 import { GoalsView } from '@/views/GoalsView';
 import { renderWithTheme } from '../testUtils';
 import { useInitializeData } from '@/hooks/useInitializeData';
@@ -177,6 +177,27 @@ describe('GoalsView', () => {
   it('shows empty state when no goals exist', () => {
     renderWithTheme(<GoalsView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+});
+
+describe('GoalsView (phone)', () => {
+  beforeEach(() => {
+    window.matchMedia = vi.fn().mockImplementation((q: string) => ({
+      matches: q.includes('max-width: 768px'), media: q,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })) as any;
+  });
+  afterEach(() => { delete (window as any).matchMedia; });
+
+  it('folds search and sort into a collapsible Filters panel', () => {
+    renderWithTheme(<GoalsView />);
+    const toggle = screen.getByRole('button', { name: /filters/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Search goals')).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Search goals')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sort')).toBeInTheDocument();
   });
 });
 

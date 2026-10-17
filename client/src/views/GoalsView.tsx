@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
@@ -8,7 +8,12 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
-import { searchAndSort, PLAN_SORTS, type PlanSort, type PlanRow } from '../utils/planningView.js';
+import {
+  searchAndSort, PLAN_SORTS, PLAN_TAB_PATHS, isSameView, parseSavedViews,
+  type PlanSort, type PlanRow, type SavedPlanView, type PlanViewState,
+} from '../utils/planningView.js';
+import { usePrivateSettings } from '../services/privateSettings.js';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { KanbanBoard, type BoardItem } from '../components/organisms/KanbanBoard.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
@@ -89,8 +94,8 @@ const HeadActions = styled.div`
 `;
 
 /* Search the tab you're in — an outlined pill with a search icon */
-const SearchBox = styled.label`
-  display: inline-flex;
+const SearchBox = styled.label<{ $wide?: boolean }>`
+  display: ${({ $wide }) => ($wide ? 'flex' : 'inline-flex')};
   align-items: center;
   gap: 8px;
   height: 38px;
@@ -100,7 +105,8 @@ const SearchBox = styled.label`
   color: var(--text-tertiary);
   &:focus-within { border-color: var(--color-accent); }
   input {
-    width: 180px;
+    width: ${({ $wide }) => ($wide ? 'auto' : '180px')};
+    flex: ${({ $wide }) => ($wide ? 1 : 'none')};
     min-width: 0;
     padding: 0;
     border: none;
@@ -110,8 +116,50 @@ const SearchBox = styled.label`
     font-size: 14px;
     color: var(--text-primary);
     &::placeholder { color: var(--text-disabled); }
-    @media (max-width: 480px) { width: 120px; }
   }
+`;
+
+/* Phones/tablets: search, sort, filters and saved views fold into one
+   "Filters" button (with a count of what's set) that opens a panel */
+const FiltersToggle = styled.button<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px 0 12px;
+  border: 1px solid ${({ $open }) => ($open ? 'var(--border-strong)' : 'var(--border-default)')};
+  border-radius: 999px;
+  background: ${({ $open }) => ($open ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const CountBadge = styled.span`
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--on-accent, #ffffff);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+`;
+
+const FilterPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg, 6px);
+  & > div { padding-top: 0; }
 `;
 
 /* Sort the tab you're in — a native select dressed as an outlined pill */
@@ -137,6 +185,82 @@ const SortBox = styled.label`
     color: var(--text-primary);
     cursor: pointer;
   }
+`;
+
+/* Tasks / Todos filters: Goal, Milestone, Status pills + Clear, above the board/list */
+const FilterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 16px;
+`;
+
+const FilterSelect = styled.label<{ $set: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  max-width: 100%;
+  /* Chosen = solid accent with --on-accent text (white, or dark on a light accent); never a see-through tint */
+  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent)' : 'var(--border-default)')};
+  background: ${({ $set }) => ($set ? 'var(--color-accent)' : 'transparent')};
+  border-radius: 999px;
+  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  select {
+    height: 100%;
+    max-width: 260px;
+    padding: 0 14px;
+    border: none;
+    outline: none;
+    background: transparent;
+    appearance: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: ${({ $set }) => ($set ? 'var(--on-accent, #ffffff)' : 'var(--text-secondary)')};
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  /* The open menu keeps normal colours */
+  option { color: var(--text-primary); background: var(--bg-surface); }
+`;
+
+/* Name a new saved view in place (no pop-up prompts) */
+const SaveForm = styled.form`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  input {
+    height: 34px;
+    width: 180px;
+    padding: 0 14px;
+    border: 1px solid var(--color-accent);
+    border-radius: 999px;
+    background: transparent;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    &::placeholder { color: var(--text-disabled); }
+  }
+`;
+
+/* Pushes Save / Delete to the end of the row */
+const RowEnd = styled.span`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const ClearBtn = styled.button`
+  padding: 0 4px;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); text-decoration: underline; }
 `;
 
 const NoMatch = styled.p`
@@ -443,12 +567,111 @@ export function GoalsView() {
   /* ── Search + sort, for the tab you're in ── */
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<PlanSort>('newest');
-  useEffect(() => { setQuery(''); }, [tab]);
+  // A saved view opened on another tab is applied once that tab is showing
+  const pendingView = useRef<SavedPlanView | null>(null);
+
+  /* ── Tasks / Todos filters: by goal, milestone and/or status ── */
+  const [goalFilter, setGoalFilter] = useState<number | null>(null);
+  const [milestoneFilter, setMilestoneFilter] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('');
+  const milestoneGoal = useMemo(() => new Map(milestones.map(m => [m.id, m.parentGoalId])), [milestones]);
+  // Milestones to pick from: those under the chosen goal, else all
+  const milestoneChoices = useMemo(
+    () => (goalFilter ? milestones.filter(m => m.parentGoalId === goalFilter) : milestones),
+    [milestones, goalFilter],
+  );
+  const pickGoal = (id: number | null) => {
+    setGoalFilter(id);
+    // A milestone under another goal no longer fits
+    if (id && milestoneFilter && milestoneGoal.get(milestoneFilter) !== id) setMilestoneFilter(null);
+  };
+  // New tasks started from a filtered board join the chosen milestone / goal
+  const filterLink: Record<string, unknown> = milestoneFilter
+    ? { parentMilestoneId: milestoneFilter, parentGoalId: milestoneGoal.get(milestoneFilter) ?? goalFilter ?? null }
+    : goalFilter ? { parentGoalId: goalFilter } : {};
+  const clearFilters = () => { setGoalFilter(null); setMilestoneFilter(null); setStatusFilter(''); };
+  const filtersSet = (tab === 'tasks' && (!!goalFilter || !!milestoneFilter)) || !!statusFilter;
+  const taskPasses = (t: TaskEntryData) => {
+    if (statusFilter && taskStatusOf(t.customFields) !== statusFilter) return false;
+    if (tab !== 'tasks') return true; // todos have no goal or milestone
+    if (milestoneFilter && t.parentMilestoneId !== milestoneFilter) return false;
+    if (goalFilter) {
+      const goalOf = t.parentGoalId ?? (t.parentMilestoneId ? milestoneGoal.get(t.parentMilestoneId) ?? null : null);
+      if (goalOf !== goalFilter) return false;
+    }
+    return true;
+  };
   const isTaskTab = tab === 'tasks' || tab === 'todos';
+  const compact = useMediaQuery('(max-width: 768px)');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => {
+    const p = pendingView.current;
+    if (p && p.tab === tab) { pendingView.current = null; applyView(p); }
+    else setQuery('');
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const sortOptions = PLAN_SORTS.filter(o => o.value !== 'priority' || isTaskTab);
   const sort: PlanSort = sortOptions.some(o => o.value === sortBy) ? sortBy : 'newest';
+  /* ── Saved views (encrypted private setting `planningViews`) ── */
+  const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
+  const [savedViews, setSavedViews] = useState<SavedPlanView[]>([]);
+  const [naming, setNaming] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    loadPrivateSettings().then(map => setSavedViews(parseSavedViews(map.planningViews))).catch(() => {});
+  }, [loadPrivateSettings]);
+  const persistViews = (next: SavedPlanView[]) => {
+    setSavedViews(next);
+    savePrivateSetting('planningViews', next).catch(() => {});
+  };
+
+  const current: PlanViewState = {
+    tab, view, query: query.trim(), sort,
+    goalId: tab === 'tasks' ? goalFilter : null,
+    milestoneId: tab === 'tasks' ? milestoneFilter : null,
+    status: isTaskTab ? statusFilter : '',
+  };
+  // How much is set — shown on the phone "Filters" button
+  const activeCount = (current.query ? 1 : 0) + (sort !== 'newest' ? 1 : 0)
+    + (current.goalId ? 1 : 0) + (current.milestoneId ? 1 : 0) + (current.status ? 1 : 0);
+  const showTaskFilters = isTaskTab && (tab === 'tasks' ? linkedTasks.length > 0 : todos.length > 0);
+  const activeSaved = savedViews.find(v => isSameView(v, current)) ?? null;
+  const hasSetup = !!current.query || sort !== 'newest' || !!current.goalId || !!current.milestoneId || !!current.status;
+
+  const applyView = (v: SavedPlanView) => {
+    setQuery(v.query);
+    setSortBy(v.sort);
+    setGoalFilter(v.goalId);
+    setMilestoneFilter(v.milestoneId);
+    setStatusFilter(v.status);
+    const nextViews = { ...views, [v.tab]: v.view };
+    setViews(nextViews);
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(nextViews)); } catch { /* storage unavailable */ }
+  };
+  const openSaved = (id: string) => {
+    const v = savedViews.find(x => x.id === id);
+    if (!v) return;
+    setNaming(false); setConfirmDelete(false);
+    if (v.tab === tab) applyView(v);
+    else { pendingView.current = v; navigate(PLAN_TAB_PATHS[v.tab]); }
+  };
+  const saveCurrent = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!name) return;
+    const others = savedViews.filter(v => v.name.toLowerCase() !== name.toLowerCase()); // same name = replace
+    persistViews([...others, { id: crypto.randomUUID(), name, ...current }]);
+    setNaming(false); setNewName('');
+  };
+  const deleteActive = () => {
+    if (!activeSaved) return;
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    persistViews(savedViews.filter(v => v.id !== activeSaved.id));
+    setConfirmDelete(false);
+  };
+
   // Dragging to reorder only makes sense in the board's own order
-  const refined = !!query.trim() || sort !== 'newest';
+  const refined = !!query.trim() || sort !== 'newest' || ((tab === 'tasks' || tab === 'todos') && filtersSet);
 
   /* ── Board cards ── */
   const milestoneTitles = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
@@ -508,8 +731,8 @@ export function GoalsView() {
 
   const shownGoals = searchAndSort(orderedGoals, goalRow, query, sort);
   const shownMilestones = searchAndSort(orderedMilestones, milestoneRow, query, sort);
-  const shownTasks = searchAndSort(sortedTasks, taskRow, query, sort);
-  const shownTodos = searchAndSort(sortedTodos, taskRow, query, sort);
+  const shownTasks = searchAndSort(sortedTasks.filter(taskPasses), taskRow, query, sort);
+  const shownTodos = searchAndSort(sortedTodos.filter(taskPasses), taskRow, query, sort);
   const shownCount = tab === 'goals' ? shownGoals.length : tab === 'milestones' ? shownMilestones.length
     : tab === 'tasks' ? shownTasks.length : shownTodos.length;
 
@@ -519,9 +742,10 @@ export function GoalsView() {
   const milestoneColumns = ROADMAP_COLUMNS.map(c => ({
     ...c, items: shownMilestones.filter(m => normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === c.key).map(milestoneItem),
   }));
-  const taskColumns = (list: TaskEntryData[]) => TASK_COLUMNS.map(c => ({
-    ...c, items: list.filter(t => taskStatusOf(t.customFields) === c.key).map(taskItem),
-  }));
+  // A status filter shows just that column
+  const taskColumns = (list: TaskEntryData[]) => TASK_COLUMNS
+    .filter(c => !statusFilter || c.key === statusFilter)
+    .map(c => ({ ...c, items: list.filter(t => taskStatusOf(t.customFields) === c.key).map(taskItem) }));
 
   /* ── List rows (same rows as every other list) ── */
   const renderRows = (items: { id: number; taxonomyId: number; isCompleted?: boolean }[], mixed: boolean) => (
@@ -555,6 +779,74 @@ export function GoalsView() {
 
   const addIn = (fields: Record<string, unknown>) => () => { if (activeAddTopic) newEntry(activeAddTopic.id, fields); };
 
+  const searchEl = (
+    <SearchBox $wide={compact}>
+      <MaterialIcon $size={18} aria-hidden="true">search</MaterialIcon>
+      <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+        placeholder={`Search ${tab}`} aria-label={`Search ${tab}`} />
+    </SearchBox>
+  );
+  const sortEl = (
+    <SortBox>
+      <MaterialIcon $size={18} aria-hidden="true">sort</MaterialIcon>
+      <select value={sort} onChange={e => setSortBy(e.target.value as PlanSort)} aria-label="Sort">
+        {sortOptions.map(o => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
+      </select>
+    </SortBox>
+  );
+  const showRow = savedViews.length > 0 || hasSetup || naming || showTaskFilters;
+  const rowContent = (<>
+              {savedViews.length > 0 && (
+                <FilterSelect $set={!!activeSaved}>
+                  <select aria-label="Saved views" value={activeSaved?.id ?? ''} onChange={e => e.target.value && openSaved(e.target.value)}>
+                    <option value="">Saved views</option>
+                    {savedViews.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                </FilterSelect>
+              )}
+              {showTaskFilters && (<>
+              {tab === 'tasks' && (
+                <>
+                  <FilterSelect $set={!!goalFilter}>
+                    <select aria-label="Goal" value={goalFilter ?? ''} onChange={e => pickGoal(e.target.value ? Number(e.target.value) : null)}>
+                      <option value="">Goal: All</option>
+                      {goals.map(g => <option key={g.id} value={g.id}>Goal: {g.title}</option>)}
+                    </select>
+                  </FilterSelect>
+                  <FilterSelect $set={!!milestoneFilter}>
+                    <select aria-label="Milestone" value={milestoneFilter ?? ''} onChange={e => setMilestoneFilter(e.target.value ? Number(e.target.value) : null)}>
+                      <option value="">Milestone: All</option>
+                      {milestoneChoices.map(m => <option key={m.id} value={m.id}>Milestone: {m.title}</option>)}
+                    </select>
+                  </FilterSelect>
+                </>
+              )}
+              <FilterSelect $set={!!statusFilter}>
+                <select aria-label="Status" value={statusFilter} onChange={e => setStatusFilter(e.target.value as TaskStatus | '')}>
+                  <option value="">Status: All</option>
+                  {TASK_COLUMNS.map(c => <option key={c.key} value={c.key}>Status: {c.label}</option>)}
+                </select>
+              </FilterSelect>
+              {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
+              </>)}
+              <RowEnd>
+                {naming ? (
+                  <SaveForm onSubmit={saveCurrent}>
+                    <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                      placeholder="Name this view" aria-label="Saved view name" maxLength={60} />
+                    <ClearBtn type="submit" disabled={!newName.trim()}>Save</ClearBtn>
+                    <ClearBtn type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</ClearBtn>
+                  </SaveForm>
+                ) : activeSaved ? (
+                  <ClearBtn type="button" onClick={deleteActive} onBlur={() => setConfirmDelete(false)}>
+                    {confirmDelete ? `Delete “${activeSaved.name}”?` : 'Delete view'}
+                  </ClearBtn>
+                ) : hasSetup ? (
+                  <ClearBtn type="button" onClick={() => { setNaming(true); setConfirmDelete(false); }}>Save view</ClearBtn>
+                ) : null}
+              </RowEnd>
+</>);
+
   return (
     <ContentTemplate>
       <Page>
@@ -562,17 +854,14 @@ export function GoalsView() {
           <Head>
             <Title>Planning</Title>
             <HeadActions>
-              <SearchBox>
-                <MaterialIcon $size={18} aria-hidden="true">search</MaterialIcon>
-                <input type="search" value={query} onChange={e => setQuery(e.target.value)}
-                  placeholder={`Search ${tab}`} aria-label={`Search ${tab}`} />
-              </SearchBox>
-              <SortBox>
-                <MaterialIcon $size={18} aria-hidden="true">sort</MaterialIcon>
-                <select value={sort} onChange={e => setSortBy(e.target.value as PlanSort)} aria-label="Sort">
-                  {sortOptions.map(o => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
-                </select>
-              </SortBox>
+              {compact ? (
+                <FiltersToggle type="button" $open={filtersOpen} aria-expanded={filtersOpen} aria-controls="planning-filters"
+                  onClick={() => setFiltersOpen(o => !o)}>
+                  <MaterialIcon $size={18} aria-hidden="true">tune</MaterialIcon>
+                  Filters
+                  {activeCount > 0 && <CountBadge aria-label={`${activeCount} set`}>{activeCount}</CountBadge>}
+                </FiltersToggle>
+              ) : (<>{searchEl}{sortEl}</>)}
               <ViewSwitch role="group" aria-label="View">
                 <ViewBtn type="button" $active={view === 'list'} aria-pressed={view === 'list'} aria-label="List view" title="List" onClick={() => setView('list')}>
                   <MaterialIcon $size={20}>list</MaterialIcon>
@@ -591,9 +880,20 @@ export function GoalsView() {
 
           <TabsRow><PlanningTabBar /></TabsRow>
 
+          {!compact && showRow && <FilterRow role="group" aria-label={`Filter ${tab}`}>{rowContent}</FilterRow>}
+          {compact && filtersOpen && (
+            <FilterPanel id="planning-filters">
+              {searchEl}
+              {sortEl}
+              {showRow && <FilterRow role="group" aria-label={`Filter ${tab}`}>{rowContent}</FilterRow>}
+            </FilterPanel>
+          )}
+
           <Body>
-            {refined && shownCount === 0 && (view === 'list' || !!query.trim()) && (
-              <NoMatch role="status">Nothing in {tab} matches “{query.trim()}”.</NoMatch>
+            {refined && shownCount === 0 && (view === 'list' || !!query.trim() || filtersSet) && (
+              <NoMatch role="status">
+                {query.trim() ? <>Nothing in {tab} matches “{query.trim()}”.</> : <>No {tab} match these filters.</>}
+              </NoMatch>
             )}
             {tab === 'goals' && (orderedGoals.length === 0
               ? <EmptyState message="No goals found." submessage="Create a journal entry with the Goal topic to get started." />
@@ -616,7 +916,7 @@ export function GoalsView() {
               : view === 'board'
                 ? <KanbanBoard columns={taskColumns(shownTasks)} noun="task" onOpen={openInJournal}
                     onMove={persistTaskStatus}
-                    onAdd={key => addIn({ isAutoMigrating: true, ...taskFieldsForStatus(key) })()} />
+                    onAdd={key => addIn({ isAutoMigrating: true, ...taskFieldsForStatus(key), ...filterLink })()} />
                 : renderRows(shownTasks, tasksMixed))}
 
             {tab === 'todos' && (todos.length === 0
