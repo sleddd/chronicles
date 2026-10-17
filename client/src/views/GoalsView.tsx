@@ -29,6 +29,7 @@ import type { GoalEntry, MilestoneEntryData, TaskEntryData, RoadmapStatus } from
 import { ROADMAP_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus, milestoneFieldsForStatus } from '../types/goals.js';
 import { useDroppable } from '@dnd-kit/core';
 import { hasMixedTopics } from '../utils/mixedTopics.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Layout (mirrors Health) ── */
 
@@ -168,7 +169,7 @@ export function GoalsView() {
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const removeEntry = useEntriesStore(s => s.removeEntry);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
   const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
   const navigate = useNavigate();

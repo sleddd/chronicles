@@ -5,6 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { SearchInput } from '../molecules/SearchInput.js';
 import { TopicIcon as TopicGlyph } from '../molecules/IconPicker.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 const dropdownSlide = keyframes`
   from { opacity: 0; transform: translateY(-8px) scaleY(0.95); }
@@ -161,7 +162,7 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, allowNone 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const selected = topics.find(t => t.id === selectedId);
 

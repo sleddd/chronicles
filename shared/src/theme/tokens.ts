@@ -106,12 +106,12 @@ export const lightTheme = {
 
     border: '#e4e6ec',
     borderSoft: '#e4e6ec',
-    borderFocus: '#5b53d6',
-    accentStroke: '#3c36a0',
+    borderFocus: '#34a5a2',
+    accentStroke: '#26807d',
 
-    accent: '#5b53d6',
-    accentHover: '#4a43c0',
-    accentLight: 'rgba(91, 83, 214, 0.10)',
+    accent: '#34a5a2',
+    accentHover: '#2b8a87',
+    accentLight: 'rgba(52, 165, 162, 0.10)',
 
     danger: '#d8483f',
     dangerHover: '#b83a32',
@@ -124,7 +124,7 @@ export const lightTheme = {
     sm: 'none',
     md: '0 1px 2px rgba(20, 20, 30, 0.04)',
     lg: '0 8px 28px rgba(20, 20, 30, 0.14)',
-    focus: '0 0 0 3px rgba(91, 83, 214, 0.28)',
+    focus: '0 0 0 3px rgba(52, 165, 162, 0.28)',
   },
 } as const;
 

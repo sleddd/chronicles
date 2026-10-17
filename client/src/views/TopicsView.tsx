@@ -17,6 +17,7 @@ import { topics as topicsApi, settings as settingsApi } from '../services/api.js
 import { usePrivateSettings } from '../services/privateSettings.js';
 import type { Topic } from '../types/topics.js';
 import type { UserFieldDef } from '../types/userFields.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Layout ── */
 
@@ -176,7 +177,7 @@ export function TopicsView() {
   const topics = useEntriesStore(s => s.topics);
   const entries = useEntriesStore(s => s.decryptedEntries);
   const setTopics = useEntriesStore(s => s.setTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const topicHideText = useUIStore(s => s.topicHideText);
   const updateTopicFields = useUIStore(s => s.updateTopicFields);

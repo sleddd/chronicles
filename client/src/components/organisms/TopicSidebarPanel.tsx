@@ -18,6 +18,7 @@ import { settings as settingsApi } from '../../services/api.js';
 import { usePrivateSettings } from '../../services/privateSettings.js';
 import type { UserFieldDef } from '../../types/userFields.js';
 import { BACKGROUND_IMAGES } from '@chronicles/shared';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 const Pane = styled.div<{ $hidden?: boolean; $hasBackground?: boolean; $lightBg?: boolean }>`
   width: 300px;
@@ -230,7 +231,7 @@ const AddSubmitBtn = styled.button<{ $accentColor?: string }>`
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #fff;
-  background: ${({ $accentColor }) => $accentColor || '#4E6E7E'};
+  background: ${({ $accentColor }) => $accentColor || DEFAULT_ACCENT_COLOR};
   border: none;
   border-radius: ${({ theme }) => theme.borderRadius.sm}px;
   cursor: pointer;

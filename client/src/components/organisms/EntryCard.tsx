@@ -8,6 +8,7 @@ import {
   MetaCell, DateCell, TopicCell, EntryCell, EntryTitle,
 } from '../molecules/EntryTable.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 interface EntryCardProps {
   id: number;
@@ -89,7 +90,7 @@ export function EntryCard({
   topicId, active, onClick, onDelete, onTopicClick, onToggleBookmark,
   isCompleted, isFavorite, previewText, hint,
 }: EntryCardProps) {
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const d = new Date(date);
   const title = extractTitle(content, previewText);

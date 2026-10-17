@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 /* ── Constants ── */
 
@@ -98,7 +99,7 @@ interface SwipeActionsProps {
 }
 
 export function SwipeActions({
-  children, onEdit, onDelete, accentColor = '#4A5568', disabled, buttonWidth = 70,
+  children, onEdit, onDelete, accentColor = DEFAULT_ACCENT_COLOR, disabled, buttonWidth = 70,
 }: SwipeActionsProps) {
   const actionW       = buttonWidth * (onEdit ? 2 : 1);
   const contentRef    = useRef<HTMLDivElement>(null);

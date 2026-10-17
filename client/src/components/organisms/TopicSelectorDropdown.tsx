@@ -3,6 +3,7 @@ import styled, { keyframes } from 'styled-components';
 import { TopicIcon as TopicGlyph } from '../molecules/IconPicker.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import type { Topic } from '../../types/topics.js';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 interface TopicSelectorDropdownProps {
   isOpen: boolean;
@@ -121,7 +122,7 @@ export function TopicSelectorDropdown({
 }: TopicSelectorDropdownProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   useEffect(() => {
     if (!isOpen) {

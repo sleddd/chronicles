@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import { Icon } from '../../atoms/core/Icon.jsx';
+import { DEFAULT_ACCENT_COLOR } from '../../../styles/accent.js';
 
 export interface PriorityItem { id: string; text: string; done: boolean; }
 export interface PrioritiesFieldValues { priorities: PriorityItem[]; }
@@ -93,7 +94,7 @@ interface Props {
   accentColor?: string;
 }
 
-export function PrioritiesFields({ values, onChange, accentColor = '#4A5568' }: Props) {
+export function PrioritiesFields({ values, onChange, accentColor = DEFAULT_ACCENT_COLOR }: Props) {
   const { priorities } = values;
 
   const update = (id: string, patch: Partial<PriorityItem>) =>

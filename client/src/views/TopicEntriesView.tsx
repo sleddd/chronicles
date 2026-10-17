@@ -16,6 +16,7 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useUIStore } from '../stores/uiStore.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Layout (mirrors TopicDetailView / TopicsView) ── */
 
@@ -81,7 +82,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const openInJournal = useOpenInJournal();
 

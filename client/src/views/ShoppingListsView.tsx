@@ -17,6 +17,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import type { ShoppingItem } from '../types/fields.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Layout (mirrors HealthView) ── */
 
@@ -82,7 +83,7 @@ export function ShoppingListsView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries   = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const openInJournal = useOpenInJournal();
 
   const [tab, setTab] = useState<Tab>('current');

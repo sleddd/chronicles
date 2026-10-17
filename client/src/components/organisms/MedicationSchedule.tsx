@@ -13,6 +13,7 @@ import { stripHtml } from '../../utils/stripHtml.js';
 import { toDateStr, formatTime12h, formatDateDisplay } from '../../utils/dateUtils.js';
 import type { DoseLogRecord } from '../../services/api.js';
 import type { ScheduledDose } from '../../types/health.js';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 /* ── Styled ── */
 
@@ -169,7 +170,7 @@ interface MedicationScheduleProps {
 export function MedicationSchedule({ isReady }: MedicationScheduleProps) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const [viewDate, setViewDate] = useState(() => toDateStr(new Date()));
   const [doseLogs, setDoseLogs] = useState<Record<string, DoseLogRecord>>({});

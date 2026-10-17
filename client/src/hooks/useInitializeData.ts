@@ -9,6 +9,7 @@ import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -65,10 +66,10 @@ export function useInitializeData() {
         // Personal settings are master-key encrypted; old plaintext ones get sealed now
         const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
         if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
-        if (typeof settingsMap.accentColor === 'string') {
-          setAccentColor(settingsMap.accentColor);
-          document.documentElement.style.setProperty('--color-accent', settingsMap.accentColor);
-        }
+        // No saved accent → Teal (never the previous account's colour)
+        const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
+        setAccentColor(accent);
+        document.documentElement.style.setProperty('--color-accent', accent);
         if (settingsMap.themeMode === 'light' || settingsMap.themeMode === 'dark') setThemeMode(settingsMap.themeMode);
         if (typeof settingsMap.backgroundImage === 'string') setBackgroundImage(settingsMap.backgroundImage);
         if (typeof settingsMap.backgroundOpacity === 'string') setBackgroundOpacity(parseFloat(settingsMap.backgroundOpacity));

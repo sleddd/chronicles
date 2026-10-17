@@ -7,6 +7,7 @@ import { TopicIcon as TopicGlyph } from '../molecules/IconPicker.js';
 import { TopicSelectorDropdown } from './TopicSelectorDropdown.js';
 import { Editor } from './Editor.js';
 import { stripHtml } from '../../utils/stripHtml.js';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 interface QuickEntryProps {
   onCreateEntry: (content: string, topicId: number | null) => void;
@@ -107,7 +108,7 @@ const SubmitButton = styled.button<{ $disabled?: boolean }>`
 
 export const QuickEntry = memo(function QuickEntry({ onCreateEntry }: QuickEntryProps) {
   const topics = useEntriesStore((s) => s.topics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const [content, setContent] = useState('');
   const [quickTopicId, setQuickTopicId] = useState<number | null>(null);

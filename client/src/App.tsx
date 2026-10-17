@@ -36,6 +36,7 @@ import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
 import { ShoppingListsView } from './views/ShoppingListsView.js';
 import { DashboardView } from './views/DashboardView.js';
+import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
    Chronicles design tokens (originally from the design-system package). Light = pure white canvas; dark =
@@ -214,7 +215,7 @@ const STATIC_CSS_VARS: Record<string, string> = {
 
   /* Design system shadow tokens */
   '--shadow-sm':    '0 1px 2px rgba(20, 20, 30, 0.04)',
-  '--shadow-ring':  '0 0 0 3px var(--color-accent, #00b4d8), 0 1px 2px rgba(20, 20, 30, 0.08)',
+  '--shadow-ring':  '0 0 0 3px var(--color-accent, #34a5a2), 0 1px 2px rgba(20, 20, 30, 0.08)',
 
   /* Design system tracking (letter-spacing) */
   '--tracking-tight': '-0.01em',
@@ -312,7 +313,7 @@ export function App() {
   const activeTheme = isDark ? darkTheme : lightTheme;
 
   useEffect(() => {
-    const color = accentColor || '#5b53d6';
+    const color = accentColor || DEFAULT_ACCENT_COLOR;
     const [r, g, b] = hexToRgbParts(color);
 
     root.setAttribute('data-theme', isDark ? 'dark' : 'light');

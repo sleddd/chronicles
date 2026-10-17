@@ -17,6 +17,7 @@ import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { entries as entriesApi } from '../services/api.js';
 import type { DecryptedPost } from '@shared/crypto/types';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Layout (mirrors TopicsView) ── */
 
@@ -112,7 +113,7 @@ export function TopicDetailView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const allTopics = useEntriesStore(s => s.allTopics);
   const entries = useEntriesStore(s => s.decryptedEntries);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const openInJournal = useOpenInJournal();
 
   const topic = allTopics.find(t => String(t.id) === String(topicId));

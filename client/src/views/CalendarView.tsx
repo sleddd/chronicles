@@ -16,6 +16,7 @@ import { useFinance } from '../hooks/useFinance.js';
 import { useNavigate } from 'react-router-dom';
 import { addDays, billOccurrences } from '../utils/finance.js';
 import type { CalendarBillItem } from '../types/finance.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 export type CalendarViewMode = 'day' | 'week' | 'month';
 
@@ -60,7 +61,7 @@ export function CalendarView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
   const [currentDate, setCurrentDate] = useState(() => new Date()); // anchor: for month=1st of month, week=Sunday, day=that day

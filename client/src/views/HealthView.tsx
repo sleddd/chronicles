@@ -19,6 +19,7 @@ import { builtinEntryName, stripHtml } from '../utils/stripHtml.js';
 import { toDateStr, startOfWeek, startOfMonth } from '../utils/dateUtils.js';
 import type { DateFilter } from '../types/health.js';
 import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 const DATE_FILTERS = [
   { value: 'all' as const, label: 'All' },
@@ -205,7 +206,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const openInJournal = useOpenInJournal();
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');

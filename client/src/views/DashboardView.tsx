@@ -25,6 +25,7 @@ import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { UnitLabel } from '../components/atoms/UnitLabel.js';
 import { useAiReady } from '../hooks/useAiReady.js';
 import { autoNutritionOnSave } from '../services/aiAssistant.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Constants ── */
 
@@ -863,7 +864,7 @@ function InlineWeather() {
 export function DashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const today = new Date();
 

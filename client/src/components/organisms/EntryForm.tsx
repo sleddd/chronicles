@@ -32,6 +32,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { EntryHeroBanner, EntryImageStrip, EntryLightbox } from './EntryImageGallery.js';
 import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
+import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -531,7 +532,7 @@ export function EntryForm({
   imageUploading = false, imageError, imagesReady = false,
 }: EntryFormProps) {
   const isFavorite = !!customFields._isFavorite;
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);

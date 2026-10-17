@@ -21,6 +21,7 @@ import type {
   DecryptedExercise,
   DecryptedWellness,
 } from '../utils/correlationAnalysis.js';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Period filter ── */
 
@@ -99,7 +100,7 @@ export function HealthReportingView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const [period, setPeriod] = useState<PeriodType>('month');
   const [customFrom, setCustomFrom] = useState('');

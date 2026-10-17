@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
 
 interface UIState {
@@ -103,6 +104,8 @@ interface UIState {
   setCalendarImportMode: (mode: 'chroniclesOnly' | 'all') => void;
 }
 
+export { DEFAULT_ACCENT_COLOR };
+
 export const useUIStore = create<UIState>((set) => ({
   isSidebarOpen: true,
   toggleSidebar: () => set(s => ({ isSidebarOpen: !s.isSidebarOpen })),
@@ -143,7 +146,7 @@ export const useUIStore = create<UIState>((set) => ({
   setPencilOnly: (v) => set({ pencilOnly: v }),
 
   themeMode: 'dark',
-  accentColor: '#34a5a2',
+  accentColor: DEFAULT_ACCENT_COLOR,
   backgroundImage: '',
   backgroundOpacity: 0.7,
   setThemeMode: (mode) => set({ themeMode: mode }),

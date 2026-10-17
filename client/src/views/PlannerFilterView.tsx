@@ -27,6 +27,7 @@ import type { MilestoneEntryData, TaskEntryData } from '../types/goals.js';
 import type { PlannerFilterConfig, SavedPlannerFilter } from '../types/planner.js';
 import { EMPTY_PLANNER_FILTER, isFilterEmpty, filtersEqual, encodePlannerFilter, decodePlannerFilter } from '../types/planner.js';
 import { useSearchParams } from 'react-router-dom';
+import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Styled components ── */
 
@@ -304,7 +305,7 @@ export function PlannerFilterView() {
   const allTopics = useEntriesStore(s => s.allTopics);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
   const openInJournal = useOpenInJournal();
-  const accentColor = useUIStore(s => s.accentColor) || '#4A5568';
+  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const { encryptPost } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
 
