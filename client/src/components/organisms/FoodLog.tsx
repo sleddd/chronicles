@@ -1,11 +1,12 @@
-import { useCallback, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useCallback, useMemo, useState, type MouseEvent } from 'react';
 import styled from 'styled-components';
 import { TextInput } from '../atoms/TextInput.js';
 import { Select } from '../atoms/Select.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { UnitLabel } from '../atoms/UnitLabel.js';
 import { FormField } from '../molecules/FormField.js';
-import { NutritionPanel } from '../molecules/NutritionPanel.js';
+import { FoodFields } from '../molecules/fields/FoodFields.js';
+import type { FoodFieldValues } from '../../types/fields.js';
 import { FilterTabs } from '../molecules/FilterTabs.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -279,69 +280,53 @@ interface FoodAddFormProps {
 
 /** Item, type and the nutrition panel; blank nutrients are AI-filled after adding. */
 export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Log food' }: FoodAddFormProps) {
-  const [item, setItem] = useState('');
-  const [mealType, setMealType] = useState(() => mealForNow());
-  const [values, setValues] = useState<Record<NutrientKey, string>>(emptyValues);
-  const [notes, setNotes] = useState('');
+  // The same meal form as the journal editor and Quick Entry
+  const blank = (): FoodFieldValues => ({
+    mealDescription: '', mealType: mealForNow() as FoodFieldValues['mealType'],
+    consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '',
+  } as FoodFieldValues);
+  const [values, setValues] = useState<FoodFieldValues>(blank);
   const [saving, setSaving] = useState(false);
+  const name = (values.mealDescription ?? '').trim();
 
   const handleAdd = async () => {
-    if (!item.trim() || saving) return;
+    if (!name || saving) return;
     setSaving(true);
     try {
-      const name = item.trim();
+      const raw = values as unknown as Record<string, unknown>;
       let fields: Record<string, unknown> = {
-        mealDescription: name, mealType, consumedDate: day,
-        consumedTime: day === toDateStr(new Date()) ? nowTime() : '',
-        ingredients: '', notes: notes.trim(),
+        ...raw,
+        mealDescription: name,
+        // Unset date/time = the day being viewed (and now, when that's today)
+        consumedDate: values.consumedDate || day,
+        consumedTime: values.consumedTime || (day === toDateStr(new Date()) ? nowTime() : ''),
+        notes: values.notes.trim(),
+        ingredients: values.ingredients.trim(),
       };
       for (const n of NUTRIENTS) {
-        const v = values[n.key].trim();
+        const v = String(raw[n.key] ?? '').trim();
         fields = v ? withManualNutrient(fields, n.key, v) : { ...fields, [n.key]: '' };
       }
       const id = await actions.create(day, name, fields);
       onStatus(`Added ${name}`);
       if (aiReady) void actions.fill(id);
-      setItem(''); setValues(emptyValues()); setNotes('');
+      setValues(blank());
     } catch (err) {
       console.error('Failed to add food:', err);
       onStatus('That didn’t save — try again');
     } finally { setSaving(false); }
   };
 
-  const onEnter = (e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void handleAdd(); } };
-
   return (
     <div>
-      <FormField label="What did you eat?">
-        <TextInput value={item} onChange={e => setItem(e.target.value)} onKeyDown={onEnter} placeholder="e.g. Chicken sausage, 1 link" autoComplete="off" aria-label="What did you eat?" />
-      </FormField>
-      <FormField label="Meal time">
-        <Select value={mealType} onChange={e => setMealType(e.target.value)} aria-label="Meal time">
-          {MEAL_TYPE_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-        </Select>
-      </FormField>
-      <NutritionPanel
-        values={values}
-        onChange={(key, v) => setValues(prev => ({ ...prev, [key]: v }))}
-        onKeyDown={onEnter}
-        compact
-      />
-      <FormField label="Notes">
-        <TextInput value={notes} onChange={e => setNotes(e.target.value)} onKeyDown={onEnter} placeholder="Optional" autoComplete="off" aria-label="Notes" />
-      </FormField>
+      <FoodFields values={values} onChange={setValues} compact onEnter={() => void handleAdd()} />
       <FormFooter>
-        <PillButton type="button" onClick={handleAdd} disabled={saving || !item.trim()}>{saving ? 'Logging…' : submitLabel}</PillButton>
+        <PillButton type="button" onClick={handleAdd} disabled={saving || !name}>{saving ? 'Logging…' : submitLabel}</PillButton>
       </FormFooter>
     </div>
   );
 }
 
-function emptyValues(): Record<NutrientKey, string> {
-  const v = {} as Record<NutrientKey, string>;
-  for (const n of NUTRIENTS) v[n.key] = '';
-  return v;
-}
 
 
 /* ══ Day navigation ══ */

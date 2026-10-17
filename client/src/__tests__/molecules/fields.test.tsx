@@ -67,9 +67,12 @@ describe('FoodFields', () => {
     notes: '',
   };
 
-  it('renders meal type, calories, ingredients, and notes fields', () => {
+  it('renders the title, meal chips, When, calories, ingredients, and notes', () => {
     renderWithTheme(<FoodFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('What did you eat?')).toBeInTheDocument();
+    expect(screen.getByText('Meal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Breakfast' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('When')).toBeInTheDocument();
     expect(screen.getByText('Calories')).toBeInTheDocument();
     expect(screen.getByText('Ingredients')).toBeInTheDocument();
     expect(screen.getByText('Notes')).toBeInTheDocument();
@@ -78,8 +81,7 @@ describe('FoodFields', () => {
   it('calls onChange when mealType changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<FoodFields values={defaultValues} onChange={onChange} />);
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'lunch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lunch' }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ mealType: 'lunch' }));
   });
 
@@ -91,10 +93,10 @@ describe('FoodFields', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ calories: '500' }));
   });
 
-  it('edits date and time in the one "Eaten at" box', () => {
+  it('edits date and time in the one When box', () => {
     const onChange = vi.fn();
     renderWithTheme(<FoodFields values={defaultValues} onChange={onChange} />);
-    expect(screen.getByText('Eaten at')).toBeInTheDocument();
+    expect(screen.getByLabelText('Date eaten')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Time eaten'), { target: { value: '18:00' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ consumedTime: '18:00' }));
   });
@@ -165,30 +167,36 @@ describe('ExerciseFields', () => {
     notes: '',
   };
 
-  it('renders type, intensity, duration, calories, distance, and notes', () => {
+  it('renders Activity chips, Intensity segments, the Stats strip, When and Notes', () => {
     renderWithTheme(<ExerciseFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Type')).toBeInTheDocument();
-    expect(screen.getByText('Intensity')).toBeInTheDocument();
-    expect(screen.getByText('Duration (min)')).toBeInTheDocument();
-    expect(screen.getByText('Calories')).toBeInTheDocument();
-    expect(screen.getByText('Distance')).toBeInTheDocument();
-    expect(screen.getByText('Unit')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Running' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('radio', { name: 'Medium' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Duration (min)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Distance (mi)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Calories')).toBeInTheDocument();
+    expect(screen.getByText('When')).toBeInTheDocument();
+    expect(screen.getByText('Notes')).toBeInTheDocument();
+  });
+
+  it('flips the distance unit with the mi pill', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<ExerciseFields values={defaultValues} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Miles — switch to kilometers'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ distanceUnit: 'km' }));
   });
 
   it('calls onChange when exerciseType changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<ExerciseFields values={defaultValues} onChange={onChange} />);
-    const selects = screen.getAllByRole('combobox');
-    // First select is exerciseType
-    fireEvent.change(selects[0], { target: { value: 'cycling' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cycling' }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ exerciseType: 'cycling' }));
   });
 
   it('calls onChange when intensity changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<ExerciseFields values={defaultValues} onChange={onChange} />);
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[1], { target: { value: 'high' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Hard' }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ intensity: 'high' }));
   });
 });

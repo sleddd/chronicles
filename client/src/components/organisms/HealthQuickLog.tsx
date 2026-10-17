@@ -1,29 +1,20 @@
 import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
-import { TextInput } from '../atoms/TextInput.js';
-import { Select } from '../atoms/Select.js';
 import { PillButton } from '../atoms/PillButton.js';
-import { FormField } from '../molecules/FormField.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { estimateEntryCalories } from '../../services/aiAssistant.js';
-import { EXERCISE_TYPES, exerciseSummary } from '../../utils/exerciseSummary.js';
+import { exerciseSummary } from '../../utils/exerciseSummary.js';
+import { ExerciseFields } from '../molecules/fields/ExerciseFields.js';
+import type { ExerciseFieldValues } from '../../types/fields.js';
 
 /* ── Styled ── */
 
 /* ── Helpers ── */
 
-/** Meal that fits the current time of day — the form's starting choice. */
-function mealForNow(): string {
-  const h = new Date().getHours();
-  if (h < 11) return 'breakfast';
-  if (h < 15) return 'lunch';
-  if (h >= 17 && h < 21) return 'dinner';
-  return 'snack';
-}
 
 function nowTime(): string {
   const d = new Date();
@@ -65,11 +56,6 @@ function useCreateEntry() {
   };
 }
 
-/* One field per row. */
-const FieldStack = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
 
 const FormFooter = styled.div`
   display: flex;
@@ -89,47 +75,46 @@ const Note = styled.p`
 
 /* ── Exercise ── */
 
+const emptyExercise = (): ExerciseFieldValues => ({
+  exerciseType: 'walking', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles',
+  calories: '', performedDate: '', performedTime: '', notes: '',
+});
+
 export function ExerciseQuickLog() {
   const createEntry = useCreateEntry();
   const aiReady = useAiReady();
 
-  const [what, setWhat] = useState('');
-  const [exerciseType, setExerciseType] = useState('walking');
-  const [duration, setDuration] = useState('');
-  const [distance, setDistance] = useState('');
-  const [distanceUnit, setDistanceUnit] = useState<'miles' | 'km'>('miles');
+  // The same exercise form as the journal editor and Quick Entry
+  const [values, setValues] = useState<ExerciseFieldValues>(emptyExercise);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
 
-  const canSave = !!what.trim() || !!duration.trim() || !!distance.trim();
+  const canSave = !!values.duration.trim() || !!values.distance.trim() || !!values.calories.trim();
 
   const handleSubmit = async (e?: FormEvent) => {
     e?.preventDefault();
     if (!canSave || saving) return;
     setSaving(true); setStatus('');
     try {
-      const text = what.trim() || exerciseSummary({ exerciseType, duration, distance, distanceUnit });
+      const text = exerciseSummary(values as unknown as Record<string, unknown>);
       let fields: Record<string, unknown> = {
-        exerciseType,
-        duration: duration.trim(),
-        intensity: 'medium',
-        distance: distance.trim(),
-        distanceUnit,
-        calories: '',
-        performedDate: toDateStr(new Date()),
-        performedTime: nowTime(),
-        notes: '',
+        ...values,
+        duration: values.duration.trim(),
+        distance: values.distance.trim(),
+        // Unset date/time = now
+        performedDate: values.performedDate || toDateStr(new Date()),
+        performedTime: values.performedTime || nowTime(),
       };
-      // AI on → calculate calories burned; a failed estimate still saves the workout
+      // AI on and no calories typed → calculate them; a failed estimate still saves the workout
       let note = '';
-      if (aiReady && (duration.trim() || distance.trim())) {
+      if (aiReady && !values.calories.trim() && (values.duration.trim() || values.distance.trim())) {
         setStatus('Calculating calories burned…');
-        try { fields = await estimateEntryCalories('exercise', what.trim(), fields); }
+        try { fields = await estimateEntryCalories('exercise', values.notes.trim(), fields); }
         catch (err) { note = ` — calories not calculated (${err instanceof Error ? err.message : 'error'})`; }
       }
       const topicId = await getOrCreateTopicId('Exercise', 'dumbbell');
       await createEntry(topicId, `<p>${escapeHtml(text)}</p>`, fields);
-      setWhat(''); setDuration(''); setDistance('');
+      setValues(emptyExercise());
       setStatus(fields.calories ? `Logged · ${String(fields.calories)} cal burned` : `Logged${note}`);
       setTimeout(() => setStatus(''), note ? 5000 : 2500);
     } catch (err) {
@@ -138,38 +123,13 @@ export function ExerciseQuickLog() {
     } finally { setSaving(false); }
   };
 
-  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void handleSubmit(); } };
-  const numeric = (v: string) => v.replace(/[^\d.]/g, '');
-
   return (
     <div>
-      <FormField label="What did you do?">
-        <TextInput aria-label="What did you do?" placeholder="Optional — e.g. Morning run around the park" value={what} onChange={e => setWhat(e.target.value)} onKeyDown={onEnter} autoComplete="off" />
-      </FormField>
-      <FieldStack>
-        <FormField label="Type">
-          <Select aria-label="Exercise type" value={exerciseType} onChange={e => setExerciseType(e.target.value)}>
-            {EXERCISE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </Select>
-        </FormField>
-        <FormField label="Minutes">
-          <TextInput aria-label="Minutes" placeholder="0" inputMode="numeric" value={duration} onChange={e => setDuration(numeric(e.target.value))} onKeyDown={onEnter} />
-        </FormField>
-        <FormField label="Distance">
-          <TextInput aria-label="Distance" placeholder="0" inputMode="decimal" value={distance} onChange={e => setDistance(numeric(e.target.value))} onKeyDown={onEnter} />
-        </FormField>
-        <FormField label="Unit">
-          <Select aria-label="Distance unit" value={distanceUnit} onChange={e => setDistanceUnit(e.target.value as 'miles' | 'km')}>
-            <option value="miles">Miles</option>
-            <option value="km">Kilometers</option>
-          </Select>
-        </FormField>
-      </FieldStack>
+      <ExerciseFields values={values} onChange={setValues} />
       <FormFooter>
         <Note role="status">{status}</Note>
         <PillButton type="button" onClick={() => void handleSubmit()} disabled={saving || !canSave}>{saving ? 'Logging…' : 'Log exercise'}</PillButton>
       </FormFooter>
-
     </div>
   );
 }

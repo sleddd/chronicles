@@ -11,38 +11,34 @@ import { NUTRIENTS, type NutrientKey } from '../../types/nutrition.js';
 /** Everything but calories, which leads the panel */
 const MICRONUTRIENTS = NUTRIENTS.filter(n => n.key !== 'calories');
 
+/* Same heading as the other field forms (formKit): sentence case, soft grey */
 export const SectionHead = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 40px;
-  margin: 18px 0 4px;
-  &:first-child { margin-top: 0; }
+  margin: 0 0 14px;
 `;
 
 export const SectionTitle = styled.h3`
   margin: 0;
-  font-family: var(--font-label);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-soft);
 `;
 
 /* Estimate / Re-estimate: the app's outlined accent pill (PillButton) */
 export const PillBtn = PillButton;
 
 /* Panel + its note; the space below separates it from the next field's label */
-const Block = styled.div`
-  margin: 6px 0 18px;
-`;
+const Block = styled.div``;
 
+/* Outlined (no fill), like the other field boxes */
 const Panel = styled.div`
-  background: var(--bg-sunken);
-  border: 1px solid var(--border-field, var(--border-default));
-  border-radius: var(--r-lg, 6px);
+  background: transparent;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
   overflow: hidden;
 `;
 
@@ -120,7 +116,7 @@ const Unit = styled.span`
 const Strip = styled.div`
   display: grid;
   grid-template-columns: repeat(${MICRONUTRIENTS.length}, minmax(0, 1fr));
-  border-top: 1px solid var(--border-field, var(--border-default));
+  border-top: 1px solid var(--border-card);
   @media (max-width: 640px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 
@@ -131,12 +127,12 @@ const Cell = styled.label`
   min-width: 0;
   padding: 16px 28px 18px;
   cursor: text;
-  & + & { border-left: 1px solid var(--border-field, var(--border-default)); }
+  & + & { border-left: 1px solid var(--border-card); }
   &:focus-within { box-shadow: inset 0 0 0 1px var(--color-accent); }
   @media (max-width: 640px) {
     padding: 14px 18px 16px;
     &:nth-child(odd) { border-left: none; }
-    &:nth-child(n + 3) { border-top: 1px solid var(--border-field, var(--border-default)); }
+    &:nth-child(n + 3) { border-top: 1px solid var(--border-card); }
   }
   [data-compact] & { padding-left: 14px; padding-right: 14px; }
 `;
