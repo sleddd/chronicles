@@ -46,7 +46,7 @@ These screenshots are from October 2026, but subject to change.
 ### Optional Financial Tracking with all data exportable to csv
 <img width="1415" height="695" alt="Screenshot 2026-10-16 at 6 22 51 PM" src="https://github.com/user-attachments/assets/695a7189-f150-4a91-83da-8cda02543ceb" />
 <img width="1419" height="691" alt="Screenshot 2026-10-16 at 6 23 06 PM" src="https://github.com/user-attachments/assets/ff7c7d14-fe8f-4dd1-94d9-c8c479ecd42d" />
-<img width="1437" height="695" alt="Screenshot 2026-10-16 at 6 23 17 PM" src="https://github.com/user-attachments/assets/cc0f531f-401c-4435-9fcb-43fd3d666f83" />
+<img width="1289" height="658" alt="Screenshot 2026-10-16 at 6 42 52 PM" src="https://github.com/user-attachments/assets/cc969ef5-e666-4f99-a699-5bfcc8b5da32" />
 <img width="1415" height="688" alt="Screenshot 2026-10-16 at 6 23 53 PM" src="https://github.com/user-attachments/assets/0028e752-ec76-42ca-b5a1-dd4fa7f25d71" />
 <img width="1433" height="683" alt="Screenshot 2026-10-16 at 6 23 43 PM" src="https://github.com/user-attachments/assets/148a642a-637c-4bc7-97d7-ee13560142d8" />
 <img width="1438" height="692" alt="Screenshot 2026-10-16 at 6 24 15 PM" src="https://github.com/user-attachments/assets/f6651df0-08f3-4573-bb84-327969ea1a72" />
