@@ -692,7 +692,7 @@ export function GoalsView() {
     const goal = m.parentGoalId ? goalTitles.get(m.parentGoalId) : undefined;
     return {
       id: m.id, title: m.title,
-      badge: goal ? { label: goal, color: 'var(--chart-blue)' } : undefined,
+      kicker: goal,
       date: shortDate(m.targetDate),
       progress: ts.length ? { done: ts.filter(t => t.isCompleted).length, total: ts.length } : undefined,
       completed: m.isCompleted,

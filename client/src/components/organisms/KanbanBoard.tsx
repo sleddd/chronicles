@@ -21,6 +21,8 @@ export interface BoardItem {
   detail?: string;
   /** Small outlined pill above the title, in its own colour */
   badge?: { label: string; color: string };
+  /** Small tracked-caps line above the title in the accent (a milestone's goal) — no pill */
+  kicker?: string;
   /** Shown in a flag chip, e.g. "Jul 2" */
   date?: string;
   /** "2/5" chip, e.g. milestones done of a goal's milestones */
@@ -187,6 +189,19 @@ const Pill = styled.span<{ $color: string }>`
   white-space: nowrap;
 `;
 
+const Kicker = styled.span`
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: -2px; /* a little air before the title */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
 const CardTitle = styled.h4<{ $done?: boolean }>`
   margin: 0;
   font-family: var(--font-sans);
@@ -260,6 +275,7 @@ function BoardCard({ item, onOpen }: { item: BoardItem; onOpen: (id: number) => 
     >
       <Top>
         <TopText>
+          {item.kicker && <Kicker>{item.kicker}</Kicker>}
           {item.badge && <Pill $color={item.badge.color}>{item.badge.label}</Pill>}
           <CardTitle $done={item.completed}>{item.title}</CardTitle>
         </TopText>
