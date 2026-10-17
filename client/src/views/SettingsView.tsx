@@ -40,6 +40,7 @@ import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { parseCsvRow, splitCsvLines, csvCell } from '../utils/csv.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
+import { collectFinanceData, financeExportZip } from '../utils/financeExport.js';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 
 const TIMEZONES = [
@@ -124,6 +125,17 @@ const Sections = styled.div`
   gap: 24px;
 `;
 
+/* Small italic note under the Finance switch */
+const FinanceDisclaimer = styled.p`
+  margin: 0;
+  padding: 0 20px 14px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+`;
+
 const SETTINGS_CARDS_KEY = 'settings-collapsed-v1';
 
 /* All sections start collapsed; each card remembers being opened */
@@ -159,7 +171,7 @@ const GuideBody = styled.div`
 
 export function SettingsView() {
   const { user, logout, encryptionData } = useAuth();
-  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost, encryptRecord } = useEncryption();
+  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost, encryptRecord, decryptRecord } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
@@ -271,6 +283,8 @@ export function SettingsView() {
   const [seedingFinance, setSeedingFinance] = useState(false);
   const [seedFinanceResult, setSeedFinanceResult] = useState('');
   const [seedFinanceArmed, setSeedFinanceArmed] = useState(false);
+  const [exportingFinance, setExportingFinance] = useState(false);
+  const [financeExportResult, setFinanceExportResult] = useState('');
 
   // Load settings
   useEffect(() => {
@@ -493,6 +507,29 @@ export function SettingsView() {
       setSeedResult('Default topics created');
     } catch { setSeedResult('Failed'); }
     finally { setSeeding(false); }
+  };
+
+  /** Download every Finance record, decrypted here in the browser, as one ZIP of spreadsheets + JSON. */
+  const handleExportFinance = async () => {
+    setExportingFinance(true); setFinanceExportResult('');
+    try {
+      const data = await collectFinanceData({ list: financeApi.list, decryptRecord });
+      const zip = financeExportZip(data);
+      const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chronicles-finance-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      const bad = Object.values(data.unreadable).reduce((t, n) => t + (n ?? 0), 0);
+      setFinanceExportResult(bad
+        ? `Downloaded — ${bad} record${bad === 1 ? '' : 's'} couldn't be decrypted and ${bad === 1 ? 'was' : 'were'} left out`
+        : 'Downloaded. The file is not encrypted — keep it somewhere safe.');
+    } catch (err) {
+      setFinanceExportResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setExportingFinance(false);
+    }
   };
 
   const handleSeedFinance = async () => {
@@ -966,6 +1003,14 @@ export function SettingsView() {
               description={feat.description}
               action={<Toggle checked={features[feat.key] ?? false} onChange={v => handleFeatureToggle(feat.key, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
             />
+            {feat.key === 'financeEnabled' && (
+              <FinanceDisclaimer role="note">
+                Finance is encrypted in your browser and the server never sees it, but Chronicles is not a banking app
+                and no system is perfectly secure. You're responsible for your financial data — what you store, keeping
+                your own records and backups, and securing your account and devices — and you accept the risk of
+                keeping it here.
+              </FinanceDisclaimer>
+            )}
             {feat.key === 'allergiesEnabled' && (
               <SettingsRow
                 title="Cycle Tracking"
@@ -1286,6 +1331,16 @@ export function SettingsView() {
             {seedFinanceResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedFinanceResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedFinanceResult}</div>}
           </>
         )}
+        <SettingsRow
+          title="Export Finance Data"
+          description="Download everything in Finance, decrypted, as one ZIP: a spreadsheet (CSV) each for budget categories, bills, bill payments, spending, savings funds and entries, goals, paydays and payday lines, one sheet of every transaction, and a complete JSON backup. The file is not encrypted — store it safely."
+          action={
+            <ActionButton onClick={() => void handleExportFinance()} disabled={exportingFinance}>
+              {exportingFinance ? <Spinner size={14} /> : 'Export All'}
+            </ActionButton>
+          }
+        />
+        {financeExportResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: financeExportResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{financeExportResult}</div>}
         <SettingsRow
           title="Export Entries"
           description="Download all entries as a decrypted CSV file"

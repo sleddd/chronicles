@@ -431,6 +431,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - **Reconcile** (`FinanceReconcileView` + `PaydayEditor`, behind `reconcileEnabled`) — one *payday* at a time, replacing a notepad: starting balance (bank after everything posted) → bills being paid (pick from Bills, due-soon pre-ticked by `suggestBillsForPayday`, or type a line; **Combined** lines roll small charges into one, e.g. "Uber — 9") → **Leftover to spend**; optional spending lines; tick each line ✓ as it clears; **Check my balance** compares the bank's balance with *start − cleared* ("Matches" / "Off by $X") and shows **Available now** (bank − still waiting). All cleared + matching check = "OK to spend". Closing keeps it in history; a new payday can carry over waiting lines. Independent of Mark paid (no linking either way)
 - **Reports** (`FinanceReportsView`) — search bill payments by name, type (bill/subscription) and category for this/last month, this/last year or custom dates: total, average a month, biggest bill, subscriptions total; cards By bill, By month (every month in the range) and Every payment. Payments come from Mark paid (dated `paidOn`) plus, when Reconcile is on, payday bill lines (dated the payday) — skipped for a bill already marked paid that month, so nothing counts twice (`billPaymentRecords` / `filterPayments` / `reportSummary` / `periodRange` in `utils/finance.ts`)
 - **Goals** (target, date, progress from a linked savings fund or a typed amount) and **Savings** (named **funds** — `SavingsPot` in code — with add / take-out entries)
+- **Export** (Settings → Data → Export Finance Data → one "Export All" ZIP; shown even when Finance is off so data can always be taken out): `collectFinanceData` fetches and decrypts every kind fresh from the server; `financeExportFiles` builds a CSV per section (budget-categories, bills, bill-payments, spending, savings-funds, savings-entries, goals, paydays, payday-lines), `transactions.csv` (one signed row per money movement) and `finance.json` (full backup); `financeExportZip` bundles them with the dependency-free store-only writer in `client/src/utils/zip.ts`. Amount columns are written raw (the CSV formula guard would turn "-12.00" into text); free-text cells stay guarded. Settings → Data also has Seed Finance Data (`utils/seedFinanceData.ts`) when Finance is on
 - Calendar: active bills' due dates show on the month grid, mobile list and day panel (`billOccurrences`), linking to `/finance`; paused/cancelled bills don't appear
 
 **Media & Inspiration**
@@ -596,7 +597,7 @@ Three sets of variables are written to `:root`:
 
 ### Default Colors
 - Default header: `#2d2c2a` (dark)
-- Default accent: `#00b4d8` (cyan)
+- Default accent: **Teal** `#34a5a2` — always the default (`DEFAULT_ACCENT_COLOR` in `client/src/styles/accent.ts`); accounts with no saved accent get Teal, and every accent fallback uses it
 - Paper background: `#f0ebdf` (light) / `#1a1917` (Midnight)
 
 ### Typography

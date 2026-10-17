@@ -63,6 +63,7 @@ These screenshots are from October 2026, but subject to change.
 - **Goals & Milestones** - Track goals with milestone progress and task linking; milestone status cycle (Not Started → In Progress → Completed) with tap-to-advance on the card; goal cards display the entry's featured image as a banner
 - **Custom Planner Filters** - Cross-hierarchy search across goals, milestones, tasks, and todos; filter by keyword, item type, status, priority, parent goal, and parent milestone; save named filters that persist and can be reloaded in one tap. The applied filter lives in the page address, so it's still there after editing a result, reloading, or opening a bookmark
 - **From the Kitchen** - A kitchen dashboard (today's meals and your open shopping list as a tick-off checklist) plus Menu, Recipes, and Shopping Lists tabs; the weekly menu planner autosaves as you type or link a recipe; recipes render as a formatted recipe page — name, description, prep/cook/serves/calories/difficulty stats band, photo hero, checkable ingredients, and numbered method steps — with live serving scaling that recalculates ingredient amounts, one-tap "Add to shopping list" (appends all ingredients and cross-links the entries), and "Add to menu"
+- **Finance (opt-in)** - A manual, encrypted money tracker, off until you turn it on: a monthly **budget** by category (planned vs bills due vs spending), every **bill and subscription** with Mark paid, pause and cancel, **savings funds**, **financial goals** with progress rings, and **reports** on what you paid by bill, type, category, month or year. An optional **paycheck reconcile** tab walks through each paycheck — starting balance, bills being paid, leftover to spend, and ticking lines off as they clear the bank. No bank connections. Not a banking app — see the disclaimer under [Finance](#finance)
 - **Shopping Lists** - Checklist-style lists linkable to recipes; dashboard widget shows active list with inline check-off
 - **Health Tracking** - Medications, symptoms, meals, exercise, and allergies; a Health dashboard with today's nutrition, a wellness check-in, quick meal and exercise logging, and the medication schedule; printable medication lists (with dosage and schedule), symptom logs, and allergy records
 - **Meals Log & Nutrition** - Log meals with calories, iron, vitamin D, B12, and vitamin C; daily totals against your goals, a 7/30/90-day and yearly at-a-glance view, and a review table for correcting entries; medication doses with nutrients (e.g. a vitamin D supplement) count toward the day automatically
@@ -98,11 +99,11 @@ These screenshots are from October 2026, but subject to change.
 - Non-extractable CryptoKeys — master key cannot be exported from the browser's crypto subsystem
 - Split-token sessions — database leaks cannot reconstruct valid session tokens
 - **Remember me** (opt-in, for personal devices) — stay unlocked until the browser closes; the browser keeps only an encrypted copy of the key, and the server holds the matching secret in memory only, never on disk
+- **Finance data is zero-knowledge too** — budgets, bills, payments, savings, goals and paydays are encrypted in the browser and stored in their own tables as ciphertext; the server never sees an amount, name or date. There are no bank connections. Chronicles is still not a banking app — see the [Finance disclaimer](#finance)
 - **AI is optional and bring-your-own** — when you turn it on, the meal or exercise description you're estimating (or your chat message) goes from your browser straight to the provider you chose; nothing passes through the Chronicles server
 
 ## Upcoming Features
 
-- **Finance** - Views for bills, savings, and financial goals, plus checkbook reconciliation. Entirely manual by design: no bank integrations, so your financial data stays encrypted in Chronicles like everything else
 - **Text to Journal** - Add journal entries by sending a text message
 - **Recurring Calendar Events** - Events and meetings that repeat on a schedule
 - **Calorie Correlation Reporting** - How meals and calories relate to symptoms, mood, and sleep in Health Reports
@@ -165,6 +166,21 @@ You can create your own topics for anything else. Any topic can have **user-defi
 - **Calendar** - Month, week, and day views; today is circled and the Today button opens today's day view
 - **Planning** - Goals, Milestones, Tasks, Todos, and Filters tabs; Custom Filters view at `/goals/filter`
 - **From the Kitchen** (`/kitchen`) - Kitchen dashboard, Menu planner, Recipes, and Shopping Lists
+- **Finance** (`/finance`, opt-in — the $ icon) - Budget & Bills, Goals, Savings, Reconcile (its own opt-in switch), and Reports
+
+### Finance
+
+An optional, manual money tracker — turn it on in **Settings → Features → Finance** (it's off by default). Nothing connects to your bank: you enter what you want to track, and it's encrypted in your browser like your journal.
+
+- **Budget & Bills** — Monthly categories with a planned amount, compared with the bills due that month (counted as soon as you add a bill) and the spending you log. List every bill and subscription with how often it's due and what it costs a month; **Mark paid** records a payment on the bill, and you can pause or cancel subscriptions you're reconsidering. Totals show your monthly and yearly bills and what subscriptions cost you.
+- **Goals** — A target amount and date, with a progress ring fed by a savings fund or an amount you enter.
+- **Savings** — Named funds (emergency fund, a trip, car repairs) with a log of what you add and take out.
+- **Reconcile** *(its own opt-in switch)* — For each paycheck: your bank balance once everything has posted, the bills you're paying, and what's left to spend. Tick each line as it clears the bank, then check your current balance against what it should be ("Matches" or "Off by $X").
+- **Reports** — Search what you've paid by bill name, type (bill or subscription) and category, for this or last month, this or last year, or any dates — totals by bill and by month.
+- **Calendar** — Bill due dates appear on the calendar.
+- **Export** — Settings → Data → Export Finance Data downloads everything, decrypted in your browser, as one ZIP: a spreadsheet each for budget categories, bills, bill payments, spending, savings funds and entries, goals, paydays and payday lines; one sheet of every transaction; and a complete JSON backup. The download is not encrypted, so keep it somewhere safe.
+
+> **Disclaimer:** Chronicles takes reasonable steps to keep your data secure — everything in Finance is encrypted in your browser before it's saved, and the server never sees it. But Chronicles is **not a banking app or a financial service**, and no system is perfectly secure. You are responsible for your financial data: what you choose to store, keeping your own records and backups, and securing your account and devices. By using Finance you accept the risk of storing and maintaining that information here.
 
 ### Health Reporting
 
@@ -206,12 +222,12 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
 - **Account** - Username, display name (edit in place), and email (changing it asks for your password)
 - **Preferences** - Timezone and the weather forecast city
 - **Theme** - Light/dark mode and 30 accent color presets
-- **Features** - Enable/disable health tracking, planning, entertainment, cycle tracking, and more
+- **Features** - Enable/disable health tracking, planning, entertainment, cycle tracking, Finance and paycheck reconcile, and more
 - **Calendar Sync** - Connect Google Calendar, choose the target calendar, toggle imports, manage the Apple ICS feed, and clean up old events
 - **Entry Images** - Toggle the feature, enter your Cloudflare R2 credentials (autosaved and master-key encrypted), test the connection, and follow the built-in setup guide
 - **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant
 - **Security** - Remember me, change password, active sessions, recovery key, and two-factor authentication (TOTP setup wizard with QR code and backup codes)
-- **Data** - Default topics, seed test data, export to CSV, import entries (CSV) and a Daily Log (JSON) — each import has a downloadable example file
+- **Data** - Default topics, seed test data (and sample Finance data when Finance is on), export to CSV, export all Finance data (a ZIP of spreadsheets plus a JSON backup), import entries (CSV) and a Daily Log (JSON) — each import has a downloadable example file
 - **Privacy** and **Sign Out**
 
 ## Getting Started
