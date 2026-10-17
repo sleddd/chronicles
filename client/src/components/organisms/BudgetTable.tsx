@@ -47,6 +47,22 @@ const BudgetTotal = styled(TotalRow)`
   }
 `;
 
+/* Totals row: rule on top, the card heading font a touch smaller (like Bills'
+   Total Active Bills), amounts italic */
+const BudgetTotals = styled(BudgetTotal)`
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 300;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  & > :not(:first-child) { font-style: italic; }
+`;
+
 const HeadRow = styled(BudgetTotal)`
   padding-top: 0;
   font-size: 10px;
@@ -229,13 +245,13 @@ export function BudgetTable({ categories, bills, expenses, paydays, month, onMon
               </BudgetRow>
             );
           })}
-          <BudgetTotal $cols={COLS}>
-            <span>Total</span>
+          <BudgetTotals $cols={COLS}>
+            <span>Totals</span>
             <Cell $right>{formatCents(summary.totals.plannedCents)}</Cell>
             <Cell $right>{formatCents(summary.totals.billsCents)}</Cell>
             <Cell $right>{formatCents(summary.totals.spendingCents)}</Cell>
             <Cell $right>{formatCents(summary.totals.leftCents)}</Cell>
-          </BudgetTotal>
+          </BudgetTotals>
         </Table>
       )}
 
