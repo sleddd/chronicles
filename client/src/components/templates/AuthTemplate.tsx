@@ -78,7 +78,7 @@ export function AuthTemplate({ title, children, footer, brand }: AuthTemplatePro
     <Wrapper>
       <Card>
         <LogoMark>
-          <BrandMark size={96} gradientId="logo-auth" />
+          <BrandMark size={84} gradientId="logo-auth" />
           <LogoText>Chronicles</LogoText>
         </LogoMark>
         {!brand && <PageTitle>{title}</PageTitle>}

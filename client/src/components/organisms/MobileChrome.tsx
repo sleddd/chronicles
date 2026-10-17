@@ -86,7 +86,7 @@ export function MobileChrome() {
     <>
       <MobileNavBar>
         <LogoContainer onClick={() => { setOpen(false); navigate('/'); }}>
-          <BrandMark size={36} gradientId="logo-mobile" />
+          <BrandMark size={32} gradientId="logo-mobile" />
           <Logo>Chronicles</Logo>
         </LogoContainer>
         <MenuButton onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'}>

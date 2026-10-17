@@ -90,7 +90,7 @@ Settings → Theme offers **30 named accent presets** (`ACCENT_PRESETS` in `Sett
   pass a page-unique `gradientId`). Its gradient ends on the user's accent (`--logo-top/mid/low/end`,
   set in `App.tsx`): mostly the accent itself — a light accent tint at the very top → the accent → a slightly deeper shade — in dark, deep
   accent → accent in light. The clock hands and hub use `--color-accent` in both. The C is drawn 20% up from the source art and the
-  hands shortened so they never touch it. Nav cell: 60px mark in the 92px rail. Used on the nav rail, mobile bar and sign-in/register/recover.
+  hands shortened so they never touch it. Nav cell: 52px mark in the 92px rail. Used on the nav rail, mobile bar and sign-in/register/recover.
   Static copies (favicon `public/chronicles-logo.svg`, `favicon.ico`, `public/icons/*.png`) are
   the default Teal on the dark canvas, since they load before the user's accent is known.
 - **Section tabs** (Health, Kitchen, Roadmap, Finance) all use `SectionTabBar`/`SectionTab` from

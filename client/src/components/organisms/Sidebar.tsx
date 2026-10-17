@@ -197,7 +197,7 @@ export const Sidebar = memo(function Sidebar() {
   return (
     <SidebarRoot $mobileOpen={mobileNavOpen}>
       <LogoBtn $active={at('/')} onClick={() => navigate('/')} title="Dashboard" aria-label="Dashboard">
-        <BrandMark size={60} gradientId="logo-rail" />
+        <BrandMark size={52} gradientId="logo-rail" />
         <SrOnly>Dashboard</SrOnly>
       </LogoBtn>
 
