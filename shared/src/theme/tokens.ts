@@ -128,26 +128,26 @@ export const lightTheme = {
   },
 } as const;
 
-/** Dark theme — deep charcoal canvas (#1b1d26) */
+/** Dark theme — soft slate canvas (#20232a) */
 export const darkTheme = {
   ...shared,
   colors: {
-    background: '#1b1d26',
-    surfaceDeep: '#13151e',
-    surface: '#22252f',
-    surfaceHover: '#2a2d38',
-    surfaceOverlay: 'rgba(27, 29, 38, 0.92)',
-    surfaceOverlayLight: 'rgba(27, 29, 38, 0.8)',
-    surfaceOverlayBlur: 'rgba(27, 29, 38, 0.7)',
+    background: '#20232a',
+    surfaceDeep: '#1a1c22',
+    surface: '#272a33',
+    surfaceHover: '#2b2f38',
+    surfaceOverlay: 'rgba(32, 35, 42, 0.92)',
+    surfaceOverlayLight: 'rgba(32, 35, 42, 0.8)',
+    surfaceOverlayBlur: 'rgba(32, 35, 42, 0.7)',
 
-    text: '#f4f4f6',
-    textSecondary: '#a0a0aa',
-    textMuted: '#74747f',
-    textFaint: '#56565f',
-    textInverse: '#0d0d10',
+    text: '#f7f8fa',
+    textSecondary: '#e6e9ee',
+    textMuted: '#cdd2da',
+    textFaint: '#a3a9b5',
+    textInverse: '#14161b',
 
-    border: '#262931',
-    borderSoft: '#262931',
+    border: '#272a34',
+    borderSoft: '#272a34',
     borderFocus: '#8a82e6',
     accentStroke: '#8a82e6',
 

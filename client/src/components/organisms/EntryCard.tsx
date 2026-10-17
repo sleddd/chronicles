@@ -36,7 +36,7 @@ function extractTitle(html: string, fallback?: string): string {
 
 /* Spreadsheet row (see EntryTable): Topic over Date | Entry | controls.
    Shared row style (styles/entryRow): sunken rows; the open entry, the
-   hovered row and the first-row hint use the page colour + accent bar. */
+   hovered row and the first-row hint use the page (editor) colour. */
 const Row = styled.div<{ $active?: boolean; $hint?: boolean }>`
   position: relative;
   display: grid;

@@ -36,6 +36,7 @@ const Check = styled.label`
 `;
 
 const HISTORY_COLS = 'minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)) 110px';
+const HISTORY_COLS_PHONE = 'minmax(0, 1fr) minmax(0, 1fr) 90px';
 
 const HistoryRow = styled(Row)`
   cursor: pointer;
@@ -182,7 +183,7 @@ function Reconcile() {
               onDelete={() => { void paydays.remove(current.id); setSelectedId(null); }}
             />
           )}
-          <Table>
+          <Table $cols={HISTORY_COLS} $phoneCols={HISTORY_COLS_PHONE}>
             <HistoryHead $cols={HISTORY_COLS} as="div" aria-hidden="true">
               <span>Payday</span><Cell $right>Starting</Cell><Cell $right>Paid</Cell><Cell $right>Leftover</Cell><Cell $right>Status</Cell>
             </HistoryHead>

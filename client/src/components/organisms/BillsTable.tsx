@@ -11,6 +11,7 @@ import {
   newId, nextUnpaidDue, parseMoney, todayStr, undoLastPayment,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
+import { continueRules } from '../../styles/columnRules.js';
 
 type BillRecord = FinanceRecord<'bills'>;
 
@@ -44,21 +45,26 @@ const CardTitle = styled.h3`
 
 // Name · category (centred, compact) · amount (with room either side) · due · actions
 const COLS = 'minmax(0, 1fr) 140px 170px 120px minmax(0, auto)';
+/* Phone: name | amount. Wide enough for the 18px total; ROW_PAD_X = Row's side padding */
+const PHONE_AMOUNT = 130;
+const ROW_PAD_X = 8;
+const PHONE_COLS = `minmax(0, 1fr) ${PHONE_AMOUNT}px`;
 
 const BillRow = styled(Row)`
   & > :nth-child(2) { text-align: center; }
-  & > :nth-child(3) { padding: 0 28px; }
+  & > :nth-child(3) { padding-left: 28px; padding-right: 28px; }
   @media (max-width: 760px) {
-    grid-template-columns: minmax(0, 1fr) 100px;
     & > :nth-child(2), & > :nth-child(4) { display: none; }
-    & > :nth-child(5) { grid-column: 1 / -1; justify-content: flex-start; }
-    & > :nth-child(3) { padding: 0; }
+    && > :nth-child(5) { grid-column: 1 / -1; justify-content: flex-start; border-left: 0; padding-left: 0; padding-top: 0; ${continueRules(PHONE_AMOUNT - ROW_PAD_X)} }
+    & > :nth-child(3) { padding-left: 10px; padding-right: 0; }
   }
 `;
 
 /* Totals row: title and amounts all in the card heading font, a touch smaller */
 const BillTotal = styled(TotalRow)`
-  & > :nth-child(3) { padding: 0 28px; }
+  border-top: 1px solid var(--border-subtle);
+  & > * { padding-top: 18px; }
+  & > :nth-child(3) { padding-left: 28px; padding-right: 28px; }
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 300;
@@ -69,13 +75,13 @@ const BillTotal = styled(TotalRow)`
   /* The amounts are italic; the title stays upright */
   & > :not(:first-child) { font-style: italic; }
   @media (max-width: 760px) {
-    grid-template-columns: minmax(0, 1fr) 100px;
     & > :nth-child(2), & > :nth-child(4), & > :nth-child(5) { display: none; }
-    & > :nth-child(3) { padding: 0; }
+    & > :nth-child(3) { padding-left: 10px; padding-right: 0; overflow: visible; overflow-wrap: anywhere; }
   }
 `;
 
 const EditorBox = styled.div`
+  grid-column: 1 / -1;
   padding: 8px 0 16px;
   border-top: 1px solid var(--border-subtle);
   input[type='checkbox'] { width: 18px; height: 18px; flex: 0 0 auto; }
@@ -293,7 +299,7 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
             : 'Nothing here for this filter.'}
         </Note>
       ) : (
-        <Table>
+        <Table $cols={COLS} $phoneCols={PHONE_COLS} $phoneAt={760}>
           {rows.map(({ bill, due }) => (editing === bill.id ? (
             <BillEditor key={bill.id} bill={bill} categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />
           ) : (
@@ -326,18 +332,18 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
               </Actions>
             </BillRow>
           )))}
+          {bills.some(billCounts) && (
+            <BillTotal $cols={COLS}>
+              <span>Total Active Bills</span>
+              <span />
+              <Cell $right>{formatCents(totals.monthly)}/mo</Cell>
+              <Cell>{formatCents(totals.yearly)}/yr</Cell>
+              <Cell $right>Subscriptions {formatCents(totals.subscriptionsMonthly)}/mo</Cell>
+            </BillTotal>
+          )}
         </Table>
       )}
 
-      {bills.some(billCounts) && (
-        <BillTotal $cols={COLS} style={{ marginTop: 16 }}>
-          <span>Total Active Bills</span>
-          <span />
-          <Cell $right>{formatCents(totals.monthly)}/mo</Cell>
-          <Cell>{formatCents(totals.yearly)}/yr</Cell>
-          <Cell $right>Subscriptions {formatCents(totals.subscriptionsMonthly)}/mo</Cell>
-        </BillTotal>
-      )}
     </BillsSection>
   );
 }

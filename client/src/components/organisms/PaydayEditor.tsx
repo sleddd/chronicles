@@ -11,6 +11,7 @@ import {
   suggestBillsForPayday, todayStr, centsToInput,
 } from '../../utils/finance.js';
 import type { FinanceRecord, Payday, PaydayItem, PaydaySpend } from '../../types/finance.js';
+import { continueRules } from '../../styles/columnRules.js';
 
 export type PaydayRecord = FinanceRecord<'paydays'>;
 
@@ -75,7 +76,7 @@ const ItemRow = styled(Row)`
   @media (max-width: 640px) {
     grid-template-columns: ${ITEM_COLS_PHONE};
     & > :nth-child(4) { display: none; }
-    & > :nth-child(5) { grid-column: 2 / -1; justify-content: flex-start; }
+    & > :nth-child(5) { grid-column: 2 / -1; justify-content: flex-start; padding-top: 0; ${continueRules(96 - 8)} }
   }
 `;
 
@@ -424,7 +425,7 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
           />
         )}
         {items.length > 0 && (
-          <Table>
+          <Table $cols={ITEM_COLS} $phoneCols={ITEM_COLS_PHONE}>
             {items.map(i => (editingId === i.id ? (
               <div key={i.id} style={{ padding: '12px 0', borderTop: '1px solid var(--border-subtle)' }}>
                 <LineForm
@@ -484,7 +485,7 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
           : undefined}
       >
         {payday.spending.length > 0 && (
-          <Table>
+          <Table $cols={ITEM_COLS} $phoneCols={ITEM_COLS_PHONE}>
             {[...payday.spending].sort((a, b) => a.date.localeCompare(b.date)).map(s => (
               <ItemRow key={s.id} $cols={ITEM_COLS} $muted={!!s.clearedOn}>
                 <ClearBox checked={!!s.clearedOn} disabled={closed} aria-label={`${s.description} cleared`} onChange={e => toggleSpend(s.id, e.target.checked)} />

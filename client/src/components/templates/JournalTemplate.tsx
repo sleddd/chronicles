@@ -19,7 +19,7 @@ const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean;
   flex-direction: column;
   overflow-y: auto;
   background: var(--bg-app);
-  border-right: 1px solid var(--border-subtle);
+  /* No divider: the open row (page colour) blends into the editor beside it */
 
   @media (max-width: 1024px) {
     width: 100%;

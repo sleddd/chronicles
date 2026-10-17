@@ -33,9 +33,12 @@ const Cards = styled.div`
 
 const CARDS_KEY = 'finance-reports-collapsed-v1';
 
+
 const BILL_COLS = 'minmax(0, 1fr) 140px 90px 130px 130px';
 const MONTH_COLS = 'minmax(0, 1fr) 90px 140px';
 const PAY_COLS = '130px minmax(0, 1fr) 140px 120px';
+const BILL_COLS_PHONE = 'minmax(0, 1fr) 110px';
+const PAY_COLS_PHONE = '100px minmax(0, 1fr) 100px';
 
 const BillRow = styled(Row)`
   & > :nth-child(2) { text-align: center; }
@@ -46,7 +49,9 @@ const BillRow = styled(Row)`
 `;
 
 const BillHead = styled(TotalRow)`
-  padding-top: 0;
+  /* Top rule closes the table; the column rules run up to it */
+  border-top: 1px solid var(--border-subtle);
+  & > * { padding-top: 12px; }
   font-size: 10px;
   color: var(--text-tertiary);
   & > :nth-child(2) { text-align: center; }
@@ -57,7 +62,9 @@ const BillHead = styled(TotalRow)`
 `;
 
 const MonthHead = styled(TotalRow)`
-  padding-top: 0;
+  /* Top rule closes the table; the column rules run up to it */
+  border-top: 1px solid var(--border-subtle);
+  & > * { padding-top: 12px; }
   font-size: 10px;
   color: var(--text-tertiary);
 `;
@@ -71,7 +78,8 @@ const PayRow = styled(Row)`
 
 /* Totals: the card heading font, a touch smaller, amounts italic */
 const Totals = styled(TotalRow)`
-  margin-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  & > * { padding-top: 18px; }
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 300;
@@ -186,6 +194,7 @@ function Reports() {
         />
       </StatStrip>
 
+
       {records.length === 0 ? (
         <Note style={{ marginTop: 32, fontStyle: 'italic' }}>
           Nothing paid yet. Use Mark paid on Budget &amp; Bills{reconcileOn ? ' or add bills to a payday on Reconcile' : ''}, and your payments show up here.
@@ -196,7 +205,7 @@ function Reports() {
             {summary.byBill.length === 0 ? (
               <Note style={{ fontStyle: 'italic' }}>No payments match these filters.</Note>
             ) : (
-              <Table>
+              <Table $cols={BILL_COLS} $phoneCols={BILL_COLS_PHONE}>
                 <BillHead $cols={BILL_COLS} aria-hidden="true">
                   <span>Bill</span><span>Category</span><Cell $right>Payments</Cell><Cell $right>Last paid</Cell><Cell $right>Total</Cell>
                 </BillHead>
@@ -217,7 +226,7 @@ function Reports() {
           </CollapsibleCard>
 
           <CollapsibleCard id="by-month" title="By month" storageKey={CARDS_KEY}>
-            <Table>
+            <Table $cols={MONTH_COLS}>
               <MonthHead $cols={MONTH_COLS} aria-hidden="true">
                 <span>Month</span><Cell $right>Payments</Cell><Cell $right>Paid</Cell>
               </MonthHead>
@@ -238,7 +247,7 @@ function Reports() {
             {matches.length === 0 ? (
               <Note style={{ fontStyle: 'italic' }}>No payments match these filters.</Note>
             ) : (
-              <Table>
+              <Table $cols={PAY_COLS} $phoneCols={PAY_COLS_PHONE}>
                 {[...matches].reverse().map(r => (
                   <PayRow key={r.key} $cols={PAY_COLS}>
                     <Cell $small $muted>{formatDay(r.date)}</Cell>

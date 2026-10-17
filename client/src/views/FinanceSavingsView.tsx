@@ -112,7 +112,7 @@ function PotCard({ pot, onSave, onDelete }: {
       </InlineForm>
 
       {pot.entries.length > 0 && (
-        <Table style={{ marginTop: 16 }}>
+        <Table $cols={ENTRY_COLS} style={{ marginTop: 16 }}>
           {[...pot.entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50).map(e => (
             <Row key={e.id} $cols={ENTRY_COLS}>
               <span>{e.amountCents >= 0 ? 'Added' : 'Took out'}<SubText>{[formatDay(e.date), e.note].filter(Boolean).join(' · ')}</SubText></span>

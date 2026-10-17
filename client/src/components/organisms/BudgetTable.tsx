@@ -25,6 +25,7 @@ interface BudgetTableProps {
 }
 
 const COLS = 'minmax(0, 1.4fr) 120px repeat(3, minmax(0, 1fr))';
+const PHONE_COLS = 'minmax(0, 1fr) 100px 100px';
 
 /* First block on the page: FinanceShell places it just under the tabs, no top rule. */
 const Top = styled.section`
@@ -33,7 +34,6 @@ const Top = styled.section`
 `;
 
 const BudgetRow = styled(Row)`
-  align-items: start;
   @media (max-width: 640px) {
     grid-template-columns: minmax(0, 1fr) 100px 100px;
     & > :nth-child(3), & > :nth-child(4) { display: none; }
@@ -50,8 +50,7 @@ const BudgetTotal = styled(TotalRow)`
 /* Totals row: rule on top, the card heading font a touch smaller (like Bills'
    Total Active Bills), amounts italic */
 const BudgetTotals = styled(BudgetTotal)`
-  margin-top: 4px;
-  padding-top: 14px;
+  & > * { padding-top: 14px; }
   border-top: 1px solid var(--border-subtle);
   font-family: var(--font-display);
   font-size: 18px;
@@ -64,7 +63,8 @@ const BudgetTotals = styled(BudgetTotal)`
 `;
 
 const HeadRow = styled(BudgetTotal)`
-  padding-top: 0;
+  /* Sits right on the stats' hairline; the gap is inside the cells so the column rules reach it */
+  & > * { padding-top: 14px; }
   font-size: 10px;
   color: var(--text-tertiary);
 `;
@@ -195,7 +195,7 @@ export function BudgetTable({ categories, bills, expenses, paydays, month, onMon
       </Month>
 
       {/* Hairline between the stats and the category table's headers */}
-      <StatStrip $cols={4} style={{ paddingBottom: 36, marginBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
+      <StatStrip $cols={4} style={{ paddingBottom: 36, borderBottom: '1px solid var(--border-subtle)' }}>
         <Stat label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
         <Stat label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
         <Stat label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
@@ -211,7 +211,7 @@ export function BudgetTable({ categories, bills, expenses, paydays, month, onMon
           </Actions>
         </>
       ) : (
-        <Table>
+        <Table $cols={COLS} $phoneCols={PHONE_COLS}>
           <HeadRow $cols={COLS} aria-hidden="true">
             <span>Category</span><Cell $right>Planned</Cell><Cell $right>Bills</Cell><Cell $right>Spending</Cell><Cell $right>Left</Cell>
           </HeadRow>
@@ -232,7 +232,7 @@ export function BudgetTable({ categories, bills, expenses, paydays, month, onMon
                   )}
                 </NameCell>
                 {cat && r.categoryId !== UNCATEGORIZED
-                  ? <PlannedInput key={`${cat.id}:${cat.monthlyPlannedCents}`} category={cat} onSave={onSave} />
+                  ? <Cell $right><PlannedInput key={`${cat.id}:${cat.monthlyPlannedCents}`} category={cat} onSave={onSave} /></Cell>
                   : <Cell $right $muted>—</Cell>}
                 <Cell $right>
                   <Money cents={r.billsCents} />

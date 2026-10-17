@@ -3,6 +3,8 @@ import { ScrollList } from '../atoms/ScrollList.js';
 import { CorrelationChart } from '../molecules/charts/CorrelationChart.js';
 import { FrequencyChart } from '../molecules/charts/FrequencyChart.js';
 import { SeverityTrendChart } from '../molecules/charts/SeverityTrendChart.js';
+import { TrendChart } from '../molecules/charts/TrendChart.js';
+import { StatTile, StatTileRow } from '../molecules/StatTile.js';
 import type { PeriodType } from '../../types/health.js';
 import type {
   DecryptedSymptom,
@@ -28,37 +30,10 @@ import React, { useMemo, useState } from 'react';
 
 /* ── Styled ── */
 
-/* Plain bordered cards — no fill or shadow (matches the Health dashboard cards). */
-const StatCard = styled.div`
-  border: 1px solid var(--border-default);
-  border-radius: var(--r-lg, 2px);
-  padding: 14px;
-  text-align: center;
-`;
-
-const StatValue = styled.div<{ $color: string }>`
-  font-family: var(--font-display);
-  font-size: 31px;
-  font-weight: 300;
-  color: ${({ $color }) => $color};
-`;
-
-const StatLabel = styled.div`
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-top: 2px;
-`;
-
-const StatSub = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-top: 4px;
-`;
-
+/* Flat report section — a hairline top rule, content on the canvas (the dashboard style). */
 const SectionCard = styled.div`
-  border: 1px solid var(--border-default);
-  border-radius: var(--r-lg, 2px);
-  padding: 16px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 16px;
 `;
 
 const SectionTitle = styled.h3`
@@ -201,93 +176,6 @@ const ImpactChange = styled.div<{ $positive: boolean; $neutral: boolean }>`
   color: ${({ $positive, $neutral, theme }) => $neutral ? theme.colors.textMuted : $positive ? theme.colors.success : theme.colors.danger};
 `;
 
-const WellnessGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  column-gap: 24px;
-  row-gap: 16px;
-`;
-
-const WellnessTrendWrap = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 80px;
-  margin-bottom: 8px;
-`;
-
-const WellnessTrendCol = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  justify-content: flex-end;
-`;
-
-const WellnessTrendBar = styled.div<{ $height: number; $color: string }>`
-  width: 100%;
-  min-width: 10px;
-  height: ${({ $height }) => Math.max($height, 2)}px;
-  background: ${({ $color }) => $color};
-  border-radius: 3px 3px 0 0;
-`;
-
-const WellnessTrendLabel = styled.span`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-top: 3px;
-  white-space: nowrap;
-`;
-
-const WellnessDotRow = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 80px;
-  margin-bottom: 8px;
-`;
-
-const WellnessDotCol = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  justify-content: flex-end;
-`;
-
-const WellnessDot = styled.div<{ $bottom: number; $color: string }>`
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: ${({ $color }) => $color};
-  margin-bottom: ${({ $bottom }) => $bottom}px;
-`;
-
-const TrendChartLegend = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-bottom: 4px;
-`;
-
-const TrendLegendDot = styled.div<{ $color: string }>`
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: ${({ $color }) => $color};
-  flex-shrink: 0;
-`;
-
-const TrendLegendItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-`;
-
 const InsightRow = styled.div`
   padding: 10px 12px;
   border-radius: ${({ theme }) => theme.borderRadius.md}px;
@@ -314,11 +202,32 @@ const InsightBadge = styled.span<{ $positive: boolean }>`
   padding: 1px 6px;
   border-radius: 3px;
   margin-left: 6px;
-  background: ${({ $positive }) => $positive ? 'rgba(90,138,106,0.12)' : 'rgba(0,0,0,0.06)'};
-  color: ${({ $positive }) => $positive ? '#5A8A6A' : '#888'};
+  background: ${({ $positive }) => $positive ? 'var(--color-success-subtle)' : 'var(--bg-sunken)'};
+  color: ${({ $positive }) => $positive ? 'var(--color-success)' : 'var(--text-tertiary)'};
 `;
 
 /* ── Helpers ── */
+
+type WellnessMetric = 'water' | 'mood' | 'sleep';
+
+const METRICS: Record<WellnessMetric, { name: string; color: string; max: number; unit: string; pick: (p: WellnessTrendPoint) => number }> = {
+  water: { name: 'Water', color: 'var(--chart-blue)', max: 8, unit: '', pick: p => p.waterGlasses },
+  mood: { name: 'Mood', color: 'var(--chart-amber)', max: 5, unit: '', pick: p => p.moodScore },
+  sleep: { name: 'Sleep', color: 'var(--chart-violet)', max: 10, unit: 'h', pick: p => p.sleepHours },
+};
+
+/* Trailing 7-day average of the logged (non-zero) days — the pale comparison line. */
+function rollingAverage(vals: (number | null)[]): (number | null)[] {
+  return vals.map((_, i) => {
+    const win = vals.slice(Math.max(0, i - 6), i + 1).filter((v): v is number => v !== null);
+    return win.length ? +(win.reduce((t, v) => t + v, 0) / win.length).toFixed(2) : null;
+  });
+}
+
+const shortDate = (iso: string) => {
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
+};
 
 function strengthColor(c: number): string {
   if (c >= 75) return '#9B4444';
@@ -408,58 +317,51 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
     };
   }, [wellness]);
 
+  const [metric, setMetric] = useState<WellnessMetric>('sleep');
+  const chart = useMemo(() => {
+    const m = METRICS[metric];
+    const values = wellnessTrend.map(p => (m.pick(p) > 0 ? m.pick(p) : null));
+    return { m, labels: wellnessTrend.map(p => shortDate(p.date)), values, avg: rollingAverage(values) };
+  }, [wellnessTrend, metric]);
+
   return (
     <ScrollList $gap="24px" $padding="16px 0">
-      {/* Wellness summary stats */}
+      {/* Wellness: one tile per metric; the chosen tile drives the trend chart */}
       {wellnessSummary && (
-        <WellnessGrid>
-          <StatCard>
-            <StatValue $color={accentColor}>{wellnessSummary.avgWater.toFixed(1)}</StatValue>
-            <StatLabel>Avg Water</StatLabel>
-            <StatSub>/ 8 glasses · {wellnessSummary.days} days</StatSub>
-          </StatCard>
-          <StatCard>
-            <StatValue $color={accentColor}>{wellnessSummary.avgMood > 0 ? wellnessSummary.avgMood.toFixed(1) : '—'}</StatValue>
-            <StatLabel>Avg Mood</StatLabel>
-            <StatSub>/ 5</StatSub>
-          </StatCard>
-          <StatCard>
-            <StatValue $color={accentColor}>{wellnessSummary.avgSleep > 0 ? `${wellnessSummary.avgSleep.toFixed(1)}h` : '—'}</StatValue>
-            <StatLabel>Avg Sleep</StatLabel>
-            {wellnessSummary.avgSleepQ > 0 && <StatSub>Quality {wellnessSummary.avgSleepQ.toFixed(1)}/5</StatSub>}
-          </StatCard>
-        </WellnessGrid>
-      )}
-
-      {/* Wellness trends */}
-      {wellnessTrend.length > 1 && (
         <SectionCard>
           <SectionTitle>Wellness Trends</SectionTitle>
-          <TrendChartLegend>
-            <TrendLegendItem><TrendLegendDot $color={accentColor} /><span>Water (glasses)</span></TrendLegendItem>
-            <TrendLegendItem><TrendLegendDot $color="#5A8A6A" /><span>Mood (×2)</span></TrendLegendItem>
-            <TrendLegendItem><TrendLegendDot $color="#B8965A" /><span>Sleep (hours ÷ 2)</span></TrendLegendItem>
-          </TrendChartLegend>
-          <WellnessTrendWrap>
-            {wellnessTrend.slice(-14).map((pt, i) => {
-              const maxH = 72;
-              const waterH  = (pt.waterGlasses / 8) * maxH;
-              const moodH   = pt.moodScore   > 0 ? ((pt.moodScore * 2) / 10) * maxH : 0;
-              const sleepH  = pt.sleepHours  > 0 ? (pt.sleepHours / 12) * maxH : 0;
-              const date = new Date(pt.date + 'T12:00:00');
-              const label = `${date.getMonth() + 1}/${date.getDate()}`;
-              return (
-                <WellnessTrendCol key={i} title={`${pt.date}: ${pt.waterGlasses} water, mood ${pt.moodScore}/5, ${pt.sleepHours}h sleep`}>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, flex: 1, justifyContent: 'center' }}>
-                    <WellnessTrendBar $height={waterH} $color={accentColor} style={{ width: 5 }} />
-                    {moodH > 0  && <WellnessTrendBar $height={moodH}  $color="#5A8A6A" style={{ width: 5 }} />}
-                    {sleepH > 0 && <WellnessTrendBar $height={sleepH} $color="#B8965A" style={{ width: 5 }} />}
-                  </div>
-                  <WellnessTrendLabel>{label}</WellnessTrendLabel>
-                </WellnessTrendCol>
-              );
-            })}
-          </WellnessTrendWrap>
+          {wellnessTrend.length > 1 && (
+            <TrendChart
+              ariaLabel={`${chart.m.name} by day`}
+              labels={chart.labels}
+              yMax={chart.m.max}
+              formatTick={v => `${v}${chart.m.unit}`}
+              series={[
+                { label: chart.m.name, values: chart.values, color: chart.m.color },
+                { label: '7-day average', values: chart.avg, ghost: true },
+              ]}
+            />
+          )}
+          <StatTileRow $cols={3} style={{ marginTop: 24 }}>
+            <StatTile
+              value={wellnessSummary.avgWater.toFixed(1)} unit="/8" name="Water"
+              caption={`Avg glasses · ${wellnessSummary.days} days`}
+              progress={wellnessSummary.avgWater / 8} color={METRICS.water.color}
+              selected={metric === 'water'} onSelect={() => setMetric('water')}
+            />
+            <StatTile
+              value={wellnessSummary.avgMood > 0 ? wellnessSummary.avgMood.toFixed(1) : '—'} unit="/5" name="Mood"
+              caption="Avg score"
+              progress={wellnessSummary.avgMood / 5} color={METRICS.mood.color}
+              selected={metric === 'mood'} onSelect={() => setMetric('mood')}
+            />
+            <StatTile
+              value={wellnessSummary.avgSleep > 0 ? wellnessSummary.avgSleep.toFixed(1) : '—'} unit="h" name="Sleep"
+              caption={wellnessSummary.avgSleepQ > 0 ? `Avg per night · quality ${wellnessSummary.avgSleepQ.toFixed(1)}/5` : 'Avg per night'}
+              progress={wellnessSummary.avgSleep / 10} color={METRICS.sleep.color}
+              selected={metric === 'sleep'} onSelect={() => setMetric('sleep')}
+            />
+          </StatTileRow>
         </SectionCard>
       )}
 

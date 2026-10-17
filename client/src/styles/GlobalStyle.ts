@@ -1,5 +1,7 @@
 import { createGlobalStyle } from 'styled-components';
 
+/* Work Sans + Open Sans, bundled with the app (not Google Fonts) so Safari/iOS load them */
+import './fonts.css';
 /* Base styles for the core primitives (components/atoms/core, ch-* classes) */
 import './core.css';
 

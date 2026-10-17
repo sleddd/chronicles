@@ -20,6 +20,7 @@ import { toDateStr, startOfWeek, startOfMonth } from '../utils/dateUtils.js';
 import type { DateFilter } from '../types/health.js';
 import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { tableColumnRules } from '../styles/columnRules.js';
 
 const DATE_FILTERS = [
   { value: 'all' as const, label: 'All' },
@@ -141,9 +142,11 @@ const PrintTable = styled.table`
   th, td {
     text-align: left;
     vertical-align: top;
-    padding: 6px 8px 6px 0;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--border-default);
   }
+  th:first-child, td:first-child { padding-left: 0; }
+  ${tableColumnRules}
   th {
     font-family: var(--font-label);
     font-size: 9px;

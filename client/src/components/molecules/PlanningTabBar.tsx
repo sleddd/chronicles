@@ -1,38 +1,8 @@
-import styled from 'styled-components';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { SectionTabBar, SectionTab } from '../../styles/sectionTabs.js';
 
-const Bar = styled.nav`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  padding: 8px 0;
-  border-top: 1px solid var(--border-subtle);
-`;
-
-const TabBtn = styled.button<{ $active?: boolean }>`
-  padding: 5px 12px;
-  font-family: var(--sans, 'Lato', sans-serif);
-  font-size: 12.5px;
-  font-weight: ${({ $active }) => $active ? 600 : 400};
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--ink-3, #6b645a)'};
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 120ms ease;
-
-  /* Align the first tab's text with the column's left edge. */
-  &:first-of-type { padding-left: 0; }
-
-  &:hover:not([aria-selected="true"]) {
-    color: var(--ink, #2b2824);
-    font-weight: 600;
-  }
-`;
+const Bar = SectionTabBar;
+const TabBtn = SectionTab;
 
 const TABS = [
   { label: 'Goals', path: '/goals' },

@@ -2,10 +2,12 @@ import { useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
 
-/* Minimal bordered card; the title row collapses it. */
+/* Lifted panel: a surface fill a step off the canvas (visible in dark) with a soft
+   hairline and slightly rounded corners; the title row collapses it. */
 const Card = styled.section`
-  border: 1px solid var(--border-default);
-  border-radius: var(--r-lg, 2px);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg, 4px);
   padding: 20px 24px;
   @media (max-width: 480px) { padding: 16px; }
 `;

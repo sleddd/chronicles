@@ -4,7 +4,9 @@ import { css } from 'styled-components';
  * ONE row style for every list in the app (journal, topic/health/goals/
  * shopping/planner lists, Topics):
  *   - journal (entryRow): rows on the sunken fill; the active row (hovered,
- *     or the open entry) lifts to the page colour with a 3px accent bar
+ *     or the open entry) lifts to the page colour — the editor's colour, with no
+ *     divider between list and editor, so the open row runs into the edit area.
+ *     No accent bar (it clashed with the nav rail's accent tab)
  *   - every other list (entryRowPlain): the reverse — rows on the page
  *     colour, the active row sinks to the sunken fill, no bar
  *   - journal only: the first row starts active, as a hint, until the
@@ -18,7 +20,6 @@ const HOVER_FLAG = 'entryRowHover';
 
 export const rowActive = css`
   background: var(--bg-app);
-  box-shadow: inset 3px 0 0 var(--color-accent);
 `;
 
 /* Non-journal lists are the reverse: rows on the page colour, the active row
@@ -37,7 +38,7 @@ const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: bo
   `}
 `;
 
-/** Journal list: active row has the 3px accent bar */
+/** Journal list: the active row lifts to the page (editor) colour */
 export const entryRow = rowStyle('var(--bg-sunken)', rowActive, true);
 /** Every other list (topic, health, goals, shopping, planner, Topics): page-colour rows, sunken active row, no bar */
 export const entryRowPlain = rowStyle('var(--bg-app)', rowActivePlain, false);

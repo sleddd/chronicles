@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
+import { BrandMark } from '../atoms/BrandMark.js';
 
 /* Reveal width: how far the main view slides right to expose the mobile bar. */
 const MOBILE_REVEAL_WIDTH = 240;
@@ -12,8 +13,8 @@ const SidebarRoot = styled.aside<{ $mobileOpen?: boolean }>`
   width: 92px;
   min-width: 92px;
   height: 100%;
-  background: var(--bg-app);
-  border-right: 1px solid var(--border-subtle);
+  /* A toned rail (no outline) — separates from the canvas by fill alone */
+  background: var(--bg-rail);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -32,37 +33,39 @@ const SidebarRoot = styled.aside<{ $mobileOpen?: boolean }>`
   }
 `;
 
-/* Brand logo block — the Chronicles poppy, pinned to the top. Doubles as the
-   Dashboard (home) nav item and matches the other nav icons: accent block only
-   when active (on the dashboard), otherwise transparent with theme text color. */
+/* Active rail item: lifted onto a lighter block with a 4px accent tab on the
+   rail's outer edge. Shared by the logo (Dashboard) and the icon rows. */
+const activeTab = `
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--color-accent);
+  }
+`;
+
+/* Brand logo block — the Chronicles mark (accent gradient) in a darker cell pinned
+   to the top. Doubles as the Dashboard (home) nav item: accent tab when active. */
 const LogoBtn = styled.button<{ $active?: boolean }>`
+  position: relative;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 60px;
+  height: 76px;
   padding: 0;
   border: none;
-  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  background: transparent;
+  background: var(--bg-rail-logo);
   color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-secondary)')};
-  transition: background 120ms ease, color 120ms ease;
+  transition: color 120ms ease;
 
-  &:hover {
-    background: ${({ $active }) => ($active ? 'transparent' : 'var(--bg-hover)')};
-    color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-primary)')};
-  }
-`;
-
-/* Inline poppy mark — strokes use currentColor so it follows the button color. */
-const LogoMark = styled.svg`
-  width: 30px;
-  height: 30px;
-  display: block;
-  stroke: currentColor;
-  fill: none;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-primary)')}; }
+  ${({ $active }) => ($active ? activeTab : '')}
 `;
 
 const NavScroll = styled.nav`
@@ -72,7 +75,9 @@ const NavScroll = styled.nav`
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  /* No top padding — the first item butts against the logo cell, so an active
+     Journal row has no gap above it */
+  padding: 0 0 12px;
 
   /* Firefox: hide the scrollbar until the sidebar is hovered. */
   scrollbar-width: none;
@@ -103,42 +108,40 @@ const NavScroll = styled.nav`
      bottom padding (plus safe-area inset) keeps the last item reachable above
      the browser chrome / home indicator. */
   ${NAV_COMPACT} {
-    justify-content: flex-start;
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 `;
 
-/* Icon-only nav button — active item gets a solid accent block (per design).
-   Rows grow to fill the sidebar height with a hairline divider between each. */
+/* Icon-only rail row — no dividers; the active row is lifted onto
+   --bg-rail-active with the accent tab. Settings sits at the bottom. */
 const NavIconBtn = styled.button<{ $active?: boolean }>`
-  flex: 1;
+  position: relative;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 56px;
+  height: 64px;
   padding: 0;
   border: none;
-  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  background: transparent;
+  background: ${({ $active }) => $active ? 'var(--bg-rail-active)' : 'transparent'};
   color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-secondary)'};
   transition: background 120ms ease, color 120ms ease;
 
-  &:last-of-type {
-    border-bottom: none;
-  }
+  &:last-of-type { margin-top: auto; }
 
   &:hover {
-    background: ${({ $active }) => $active ? 'transparent' : 'var(--bg-hover)'};
+    background: var(--bg-rail-active);
     color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-primary)'};
   }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
-  /* On the mobile reveal bar, keep natural height so the list can scroll
-     instead of stretching items to fill the viewport. */
+  ${({ $active }) => ($active ? activeTab : '')}
+
+  /* Mobile reveal bar: the list scrolls, so Settings follows the others. */
   ${NAV_COMPACT} {
-    flex: 0 0 auto;
-    min-height: 64px;
+    &:last-of-type { margin-top: 0; }
   }
 `;
 
@@ -159,7 +162,7 @@ const MaterialIcon = styled.span<{ $size?: number }>`
   font-family: 'Material Symbols Outlined';
   font-weight: normal;
   font-style: normal;
-  font-size: ${({ $size }) => $size ?? 26}px;
+  font-size: ${({ $size }) => $size ?? 24}px;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -194,25 +197,7 @@ export const Sidebar = memo(function Sidebar() {
   return (
     <SidebarRoot $mobileOpen={mobileNavOpen}>
       <LogoBtn $active={at('/')} onClick={() => navigate('/')} title="Dashboard" aria-label="Dashboard">
-        <LogoMark viewBox="0 0 100 100" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          {[0, 72, 144, 216, 288].map(deg => (
-            <g key={deg} transform={`rotate(${deg},50,50)`}>
-              <path strokeWidth="1.1" d="M44,47 C34,42 24,28 28,13 C32,4 48,4 50,8 C52,4 68,4 72,13 C76,28 66,42 56,47 Z" />
-              <path strokeWidth="0.7" d="M50,46 C50,36 50,22 50,10" />
-              <path strokeWidth="0.7" d="M50,36 C48,30 44,24 40,18" />
-              <path strokeWidth="0.7" d="M50,36 C52,30 56,24 60,18" />
-              <path strokeWidth="0.7" d="M50,28 C49,24 47,20 45,16" />
-              <path strokeWidth="0.7" d="M50,28 C51,24 53,20 55,16" />
-            </g>
-          ))}
-          <circle cx="50" cy="50" r="9" strokeWidth="1.1" />
-          <g strokeWidth="1">
-            {[0, 36, 72, 108, 144, 180, 216, 252, 288, 324].map(deg => (
-              <line key={deg} transform={`rotate(${deg},50,50)`} x1="50" y1="39" x2="50" y2="36" />
-            ))}
-          </g>
-          <circle cx="50" cy="50" r="2.5" fill="currentColor" stroke="none" />
-        </LogoMark>
+        <BrandMark size={60} gradientId="logo-rail" />
         <SrOnly>Dashboard</SrOnly>
       </LogoBtn>
 

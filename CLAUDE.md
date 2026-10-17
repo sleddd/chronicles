@@ -22,18 +22,31 @@ The design system lives **in the app code** (the separate `design-system/` folde
   `client/src/styles/core.css`. App code uses the atom wrappers (`TextInput`, `Select`, …) and
   `Icon` from `atoms/core/Icon.jsx`.
 - **Shared patterns** — field rows `FormField` + `styles/filledInputs.ts`, `PillButton`,
-  `CollapsibleCard`, `EntryListCard`/`EntryTable`. Reuse these rather than restyling locally.
+  `CollapsibleCard` (lifted panel: `--bg-surface` fill + `--border-subtle` hairline),
+  **column borders on spreadsheet tables** (not the entry lists — journal/topic/health lists have
+  none) — `columnRules(padY)` for grid rows (finance `Row`/`TotalRow`) and `tableColumnRules` for
+  `<table>`s (Meals, print report)
+  (`styles/columnRules.ts`); new table-like layouts use them too. Rules must run unbroken
+  top to bottom, so: finance tables pass their columns to `Table` (`$cols`, `$phoneCols`,
+  `$phoneAt`) and rows/headers/totals share them by subgrid (totals live *inside* the
+  `Table`, spaced with cell padding, never a margin); a cell that wraps onto its own line on
+  phones repaints the rules with `continueRules(columnsToTheRight - rowPaddingRight)`,
+  `EntryListCard`/`EntryTable`, and for reports `StatTile`/`StatTileRow` (tracked delta line,
+  thin 40px Work Sans figure, 4px bar in the metric's colour, name + caption; selectable tiles
+  lift with a hairline) and `charts/TrendChart` (faint grid, main line + soft area wash in its
+  `--chart-*` colour, pale ghost comparison lines). Reuse these rather than restyling locally.
 All UI must follow the rules below.
 
 ### Design Philosophy
-- **Borderless tonal panels** — Pure-white canvas (light) / deep-charcoal `#1b1d26` (dark).
+- **Borderless tonal panels** — Pure-white canvas (light) / slate `#20232a` with bright, high-contrast
+  greys (dark) — keep dark-theme greys bright; users find mid-greys washed out.
   Cards and inputs separate from the canvas by **fill tone**, not outline. Visible borders are
   hairline dividers only. **Inputs are filled** (`--bg-sunken`), not outlined.
 - **Dashboard widgets are borderless flat sections** (per the `app.jsx` mini-app, which is
   canonical): a 1px `--border-subtle` *top rule* + a tracked-uppercase label row, with content
   sitting directly on the canvas — NOT bordered/filled tiles. The grid is `2fr / 1fr` with a
   24px gap and **no vertical divider** between columns.
-- **Mostly squared corners** — Cards/tiles ~2px (`--r-lg`), filled inputs ~1px (`--r-md`). Action
+- **Mostly squared corners** — Cards/tiles 4px (`--r-lg`), filled inputs ~1px (`--r-md`). Action
   buttons are the round `PillButton` (`--r-full`); small utility controls (search fields, Clear,
   bulk-edit buttons) use a slight 4px radius. Avatars, switches and dots are round.
 - **Flat elevation** — Depth is tonal layering, **never shadow** on resting panels. Shadows
@@ -43,6 +56,8 @@ All UI must follow the rules below.
   A 3px accent stripe pins the very top of the app chrome.
 - **Type** — **Work Sans** for display/headings, set **thin (Light/200–300)** for an airy feel;
   **Open Sans** for UI, body, and metadata (uppercase + `~0.14em` tracking). Sentence case in UI.
+  Both are **bundled with the app** (`client/src/styles/fonts.css` + `src/assets/fonts/`, variable
+  weight) — never load them from Google Fonts, which Safari/iOS can block, leaving a system face.
 
 ### Two Themes: Light (white) and Dark (charcoal)
 Switched via `data-theme="dark"` on `<html>` (driven by `uiStore.themeMode`). The token layer
@@ -67,12 +82,25 @@ Settings → Theme offers **30 named accent presets** (`ACCENT_PRESETS` in `Sett
   backgrounds, no colored dot indicators.
 - **Icon colors — body text** — Topic icons in entry cards, topic sidebar, and topic selector
   dropdowns use `--text-primary` (body font color), not the accent or a muted color.
-- **Active nav = solid accent block** with `--on-accent` (white) text/icon.
+- **Nav rail** (`Sidebar`): its own toned panel (`--bg-rail`, no outline, no dividers between
+  items); the Chronicles logo mark sits in a darker top cell (`--bg-rail-logo`); the **active item is
+  lifted** onto `--bg-rail-active` in accent with a 4px accent tab on the rail's outer edge;
+  Settings is pinned to the bottom. The mobile top bar uses `--bg-rail` too.
+- **Logo** — the outlined-C-with-clock-hands mark, always via `BrandMark` (`atoms/BrandMark.tsx`;
+  pass a page-unique `gradientId`). Its gradient ends on the user's accent (`--logo-top/mid/low/end`,
+  set in `App.tsx`): mostly the accent itself — a light accent tint at the very top → the accent → a slightly deeper shade — in dark, deep
+  accent → accent in light. The clock hands and hub use `--color-accent` in both. The C is drawn 20% up from the source art and the
+  hands shortened so they never touch it. Nav cell: 60px mark in the 92px rail. Used on the nav rail, mobile bar and sign-in/register/recover.
+  Static copies (favicon `public/chronicles-logo.svg`, `favicon.ico`, `public/icons/*.png`) are
+  the default Teal on the dark canvas, since they load before the user's accent is known.
+- **Section tabs** (Health, Kitchen, Roadmap, Finance) all use `SectionTabBar`/`SectionTab` from
+  `styles/sectionTabs.ts` — tracked uppercase on a hairline; active = accent text + 2px accent
+  underline. Never restyle tabs locally.
 - **Wellness icon unselected color** — Tap-to-fill icons use `--border-strong`/`--text-tertiary`
   when not selected; the accent when filled.
 
 ### Component-specific Rules
-- **List rows — one style everywhere** (`styles/entryRow.ts`, used by `EntryCard`, `EntryListCard` and the Topics list): journal (`entryRow`): rows on `--bg-sunken`, the active row (hovered/focused, or the open entry) on `--bg-app` with a 3px accent left bar; every other list (`entryRowPlain`) is the reverse — rows on `--bg-app`, the active row on `--bg-sunken`, no bar; in the **journal only**, the first row starts active as a hint — only while no entry is open (or the open one is filtered out of view) — until the pointer is over a row (`rowHoverHandlers` set a flag on `<html>`); other lists don't highlight their first row (it just gets a top rule). Never style list rows locally
+- **List rows — one style everywhere** (`styles/entryRow.ts`, used by `EntryCard`, `EntryListCard` and the Topics list): journal (`entryRow`): rows on `--bg-sunken`, the active row (hovered/focused, or the open entry) on `--bg-app` — no accent bar (it clashed with the nav rail's tab), and no divider between the list and the editor, so the open row blends into the edit area; every other list (`entryRowPlain`) is the reverse — rows on `--bg-app`, the active row on `--bg-sunken`, no bar; in the **journal only**, the first row starts active as a hint — only while no entry is open (or the open one is filtered out of view) — until the pointer is over a row (`rowHoverHandlers` set a flag on `<html>`); other lists don't highlight their first row (it just gets a top rule). Never style list rows locally
 - **Custom-field rows** (`FormField`): **one column** — label left (150px), value in a **filled** `--bg-sunken` box capped at 560px, every row the same 46px min height (no hairline per row; labels stack above the box ≤480px). Never pair fields side by side (each fields form's `Row` is `display: contents`). Units go inside the box (`SuffixInput`); nutrient sets use the compact `NutrientGrid` (always open, on Meals and Medication). Rarely used fields (Medication notes) hide behind a "+ Add …" link until used or filled
 - **No `window.confirm`** — Safari on iPad blocks pop-ups by default, silently returning `false`. Use inline state-based confirmation or delete directly. Never use `window.confirm` / `window.alert` / `window.prompt`.
 - **TipTap node views with overlays** — Always portal overlays (`position: fixed`) from TipTap `NodeViewWrapper` to `document.body` via `createPortal`. The node view DOM can create stacking contexts that trap pointer events.

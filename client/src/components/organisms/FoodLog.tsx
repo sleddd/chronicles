@@ -20,6 +20,7 @@ import {
   NUTRIENTS, formatNutrient, nutrientNumber, nutrientSourceOf, withManualNutrient,
   type NutrientGoals, type NutrientKey,
 } from '../../types/nutrition.js';
+import { tableColumnRules } from '../../styles/columnRules.js';
 
 /* ══ Shared section chrome (flat sections: top rule + tracked label row) ══ */
 
@@ -443,6 +444,7 @@ const Table = styled.table<{ $min: number }>`
     vertical-align: middle;
   }
   th:first-child, td:first-child { padding-left: 4px; }
+  ${tableColumnRules}
   th {
     font-family: var(--font-label);
     font-size: 10px;

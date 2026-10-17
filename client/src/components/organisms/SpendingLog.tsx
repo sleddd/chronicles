@@ -9,6 +9,7 @@ import {
 } from '../molecules/FinanceParts.js';
 import { centsToInput, formatCents, formatDay, formatMonth, parseMoney, todayStr } from '../../utils/finance.js';
 import type { FinanceExpense, FinanceRecord } from '../../types/finance.js';
+import { continueRules } from '../../styles/columnRules.js';
 
 interface SpendingLogProps {
   expenses: FinanceRecord<'expenses'>[];
@@ -24,12 +25,13 @@ const CardGap = styled.div`
 `;
 
 const COLS = 'minmax(0, 1fr) minmax(0, 160px) 110px minmax(0, auto)';
+const PHONE_COLS = 'minmax(0, 1fr) 100px';
 
 const SpendRow = styled(Row)`
   @media (max-width: 640px) {
     grid-template-columns: minmax(0, 1fr) 100px;
     & > :nth-child(2) { display: none; }
-    & > :nth-child(4) { grid-column: 1 / -1; justify-content: flex-start; }
+    && > :nth-child(4) { grid-column: 1 / -1; justify-content: flex-start; border-left: 0; padding-left: 0; padding-top: 0; ${continueRules(100 - 8)} }
   }
 `;
 
@@ -119,7 +121,7 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
         {rows.length === 0 ? (
           <Note style={{ marginTop: 14, fontStyle: 'italic' }}>Log what you spend outside your bills (groceries, gas, eating out) and it counts against that category's budget.</Note>
         ) : (
-          <Table style={{ marginTop: 16 }}>
+          <Table $cols={COLS} $phoneCols={PHONE_COLS} style={{ marginTop: 16 }}>
             {rows.map(e => (editingId === e.id ? (
               <div key={e.id} style={{ padding: '12px 0', borderTop: '1px solid var(--border-subtle)' }}>
                 <ExpenseForm

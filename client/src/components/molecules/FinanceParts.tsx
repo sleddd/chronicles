@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import styled, { css } from 'styled-components';
 import { filledInputs } from '../../styles/filledInputs.js';
 import { entryRowPlain } from '../../styles/entryRow.js';
 import { formatCents } from '../../utils/finance.js';
 import { PillButton } from '../atoms/PillButton.js';
+import { columnRules } from '../../styles/columnRules.js';
 
 /*
  * Shared Finance building blocks (pure, props only): flat sections with a top
@@ -204,19 +205,46 @@ export function Money({ cents, out = false, strike }: { cents: number; out?: boo
 
 /* ── Spreadsheet rows ── */
 
-export const Table = styled.div`
-  display: flex;
+/* A spreadsheet table. With $cols it owns the column tracks (and $phoneCols below
+   $phoneAt px) and every Row / TotalRow inside shares them through subgrid — so
+   headers, rows and totals line up even with auto-sized columns, and the column
+   rules run unbroken from the first row to the last. Rows' own $cols are then
+   ignored, and so are their mobile grid-template-columns. */
+interface TableProps { $cols?: string; $phoneCols?: string; $phoneAt?: number }
+
+const TableBase = styled.div<TableProps>`
+  display: ${({ $cols }) => ($cols ? 'grid' : 'flex')};
   flex-direction: column;
+  /* Every child spans the table (inline edit forms too); rows then take its tracks */
+  ${({ $cols }) => ($cols ? `grid-template-columns: ${$cols}; column-gap: 0; & > * { grid-column: 1 / -1; }` : '')}
+  ${({ $phoneCols, $phoneAt = 640 }) => ($phoneCols ? `@media (max-width: ${$phoneAt}px) { grid-template-columns: ${$phoneCols}; }` : '')}
+`;
+
+export function Table(props: ComponentProps<typeof TableBase>) {
+  return <TableBase data-grid={props.$cols ? '' : undefined} {...props} />;
+}
+
+/* Inside a column-owning Table: span it and take its tracks (beats any row's own
+   or mobile grid-template-columns). */
+const subgridRow = css`
+  ${TableBase}[data-grid] > & {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
 `;
 
 /** One list row: page-colour, sinks on hover (the shared plain-list style). */
 export const Row = styled.div<{ $cols: string; $active?: boolean; $muted?: boolean }>`
   ${entryRowPlain}
+  /* No fill at rest — rows sit on whatever card or page they're in; hover still sinks */
+  background: transparent;
   display: grid;
   grid-template-columns: ${({ $cols }) => $cols};
   align-items: center;
   gap: 12px;
   padding: 10px 8px;
+  ${columnRules('10px')}
+  ${subgridRow}
   border-top: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -233,6 +261,8 @@ export const TotalRow = styled.div<{ $cols: string }>`
   align-items: center;
   gap: 12px;
   padding: 12px 8px;
+  ${columnRules('12px')}
+  ${subgridRow}
   font-family: var(--font-label);
   font-size: 11px;
   font-weight: 700;

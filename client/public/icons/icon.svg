@@ -1,4 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#2D2C2A"/>
-  <text x="256" y="310" text-anchor="middle" font-family="Georgia, serif" font-size="280" font-weight="700" font-style="italic" fill="#f0ebdf">C</text>
+  <!-- Chronicles mark (favicon / static use) in the default Teal accent. The app itself
+       renders it with BrandMark so it follows the user's chosen accent. Light browser
+       chrome gets the deep-teal variant so the white top and hands don't vanish. -->
+  <style>
+    .t { stop-color: #ace7e0 } .m { stop-color: #2fc2b2 } .l { stop-color: #2fc2b2 } .a { stop-color: #28a597 }
+    .ink { stroke: #2fc2b2 } .dot { fill: #2fc2b2 }
+    @media (prefers-color-scheme: light) {
+      .t { stop-color: #174a49 } .m { stop-color: #226b69 } .l { stop-color: #2c8c8a } .a { stop-color: #34a5a2 }
+      .ink { stroke: #34a5a2 } .dot { fill: #34a5a2 }
+    }
+  </style>
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="256" y1="100" x2="256" y2="412">
+      <stop offset="0" class="t"/><stop offset="0.45" class="m"/><stop offset="0.75" class="l"/><stop offset="1" class="a"/>
+    </linearGradient>
+  </defs>
+  <path transform="translate(256 256) scale(1.2) translate(-256 -256)" fill="url(#g)" fill-rule="evenodd" d="M390.3 165.4 A162 162 0 1 0 390.3 346.6 L313.9 330.1 A94 94 0 1 1 313.9 181.9 Z M340.3 151.9 A134 134 0 1 0 340.3 360.1 L319.2 353.3 A116 116 0 1 1 319.2 158.7 Z"/>
+  <g class="ink" stroke-width="13" stroke-linecap="round" fill="none">
+    <line x1="256" y1="256" x2="256" y2="192"/><line x1="256" y1="256" x2="295" y2="295"/>
+  </g>
+  <circle class="dot" cx="256" cy="256" r="16"/>
 </svg>

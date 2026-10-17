@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
+import { BrandMark } from '../atoms/BrandMark.js';
 
 const Wrapper = styled.div`
   display: flex;
@@ -77,7 +78,7 @@ export function AuthTemplate({ title, children, footer, brand }: AuthTemplatePro
     <Wrapper>
       <Card>
         <LogoMark>
-          <img src="/chronicles-poppy.svg" alt="Chronicles" width={64} height={64} />
+          <BrandMark size={96} gradientId="logo-auth" />
           <LogoText>Chronicles</LogoText>
         </LogoMark>
         {!brand && <PageTitle>{title}</PageTitle>}

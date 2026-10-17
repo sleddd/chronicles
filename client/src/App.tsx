@@ -40,7 +40,7 @@ import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
    Chronicles design tokens (originally from the design-system package). Light = pure white canvas; dark =
-   deep charcoal (#1b1d26). Borderless tonal panels: surfaces separate by FILL,
+   slate (#20232a) with bright, high-contrast grey text. Borderless tonal panels: surfaces separate by FILL,
    not outline; shadows are reserved for floating overlays only.
 
    Legacy aliases (--paper*, --ink*, --rule*, --btn-*, --accent-fill*) are kept
@@ -65,11 +65,21 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--text-secondary':    '#26262c',
   '--text-tertiary':     '#3a3a42',
   '--text-disabled':     '#57575f',
+  '--text-tab':          '#3a3a42',  /* inactive section tabs */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
   '--border-subtle':     '#e4e6ec',
   '--border-default':    '#d8dae2',
   '--border-strong':     '#c4c7d2',
+  /* Nav rail — its own toned panel: darker logo cell, active item lifted */
+  '--bg-rail':           '#f3f4f7',
+  '--bg-rail-logo':      '#e8eaef',
+  '--bg-rail-active':    '#ffffff',
+  /* Chart series — muted, same chroma as the accent presets */
+  '--chart-blue':        '#4f8fd1',
+  '--chart-violet':      '#8a6fd1',
+  '--chart-amber':       '#c98f3e',
+  '--chart-green':       '#4f9e74',
   /* Status */
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#e2f4eb',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#fbefd7',
@@ -110,47 +120,57 @@ const LIGHT_CSS_VARS: Record<string, string> = {
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
-  '--bg-app':            '#1b1d26',
-  '--bg-surface':        '#22252f',
-  '--bg-elevated':       '#2a2d38',
-  '--bg-sunken':         '#13151e',
-  '--bg-hover':          '#2a2d38',
-  '--bg-active':         '#303545',
-  '--bg-inverse':        '#f5f6f9',
-  '--text-primary':      '#f4f4f6',
-  '--text-secondary':    '#a0a0aa',
-  '--text-tertiary':     '#74747f',
-  '--text-disabled':     '#56565f',
-  '--text-inverse':      '#0d0d10',
-  '--border-subtle':     '#262931',
-  '--border-default':    '#2e3140',
-  '--border-strong':     '#3a3e50',
+  '--bg-app':            '#20232a',
+  '--bg-surface':        '#272a33',
+  '--bg-elevated':       '#2e323c',
+  '--bg-sunken':         '#1a1c22',
+  '--bg-hover':          '#2b2f38',
+  '--bg-active':         '#333844',
+  '--bg-inverse':        '#f1f2f5',
+  '--text-primary':      '#f7f8fa',
+  '--text-secondary':    '#e6e9ee',
+  '--text-tertiary':     '#cdd2da',
+  '--text-disabled':     '#a3a9b5',
+  '--text-tab':          '#aeb4bf',  /* inactive section tabs — a step under tertiary */
+  '--text-inverse':      '#14161b',
+  '--border-subtle':     '#272a34',
+  '--border-default':    '#343844',
+  '--border-strong':     '#3e4350',
+  /* Nav rail — its own toned panel: darker logo cell, active item lifted */
+  '--bg-rail':           '#272a33',
+  '--bg-rail-logo':      '#1a1c22',
+  '--bg-rail-active':    '#353a46',
+  /* Chart series — brightened a notch for the slate canvas */
+  '--chart-blue':        '#6aa6e6',
+  '--chart-violet':      '#a68cf0',
+  '--chart-amber':       '#e0ae68',
+  '--chart-green':       '#6cc093',
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#1c3a2c',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#3a2f14',
   '--color-danger':      '#d8483f',  '--color-danger-subtle':  '#3a1e1c',
   '--color-info':        '#2f7fd8',  '--color-info-subtle':    '#16283a',
 
   /* DS neutral grays for dark theme */
-  '--neutral-300': '#3a3e50',
-  '--neutral-700': '#74747f',
+  '--neutral-300': '#3e4350',
+  '--neutral-700': '#cdd2da',
 
   /* ── Legacy aliases → DS values ── */
-  '--paper':             '#1b1d26',
-  '--paper-deep':        '#13151e',
-  '--paper-surface':     '#22252f',
-  '--paper-well':        '#303545',
-  '--paper-hover':       '#2a2d38',
-  '--ink':               '#f4f4f6',
-  '--ink-2':             '#a0a0aa',
-  '--ink-3':             '#74747f',
-  '--ink-4':             '#56565f',
-  '--rule':              '#262931',
-  '--rule-2':            '#262931',
-  '--btn-primary':       '#f4f4f6',
-  '--btn-primary-ink':   '#1b1d26',
-  '--btn-primary-hover': '#e0e0e4',
-  '--accent-fill':       '#f4f4f6',
-  '--accent-fill-ink':   '#1b1d26',
+  '--paper':             '#20232a',
+  '--paper-deep':        '#1a1c22',
+  '--paper-surface':     '#272a33',
+  '--paper-well':        '#333844',
+  '--paper-hover':       '#2b2f38',
+  '--ink':               '#f7f8fa',
+  '--ink-2':             '#e6e9ee',
+  '--ink-3':             '#cdd2da',
+  '--ink-4':             '#a3a9b5',
+  '--rule':              '#272a34',
+  '--rule-2':            '#272a34',
+  '--btn-primary':       '#f7f8fa',
+  '--btn-primary-ink':   '#20232a',
+  '--btn-primary-hover': '#d4d7df',
+  '--accent-fill':       '#f7f8fa',
+  '--accent-fill-ink':   '#20232a',
   '--danger':            '#d8483f',
   '--success':           '#2f9e6b',
   '--warning':           '#d8941f',
@@ -168,8 +188,8 @@ const STATIC_CSS_VARS: Record<string, string> = {
   /* Legacy spacing tokens (--s-*) */
   '--r-sm':  '0',
   '--r-md':  '1px',
-  '--r-lg':  '2px',
-  '--r-xl':  '2px',
+  '--r-lg':  '4px',
+  '--r-xl':  '4px',
   '--r-full':'999px',
   '--s-1':   '4px',
   '--s-2':   '8px',
@@ -193,7 +213,7 @@ const STATIC_CSS_VARS: Record<string, string> = {
   /* Design system radius tokens (--radius-*) */
   '--radius-sm':   '0px',
   '--radius-md':   '1px',
-  '--radius-lg':   '2px',
+  '--radius-lg':   '4px',
   '--radius-full': '999px',
 
   /* Design system text tokens (--text-*) */
@@ -324,6 +344,15 @@ export function App() {
 
     /* DS accent scale (--accent-100..800) derived from the chosen hex */
     Object.entries(deriveAccentScale(color)).forEach(([k, v]) => root.style.setProperty(k, v));
+
+    /* Logo mark (BrandMark) gradient, top → bottom: mostly the accent itself.
+       Dark: a light accent tint at the very top → the accent (most of the C) → a
+       slightly deeper shade at the bottom. Light: deep
+       accent into the accent, with ink hands — pale tints would vanish on a light nav. */
+    root.style.setProperty('--logo-top', isDark ? mix(color, 255, 0.6) : mix(color, 0, 0.55));
+    root.style.setProperty('--logo-mid', isDark ? color : mix(color, 0, 0.35));
+    root.style.setProperty('--logo-low', isDark ? color : mix(color, 0, 0.15));
+    root.style.setProperty('--logo-end', isDark ? mix(color, 0, 0.15) : color);
 
     /* DS interactive accent tokens. In dark, brighten one notch (use the
        lighter 400/300 steps) for legibility on the charcoal canvas. */
