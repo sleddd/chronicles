@@ -167,6 +167,13 @@ describe('GoalsView', () => {
     expect(screen.getByTestId('planning-tab-bar')).toBeInTheDocument();
   });
 
+  it('has search and sort for the tab in the header', () => {
+    renderWithTheme(<GoalsView />);
+    expect(screen.getByLabelText('Search goals')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sort')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Filters')).not.toBeInTheDocument();
+  });
+
   it('shows empty state when no goals exist', () => {
     renderWithTheme(<GoalsView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();

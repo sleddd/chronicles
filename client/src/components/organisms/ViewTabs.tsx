@@ -16,7 +16,6 @@ type TabEntry = {
 const tabs: TabEntry[] = [
   { value: 'all',       icon: 'list',            label: 'All',       title: 'All entries' },
   { value: 'date',      icon: 'wb_sunny',        label: 'Today',     title: 'Today',        isToday: true },
-  { value: 'date',      icon: 'calendar_month',  label: 'Date',      title: 'Pick a date' },
   { value: 'favorites', icon: 'bookmark',        label: 'Bookmarks', title: 'Bookmarked entries' },
   { value: 'search',    icon: 'search',          label: 'Search',    title: 'Search entries' },
   { value: 'all',       icon: 'add',             label: 'New',       title: 'New entry',    isNewEntry: true },
@@ -89,12 +88,11 @@ function isSameDay(a: Date, b: Date) {
 }
 
 interface ViewTabsProps {
-  onDateTabClick?: () => void;
   onTodayClick?: () => void;
   onNewEntry?: () => void;
 }
 
-export function ViewTabs({ onDateTabClick, onTodayClick, onNewEntry }: ViewTabsProps = {}) {
+export function ViewTabs({ onTodayClick, onNewEntry }: ViewTabsProps = {}) {
   const viewMode = useUIStore(s => s.viewMode);
   const setViewMode = useUIStore(s => s.setViewMode);
   const selectedDate = useUIStore(s => s.selectedDate);
@@ -103,7 +101,6 @@ export function ViewTabs({ onDateTabClick, onTodayClick, onNewEntry }: ViewTabsP
   const isTabActive = useCallback((tab: TabEntry) => {
     if (tab.isNewEntry) return false;
     if (tab.isToday) return viewMode === 'date' && isSameDay(selectedDate, new Date());
-    if (tab.label === 'Date') return viewMode === 'date' && !isSameDay(selectedDate, new Date());
     return viewMode === tab.value;
   }, [viewMode, selectedDate]);
 
@@ -118,21 +115,12 @@ export function ViewTabs({ onDateTabClick, onTodayClick, onNewEntry }: ViewTabsP
       onTodayClick?.();
       return;
     }
-    if (tab.label === 'Date') {
-      if (viewMode === 'date' && onDateTabClick) {
-        onDateTabClick();
-      } else {
-        setViewMode('date');
-        if (onDateTabClick) onDateTabClick();
-      }
-      return;
-    }
     if (tab.value === 'search' && viewMode === 'search') {
       setViewMode('all');
     } else {
       setViewMode(tab.value);
     }
-  }, [viewMode, setViewMode, setSelectedDate, onDateTabClick, onTodayClick, onNewEntry]);
+  }, [viewMode, setViewMode, setSelectedDate, onTodayClick, onNewEntry]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;

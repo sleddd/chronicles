@@ -9,7 +9,6 @@ const TABS = [
   { label: 'Milestones', path: '/goals/milestones' },
   { label: 'Tasks', path: '/goals/tasks' },
   { label: 'Todos', path: '/goals/todos' },
-  { label: 'Filters', path: '/goals/filter' },
 ];
 
 export function PlanningTabBar() {

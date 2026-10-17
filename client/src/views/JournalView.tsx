@@ -16,7 +16,6 @@ import { EntryList } from '../components/organisms/EntryList.js';
 import { EntryForm } from '../components/organisms/EntryForm.js';
 import type { DictationControls } from '../components/organisms/Editor.js';
 import { SearchPanel } from '../components/organisms/SearchPanel.js';
-import { MiniCalendar } from '../components/organisms/MiniCalendar.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { ShareModal } from '../components/organisms/ShareModal.js';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog.js';
@@ -34,7 +33,6 @@ import { getOrCreateJournalTopic } from '../utils/getOrCreateJournalTopic.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../utils/stripHtml.js';
 import type { RecipeFieldValues } from '../types/fields.js';
 import { recipeShareHtml } from '../utils/recipeShareHtml.js';
-import { toDateStr } from '../utils/dateUtils.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
@@ -165,18 +163,8 @@ export function JournalView() {
   const imagesReady = imagesEnabled && imagesConfigured;
   const navigate = useNavigate();
 
-  const entryDates = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of decryptedEntries) {
-      const d = e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt as unknown as string);
-      set.add(toDateStr(d));
-    }
-    return set;
-  }, [decryptedEntries]);
-
   const selectedDate = useUIStore(s => s.selectedDate);
   const setSelectedDate = useUIStore(s => s.setSelectedDate);
-  const [calendarExpanded, setCalendarExpanded] = useState(false);
   const [editorExpanded, setEditorExpanded] = useState(false);
   const [editorContent, setEditorContent] = useState('');
   const [editorTopicId, setEditorTopicId] = useState<number | null>(null);
@@ -206,10 +194,12 @@ export function JournalView() {
   // A new entry started from a list page ("New entry") arrives with its topic
   // preset; kept here so the editor reset for "no entry selected" keeps it
   const [pendingNewTopicId, setPendingNewTopicId] = useState<number | null>(null);
+  // …and its preset fields (a Planning board column's status)
+  const [pendingNewFields, setPendingNewFields] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (originPath) setEditorExpanded(true);
-    else setPendingNewTopicId(null); // left edit view — later blank entries start topic-less
+    else { setPendingNewTopicId(null); setPendingNewFields(null); } // left edit view — later blank entries start topic-less
   }, [location.key]);
 
   // Topic filter the journal had before edit view took over, restored after
@@ -229,10 +219,11 @@ export function JournalView() {
   }, []);
 
   useEffect(() => {
-    const state = location.state as { newEntryDate?: string; newEntryTopicId?: number; from?: string } | null;
+    const state = location.state as { newEntryDate?: string; newEntryTopicId?: number; newEntryFields?: Record<string, unknown>; from?: string } | null;
     if (state?.newEntryTopicId) {
       setSelectedEntryId(null);
       setPendingNewTopicId(state.newEntryTopicId);
+      setPendingNewFields(state.newEntryFields ?? null);
       setShowMobileEditor(true);
       navigate(location.pathname, { replace: true, state: state.from ? { from: state.from } : null });
       return;
@@ -533,20 +524,22 @@ export function JournalView() {
         if (calendarArrivalRef.current) calendarArrivalRef.current = false;
         else setPendingEntryDate(null);
         setPendingNewTopicId(null); // the new entry exists now
+        setPendingNewFields(null);
       }
     } else {
       setEditorContent('');
       setEditorTopicId(pendingNewTopicId);
-      setCustomFields({});
+      setCustomFields(pendingNewFields ?? {});
       setWidgetType(null);
       setEntryImages([]);
       setFeaturedKey(null);
       setImageError('');
-      loadedStateRef.current = { content: '', customFields: '{}', images: imagesSig([], null) };
+      // A preset (board column status) isn't an edit — nothing to save yet
+      loadedStateRef.current = { content: '', customFields: JSON.stringify(pendingNewFields ?? {}), images: imagesSig([], null) };
       setLastSavedAt(null);
       calendarArrivalRef.current = false;
     }
-  }, [selectedEntryId, decryptedEntries, pendingNewTopicId]);
+  }, [selectedEntryId, decryptedEntries, pendingNewTopicId, pendingNewFields]);
 
   const handleSave = useCallback(async () => {
     const hasDrawing = editorContent.includes('data-type="drawing"');
@@ -964,8 +957,6 @@ export function JournalView() {
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>
             <ViewTabs
-              onDateTabClick={() => setCalendarExpanded(prev => !prev)}
-              onTodayClick={() => setCalendarExpanded(false)}
               onNewEntry={() => {
                 setSelectedEntryId(null);
                 setShowMobileEditor(true);
@@ -974,7 +965,7 @@ export function JournalView() {
             {viewMode === 'date' && (
               <DateFilterBar>
                 {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                <DateFilterClear onClick={() => { setViewMode('all'); setCalendarExpanded(false); }}>
+                <DateFilterClear onClick={() => setViewMode('all')}>
                   <FontAwesomeIcon icon={faXmark} size="xs" /> Clear
                 </DateFilterClear>
               </DateFilterBar>
@@ -986,13 +977,6 @@ export function JournalView() {
                   <FontAwesomeIcon icon={faXmark} size="xs" /> Clear
                 </DateFilterClear>
               </DateFilterBar>
-            )}
-            {viewMode === 'date' && calendarExpanded && (
-              <MiniCalendar
-                selectedDate={selectedDate}
-                onSelectDate={(date) => { setSelectedDate(date); setCalendarExpanded(false); }}
-                entryDates={entryDates}
-              />
             )}
             {viewMode === 'search' && <SearchPanel />}
             <QuickEntryCard>

@@ -2,17 +2,14 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
-import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor,
-  useSensor, useSensors, type DragEndEvent,
-} from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { arrayMove } from '@dnd-kit/sortable';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
+import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
-import { GoalCard } from '../components/organisms/GoalCard.js';
-import { MilestoneCard } from '../components/organisms/MilestoneCard.js';
+import { searchAndSort, PLAN_SORTS, type PlanSort, type PlanRow } from '../utils/planningView.js';
+import { KanbanBoard, type BoardItem } from '../components/organisms/KanbanBoard.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
@@ -25,9 +22,11 @@ import { entries as entriesApi } from '../services/api.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { journalOriginState } from '../utils/topicBreadcrumb.js';
-import type { GoalEntry, MilestoneEntryData, TaskEntryData, RoadmapStatus } from '../types/goals.js';
-import { ROADMAP_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus, milestoneFieldsForStatus } from '../types/goals.js';
-import { useDroppable } from '@dnd-kit/core';
+import type { GoalEntry, MilestoneEntryData, TaskEntryData, RoadmapStatus, TaskStatus } from '../types/goals.js';
+import {
+  ROADMAP_COLUMNS, TASK_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus,
+  milestoneFieldsForStatus, taskStatusOf, taskFieldsForStatus,
+} from '../types/goals.js';
 import { hasMixedTopics } from '../utils/mixedTopics.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
@@ -50,6 +49,7 @@ const Inner = styled.div`
 
 const Head = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
@@ -81,85 +81,126 @@ const RowList = styled.div`
   margin-top: 16px;
 `;
 
-/* ── Roadmap (Kanban) board ── */
-const Board = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
-  padding-top: 20px;
-  @media (min-width: 901px) { margin-left: -10px; }
-  @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 560px) { grid-template-columns: 1fr; }
-`;
-
-const Column = styled.div<{ $over?: boolean }>`
+const HeadActions = styled.div`
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-  background: ${({ $over }) => $over ? 'var(--bg-hover)' : 'var(--bg-sunken)'};
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 8px;
-  min-height: 120px;
-  transition: background 120ms ease;
-`;
-
-const ColumnHead = styled.div`
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
+`;
+
+/* Search the tab you're in — an outlined pill with a search icon */
+const SearchBox = styled.label`
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  padding: 6px 8px 10px;
-`;
-
-const ColumnTitle = styled.span`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-`;
-
-const ColumnCount = styled.span`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 600;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   color: var(--text-tertiary);
-  min-width: 18px;
-  text-align: center;
+  &:focus-within { border-color: var(--color-accent); }
+  input {
+    width: 180px;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    &::placeholder { color: var(--text-disabled); }
+    @media (max-width: 480px) { width: 120px; }
+  }
 `;
 
-const ColumnBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-height: 40px;
+/* Sort the tab you're in — a native select dressed as an outlined pill */
+const SortBox = styled.label`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  &:focus-within { border-color: var(--color-accent); }
+  & > span { position: absolute; left: 12px; pointer-events: none; }
+  select {
+    height: 100%;
+    padding: 0 16px 0 38px;
+    border: none;
+    outline: none;
+    background: transparent;
+    appearance: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
 `;
 
-const ColumnEmpty = styled.div`
+const NoMatch = styled.p`
+  margin: 24px 0 0;
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-style: italic;
-  color: var(--text-tertiary);
-  padding: 12px 8px;
-  text-align: center;
+  font-size: 15px;
+  color: var(--text-disabled);
 `;
 
-/* A single droppable roadmap column. Children are the sortable goal cards. */
-function RoadmapColumn({ status, label, count, children }: {
-  status: RoadmapStatus; label: string; count: number; children: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: `col:${status}` });
-  return (
-    <Column ref={setNodeRef} $over={isOver}>
-      <ColumnHead>
-        <ColumnTitle>{label}</ColumnTitle>
-        <ColumnCount>{count}</ColumnCount>
-      </ColumnHead>
-      <ColumnBody>{children}</ColumnBody>
-    </Column>
-  );
+/* List | Board switch — two icon buttons in one outlined pill */
+const ViewSwitch = styled.div`
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+`;
+
+const ViewBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-tertiary)')};
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+type PlanTab = 'goals' | 'milestones' | 'tasks' | 'todos';
+type PlanView = 'board' | 'list';
+const VIEW_KEY = 'planning-view-v1';
+
+function readViews(): Partial<Record<PlanTab, PlanView>> {
+  try { return JSON.parse(localStorage.getItem(VIEW_KEY) || '{}') as Partial<Record<PlanTab, PlanView>>; }
+  catch { return {}; }
+}
+
+/** "Jul 2" from a YYYY-MM-DD date, '' when unset/invalid */
+function shortDate(d: unknown): string {
+  if (typeof d !== 'string' || !d) return '';
+  const date = new Date(`${d.slice(0, 10)}T12:00:00`);
+  return isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const PRIORITY_BADGE: Record<string, { label: string; color: string }> = {
+  urgent: { label: 'Urgent', color: 'var(--color-danger)' },
+  high: { label: 'High', color: 'var(--mood-1)' },
+  medium: { label: 'Medium', color: 'var(--chart-amber)' },
+  low: { label: 'Low', color: 'var(--chart-violet)' },
+};
+
+/** An entry's picture for a board avatar: the featured image (else the first), as its thumbnail */
+function avatarImage(meta: Record<string, unknown> | undefined): BoardItem['image'] {
+  const imgs = Array.isArray(meta?._images) ? meta._images as { key: string; iv: string; thumbKey?: string; thumbIv?: string; mimeType: string }[] : [];
+  const img = imgs.find(i => i.key === meta?._featuredKey) ?? imgs[0];
+  if (!img) return undefined;
+  return img.thumbKey && img.thumbIv
+    ? { key: img.thumbKey, iv: img.thumbIv, mimeType: img.mimeType }
+    : { key: img.key, iv: img.iv, mimeType: img.mimeType };
 }
 
 export function GoalsView() {
@@ -167,8 +208,6 @@ export function GoalsView() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
-  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const removeEntry = useEntriesStore(s => s.removeEntry);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
   const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
@@ -179,16 +218,11 @@ export function GoalsView() {
   const tabFromPath = location.pathname.endsWith('/milestones') ? 'milestones' as const
     : location.pathname.endsWith('/tasks') ? 'tasks' as const
     : location.pathname.endsWith('/todos') ? 'todos' as const : 'goals' as const;
-  const [tab, setTab] = useState<'goals' | 'milestones' | 'tasks' | 'todos'>(tabFromPath);
+  const [tab, setTab] = useState<PlanTab>(tabFromPath);
 
   useEffect(() => {
     setTab(tabFromPath);
   }, [tabFromPath]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
 
   // Resolve topic IDs
   const goalTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'goal')?.id, [allTopics]);
@@ -247,11 +281,12 @@ export function GoalsView() {
 
   // Todos have no parent goal or milestone connection
   const todos = useMemo(() => tasks.filter(t => !t.parentMilestoneId && !t.parentGoalId), [tasks]);
+  // The Tasks tab only shows tasks attached to a goal or milestone (the rest are Todos)
+  const linkedTasks = useMemo(() => tasks.filter(t => t.parentMilestoneId || t.parentGoalId), [tasks]);
   // Topic labels only when a list spans more than one topic
-  const tasksMixed = useMemo(() => hasMixedTopics(tasks.map(t => t.taxonomyId)), [tasks]);
+  const tasksMixed = useMemo(() => hasMixedTopics(linkedTasks.map(t => t.taxonomyId)), [linkedTasks]);
   const todosMixed = useMemo(() => hasMixedTopics(todos.map(t => t.taxonomyId)), [todos]);
 
-  const goalOptions = useMemo(() => goals.map(g => ({ id: g.id, title: g.title })), [goals]);
   const goalTitles = useMemo(() => new Map(goals.map(g => [g.id, g.title])), [goals]);
 
   // Sorted lists
@@ -308,231 +343,80 @@ export function GoalsView() {
     }
   }, [persistEntry, goalTopicId, milestoneTopicId]);
 
-  const handleToggleMilestone = useCallback(async (m: MilestoneEntryData) => {
-    let newStatus: string, newCompleted: boolean;
-    if (!m.isCompleted && m.milestoneStatus !== 'active') { newStatus = 'active'; newCompleted = false; }
-    else if (!m.isCompleted) { newStatus = 'completed'; newCompleted = true; }
-    else { newStatus = 'not_started'; newCompleted = false; }
-    try {
-      await persistEntry(m.id, m.content, m.taxonomyId, { ...m.customFields, milestoneStatus: newStatus, isCompleted: newCompleted });
-      await syncParentGoal(m.parentGoalId);
+  // A milestone's tasks all done → milestone completed; any reopened → in progress
+  const syncParentMilestone = useCallback(async (milestoneId: number | null) => {
+    if (!milestoneId || !milestoneTopicId || !taskTopicId) return;
+    const fresh = useEntriesStore.getState().decryptedEntries;
+    const parentEntry = fresh.find(e => e.id === milestoneId);
+    if (!parentEntry) return;
+    const parentCf = (parentEntry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
+    const siblings = fresh
+      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === taskTopicId)
+      .map(e => (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {})
+      .filter(cf => cf.parentMilestoneId === milestoneId);
+    const allDone = siblings.length > 0 && siblings.every(cf => !!cf.isCompleted);
+    const anyUndone = siblings.some(cf => !cf.isCompleted);
+    if (allDone && !parentCf.isCompleted) {
+      await persistEntry(parentEntry.id, parentEntry.content, milestoneTopicId, { ...parentCf, milestoneStatus: 'completed', isCompleted: true });
+      await syncParentGoal((parentCf.parentGoalId as number) || null);
+    } else if (anyUndone && parentCf.isCompleted) {
+      await persistEntry(parentEntry.id, parentEntry.content, milestoneTopicId, { ...parentCf, milestoneStatus: 'in_progress', isCompleted: false });
+      await syncParentGoal((parentCf.parentGoalId as number) || null);
     }
-    catch (err) { console.error('Failed to toggle milestone:', err); }
-  }, [persistEntry, goalTopicId, milestoneTopicId]);
+  }, [persistEntry, syncParentGoal, milestoneTopicId, taskTopicId]);
 
-  const handleUnlinkMilestone = useCallback(async (m: MilestoneEntryData) => {
-    try { await persistEntry(m.id, m.content, m.taxonomyId, { ...m.customFields, parentGoalId: null }); }
-    catch (err) { console.error('Failed to unlink milestone:', err); }
-  }, [persistEntry]);
-
-  const handleToggleTask = useCallback(async (t: TaskEntryData) => {
-    const newCompleted = !t.isCompleted;
-    try {
-      await persistEntry(t.id, t.content, t.taxonomyId, { ...t.customFields, isCompleted: newCompleted });
-
-      // Auto-complete parent milestone when all tasks are done
-      // Read fresh from store to avoid stale closure
-      if (t.parentMilestoneId && milestoneTopicId && taskTopicId) {
-        const freshEntries = useEntriesStore.getState().decryptedEntries;
-
-        const parentEntry = freshEntries.find(e => e.id === t.parentMilestoneId);
-        if (parentEntry) {
-          const parentCf = (parentEntry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
-          const parentIsCompleted = !!parentCf.isCompleted;
-
-          const siblingTasks = freshEntries
-            .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === taskTopicId)
-            .filter(e => {
-              const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
-              return cf.parentMilestoneId === t.parentMilestoneId;
-            });
-
-          const allDone = siblingTasks.length > 0 && siblingTasks.every(e => {
-            const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
-            return !!cf.isCompleted;
-          });
-
-          const anyUndone = siblingTasks.some(e => {
-            const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
-            return !cf.isCompleted;
-          });
-
-          if (allDone && !parentIsCompleted) {
-            await persistEntry(parentEntry.id, parentEntry.content, milestoneTopicId,
-              { ...parentCf, milestoneStatus: 'completed', isCompleted: true });
-          } else if (anyUndone && parentIsCompleted) {
-            await persistEntry(parentEntry.id, parentEntry.content, milestoneTopicId,
-              { ...parentCf, milestoneStatus: 'in_progress', isCompleted: false });
-          }
-        }
-      }
-    }
-    catch (err) { console.error('Failed to toggle task:', err); }
-  }, [persistEntry, milestoneTopicId, taskTopicId]);
-
-  const handleUnlinkTask = useCallback(async (t: TaskEntryData) => {
-    try { await persistEntry(t.id, t.content, t.taxonomyId, { ...t.customFields, parentMilestoneId: null }); }
-    catch (err) { console.error('Failed to unlink task:', err); }
-  }, [persistEntry]);
-
-  const handleCreateTask = useCallback(async (milestoneId: number, title: string) => {
-    if (!taskTopicId) return;
-    const content = `<p>${title}</p>`;
-    const customFields = { isCompleted: false, isInProgress: false, isAutoMigrating: true, parentMilestoneId: milestoneId };
-    const metadata: Record<string, unknown> = { _taxonomyId: taskTopicId, _customFields: customFields };
-    const encrypted = await encryptPost(content, metadata);
-    const result = await entriesApi.create({
-      contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
-      metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
-      isEncrypted: true, taxonomyIds: [taskTopicId],
-    });
-    addDecryptedEntry({
-      id: result.id as number, content, metadata, isEncrypted: true,
-      createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string),
-    });
-  }, [taskTopicId, encryptPost, addDecryptedEntry]);
-
-  const handleLinkMilestone = useCallback(async (goalId: number, milestoneId: number) => {
-    const m = milestones.find(ms => ms.id === milestoneId);
-    if (!m) return;
-    await persistEntry(m.id, m.content, m.taxonomyId, { ...m.customFields, parentGoalId: goalId });
-  }, [milestones, persistEntry]);
-
-  const handleLinkTask = useCallback(async (milestoneId: number, taskId: number) => {
-    const t = tasks.find(ts => ts.id === taskId);
-    if (!t) return;
-    if (!taskTopicId) return;
-    await persistEntry(t.id, t.content, t.taxonomyId, { ...t.customFields, parentMilestoneId: milestoneId });
-  }, [tasks, taskTopicId, persistEntry]);
-
-  const handleCreateMilestone = useCallback(async (goalId: number, title: string) => {
-    if (!milestoneTopicId) return;
-    const content = `<p>${title}</p>`;
-    const customFields = { milestoneStatus: 'not_started', isCompleted: false, targetDate: '', parentGoalId: goalId };
-    const metadata: Record<string, unknown> = { _taxonomyId: milestoneTopicId, _customFields: customFields };
-    const encrypted = await encryptPost(content, metadata);
-    const result = await entriesApi.create({
-      contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
-      metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
-      isEncrypted: true, taxonomyIds: [milestoneTopicId],
-    });
-    addDecryptedEntry({
-      id: result.id as number, content, metadata, isEncrypted: true,
-      createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string),
-    });
-  }, [milestoneTopicId, encryptPost, addDecryptedEntry]);
-
-  // Local display order — synced from filtered lists, reordered by drag
-  const [orderedGoals, setOrderedGoals] = useState<typeof filteredGoals>([]);
-  const [orderedMilestones, setOrderedMilestones] = useState<typeof filteredMilestones>([]);
-
+  // Local display order — synced from the sorted lists, reordered by drag
+  const [orderedGoals, setOrderedGoals] = useState<GoalEntry[]>([]);
+  const [orderedMilestones, setOrderedMilestones] = useState<MilestoneEntryData[]>([]);
   useEffect(() => { setOrderedGoals(filteredGoals); }, [filteredGoals]);
   useEffect(() => { setOrderedMilestones(filteredMilestones); }, [filteredMilestones]);
 
-  // Group goals into roadmap columns by normalized status.
-  const goalsByStatus = useMemo(() => {
-    const map: Record<RoadmapStatus, GoalEntry[]> = { new: [], planned: [], in_progress: [], completed: [] };
-    for (const g of orderedGoals) map[normalizeRoadmapStatus(g.goalStatus)].push(g);
-    return map;
-  }, [orderedGoals]);
+  const sortedTasks = useMemo(() => [...linkedTasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), [linkedTasks]);
+  const sortedTodos = useMemo(() => [...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), [todos]);
 
-  // Persist a goal's new roadmap status (used by drag-drop and the card control).
-  const persistGoalStatus = useCallback(async (g: GoalEntry, status: RoadmapStatus) => {
-    if (normalizeRoadmapStatus(g.goalStatus) === status) return;
-    // Optimistic local reflow
-    setOrderedGoals(prev => prev.map(x => x.id === g.id ? { ...x, goalStatus: status } : x));
-    try {
-      await persistEntry(g.id, g.content, g.taxonomyId, { ...g.customFields, goalStatus: status });
-    } catch (err) { console.error('Failed to update goal status:', err); }
-  }, [persistEntry]);
+  /* ── Status changes (board drag) ── */
 
-  // Board drag: dropping onto a column (or a card within it) sets the goal's status.
-  const handleGoalDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-    const activeId = Number(active.id);
-    const goal = orderedGoals.find(g => g.id === activeId);
-    if (!goal) return;
+  const persistGoalStatus = useCallback(async (id: number, status: RoadmapStatus) => {
+    const g = orderedGoals.find(x => x.id === id);
+    if (!g || normalizeRoadmapStatus(g.goalStatus) === status) return;
+    setOrderedGoals(prev => prev.map(x => x.id === id ? { ...x, goalStatus: status } : x));
+    try { await persistEntry(g.id, g.content, g.taxonomyId, { ...g.customFields, goalStatus: status }); }
+    catch (err) { console.error('Failed to update goal status:', err); }
+  }, [orderedGoals, persistEntry]);
 
-    // The droppable target is either a column ("col:<status>") or another card (its id).
-    const overId = String(over.id);
-    let targetStatus: RoadmapStatus | null = null;
-    if (overId.startsWith('col:')) {
-      targetStatus = overId.slice(4) as RoadmapStatus;
-    } else {
-      const overGoal = orderedGoals.find(g => g.id === Number(over.id));
-      if (overGoal) targetStatus = normalizeRoadmapStatus(overGoal.goalStatus);
-    }
-    if (!targetStatus) return;
-
-    if (normalizeRoadmapStatus(goal.goalStatus) !== targetStatus) {
-      persistGoalStatus(goal, targetStatus);
-    } else if (over.id !== active.id) {
-      // Reorder within the same column
-      setOrderedGoals(prev => {
-        const oldIndex = prev.findIndex(g => g.id === activeId);
-        const newIndex = prev.findIndex(g => g.id === Number(over.id));
-        if (oldIndex === -1 || newIndex === -1) return prev;
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-    }
-  }, [orderedGoals, persistGoalStatus]);
-
-  // Group milestones into roadmap columns by normalized status.
-  const milestonesByStatus = useMemo(() => {
-    const map: Record<RoadmapStatus, MilestoneEntryData[]> = { new: [], planned: [], in_progress: [], completed: [] };
-    for (const m of orderedMilestones) map[normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted)].push(m);
-    return map;
-  }, [orderedMilestones]);
-
-  // Persist a milestone's new roadmap status (drag-drop), then roll up to parent goal.
-  const persistMilestoneStatus = useCallback(async (m: MilestoneEntryData, status: RoadmapStatus) => {
-    if (normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === status) return;
+  const persistMilestoneStatus = useCallback(async (id: number, status: RoadmapStatus) => {
+    const m = orderedMilestones.find(x => x.id === id);
+    if (!m || normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === status) return;
     const fields = milestoneFieldsForStatus(status);
-    setOrderedMilestones(prev => prev.map(x => x.id === m.id ? { ...x, ...fields } : x));
+    setOrderedMilestones(prev => prev.map(x => x.id === id ? { ...x, ...fields } : x));
     try {
       await persistEntry(m.id, m.content, m.taxonomyId, { ...m.customFields, ...fields });
       await syncParentGoal(m.parentGoalId);
     } catch (err) { console.error('Failed to update milestone status:', err); }
-  }, [persistEntry, syncParentGoal]);
+  }, [orderedMilestones, persistEntry, syncParentGoal]);
 
-  const handleMilestoneDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-    const activeId = Number(active.id);
-    const m = orderedMilestones.find(x => x.id === activeId);
-    if (!m) return;
+  const persistTaskStatus = useCallback(async (id: number, status: TaskStatus) => {
+    const t = tasks.find(x => x.id === id);
+    if (!t || taskStatusOf(t.customFields) === status) return;
+    try {
+      await persistEntry(t.id, t.content, t.taxonomyId, { ...t.customFields, ...taskFieldsForStatus(status) });
+      await syncParentMilestone(t.parentMilestoneId);
+    } catch (err) { console.error('Failed to update task status:', err); }
+  }, [tasks, persistEntry, syncParentMilestone]);
 
-    const overId = String(over.id);
-    let targetStatus: RoadmapStatus | null = null;
-    if (overId.startsWith('col:')) {
-      targetStatus = overId.slice(4) as RoadmapStatus;
-    } else {
-      const overM = orderedMilestones.find(x => x.id === Number(over.id));
-      if (overM) targetStatus = normalizeMilestoneRoadmapStatus(overM.milestoneStatus, overM.isCompleted);
-    }
-    if (!targetStatus) return;
-
-    if (normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) !== targetStatus) {
-      persistMilestoneStatus(m, targetStatus);
-    } else if (over.id !== active.id) {
-      setOrderedMilestones(prev => {
-        const oldIndex = prev.findIndex(x => x.id === activeId);
-        const newIndex = prev.findIndex(x => x.id === Number(over.id));
-        if (oldIndex === -1 || newIndex === -1) return prev;
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-    }
-  }, [orderedMilestones, persistMilestoneStatus]);
+  const reorder = <T extends { id: number }>(set: React.Dispatch<React.SetStateAction<T[]>>) => (id: number, overId: number) =>
+    set(prev => {
+      const from = prev.findIndex(x => x.id === id);
+      const to = prev.findIndex(x => x.id === overId);
+      return from === -1 || to === -1 ? prev : arrayMove(prev, from, to);
+    });
 
   const handleDeleteEntry = useCallback(async (id: number) => {
-    try {
-      await deleteEntryWithImages(id);
-    } catch (err) { console.error('Failed to delete entry:', err); }
+    try { await deleteEntryWithImages(id); }
+    catch (err) { console.error('Failed to delete entry:', err); }
   }, []);
 
-  // Goals & milestones open in the standard journal editor (not inline). The
-  // editor shows a "Planning" link back to this board.
+  // Everything opens in the standard journal editor (not inline)
   const openInJournal = useCallback((id: number) => {
     setSelectedEntryId(id);
     setShowMobileEditor(true);
@@ -547,6 +431,121 @@ export function GoalsView() {
     : tab === 'milestones' ? 'New Milestone'
     : tab === 'todos' ? 'New Todo' : 'New Task';
 
+  /* ── List | Board, remembered per tab ── */
+  const [views, setViews] = useState(readViews);
+  const view: PlanView = views[tab] ?? 'board';
+  const setView = (v: PlanView) => {
+    const next = { ...views, [tab]: v };
+    setViews(next);
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+  };
+
+  /* ── Search + sort, for the tab you're in ── */
+  const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState<PlanSort>('newest');
+  useEffect(() => { setQuery(''); }, [tab]);
+  const isTaskTab = tab === 'tasks' || tab === 'todos';
+  const sortOptions = PLAN_SORTS.filter(o => o.value !== 'priority' || isTaskTab);
+  const sort: PlanSort = sortOptions.some(o => o.value === sortBy) ? sortBy : 'newest';
+  // Dragging to reorder only makes sense in the board's own order
+  const refined = !!query.trim() || sort !== 'newest';
+
+  /* ── Board cards ── */
+  const milestoneTitles = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
+
+  const goalItem = (g: GoalEntry): BoardItem => {
+    const ms = milestones.filter(m => m.parentGoalId === g.id);
+    return {
+      id: g.id, title: g.title,
+      image: avatarImage(entries.find(e => e.id === g.id)?.metadata as Record<string, unknown> | undefined),
+      date: shortDate(g.targetDate),
+      progress: ms.length ? { done: ms.filter(m => m.isCompleted).length, total: ms.length } : undefined,
+      completed: normalizeRoadmapStatus(g.goalStatus) === 'completed',
+    };
+  };
+
+  const milestoneItem = (m: MilestoneEntryData): BoardItem => {
+    const ts = tasks.filter(t => t.parentMilestoneId === m.id);
+    const goal = m.parentGoalId ? goalTitles.get(m.parentGoalId) : undefined;
+    return {
+      id: m.id, title: m.title,
+      badge: goal ? { label: goal, color: 'var(--chart-blue)' } : undefined,
+      date: shortDate(m.targetDate),
+      progress: ts.length ? { done: ts.filter(t => t.isCompleted).length, total: ts.length } : undefined,
+      completed: m.isCompleted,
+    };
+  };
+
+  const taskItem = (t: TaskEntryData): BoardItem => {
+    const parent = t.parentMilestoneId ? milestoneTitles.get(t.parentMilestoneId)
+      : t.parentGoalId ? goalTitles.get(t.parentGoalId) : undefined;
+    const entry = entries.find(e => e.id === t.id);
+    const title = (entry && stripHtml(entry.content).trim()) || builtinEntryName(t.customFields) || t.title;
+    return {
+      id: t.id, title: title.slice(0, 140),
+      badge: PRIORITY_BADGE[t.priority],
+      detail: parent,
+      date: shortDate(t.customFields.deadline),
+      completed: t.isCompleted,
+    };
+  };
+
+  const goalRow = (g: GoalEntry): PlanRow => ({
+    title: g.title, text: g.title, due: g.targetDate, priority: '', created: g.createdAt.getTime(),
+  });
+  const milestoneRow = (m: MilestoneEntryData): PlanRow => ({
+    title: m.title, text: `${m.title} ${m.parentGoalId ? goalTitles.get(m.parentGoalId) ?? '' : ''}`,
+    due: m.targetDate, priority: '', created: m.createdAt.getTime(),
+  });
+  const taskRow = (t: TaskEntryData): PlanRow => {
+    const item = taskItem(t);
+    return {
+      title: item.title, text: `${item.title} ${item.detail ?? ''} ${item.badge?.label ?? ''}`,
+      due: typeof t.customFields.deadline === 'string' ? t.customFields.deadline : '',
+      priority: t.priority, created: t.createdAt.getTime(),
+    };
+  };
+
+  const shownGoals = searchAndSort(orderedGoals, goalRow, query, sort);
+  const shownMilestones = searchAndSort(orderedMilestones, milestoneRow, query, sort);
+  const shownTasks = searchAndSort(sortedTasks, taskRow, query, sort);
+  const shownTodos = searchAndSort(sortedTodos, taskRow, query, sort);
+  const shownCount = tab === 'goals' ? shownGoals.length : tab === 'milestones' ? shownMilestones.length
+    : tab === 'tasks' ? shownTasks.length : shownTodos.length;
+
+  const goalColumns = ROADMAP_COLUMNS.map(c => ({
+    ...c, items: shownGoals.filter(g => normalizeRoadmapStatus(g.goalStatus) === c.key).map(goalItem),
+  }));
+  const milestoneColumns = ROADMAP_COLUMNS.map(c => ({
+    ...c, items: shownMilestones.filter(m => normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === c.key).map(milestoneItem),
+  }));
+  const taskColumns = (list: TaskEntryData[]) => TASK_COLUMNS.map(c => ({
+    ...c, items: list.filter(t => taskStatusOf(t.customFields) === c.key).map(taskItem),
+  }));
+
+  /* ── List rows (same rows as every other list) ── */
+  const renderRows = (items: { id: number; taxonomyId: number; isCompleted?: boolean }[], mixed: boolean) => (
+    <RowList>{items.map((t, i) => {
+      const entry = entries.find(e => e.id === t.id);
+      if (!entry) return null;
+      const topic = allTopics.find(tp => tp.id === t.taxonomyId);
+      return (
+        <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
+          <EntryListCard
+            hint={i === 0}
+            content={entry.content}
+            createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
+            topicName={mixed ? topic?.name : undefined}
+            topicColor={topic?.color || accentColor}
+            completed={!!t.isCompleted}
+            fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
+            onClick={() => openInJournal(t.id)}
+          />
+        </SwipeActions>
+      );
+    })}</RowList>
+  );
+
   if (needsUnlock) {
     return (<><ContentTemplate><EmptyState message="Unlock your journal to view goals" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
   }
@@ -554,125 +553,79 @@ export function GoalsView() {
     return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
   }
 
+  const addIn = (fields: Record<string, unknown>) => () => { if (activeAddTopic) newEntry(activeAddTopic.id, fields); };
+
   return (
     <ContentTemplate>
       <Page>
         <Inner>
           <Head>
             <Title>Planning</Title>
-            {activeAddTopic && (
-              <PillButton type="button" onClick={() => activeAddTopic && newEntry(activeAddTopic.id)}>
-                {addLabel}
-              </PillButton>
-            )}
+            <HeadActions>
+              <SearchBox>
+                <MaterialIcon $size={18} aria-hidden="true">search</MaterialIcon>
+                <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+                  placeholder={`Search ${tab}`} aria-label={`Search ${tab}`} />
+              </SearchBox>
+              <SortBox>
+                <MaterialIcon $size={18} aria-hidden="true">sort</MaterialIcon>
+                <select value={sort} onChange={e => setSortBy(e.target.value as PlanSort)} aria-label="Sort">
+                  {sortOptions.map(o => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
+                </select>
+              </SortBox>
+              <ViewSwitch role="group" aria-label="View">
+                <ViewBtn type="button" $active={view === 'list'} aria-pressed={view === 'list'} aria-label="List view" title="List" onClick={() => setView('list')}>
+                  <MaterialIcon $size={20}>list</MaterialIcon>
+                </ViewBtn>
+                <ViewBtn type="button" $active={view === 'board'} aria-pressed={view === 'board'} aria-label="Board view" title="Board" onClick={() => setView('board')}>
+                  <MaterialIcon $size={20}>view_kanban</MaterialIcon>
+                </ViewBtn>
+              </ViewSwitch>
+              {activeAddTopic && (
+                <PillButton type="button" onClick={() => newEntry(activeAddTopic.id)}>
+                  {addLabel}
+                </PillButton>
+              )}
+            </HeadActions>
           </Head>
 
           <TabsRow><PlanningTabBar /></TabsRow>
 
           <Body>
+            {refined && shownCount === 0 && (view === 'list' || !!query.trim()) && (
+              <NoMatch role="status">Nothing in {tab} matches “{query.trim()}”.</NoMatch>
+            )}
+            {tab === 'goals' && (orderedGoals.length === 0
+              ? <EmptyState message="No goals found." submessage="Create a journal entry with the Goal topic to get started." />
+              : view === 'board'
+                ? <KanbanBoard columns={goalColumns} noun="goal" onOpen={openInJournal}
+                    onMove={persistGoalStatus} onReorder={refined ? undefined : reorder(setOrderedGoals)}
+                    onAdd={key => addIn({ goalStatus: key })()} />
+                : renderRows(shownGoals.map(g => ({ ...g, isCompleted: normalizeRoadmapStatus(g.goalStatus) === 'completed' })), false))}
 
-        {tab === 'goals' && (orderedGoals.length === 0
-          ? <EmptyState message="No goals found." submessage="Create a journal entry with the Goal topic to get started." />
-          : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGoalDragEnd}>
-              <Board>
-                {ROADMAP_COLUMNS.map(({ key, label }) => {
-                  const colGoals = goalsByStatus[key];
-                  return (
-                    <RoadmapColumn key={key} status={key} label={label} count={colGoals.length}>
-                      <SortableContext items={colGoals.map(g => g.id)} strategy={verticalListSortingStrategy}>
-                        {colGoals.length === 0
-                          ? <ColumnEmpty>Drop goals here</ColumnEmpty>
-                          : colGoals.map(g => (
-                              <GoalCard key={g.id} goal={g} milestones={milestones} accentColor={accentColor}
-                                isEditing={false} onSelect={() => openInJournal(g.id)}
-                                onClose={() => {}} onSaved={() => {}}
-                                onToggleMilestone={handleToggleMilestone} onUnlinkMilestone={handleUnlinkMilestone}
-                                onLinkMilestone={handleLinkMilestone}
-                                onCreateMilestone={handleCreateMilestone}
-                                roadmapStatus={normalizeRoadmapStatus(g.goalStatus)} />
-                            ))}
-                      </SortableContext>
-                    </RoadmapColumn>
-                  );
-                })}
-              </Board>
-            </DndContext>
-        )}
+            {tab === 'milestones' && (orderedMilestones.length === 0
+              ? <EmptyState message="No milestones found." submessage="Create a journal entry with the Milestone topic to get started." />
+              : view === 'board'
+                ? <KanbanBoard columns={milestoneColumns} noun="milestone" onOpen={openInJournal}
+                    onMove={persistMilestoneStatus} onReorder={refined ? undefined : reorder(setOrderedMilestones)}
+                    onAdd={key => addIn(milestoneFieldsForStatus(key))()} />
+                : renderRows(shownMilestones, false))}
 
-        {tab === 'milestones' && (orderedMilestones.length === 0
-          ? <EmptyState message="No milestones found." submessage="Create a journal entry with the Milestone topic to get started." />
-          : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMilestoneDragEnd}>
-              <Board>
-                {ROADMAP_COLUMNS.map(({ key, label }) => {
-                  const colMilestones = milestonesByStatus[key];
-                  return (
-                    <RoadmapColumn key={key} status={key} label={label} count={colMilestones.length}>
-                      <SortableContext items={colMilestones.map(m => m.id)} strategy={verticalListSortingStrategy}>
-                        {colMilestones.length === 0
-                          ? <ColumnEmpty>Drop milestones here</ColumnEmpty>
-                          : colMilestones.map(m => (
-                              <MilestoneCard key={m.id} milestone={m} tasks={tasks}
-                                goalTitle={m.parentGoalId ? (goalTitles.get(m.parentGoalId) || null) : null}
-                                goalOptions={goalOptions} accentColor={accentColor}
-                                isEditing={false} onSelect={() => openInJournal(m.id)}
-                                onClose={() => {}} onSaved={() => {}}
-                                onToggleTask={handleToggleTask} onUnlinkTask={handleUnlinkTask}
-                                onCreateTask={handleCreateTask}
-                                onLinkTask={handleLinkTask} />
-                            ))}
-                      </SortableContext>
-                    </RoadmapColumn>
-                  );
-                })}
-              </Board>
-            </DndContext>
-        )}
+            {tab === 'tasks' && (linkedTasks.length === 0
+              ? <EmptyState message="No tasks found." submessage="Tasks linked to a goal or milestone show here; unlinked ones are Todos." />
+              : view === 'board'
+                ? <KanbanBoard columns={taskColumns(shownTasks)} noun="task" onOpen={openInJournal}
+                    onMove={persistTaskStatus}
+                    onAdd={key => addIn({ isAutoMigrating: true, ...taskFieldsForStatus(key) })()} />
+                : renderRows(shownTasks, tasksMixed))}
 
-        {tab === 'tasks' && (tasks.length === 0
-            ? <EmptyState message="No tasks found." submessage="Create a journal entry with the Task topic to get started." />
-            : <RowList>{[...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((t, i) => {
-                const entry = entries.find(e => e.id === t.id);
-                if (!entry) return null;
-                const topic = allTopics.find(tp => tp.id === t.taxonomyId);
-                return (
-                  <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
-                    <EntryListCard
-                      hint={i === 0}
-                      content={entry.content}
-                      createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
-                      topicName={tasksMixed ? topic?.name : undefined}
-                      topicColor={topic?.color || accentColor}
-                      completed={t.isCompleted}
-                      fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
-                      onClick={() => openInJournal(t.id)}
-                    />
-                  </SwipeActions>
-                );
-              })}</RowList>
-        )}
-
-        {tab === 'todos' && (todos.length === 0
-            ? <EmptyState message="No todos found." submessage="Create a task without linking it to a milestone or goal." />
-            : <RowList>{[...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((t, i) => {
-                const entry = entries.find(e => e.id === t.id);
-                if (!entry) return null;
-                const topic = allTopics.find(tp => tp.id === t.taxonomyId);
-                return (
-                  <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
-                    <EntryListCard
-                      hint={i === 0}
-                      content={entry.content}
-                      createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
-                      topicName={todosMixed ? topic?.name : undefined}
-                      topicColor={topic?.color || accentColor}
-                      completed={t.isCompleted}
-                      fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
-                      onClick={() => openInJournal(t.id)}
-                    />
-                  </SwipeActions>
-                );
-              })}</RowList>
-        )}
+            {tab === 'todos' && (todos.length === 0
+              ? <EmptyState message="No todos found." submessage="Create a task without linking it to a milestone or goal." />
+              : view === 'board'
+                ? <KanbanBoard columns={taskColumns(shownTodos)} noun="todo" onOpen={openInJournal}
+                    onMove={persistTaskStatus}
+                    onAdd={key => addIn({ isAutoMigrating: true, ...taskFieldsForStatus(key) })()} />
+                : renderRows(shownTodos, todosMixed))}
           </Body>
         </Inner>
       </Page>

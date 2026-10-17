@@ -28,7 +28,7 @@ describe('ViewTabs', () => {
 
   it('renders every tool as a labelled icon button', () => {
     renderWithTheme(<ViewTabs />);
-    for (const label of ['All entries', 'Today', 'Pick a date', 'Bookmarked entries', 'Search entries', 'New entry']) {
+    for (const label of ['All entries', 'Today', 'Bookmarked entries', 'Search entries', 'New entry']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
   });
@@ -49,12 +49,9 @@ describe('ViewTabs', () => {
     expect(onTodayClick).toHaveBeenCalled();
   });
 
-  it('Pick a date switches to date mode and calls onDateTabClick', () => {
-    const onDateTabClick = vi.fn();
-    renderWithTheme(<ViewTabs onDateTabClick={onDateTabClick} />);
-    fireEvent.click(screen.getByLabelText('Pick a date'));
-    expect(mockSetViewMode).toHaveBeenCalledWith('date');
-    expect(onDateTabClick).toHaveBeenCalled();
+  it('has no date-picker tab (dates are searched in the Search tab)', () => {
+    renderWithTheme(<ViewTabs />);
+    expect(screen.queryByLabelText('Pick a date')).not.toBeInTheDocument();
   });
 
   it('clicking Search again toggles back to all entries', () => {

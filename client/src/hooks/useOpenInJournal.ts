@@ -35,9 +35,10 @@ export function useNewEntryInJournal() {
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
   const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
 
-  return useCallback((topicId: number) => {
+  /** `fields` presets the new entry's custom fields (e.g. a board column's status) */
+  return useCallback((topicId: number, fields?: Record<string, unknown>) => {
     setSelectedEntryId(null);
     setShowMobileEditor(true);
-    navigate('/journal', { state: { newEntryTopicId: topicId, ...journalOriginState(location.pathname, location.search) } });
+    navigate('/journal', { state: { newEntryTopicId: topicId, newEntryFields: fields, ...journalOriginState(location.pathname, location.search) } });
   }, [navigate, location.pathname, location.search, setSelectedEntryId, setShowMobileEditor]);
 }

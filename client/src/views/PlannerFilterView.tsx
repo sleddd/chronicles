@@ -55,6 +55,12 @@ const Head = styled.div`
   padding: 53px 0 16px;
 `;
 
+const HeadActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
 const Title = styled.h1`
   font-family: var(--font-display);
   font-size: 44px;
@@ -613,6 +619,7 @@ export function PlannerFilterView() {
         <Inner>
           <Head>
             <Title>Planning</Title>
+            <HeadActions>
             <AddBtnWrap ref={addDropdownRef}>
               <PillButton type="button" onClick={() => setAddDropdownOpen(o => !o)} aria-expanded={addDropdownOpen}>
                 New
@@ -637,6 +644,7 @@ export function PlannerFilterView() {
                 </AddDropdown>
               )}
             </AddBtnWrap>
+            </HeadActions>
           </Head>
 
           <TabsRow><PlanningTabBar /></TabsRow>
