@@ -34,12 +34,12 @@ describe('EntryCard', () => {
   it('renders a spreadsheet row: topic over the date, then the entry', () => {
     const { container } = renderWithTheme(<EntryCard {...defaultProps} topicName="Work" />);
     // 2024 isn't the current year, so the short year is shown
-    expect(screen.getByText("JAN 15, 2024")).toBeInTheDocument();
+    expect(screen.getByText("Jan 15")).toBeInTheDocument();
     const text = container.textContent ?? '';
-    expect(text.indexOf('Work')).toBeLessThan(text.indexOf("JAN 15, 2024"));
-    expect(text.indexOf("JAN 15, 2024")).toBeLessThan(text.indexOf('This is a journal entry'));
+    expect(text.indexOf('Work')).toBeLessThan(text.indexOf("Jan 15"));
+    expect(text.indexOf("Jan 15")).toBeLessThan(text.indexOf('This is a journal entry'));
     // Topic and date share one column
-    expect(screen.getByText('Work').parentElement).toBe(screen.getByText("JAN 15, 2024").parentElement);
+    expect(screen.getByText('Work').parentElement).toBe(screen.getByText("Jan 15").parentElement);
   });
 
   it('calls onClick when card is clicked', () => {

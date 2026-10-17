@@ -66,11 +66,13 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--text-tertiary':     '#3a3a42',
   '--text-disabled':     '#57575f',
   '--text-tab':          '#3a3a42',  /* inactive section tabs */
+  '--text-meta':         '#8a8c95',  /* list-row topic + date: recede behind the entry */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
   '--border-subtle':     '#e4e6ec',
   '--border-default':    '#d8dae2',
   '--border-strong':     '#c4c7d2',
+  '--border-field':      '#e4e6ec',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
   '--bg-rail':           '#f3f4f7',
   '--bg-rail-logo':      '#e8eaef',
@@ -80,6 +82,8 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--chart-violet':      '#8a6fd1',
   '--chart-amber':       '#c98f3e',
   '--chart-green':       '#4f9e74',
+  /* Mood faces, very low → great (wellness check-in) */
+  '--mood-1': '#cf6a62', '--mood-2': '#d48a63', '--mood-3': '#c49a45', '--mood-4': '#5c9e78', '--mood-5': '#3f9a8c',
   /* Status */
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#e2f4eb',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#fbefd7',
@@ -132,10 +136,12 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-tertiary':     '#cdd2da',
   '--text-disabled':     '#a3a9b5',
   '--text-tab':          '#aeb4bf',  /* inactive section tabs — a step under tertiary */
+  '--text-meta':         '#a9b0c8',  /* list-row topic + date: recede behind the entry */
   '--text-inverse':      '#14161b',
   '--border-subtle':     '#272a34',
   '--border-default':    '#343844',
   '--border-strong':     '#3e4350',
+  '--border-field':      '#30333f',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
   '--bg-rail':           '#272a33',
   '--bg-rail-logo':      '#1a1c22',
@@ -145,6 +151,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--chart-violet':      '#a68cf0',
   '--chart-amber':       '#e0ae68',
   '--chart-green':       '#6cc093',
+  '--mood-1': '#ea8a83', '--mood-2': '#eba584', '--mood-3': '#e0b468', '--mood-4': '#7cc49a', '--mood-5': '#6cc4b4',
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#1c3a2c',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#3a2f14',
   '--color-danger':      '#d8483f',  '--color-danger-subtle':  '#3a1e1c',
@@ -188,8 +195,8 @@ const STATIC_CSS_VARS: Record<string, string> = {
   /* Legacy spacing tokens (--s-*) */
   '--r-sm':  '0',
   '--r-md':  '1px',
-  '--r-lg':  '4px',
-  '--r-xl':  '4px',
+  '--r-lg':  '6px',
+  '--r-xl':  '6px',
   '--r-full':'999px',
   '--s-1':   '4px',
   '--s-2':   '8px',
@@ -213,7 +220,7 @@ const STATIC_CSS_VARS: Record<string, string> = {
   /* Design system radius tokens (--radius-*) */
   '--radius-sm':   '0px',
   '--radius-md':   '1px',
-  '--radius-lg':   '4px',
+  '--radius-lg':   '6px',
   '--radius-full': '999px',
 
   /* Design system text tokens (--text-*) */
@@ -295,6 +302,50 @@ function mix(hex: string, target: number, amt: number): string {
   return `rgb(${m(r)},${m(g)},${m(b)})`;
 }
 
+/* WCAG relative luminance / contrast of two hex colours. */
+function luminance(hex: string): number {
+  const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const [r, g, b] = hexToRgbParts(hex);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+function toHsl(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgbParts(hex).map(v => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn;
+  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = (mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+function fromHsl(h: number, s: number, l: number): string {
+  const f = (n: number) => {
+    const k = (n + h * 12) % 12;
+    const a = s * Math.min(l, 1 - l);
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+  };
+  return '#' + [f(0), f(8), f(4)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+/* Nav accent: the SAME hue, a touch more vivid (its own saturation × 1.3), then
+   lightened only until it reaches `ratio` against the active rail block (dark) or
+   darkened until it does on white (light). Mixing with white instead drained the
+   colour into a pastel; this keeps it recognisably the user's accent. */
+function navAccent(color: string, bg: string, ratio: number, isDark: boolean): string {
+  const [h, s, l] = toHsl(color);
+  const sat = Math.min(0.95, s * 1.3);
+  for (let i = 0; i <= 60; i++) {
+    const light = isDark ? Math.min(0.9, l + i * 0.01) : Math.max(0.1, l - i * 0.01);
+    const c = fromHsl(h, sat, light);
+    if (contrast(c, bg) >= ratio) return c;
+  }
+  return fromHsl(h, sat, isDark ? 0.9 : 0.1);
+}
+
 /* Build the DS accent scale (--accent-100..800) from a single base hex.
    Lighter steps mix toward white, darker steps toward black — mirrors the
    tonal accent ramps of the original design system. */
@@ -364,6 +415,12 @@ export function App() {
     root.style.setProperty('--color-accent-text',   isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.78));
     root.style.setProperty('--on-accent', onAccent);
 
+    /* Nav accent (active rail icon + tab): same hue, more vivid, lifted to 3.5:1
+       on the active rail block — icons need 3:1; 4.5 forced muted presets pastel. */
+    root.style.setProperty('--color-accent-nav', isDark
+      ? navAccent(color, DARK_CSS_VARS['--bg-rail-active'], 3.5, true)
+      : navAccent(color, LIGHT_CSS_VARS['--bg-rail-active'], 3.5, false));
+
     /* Legacy accent tokens (existing components still read these) */
     root.style.setProperty('--accent', isDark ? mix(color, 255, 0.22) : color);
     root.style.setProperty('--accent-hover', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.85));
@@ -379,7 +436,10 @@ export function App() {
     /* Legacy vars for existing components that depend on them */
     root.style.setProperty('--focus-color', color);
     root.style.setProperty('--focus-color-rgb', `${r},${g},${b}`);
-  }, [accentColor, isDark]);
+    /* The token tables are deps too: when a hot reload re-creates them (a token
+       added or changed in this file), the tokens are re-applied without a full
+       page reload — otherwise a new token is missing until the next reload. */
+  }, [accentColor, isDark, LIGHT_CSS_VARS, DARK_CSS_VARS]);
 
   return (
     <ThemeProvider theme={activeTheme}>

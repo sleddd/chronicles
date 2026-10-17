@@ -46,7 +46,6 @@ const Row = styled.div<{ $hasTopic: boolean; $hint?: boolean }>`
 
 const ListDate = styled(DateCell)`
   font-family: var(--font-label);
-  letter-spacing: 0.08em;
   text-align: right;
 `;
 

@@ -62,7 +62,8 @@ const ProgressStats = styled.div`
 const ProgressTrack = styled.div`
   height: 6px;
   border-radius: 3px;
-  background: ${({ theme }) => theme.colors.border};
+  /* --border-subtle matches the card's fill in dark, so the track uses a visible tone */
+  background: var(--border-default);
   overflow: hidden;
 `;
 
@@ -108,7 +109,7 @@ const DoseCard = styled.div<{ $taken: boolean; $accentColor: string }>`
   padding: 16px 4px;
   background: transparent;
   border: none;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-field, var(--border-default));
   border-radius: 0;
   @media (max-width: 480px) { padding: 14px 4px; gap: 10px; }
 `;

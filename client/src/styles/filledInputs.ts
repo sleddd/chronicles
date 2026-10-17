@@ -4,7 +4,7 @@ import { css } from 'styled-components';
    (FormField rows, Settings cards) to every text input, select and textarea
    inside them. !important: GlobalStyle flattens every input to transparent. */
 
-const TEXT_INPUTS = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])';
+export const TEXT_INPUTS = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])';
 
 export const filledInputs = css`
   ${TEXT_INPUTS}, select, textarea {

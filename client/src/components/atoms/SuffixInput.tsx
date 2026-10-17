@@ -12,8 +12,8 @@ const Wrap = styled.div`
 
 const Suffix = styled.span`
   position: absolute;
-  right: 12px;
-  top: 19px; /* centre of the 38px box, even when a hint sits below */
+  right: 16px;
+  top: 24px; /* centre of the 48px box, even when a hint sits below */
   transform: translateY(-50%);
   font-family: var(--font-sans);
   font-size: 13px;

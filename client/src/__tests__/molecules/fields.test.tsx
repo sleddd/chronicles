@@ -69,7 +69,7 @@ describe('FoodFields', () => {
 
   it('renders meal type, calories, ingredients, and notes fields', () => {
     renderWithTheme(<FoodFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Meal Type')).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
     expect(screen.getByText('Calories')).toBeInTheDocument();
     expect(screen.getByText('Ingredients')).toBeInTheDocument();
     expect(screen.getByText('Notes')).toBeInTheDocument();
@@ -86,9 +86,26 @@ describe('FoodFields', () => {
   it('calls onChange when calories changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<FoodFields values={defaultValues} onChange={onChange} />);
-    const calorieInput = screen.getByPlaceholderText('kcal');
+    const calorieInput = screen.getByLabelText('Calories');
     fireEvent.change(calorieInput, { target: { value: '500' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ calories: '500' }));
+  });
+
+  it('edits date and time in the one "Eaten at" box', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<FoodFields values={defaultValues} onChange={onChange} />);
+    expect(screen.getByText('Eaten at')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Time eaten'), { target: { value: '18:00' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ consumedTime: '18:00' }));
+  });
+
+  it('shows Re-estimate only when AI is available, and calls it', () => {
+    const onEstimate = vi.fn();
+    const { rerender } = renderWithTheme(<FoodFields values={defaultValues} onChange={() => {}} />);
+    expect(screen.queryByRole('button', { name: /estimate/i })).toBeNull();
+    rerender(<FoodFields values={{ ...defaultValues, calories: '390' }} onChange={() => {}} onEstimateCalories={onEstimate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Re-estimate' }));
+    expect(onEstimate).toHaveBeenCalledOnce();
   });
 
   it('calls onChange when ingredients changes', () => {
@@ -259,7 +276,7 @@ describe('FoodFields nutrient grid', () => {
     const onChange = vi.fn();
     const values = { mealType: 'lunch', ingredients: '', notes: '', consumedDate: '', consumedTime: '', calories: '' } as unknown as FoodFieldValues;
     renderWithTheme(<FoodFields values={values} onChange={onChange} />);
-    expect(screen.getByText('Nutrients')).toBeInTheDocument();
+    expect(screen.getByText('Nutrition')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Vitamin D (mcg)'), { target: { value: '15' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ vitaminD: '15' }));
   });

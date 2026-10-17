@@ -5,6 +5,7 @@ import { Select } from '../atoms/Select.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { UnitLabel } from '../atoms/UnitLabel.js';
 import { FormField } from '../molecules/FormField.js';
+import { NutritionPanel } from '../molecules/NutritionPanel.js';
 import { FilterTabs } from '../molecules/FilterTabs.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -79,7 +80,6 @@ const ErrorNote = styled(SectionNote)`
   color: var(--color-danger, #c0392b);
 `;
 
-/* Two FormField columns that collapse to one on narrow screens. */
 /* One field per row. */
 const FieldStack = styled.div`
   display: flex;
@@ -277,7 +277,7 @@ interface FoodAddFormProps {
   submitLabel?: string;
 }
 
-/** Item, type and nutrients in the app's label-left field rows; blanks are AI-filled after adding. */
+/** Item, type and the nutrition panel; blank nutrients are AI-filled after adding. */
 export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Log food' }: FoodAddFormProps) {
   const [item, setItem] = useState('');
   const [mealType, setMealType] = useState(() => mealForNow());
@@ -311,39 +311,22 @@ export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Lo
 
   const onEnter = (e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void handleAdd(); } };
 
-  const nutrientField = (key: NutrientKey) => {
-    const n = NUTRIENTS.find(x => x.key === key)!;
-    return (
-      <FormField key={key} label={<UnitLabel label={n.label} unit={n.unit || undefined} />}>
-        <TextInput
-          type="number" step={n.step} min="0" inputMode="decimal"
-          value={values[key]}
-          onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}
-          onKeyDown={onEnter}
-          placeholder={aiReady ? 'Auto' : '—'}
-          aria-label={`${n.label}${n.unit ? ` (${n.unit})` : ''}`}
-        />
-      </FormField>
-    );
-  };
-
   return (
     <div>
       <FormField label="What did you eat?">
         <TextInput value={item} onChange={e => setItem(e.target.value)} onKeyDown={onEnter} placeholder="e.g. Chicken sausage, 1 link" autoComplete="off" aria-label="What did you eat?" />
       </FormField>
-      <FieldStack>
-        <FormField label="Meal time">
-          <Select value={mealType} onChange={e => setMealType(e.target.value)} aria-label="Meal time">
-            {MEAL_TYPE_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </Select>
-        </FormField>
-        {nutrientField('calories')}
-        {nutrientField('iron')}
-        {nutrientField('vitaminD')}
-        {nutrientField('vitaminB12')}
-        {nutrientField('vitaminC')}
-      </FieldStack>
+      <FormField label="Meal time">
+        <Select value={mealType} onChange={e => setMealType(e.target.value)} aria-label="Meal time">
+          {MEAL_TYPE_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </Select>
+      </FormField>
+      <NutritionPanel
+        values={values}
+        onChange={(key, v) => setValues(prev => ({ ...prev, [key]: v }))}
+        onKeyDown={onEnter}
+        compact
+      />
       <FormField label="Notes">
         <TextInput value={notes} onChange={e => setNotes(e.target.value)} onKeyDown={onEnter} placeholder="Optional" autoComplete="off" aria-label="Notes" />
       </FormField>

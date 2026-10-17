@@ -36,7 +36,7 @@ function extractTitle(html: string, fallback?: string): string {
 
 /* Spreadsheet row (see EntryTable): Topic over Date | Entry | controls.
    Shared row style (styles/entryRow): sunken rows; the open entry, the
-   hovered row and the first-row hint use the page (editor) colour. */
+   hovered row and the first-row hint use the page (editor) colour + accent bar. */
 const Row = styled.div<{ $active?: boolean; $hint?: boolean }>`
   position: relative;
   display: grid;
@@ -48,6 +48,7 @@ const Row = styled.div<{ $active?: boolean; $hint?: boolean }>`
   padding: ${ENTRY_ROW_INSET_PADDING};
   border-bottom: 1px solid var(--border-subtle);
   ${entryRow}
+
 `;
 
 /* Tapping the topic filters the list to that topic */
@@ -61,10 +62,10 @@ const TopicButton = styled.button<{ $active?: boolean }>`
   white-space: nowrap;
   font-family: var(--font-label);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-weight: 500;
+  letter-spacing: 0.12rem;
   text-transform: uppercase;
-  color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-tertiary)'};
+  color: var(--text-meta);
   &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;

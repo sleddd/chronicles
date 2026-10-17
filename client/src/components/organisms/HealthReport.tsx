@@ -30,10 +30,13 @@ import React, { useMemo, useState } from 'react';
 
 /* ── Styled ── */
 
-/* Flat report section — a hairline top rule, content on the canvas (the dashboard style). */
+/* Report section — the same filled, bordered card as the dashboards (CollapsibleCard). */
 const SectionCard = styled.div`
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg, 6px);
+  background: var(--bg-surface);
+  padding: 20px 24px;
+  @media (max-width: 480px) { padding: 16px; }
 `;
 
 const SectionTitle = styled.h3`
@@ -41,13 +44,14 @@ const SectionTitle = styled.h3`
   font-size: ${({ theme }) => theme.typography.h3.fontSize};
   font-weight: 300;
   color: ${({ theme }) => theme.colors.text};
-  margin: 0 0 12px;
+  margin: 0 0 24px; /* clear space between a section's header and its content */
 `;
 
+/* Sits right under its title; the header's space goes below it instead */
 const SectionDesc = styled.p`
   font-size: 14px;
   color: ${({ theme }) => theme.colors.textMuted};
-  margin: 0 0 12px;
+  margin: -18px 0 24px;
 `;
 
 const ListRow = styled.div`
@@ -326,23 +330,11 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
 
   return (
     <ScrollList $gap="24px" $padding="16px 0">
-      {/* Wellness: one tile per metric; the chosen tile drives the trend chart */}
+      {/* Wellness: one tile per metric above the chart; the chosen tile drives it */}
       {wellnessSummary && (
         <SectionCard>
           <SectionTitle>Wellness Trends</SectionTitle>
-          {wellnessTrend.length > 1 && (
-            <TrendChart
-              ariaLabel={`${chart.m.name} by day`}
-              labels={chart.labels}
-              yMax={chart.m.max}
-              formatTick={v => `${v}${chart.m.unit}`}
-              series={[
-                { label: chart.m.name, values: chart.values, color: chart.m.color },
-                { label: '7-day average', values: chart.avg, ghost: true },
-              ]}
-            />
-          )}
-          <StatTileRow $cols={3} style={{ marginTop: 24 }}>
+          <StatTileRow $cols={3} style={{ marginBottom: 24 }}>
             <StatTile
               value={wellnessSummary.avgWater.toFixed(1)} unit="/8" name="Water"
               caption={`Avg glasses · ${wellnessSummary.days} days`}
@@ -362,6 +354,18 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
               selected={metric === 'sleep'} onSelect={() => setMetric('sleep')}
             />
           </StatTileRow>
+          {wellnessTrend.length > 1 && (
+            <TrendChart
+              ariaLabel={`${chart.m.name} by day`}
+              labels={chart.labels}
+              yMax={chart.m.max}
+              formatTick={v => `${v}${chart.m.unit}`}
+              series={[
+                { label: chart.m.name, values: chart.values, color: chart.m.color },
+                { label: '7-day average', values: chart.avg, ghost: true },
+              ]}
+            />
+          )}
         </SectionCard>
       )}
 

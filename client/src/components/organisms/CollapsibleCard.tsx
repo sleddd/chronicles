@@ -4,10 +4,12 @@ import { Icon } from '../atoms/core/Icon.jsx';
 
 /* Lifted panel: a surface fill a step off the canvas (visible in dark) with a soft
    hairline and slightly rounded corners; the title row collapses it. */
-const Card = styled.section`
+const Card = styled.section<{ $outlined?: boolean }>`
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg, 4px);
+  /* Outlined variant (Health dashboard): no fill, a brighter outline instead */
+  ${({ $outlined }) => $outlined && 'background: transparent; border-color: var(--border-default);'}
+  border-radius: var(--r-lg, 6px);
   padding: 20px 24px;
   @media (max-width: 480px) { padding: 16px; }
 `;
@@ -62,8 +64,9 @@ const ChevronBtn = styled.button`
   cursor: pointer;
 `;
 
+/* Clear space under the card's title before its content */
 const Body = styled.div`
-  padding: 16px 0 4px;
+  padding: 36px 0 4px;
 `;
 
 function readCollapsed(storageKey: string): Record<string, boolean> {
@@ -80,6 +83,8 @@ interface CollapsibleCardProps {
   defaultOpen?: boolean;
   /** Control shown in the title row, left of the chevron (kept outside the toggle button). */
   action?: ReactNode;
+  /** No fill, a brighter outline (Health dashboard) */
+  outlined?: boolean;
   children: ReactNode;
 }
 
@@ -88,7 +93,7 @@ interface CollapsibleCardProps {
  * card in this browser (falls back to `defaultOpen`). The body stays mounted
  * while hidden so form drafts survive collapsing.
  */
-export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, action, children }: CollapsibleCardProps) {
+export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, action, outlined, children }: CollapsibleCardProps) {
   const [open, setOpen] = useState(() => {
     const saved = readCollapsed(storageKey)[id];
     return saved === undefined ? defaultOpen : !saved;
@@ -100,7 +105,7 @@ export function CollapsibleCard({ id, title, storageKey, defaultOpen = true, act
     try { localStorage.setItem(storageKey, JSON.stringify({ ...readCollapsed(storageKey), [id]: !next })); } catch { /* storage unavailable */ }
   };
   return (
-    <Card aria-label={title}>
+    <Card aria-label={title} $outlined={outlined}>
       <Heading>
         <Toggle type="button" onClick={toggle} aria-expanded={open} aria-controls={bodyId}>
           {title}

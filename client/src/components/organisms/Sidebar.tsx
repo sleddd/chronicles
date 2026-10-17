@@ -43,7 +43,7 @@ const activeTab = `
     top: 0;
     bottom: 0;
     width: 4px;
-    background: var(--color-accent);
+    background: var(--color-accent-nav);
   }
 `;
 
@@ -61,10 +61,10 @@ const LogoBtn = styled.button<{ $active?: boolean }>`
   border: none;
   cursor: pointer;
   background: var(--bg-rail-logo);
-  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-secondary)')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-secondary)')};
   transition: color 120ms ease;
 
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-primary)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')}; }
   ${({ $active }) => ($active ? activeTab : '')}
 `;
 
@@ -126,14 +126,14 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   border: none;
   cursor: pointer;
   background: ${({ $active }) => $active ? 'var(--bg-rail-active)' : 'transparent'};
-  color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-secondary)'};
+  color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-secondary)'};
   transition: background 120ms ease, color 120ms ease;
 
   &:last-of-type { margin-top: auto; }
 
   &:hover {
     background: var(--bg-rail-active);
-    color: ${({ $active }) => $active ? 'var(--color-accent)' : 'var(--text-primary)'};
+    color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-primary)'};
   }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 

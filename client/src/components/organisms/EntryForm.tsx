@@ -291,7 +291,8 @@ const CustomFieldsSection = styled.div<{ $noRule?: boolean }>`
      when there IS a writing area above */
   border-top: ${({ $noRule }) => ($noRule ? 'none' : '1px solid var(--border-subtle)')};
   border-radius: 0;
-  padding: ${({ $noRule }) => ($noRule ? '0' : 'var(--s-6, 24px)')} 0 var(--s-5, 20px);
+  /* Fields-only entries: clear space under the header's bottom rule */
+  padding: ${({ $noRule }) => ($noRule ? '16px' : 'var(--s-6, 24px)')} 0 var(--s-5, 20px);
   position: relative;
   margin-top: var(--s-5, 20px);
 `;
@@ -691,8 +692,10 @@ export function EntryForm({
   const contentText = stripHtml(content).trim();
   // Menu plans too: their text is just "Menu: Oct 12 – Oct 18"
   const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || !!nameKey;
+  // Wellness is fields only: its auto-save writes a summary ("3/8 glasses · …")
+  // as the text, which must not bring the text area back
   const editorCollapsed = !notesExpanded && (
-    customType === 'event' || titleOnlyTopic ||
+    customType === 'event' || customType === 'wellness' || titleOnlyTopic ||
     (!hasTextContent && !isJournalTopic && customType !== 'task'
       && (customType !== null || hideByTopicOption || fieldLedTopic))
   );

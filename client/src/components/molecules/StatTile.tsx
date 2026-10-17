@@ -2,8 +2,8 @@ import styled from 'styled-components';
 import type { ReactNode } from 'react';
 
 /* Report stat tile: tracked caption, thin Work Sans figure, a 4px progress bar in
-   the metric's own colour, then the name. Selectable tiles (with onSelect) lift onto
-   --bg-surface with a hairline outline when chosen — e.g. to switch a TrendChart. */
+   the metric's own colour, then the name. Every tile has a hairline outline; the chosen
+   one (with onSelect, e.g. to switch a TrendChart) lifts onto --bg-hover with a brighter one. */
 
 const Tile = styled.button<{ $selected?: boolean; $static?: boolean }>`
   display: flex;
@@ -14,9 +14,9 @@ const Tile = styled.button<{ $selected?: boolean; $static?: boolean }>`
   text-align: left;
   font: inherit;
   color: inherit;
-  background: ${({ $selected }) => ($selected ? 'var(--bg-surface)' : 'transparent')};
-  border: 1px solid ${({ $selected }) => ($selected ? 'var(--border-default)' : 'transparent')};
-  border-radius: 4px;
+  background: ${({ $selected }) => ($selected ? 'var(--bg-hover)' : 'transparent')};
+  border: 1px solid ${({ $selected }) => ($selected ? 'var(--border-strong)' : 'var(--border-default)')};
+  border-radius: var(--r-lg, 6px);
   cursor: ${({ $static }) => ($static ? 'default' : 'pointer')};
   transition: background 200ms ease, border-color 200ms ease;
 
@@ -52,7 +52,7 @@ const Figure = styled.span`
 const Track = styled.span`
   display: block;
   height: 4px;
-  background: var(--border-subtle);
+  background: var(--bg-sunken); /* --border-subtle vanishes on a card's fill */
   border-radius: 2px;
   overflow: hidden;
 `;

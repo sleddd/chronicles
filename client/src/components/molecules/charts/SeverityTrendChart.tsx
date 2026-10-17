@@ -1,11 +1,13 @@
 import styled from 'styled-components';
 import type { SeverityTrendData } from '../../../utils/correlationAnalysis.js';
 
+/* Same filled, bordered card as the other report sections */
 const Card = styled.div`
-  border: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
-  border-radius: ${({ theme }) => theme.borderRadius.lg}px;
-  background: transparent;
-  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg, 6px);
+  background: var(--bg-surface);
+  padding: 20px 24px;
+  @media (max-width: 480px) { padding: 16px; }
 `;
 
 const Title = styled.h3`
@@ -13,7 +15,7 @@ const Title = styled.h3`
   font-size: ${({ theme }) => theme.typography.bodySm.fontSize};
   font-weight: ${({ theme }) => theme.fontWeight.semibold};
   color: ${({ theme }) => theme.colors.text};
-  margin: 0 0 12px;
+  margin: 0 0 24px;
 `;
 
 const Empty = styled.div`

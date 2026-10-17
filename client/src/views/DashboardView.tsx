@@ -17,10 +17,21 @@ import { TopicSelector } from '../components/organisms/TopicSelector.js';
 import { Editor, type DictationControls } from '../components/organisms/Editor.js';
 import type { Topic } from '../types/topics.js';
 import { UserFieldsForm } from '../components/molecules/fields/UserFieldsForm.js';
+import { GoalFields } from '../components/molecules/fields/GoalFields.js';
+import { MilestoneFields } from '../components/molecules/fields/MilestoneFields.js';
+import { MenuPlanFields, type MenuPlanFieldValues } from '../components/molecules/fields/MenuPlanFields.js';
+import { ShoppingListFields } from '../components/molecules/fields/ShoppingListFields.js';
+import { RecipeFields } from '../components/molecules/fields/RecipeFields.js';
+import type { GoalFieldValues, MilestoneFieldValues, RecipeFieldValues, ShoppingListFieldValues } from '../types/fields.js';
+import { defaultShoppingListTitle } from '../utils/kitchen.js';
 import { TextInput } from '../components/atoms/TextInput.js';
 import { Select } from '../components/atoms/Select.js';
 import { Checkbox } from '../components/atoms/Checkbox.js';
 import { FormField, FieldRowLayoutContext } from '../components/molecules/FormField.js';
+import { NutritionPanel } from '../components/molecules/NutritionPanel.js';
+import { WellnessPanel, WATER_GOAL, type FlowIntensity } from '../components/molecules/WellnessPanel.js';
+import { toDateStr } from '../utils/dateUtils.js';
+import { NUTRIENTS, type NutrientKey } from '../types/nutrition.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { UnitLabel } from '../components/atoms/UnitLabel.js';
 import { useAiReady } from '../hooks/useAiReady.js';
@@ -450,10 +461,18 @@ interface FieldDef { key: string; label: string; type: FieldType; options?: stri
 /* Topics that are written in their fields, not a text area — the same set the
    journal editor hides its text area for (where Quick Entry has the fields).
    Their text is generated on save (utils/entryText). */
+/** Meals nutrients — shown together in the nutrition panel */
+const NUTRIENT_KEYS = new Set<string>(NUTRIENTS.map(n => n.key));
+
 const QE_FIELDS_ONLY = new Set([
   'meals', 'medication', 'allergy', 'exercise', 'event', 'events', 'meeting', 'meetings',
-  'book', 'books', 'quote', 'quotes', 'music',
+  'book', 'books', 'quote', 'quotes', 'music', 'wellness',
+  'goal', 'goals', 'milestone', 'milestones',
+  'shopping list', 'shopping lists', 'menu plan', 'meal plan', 'recipe', 'recipes',
 ]);
+
+const SHOPPING_TOPICS = ['shopping list', 'shopping lists'];
+const MENU_PLAN_TOPICS = ['menu plan', 'meal plan'];
 
 const TOPIC_FIELDS: Record<string, FieldDef[]> = {
   'medication':  [],
@@ -484,9 +503,13 @@ function escapeHtml(text: string): string {
 function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: Topic[] }) {
   const { encryptPost } = useEncryption();
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
+  const cycleTrackingEnabled = useUIStore(s => s.cycleTrackingEnabled);
   const [content, setContent] = useState('');
   const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  /** Shopping lists: their text is just a title */
+  const [listTitle, setListTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const [toolbarOpen, setToolbarOpen] = useState(false);
@@ -511,6 +534,32 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
 
   const isTaskTopic = selectedTopic?.name.toLowerCase() === 'task';
   const isMedicationTopic = selectedTopic?.name.toLowerCase() === 'medication';
+  const isWellnessTopic = selectedTopic?.name.toLowerCase() === 'wellness';
+  const isGoalTopic = ['goal', 'goals'].includes(selectedTopic?.name.toLowerCase() ?? '');
+  const isMilestoneTopic = ['milestone', 'milestones'].includes(selectedTopic?.name.toLowerCase() ?? '');
+  const isShoppingTopic = SHOPPING_TOPICS.includes(selectedTopic?.name.toLowerCase() ?? '');
+  const isMenuPlanTopic = MENU_PLAN_TOPICS.includes(selectedTopic?.name.toLowerCase() ?? '');
+  const isRecipeTopic = ['recipe', 'recipes'].includes(selectedTopic?.name.toLowerCase() ?? '');
+  // Shopping lists a recipe can link to (as in the journal editor)
+  const shoppingListOptions = useMemo(() => {
+    const listIds = new Set(allTopics.filter(t => SHOPPING_TOPICS.includes(t.name.toLowerCase())).map(t => t.id));
+    if (!listIds.size) return [];
+    return allEntries
+      .filter(e => listIds.has((e.metadata as Record<string, unknown>)?._taxonomyId as number))
+      .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Shopping List #${e.id}` }));
+  }, [allEntries, allTopics]);
+  // Recipes to link from shopping lists and menu plans (as in the journal editor)
+  const recipeOptions = useMemo(() => {
+    const recipeIds = new Set(allTopics.filter(t => ['recipe', 'recipes'].includes(t.name.toLowerCase())).map(t => t.id));
+    if (!recipeIds.size) return [];
+    return allEntries
+      .filter(e => recipeIds.has((e.metadata as Record<string, unknown>)?._taxonomyId as number))
+      .map(e => {
+        const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
+        const name = typeof cf?.recipeName === 'string' ? cf.recipeName.trim() : '';
+        return { id: e.id, title: name || stripHtml(e.content).slice(0, 60) || `Recipe #${e.id}` };
+      });
+  }, [allEntries, allTopics]);
   const goalTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'goal')?.id, [allTopics]);
   const milestoneTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'milestone')?.id, [allTopics]);
   const goalOptions = useMemo(() => {
@@ -542,24 +591,86 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
   // custom topics set to hide it), unless text was already typed
   const fieldsOnly = selectedTopic !== null && !hasContent
     && (QE_FIELDS_ONLY.has(topicLower) || (!!topicHideText[selectedTopic.id] && userFieldDefs.length > 0));
-  const generatedText = selectedTopic ? generatedEntryText(topicLower, customFields, userFieldDefs) : '';
+  const menuWeek = typeof customFields.weekStart === 'string' ? customFields.weekStart : '';
+  const generatedText = !selectedTopic ? ''
+    : isShoppingTopic ? (listTitle.trim() || defaultShoppingListTitle())
+    : isMenuPlanTopic ? (menuWeek ? `Menu: week of ${menuWeek}` : 'Menu plan')
+    : isRecipeTopic ? (typeof customFields.recipeName === 'string' ? customFields.recipeName.trim() : '')
+    : generatedEntryText(topicLower, customFields, userFieldDefs);
   const isFilled = (v: unknown) => v !== '' && v != null && v !== false && !(Array.isArray(v) && v.length === 0);
   const hasFieldValue = Object.entries(customFields).some(([k, v]) => !k.startsWith('_') && isFilled(v))
     || Object.values(userFields).some(isFilled);
-  const canSave = hasContent || !!generatedText || (selectedTopic !== null && hasFieldValue);
-  const hasFieldsBelow = fieldDefs.length > 0 || isTaskTopic || isMedicationTopic || userFieldDefs.length > 0;
+  const hasPlanOrList = (Array.isArray(customFields.items) && customFields.items.length > 0)
+    || !!listTitle.trim() || !!menuWeek
+    || Object.keys((customFields.days as Record<string, unknown>) ?? {}).length > 0;
+  const canSave = hasContent || ((isShoppingTopic || isMenuPlanTopic) ? hasPlanOrList : !!generatedText)
+    || (selectedTopic !== null && hasFieldValue);
+  const hasFieldsBelow = fieldDefs.length > 0 || isTaskTopic || isMedicationTopic || isWellnessTopic || isGoalTopic || isMilestoneTopic || isShoppingTopic || isMenuPlanTopic || isRecipeTopic || userFieldDefs.length > 0;
 
   const setField = (key: string, value: unknown) => setCustomFields(prev => ({ ...prev, [key]: value }));
 
+  // Wellness is one check-in per day: start from today's values (same entry the
+  // Health dashboard and journal edit)
+  const todaysCheckIn = () => {
+    const day = toDateStr(new Date());
+    return useEntriesStore.getState().decryptedEntries.find(e => {
+      const meta = e.metadata as Record<string, unknown>;
+      return meta._widgetType === 'wellness-checkin'
+        && (meta._customFields as Record<string, unknown> | undefined)?.date === day;
+    }) ?? null;
+  };
+
   const handleTopicChange = (id: number | null) => {
     setSelectedTopicId(id);
-    setCustomFields({});
+    setListTitle('');
+    const topic = topics.find(t => t.id === id);
+    if (topic?.name.toLowerCase() === 'wellness') {
+      const existing = todaysCheckIn();
+      setCustomFields({ ...(((existing?.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {}) });
+    } else {
+      setCustomFields({});
+    }
+  };
+
+  // Wellness saves into today's check-in entry (created if missing), never a second one
+  const saveWellness = async (topicId: number) => {
+    const existing = todaysCheckIn();
+    const prevCf = ((existing?.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {};
+    const cf: Record<string, unknown> = {
+      sleepQuality: 0, waterGoal: WATER_GOAL, ...prevCf, ...customFields, date: toDateStr(new Date()),
+    };
+    const w = Number(cf.waterGlasses) || 0, g = Number(cf.waterGoal) || WATER_GOAL;
+    const m = Number(cf.moodScore) || 0, sl = Number(cf.sleepHours) || 0;
+    const parts = [w > 0 ? `${w}/${g} glasses` : '', m > 0 ? `Mood ${m}/5` : '', sl > 0 ? `${sl}h sleep` : ''].filter(Boolean);
+    const text = `<p>${parts.join(' · ') || 'Wellness check-in'}</p>`;
+    const metadata = { ...((existing?.metadata as Record<string, unknown>) ?? {}), _taxonomyId: topicId, _widgetType: 'wellness-checkin', _customFields: cf };
+    const encrypted = await encryptPost(text, metadata);
+    const payload = {
+      contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
+      metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
+      isEncrypted: true as const, taxonomyIds: [topicId],
+    };
+    if (existing) {
+      await entriesApi.update(existing.id, payload);
+      updateDecryptedEntry(existing.id, { content: text, metadata });
+    } else {
+      const result = await entriesApi.create(payload);
+      const created = new Date(result.createdAt as string);
+      addDecryptedEntry({ id: result.id as number, content: text, metadata, isEncrypted: true, createdAt: created, updatedAt: created });
+    }
   };
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
+      if (isWellnessTopic && selectedTopic) {
+        await saveWellness(selectedTopic.id);
+        setContent('');
+        setSelectedTopicId(null);
+        setCustomFields({});
+        return;
+      }
       // Fields-only entries carry generated text as their title in every list
       const finalContent = !hasContent && generatedText ? `<p>${escapeHtml(generatedText)}</p>` : content;
       const effectiveTopicId = selectedTopic ? selectedTopic.id : await getOrCreateJournalTopic();
@@ -569,7 +680,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
       if (isMealsTopic && aiReady) {
         fieldsToSave = (await autoNutritionOnSave(stripHtml(finalContent), customFields).catch(() => null)) ?? customFields;
       }
-      if ((fieldDefs.length > 0 || userFieldDefs.length > 0 || isMedicationTopic || isTaskTopic) && selectedTopic) metadata._customFields = fieldsToSave;
+      if ((fieldDefs.length > 0 || userFieldDefs.length > 0 || isMedicationTopic || isTaskTopic || isGoalTopic || isMilestoneTopic || isShoppingTopic || isMenuPlanTopic || isRecipeTopic) && selectedTopic) metadata._customFields = fieldsToSave;
       const encrypted = await encryptPost(finalContent, metadata);
       const result = await entriesApi.create({
         contentEncrypted: encrypted.contentEncrypted,
@@ -581,6 +692,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
       });
       addDecryptedEntry({ id: result.id as number, content: finalContent, metadata, isEncrypted: true, createdAt: new Date(result.createdAt as string), updatedAt: new Date(result.createdAt as string) });
       setContent('');
+      setListTitle('');
       setSelectedTopicId(null);
       setCustomFields({});
     } finally {
@@ -637,7 +749,16 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
         {/* The topic's fields sit under a rule when the editor is above them */}
         {hasFieldsBelow && <FieldsBlock $ruled={!fieldsOnly}>
         <FieldRowLayoutContext.Provider value={true}>
-        {fieldDefs.length > 0 && fieldDefs.map(f => (
+        {fieldDefs.length > 0 && fieldDefs.map(f => isMealsTopic && NUTRIENT_KEYS.has(f.key) ? (
+          // Meals: the nutrients share one panel, placed where calories sit
+          f.key === 'calories' && (
+            <NutritionPanel
+              key="nutrition"
+              values={customFields as Partial<Record<NutrientKey, unknown>>}
+              onChange={(key, v) => setField(key, v === '' ? '' : Number(v))}
+            />
+          )
+        ) : (
           <FormField key={f.key} label={f.unit ? <UnitLabel label={f.label} unit={f.unit} /> : f.label}>
             {f.type === 'boolean' ? (
               <Checkbox
@@ -653,7 +774,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
             ) : (
               <TextInput
                 type={f.type}
-                placeholder={f.type === 'number' ? (isMealsTopic && aiReady ? 'Auto' : '0') : `Add ${f.label.toLowerCase()}…`}
+                placeholder={f.type === 'number' ? '0' : `Add ${f.label.toLowerCase()}…`}
                 value={(customFields[f.key] as string) ?? ''}
                 onChange={e => setField(f.key, f.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
               />
@@ -742,6 +863,59 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
               />
             </FormField>
           </>
+        )}
+        {isShoppingTopic && (
+          <>
+            <FormField label="Title">
+              <TextInput value={listTitle} onChange={e => setListTitle(e.target.value)} placeholder={defaultShoppingListTitle()} />
+            </FormField>
+            <ShoppingListFields
+              values={{ items: [], notes: '', linkedRecipeIds: [], ...customFields } as ShoppingListFieldValues}
+              onChange={v => setCustomFields(v as unknown as Record<string, unknown>)}
+              recipeOptions={recipeOptions}
+            />
+          </>
+        )}
+        {isRecipeTopic && (
+          <RecipeFields
+            values={{ servings: '', prepTime: '', cookTime: '', cuisine: '', ingredients: [], instructions: '', linkedShoppingListIds: [], ...customFields } as RecipeFieldValues}
+            onChange={v => setCustomFields(v as unknown as Record<string, unknown>)}
+            shoppingListOptions={shoppingListOptions}
+          />
+        )}
+        {isMenuPlanTopic && (
+          <MenuPlanFields
+            values={{ weekStart: '', days: {}, ...customFields } as MenuPlanFieldValues}
+            onChange={v => setCustomFields(v as unknown as Record<string, unknown>)}
+            recipeOptions={recipeOptions}
+          />
+        )}
+        {isGoalTopic && (
+          <GoalFields
+            values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues}
+            onChange={v => setCustomFields(v as unknown as Record<string, unknown>)}
+          />
+        )}
+        {isMilestoneTopic && (
+          <MilestoneFields
+            values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues}
+            onChange={v => setCustomFields(v as unknown as Record<string, unknown>)}
+            goalOptions={goalOptions}
+          />
+        )}
+        {isWellnessTopic && (
+          <WellnessPanel
+            water={Number(customFields.waterGlasses) || 0}
+            waterGoal={Number(customFields.waterGoal) || WATER_GOAL}
+            sleep={Number(customFields.sleepHours) || 0}
+            mood={Number(customFields.moodScore) || 0}
+            flow={((customFields.flowIntensity as string) || '') as FlowIntensity}
+            onWater={v => setField('waterGlasses', v)}
+            onSleep={v => setField('sleepHours', v)}
+            onMood={v => setField('moodScore', v)}
+            onFlow={f => setCustomFields(prev => ({ ...prev, flowIntensity: f, periodToday: f !== '' }))}
+            showCycle={cycleTrackingEnabled}
+          />
         )}
         {userFieldDefs.length > 0 && (
           <UserFieldsForm

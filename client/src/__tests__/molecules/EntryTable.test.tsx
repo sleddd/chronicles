@@ -6,7 +6,7 @@ import { renderWithTheme } from '../testUtils';
 
 describe('formatListDate', () => {
   it('shows an uppercase month, day and full year', () => {
-    expect(formatListDate(new Date(2026, 9, 11))).toBe('OCT 11, 2026');
+    expect(formatListDate(new Date(2026, 9, 11))).toBe('Oct 11');
   });
 });
 
@@ -16,10 +16,10 @@ describe('EntryListCard (spreadsheet row)', () => {
     const { container } = renderWithTheme(
       <EntryListCard content="<p>Buy milk</p>" createdAt={createdAt} topicName="Task" preview="Due Friday" />
     );
-    expect(screen.getByText('OCT 11, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Oct 11')).toBeInTheDocument();
     const text = container.textContent ?? '';
     expect(text.indexOf('Task')).toBeLessThan(text.indexOf('Buy milk'));
-    expect(text.indexOf('Due Friday')).toBeLessThan(text.indexOf('OCT 11, 2026'));
+    expect(text.indexOf('Due Friday')).toBeLessThan(text.indexOf('Oct 11'));
     expect(screen.getByText('Buy milk')).toHaveStyle('font-size: 16px');
   });
 

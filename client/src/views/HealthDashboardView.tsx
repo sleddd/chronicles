@@ -54,7 +54,7 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Meal and exercise cards side by side on desktop; stacked on tablet and phone. */
+/* Two columns on desktop (meal + exercise | meds); stacked on tablet and phone. */
 const LogGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -64,12 +64,16 @@ const LogGrid = styled.div`
   ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); }
 `;
 
+
 const WellnessWrap = styled.div`
   margin-top: 24px;
 `;
 
-const MedsWrap = styled.div`
-  margin-top: 24px;
+const Column = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
 `;
 
 /* ── Helpers ── */
@@ -201,16 +205,18 @@ export function HealthDashboardView() {
             <LogPanel id="wellness" title="Wellness Check-in"><WellnessCheckIn /></LogPanel>
           </WellnessWrap>
 
+          {/* Left: Log a Meal with Log Exercise under it; right: Medication Schedule */}
           <LogGrid>
-            {food && <LogPanel id="meal" title="Log a Meal" defaultOpen={false}><MealLog /></LogPanel>}
-            {exercise && <LogPanel id="exercise" title="Log Exercise" defaultOpen={false}><ExerciseQuickLog /></LogPanel>}
+            <Column>
+              {food && <LogPanel id="meal" title="Log a Meal" defaultOpen={false}><MealLog /></LogPanel>}
+              {exercise && <LogPanel id="exercise" title="Log Exercise" defaultOpen={false}><ExerciseQuickLog /></LogPanel>}
+            </Column>
+            {hasMeds && ff.medicationEnabled !== false && (
+              <Column>
+                <LogPanel id="meds" title="Medication Schedule"><MedicationSchedule isReady={isReady} /></LogPanel>
+              </Column>
+            )}
           </LogGrid>
-
-          {hasMeds && ff.medicationEnabled !== false && (
-            <MedsWrap>
-              <LogPanel id="meds" title="Medication Schedule"><MedicationSchedule isReady={isReady} /></LogPanel>
-            </MedsWrap>
-          )}
 
         </Inner>
       </Page>

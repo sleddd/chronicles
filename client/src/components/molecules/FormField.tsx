@@ -1,50 +1,47 @@
 import { createContext } from 'react';
 import styled from 'styled-components';
 import { Label } from '../atoms/Label.js';
-import { filledInputs } from '../../styles/filledInputs.js';
+import { filledInputs, TEXT_INPUTS } from '../../styles/filledInputs.js';
 
-/* Every FormField renders as a row app-wide: label in a fixed left column,
-   value on the right. Inputs are FILLED (DS: --bg-sunken box) so it's clear
-   where to type — no hairline under each row; spacing separates fields.
-   Phones stack the label above its box. Kept as an exported context (no-op)
-   so existing provider wrappers don't break. */
+/* Every FormField app-wide is a styled field: label ABOVE in 12px tracked
+   capitals, the value full width in a filled box with a faint 1px outline and
+   the cards' 6px corner, 48px tall. Kept as an exported context (no-op) so
+   existing provider wrappers don't break. */
 export const FieldRowLayoutContext = createContext(true);
 
 const RowWrapper = styled.div`
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 0; /* breathing room between rows */
-  /* Same height whether the value is a box or plain text, so rows keep one rhythm */
-  min-height: 46px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 0;
 
   & > label {
-    flex: 0 0 150px;
+    flex: none;
     margin: 0;
+    padding-top: 0;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.10rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
   }
 
-  /* Multi-line values (notes): label lines up with the first line of text */
-  &:has(textarea) {
-    align-items: flex-start;
-    & > label { padding-top: 11px; }
-  }
-
-  /* Values stay a readable width instead of stretching across the editor */
-  & > :not(label) {
-    flex: 1;
-    min-width: 0;
-    max-width: 560px;
-  }
+  & > :not(label) { min-width: 0; }
 
   ${filledInputs}
 
-  @media (max-width: 480px) {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    & > label { flex: none; }
+  ${TEXT_INPUTS}, select, textarea {
+    border: 1px solid var(--border-field, var(--border-default)) !important;
+    border-radius: var(--r-lg, 6px); /* same corner as the cards */
+    min-height: 48px;
+    padding-left: 16px;
+    padding-right: 16px;
+    font-size: 16px;
   }
+  textarea { padding-top: 13px; padding-bottom: 13px; }
+  select { padding-right: 40px; background-position: right 16px center; }
 `;
 
 const ErrorText = styled.span`

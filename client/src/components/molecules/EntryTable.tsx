@@ -8,15 +8,15 @@ import styled from 'styled-components';
 /** Topic over Date | Entry | trailing controls */
 export const ENTRY_ROW_COLUMNS = 'minmax(0, 88px) minmax(0, 1fr) auto';
 
-/** "OCT 7, 2026" — the row date on every entry list (journal and the rest). */
+/** "Oct 07" (month + 2-digit day, no year) — the row date on every entry list. */
 export function formatListDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 }
 
 /** Shared row padding. */
 export const ENTRY_ROW_PADDING = '16px 10px 16px 4px';
 /** Inset variant for edge-to-edge panels (journal list) — matches its 20px toolbar gutter. */
-export const ENTRY_ROW_INSET_PADDING = '16px 20px';
+export const ENTRY_ROW_INSET_PADDING = '22px 20px';
 
 /* Cell pieces both row components use */
 
@@ -32,7 +32,8 @@ export const MetaCell = styled.div`
 export const DateCell = styled.span`
   font-family: var(--font-sans);
   font-size: 12px;
-  color: var(--text-secondary);
+  font-weight: 500;
+  color: var(--text-meta);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 `;
@@ -45,10 +46,10 @@ export const TopicCell = styled.span<{ $active?: boolean }>`
   white-space: nowrap;
   font-family: var(--font-label);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-weight: 500;
+  letter-spacing: 0.12rem;
   text-transform: uppercase;
-  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-tertiary)')};
+  color: var(--text-meta);
 `;
 
 export const EntryCell = styled.div`

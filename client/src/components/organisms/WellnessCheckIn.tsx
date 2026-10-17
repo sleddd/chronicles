@@ -1,103 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../atoms/core/Icon.jsx';
+import { WellnessPanel, WATER_GOAL, type FlowIntensity } from '../molecules/WellnessPanel.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { predictNextPeriod } from '../../utils/cyclePrediction.js';
 
-const WATER_GOAL = 8;
-const SLEEP_GOAL = 10;
-const MOOD_ICONS = ['mood-1', 'mood-2', 'mood-3', 'mood-4', 'mood-5'] as const;
-const MOOD_LABELS = ['Very sad', 'Sad', 'Neutral', 'Good', 'Great'] as const;
-const FLOW_OPTIONS = ['spotting', 'light', 'medium', 'heavy'] as const;
-type FlowIntensity = typeof FLOW_OPTIONS[number] | '';
-const FLOW_INDEX: Record<FlowIntensity, number> = { '': 0, spotting: 1, light: 2, medium: 3, heavy: 4 };
-
-/* ── Styled ── */
-
-/* Water, mood, sleep and period side by side; two-up on narrow desktops/tablets; stacked on phones. */
-const Rows = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
-  @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @media (max-width: 768px) { grid-template-columns: minmax(0, 1fr); gap: 0; }
-`;
-
-const Row = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  @media (max-width: 768px) {
-    padding: 14px 0;
-    & + & { border-top: 1px solid var(--border-subtle); }
-    &:first-child { padding-top: 0; }
-    &:last-child { padding-bottom: 0; }
-  }
-`;
-
-const RowLabel = styled.div`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-`;
-
-const Taps = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-`;
-
-/* Water (8), sleep (10) and mood (5) sit in two rows — 4, 5 and 3 across */
-const IconGrid = styled.div<{ $cols: number }>`
-  display: grid;
-  grid-template-columns: repeat(${({ $cols }) => $cols}, auto);
-  gap: 2px 4px;
-`;
-
-const TapBtn = styled.button<{ $filled: boolean }>`
-  background: none;
-  border: none;
-  padding: 4px 2px;
-  cursor: pointer;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ $filled }) => ($filled ? 'var(--color-accent)' : 'var(--border-strong)')};
-  transition: color 120ms ease, transform 100ms ease;
-  &:hover { transform: scale(1.15); }
-  &:active { transform: scale(0.88); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (prefers-reduced-motion: reduce) { transition: none; &:hover, &:active { transform: none; } }
-`;
-
-const MoodBtn = styled(TapBtn)`
-  padding: 2px;
-`;
-
-const Prediction = styled.p`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-style: italic;
-  font-weight: 300;
-  color: var(--text-secondary);
-  margin: 0;
-`;
-
-const Count = styled.span`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-left: 8px;
-  text-transform: capitalize;
-`;
+type Flow = FlowIntensity;
 
 /* ── Helpers ── */
 
@@ -110,7 +20,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
 /* ── Component ── */
 
 /**
- * Today's wellness check-in — tap-to-fill water glasses, mood, sleep hours
+ * Today's wellness check-in (the shared WellnessPanel) — water, sleep, mood
  * and period flow, with the next expected period. Saves the same `wellness-checkin` entry the journal edits
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
@@ -138,11 +48,11 @@ export function WellnessCheckIn() {
   const [pendingWater, setPendingWater] = useState(0);
   const [pendingMood, setPendingMood] = useState(0);
   const [pendingSleep, setPendingSleep] = useState(0);
-  const [pendingFlow, setPendingFlow] = useState<FlowIntensity>('');
+  const [pendingFlow, setPendingFlow] = useState<Flow>('');
 
   const water = stored ? (Number(stored.waterGlasses) || 0) : pendingWater;
   const sleep = stored ? (Number(stored.sleepHours) || 0) : pendingSleep;
-  const flow = stored ? ((stored.flowIntensity as FlowIntensity) || '') : pendingFlow;
+  const flow = stored ? ((stored.flowIntensity as Flow) || '') : pendingFlow;
   const mood = stored ? (Number(stored.moodScore) || 0) : pendingMood;
 
   // Next period from every logged check-in, with today's live value overlaid
@@ -161,7 +71,7 @@ export function WellnessCheckIn() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
-  const latestRef = useRef({ water: 0, sleep: 0, flow: '' as FlowIntensity, mood: 0 });
+  const latestRef = useRef({ water: 0, sleep: 0, flow: '' as Flow, mood: 0 });
 
   const wellnessTopicId = useMemo(
     () => allTopics.find(t => t.name.toLowerCase() === 'wellness')?.id ?? null,
@@ -221,7 +131,7 @@ export function WellnessCheckIn() {
     }
   };
 
-  const scheduleSave = (next: Partial<{ water: number; sleep: number; flow: FlowIntensity; mood: number }>) => {
+  const scheduleSave = (next: Partial<{ water: number; sleep: number; flow: Flow; mood: number }>) => {
     latestRef.current = { water, sleep, flow, mood, ...next };
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => { void doSaveRef.current(); }, 600);
@@ -236,95 +146,36 @@ export function WellnessCheckIn() {
     updateDecryptedEntry(entryIdRef.current, { metadata: { ...meta, _customFields: { ...cf, ...updates } } });
   };
 
-  const tapWater = (i: number) => {
-    const v = i < water ? i : i + 1;
+  const setWater = (v: number) => {
     if (entry) optimistic({ waterGlasses: v }); else setPendingWater(v);
     scheduleSave({ water: v });
   };
 
-  const tapMood = (score: number) => {
-    const v = mood === score ? 0 : score;
+  const setMood = (v: number) => {
     if (entry) optimistic({ moodScore: v }); else setPendingMood(v);
     scheduleSave({ mood: v });
   };
 
-  const tapSleep = (i: number) => {
-    const v = i < sleep ? i : i + 1;
+  const setSleep = (v: number) => {
     if (entry) optimistic({ sleepHours: v }); else setPendingSleep(v);
     scheduleSave({ sleep: v });
   };
 
-  const tapFlow = (f: FlowIntensity) => {
-    const v: FlowIntensity = flow === f ? '' : f;
+  const setFlow = (v: Flow) => {
     if (entry) optimistic({ periodToday: v !== '', flowIntensity: v }); else setPendingFlow(v);
     scheduleSave({ flow: v });
   };
 
+  const nextPeriod = prediction
+    ? `Estimated next period: ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
+    : 'Estimated next period: log a period day to estimate';
+
   return (
-    <Rows>
-      <Row>
-        <RowLabel>Water</RowLabel>
-        <Taps>
-          <IconGrid $cols={Math.ceil(WATER_GOAL / 2)}>
-            {Array.from({ length: WATER_GOAL }, (_, i) => (
-              <TapBtn key={i} type="button" $filled={i < water} onClick={() => tapWater(i)}
-                aria-label={`${i + 1} glass${i ? 'es' : ''} of water`} aria-pressed={i < water}>
-                <Icon name="droplet" size={18} strokeWidth={1.6} />
-              </TapBtn>
-            ))}
-          </IconGrid>
-          <Count>{water}/{WATER_GOAL}</Count>
-        </Taps>
-      </Row>
-
-      <Row>
-        <RowLabel>Mood</RowLabel>
-        <Taps>
-          {/* Five faces: a row of three, then two */}
-          <IconGrid $cols={3}>
-            {MOOD_ICONS.map((name, i) => (
-              <MoodBtn key={name} type="button" $filled={mood === i + 1} onClick={() => tapMood(i + 1)}
-                aria-label={`Mood: ${MOOD_LABELS[i]}`} aria-pressed={mood === i + 1}>
-                <Icon name={name} size={22} strokeWidth={1.8} />
-              </MoodBtn>
-            ))}
-          </IconGrid>
-          <Count>{mood ? MOOD_LABELS[mood - 1] : '—'}</Count>
-        </Taps>
-      </Row>
-
-      <Row>
-        <RowLabel>Sleep</RowLabel>
-        <Taps>
-          <IconGrid $cols={Math.ceil(SLEEP_GOAL / 2)}>
-            {Array.from({ length: SLEEP_GOAL }, (_, i) => (
-              <TapBtn key={i} type="button" $filled={i < sleep} onClick={() => tapSleep(i)}
-                aria-label={`${i + 1} hour${i ? 's' : ''} of sleep`} aria-pressed={i < sleep}>
-                <Icon name="moon" size={18} strokeWidth={1.6} />
-              </TapBtn>
-            ))}
-          </IconGrid>
-          <Count>{sleep > 0 ? `${sleep}h` : '—'}</Count>
-        </Taps>
-      </Row>
-
-      <Row>
-        <RowLabel>Period</RowLabel>
-        <Taps>
-          {FLOW_OPTIONS.map((f, i) => (
-            <TapBtn key={f} type="button" $filled={i < FLOW_INDEX[flow]} onClick={() => tapFlow(f)}
-              aria-label={`Flow: ${f}`} aria-pressed={flow === f}>
-              <Icon name="droplet" size={18} strokeWidth={1.6} />
-            </TapBtn>
-          ))}
-          <Count>{flow || 'None'}</Count>
-        </Taps>
-        <Prediction>
-          {prediction
-            ? `Estimated Next Period: ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
-            : 'Estimated Next Period: log a period day to estimate'}
-        </Prediction>
-      </Row>
-    </Rows>
+    <WellnessPanel
+      water={water} sleep={sleep} mood={mood} flow={flow}
+      onWater={setWater} onSleep={setSleep} onMood={setMood} onFlow={setFlow}
+      cycleNote={nextPeriod}
+      compact
+    />
   );
 }
