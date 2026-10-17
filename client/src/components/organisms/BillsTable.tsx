@@ -4,10 +4,10 @@ import { PillButton } from '../atoms/PillButton.js';
 import { FormField } from '../molecules/FormField.js';
 import {
   SectionHead, Note, SmallPill, Table, Row, TotalRow, Cell, SubText, Tag,
-  SmallBtn, Chips, Actions, ConfirmDelete, Money, ErrorNote,
+  SmallBtn, Chips, Actions, Money, ErrorNote, RowMenu, type RowMenuItem,
 } from '../molecules/FinanceParts.js';
 import {
-  billCounts, billTotals, centsToInput, formatCents, formatDay, latestPayment, markBillPaid, monthlyEquivalent,
+  billCounts, billTotals, centsToInput, formatCents, formatDay, latestPayment, markBillPaid, monthlyEquivalent, primaryBillAction,
   newId, nextUnpaidDue, parseMoney, todayStr, undoLastPayment,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
@@ -199,6 +199,42 @@ function BillEditor({ bill, categories, onSave, onCancel }: {
   );
 }
 
+/* ── Row actions: one main action that fits the bill's state, Edit, and a ⋯ menu ── */
+
+function BillActions({ bill, due, today, onSave, onEdit, onStatus, onDelete }: {
+  bill: BillRecord;
+  due: string | null;
+  today: string;
+  onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
+  onEdit: () => void;
+  onStatus: (status: BillStatus) => void;
+  onDelete: () => void;
+}) {
+  const primary = primaryBillAction(bill, today);
+  const markPaid = () => void onSave(markBillPaid(bill, today, newId()));
+  const undoPaid = () => void onSave(undoLastPayment(bill));
+  const paid = latestPayment(bill);
+
+  const menu: RowMenuItem[] = [];
+  // Whichever payment action isn't up front
+  if (primary !== 'mark' && due) menu.push({ label: `Mark paid early (due ${formatDay(due)})`, onSelect: markPaid });
+  if (primary !== 'undo' && paid) menu.push({ label: `Undo last payment (${formatDay(paid.paidOn)})`, onSelect: undoPaid });
+  if (bill.status === 'active') menu.push({ label: 'Pause', onSelect: () => onStatus('paused') });
+  if (bill.status === 'paused') menu.push({ label: 'Resume', onSelect: () => onStatus('active') });
+  if (bill.status !== 'cancelled') menu.push({ label: 'Mark cancelled', onSelect: () => onStatus('cancelled') });
+  else menu.push({ label: 'Reactivate', onSelect: () => onStatus('active') });
+  menu.push({ label: 'Delete', danger: true, confirmLabel: 'Click again to delete', onSelect: onDelete });
+
+  return (
+    <>
+      {primary === 'mark' && <SmallBtn type="button" onClick={markPaid}>Mark paid</SmallBtn>}
+      {primary === 'undo' && <SmallBtn type="button" onClick={undoPaid}>Undo paid</SmallBtn>}
+      <SmallBtn type="button" onClick={onEdit}>Edit</SmallBtn>
+      <RowMenu label={`More actions for ${bill.name}`} items={menu} />
+    </>
+  );
+}
+
 /* ── Table ── */
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -278,13 +314,15 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
                 {latestPayment(bill) && <SubText>Paid {formatDay(latestPayment(bill)!.paidOn)}</SubText>}
               </Cell>
               <Actions>
-                {due && <SmallBtn type="button" onClick={() => void onSave(markBillPaid(bill, today, newId()))}>Mark paid</SmallBtn>}
-                {latestPayment(bill) && <SmallBtn type="button" onClick={() => void onSave(undoLastPayment(bill))}>Undo paid</SmallBtn>}
-                <SmallBtn type="button" onClick={() => setEditing(bill.id)}>Edit</SmallBtn>
-                {billCounts(bill) && <SmallBtn type="button" onClick={() => setStatus(bill, 'paused')}>Pause</SmallBtn>}
-                {bill.status !== 'cancelled' && <SmallBtn type="button" onClick={() => setStatus(bill, 'cancelled')}>Mark cancelled</SmallBtn>}
-                {!billCounts(bill) && <SmallBtn type="button" onClick={() => setStatus(bill, 'active')}>{bill.status === 'paused' ? 'Resume' : 'Reactivate'}</SmallBtn>}
-                <ConfirmDelete onConfirm={() => onDelete(bill.id)} />
+                <BillActions
+                  bill={bill}
+                  due={due}
+                  today={today}
+                  onSave={onSave}
+                  onEdit={() => setEditing(bill.id)}
+                  onStatus={status => setStatus(bill, status)}
+                  onDelete={() => onDelete(bill.id)}
+                />
               </Actions>
             </BillRow>
           )))}

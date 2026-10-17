@@ -9,7 +9,7 @@ import {
 import { useFinance } from '../hooks/useFinance.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import {
-  billPaymentRecords, filterPayments, formatCents, formatDay, formatMonth, periodRange, reportSummary,
+  averagePerMonth, billPaymentRecords, filterPayments, formatCents, formatDay, formatMonth, periodRange, reportSummary,
   todayStr, UNCATEGORIZED, type ReportPeriod,
 } from '../utils/finance.js';
 import type { Bill } from '../types/finance.js';
@@ -134,7 +134,8 @@ function Reports() {
   const statuses = [bills.status, budget.status, ...(reconcileOn ? [paydays.status] : [])];
   if (statuses.some(s => s === 'idle' || s === 'loading')) return <Center><Spinner size={32} /></Center>;
 
-  const monthsInRange = summary.byMonth.length || 1;
+  // Months that have happened since tracking started (same rule wherever an average is shown)
+  const avg = averagePerMonth(summary.byMonth, today);
   const rangeLabel = `${formatDay(range.start)} – ${formatDay(range.end)}`;
 
   return (
@@ -172,7 +173,11 @@ function Reports() {
 
       <StatStrip $cols={4}>
         <Stat label="Total paid" cents={summary.totalCents} sub={rangeLabel} />
-        <Stat label="Average a month" cents={Math.round(summary.totalCents / monthsInRange)} sub={`Over ${monthsInRange} month${monthsInRange === 1 ? '' : 's'}`} />
+        <Stat
+          label="Average paid a month"
+          cents={avg.averageCents}
+          sub={avg.months ? `Over ${avg.months} month${avg.months === 1 ? '' : 's'} so far` : 'No payments yet'}
+        />
         <Stat label="Biggest bill" cents={summary.byBill[0]?.totalCents ?? 0} sub={summary.byBill[0]?.name ?? '—'} />
         <Stat
           label="On subscriptions"

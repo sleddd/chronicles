@@ -533,3 +533,36 @@ export function periodRange(period: Exclude<ReportPeriod, 'custom'>, today: stri
     case 'last-year': return { start: `${year - 1}-01-01`, end: `${year - 1}-12-31` };
   }
 }
+
+/**
+ * Average paid per month, counting only months that have happened since
+ * tracking started: from the first month in the range with a payment through
+ * the current month (or the range's end, if earlier). Future months and
+ * months before the first payment don't drag the average down; a real month
+ * with nothing paid still counts.
+ */
+export function averagePerMonth(byMonth: ReportSummary['byMonth'], today: string): { averageCents: number; months: number } {
+  const current = today.slice(0, 7);
+  const first = byMonth.findIndex(m => m.count > 0);
+  if (first === -1) return { averageCents: 0, months: 0 };
+  const counted = byMonth.slice(first).filter(m => m.month <= current);
+  const months = Math.max(1, counted.length);
+  const total = counted.reduce((t, m) => t + m.totalCents, 0);
+  return { averageCents: Math.round(total / months), months };
+}
+
+/** Within this many days a bill counts as "due" for Mark paid. */
+export const DUE_SOON_DAYS = 7;
+
+/**
+ * The one action a bill row shows up front: Mark paid when the next payment is
+ * overdue or due within a week (or nothing's been paid yet), otherwise Undo
+ * paid for the latest payment. Null for paused/cancelled or fully paid one-offs.
+ */
+export function primaryBillAction(bill: Bill, today: string): 'mark' | 'undo' | null {
+  const due = billCounts(bill) ? nextUnpaidDue(bill, today) : null;
+  const paid = !!latestPayment(bill);
+  if (due && (daysBetween(today, due) <= DUE_SOON_DAYS || !paid)) return 'mark';
+  if (paid) return 'undo';
+  return due ? 'mark' : null;
+}

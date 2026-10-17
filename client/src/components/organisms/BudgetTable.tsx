@@ -180,7 +180,7 @@ export function BudgetTable({ categories, bills, expenses, paydays, month, onMon
 
       {/* Hairline between the stats and the category table's headers */}
       <StatStrip $cols={4} style={{ paddingBottom: 36, marginBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
-        <Stat label="Planned" cents={summary.totals.plannedCents} sub={`Bills average ${formatCents(committed)}/mo`} />
+        <Stat label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
         <Stat label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
         <Stat label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
         <Stat label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'default'} />

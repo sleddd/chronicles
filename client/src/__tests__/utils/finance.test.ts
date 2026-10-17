@@ -4,7 +4,7 @@ import {
   monthlyEquivalent, billTotals, suggestBillsForPayday, paydaySummary, balanceCheck,
   isReadyToSpend, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
   nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment,
-  billPaymentRecords, filterPayments, reportSummary, periodRange,
+  billPaymentRecords, filterPayments, reportSummary, periodRange, averagePerMonth, primaryBillAction,
 } from '../../utils/finance.js';
 import type { Bill, Payday } from '../../types/finance.js';
 
@@ -316,5 +316,44 @@ describe('reports', () => {
     expect(periodRange('last-month', '2026-01-10')).toEqual({ start: '2025-12-01', end: '2025-12-31' });
     expect(periodRange('this-year', '2026-10-16')).toEqual({ start: '2026-01-01', end: '2026-12-31' });
     expect(periodRange('last-year', '2026-10-16')).toEqual({ start: '2025-01-01', end: '2025-12-31' });
+  });
+});
+
+describe('averagePerMonth', () => {
+  const months = (vals: [string, number][]) => vals.map(([month, totalCents]) => ({ month, totalCents, count: totalCents ? 1 : 0 }));
+
+  it('skips months before the first payment and months still to come', () => {
+    const byMonth = months([['2026-01', 0], ['2026-02', 0], ['2026-03', 1000], ['2026-04', 0], ['2026-05', 2000], ['2026-06', 0]]);
+    // March–May: 3 months (April's real zero counts), June is in the future
+    expect(averagePerMonth(byMonth, '2026-05-20')).toEqual({ averageCents: 1000, months: 3 });
+  });
+
+  it('handles no payments and a single month', () => {
+    expect(averagePerMonth(months([['2026-01', 0]]), '2026-01-10')).toEqual({ averageCents: 0, months: 0 });
+    expect(averagePerMonth(months([['2026-10', 4500]]), '2026-10-16')).toEqual({ averageCents: 4500, months: 1 });
+  });
+
+  it('uses the whole range when it is in the past', () => {
+    const byMonth = months([['2025-11', 1000], ['2025-12', 3000]]);
+    expect(averagePerMonth(byMonth, '2026-10-16')).toEqual({ averageCents: 2000, months: 2 });
+  });
+});
+
+describe('primaryBillAction', () => {
+  const rent = bill({ dueDate: '2026-01-01' });
+
+  it('offers Mark paid when due soon or overdue, or never paid', () => {
+    expect(primaryBillAction(rent, '2026-10-28')).toBe('mark');               // Nov 1 is 4 days off
+    expect(primaryBillAction(rent, '2026-10-16')).toBe('mark');               // never paid
+    expect(primaryBillAction(markBillPaid(rent, '2026-09-01', 'p'), '2026-10-03')).toBe('mark'); // Oct 1 overdue
+  });
+
+  it('offers Undo paid once the current one is paid and the next is not due yet', () => {
+    expect(primaryBillAction(markBillPaid(rent, '2026-10-01', 'p'), '2026-10-16')).toBe('undo');
+  });
+
+  it('offers nothing for paused bills that were never paid', () => {
+    expect(primaryBillAction(bill({ status: 'paused' }), '2026-10-16')).toBeNull();
+    expect(primaryBillAction(markBillPaid(bill({ frequency: 'once', dueDate: '2026-10-01' }), '2026-10-01', 'p'), '2026-10-16')).toBe('undo');
   });
 });

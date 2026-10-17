@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import styled, { css } from 'styled-components';
 import { filledInputs } from '../../styles/filledInputs.js';
 import { entryRowPlain } from '../../styles/entryRow.js';
@@ -401,3 +401,106 @@ export const ClearBox = styled.input.attrs({ type: 'checkbox' })`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
 `;
+
+/* ── Row "⋯" menu: secondary actions tucked behind one button ── */
+
+const MenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+`;
+
+const MenuButton = styled(SmallBtn)`
+  min-width: 32px;
+  padding: 3px 8px;
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+`;
+
+/* A floating overlay — the one place a shadow is allowed */
+const MenuList = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: 4px 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
+`;
+
+const MenuItem = styled.button<{ $danger?: boolean }>`
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-primary)')};
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  &:hover, &:focus-visible { background: var(--bg-hover); outline: none; }
+`;
+
+export interface RowMenuItem {
+  label: string;
+  onSelect: () => void;
+  danger?: boolean;
+  /** Needs a second click with this label before it runs (e.g. "Yes, delete"). */
+  confirmLabel?: string;
+}
+
+/** "⋯" button opening a small menu of secondary row actions. */
+export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) { setOpen(false); setConfirming(null); }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); setConfirming(null); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (items.length === 0) return null;
+  return (
+    <MenuWrap ref={wrap}>
+      <MenuButton type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(o => !o); setConfirming(null); }}>
+        ⋯
+      </MenuButton>
+      {open && (
+        <MenuList role="menu">
+          {items.map(item => (
+            <MenuItem
+              key={item.label}
+              type="button"
+              role="menuitem"
+              $danger={item.danger}
+              onClick={() => {
+                if (item.confirmLabel && confirming !== item.label) { setConfirming(item.label); return; }
+                setOpen(false);
+                setConfirming(null);
+                item.onSelect();
+              }}
+            >
+              {confirming === item.label && item.confirmLabel ? item.confirmLabel : item.label}
+            </MenuItem>
+          ))}
+        </MenuList>
+      )}
+    </MenuWrap>
+  );
+}
