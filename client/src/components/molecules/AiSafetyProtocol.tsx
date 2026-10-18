@@ -114,8 +114,8 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <Meta>Last updated {PROTOCOL_DATE}</Meta>
           <p>
             The AI chat in Chronicles is an AI model, not a person, and every message in it is screened for signs of
-            suicide, self-harm, or eating disorder risk. When a sign appears, the chat pauses and shows crisis resources,
-            starting with the 988 Suicide &amp; Crisis Lifeline.
+            suicide, self-harm, or eating disorder risk. When a sign appears, crisis resources appear in the chat, starting
+            with the 988 Suicide &amp; Crisis Lifeline. For the most serious signs, the chat pauses.
           </p>
           <p>
             This explains how that works. It is published to meet the safety protocol requirements of state AI companion
@@ -169,14 +169,16 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <p>Each message gets one of four ratings: none, concern, elevated, or urgent. The next section explains what each one does.</p>
           <p>
             The AI’s replies are screened too. A reply that describes ways to self-harm, or encourages suicide,
-            self-harm, or disordered eating, is withheld and the crisis card appears in its place. If a reply on one of
+            self-harm, or disordered eating, is withheld and the support notice appears in its place. If a reply on one of
             these topics can’t be checked, it is withheld.
           </p>
 
           <h4>What happens when a risk sign appears</h4>
           <p>
-            The chat pauses and a crisis card appears. You can reach help straight from the card, or choose to keep
-            talking. The chat stays open because cutting someone off at a hard moment can do harm.
+            A support notice appears under the AI’s reply: “If you or someone you know is having a difficult time,
+            support is available.” Its Find resources link opens the crisis lines, each one tap away. For the most
+            serious signs, the chat pauses and the full crisis card appears instead. Either way, the chat stays open,
+            because cutting someone off at a hard moment can do harm.
           </p>
           <table>
             <thead>
@@ -186,21 +188,21 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
               <tr>
                 <td>Concern</td>
                 <td>Passive thoughts, like wishing to not wake up, or worry about eating or body weight</td>
-                <td>Shows the crisis card above the AI’s reply. The AI answers under the safe conversation rules below.</td>
+                <td>Shows the support notice under the AI’s reply. The AI answers under the safe conversation rules below.</td>
               </tr>
               <tr>
                 <td>Elevated</td>
                 <td>Active thoughts of suicide, self-harm, purging, or severe restriction</td>
-                <td>Pauses the chat and shows the crisis card. If you choose to continue, the AI answers under the safe conversation rules.</td>
+                <td>Shows the support notice under the AI’s reply. The AI answers under the safe conversation rules for the rest of the session.</td>
               </tr>
               <tr>
                 <td>Urgent</td>
                 <td>A method, a plan, intent to act, or a recent attempt</td>
-                <td>Pauses the chat and shows the crisis card with 911 first. The card stays pinned at the top for the rest of the session.</td>
+                <td>Pauses the chat and shows the full crisis card with 911 first. If you choose to keep talking, the AI answers under the safe conversation rules, and the resources stay pinned at the top for the rest of the session.</td>
               </tr>
             </tbody>
           </table>
-          <p><strong>The crisis card lists:</strong></p>
+          <p><strong>The crisis resources are:</strong></p>
           <ul>
             <li><strong>988 Suicide &amp; Crisis Lifeline.</strong> Call or text 988, or chat at <a href="https://988lifeline.org" target="_blank" rel="noopener noreferrer">988lifeline.org</a>. Free, 24 hours a day.</li>
             <li><strong>Crisis Text Line.</strong> Text HOME to 741741. Free, 24 hours a day.</li>
@@ -219,7 +221,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
 
           <h4>What Chronicles records</h4>
           <p>
-            Chronicles records only that the crisis card was shown, with the date, the rating, and the kind of risk. It
+            Chronicles records only that crisis resources were shown, with the date, the rating, and the kind of risk. It
             never records what you wrote, what the AI replied, or which account it was. These counts are used only if a
             report is requested.
           </p>

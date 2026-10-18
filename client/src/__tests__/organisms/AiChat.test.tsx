@@ -101,18 +101,30 @@ describe('AiChat safety', () => {
     expect(lastSystem).toContain('SAFETY MODE');
   });
 
-  it('elevated: pauses until Keep talking', async () => {
+  it('elevated: no pause — the reply, then a quiet support notice after it', async () => {
     openChat();
     await send('I want to kill myself');
-    expect(await screen.findByLabelText('Crisis resources')).toBeInTheDocument();
-    expect(screen.queryByText('Here to help.')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Message')).toBeDisabled();
-    expect(analytics.crisisCard).toHaveBeenCalledWith('elevated', 'suicide');
-    (chatReply as any).mockResolvedValue('Thank you for telling me.');
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Keep talking' })); });
-    expect(await screen.findByText('Thank you for telling me.')).toBeInTheDocument();
-    expect((chatReply as any).mock.calls.at(-1)[0]).toContain('SAFETY MODE');
+    const reply = await screen.findByText('Here to help.');
+    const notice = screen.getByLabelText('Crisis resources');
+    expect(reply.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notice.textContent).toContain('If you or someone you know is having a difficult time, support is available.');
+    expect(screen.queryByRole('button', { name: 'Keep talking' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Message')).not.toBeDisabled();
+    expect(analytics.crisisCard).toHaveBeenCalledWith('elevated', 'suicide');
+    expect((chatReply as any).mock.calls.at(-1)[0]).toContain('SAFETY MODE');
+  });
+
+  it('Find resources opens the help chips', async () => {
+    (classifyRisk as any).mockResolvedValue({ rating: 'concern', kind: 'eating_disorder' });
+    openChat();
+    await send('I feel bad about my body');
+    await screen.findByText('Here to help.');
+    expect(screen.queryByRole('link', { name: 'Call 988' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Find resources/ }));
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    const labels = screen.getAllByRole('link').map(a => a.textContent);
+    expect(labels.indexOf('Eating disorder helpline')).toBeLessThan(labels.indexOf('Text HOME to 741741'));
+    expect(labels).toContain('Call 911');
   });
 
   it('urgent: pins the card with 911 first, and it stays through Clear', async () => {
