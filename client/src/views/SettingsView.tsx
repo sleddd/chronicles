@@ -27,6 +27,7 @@ import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
+import { useSignOut } from '../hooks/useSignOut.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useUIStore } from '../stores/uiStore.js';
@@ -732,9 +733,7 @@ export function SettingsView() {
     }
   };
 
-  const handleSignOut = async () => {
-    lock(); clearAll(); await logout(); navigate('/login');
-  };
+  const handleSignOut = useSignOut();
 
   if (needsUnlock) return (
     <>

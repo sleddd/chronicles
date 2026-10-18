@@ -6,6 +6,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
+import { useSignOut } from '../../hooks/useSignOut.js';
 import { useEffect } from 'react';
 
 /* Top bar shown only on phones/tablets: the logo and the current page's name
@@ -66,7 +67,7 @@ const MenuButton = styled.button<{ $open: boolean }>`
 
 /* The menu: a sheet dropping from under the bar, full width, rounded at the
    bottom — one row per destination (accent icon + name); the current page
-   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings, quieter. Escape, a
+   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings and Sign out, quieter. Escape, a
    destination or a tap outside closes it. */
 const Panel = styled.nav`
   display: none;
@@ -133,7 +134,7 @@ const Overlay = styled.div<{ $open: boolean }>`
 /**
  * Phones/tablets (NAV_COMPACT): the top bar (logo + the current page's name +
  * menu button) and the drop-down menu sheet it opens — the same destinations
- * as the desktop rail (`useNavItems`), Settings last under a hairline. Open
+ * as the desktop rail (`useNavItems`), Settings and Sign out last under a hairline. Open
  * state lives in uiStore (`mobileNavOpen`). Hidden on desktop.
  */
 export function MobileChrome() {
@@ -144,6 +145,7 @@ export function MobileChrome() {
   const current = items.find(i => i.active);
   const main = items.filter(i => i.key !== 'settings');
   const settings = items.find(i => i.key === 'settings');
+  const signOut = useSignOut();
 
   useEffect(() => {
     if (!open) return;
@@ -176,7 +178,12 @@ export function MobileChrome() {
       {open && (
         <Panel id="mobile-nav" aria-label="Main">
           {main.map(i => row(i))}
-          {settings && <><MenuRule />{row(settings, true)}</>}
+          <MenuRule />
+          {settings && row(settings, true)}
+          <NavRow type="button" $active={false} $quiet onClick={() => { setOpen(false); void signOut(); }}>
+            <MaterialIcon $size={22} aria-hidden="true">logout</MaterialIcon>
+            <span>Sign out</span>
+          </NavRow>
         </Panel>
       )}
     </>

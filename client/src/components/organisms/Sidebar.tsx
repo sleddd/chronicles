@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useNavItems } from '../../hooks/useNavItems.js';
+import { useSignOut } from '../../hooks/useSignOut.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 
 const SidebarRoot = styled.aside`
@@ -93,8 +94,9 @@ const NavScroll = styled.nav`
 `;
 
 /* Icon-only rail row — no dividers; the active row is lifted onto
-   --bg-rail-active with the accent tab. Settings sits at the bottom. */
-const NavIconBtn = styled.button<{ $active?: boolean }>`
+   --bg-rail-active with the accent tab. Settings sits at the bottom, with
+   Sign out under it. */
+const NavIconBtn = styled.button<{ $active?: boolean; $pinned?: boolean }>`
   position: relative;
   flex: 0 0 auto;
   display: flex;
@@ -109,7 +111,7 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-secondary)'};
   transition: background 120ms ease, color 120ms ease;
 
-  &:last-of-type { margin-top: auto; }
+  ${({ $pinned }) => ($pinned ? 'margin-top: auto;' : '')}
 
   &:hover {
     background: var(--bg-rail-active);
@@ -154,6 +156,7 @@ const MaterialIcon = styled.span<{ $size?: number }>`
 export const Sidebar = memo(function Sidebar() {
   const navigate = useNavigate();
   const items = useNavItems();
+  const signOut = useSignOut();
 
   return (
     <SidebarRoot>
@@ -164,11 +167,15 @@ export const Sidebar = memo(function Sidebar() {
 
       <NavScroll>
         {items.map(item => (
-          <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={item.label}>
+          <NavIconBtn key={item.key} $active={item.active} $pinned={item.key === 'settings'} onClick={() => navigate(item.path)} title={item.label}>
             <MaterialIcon aria-hidden="true">{item.icon}</MaterialIcon>
             <SrOnly>{item.label}</SrOnly>
           </NavIconBtn>
         ))}
+        <NavIconBtn onClick={() => { void signOut(); }} title="Sign out">
+          <MaterialIcon aria-hidden="true">logout</MaterialIcon>
+          <SrOnly>Sign out</SrOnly>
+        </NavIconBtn>
       </NavScroll>
     </SidebarRoot>
   );

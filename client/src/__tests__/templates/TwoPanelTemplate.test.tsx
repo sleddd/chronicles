@@ -3,6 +3,9 @@ import { screen } from '@testing-library/react';
 import { TwoPanelTemplate } from '@/components/templates/TwoPanelTemplate';
 import { renderWithRouter as renderWithTheme } from '../testUtils';
 
+// MobileChrome's Sign out needs the auth providers these tests don't set up
+vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => vi.fn() }));
+
 vi.mock('@/components/organisms/Header', () => ({
   Header: () => <header data-testid="mock-header">Header</header>,
 }));

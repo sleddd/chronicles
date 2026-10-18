@@ -19,6 +19,9 @@ vi.mock('@/stores/uiStore', () => ({
     selector({ mobileNavOpen: open, setMobileNavOpen: mockSetOpen }),
 }));
 
+const mockSignOut = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
+
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ featureFlags: { foodEnabled: true } }),
@@ -49,6 +52,14 @@ describe('MobileChrome drop-down menu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Calendar/, hidden: true }));
     expect(mockNavigate).toHaveBeenCalledWith('/calendar');
     expect(mockSetOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('signs out from under Settings, closing the menu', () => {
+    renderAt();
+    fireEvent.click(screen.getByRole('button', { name: /Sign out/, hidden: true }));
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('is not shown while closed', () => {

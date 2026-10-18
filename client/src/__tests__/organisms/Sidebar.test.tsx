@@ -19,6 +19,9 @@ vi.mock('@/stores/uiStore', () => ({
     selector({ mobileNavOpen: false, setMobileNavOpen: mockSetMobileNavOpen }),
 }));
 
+const mockSignOut = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
+
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ featureFlags }),
@@ -51,6 +54,15 @@ describe('Sidebar', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
     fireEvent.click(screen.getByTitle('Chronicles'));
     expect(mockNavigate).toHaveBeenCalledWith('/journal', { state: { newEntry: expect.any(Number) } });
+  });
+
+  it('has a Sign out button under Settings that signs out', () => {
+    renderAt();
+    const titles = Array.from(document.querySelectorAll('button[title]')).map(b => b.getAttribute('title'));
+    expect(titles.slice(-2)).toEqual(['Settings', 'Sign out']);
+    fireEvent.click(screen.getByTitle('Sign out'));
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('navigates when a nav item is clicked', () => {
