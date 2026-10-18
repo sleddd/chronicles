@@ -255,4 +255,18 @@ describe('Share Routes', () => {
       expect(res.body.error).toBe('Failed to list shares');
     });
   });
+
+  describe('no images in shares', () => {
+    it.each([
+      '<p>Hi</p><img src="x">',
+      '<div data-type="drawing" data-svg="x"></div>',
+      '<svg><circle/></svg>',
+      '<p style="background:url(data:image/png;base64,AA)">x</p>',
+    ])('rejects %s', async content => {
+      const res = await request(buildApp()).post('/api/shares').send({ content, entryId: 5 });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/images or drawings/);
+      expect(createShare).not.toHaveBeenCalled();
+    });
+  });
 });

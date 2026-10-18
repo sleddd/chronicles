@@ -65,3 +65,12 @@ export const BackLink = styled(Link)`
   text-decoration: none;
   &:hover { opacity: 0.7; }
 `;
+
+/* An outlined box around one settings field (label + control) — the
+   custom-fields look: 1px --border-card, 10px corners, no fill */
+export const OutlinedSection = styled.div`
+  margin: 10px 0;
+  padding: 8px 18px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+`;

@@ -18,7 +18,9 @@
     "migrate:tenants": "tsx src/db/migrationOrchestrator.ts",
     "clear:topic-links": "tsx src/db/clearTopicLinks.ts",
     "report:ai-safety": "tsx src/db/aiSafetyReport.ts",
-    "ai:block": "tsx src/db/aiChatBlock.ts"
+    "ai:block": "tsx src/db/aiChatBlock.ts",
+    "account:delete": "tsx src/db/deleteAccount.ts",
+    "notice": "tsx src/db/appNotice.ts"
   },
   "dependencies": {
     "@chronicles/shared": "*",

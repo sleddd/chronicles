@@ -22,6 +22,7 @@ vi.mock('../../db/prisma.js', () => ({
 }));
 
 vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAccountById: vi.fn() }));
+vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn().mockResolvedValue(true) }));
 
 vi.mock('../../middleware/auth.js', () => ({
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
@@ -53,6 +54,7 @@ import authRouter from '../../routes/auth.js';
 import { prisma } from '../../db/prisma.js';
 import { decryptToken } from '../../services/tokenCrypto.js';
 import { deleteAccountById } from '../../db/schemaManager.js';
+import { revokeGoogleAccess } from '../../services/googleRevoke.js';
 import bcrypt from 'bcryptjs';
 
 function buildApp() {
@@ -358,6 +360,9 @@ describe('2FA hardening', () => {
       const ok = await request(app).delete('/api/auth/account').send({ authSecret: SECRET, code: generateSync({ secret }) });
       expect(ok.status).toBe(200);
       expect(deleteAccountById).toHaveBeenCalledWith(account.id);
+      // Google access is revoked at Google before the token row is deleted
+      expect(revokeGoogleAccess).toHaveBeenCalledWith(account.id);
+      expect((revokeGoogleAccess as any).mock.invocationCallOrder[0]).toBeLessThan((deleteAccountById as any).mock.invocationCallOrder[0]);
     });
   });
 

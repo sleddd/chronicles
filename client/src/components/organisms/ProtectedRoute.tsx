@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { Spinner } from '../atoms/Spinner.js';
+import { ConsentGate } from './ConsentGate.js';
 import styled from 'styled-components';
 
 const LoadingWrapper = styled.div`
@@ -15,7 +16,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -29,5 +30,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  // Terms + health-data consent at the current versions before anything opens
+  return <ConsentGate accountKey={user?.email ?? ''}>{children}</ConsentGate>;
 }

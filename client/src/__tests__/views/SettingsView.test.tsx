@@ -123,6 +123,7 @@ vi.mock('@/components/atoms/SettingsAtoms', () => ({
   SelectedColorLabel: ({ children }: any) => <span>{children}</span>,
   BackLink: ({ children, to }: any) => <a href={to}>{children}</a>,
   RowLink: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  OutlinedSection: ({ children }: any) => <div>{children}</div>,
 }));
 
 vi.mock('@/components/atoms/Toggle', () => ({

@@ -113,8 +113,17 @@ export const saveRecoveryKeySchema = z.object({
 
 // Shares validation — shared content is stored as plaintext by design; the
 // user opts into that risk when creating a public link
+/** Shares never carry images: photos, drawings (SVG) or any embedded media.
+ *  Checked by the server (createShareSchema) and stripped first by the client. */
+const SHARE_MEDIA = /<\s*(img|svg|picture|source|video|audio|iframe|object|embed|canvas|image)\b|data-type\s*=\s*["']?drawing|data:(image|video|audio)\/|url\(\s*["']?\s*(data|blob|https?):/i;
+
+export function shareContentHasMedia(content: string): boolean {
+  return SHARE_MEDIA.test(content);
+}
+
 export const createShareSchema = z.object({
-  content: z.string().min(1, 'content is required').max(100_000, 'Content too large'),
+  content: z.string().min(1, 'content is required').max(100_000, 'Content too large')
+    .refine(c => !shareContentHasMedia(c), 'Shared entries cannot include images or drawings'),
   entryId: z.number().int().positive(),
   expiresAt: z.string().datetime().nullable().optional(),
 });
@@ -215,3 +224,26 @@ export const aiChatConsentSchema = z.object({
   version: z.number().int().min(1).max(1000),
   ageConfirmed: z.literal(true),
 }).strict();
+
+// Sign-up / re-consent card: three separate affirmative boxes, plus how to
+// get a breach notice (email, or a mailed letter to a postal address)
+export const accountConsentSchema = z.object({
+  ageConfirmed: z.literal(true),
+  termsAccepted: z.literal(true),
+  healthConsent: z.literal(true),
+  termsVersion: z.string().min(1).max(20),
+  healthVersion: z.string().min(1).max(20),
+  breachNotice: z.enum(['email', 'mail']),
+  postalAddress: z.string().trim().max(500).optional(),
+}).strict().refine(
+  d => d.breachNotice === 'email' || (d.postalAddress ?? '').length >= 8,
+  { message: 'Add a postal address for mailed notices', path: ['postalAddress'] },
+);
+
+export const breachNoticeSchema = z.object({
+  breachNotice: z.enum(['email', 'mail']),
+  postalAddress: z.string().trim().max(500).optional(),
+}).strict().refine(
+  d => d.breachNotice === 'email' || (d.postalAddress ?? '').length >= 8,
+  { message: 'Add a postal address for mailed notices', path: ['postalAddress'] },
+);

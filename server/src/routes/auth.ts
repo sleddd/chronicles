@@ -6,6 +6,7 @@ import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
+import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
@@ -1090,6 +1091,8 @@ router.delete('/account', strictLimiter, authMiddleware, async (req, res) => {
     }
 
     revokeGrantsForAccount(account.id);
+    // Revoke Google Calendar access at Google before the token row is deleted
+    await revokeGoogleAccess(account.id);
     await deleteAccountById(account.id);
     lastTotpStep.delete(account.id);
     twoFAFailures.delete(account.id);

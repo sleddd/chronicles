@@ -435,6 +435,21 @@ export async function getDoseLogsByDate(schemaName: string, date: string): Promi
   return rows.map(r => ({ ...r, id: Number(r.id), medicationPostId: Number(r.medicationPostId) }));
 }
 
+/** Every dose log, oldest first (Settings → Data → Export All). */
+export async function getAllDoseLogs(schemaName: string): Promise<DoseLog[]> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<DoseLog[]>(
+    `SELECT id, medication_post_id as "medicationPostId",
+            TO_CHAR(scheduled_time, 'HH24:MI') as "scheduledTime",
+            taken_at as "takenAt",
+            TO_CHAR(date, 'YYYY-MM-DD') as "date",
+            status, created_at as "createdAt"
+     FROM ${s}.medication_dose_logs
+     ORDER BY date ASC, scheduled_time ASC`
+  );
+  return rows.map(r => ({ ...r, id: Number(r.id), medicationPostId: Number(r.medicationPostId) }));
+}
+
 export async function upsertDoseLog(
   schemaName: string,
   medicationPostId: number,

@@ -5,13 +5,17 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
 import { RegisterForm } from '../components/organisms/RegisterForm.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
-import { deriveAuthSecret, newRecoveryProof } from '@chronicles/shared';
+import { ConsentCard, EMPTY_CONSENT, consentComplete, type ConsentValue } from '../components/molecules/ConsentCard.js';
+import { useConsentStore } from '../stores/consentStore.js';
+import { deriveAuthSecret, newRecoveryProof, LEGAL_VERSIONS } from '@chronicles/shared';
 
 export function RegisterView() {
   const navigate = useNavigate();
   const { register } = useAuth();
   const { setupEncryption } = useEncryption();
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [consent, setConsent] = useState<ConsentValue>(EMPTY_CONSENT);
+  const agree = useConsentStore(s => s.agree);
 
   const handleRegister = async ({ email, username, password }: { email: string; username: string; password: string }) => {
     // Setup encryption — generates master key, wraps with password + recovery key
@@ -36,6 +40,15 @@ export function RegisterView() {
       recoveryKeyHash,
       recoveryKeySalt,
     });
+
+    // Record the consent given on the card (if this fails, the consent gate
+    // asks again before the app opens)
+    await agree({
+      termsVersion: LEGAL_VERSIONS.terms,
+      healthVersion: LEGAL_VERSIONS.health,
+      breachNotice: consent.breachNotice,
+      ...(consent.breachNotice === 'mail' ? { postalAddress: consent.postalAddress.trim() } : {}),
+    }).catch(() => { /* asked again at the gate */ });
 
     // Show recovery key — user must save it
     setRecoveryKey(result.recoveryKey);
@@ -63,7 +76,11 @@ export function RegisterView() {
       title="Create Account"
       footer={<>Already have an account? <Link to="/login">Sign in</Link></>}
     >
-      <RegisterForm onSubmit={handleRegister} />
+      <RegisterForm
+        onSubmit={handleRegister}
+        canSubmit={consentComplete(consent)}
+        extra={<ConsentCard value={consent} onChange={setConsent} />}
+      />
     </AuthTemplate>
   );
 }

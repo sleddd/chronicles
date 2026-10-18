@@ -2,8 +2,8 @@ import styled from 'styled-components';
 
 /**
  * Google Material Symbols (outlined) icon. The glyph is the element's text
- * content (a ligature name). Requires the Material Symbols Outlined font,
- * loaded in index.html. Color follows `currentColor`.
+ * content (a ligature name). Requires the Material Symbols Outlined font
+ * (bundled — src/styles/fonts.css). Color follows `currentColor`.
  */
 export const MaterialIcon = styled.span<{ $size?: number }>`
   font-family: 'Material Symbols Outlined';

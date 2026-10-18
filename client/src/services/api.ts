@@ -286,6 +286,36 @@ export const aiChat = {
   withdraw: () => request<AiChatStatus>('/ai-chat/consent', { method: 'DELETE' }),
 };
 
+export interface ConsentRecord {
+  agreedAt: string;
+  ageConfirmed: boolean;
+  termsVersion: string;
+  healthVersion: string;
+  healthConsentWithdrawnAt: string | null;
+  breachNotice: 'email' | 'mail';
+  postalAddress: string | null;
+}
+export interface ConsentStatus { consent: ConsentRecord | null; current: { terms: string; health: string } }
+export interface ConsentInput {
+  termsVersion: string;
+  healthVersion: string;
+  breachNotice: 'email' | 'mail';
+  postalAddress?: string;
+}
+
+export const consent = {
+  status: () => request<ConsentStatus>('/consent'),
+  agree: (c: ConsentInput) =>
+    request<ConsentStatus>('/consent', { method: 'POST', body: { ageConfirmed: true, termsAccepted: true, healthConsent: true, ...c } }),
+  setBreachNotice: (breachNotice: 'email' | 'mail', postalAddress?: string) =>
+    request<ConsentStatus>('/consent/breach-notice', { method: 'PUT', body: { breachNotice, ...(postalAddress ? { postalAddress } : {}) } }),
+};
+
+export interface AppNotice { message: string; linkUrl: string | null; updatedAt: string }
+export const notice = {
+  get: () => request<{ notice: AppNotice | null }>('/notice'),
+};
+
 export const analytics = {
   crisisCard: (rating: CrisisRating, kind: RiskKind | null) =>
     request<{ ok: true }>('/analytics/crisis-card', { method: 'POST', body: { rating, kind } }),
@@ -331,6 +361,9 @@ export interface DoseLogRecord {
 export const doses = {
   getByDate: (date: string) =>
     request<{ logs: DoseLogRecord[] }>('/doses', { params: { date } }),
+
+  /** Every dose log (Settings → Data → Export All) */
+  getAll: () => request<{ logs: DoseLogRecord[] }>('/doses/all'),
 
   log: (data: {
     medicationPostId: number;

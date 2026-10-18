@@ -66,6 +66,16 @@ const Footer = styled.div`
   }
 `;
 
+/* Privacy policy and terms under every sign-in screen (new tab, so nothing typed is lost) */
+const Legal = styled.nav`
+  margin-top: ${({ theme }) => theme.spacing.lg}px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+  a { color: var(--text-muted); text-decoration: none; &:hover { text-decoration: underline; } }
+`;
+
 interface AuthTemplateProps {
   title: string;
   children: ReactNode;
@@ -84,6 +94,10 @@ export function AuthTemplate({ title, children, footer, brand }: AuthTemplatePro
         {!brand && <PageTitle>{title}</PageTitle>}
         {children}
         {footer && <Footer>{footer}</Footer>}
+        <Legal aria-label="Legal">
+          <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy</a>
+          <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
+        </Legal>
       </Card>
     </Wrapper>
   );

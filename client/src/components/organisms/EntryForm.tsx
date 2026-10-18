@@ -34,6 +34,7 @@ import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
+import { ALLOWED_IMAGE_TYPES } from '../../utils/processImage.js';
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1030,7 +1031,7 @@ export function EntryForm({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept={ALLOWED_IMAGE_TYPES.join(',')}
                     multiple
                     style={{ display: 'none' }}
                     onChange={e => {

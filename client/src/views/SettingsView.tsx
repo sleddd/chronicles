@@ -7,7 +7,7 @@ import {
   PasswordForm, SessionsList, SessionItem,
   ColorSection, ColorSectionTitle, ColorSectionDesc,
 } from '../components/molecules/SettingsSection.js';
-import { ActionButton, SignOutButton, RowLink } from '../components/atoms/SettingsAtoms.js';
+import { ActionButton, SignOutButton, RowLink, OutlinedSection } from '../components/atoms/SettingsAtoms.js';
 import { Toggle } from '../components/atoms/Toggle.js';
 import { Select } from '../components/atoms/Select.js';
 import { PasswordInput } from '../components/atoms/PasswordInput.js';
@@ -33,7 +33,9 @@ import { useUIStore } from '../stores/uiStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useNavigate } from 'react-router-dom';
 import { usePrivateSettings } from '../services/privateSettings.js';
-import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, finance as financeApi, ApiError } from '../services/api.js';
+import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, finance as financeApi, doses as dosesApi, ApiError } from '../services/api.js';
+import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
+import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
 import { seedTestData } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
@@ -159,6 +161,15 @@ const EditActions = styled.div`
   padding: 4px 0 12px;
 `;
 
+/* Links to the Health Data Privacy Policy and Terms, under the privacy note */
+const PolicyLinks = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+  a { color: var(--color-accent-link, var(--color-accent)); font-weight: 500; }
+`;
+
 /* Prose inside a card (the guide, the privacy note) */
 const GuideBody = styled.div`
   font-family: var(--font-sans);
@@ -172,7 +183,7 @@ const GuideBody = styled.div`
 
 export function SettingsView() {
   const { user, logout, encryptionData } = useAuth();
-  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost, encryptRecord, decryptRecord } = useEncryption();
+  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
@@ -274,6 +285,8 @@ export function SettingsView() {
   const [seedFinanceResult, setSeedFinanceResult] = useState('');
   const [seedFinanceArmed, setSeedFinanceArmed] = useState(false);
   const [exportingFinance, setExportingFinance] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportAllResult, setExportAllResult] = useState('');
   const [financeExportResult, setFinanceExportResult] = useState('');
 
   // Load settings
@@ -468,6 +481,33 @@ export function SettingsView() {
       setSeedResult('Default topics created');
     } catch { setSeedResult('Failed'); }
     finally { setSeeding(false); }
+  };
+
+  /** Download everything — entries, topics, dose log, settings, finance — decrypted here, as one JSON file. */
+  const handleExportAll = async () => {
+    setExportingAll(true); setExportAllResult('');
+    try {
+      const [settingRows, doseRes, finance] = await Promise.all([
+        settingsApi.getAll(),
+        dosesApi.getAll(),
+        collectFinanceData({ list: financeApi.list, decryptRecord }),
+      ]);
+      const { settings, unreadable } = await openAllSettings(settingRows, decryptBytes);
+      const data = buildFullExport({ entries: decryptedEntries, topics: allTopics, doseLogs: doseRes.logs, settings, finance });
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chronicles-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportAllResult(unreadable.length
+        ? `Downloaded — ${unreadable.length} setting${unreadable.length === 1 ? '' : 's'} couldn't be decrypted and ${unreadable.length === 1 ? 'was' : 'were'} left out`
+        : 'Downloaded. The file is not encrypted — keep it somewhere safe.');
+    } catch (err) {
+      setExportAllResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setExportingAll(false);
+    }
   };
 
   /** Download every Finance record, decrypted here in the browser, as one ZIP of spreadsheets + JSON. */
@@ -801,6 +841,15 @@ export function SettingsView() {
           </>
         )}
         {emailMessage && <div style={{ padding: '0 0 12px', fontSize: 13, color: emailError ? '#9B4444' : '#5A8A6A' }}>{emailMessage}</div>}
+        <BreachNoticeSetting />
+        <OutlinedSection>
+          <FormField label="Privacy and terms">
+            <PolicyLinks style={{ marginTop: 0 }}>
+              <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a>
+              <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            </PolicyLinks>
+          </FormField>
+        </OutlinedSection>
         {!deletingAccount ? (
           <FormField label="Delete account">
             <ActionButton onClick={() => { setDeletingAccount(true); setDeletePassword(''); setDeleteCode(''); setDeleteError(''); }}>
@@ -1194,6 +1243,16 @@ export function SettingsView() {
       <Section id="data" title="Data">
       <SettingsCard>
         <SettingsRow
+          title="Export All"
+          description="Download everything, decrypted, as one JSON file: entries, topics, your medication dose log, settings (including your notes for the AI) and finance. AI and storage keys are left out. The file is not encrypted — store it safely."
+          action={
+            <ActionButton onClick={() => void handleExportAll()} disabled={exportingAll}>
+              {exportingAll ? <Spinner size={14} /> : 'Export All'}
+            </ActionButton>
+          }
+        />
+        {exportAllResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: exportAllResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{exportAllResult}</div>}
+        <SettingsRow
           title="Default Topics"
           description="Create default journal topics if missing"
           action={
@@ -1203,6 +1262,8 @@ export function SettingsView() {
           }
         />
         {seedResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: '#5A8A6A' }}>{seedResult}</div>}
+        {/* Seed buttons are for development only — never in a production build */}
+        {import.meta.env.DEV && (<>
         <SettingsRow
           title="Seed Test Data"
           description="Create test entries across all topic types — adds to existing data, does not delete anything"
@@ -1253,6 +1314,7 @@ export function SettingsView() {
             {seedFinanceResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedFinanceResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedFinanceResult}</div>}
           </>
         )}
+        </>)}
         <SettingsRow
           title="Export Finance Data"
           description="Download everything in Finance, decrypted, as one ZIP: a spreadsheet (CSV) each for budget categories, bills, bill payments, spending, savings funds and entries, goals, paydays and payday lines, one sheet of every transaction, and a complete JSON backup. The file is not encrypted — store it safely."
@@ -1303,6 +1365,10 @@ export function SettingsView() {
       <Section id="privacy" title="Privacy">
         <GuideBody>
           <strong>Zero-Knowledge Encryption:</strong> Your journal entries are encrypted in your browser before being sent to the server. We cannot read your data. If you lose your password, your data cannot be recovered.
+          <PolicyLinks>
+            <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a>
+            <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+          </PolicyLinks>
         </GuideBody>
       </Section>
 

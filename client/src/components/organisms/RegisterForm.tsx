@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { TextInput } from '../atoms/TextInput.js';
 import { PasswordInput } from '../atoms/PasswordInput.js';
@@ -59,9 +59,13 @@ function generateUsernameSuggestions(base: string): string[] {
 
 interface RegisterFormProps {
   onSubmit: (data: { email: string; username: string; password: string }) => Promise<void>;
+  /** Shown above Create account (the consent card) */
+  extra?: ReactNode;
+  /** Create account stays disabled until this is true (every consent box ticked) */
+  canSubmit?: boolean;
 }
 
-export function RegisterForm({ onSubmit }: RegisterFormProps) {
+export function RegisterForm({ onSubmit, extra, canSubmit = true }: RegisterFormProps) {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -185,7 +189,9 @@ export function RegisterForm({ onSubmit }: RegisterFormProps) {
         />
       </FormField>
 
-      <Button type="submit" fullWidth disabled={loading} variant="secondary">
+      {extra}
+
+      <Button type="submit" fullWidth disabled={loading || !canSubmit} variant="secondary">
         {loading ? <Spinner size={18} /> : 'Create account'}
       </Button>
     </Form>

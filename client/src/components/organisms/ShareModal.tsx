@@ -5,6 +5,7 @@ import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { Modal } from '../atoms/Modal.js';
 import { shares as sharesApi, type ShareRecord } from '../../services/api.js';
+import { stripMediaForShare } from '../../utils/shareContent.js';
 
 function buildShareUrl(token: string): string {
   return `${window.location.origin}/share/${token}`;
@@ -167,7 +168,8 @@ export function ShareModal({ entryId, entryContent, onClose }: ShareModalProps) 
     setIsCreating(true);
     setError(null);
     try {
-      const share = await sharesApi.create({ content: entryContent, entryId });
+      // Never share images: photos and drawings are removed first (the server refuses them too)
+      const share = await sharesApi.create({ content: stripMediaForShare(entryContent), entryId });
       setShareUrl(buildShareUrl(share.token));
       setExistingShares(prev => [share, ...prev]);
     } catch {

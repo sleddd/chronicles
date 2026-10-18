@@ -1,8 +1,8 @@
 import React from "react";
 
 export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
-  /** Text label shown beside the box. */
-  label?: string;
+  /** Label shown beside the box (text, or text with links). */
+  label?: React.ReactNode;
 }
 
 /** Accessible checkbox with animated check and optional label. */

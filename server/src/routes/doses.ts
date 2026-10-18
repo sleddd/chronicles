@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { ensureDoseLogsTable, getDoseLogsByDate, upsertDoseLog, getPost } from '../db/tenantQueries.js';
+import { ensureDoseLogsTable, getAllDoseLogs, getDoseLogsByDate, upsertDoseLog, getPost } from '../db/tenantQueries.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -13,6 +13,17 @@ const logDoseSchema = z.object({
   date: z.string().regex(dateRegex, 'Must be YYYY-MM-DD format'),
   status: z.enum(['taken', 'skipped', 'pending']),
   takenAt: z.string().nullable().optional(),
+});
+
+// GET /api/doses/all — every dose log (for the full data export)
+router.get('/all', async (req, res) => {
+  try {
+    await ensureDoseLogsTable(req.auth!.tenantSchemaName);
+    res.json({ logs: await getAllDoseLogs(req.auth!.tenantSchemaName) });
+  } catch (err) {
+    console.error('Get all dose logs error:', err);
+    res.status(500).json({ error: 'Failed to fetch dose logs' });
+  }
 });
 
 // GET /api/doses?date=YYYY-MM-DD

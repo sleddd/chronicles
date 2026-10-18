@@ -18,6 +18,11 @@ export interface ProcessedImage {
   mimeType: string; // always image/jpeg
 }
 
+/** The only image types that can be added: no SVG (it can carry script) and no
+ *  GIF. Every image is redrawn and saved as a new JPEG anyway, so nothing
+ *  hidden inside a file survives. */
+export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'] as const;
+
 function scaleToFit(width: number, height: number, maxEdge: number): { w: number; h: number } {
   const longEdge = Math.max(width, height);
   if (longEdge <= maxEdge) return { w: width, h: height };
@@ -47,8 +52,8 @@ function drawToJpeg(bitmap: ImageBitmap, w: number, h: number, quality: number):
  * Rejects non-image files and images that stay over 10 MB after downscaling.
  */
 export async function processImage(file: File): Promise<ProcessedImage> {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Only image files can be added');
+  if (!(ALLOWED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
+    throw new Error('Only JPG, PNG, WebP or AVIF images can be added');
   }
 
   let bitmap: ImageBitmap;

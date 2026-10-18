@@ -10,6 +10,9 @@ import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
+import { HealthPrivacyView } from './views/HealthPrivacyView.js';
+import { TermsView } from './views/TermsView.js';
+import { NoticeBanner } from './components/organisms/NoticeBanner.js';
 import { RecoverView } from './views/RecoverView.js';
 import { JournalView } from './views/JournalView.js';
 import { SettingsView } from './views/SettingsView.js';
@@ -383,9 +386,18 @@ function ChatGate() {
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
   const { pathname } = useLocation();
-  const publicPage = ['/login', '/register', '/recover', '/share'].some(p => pathname.startsWith(p));
+  const publicPage = ['/login', '/register', '/recover', '/share', '/health-privacy', '/terms'].some(p => pathname.startsWith(p));
   if (!isAuthenticated || !isUnlocked || publicPage) return null;
   return <AiChat />;
+}
+
+/** The server-controlled notice banner — signed-in pages only. */
+function NoticeGate() {
+  const { isAuthenticated } = useAuth();
+  const { pathname } = useLocation();
+  const publicPage = ['/login', '/register', '/recover', '/share', '/health-privacy', '/terms'].some(p => pathname.startsWith(p));
+  if (!isAuthenticated || publicPage) return null;
+  return <NoticeBanner />;
 }
 
 function R({ children }: { children: React.ReactNode }) {
@@ -490,6 +502,8 @@ export function App() {
               <Route path="/register" element={<RegisterView />} />
               <Route path="/recover" element={<RecoverView />} />
               <Route path="/share/:token" element={<SharedEntryView />} />
+              <Route path="/health-privacy" element={<HealthPrivacyView />} />
+              <Route path="/terms" element={<TermsView />} />
 
               {/* Core */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -536,6 +550,7 @@ export function App() {
               <Route path="/inspiration/quotes" element={<R><TopicEntriesView title="Quotes" topicNames={['Quote']} showDateFilter={false} /></R>} />
             </Routes>
             <ChatGate />
+            <NoticeGate />
             <UpdatePrompt />
           </BrowserRouter>
         </EncryptionProvider>

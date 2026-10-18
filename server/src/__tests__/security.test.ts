@@ -333,7 +333,7 @@ describe('Dose route post ownership validation', () => {
       new URL('../routes/doses.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    expect(content).toContain("import { ensureDoseLogsTable, getDoseLogsByDate, upsertDoseLog, getPost }");
+    expect(content).toMatch(/import \{[^}]*\bgetPost\b[^}]*\} from '\.\.\/db\/tenantQueries\.js'/);
     expect(content).toContain('getPost(req.auth!.tenantSchemaName, medicationPostId)');
     expect(content).toContain("'Medication post not found'");
   });

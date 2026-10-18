@@ -66,7 +66,9 @@ All UI must follow the rules below.
   load them from Google Fonts, which Safari/iOS can block, leaving a system face. **One static file
   per weight and style**, never a single variable-weight file (iOS doesn't render those reliably):
   Work Sans 100–700, Open Sans 300–700, normal + italic, latin + latin-ext. A new weight needs its
-  own files and `@font-face` rules (Fontsource packages have them).
+  own files and `@font-face` rules (Fontsource packages have them). The **Material Symbols** icon font is bundled
+  too (a subset of the glyphs listed in `src/assets/fonts/material-symbols-icons.txt`, fetched by `npm run fonts:icons`),
+  so no page load calls Google — the CSP allows no font or style hosts beyond `'self'`.
 
 ### Two Themes: Light (white) and Dark (charcoal)
 Switched via `data-theme="dark"` on `<html>` (driven by `uiStore.themeMode`, the theme in effect — set by the Light / Dark / Auto choice). The token layer
@@ -122,8 +124,8 @@ Settings → Theme offers **30 named accent presets** (`ACCENT_PRESETS` in `Sett
   buttons, a 4px progress rule toward 8 glasses / 8 hours), then Mood as five Material
   `sentiment_*` faces (the chosen one just turns accent — no disc or ring — its name on the
   right), then Cycle as pill chips (None/Spotting/Light/Medium/Heavy; chosen = accent). Hairlines
-  between sections. **One colour: everything coloured (icons, progress rules, the chosen face and its name) uses the accent** — no blues, violets or per-mood hues. New Material glyphs must be added to the `icon_names` list in `index.html`
-  (alphabetical) or they render as text.
+  between sections. **One colour: everything coloured (icons, progress rules, the chosen face and its name) uses the accent** — no blues, violets or per-mood hues. New Material glyphs must be added to `client/src/assets/fonts/material-symbols-icons.txt`
+  and `npm run fonts:icons` (client) re-run — it downloads the subset font into `src/assets/fonts/` — or they render as text.
 
 ### Component-specific Rules
 - **List rows — one style everywhere** (`styles/entryRow.ts`, used by `EntryCard`, `EntryListCard` and the Topics list): journal (`entryRow`): rows have no background of their own; hover/focus shows only a 3px accent left bar (the background never changes on hover); the open entry on `--bg-app` with the bar, a hairline (`--border-subtle`) down the right edge of the list beside the editor (desktop), and the topic + date are never accent — on every list they recede in `--text-meta` grey (hover and the open row included); every other list (`entryRowPlain`) is the reverse — rows on `--bg-app`, the active row on `--bg-sunken`, no bar; in the **journal only**, the first row starts active as a hint — only while no entry is open (or the open one is filtered out of view) — until the pointer is over a row (`rowHoverHandlers` set a flag on `<html>`); other lists don't highlight their first row (it just gets a top rule — except straight under a tab bar, whose hairline would double it: Recipes, Planning list view with no filter row). Never style list rows locally
@@ -517,7 +519,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Sessions: view and revoke active sessions from any device
 - Features: enable/disable health tracking, planning, entertainment, and more per topic type; opt-in Finance
 - Theme: header color (40+), **Light / Dark / Auto** — Auto follows the local clock (light 7 AM – 7 PM, dark otherwise; `utils/autoTheme.ts`). The saved `themeMode` setting holds the choice (`'light' | 'dark' | 'auto'`); `uiStore.themePreference` is that choice and `uiStore.themeMode` the theme in effect (everything that styles by theme reads `themeMode`). While Auto is on, `App.tsx` re-checks every minute and when the tab returns
-- Data: seed test data
+- Data: Export All (and per-area exports); seed test data in development builds only
 
 **Entry Images**
 - Up to 7 encrypted images per entry, stored zero-knowledge in the user's own Cloudflare R2 bucket (see `docs/IMAGES_FEATURE_PLAN.md`)
@@ -570,6 +572,15 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Pure helpers (rows by eaten day = `consumedDate` else creation day, totals, goal checks) in `client/src/utils/foodLog.ts`
 - Goals (`nutritionGoals`) are a **master-key-encrypted setting** via `useEncryptedSetting` (`client/src/hooks/useEncryptedSetting.ts` — it loads only once the master key is unlocked, keeps `loaded` false until then and refuses `save` before the stored value was read, so a fresh launch that mounts before a remembered key is restored can't show — or save over — the empty default); the saved-foods (`foodLibrary`) UI was removed
 - AI: `estimateFoodNutrition` asks for only the missing nutrients in one request; `nutrientSource` (`'ai' | 'manual'` per nutrient) + `nutritionBasis` mean typed values are never overwritten and AI values refresh when the description/meal type changes. New rows are AI-filled in the background after adding; the Logged table has "Fill N missing with AI" and a per-row "Estimate". Every food save path (Health dashboard quick log, New entry, journal Save) fills blank nutrients via `autoNutritionOnSave`; `FoodFields` shows the nutrient inputs
+
+**Health data compliance** (internal records and status: `docs/compliance/HEALTH_DATA_COMPLIANCE.md`)
+- **Public pages** `/health-privacy` (`HealthPrivacyView`) and `/terms` (`TermsView`, with the risk notice and image rules), in `LegalTemplate`, readable without signing in; linked under every sign-in screen (`AuthTemplate`), from the consent card and from Settings → Account. Placeholders (business name, address, host, backup/log days, abuse email, effective date) are `LEGAL_DETAILS` in `shared/src/legal/index.ts`; `LEGAL_VERSIONS` there versions each text — **update the policy before a feature changes how data moves, and bump the version when a change matters** (everyone is asked again). The chat stays off these pages
+- **Consent**: sign-up shows `ConsentCard` (three separate, never pre-checked boxes — 18+, Terms, health-data consent — plus email / mailed-letter breach notices with a postal address); **Create account** stays disabled until they're ticked, and the consent is posted right after registering. `ConsentGate` (inside `ProtectedRoute`) checks `GET /api/consent` before any signed-in page: no record → the full card once; a bumped version → only the changed items. If the check can't load, the app opens and asks next time. Stored in `public.account_consent` (`server/src/db/consentQueries.ts`; `POST /api/consent` only accepts the current versions; `PUT /api/consent/breach-notice` from Settings → Account → **Security notices**); the postal address is kept only for mailed notices
+- **Shares carry no images**: the client strips photos, drawings, SVG and embedded media (`stripMediaForShare`, `utils/shareContent.ts`) and `createShareSchema` rejects anything still carrying one (`shareContentHasMedia`, shared). **Uploads** are only JPG, PNG, WebP or AVIF (`ALLOWED_IMAGE_TYPES` in `utils/processImage.ts`, also the picker's `accept`) — never SVG or GIF; every image is re-encoded to a fresh JPEG anyway
+- **Account deletion** revokes the Google Calendar token at Google first (`services/googleRevoke.ts`); `npm run account:delete -- <email> [--yes]` (server, dry run without `--yes`) does the same for locked-out or under-18 accounts
+- **Export All** (Settings → Data): entries, topics, every dose log (`GET /api/doses/all`), settings opened in the browser and finance as one JSON (`utils/fullExport.ts`); AI/R2/AWS credentials are left out (`redactSecrets`)
+- **Notice banner**: `npm run notice -- --set "…" [--link https://…]` / `--clear` (server, `public.app_notice`) shows a dismissible banner on signed-in pages (`NoticeBanner`, `GET /api/notice`) — used with emailed breach notices
+- **Seed buttons** (Seed Test Data / Seed Finance Data) show only in development builds (`import.meta.env.DEV`)
 
 ### Planned
 - Recurring calendar events

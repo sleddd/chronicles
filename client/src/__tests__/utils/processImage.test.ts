@@ -44,7 +44,13 @@ afterEach(() => {
 describe('processImage', () => {
   it('rejects non-image files', async () => {
     const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
-    await expect(processImage(file)).rejects.toThrow(/image files/i);
+    await expect(processImage(file)).rejects.toThrow(/JPG, PNG, WebP or AVIF/);
+  });
+
+  it('rejects SVG and GIF — only JPG, PNG, WebP and AVIF are allowed', async () => {
+    for (const [name, type] of [['x.svg', 'image/svg+xml'], ['x.gif', 'image/gif']]) {
+      await expect(processImage(new File(['<svg/>'], name, { type }))).rejects.toThrow(/JPG, PNG, WebP or AVIF/);
+    }
   });
 
   it('rejects files that fail to decode', async () => {

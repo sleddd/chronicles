@@ -3,3 +3,4 @@ export * from './crypto/index.js';
 export * from './types/index.js';
 export * from './validation/index.js';
 export * from './theme/index.js';
+export * from './legal/index.js';

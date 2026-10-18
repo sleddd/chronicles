@@ -19,6 +19,10 @@ import financeRoutes from './routes/finance.js';
 import calendarRoutes from './routes/calendar.js';
 import analyticsRoutes from './routes/analytics.js';
 import aiChatRoutes from './routes/aiChat.js';
+import consentRoutes from './routes/consent.js';
+import noticeRoutes from './routes/notice.js';
+import { initConsentTable } from './db/consentQueries.js';
+import { initAppNoticeTable } from './db/appNoticeQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
@@ -97,6 +101,8 @@ app.use('/api/sessions', authMiddleware, apiLimiter, sessionsRoutes);
 app.use('/api/doses', authMiddleware, apiLimiter, dosesRoutes);
 app.use('/api/finance', authMiddleware, apiLimiter, financeRoutes);
 app.use('/api/ai-chat', authMiddleware, apiLimiter, aiChatRoutes);
+app.use('/api/consent', authMiddleware, apiLimiter, consentRoutes);
+app.use('/api/notice', authMiddleware, apiLimiter, noticeRoutes);
 app.use('/api/analytics', authMiddleware, apiLimiter, analyticsRoutes); // never tied to the account
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
@@ -120,6 +126,8 @@ initSharesTable()
   .catch(err => console.error('Failed to init shares table:', err));
 initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err));
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err));
+initConsentTable().catch(err => console.error('Failed to init consent table:', err));
+initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err));
 upgradeStoredCredentials().then(({ recoverySealed, sessionsRevoked }) => {
   if (recoverySealed || sessionsRevoked) console.log(`Credential upgrade: ${recoverySealed} recovery check(s) sealed, ${sessionsRevoked} legacy session(s) signed out`);
 }).catch(err => console.error('Credential upgrade failed:', err instanceof Error ? err.message : err));
