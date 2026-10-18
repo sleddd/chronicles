@@ -3,7 +3,6 @@ import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import type { ReactNode } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
-import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
 /* Page title on top, the two panels below it — edge to edge */
 const Page = styled.div`
@@ -69,7 +68,7 @@ const ContentArea = styled.div`
   min-height: 0;
 `;
 
-const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean; $lightBg?: boolean }>`
+const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean }>`
   /* Wide enough for the Date | Topic | Entry columns */
   width: 380px;
   min-width: 380px;
@@ -90,7 +89,7 @@ const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean;
   }
 `;
 
-const StyledEditorPanel = styled.div<{ $visibleMobile?: boolean; $isDark?: boolean; $lightBg?: boolean }>`
+const StyledEditorPanel = styled.div<{ $visibleMobile?: boolean; $isDark?: boolean }>`
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -113,9 +112,7 @@ interface SidePanelProps {
 
 export function SidePanel({ hiddenMobile, children }: SidePanelProps) {
   const isDark = useUIStore(s => s.themeMode) === 'dark';
-  const backgroundImage = useUIStore(s => s.backgroundImage);
-  const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
-  return <StyledSidePanel $hiddenMobile={hiddenMobile} $isDark={isDark} $lightBg={isLightBg}>{children}</StyledSidePanel>;
+  return <StyledSidePanel $hiddenMobile={hiddenMobile} $isDark={isDark}>{children}</StyledSidePanel>;
 }
 
 interface EditorPanelProps {
@@ -125,9 +122,7 @@ interface EditorPanelProps {
 
 export function EditorPanel({ visibleMobile, children }: EditorPanelProps) {
   const isDark = useUIStore(s => s.themeMode) === 'dark';
-  const backgroundImage = useUIStore(s => s.backgroundImage);
-  const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
-  return <StyledEditorPanel $visibleMobile={visibleMobile} $isDark={isDark} $lightBg={isLightBg}>{children}</StyledEditorPanel>;
+  return <StyledEditorPanel $visibleMobile={visibleMobile} $isDark={isDark}>{children}</StyledEditorPanel>;
 }
 
 

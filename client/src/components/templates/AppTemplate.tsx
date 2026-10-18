@@ -6,7 +6,6 @@ import { Sidebar } from '../organisms/Sidebar.js';
 import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { useUIStore } from '../../stores/uiStore.js';
-import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
 const SkipLink = styled.a`
   position: absolute;
@@ -74,14 +73,13 @@ const MainColumn = styled.div`
   }
 `;
 
-const MainContent = styled.main<{ $transparent?: boolean; $hasBackground?: boolean; $lightBg?: boolean }>`
+const MainContent = styled.main<{ $transparent?: boolean }>`
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow-y: ${({ $transparent }) => $transparent ? 'hidden' : 'auto'};
-  background: ${({ $transparent, $hasBackground, $lightBg, theme }) =>
-    $transparent ? 'transparent' : $hasBackground ? ($lightBg ? theme.colors.surfaceOverlayLight : theme.colors.surfaceOverlay) : 'var(--paper)'};
+  background: ${({ $transparent }) => $transparent ? 'transparent' : 'var(--paper)'};
   padding-bottom: 0;
 `;
 
@@ -93,8 +91,6 @@ interface AppTemplateProps {
 }
 
 export function AppTemplate({ children, hideSidebar, transparentContent, hideAccentStripe }: AppTemplateProps) {
-  const backgroundImage = useUIStore(s => s.backgroundImage);
-  const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
   /* Mobile: while the full-view editor overlay is open, hide the mobile
      chrome and let the overlay fill the whole viewport. */
   const focusMode = useUIStore(s => s.editorFocusMode);
@@ -109,7 +105,7 @@ export function AppTemplate({ children, hideSidebar, transparentContent, hideAcc
         {!hideSidebar && <Sidebar />}
         <MainColumn>
           <Header />
-          <MainContent id="main-content" $transparent={transparentContent} $hasBackground={!!backgroundImage} $lightBg={isLightBg}>{children}</MainContent>
+          <MainContent id="main-content" $transparent={transparentContent}>{children}</MainContent>
         </MainColumn>
       </Layout>
     </>

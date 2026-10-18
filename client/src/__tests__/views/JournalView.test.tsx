@@ -43,8 +43,6 @@ const { setters, entriesState, uiState } = vi.hoisted(() => {
     setSelectedTopicId: (() => {}) as any,
     setHeaderColor: (() => {}) as any,
     setThemeMode: (() => {}) as any,
-    setBackgroundImage: (() => {}) as any,
-    setBackgroundOpacity: (() => {}) as any,
   };
 
   const entriesState = {
@@ -64,7 +62,6 @@ const { setters, entriesState, uiState } = vi.hoisted(() => {
     topicCustomFields: {},
     topicHideText: {},
     headerColor: '#4A5568',
-    backgroundImage: '',
     ...setters,
   };
   return { setters, entriesState, uiState };

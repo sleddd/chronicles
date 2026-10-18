@@ -186,7 +186,7 @@ chronicles-rebuild/
 │       ├── crypto/      # Stateless encryption service (AES-256-GCM, PBKDF2)
 │       ├── types/       # TypeScript interfaces (Post, Taxonomy, User, Session, Settings)
 │       ├── validation/  # Zod schemas for API request/response validation
-│       └── theme/       # Design tokens, accent colors, background images
+│       └── theme/       # Design tokens, accent colors
 │
 ├── server/              # Express 5 API
 │   ├── prisma/
@@ -406,7 +406,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Journal entries with TipTap rich text editor
 - Topic organization with icons and drag-and-drop reordering
 - Client-side search (keyword + date range)
-- Settings (header color, background image, feature toggles per topic type)
+- Settings (header color, feature toggles per topic type)
 - Session management (view/revoke active sessions)
 - Security headers (CSP, HSTS, X-Frame-Options, Permissions-Policy)
 - Apple Pencil: Scribble handwriting-to-text (CSS) + freehand drawing canvas with pressure sensitivity, palm rejection, undo, inline SVG storage (encrypted)
@@ -512,7 +512,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Security: change password (re-wraps master key, no data re-encryption); TOTP 2FA inline setup wizard
 - Sessions: view and revoke active sessions from any device
 - Features: enable/disable health tracking, planning, entertainment, and more per topic type; opt-in Finance
-- Theme: header color (40+), background image (28), light/dark mode
+- Theme: header color (40+), light/dark mode
 - Data: seed test data
 
 **Entry Images**
@@ -658,7 +658,6 @@ Three sets of variables are written to `:root`:
 
 ### Customizable Colors
 - **40+ header accent colors** (Dark, Navy, Gold, Coral, Teal, Steel Blue, etc.) + transparent
-- **28 background images** from Unsplash artists
 - Colors derived programmatically: hover (15% darker), tint (10% opacity), stroke (desaturated muted variant for borders)
 
 ### Default Colors

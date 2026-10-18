@@ -54,12 +54,8 @@ interface UIState {
   // Theme (runtime overrides from settings)
   themeMode: 'light' | 'dark';
   accentColor: string;
-  backgroundImage: string;
-  backgroundOpacity: number;
   setThemeMode: (mode: 'light' | 'dark') => void;
   setAccentColor: (color: string) => void;
-  setBackgroundImage: (image: string) => void;
-  setBackgroundOpacity: (opacity: number) => void;
 
   // Profile
   displayName: string;
@@ -140,12 +136,8 @@ export const useUIStore = create<UIState>((set) => ({
 
   themeMode: 'dark',
   accentColor: DEFAULT_ACCENT_COLOR,
-  backgroundImage: '',
-  backgroundOpacity: 0.7,
   setThemeMode: (mode) => set({ themeMode: mode }),
   setAccentColor: (color) => set({ accentColor: color }),
-  setBackgroundImage: (image) => set({ backgroundImage: image }),
-  setBackgroundOpacity: (opacity) => set({ backgroundOpacity: opacity }),
 
   displayName: '',
   setDisplayName: (name) => set({ displayName: name }),

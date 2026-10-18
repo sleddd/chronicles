@@ -21,5 +21,4 @@ export interface FeatureFlags {
 export interface ThemeSettings {
   headerColor: string;
   accentColor: string;
-  backgroundImage: string | null;
 }

@@ -7,7 +7,6 @@ import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { SidebarToggle } from '../atoms/SidebarToggle.js';
 import { useUIStore } from '../../stores/uiStore.js';
-import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
 const Layout = styled.div`
   display: flex;
@@ -36,10 +35,10 @@ const MainColumn = styled.div`
   }
 `;
 
-const Body = styled.div<{ $hasBackground?: boolean; $lightBg?: boolean }>`
+const Body = styled.div`
   flex: 1;
   overflow-y: auto;
-  background: ${({ $hasBackground, $lightBg, theme }) => $hasBackground ? ($lightBg ? theme.colors.surfaceOverlayLight : theme.colors.surfaceOverlay) : 'var(--paper)'};
+  background: var(--paper);
 `;
 
 const Content = styled.div`
@@ -69,8 +68,6 @@ interface SettingsTemplateProps {
 }
 
 export function SettingsTemplate({ title, children }: SettingsTemplateProps) {
-  const backgroundImage = useUIStore(s => s.backgroundImage);
-  const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
   return (
     <>
       <Background />
@@ -79,7 +76,7 @@ export function SettingsTemplate({ title, children }: SettingsTemplateProps) {
         <div data-print-hide><Sidebar /></div>
         <MainColumn>
           <Header />
-          <Body $hasBackground={!!backgroundImage} $lightBg={isLightBg}>
+          <Body>
             <Content>
               {title && (
                 <PageTitleRow>

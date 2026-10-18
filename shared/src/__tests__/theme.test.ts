@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 /**
  * Theme module unit tests
  * Tests for tokens, accent colors, and backgrounds
@@ -7,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { lightTheme, darkTheme, theme } from '../theme/tokens.js';
 import { HEADER_COLORS, deriveHoverColor, deriveLightColor, type ColorOption } from '../theme/accentColors.js';
-import { BACKGROUND_IMAGES, type BackgroundOption } from '../theme/backgrounds.js';
 
 // ============================================================================
 // Theme tokens
@@ -237,78 +234,6 @@ describe('deriveLightColor', () => {
     for (const color of HEADER_COLORS) {
       const result = deriveLightColor(color.value);
       expect(result).toMatch(/^rgba\(\d+, \d+, \d+, 0\.1\)$/);
-    }
-  });
-});
-
-// ============================================================================
-// Backgrounds
-// ============================================================================
-describe('BACKGROUND_IMAGES', () => {
-  it('is a non-empty array', () => {
-    expect(Array.isArray(BACKGROUND_IMAGES)).toBe(true);
-    expect(BACKGROUND_IMAGES.length).toBeGreaterThan(0);
-  });
-
-  it('each entry has value, thumb, and label properties', () => {
-    for (const bg of BACKGROUND_IMAGES) {
-      expect(bg).toHaveProperty('value');
-      expect(bg).toHaveProperty('thumb');
-      expect(bg).toHaveProperty('label');
-      expect(typeof bg.value).toBe('string');
-      expect(typeof bg.thumb).toBe('string');
-      expect(typeof bg.label).toBe('string');
-    }
-  });
-
-  it('includes a "None" option with empty value', () => {
-    const none = BACKGROUND_IMAGES.find(bg => bg.label === 'None');
-    expect(none).toBeDefined();
-    expect(none!.value).toBe('');
-    expect(none!.thumb).toBe('');
-  });
-
-  it('non-empty entries have paths starting with /backgrounds/', () => {
-    for (const bg of BACKGROUND_IMAGES) {
-      if (bg.value) {
-        expect(bg.value).toMatch(/^\/backgrounds\//);
-      }
-    }
-  });
-
-  it('non-empty entries have thumbs under /backgrounds/', () => {
-    for (const bg of BACKGROUND_IMAGES) {
-      if (bg.thumb) {
-        expect(bg.thumb).toMatch(/^\/backgrounds\//);
-      }
-    }
-  });
-
-  it('every selectable image and thumb exists in client/public', () => {
-    const publicDir = fileURLToPath(new URL('../../../client/public', import.meta.url));
-    // Hidden entries are retired backgrounds kept only so old saved settings resolve
-    for (const bg of BACKGROUND_IMAGES.filter(b => !b.hidden)) {
-      for (const p of [bg.value, bg.thumb]) {
-        if (p) expect(existsSync(publicDir + p), p).toBe(true);
-      }
-    }
-  });
-
-  it('has unique labels', () => {
-    const labels = BACKGROUND_IMAGES.map(bg => bg.label);
-    expect(new Set(labels).size).toBe(labels.length);
-  });
-
-  it('has unique values', () => {
-    const values = BACKGROUND_IMAGES.map(bg => bg.value);
-    expect(new Set(values).size).toBe(values.length);
-  });
-
-  it('image values are jpg or png', () => {
-    for (const bg of BACKGROUND_IMAGES) {
-      if (bg.value) {
-        expect(bg.value).toMatch(/\.(jpg|png)$/);
-      }
     }
   });
 });

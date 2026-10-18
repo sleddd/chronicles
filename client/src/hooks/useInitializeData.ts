@@ -25,8 +25,6 @@ export function useInitializeData() {
   } = useEntriesStore();
   const setAccentColor = useUIStore(s => s.setAccentColor);
   const setThemeMode = useUIStore(s => s.setThemeMode);
-  const setBackgroundImage = useUIStore(s => s.setBackgroundImage);
-  const setBackgroundOpacity = useUIStore(s => s.setBackgroundOpacity);
   const setDisplayName = useUIStore(s => s.setDisplayName);
   const setTopicCustomFields = useUIStore(s => s.setTopicCustomFields);
   const setTopicHideText = useUIStore(s => s.setTopicHideText);
@@ -68,8 +66,6 @@ export function useInitializeData() {
         setAccentColor(accent);
         document.documentElement.style.setProperty('--color-accent', accent);
         if (settingsMap.themeMode === 'light' || settingsMap.themeMode === 'dark') setThemeMode(settingsMap.themeMode);
-        if (typeof settingsMap.backgroundImage === 'string') setBackgroundImage(settingsMap.backgroundImage);
-        if (typeof settingsMap.backgroundOpacity === 'string') setBackgroundOpacity(parseFloat(settingsMap.backgroundOpacity));
         if (typeof settingsMap.displayName === 'string') setDisplayName(settingsMap.displayName);
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
           setTopicCustomFields(settingsMap.topicCustomFields as import('../types/userFields.js').TopicCustomFields);

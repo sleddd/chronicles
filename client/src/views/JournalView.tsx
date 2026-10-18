@@ -176,8 +176,6 @@ export function JournalView() {
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const setAccentColor = useUIStore(s => s.setAccentColor);
   const setThemeMode = useUIStore(s => s.setThemeMode);
-  const setBackgroundImage = useUIStore(s => s.setBackgroundImage);
-  const setBackgroundOpacity = useUIStore(s => s.setBackgroundOpacity);
   const setTopicCustomFields = useUIStore(s => s.setTopicCustomFields);
   const imagesEnabled = useUIStore(s => s.imagesEnabled);
   const imagesConfigured = useUIStore(s => s.imagesConfigured);
@@ -478,8 +476,6 @@ export function JournalView() {
         if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') setAccentColor(settingsMap.accentColor);
         if (settingsMap.themeMode === 'light' || settingsMap.themeMode === 'dark') setThemeMode(settingsMap.themeMode);
-        if (typeof settingsMap.backgroundImage === 'string') setBackgroundImage(settingsMap.backgroundImage);
-        if (typeof settingsMap.backgroundOpacity === 'string') setBackgroundOpacity(parseFloat(settingsMap.backgroundOpacity as string));
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
           setTopicCustomFields(settingsMap.topicCustomFields as import('../types/userFields.js').TopicCustomFields);
         }

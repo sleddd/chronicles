@@ -6,7 +6,6 @@ import { Sidebar } from '../organisms/Sidebar.js';
 import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { useUIStore } from '../../stores/uiStore.js';
-import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
 const Layout = styled.div<{ $focusMode?: boolean }>`
   display: flex;
@@ -36,14 +35,14 @@ const MainColumn = styled.div`
   }
 `;
 
-const Main = styled.main<{ $lightBg?: boolean }>`
+const Main = styled.main`
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   min-height: 0;
-  background: ${({ $lightBg, theme }) => $lightBg ? theme.colors.surfaceOverlayLight : theme.colors.surfaceOverlay};
+  background: ${({ theme }) => theme.colors.surfaceOverlay};
   /* Phones: a little more room at the sides on top of each page's own 16px
      gutter, so content never runs close to the screen edge */
   @media (max-width: 768px) { padding-inline: 8px; }
@@ -56,8 +55,6 @@ interface ContentTemplateProps {
 
 /** Full-height template: left sidebar (full height) + main column (header bar + scrollable content). */
 export function ContentTemplate({ children, hideSidebar }: ContentTemplateProps) {
-  const backgroundImage = useUIStore(s => s.backgroundImage);
-  const isLightBg = BACKGROUND_IMAGES.find(bg => bg.value === backgroundImage)?.light ?? false;
   /* Same as AppTemplate: hide the mobile chrome while a full-view overlay
      (e.g. dashboard Quick Entry) is open so it can fill the whole viewport. */
   const focusMode = useUIStore(s => s.editorFocusMode);
@@ -69,7 +66,7 @@ export function ContentTemplate({ children, hideSidebar }: ContentTemplateProps)
         {!hideSidebar && <div data-print-hide><Sidebar /></div>}
         <MainColumn>
           <div data-print-hide><Header /></div>
-          <Main $lightBg={isLightBg}>{children}</Main>
+          <Main>{children}</Main>
         </MainColumn>
       </Layout>
     </>

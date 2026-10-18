@@ -15,7 +15,6 @@ import { TextInput } from '../components/atoms/TextInput.js';
 import { Button } from '../components/atoms/Button.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { FormField } from '../components/molecules/FormField.js';
-import { BackgroundPicker } from '../components/molecules/BackgroundPicker.js';
 import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import { deriveAuthSecret, newRecoveryProof, passwordSchema } from '@chronicles/shared';
@@ -188,10 +187,6 @@ export function SettingsView() {
   const setAccentColor = useUIStore(s => s.setAccentColor);
   const themeMode = useUIStore(s => s.themeMode);
   const setThemeMode = useUIStore(s => s.setThemeMode);
-  const backgroundImage = useUIStore(s => s.backgroundImage);
-  const setBackgroundImage = useUIStore(s => s.setBackgroundImage);
-  const backgroundOpacity = useUIStore(s => s.backgroundOpacity);
-  const setBackgroundOpacity = useUIStore(s => s.setBackgroundOpacity);
   const navigate = useNavigate();
 
   // How to Use
@@ -285,8 +280,6 @@ export function SettingsView() {
       if (typeof map.timezone === 'string') setTimezone(map.timezone);
       if (map.themeMode === 'light' || map.themeMode === 'dark') setThemeMode(map.themeMode);
       if (typeof map.accentColor === 'string') setAccentColor(map.accentColor);
-      if (typeof map.backgroundImage === 'string') setBackgroundImage(map.backgroundImage);
-      if (typeof map.backgroundOpacity === 'string') setBackgroundOpacity(parseFloat(map.backgroundOpacity as string));
       const f: Record<string, boolean> = {};
       // Unset flags get the same defaults as useInitializeData (opt-in ones stay off)
       const defaults = featureFlagsFrom(map);
@@ -349,16 +342,6 @@ export function SettingsView() {
     setAccentColor(color);
     document.documentElement.style.setProperty('--color-accent', color);
     await settingsApi.upsert('accentColor', color).catch(() => {});
-  };
-
-  const handleImageChange = async (image: string) => {
-    setBackgroundImage(image);
-    await settingsApi.upsert('backgroundImage', image).catch(() => {});
-  };
-
-  const handleOpacityChange = async (opacity: number) => {
-    setBackgroundOpacity(opacity);
-    await settingsApi.upsert('backgroundOpacity', String(opacity)).catch(() => {});
   };
 
   const handleFeatureToggle = async (key: string, value: boolean) => {

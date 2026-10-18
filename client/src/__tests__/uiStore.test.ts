@@ -15,8 +15,6 @@ beforeEach(() => {
     showMobileEditor: false,
     themeMode: 'light',
     accentColor: '#00b4d8',
-    backgroundImage: '',
-    backgroundOpacity: 0.7,
   });
 });
 
@@ -34,8 +32,6 @@ describe('uiStore – initial state', () => {
     expect(state.showMobileEditor).toBe(false);
     expect(state.themeMode).toBe('light');
     expect(state.accentColor).toBe('#00b4d8');
-    expect(state.backgroundImage).toBe('');
-    expect(state.backgroundOpacity).toBe(0.7);
   });
 });
 
@@ -152,15 +148,5 @@ describe('uiStore – theme', () => {
     expect(useUIStore.getState().themeMode).toBe('dark');
     useUIStore.getState().setThemeMode('light');
     expect(useUIStore.getState().themeMode).toBe('light');
-  });
-
-  it('setBackgroundImage updates image', () => {
-    useUIStore.getState().setBackgroundImage('mountains.jpg');
-    expect(useUIStore.getState().backgroundImage).toBe('mountains.jpg');
-  });
-
-  it('setBackgroundOpacity updates opacity', () => {
-    useUIStore.getState().setBackgroundOpacity(0.5);
-    expect(useUIStore.getState().backgroundOpacity).toBe(0.5);
   });
 });

@@ -42,10 +42,6 @@ vi.mock('@/stores/uiStore', () => ({
       setHeaderColor: vi.fn(),
       themeMode: 'light',
       setThemeMode: vi.fn(),
-      backgroundImage: '',
-      setBackgroundImage: vi.fn(),
-      backgroundOpacity: 0.5,
-      setBackgroundOpacity: vi.fn(),
     })
   ),
 }));
@@ -157,10 +153,6 @@ vi.mock('@/components/molecules/FormField', () => ({
 
 vi.mock('@/components/molecules/ColorPicker', () => ({
   ColorPicker: () => <div data-testid="color-picker" />,
-}));
-
-vi.mock('@/components/molecules/BackgroundPicker', () => ({
-  BackgroundPicker: () => <div data-testid="background-picker" />,
 }));
 
 vi.mock('@/components/molecules/SessionRow', () => ({
