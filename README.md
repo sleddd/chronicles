@@ -14,11 +14,13 @@ Screenshots are from October 2026 and may change.
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
 
-<img width="1400" height="736" alt="Screenshot 2026-10-17 at 10 07 35 PM" src="https://github.com/user-attachments/assets/2fefd689-c7ae-4b0b-bc9c-ef87f1afab80" />
-<img width="1455" height="736" alt="Screenshot 2026-10-17 at 9 47 23 PM" src="https://github.com/user-attachments/assets/aba3a457-703b-45ad-baca-63f970479cd4" />
+<img width="1418" height="739" alt="Screenshot 2026-10-17 at 10 32 40 PM" src="https://github.com/user-attachments/assets/8e59a461-2e89-48ba-860b-13d1427b5dc4" />
+<img width="1414" height="740" alt="Screenshot 2026-10-17 at 10 32 57 PM" src="https://github.com/user-attachments/assets/a1b61a40-f5c0-4198-a1ef-bcd0e5b5588b" />
+<img width="1408" height="736" alt="Screenshot 2026-10-17 at 10 33 18 PM" src="https://github.com/user-attachments/assets/3f0c37f4-ff8a-419e-aeb8-3c887ab0c0be" />
+
 
 ### Journal
-The main view, and where the app opens. Pick a topic, write a line (or fill in the topic's fields) and save. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket, voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and saving takes you back there.
+The main view, and where the app opens. Pick a topic, write a line (or fill in the topic's fields) and save. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket( Bring your key), voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and saving takes you back there.
 
 <img width="1460" height="738" alt="Screenshot 2026-10-17 at 9 44 50 PM" src="https://github.com/user-attachments/assets/063bd93e-17e8-4b6b-9951-366ab3ef7b8c" />
 
