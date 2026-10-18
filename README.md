@@ -11,45 +11,55 @@ Chronicles is in active design and development, with a phone app via React Nativ
 ## Screenshots
 These screenshots are from October 2026, but subject to change.
 
-### Main view for quick entry
-<img width="1423" height="672" alt="Screenshot 2026-10-15 at 7 07 39 PM" src="https://github.com/user-attachments/assets/571b20b3-4284-4e3d-ae5d-94d9cf6e428b" />
+### Dashboard - Light and Dark Mode
+<img width="1400" height="736" alt="Screenshot 2026-10-17 at 10 07 35 PM" src="https://github.com/user-attachments/assets/2fefd689-c7ae-4b0b-bc9c-ef87f1afab80" />
+<img width="1455" height="736" alt="Screenshot 2026-10-17 at 9 47 23 PM" src="https://github.com/user-attachments/assets/aba3a457-703b-45ad-baca-63f970479cd4" />
 
-### Journal View - to sort, search, edit, and filter with. App comes with dark and light theme
-<img width="1428" height="690" alt="Screenshot 2026-10-15 at 7 06 50 PM" src="https://github.com/user-attachments/assets/b7cca347-6b0f-4c27-ad7c-a2749c4d7527" />
-<img width="1433" height="686" alt="Screenshot 2026-10-15 at 6 58 46 PM" src="https://github.com/user-attachments/assets/536d91dd-7769-4bfb-8205-ccaea0e62b3f" />
+### Journal View - to sort, search, edit, and filter with. This is the main view.
+<img width="1460" height="738" alt="Screenshot 2026-10-17 at 9 44 50 PM" src="https://github.com/user-attachments/assets/063bd93e-17e8-4b6b-9951-366ab3ef7b8c" />
 
 ### Health View - Meal, Exercise, Medication, Allergy, Wellness, and Symptom Tracking with basic reporting
-<img width="1426" height="673" alt="Screenshot 2026-10-15 at 5 22 52 PM" src="https://github.com/user-attachments/assets/e2c21317-9501-4e85-85ba-b65944e69d27" />
-<img width="1420" height="682" alt="Screenshot 2026-10-15 at 5 22 23 PM" src="https://github.com/user-attachments/assets/fb06eb42-32e9-4cb7-a322-de3cacc6a167" />
-<img width="1433" height="682" alt="Screenshot 2026-10-15 at 5 22 10 PM" src="https://github.com/user-attachments/assets/ebc1f06e-e8cb-4d60-b4cc-ccfd4054b0fb" />
-<img width="1435" height="681" alt="Screenshot 2026-10-15 at 5 23 33 PM" src="https://github.com/user-attachments/assets/8b308267-921d-4a2f-8fc1-1e04bf758250" />
-<img width="1173" height="592" alt="Screenshot 2026-10-15 at 5 23 16 PM" src="https://github.com/user-attachments/assets/392af49e-70ea-47af-8a2b-4785edfdaba7" />
+<img width="1449" height="741" alt="Screenshot 2026-10-17 at 9 50 52 PM" src="https://github.com/user-attachments/assets/a6aeda98-524f-4c77-a286-afbf1aed86b3" />
+<img width="1450" height="732" alt="Screenshot 2026-10-17 at 9 51 01 PM" src="https://github.com/user-attachments/assets/4b39780b-5ca7-447c-8c57-13d16cdfc40a" />
+<img width="1158" height="727" alt="Screenshot 2026-10-17 at 10 08 44 PM" src="https://github.com/user-attachments/assets/a2dbd91a-d1ab-4a07-a1d1-b57f80c26a7e" />
+<img width="1212" height="656" alt="Screenshot 2026-10-17 at 10 08 52 PM" src="https://github.com/user-attachments/assets/a1137179-6533-4352-96fd-22c296111450" />
+<img width="1464" height="732" alt="Screenshot 2026-10-17 at 9 51 14 PM" src="https://github.com/user-attachments/assets/367b2f5d-ef65-4414-af02-37510e2549a1" />
+<img width="1444" height="723" alt="Screenshot 2026-10-17 at 9 51 37 PM" src="https://github.com/user-attachments/assets/7ab3435c-8bd7-41d7-8982-feab4d736aa5" />
+<img width="1446" height="731" alt="Screenshot 2026-10-17 at 9 51 27 PM" src="https://github.com/user-attachments/assets/4c2f211c-36bc-46a7-943a-ce61c3c8ca21" />
+<img width="1435" height="546" alt="Screenshot 2026-10-17 at 9 51 47 PM" src="https://github.com/user-attachments/assets/a6fee1bd-91a8-4df0-a6a0-0352408a8ec1" />
 
 ### AI integration for calorie estimation and chat. It will auto-generate save suggestions and provide app assistance. AI has no access to your journal entries ensuring no private information gets to the AI unless you send it. It has no memory beyond chat context, so your chats are not remembered once they are cleared or you logout. However, there is a specific section for notes in your settings where you can add things you want your AI to always know. You must provide your own AI key via OpenAI, Claude/Anthropic, or AWS Bedrock.
-<img width="1427" height="704" alt="Screenshot 2026-10-15 at 6 59 47 PM" src="https://github.com/user-attachments/assets/32dd8bb1-93a8-463b-9fb9-1e8273028ae8" />
+<img width="1460" height="735" alt="Screenshot 2026-10-17 at 9 46 26 PM" src="https://github.com/user-attachments/assets/a6c25896-569a-4ea7-8172-1a3ddac153d0" />
 
-### Browse by topic or full journal view
-<img width="1424" height="691" alt="Screenshot 2026-10-15 at 7 15 11 PM" src="https://github.com/user-attachments/assets/39e5cbae-5a0b-4615-b007-2efe823b345e" />
-
-### Sort your kitchen with shopping checklists, meal planning, and recipe integration
-<img width="1417" height="680" alt="Screenshot 2026-10-15 at 5 25 16 PM" src="https://github.com/user-attachments/assets/69f5f816-df57-4a6f-a643-e0d1750be78f" />
-<img width="1410" height="689" alt="Screenshot 2026-10-15 at 5 43 06 PM" src="https://github.com/user-attachments/assets/c5b7571c-e97b-45e5-b51b-126f62e72c94" />
-<img width="1438" height="596" alt="Screenshot 2026-10-15 at 5 43 16 PM" src="https://github.com/user-attachments/assets/cb8ca3ce-de2f-4bb4-bb07-ceee0b0098ec" />
-
-### Calendar for meetings, tasks, and events with Google and Apple Calendar integration
-<img width="1428" height="684" alt="Screenshot 2026-10-15 at 5 24 23 PM" src="https://github.com/user-attachments/assets/fcdd4d6c-8fec-44c8-9dbf-22bb090b7979" />
+### Browse by topic or full journal view - Add your own topics, remove topics, and add your own custom fields to topics.
+<img width="1454" height="746" alt="Screenshot 2026-10-17 at 9 47 38 PM" src="https://github.com/user-attachments/assets/c7177ae8-6287-44d3-97d3-58ea72660437" />
+<img width="1464" height="731" alt="Screenshot 2026-10-17 at 9 47 49 PM" src="https://github.com/user-attachments/assets/9dbbb374-3cd1-4ea6-bb44-382f754a276f" />
 
 ### Kanban for life planning with goals and milestones. Also allows tasks and todos with custom filtering view for quickly checking outstanding project tasks. 
-<img width="1427" height="681" alt="Screenshot 2026-10-15 at 5 24 08 PM" src="https://github.com/user-attachments/assets/59d38a45-4b1d-4dbf-8101-da8b505dc041" />
-<img width="1424" height="695" alt="Screenshot 2026-10-15 at 7 16 36 PM" src="https://github.com/user-attachments/assets/58a8e792-b59e-472e-9d52-d8a29f5deb80" />
+<img width="1460" height="732" alt="Screenshot 2026-10-17 at 9 52 16 PM" src="https://github.com/user-attachments/assets/c3f87add-04a1-4e2b-afe0-4ad9d32a6ea5" />
+<img width="1455" height="734" alt="Screenshot 2026-10-17 at 9 52 02 PM" src="https://github.com/user-attachments/assets/bf3f6c0e-b0c3-4acb-9267-faffa85be020" />
+
+### Calendar for meetings, tasks, and events with Google and Apple Calendar integration
+<img width="1458" height="734" alt="Screenshot 2026-10-17 at 9 52 26 PM" src="https://github.com/user-attachments/assets/af8680bb-0fad-4699-85a8-dca4f166affb" />
+
+### Sort your kitchen with shopping checklists, meal planning, and printable recipes with ingredient checklist integration
+<img width="1458" height="735" alt="Screenshot 2026-10-17 at 9 54 58 PM" src="https://github.com/user-attachments/assets/254e2ef1-d66c-4d53-b66e-b8d8fec047b9" />
+<img width="1450" height="740" alt="Screenshot 2026-10-17 at 9 55 07 PM" src="https://github.com/user-attachments/assets/0670fe02-87e2-422e-83fe-48a1da800f8c" />
+<img width="1120" height="743" alt="Screenshot 2026-10-17 at 9 56 35 PM" src="https://github.com/user-attachments/assets/f2934c16-c80b-410c-a2a7-08f794a5b4d7" />
+<img width="1455" height="726" alt="Screenshot 2026-10-17 at 9 55 39 PM" src="https://github.com/user-attachments/assets/af53e857-de29-423e-bebb-e1e696db768d" />
 
 ### Optional Financial Tracking with all data exportable to csv
-<img width="1415" height="695" alt="Screenshot 2026-10-16 at 6 22 51 PM" src="https://github.com/user-attachments/assets/695a7189-f150-4a91-83da-8cda02543ceb" />
-<img width="1419" height="691" alt="Screenshot 2026-10-16 at 6 23 06 PM" src="https://github.com/user-attachments/assets/ff7c7d14-fe8f-4dd1-94d9-c8c479ecd42d" />
-<img width="1289" height="658" alt="Screenshot 2026-10-16 at 6 42 52 PM" src="https://github.com/user-attachments/assets/cc969ef5-e666-4f99-a699-5bfcc8b5da32" />
-<img width="1415" height="688" alt="Screenshot 2026-10-16 at 6 23 53 PM" src="https://github.com/user-attachments/assets/0028e752-ec76-42ca-b5a1-dd4fa7f25d71" />
-<img width="1433" height="683" alt="Screenshot 2026-10-16 at 6 23 43 PM" src="https://github.com/user-attachments/assets/148a642a-637c-4bc7-97d7-ee13560142d8" />
-<img width="1438" height="692" alt="Screenshot 2026-10-16 at 6 24 15 PM" src="https://github.com/user-attachments/assets/f6651df0-08f3-4573-bb84-327969ea1a72" />
+<img width="1464" height="739" alt="Screenshot 2026-10-17 at 9 52 36 PM" src="https://github.com/user-attachments/assets/67bd72a4-63e2-4dbd-8748-890fd9ed1fda" />
+<img width="1448" height="743" alt="Screenshot 2026-10-17 at 9 52 47 PM" src="https://github.com/user-attachments/assets/dfa05480-7530-47ab-80c5-e4eac0ced4ad" />
+<img width="1460" height="739" alt="Screenshot 2026-10-17 at 9 52 58 PM" src="https://github.com/user-attachments/assets/ea31a2eb-9e5a-486a-9f21-04ed740edae1" />
+<img width="1454" height="737" alt="Screenshot 2026-10-17 at 9 53 09 PM" src="https://github.com/user-attachments/assets/043bcf4c-5563-4dde-9af6-c1b55f2c12c0" />
+<img width="1461" height="724" alt="Screenshot 2026-10-17 at 9 53 24 PM" src="https://github.com/user-attachments/assets/614fc048-3aa9-4fcf-89c8-5bb58ef5f0dd" />
+<img width="1109" height="742" alt="Screenshot 2026-10-17 at 9 56 44 PM" src="https://github.com/user-attachments/assets/08c2d2f0-aff8-4c55-abef-bc7cd312eabd" />
+
+### Settings
+<img width="1456" height="734" alt="Screenshot 2026-10-17 at 9 55 55 PM" src="https://github.com/user-attachments/assets/28b58f16-c629-446f-ac54-75acaaded3dd" />
+
+
 
 ## Full Feature List
 
