@@ -36,6 +36,7 @@ import type { RecipeFieldValues } from '../types/fields.js';
 import { recipeShareHtml } from '../utils/recipeShareHtml.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
+import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
 
 const NewEntryDateNote = styled.div`
@@ -172,7 +173,6 @@ export function JournalView() {
   const setViewMode = useUIStore(s => s.setViewMode);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const setAccentColor = useUIStore(s => s.setAccentColor);
-  const setThemeMode = useUIStore(s => s.setThemeMode);
   const setTopicCustomFields = useUIStore(s => s.setTopicCustomFields);
   const imagesEnabled = useUIStore(s => s.imagesEnabled);
   const imagesConfigured = useUIStore(s => s.imagesConfigured);
@@ -477,7 +477,7 @@ export function JournalView() {
         const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
         if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') setAccentColor(settingsMap.accentColor);
-        if (settingsMap.themeMode === 'light' || settingsMap.themeMode === 'dark') setThemeMode(settingsMap.themeMode);
+        { const pref = parseThemePreference(settingsMap.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
           setTopicCustomFields(settingsMap.topicCustomFields as import('../types/userFields.js').TopicCustomFields);
         }

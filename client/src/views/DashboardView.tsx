@@ -28,6 +28,7 @@ import { addDays, billOccurrences, formatCents } from '../utils/finance.js';
 import { MENU_SLOTS, defaultShoppingListTitle, latestOpenList, menuDays } from '../utils/kitchen.js';
 import { getOrCreateTopic } from '../utils/getOrCreateJournalTopic.js';
 import { prioritiesTitle } from '../utils/entrySave.js';
+import type { ThemePreference } from '../utils/autoTheme.js';
 import { dailyQuote, greeting } from '../utils/dailyQuote.js';
 import { currentWeather, describeWeather, findPlace, hoursFromLocal, type CurrentWeather, type Place } from '../utils/weather.js';
 import type { DecryptedPost } from '@shared/crypto/types';
@@ -532,9 +533,19 @@ function useSaveFields() {
 
 /* ── Sections ── */
 
+/** ["10:17", "AM"] in a time zone. Read from formatToParts — Safari / iPadOS put
+ *  a narrow no-break space (U+202F), not a plain space, before AM/PM, so
+ *  splitting the formatted string on ' ' fails there. An unknown zone falls
+ *  back to local time. */
 function clockParts(tz: string, now: Date): [string, string] {
-  const [t, ampm] = now.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).split(' ');
-  return [t, ampm ?? ''];
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).formatToParts(now);
+  } catch {
+    parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).formatToParts(now);
+  }
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+  return [`${get('hour')}:${get('minute')}`, get('dayPeriod')];
 }
 
 function WorldClocks({ places, now, open, onToggle }: { places: Place[]; now: Date; open: boolean; onToggle: () => void }) {
@@ -1124,12 +1135,12 @@ export function DashboardView() {
   const [customizing, setCustomizing] = useState(false);
   const displayName = useUIStore(s => s.displayName) ?? '';
   const { user } = useAuth();
-  const themeMode = useUIStore(s => s.themeMode);
-  const setThemeMode = useUIStore(s => s.setThemeMode);
-  const changeTheme = (mode: 'light' | 'dark') => {
-    if (mode === themeMode) return;
-    setThemeMode(mode);
-    void settingsApi.upsert('themeMode', mode).catch(() => {});
+  const themePreference = useUIStore(s => s.themePreference);
+  const setThemePreference = useUIStore(s => s.setThemePreference);
+  const changeTheme = (pref: ThemePreference) => {
+    if (pref === themePreference) return;
+    setThemePreference(pref);
+    void settingsApi.upsert('themeMode', pref).catch(() => {});
   };
   const [placeQuery, setPlaceQuery] = useState('');
   const [placeError, setPlaceError] = useState('');
@@ -1217,9 +1228,10 @@ export function DashboardView() {
             </DateBlock>
             <HeadActions>
               <ThemeSwitch role="group" aria-label="Theme">
-                {(['light', 'dark'] as const).map(m => (
-                  <ThemeOpt key={m} type="button" $on={themeMode === m} aria-pressed={themeMode === m} onClick={() => changeTheme(m)}>
-                    {m === 'light' ? 'Light' : 'Dark'}
+                {(['light', 'dark', 'auto'] as const).map(m => (
+                  <ThemeOpt key={m} type="button" $on={themePreference === m} aria-pressed={themePreference === m} onClick={() => changeTheme(m)}
+                    title={m === 'auto' ? 'Light from 7 AM, dark from 7 PM' : undefined}>
+                    {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'Auto'}
                   </ThemeOpt>
                 ))}
               </ThemeSwitch>

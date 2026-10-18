@@ -9,6 +9,7 @@ import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { parseThemePreference } from '../utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /**
@@ -24,7 +25,6 @@ export function useInitializeData() {
     isInitialized, setLoading, isLoading,
   } = useEntriesStore();
   const setAccentColor = useUIStore(s => s.setAccentColor);
-  const setThemeMode = useUIStore(s => s.setThemeMode);
   const setDisplayName = useUIStore(s => s.setDisplayName);
   const setTopicCustomFields = useUIStore(s => s.setTopicCustomFields);
   const setTopicHideText = useUIStore(s => s.setTopicHideText);
@@ -65,7 +65,7 @@ export function useInitializeData() {
         const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
         setAccentColor(accent);
         document.documentElement.style.setProperty('--color-accent', accent);
-        if (settingsMap.themeMode === 'light' || settingsMap.themeMode === 'dark') setThemeMode(settingsMap.themeMode);
+        { const pref = parseThemePreference(settingsMap.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
         if (typeof settingsMap.displayName === 'string') setDisplayName(settingsMap.displayName);
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
           setTopicCustomFields(settingsMap.topicCustomFields as import('../types/userFields.js').TopicCustomFields);

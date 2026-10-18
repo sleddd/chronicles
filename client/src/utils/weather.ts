@@ -58,5 +58,6 @@ export function hoursFromLocal(timezone: string, now = new Date()): number {
       .formatToParts(now).reduce<Record<string, string>>((o, p) => ({ ...o, [p.type]: p.value }), {});
     return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute);
   };
-  return Math.round((at(timezone) - at(undefined)) / 3_600_000);
+  // An unknown zone throws in Intl — show it as local rather than breaking the clocks
+  try { return Math.round((at(timezone) - at(undefined)) / 3_600_000); } catch { return 0; }
 }

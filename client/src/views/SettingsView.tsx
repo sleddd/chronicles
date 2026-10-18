@@ -41,6 +41,7 @@ import { stripHtml } from '../utils/stripHtml.js';
 import { parseCsvRow, splitCsvLines, csvCell } from '../utils/csv.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
 import { collectFinanceData, financeExportZip } from '../utils/financeExport.js';
+import { parseThemePreference, type ThemePreference } from '../utils/autoTheme.js';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 
 const TIMEZONES = [
@@ -186,7 +187,8 @@ export function SettingsView() {
   const accentColor = useUIStore(s => s.accentColor);
   const setAccentColor = useUIStore(s => s.setAccentColor);
   const themeMode = useUIStore(s => s.themeMode);
-  const setThemeMode = useUIStore(s => s.setThemeMode);
+  const themePreference = useUIStore(s => s.themePreference);
+  const setThemePreference = useUIStore(s => s.setThemePreference);
   const navigate = useNavigate();
 
   // How to Use
@@ -278,7 +280,7 @@ export function SettingsView() {
   useEffect(() => {
     loadPrivateSettings().then(map => {
       if (typeof map.timezone === 'string') setTimezone(map.timezone);
-      if (map.themeMode === 'light' || map.themeMode === 'dark') setThemeMode(map.themeMode);
+      { const pref = parseThemePreference(map.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
       if (typeof map.accentColor === 'string') setAccentColor(map.accentColor);
       const f: Record<string, boolean> = {};
       // Unset flags get the same defaults as useInitializeData (opt-in ones stay off)
@@ -333,9 +335,10 @@ export function SettingsView() {
     await savePrivateSetting('timezone', tz).catch(() => {});
   };
 
-  const handleThemeModeChange = async (mode: 'light' | 'dark') => {
-    setThemeMode(mode);
-    await settingsApi.upsert('themeMode', mode).catch(() => {});
+  // Light / Dark / Auto (light 7 AM – 7 PM, dark otherwise); saved as `themeMode`
+  const handleThemeModeChange = async (pref: ThemePreference) => {
+    setThemePreference(pref);
+    await settingsApi.upsert('themeMode', pref).catch(() => {});
   };
 
   const handleAccentColorChange = async (color: string) => {
@@ -864,35 +867,26 @@ export function SettingsView() {
       <SettingsCard>
         <ColorSection>
           <ColorSectionTitle>Appearance</ColorSectionTitle>
-          <ColorSectionDesc>Choose light or dark mode</ColorSectionDesc>
+          <ColorSectionDesc>Choose light or dark mode, or Auto: light from 7 AM, dark from 7 PM</ColorSectionDesc>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              variant="secondary"
-              onClick={() => handleThemeModeChange('light')}
-              style={{
-                flex: 1,
-                // Selected: accent outline + soft accent text, no fill (custom-field chips)
-                background: 'transparent',
-                border: `1px solid ${themeMode === 'light' ? 'var(--color-accent)' : 'var(--border-card)'}`,
-                color: themeMode === 'light' ? 'var(--color-accent-soft)' : 'var(--text-soft)',
-                fontWeight: themeMode === 'light' ? 600 : 400,
-              }}
-            >
-              Light
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleThemeModeChange('dark')}
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: `1px solid ${themeMode === 'dark' ? 'var(--color-accent)' : 'var(--border-card)'}`,
-                color: themeMode === 'dark' ? 'var(--color-accent-soft)' : 'var(--text-soft)',
-                fontWeight: themeMode === 'dark' ? 600 : 400,
-              }}
-            >
-              Dark
-            </Button>
+            {(['light', 'dark', 'auto'] as const).map(pref => (
+              <Button
+                key={pref}
+                variant="secondary"
+                aria-pressed={themePreference === pref}
+                onClick={() => handleThemeModeChange(pref)}
+                style={{
+                  flex: 1,
+                  // Selected: accent outline + soft accent text, no fill (custom-field chips)
+                  background: 'transparent',
+                  border: `1px solid ${themePreference === pref ? 'var(--color-accent)' : 'var(--border-card)'}`,
+                  color: themePreference === pref ? 'var(--color-accent-soft)' : 'var(--text-soft)',
+                  fontWeight: themePreference === pref ? 600 : 400,
+                }}
+              >
+                {pref === 'light' ? 'Light' : pref === 'dark' ? 'Dark' : 'Auto'}
+              </Button>
+            ))}
           </div>
         </ColorSection>
         <ColorSection>

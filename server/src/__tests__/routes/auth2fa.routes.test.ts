@@ -170,6 +170,25 @@ describe('2FA hardening', () => {
       expect(replay.status).toBe(401);
     });
 
+    it('keeps the pending token through a wrong code, then spends it on the right one', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const pendingToken = await pendingTokenFor(app, account);
+      const good = generateSync({ secret });
+
+      const wrong = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken, code: good === '000000' ? '111111' : '000000' });
+      expect(wrong.status).toBe(401);
+      expect(wrong.body.error).toBe('Invalid code');
+
+      const right = await request(app).post('/api/auth/login/2fa').send({ pendingToken, code: good });
+      expect(right.status).toBe(200);
+
+      const again = await request(app).post('/api/auth/login/2fa').send({ pendingToken, code: good });
+      expect(again.status).toBe(401);
+      expect(again.body.error).toMatch(/expired/);
+    });
+
     it('reads a secret sealed at rest', async () => {
       const secret = generateSecret();
       const { encryptToken } = await import('../../services/tokenCrypto.js');

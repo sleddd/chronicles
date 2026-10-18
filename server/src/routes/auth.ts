@@ -838,9 +838,9 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
 
-    // Single-use — remove immediately
-    pendingTwoFA.delete(pendingToken);
-
+    // The pending token survives a wrong code so the user can retry (the
+    // 5-wrong-codes lock, the 5-minute expiry and authLimiter bound guessing);
+    // it's single-use once a code is accepted.
     const account = await prisma.account.findUnique({
       where: { id: pending.accountId },
       select: {
@@ -863,6 +863,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     });
 
     if (!account || !account.totpEnabled || !account.totpSecret) {
+      pendingTwoFA.delete(pendingToken);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
@@ -879,6 +880,8 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       res.status(401).json({ error: 'Invalid code' });
       return;
     }
+    // Accepted — the pending token is spent
+    pendingTwoFA.delete(pendingToken);
     if (factor === 'backup') {
       logSecurityEvent('login_2fa_backup_code_used', { accountId: account.id, ip: req.ip });
     }

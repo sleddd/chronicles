@@ -130,13 +130,16 @@ const Log = styled.div`
   gap: 12px;
 `;
 
-/* Alternating bubbles: the user on the right in the accent tint, the assistant
-   on the left in a sunken bubble; notes sit centred and quiet. */
+/* Alternating bubbles: the user on the right in a lighter grey (never the
+   accent — text on an accent can't always stay readable), the assistant on the
+   left in a sunken bubble; notes sit centred and quiet. */
 const Msg = styled.div<{ $role: 'user' | 'assistant' | 'note' }>`
   max-width: ${({ $role }) => ($role === 'note' ? '100%' : '85%')};
   align-self: ${({ $role }) => ($role === 'user' ? 'flex-end' : $role === 'assistant' ? 'flex-start' : 'center')};
   padding: ${({ $role }) => ($role === 'note' ? '0 4px' : '9px 13px')};
-  background: ${({ $role }) => ($role === 'user' ? 'var(--color-accent-subtle)' : $role === 'assistant' ? 'var(--bg-sunken)' : 'transparent')};
+  background: ${({ $role }) => ($role === 'user' ? 'var(--bg-active)' : $role === 'assistant' ? 'var(--bg-sunken)' : 'transparent')};
+  /* Light: --bg-active is darker than the sunken bubble — the user's stays the lighter grey */
+  ${({ $role }) => ($role === 'user' ? "html[data-theme='light'] & { background: var(--bg-hover); }" : '')}
   border-radius: ${({ $role }) => ($role === 'user' ? '16px 16px 4px 16px' : $role === 'assistant' ? '16px 16px 16px 4px' : '0')};
   font-family: var(--font-sans);
   font-size: ${({ $role }) => ($role === 'note' ? '12px' : '14px')};

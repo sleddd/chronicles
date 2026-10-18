@@ -30,6 +30,8 @@ interface AuthContextValue {
   pending2FA: Pending2FA | null;
   login: (email: string, password: string) => Promise<EncryptionData | null>;
   submitTotpCode: (code: string) => Promise<EncryptionData>;
+  /** Leave the 2FA code screen and go back to the sign-in form */
+  cancel2FA: () => void;
   register: (data: {
     email: string;
     username: string;
@@ -101,6 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEncryptionData(result.encryption);
     return result.encryption;
   }, [pending2FA]);
+
+  const cancel2FA = useCallback(() => setPending2FA(null), []);
 
   const register = useCallback(async (data: Parameters<typeof authApi.register>[0]) => {
     const result = await authApi.register(data);
@@ -179,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pending2FA,
       login,
       submitTotpCode,
+      cancel2FA,
       register,
       logout,
     }}>

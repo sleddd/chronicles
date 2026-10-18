@@ -81,7 +81,7 @@ const ErrorBanner = styled.div`
 
 export function LoginView() {
   const navigate = useNavigate();
-  const { login, submitTotpCode, pending2FA } = useAuth();
+  const { login, submitTotpCode, cancel2FA, pending2FA } = useAuth();
   const { unlock } = useEncryption();
 
   // Saved password for encryption unlock after 2FA completes
@@ -93,6 +93,16 @@ export function LoginView() {
   const [useBackup, setUseBackup] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
+  // Shown over the sign-in form after leaving the code screen
+  const [signInNote, setSignInNote] = useState('');
+
+  // Back to the sign-in form (the code screen's link, or a timed-out session)
+  const leave2FA = (note = '') => {
+    cancel2FA();
+    setOtpCode(''); setOtpError(''); setUseBackup(false);
+    setSavedPassword('');
+    setSignInNote(note);
+  };
 
   const handleLogin = async (email: string, password: string, remember: boolean) => {
     const encryptionData = await login(email, password);
@@ -148,7 +158,11 @@ export function LoginView() {
       }
       navigate('/');
     } catch (err) {
-      setOtpError(err instanceof Error ? err.message : 'Invalid code');
+      const message = err instanceof Error ? err.message : 'Invalid code';
+      // The session timed out (5 minutes): there's nothing left to retry, so
+      // go back to the sign-in form rather than leaving the screen stuck
+      if (/expired|log in again/i.test(message)) leave2FA('Your verification timed out. Sign in again.');
+      else setOtpError(message);
     } finally {
       setOtpLoading(false);
     }
@@ -210,6 +224,9 @@ export function LoginView() {
           >
             {useBackup ? 'Use authenticator app instead' : 'Use a backup code instead'}
           </ToggleLink>
+          <ToggleLink type="button" onClick={() => leave2FA()}>
+            Back to sign in
+          </ToggleLink>
         </OtpWrap>
       </AuthTemplate>
     );
@@ -221,8 +238,9 @@ export function LoginView() {
       brand
       footer={<>New here? <Link to="/register">Create an account</Link></>}
     >
+      {signInNote && <ErrorBanner role="status">{signInNote}</ErrorBanner>}
       <LoginForm
-        onSubmit={handleLogin}
+        onSubmit={async (email, password, remember) => { setSignInNote(''); await handleLogin(email, password, remember); }}
         onForgotPassword={() => navigate('/recover')}
       />
     </AuthTemplate>

@@ -36,6 +36,7 @@ import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.j
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
 import { ShoppingListsView } from './views/ShoppingListsView.js';
+import { autoThemeFor } from './utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
@@ -397,6 +398,18 @@ export function App() {
   const themeMode = useUIStore(s => s.themeMode);
   const isDark = themeMode === 'dark';
   const activeTheme = isDark ? darkTheme : lightTheme;
+
+  // Auto theme: follow the clock (light 7 AM – 7 PM) — checked every minute and
+  // whenever the tab comes back, so it flips on its own at the hour
+  const themePreference = useUIStore(s => s.themePreference);
+  useEffect(() => {
+    if (themePreference !== 'auto') return;
+    const tick = () => useUIStore.getState().setThemeMode(autoThemeFor());
+    tick();
+    const id = setInterval(tick, 60_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
+  }, [themePreference]);
 
   useEffect(() => {
     const color = accentColor || DEFAULT_ACCENT_COLOR;

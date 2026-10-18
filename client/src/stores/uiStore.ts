@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { resolveTheme, type ThemePreference } from '../utils/autoTheme.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
 
 interface UIState {
@@ -51,10 +52,13 @@ interface UIState {
   pencilOnly: boolean;
   setPencilOnly: (v: boolean) => void;
 
-  // Theme (runtime overrides from settings)
+  // Theme (runtime overrides from settings). themePreference is what the user
+  // chose (Light / Dark / Auto by time of day); themeMode is the theme in effect.
   themeMode: 'light' | 'dark';
+  themePreference: ThemePreference;
   accentColor: string;
   setThemeMode: (mode: 'light' | 'dark') => void;
+  setThemePreference: (pref: ThemePreference) => void;
   setAccentColor: (color: string) => void;
 
   // Profile
@@ -135,8 +139,10 @@ export const useUIStore = create<UIState>((set) => ({
   setPencilOnly: (v) => set({ pencilOnly: v }),
 
   themeMode: 'dark',
+  themePreference: 'dark',
   accentColor: DEFAULT_ACCENT_COLOR,
   setThemeMode: (mode) => set({ themeMode: mode }),
+  setThemePreference: (pref) => set({ themePreference: pref, themeMode: resolveTheme(pref) }),
   setAccentColor: (color) => set({ accentColor: color }),
 
   displayName: '',
