@@ -13,7 +13,7 @@ export interface GoalEntry {
 }
 
 /* Roadmap (Kanban) status columns for goals. */
-export type RoadmapStatus = 'new' | 'planned' | 'in_progress' | 'completed';
+export type RoadmapStatus = 'new' | 'planned' | 'in_progress' | 'paused' | 'completed';
 
 export const ROADMAP_COLUMNS: { key: RoadmapStatus; label: string }[] = [
   { key: 'new', label: 'New' },
@@ -22,12 +22,22 @@ export const ROADMAP_COLUMNS: { key: RoadmapStatus; label: string }[] = [
   { key: 'completed', label: 'Completed' },
 ];
 
+/* Goals' board also has Paused (milestones keep the four above) */
+export const GOAL_COLUMNS: { key: RoadmapStatus; label: string }[] = [
+  { key: 'new', label: 'New' },
+  { key: 'planned', label: 'Planned' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'paused', label: 'Paused' },
+  { key: 'completed', label: 'Achieved' },
+];
+
 /* Map any stored/legacy goalStatus onto one of the four roadmap columns.
    Legacy: active→new, archived→new; in_progress/completed unchanged. */
 export function normalizeRoadmapStatus(raw: unknown): RoadmapStatus {
   switch (raw) {
     case 'planned':     return 'planned';
     case 'in_progress': return 'in_progress';
+    case 'paused':      return 'paused';
     case 'completed':   return 'completed';
     case 'new':
     case 'active':

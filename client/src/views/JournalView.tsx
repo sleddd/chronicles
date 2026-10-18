@@ -4,7 +4,7 @@ import styled, { css, keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
-import { JournalTemplate, SidePanel, EditorPanel, MobileBackButton } from '../components/templates/JournalTemplate.js';
+import { JournalTemplate, SidePanel, EditorPanel } from '../components/templates/JournalTemplate.js';
 import { LoadingCenter } from '../components/atoms/LoadingCenter.js';
 import { EmptyEditor } from '../components/atoms/EmptyEditor.js';
 import { SidePadding } from '../components/atoms/SidePadding.js';
@@ -110,6 +110,45 @@ const EditorFocusWrap = styled.div<{ $expanded?: boolean }>`
   `}
 `;
 
+
+/* Title row, right side: the breadcrumb then the New entry pill. On phones
+   the pill stays across from the title and the breadcrumb is hidden (the wrapper dissolves into the title row) */
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-left: auto;
+  @media (max-width: 768px) { display: contents; }
+`;
+
+/* Phones: no breadcrumb for now */
+const CrumbSlot = styled.div`
+  min-width: 0;
+  @media (max-width: 768px) { display: none; }
+`;
+
+/* Outlined accent pill (no fill) */
+const NewEntryPill = styled.button`
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-accent);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms;
+  &:hover { border-color: var(--color-accent-hover); color: var(--color-accent-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  /* Phones: across from the title */
+  @media (max-width: 768px) {
+    order: 1;
+    margin-left: auto;
+  }
+`;
 
 /** Compact change-detection signature for the entry's image set. */
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
@@ -891,25 +930,30 @@ export function JournalView() {
   return (
     <AppTemplate transparentContent hideAccentStripe>
       <JournalTemplate
-        headerAside={entryTrail.length > 1 && (
-          <EntryBreadcrumb
-            trail={entryTrail}
-            onNavigate={path => {
-              // The Journal crumb returns to the entry list — on mobile
-              // that means closing the editor so the list is full-width
-              if (path === '/journal') handleMobileBack();
-              navigate(path);
-            }}
-          />
+        // Phones/tablets: the editor pane shows a back caret before the title
+        onBack={showMobileEditor ? handleMobileBack : undefined}
+        headerAside={(
+          <HeaderActions>
+            {entryTrail.length > 1 && (
+              <CrumbSlot><EntryBreadcrumb
+                trail={entryTrail}
+                onNavigate={path => {
+                  // The Journal crumb returns to the entry list — on mobile
+                  // that means closing the editor so the list is full-width
+                  if (path === '/journal') handleMobileBack();
+                  navigate(path);
+                }}
+              /></CrumbSlot>
+            )}
+            {/* New entry: an outlined pill in the title row */}
+            <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
+              + New entry
+            </NewEntryPill>
+          </HeaderActions>
         )}
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>
-            <ViewTabs
-              onNewEntry={() => {
-                setSelectedEntryId(null);
-                setShowMobileEditor(true);
-              }}
-            />
+            <ViewTabs />
             {viewMode === 'date' && (
               <DateFilterBar>
                 {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -935,7 +979,6 @@ export function JournalView() {
         }
         editorPanel={
           <EditorPanel visibleMobile={showMobileEditor}>
-            <MobileBackButton onClick={handleMobileBack} />
             <EditorFocusWrap
               $expanded={editorExpanded}
               onFocus={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}

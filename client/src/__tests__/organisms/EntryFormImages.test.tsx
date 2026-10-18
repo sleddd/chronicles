@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
 import { EntryForm } from '@/components/organisms/EntryForm';
@@ -79,17 +79,37 @@ describe('EntryForm image gating', () => {
     expect(btn).toHaveAttribute('title', 'Maximum of 7 images per entry');
   });
 
-  it('shows the share button on entries without images', () => {
+  it('offers Share in the More menu on entries without images', () => {
     renderWithTheme(<EntryForm {...defaultProps} images={[]} onShare={vi.fn()} />);
-    expect(screen.getByLabelText('Share entry')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('More actions'));
+    expect(screen.getByRole('menuitem', { name: /share/i })).toBeInTheDocument();
   });
 
-  it('hides the share button entirely on entries with images', () => {
-    renderWithTheme(
-      <EntryForm {...defaultProps} images={[makeImage(1)]} imagesReady={true} onShare={vi.fn()} />
-    );
-    expect(screen.queryByLabelText('Share entry')).not.toBeInTheDocument();
+  it('More holds Dictate (first), Share and Draw', () => {
+    renderWithTheme(<EntryForm {...defaultProps} images={[]} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    const items = screen.getAllByRole('menuitem').map(i => i.textContent);
+    expect(items[0]).toMatch(/dictate/i);
+    expect(items.some(t => /share/i.test(t ?? ''))).toBe(true);
+    expect(items.some(t => /draw/i.test(t ?? ''))).toBe(true);
   });
+
+  it('keeps Format visible in the toolbar (not in More)', () => {
+    renderWithTheme(<EntryForm {...defaultProps} images={[]} />);
+    expect(screen.getByLabelText('Formatting')).toBeInTheDocument();
+  });
+
+  it('disables Share in the More menu on entries with images, and says why', () => {
+    const onShare = vi.fn();
+    renderWithTheme(
+      <EntryForm {...defaultProps} entryId={1} images={[makeImage(1)]} imagesReady={true} onShare={onShare} />
+    );
+    fireEvent.click(screen.getByLabelText('More actions'));
+    const share = screen.getByRole('menuitem', { name: /share/i });
+    expect(share).toBeDisabled();
+    expect(screen.getByText('Not for entries with images')).toBeInTheDocument();
+  });
+
 
   it('renders one thumbnail per image', () => {
     const images = [makeImage(1), makeImage(2), makeImage(3)];

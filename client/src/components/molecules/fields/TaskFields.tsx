@@ -1,31 +1,62 @@
-import { Checkbox } from '../../atoms/Checkbox.js';
-import { Select } from '../../atoms/Select.js';
-import { TextInput } from '../../atoms/TextInput.js';
-import { FormField } from '../FormField.js';
+import { useId } from 'react';
 import styled from 'styled-components';
+import { Icon } from '../../atoms/core/Icon.jsx';
+import { Toggle } from '../../atoms/Toggle.js';
 import type { TaskFieldValues } from '../../../types/fields.js';
-import type { MilestoneOption, GoalOption } from '../../../types/ui.js';
+import type { GoalOption, MilestoneOption } from '../../../types/ui.js';
+import {
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareDate, BareSelect, BoxText,
+} from './formKit.js';
 export type { TaskFieldValues } from '../../../types/fields.js';
 
-const PRIORITY_OPTIONS = [
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'high',   label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low',    label: 'Low' },
-  { value: 'none',   label: 'None' },
-] as const;
+/* Task fields — the same form in the journal editor and Quick Entry: the task
+   as a big borderless title ("What needs doing?"; an older task's text fills
+   it once), then one outlined box of rows — Part of (goal and milestone pills),
+   Priority chips with a coloured dot, Deadline, Status chips and an
+   Auto-migrate switch — then Notes. Props only. */
 
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+const PRIORITIES: { value: TaskFieldValues['priority']; label: string; color: string }[] = [
+  { value: 'none', label: 'None', color: 'var(--control-border)' },
+  { value: 'low', label: 'Low', color: 'var(--chart-blue)' },
+  { value: 'medium', label: 'Medium', color: 'var(--chart-amber)' },
+  { value: 'high', label: 'High', color: 'var(--mood-1)' },
+  { value: 'urgent', label: 'Urgent', color: 'var(--color-danger)' },
+];
+
+type Status = 'todo' | 'in_progress' | 'done';
+const STATUSES: { value: Status; label: string }[] = [
+  { value: 'todo', label: 'To do' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'done', label: 'Completed' },
+];
+
+const Dot = styled.span<{ $color: string }>`
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  vertical-align: 1px;
 `;
 
-const CheckboxGroup = styled.div`
+const PartOf = styled.div`
   display: flex;
-  flex-direction: row;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+`;
+
+
+const MigrateRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-soft);
 `;
 
 interface TaskFieldsProps {
@@ -36,89 +67,107 @@ interface TaskFieldsProps {
 }
 
 export function TaskFields({ values, onChange, goalOptions = [], milestoneOptions = [] }: TaskFieldsProps) {
-  // When a goal is selected, narrow the milestone list to that goal's milestones.
-  // MilestoneOption may carry an optional parentGoalId for filtering.
-  const visibleMilestones = values.parentGoalId
-    ? milestoneOptions.filter(m => (m as MilestoneOption & { parentGoalId?: number }).parentGoalId === values.parentGoalId)
-    : milestoneOptions;
+  const set = (patch: Partial<TaskFieldValues>) => onChange({ ...values, ...patch });
+  const goalId = useId();
+  const milestoneId = useId();
+  const deadlineId = useId();
+  const notesId = useId();
 
-  const handleGoalChange = (goalId: number | null) => {
-    const milestonesForNewGoal = goalId
-      ? milestoneOptions.filter(m => (m as MilestoneOption & { parentGoalId?: number }).parentGoalId === goalId)
-      : milestoneOptions;
-    const milestoneStillValid = !values.parentMilestoneId || milestonesForNewGoal.some(m => m.id === values.parentMilestoneId);
-    onChange({
-      ...values,
-      parentGoalId: goalId,
-      parentMilestoneId: milestoneStillValid ? values.parentMilestoneId : null,
-    });
+  // A goal narrows the milestones to its own (MilestoneOption may carry parentGoalId)
+  const goalOf = (m: MilestoneOption) => (m as MilestoneOption & { parentGoalId?: number | null }).parentGoalId ?? null;
+  const visibleMilestones = values.parentGoalId ? milestoneOptions.filter(m => goalOf(m) === values.parentGoalId) : milestoneOptions;
+  const pickGoal = (id: number | null) => {
+    const keepMilestone = !values.parentMilestoneId || !id
+      || milestoneOptions.some(m => m.id === values.parentMilestoneId && goalOf(m) === id);
+    set({ parentGoalId: id, parentMilestoneId: keepMilestone ? values.parentMilestoneId : null });
   };
 
+  const status: Status = values.isCompleted ? 'done' : values.isInProgress ? 'in_progress' : 'todo';
+  const priority = PRIORITIES.some(p => p.value === values.priority) ? values.priority : 'none';
+
   return (
-    <Wrapper>
-      {/* No separate description field — the task is written in the main text area */}
-      {goalOptions.length > 0 && (
-        <FormField label="Linked Goal">
-          <Select
-            value={values.parentGoalId?.toString() || ''}
-            onChange={e => handleGoalChange(e.target.value ? parseInt(e.target.value) : null)}
-          >
-            <option value="">No goal</option>
-            {goalOptions.map(g => (
-              <option key={g.id} value={g.id}>{g.title}</option>
-            ))}
-          </Select>
-        </FormField>
-      )}
-      {milestoneOptions.length > 0 && (
-        <FormField label="Linked Milestone">
-          <Select
-            value={values.parentMilestoneId?.toString() || ''}
-            onChange={e => onChange({ ...values, parentMilestoneId: e.target.value ? parseInt(e.target.value) : null })}
-          >
-            <option value="">No milestone</option>
-            {visibleMilestones.map(m => (
-              <option key={m.id} value={m.id}>{m.title}</option>
-            ))}
-          </Select>
-        </FormField>
-      )}
-      <FormField label="Priority">
-        <Select
-          value={values.priority || 'none'}
-          onChange={e => onChange({ ...values, priority: e.target.value as TaskFieldValues['priority'] })}
-        >
-          {PRIORITY_OPTIONS.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </Select>
-      </FormField>
-      <FormField label="Deadline">
-        <TextInput
-          type="date"
-          value={values.deadline || ''}
-          onChange={e => onChange({ ...values, deadline: e.target.value })}
+    <FormWrap>
+      <Section>
+        <TitleInput
+          value={values.taskDescription ?? ''}
+          onChange={e => set({ taskDescription: e.target.value })}
+          placeholder="What needs doing?"
+          aria-label="Task"
         />
-      </FormField>
-      <FormField label="Status">
-        <CheckboxGroup>
-          <Checkbox
-            checked={values.isInProgress}
-            onChange={v => onChange({ ...values, isInProgress: v })}
-            label="In Progress"
-          />
-          <Checkbox
-            checked={values.isCompleted}
-            onChange={v => onChange({ ...values, isCompleted: v })}
-            label="Completed"
-          />
-          <Checkbox
-            checked={values.isAutoMigrating}
-            onChange={v => onChange({ ...values, isAutoMigrating: v })}
-            label="Auto-migrate"
-          />
-        </CheckboxGroup>
-      </FormField>
-    </Wrapper>
+      </Section>
+
+      <RowBox style={{ marginTop: 40 }}>
+        <LabelledRow>
+          <RowLabel>Part of</RowLabel>
+          <PartOf>
+            <BareSelect>
+              <select id={goalId} aria-label="Goal" value={values.parentGoalId?.toString() || ''}
+                onChange={e => pickGoal(e.target.value ? parseInt(e.target.value, 10) : null)}>
+                <option value="">No goal</option>
+                {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+              </select>
+              <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+            </BareSelect>
+            <BareSelect>
+              <select id={milestoneId} aria-label="Milestone" value={values.parentMilestoneId?.toString() || ''}
+                onChange={e => {
+                  const id = e.target.value ? parseInt(e.target.value, 10) : null;
+                  const m = id ? milestoneOptions.find(x => x.id === id) : undefined;
+                  // Picking a milestone also sets its goal
+                  set({ parentMilestoneId: id, parentGoalId: m && goalOf(m) ? goalOf(m) : values.parentGoalId });
+                }}>
+                <option value="">No milestone</option>
+                {visibleMilestones.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+              </select>
+              <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+            </BareSelect>
+          </PartOf>
+        </LabelledRow>
+
+        <LabelledRow>
+          <RowLabel>Priority</RowLabel>
+          <Chips role="radiogroup" aria-label="Priority">
+            {PRIORITIES.map(p => (
+              <Chip key={p.value} type="button" role="radio" aria-checked={priority === p.value}
+                $active={priority === p.value} onClick={() => set({ priority: p.value })}>
+                <Dot $color={p.color} aria-hidden="true" />{p.label}
+              </Chip>
+            ))}
+          </Chips>
+        </LabelledRow>
+
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={deadlineId}>Deadline</RowLabel>
+          <BareDate id={deadlineId} type="date" value={values.deadline} onChange={e => set({ deadline: e.target.value })} />
+        </LabelledRow>
+
+        <LabelledRow>
+          <RowLabel>Status</RowLabel>
+          <Chips role="radiogroup" aria-label="Status">
+            {STATUSES.map(s => (
+              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
+                $active={status === s.value}
+                onClick={() => set({ isInProgress: s.value === 'in_progress', isCompleted: s.value === 'done' })}>
+                {s.label}
+              </Chip>
+            ))}
+          </Chips>
+        </LabelledRow>
+
+        <LabelledRow>
+          <RowLabel>Auto-migrate</RowLabel>
+          <MigrateRow>
+            Move to tomorrow if unfinished
+            <Toggle checked={values.isAutoMigrating} aria-label="Auto-migrate" onChange={v => set({ isAutoMigrating: v })} />
+          </MigrateRow>
+        </LabelledRow>
+      </RowBox>
+
+      <Section style={{ marginTop: 40 }}>
+        <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
+        <BoxText id={notesId} value={values.notes ?? ''} placeholder="Additional details"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+    </FormWrap>
   );
 }

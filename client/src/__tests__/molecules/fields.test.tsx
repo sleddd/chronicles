@@ -31,27 +31,35 @@ describe('GoalFields', () => {
     targetDate: '2024-12-31',
   };
 
-  it('renders type and status selects and target date', () => {
+  it('renders the title and a box of Type, Status and Target date rows', () => {
     renderWithTheme(<GoalFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Type')).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Target Date')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('What do you want to achieve?')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Short-term' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'In progress' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Target date')).toBeInTheDocument();
+  });
+
+  it('edits the goal notes', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<GoalFields values={defaultValues} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Train 3x a week' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Train 3x a week' }));
   });
 
   it('calls onChange when goalType changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<GoalFields values={defaultValues} onChange={onChange} />);
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'long_term' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Long-term' }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalType: 'long_term' }));
   });
 
-  it('calls onChange when goalStatus changes', () => {
+  it('calls onChange when goalStatus changes (Achieved = completed, Paused)', () => {
     const onChange = vi.fn();
     renderWithTheme(<GoalFields values={defaultValues} onChange={onChange} />);
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[1], { target: { value: 'completed' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Achieved' }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalStatus: 'completed' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalStatus: 'paused' }));
   });
 });
 
@@ -321,12 +329,14 @@ describe('MedicationFields', () => {
     notes: '',
   };
 
-  it('renders dosage, frequency, schedule times, active checkbox, and notes', () => {
+  it('renders the name, dosage, how often, reminders, currently taking, and notes', () => {
     renderWithTheme(<MedicationFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Dosage')).toBeInTheDocument();
-    expect(screen.getByText('Frequency')).toBeInTheDocument();
-    expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.getByText('Currently active')).toBeInTheDocument();
+    expect(screen.getByLabelText('Medication name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Dosage')).toBeInTheDocument();
+    expect(screen.getByText('How often')).toBeInTheDocument();
+    expect(screen.getByText('Reminders')).toBeInTheDocument();
+    expect(screen.getByText('Currently taking')).toBeInTheDocument();
+    expect(screen.getByLabelText('Currently taking')).toBeInTheDocument();
     // Empty notes stay tucked behind a link until asked for
     expect(screen.queryByPlaceholderText('e.g. Take with food')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText(/Add notes/));
@@ -354,16 +364,15 @@ describe('MedicationFields', () => {
   it('calls onChange when dosage changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<MedicationFields values={defaultValues} onChange={onChange} />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. 500mg'), { target: { value: '250mg' } });
+    fireEvent.change(screen.getByLabelText('Dosage'), { target: { value: '250mg' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ dosage: '250mg' }));
   });
 
   it('calls onChange when frequency changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<MedicationFields values={defaultValues} onChange={onChange} />);
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'twice_daily' } });
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ frequency: 'twice_daily' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Weekly' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ frequency: 'weekly' }));
   });
 
   it('renders "Add time" button', () => {
@@ -408,9 +417,24 @@ describe('MilestoneFields', () => {
     renderWithTheme(
       <MilestoneFields values={defaultValues} onChange={() => {}} goalOptions={goalOptions} />,
     );
-    expect(screen.getByText('Linked Goal')).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Target Date')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('What does this milestone accomplish?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Goal')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Not started' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Target date')).toBeInTheDocument();
+  });
+
+  it('edits the milestone notes', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<MilestoneFields values={defaultValues} onChange={onChange} goalOptions={goalOptions} />);
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'First 5k' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ notes: 'First 5k' }));
+  });
+
+  it('Done marks the milestone completed', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<MilestoneFields values={defaultValues} onChange={onChange} goalOptions={goalOptions} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Done' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ milestoneStatus: 'completed', isCompleted: true }));
   });
 
   it('renders goal options in select', () => {
@@ -446,11 +470,27 @@ describe('TaskFields', () => {
     priority: 'none',
   };
 
-  it('renders checkboxes for progress, completion, and auto-migrate', () => {
+  it('renders the title, Priority and Status chips, Deadline and Auto-migrate', () => {
     renderWithTheme(<TaskFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('In Progress')).toBeInTheDocument();
-    expect(screen.getByText('Completed')).toBeInTheDocument();
-    expect(screen.getByText('Auto-migrate')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('What needs doing?')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'None' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'To do' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Deadline')).toBeInTheDocument();
+    expect(screen.getByLabelText('Auto-migrate')).toBeInTheDocument();
+  });
+
+  it('edits the task notes', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<TaskFields values={defaultValues} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Ask about shots' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Ask about shots' }));
+  });
+
+  it('Status chips set the progress flags', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<TaskFields values={defaultValues} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'In progress' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ isInProgress: true, isCompleted: false }));
   });
 
   it('renders milestone select when options are provided', () => {
@@ -458,7 +498,7 @@ describe('TaskFields', () => {
     renderWithTheme(
       <TaskFields values={defaultValues} onChange={() => {}} milestoneOptions={milestoneOptions} />,
     );
-    expect(screen.getByText('Linked Milestone')).toBeInTheDocument();
+    expect(screen.getByLabelText('Milestone')).toBeInTheDocument();
     expect(screen.getByText('Phase 1')).toBeInTheDocument();
   });
 

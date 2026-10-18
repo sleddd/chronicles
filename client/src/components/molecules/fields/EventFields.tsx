@@ -281,7 +281,7 @@ function EventLikeFields<V extends EventLike>({ kind, values, onChange, showCale
         </Box>
       </Section>
 
-      <Section aria-label="Notes">
+      <Section>
         <SectionHead><SectionLabel as="label" htmlFor={`${kind}-notes`}>Notes</SectionLabel></SectionHead>
         <NotesBox id={`${kind}-notes`} value={values.notes} onChange={e => set({ notes: e.target.value })} placeholder="Additional details" />
       </Section>

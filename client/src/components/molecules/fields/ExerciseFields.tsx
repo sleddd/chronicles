@@ -118,7 +118,7 @@ export function ExerciseFields({ values, onChange, onEstimateCalories, estimatin
         </DateTimeBox>
       </Section>
 
-      <Section aria-label="Notes">
+      <Section>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
         <BoxText id={notesId} value={values.notes} placeholder="Additional details"
           onChange={e => set({ notes: e.target.value })} />

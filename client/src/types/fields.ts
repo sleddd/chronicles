@@ -87,14 +87,16 @@ export interface TaskFieldValues {
   parentMilestoneId: number | null;
   deadline: string;
   priority: TaskPriority;
+  notes?: string;
 }
 
 export interface GoalFieldValues {
   /** Primary label — shown when the entry has no text content. */
   goalObjective?: string;
   goalType: 'short_term' | 'long_term';
-  goalStatus: 'new' | 'planned' | 'in_progress' | 'completed';
+  goalStatus: 'new' | 'planned' | 'in_progress' | 'paused' | 'completed';
   targetDate: string;
+  notes?: string;
 }
 
 export interface MilestoneFieldValues {
@@ -104,6 +106,7 @@ export interface MilestoneFieldValues {
   targetDate: string;
   isCompleted: boolean;
   parentGoalId: number | null;
+  notes?: string;
 }
 
 export interface FoodFieldValues {
@@ -134,7 +137,7 @@ export interface MedicationFieldValues {
   /** The medication's name — the entry's title (its text mirrors it) */
   medicationName?: string;
   dosage: string;
-  frequency: 'once_daily' | 'twice_daily' | 'three_daily' | 'as_needed' | 'custom';
+  frequency: 'once_daily' | 'twice_daily' | 'three_daily' | 'three_times_daily' | 'weekly' | 'as_needed' | 'custom';
   scheduleTimes: string[];
   isActive: boolean;
   notes: string;

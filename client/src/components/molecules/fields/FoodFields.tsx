@@ -99,7 +99,7 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
           placeholder="Comma-separated (eggs, toast, bacon)" aria-label="Ingredients" />
       </Section>
 
-      <Section aria-label="Notes">
+      <Section>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
         <BoxText id={notesId} value={values.notes} onChange={e => set({ notes: e.target.value })} placeholder="Additional notes" />
       </Section>

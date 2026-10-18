@@ -12,17 +12,17 @@ const Row = styled.nav`
   flex-wrap: wrap;
 `;
 
+/* Sentence case: ancestors muted, the last crumb (where you are) bright */
 const CrumbLink = styled.button`
   padding: 0;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+  &:last-child { color: var(--text-secondary); }
   transition: color 120ms ease;
   &:hover { color: var(--text-primary); }
   &:disabled { cursor: default; }
@@ -30,9 +30,9 @@ const CrumbLink = styled.button`
 `;
 
 const CrumbSep = styled.span`
-  font-family: var(--font-label);
-  font-size: 11px;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-hint);
 `;
 
 interface EntryBreadcrumbProps {

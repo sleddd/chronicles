@@ -205,12 +205,15 @@ describe('EntryForm', () => {
       expect(screen.getByTestId('editor')).not.toBeVisible();
     });
 
-    it('keeps the text area for tasks, even when empty', () => {
+    it('tasks are name-led: no text area; an older task text fills the title once', () => {
+      const onCustomFieldsChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={6}
-          topics={[{ id: 6, name: 'Task', icon: null, color: null }]} content="" />
+          topics={[{ id: 6, name: 'Task', icon: null, color: null }]} content="<p>Call the vet</p>"
+          onCustomFieldsChange={onCustomFieldsChange} />
       );
-      expect(screen.getByTestId('editor')).toBeVisible();
+      expect(screen.getByTestId('editor')).not.toBeVisible();
+      expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ taskDescription: 'Call the vet' }));
     });
 
     it('moves an old task description into the text area', () => {
@@ -250,7 +253,7 @@ describe('EntryForm', () => {
           topics={[{ id: 15, name: 'Medication', icon: null, color: null }]} content="<p>Montelukast</p>"
           customFields={{ dosage: '10mg' }} onCustomFieldsChange={onCustomFieldsChange} />
       );
-      expect(screen.getByText('Medication Name')).toBeInTheDocument();
+      expect(screen.getByLabelText('Medication name')).toBeInTheDocument();
       expect(screen.getByTestId('editor')).not.toBeVisible();
       expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ medicationName: 'Montelukast', dosage: '10mg' }));
     });

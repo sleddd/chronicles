@@ -106,12 +106,14 @@ vi.mock('@/components/templates/AppTemplate', () => ({
 }));
 
 vi.mock('@/components/templates/JournalTemplate', () => ({
-  JournalTemplate: ({ sidePanel, editorPanel }: any) => (
-    <div data-testid="journal-template">{sidePanel}{editorPanel}</div>
+  JournalTemplate: ({ sidePanel, editorPanel, onBack }: any) => (
+    <div data-testid="journal-template">
+      {onBack && <button onClick={onBack}>Back</button>}
+      {sidePanel}{editorPanel}
+    </div>
   ),
   SidePanel: ({ children }: any) => <div data-testid="side-panel">{children}</div>,
   EditorPanel: ({ children }: any) => <div data-testid="editor-panel">{children}</div>,
-  MobileBackButton: ({ onClick }: any) => <button onClick={onClick}>Back</button>,
 }));
 
 vi.mock('@/components/atoms/LoadingCenter', () => ({
@@ -334,12 +336,19 @@ describe('JournalView (new entry from a list page)', () => {
 });
 
 describe('JournalView (mobile back to list)', () => {
-  it('puts a back-to-entries control at the top of the editor panel', async () => {
+  it('gives the title a back caret only while the editor pane is showing', async () => {
     (useEncryption as any).mockReturnValue({
       isUnlocked: true, unlock: vi.fn(), decryptPosts: vi.fn().mockResolvedValue([]), encryptPost: vi.fn(),
     });
-    renderWithTheme(<JournalView />);
-    const back = await screen.findByText('Back');
-    expect(screen.getByTestId('editor-panel')).toContainElement(back);
+    const { unmount } = renderWithTheme(<JournalView />);
+    expect(screen.queryByText('Back')).not.toBeInTheDocument();
+    unmount();
+    (uiState as any).showMobileEditor = true;
+    try {
+      renderWithTheme(<JournalView />);
+      expect(await screen.findByText('Back')).toBeInTheDocument();
+    } finally {
+      (uiState as any).showMobileEditor = false;
+    }
   });
 });

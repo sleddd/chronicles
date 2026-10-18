@@ -190,6 +190,11 @@ export interface DictationControls {
   toggle: () => void;
 }
 
+/** Lets a parent (the editor's top bar ⋯ More → Draw) open the drawing canvas */
+export interface DrawingControls {
+  open: () => void;
+}
+
 interface EditorProps {
   content: string;
   onChange: (content: string) => void;
@@ -201,10 +206,11 @@ interface EditorProps {
   onToolbarToggle?: (open: boolean) => void;
   hideToolbarToggle?: boolean;
   dictationControlRef?: React.MutableRefObject<DictationControls | null>;
+  drawingControlRef?: React.MutableRefObject<DrawingControls | null>;
   onDictationChange?: (isListening: boolean, interimText: string, error: string) => void;
 }
 
-export function Editor({ content, onChange, readOnly = false, placeholder = 'Start writing...', charLimit, onEnterSave, toolbarOpen: externalToolbarOpen, onToolbarToggle, hideToolbarToggle, dictationControlRef, onDictationChange }: EditorProps) {
+export function Editor({ content, onChange, readOnly = false, placeholder = 'Start writing...', charLimit, onEnterSave, toolbarOpen: externalToolbarOpen, onToolbarToggle, hideToolbarToggle, dictationControlRef, drawingControlRef, onDictationChange }: EditorProps) {
   const [internalToolbarOpen, setInternalToolbarOpen] = useState(false);
   const [drawingOpen, setDrawingOpen] = useState(false);
   const toolbarOpen = externalToolbarOpen ?? internalToolbarOpen;
@@ -229,6 +235,11 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
       dictationControlRef.current = { toggle: () => isListening ? stopListening() : startListening() };
     }
   }, [dictationControlRef, isListening, startListening, stopListening]);
+
+  // Expose "open the drawing canvas" to the parent
+  useEffect(() => {
+    if (drawingControlRef) drawingControlRef.current = { open: () => setDrawingOpen(true) };
+  }, [drawingControlRef]);
 
   // Notify parent of dictation state changes
   useEffect(() => {

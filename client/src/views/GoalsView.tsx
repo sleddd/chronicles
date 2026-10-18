@@ -29,7 +29,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { journalOriginState } from '../utils/topicBreadcrumb.js';
 import type { GoalEntry, MilestoneEntryData, TaskEntryData, RoadmapStatus, TaskStatus } from '../types/goals.js';
 import {
-  ROADMAP_COLUMNS, TASK_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus,
+  ROADMAP_COLUMNS, GOAL_COLUMNS, TASK_COLUMNS, normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus,
   milestoneFieldsForStatus, taskStatusOf, taskFieldsForStatus,
 } from '../types/goals.js';
 import { hasMixedTopics } from '../utils/mixedTopics.js';
@@ -314,7 +314,7 @@ const PRIORITY_BADGE: Record<string, { label: string; color: string }> = {
   urgent: { label: 'Urgent', color: 'var(--color-danger)' },
   high: { label: 'High', color: 'var(--mood-1)' },
   medium: { label: 'Medium', color: 'var(--chart-amber)' },
-  low: { label: 'Low', color: 'var(--chart-violet)' },
+  low: { label: 'Low', color: 'var(--chart-blue)' },
 };
 
 /** An entry's picture for a board avatar: the featured image (else the first), as its thumbnail */
@@ -736,7 +736,7 @@ export function GoalsView() {
   const shownCount = tab === 'goals' ? shownGoals.length : tab === 'milestones' ? shownMilestones.length
     : tab === 'tasks' ? shownTasks.length : shownTodos.length;
 
-  const goalColumns = ROADMAP_COLUMNS.map(c => ({
+  const goalColumns = GOAL_COLUMNS.map(c => ({
     ...c, items: shownGoals.filter(g => normalizeRoadmapStatus(g.goalStatus) === c.key).map(goalItem),
   }));
   const milestoneColumns = ROADMAP_COLUMNS.map(c => ({
@@ -918,7 +918,7 @@ export function GoalsView() {
               : view === 'board'
                 ? <KanbanBoard columns={taskColumns(shownTasks)} noun="task" onOpen={openInJournal}
                     onMove={persistTaskStatus}
-                    onAdd={key => addIn({ isAutoMigrating: true, ...taskFieldsForStatus(key), ...filterLink })()} />
+                    onAdd={key => addIn({ ...taskFieldsForStatus(key), ...filterLink })()} />
                 : renderRows(shownTasks, tasksMixed))}
 
             {tab === 'todos' && (todos.length === 0
@@ -926,7 +926,7 @@ export function GoalsView() {
               : view === 'board'
                 ? <KanbanBoard columns={taskColumns(shownTodos)} noun="todo" onOpen={openInJournal}
                     onMove={persistTaskStatus}
-                    onAdd={key => addIn({ isAutoMigrating: true, ...taskFieldsForStatus(key) })()} />
+                    onAdd={key => addIn({ ...taskFieldsForStatus(key) })()} />
                 : renderRows(shownTodos, todosMixed))}
           </Body>
         </Inner>

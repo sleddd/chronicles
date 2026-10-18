@@ -40,10 +40,9 @@ describe('SearchPanel', () => {
     expect(screen.queryByPlaceholderText('Search entries...')).not.toBeInTheDocument();
   });
 
-  it('searches by keyword and filters by topic', () => {
+  it('filters by topic (the keyword is the tool row search box)', () => {
     renderWithTheme(<SearchPanel />);
-    fireEvent.change(screen.getByPlaceholderText('Words in the entry'), { target: { value: 'garden' } });
-    expect(mockSetSearchKeyword).toHaveBeenCalledWith('garden');
+    expect(screen.queryByPlaceholderText('Words in the entry')).not.toBeInTheDocument();
     const select = screen.getByDisplayValue('All topics');
     expect(Array.from((select as HTMLSelectElement).options).map(o => o.text)).toEqual(['All topics', 'Art', 'Books']);
     fireEvent.change(select, { target: { value: '3' } });

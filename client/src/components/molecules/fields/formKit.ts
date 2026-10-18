@@ -272,3 +272,85 @@ export const FieldNote = styled.p<{ $error?: boolean }>`
   color: ${({ $error }) => ($error ? 'var(--color-danger)' : 'var(--text-muted)')};
   em { font-style: italic; }
 `;
+
+/* One outlined box of labelled rows (goal / milestone details): a muted label
+   on the left, the control beside it, rows split by rules */
+export const RowBox = styled.div`
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  overflow: hidden;
+`;
+
+export const LabelledRow = styled.div`
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 18px;
+  & + & { border-top: 1px solid var(--border-card); }
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px 16px;
+  }
+`;
+
+export const RowLabel = styled.span`
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
+`;
+
+/* A date picker sitting bare in a row */
+export const BareDate = styled.input`
+  && {
+    justify-self: start;
+    width: auto;
+    min-width: 180px;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-secondary);
+    color-scheme: light dark;
+  }
+  &::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; margin-left: 24px; }
+`;
+
+/* A picker in a row: an outlined pill holding the select and its chevron
+   ("No goal ⌄"). Capped in width — a native select is as wide as its
+   longest option otherwise. */
+export const BareSelect = styled.label`
+  position: relative;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  max-width: min(100%, 280px);
+  height: 36px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  color: var(--text-muted);
+  &:hover { border-color: var(--control-border); }
+  &:focus-within { border-color: var(--color-accent); }
+  select {
+    max-width: 100%;
+    height: 100%;
+    padding: 0 34px 0 16px;
+    border: none;
+    background: transparent;
+    appearance: none;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  option { color: var(--text-primary); background: var(--bg-surface); }
+  & > span { position: absolute; right: 12px; pointer-events: none; display: inline-flex; }
+`;

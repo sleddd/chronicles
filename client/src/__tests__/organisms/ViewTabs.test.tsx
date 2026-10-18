@@ -6,14 +6,16 @@ import { ViewTabs } from '@/components/organisms/ViewTabs';
 
 const mockSetViewMode = vi.fn();
 const mockSetSelectedDate = vi.fn();
+const mockSetSearchKeyword = vi.fn();
 const uiState = vi.hoisted(() => ({
   viewMode: 'all' as string,
   selectedDate: new Date(2000, 0, 1),
+  searchKeyword: '',
 }));
 
 vi.mock('@/stores/uiStore', () => ({
   useUIStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ ...uiState, setViewMode: mockSetViewMode, setSelectedDate: mockSetSelectedDate }),
+    selector({ ...uiState, setViewMode: mockSetViewMode, setSelectedDate: mockSetSelectedDate, setSearchKeyword: mockSetSearchKeyword }),
 }));
 
 function renderWithTheme(ui: React.ReactElement) {
@@ -26,11 +28,20 @@ describe('ViewTabs', () => {
     uiState.viewMode = 'all';
   });
 
-  it('renders every tool as a labelled icon button', () => {
+  it('has a search box and the Today / All / Bookmarks group (New entry is in the title row)', () => {
     renderWithTheme(<ViewTabs />);
-    for (const label of ['All entries', 'Today', 'Bookmarked entries', 'Search entries', 'New entry']) {
+    expect(screen.getByLabelText('Search entries')).toBeInTheDocument();
+    for (const label of ['Today', 'All entries', 'Bookmarked entries']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+    expect(screen.queryByLabelText('New entry')).not.toBeInTheDocument();
+  });
+
+  it('typing searches; the keyword is kept and the list switches to search', () => {
+    renderWithTheme(<ViewTabs />);
+    fireEvent.change(screen.getByLabelText('Search entries'), { target: { value: 'vet' } });
+    expect(mockSetSearchKeyword).toHaveBeenCalledWith('vet');
+    expect(mockSetViewMode).toHaveBeenCalledWith('search');
   });
 
   it('leads with Today, then All', () => {
@@ -55,23 +66,16 @@ describe('ViewTabs', () => {
     expect(onTodayClick).toHaveBeenCalled();
   });
 
-  it('has no date-picker tab (dates are searched in the Search tab)', () => {
+  it('has no date-picker tab (dates are in the search filters)', () => {
     renderWithTheme(<ViewTabs />);
     expect(screen.queryByLabelText('Pick a date')).not.toBeInTheDocument();
   });
 
-  it('clicking Search again toggles back to all entries', () => {
+  it('closing the search filters leaves search', () => {
     uiState.viewMode = 'search';
     renderWithTheme(<ViewTabs />);
-    fireEvent.click(screen.getByLabelText('Search entries'));
-    expect(mockSetViewMode).toHaveBeenCalledWith('all');
-  });
-
-  it('New entry calls onNewEntry without changing the view', () => {
-    const onNewEntry = vi.fn();
-    renderWithTheme(<ViewTabs onNewEntry={onNewEntry} />);
-    fireEvent.click(screen.getByLabelText('New entry'));
-    expect(onNewEntry).toHaveBeenCalled();
-    expect(mockSetViewMode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Close search filters'));
+    expect(mockSetSearchKeyword).toHaveBeenCalledWith('');
+    expect(mockSetViewMode).toHaveBeenCalled();
   });
 });

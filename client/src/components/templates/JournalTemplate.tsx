@@ -1,6 +1,7 @@
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import type { ReactNode } from 'react';
-import { Icon } from '../atoms/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 import { BACKGROUND_IMAGES } from '@chronicles/shared';
 
@@ -22,7 +23,32 @@ const Head = styled.header`
   gap: 12px 24px;
   padding: 28px 36px 20px;
   border-bottom: 1px solid var(--border-subtle);
-  @media (max-width: 768px) { padding: 20px 16px 14px; }
+  @media (max-width: 768px) { padding: 20px 16px 14px; align-items: center; row-gap: 10px; }
+`;
+
+const TitleBlock = styled.div`
+  display: flex;
+  align-items: center;
+  min-width: 0;
+`;
+
+/* Phones/tablets, while an entry is open: a back caret before the title takes
+   the editor back to the entry list (same caret as a topic page's title) */
+const BackBtn = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin-left: -14px;
+  margin-right: -6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  &:hover { color: var(--color-accent); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  ${NAV_COMPACT} { display: flex; }
 `;
 
 const Title = styled.h1`
@@ -75,32 +101,6 @@ const StyledEditorPanel = styled.div<{ $visibleMobile?: boolean; $isDark?: boole
   }
 `;
 
-/* Phones/tablets show one pane at a time: this bar takes the editor back to
-   the entry list. Hidden whenever both panes are side by side. */
-const StyledMobileBackButton = styled.button`
-  display: none;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  min-height: 44px;
-  padding: 0 20px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border-subtle);
-  cursor: pointer;
-  &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-
-  @media (max-width: 1024px) {
-    display: flex;
-  }
-`;
 
 /* ── Exported sub-components ── */
 
@@ -128,18 +128,6 @@ export function EditorPanel({ visibleMobile, children }: EditorPanelProps) {
   return <StyledEditorPanel $visibleMobile={visibleMobile} $isDark={isDark} $lightBg={isLightBg}>{children}</StyledEditorPanel>;
 }
 
-interface MobileBackButtonProps {
-  onClick: () => void;
-}
-
-export function MobileBackButton({ onClick }: MobileBackButtonProps) {
-  return (
-    <StyledMobileBackButton type="button" onClick={onClick} aria-label="Back to entries">
-      <Icon name="chevron-left" size={16} strokeWidth={2} />
-      Entries
-    </StyledMobileBackButton>
-  );
-}
 
 /* ── Main template ── */
 
@@ -150,13 +138,25 @@ interface JournalTemplateProps {
   title?: string;
   /** At the right end of the title row (the open entry's breadcrumb) */
   headerAside?: ReactNode;
+  /** Phones/tablets with an entry open: the back caret before the title */
+  onBack?: () => void;
 }
 
 /** Journal layout: the page title, then side panel (list) + editor panel. */
-export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', headerAside }: JournalTemplateProps) {
+export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', headerAside, onBack }: JournalTemplateProps) {
   return (
     <Page>
-      <Head><Title>{title}</Title>{headerAside}</Head>
+      <Head>
+        <TitleBlock>
+          {onBack && (
+            <BackBtn type="button" onClick={onBack} aria-label="Back to entries">
+              <MaterialIcon $size={48} aria-hidden="true">chevron_left</MaterialIcon>
+            </BackBtn>
+          )}
+          <Title>{title}</Title>
+        </TitleBlock>
+        {headerAside}
+      </Head>
       <ContentArea>
         {sidePanel}
         {editorPanel}

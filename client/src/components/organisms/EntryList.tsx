@@ -140,6 +140,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
   const setSelectedTopicId = useUIStore(s => s.setSelectedTopicId);
   const selectedEntryId = useUIStore(s => s.selectedEntryId);
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
+  const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
   const viewMode = useUIStore(s => s.viewMode);
   const selectedDate = useUIStore(s => s.selectedDate);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
@@ -420,7 +421,13 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
                   topicColor={topicBarColor(topic?.name, topic?.color)}
                   topicId={topic?.id}
                   active={selectMode ? selectedIds.has(entry.id) : selectedEntryId === entry.id}
-                  onClick={() => (selectMode ? toggleSelected(entry.id) : setSelectedEntryId(entry.id))}
+                  onClick={() => {
+                    if (selectMode) { toggleSelected(entry.id); return; }
+                    setSelectedEntryId(entry.id);
+                    // Phones: reopening the entry that's already selected doesn't
+                    // change the id, so show the editor pane directly
+                    setShowMobileEditor(true);
+                  }}
                   onDelete={selectMode ? undefined : () => handleDelete(entry.id)}
                   onTopicClick={selectMode ? undefined : handleTopicClick}
                   onToggleBookmark={selectMode ? undefined : handleToggleBookmarkLocal}

@@ -4,7 +4,8 @@ import styled from 'styled-components';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
 import { Icon } from '../atoms/core/Icon.jsx';
-import { Editor, type DictationControls } from './Editor.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { Editor, type DictationControls, type DrawingControls } from './Editor.js';
 import { RecipeEntry } from './RecipeEntry.js';
 import { ImageLibraryPicker } from './ImageLibraryPicker.js';
 import { TopicSelector } from './TopicSelector.js';
@@ -58,7 +59,10 @@ const EdToolRow = styled.div`
   box-sizing: border-box;
   height: 60px;
   flex-shrink: 0;
-  padding: 0 20px;
+  /* Above the writing area, so the ⋯ More menu sits on top of it */
+  position: relative;
+  z-index: 5;
+  padding: 0 20px 0 32px;
   border-bottom: 1px solid var(--border-subtle);
 `;
 
@@ -68,22 +72,22 @@ const EdActions = styled.div`
   align-items: center;
   margin-left: auto;
   min-width: 0;
-  overflow-x: auto; /* narrow screens: scroll the icons rather than break the bar */
+  /* No overflow clipping here — it would hide the ⋯ More menu that drops below */
 `;
 
 const IconBtn = styled.button<{ $active?: boolean; $activeColor?: string; $danger?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   color: ${({ $active, $activeColor, $danger }) =>
     $active ? ($activeColor || 'var(--color-accent)') :
     $danger ? 'var(--text-tertiary)' :
-    'var(--text-secondary)'};
+    'var(--text-muted)'};
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
   transition: color 0.15s, background 0.15s;
@@ -92,6 +96,63 @@ const IconBtn = styled.button<{ $active?: boolean; $activeColor?: string; $dange
     background: var(--bg-hover);
     color: ${({ $danger }) => $danger ? 'var(--color-danger)' : 'var(--text-primary)'};
   }
+`;
+
+/* A thin rule between the entry actions and the window controls (expand / close) */
+const ToolDivider = styled.span`
+  width: 1px;
+  height: 26px;
+  margin: 0 8px;
+  background: var(--border-card);
+`;
+
+/* ⋯ More: the less-used actions (share, add from library, draw) */
+const MoreWrap = styled.div`
+  position: relative;
+`;
+
+const MoreMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 240px;
+  padding: 6px;
+  background: var(--bg-tile);
+  border: 1px solid var(--border-pop);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+`;
+
+const MoreText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`;
+
+const MoreHint = styled.span`
+  font-size: 12px;
+  color: var(--text-muted);
+`;
+
+const MoreItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  & > svg { flex: none; color: var(--text-muted); }
+  &:hover:not(:disabled) { background: var(--bg-row-hover); }
+  &:disabled { opacity: 0.4; cursor: default; }
 `;
 
 /* Scrollable body — all editing content */
@@ -112,31 +173,25 @@ const EdBody = styled.div`
 /* The topic picker (left of the action row) — restyle the
    TopicSelector trigger to read as bright tracked-uppercase crumb text,
    keeping its dropdown intact. */
+/* The topic picker at the left of the editor's top bar: the topic's name
+   in bold sentence case with a chevron (restyles the TopicSelector trigger,
+   keeping its dropdown intact). */
 const CrumbTopic = styled.div`
-  /* Trigger only (direct child button of the picker wrapper). */
   & > div > button {
     border: none;
     border-radius: 0;
     padding: 0 2px;
     background: transparent;
-    font-family: var(--font-label);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-family: var(--font-sans);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
     color: var(--text-primary);
-    gap: 6px;
+    gap: 12px;
   }
-  & > div > button:hover {
-    background: transparent;
-    color: var(--color-accent);
-  }
-  /* Chevron: top-aligned, sitting 1px below the top of the crumb text. */
-  & > div > button > span:last-child {
-    padding-bottom: 0;
-    align-self: flex-start;
-    margin-top: 1px;
-  }
+  & > div > button:hover { background: transparent; color: var(--text-primary); }
+  & > div > button > span:last-child { color: var(--text-muted); }
   /* Dropdown menu: drop the outer border (matches Quick Entry). */
   & > div > div { border: none; }
 `;
@@ -210,6 +265,13 @@ const FooterDeleteBtn = styled(PillButton)`
     border-color: var(--color-danger, #dc3232);
     background: transparent;
   }
+  @media (max-width: 768px) { order: 3; }
+`;
+
+/* Phones: the "Saved" note is dropped (a save failure still shows) */
+const StatusSlot = styled.span<{ $failed?: boolean }>`
+  display: contents;
+  @media (max-width: 768px) { display: ${({ $failed }) => ($failed ? 'contents' : 'none')}; }
 `;
 
 const FooterLeft = styled.div`
@@ -219,7 +281,8 @@ const FooterLeft = styled.div`
   min-width: 0;
 `;
 
-/* Footer — bottom-docked, outside the scroll area */
+/* Footer — bottom-docked, outside the scroll area. Phones (not tablets):
+   the buttons stack full width — Save, Discard, Delete */
 const SaveRow = styled.div`
   display: flex;
   align-items: center;
@@ -228,6 +291,14 @@ const SaveRow = styled.div`
   border-top: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
   gap: 8px;
   flex-shrink: 0;
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px 16px;
+    & > div { display: contents; }
+    & button { width: 100%; min-height: 44px; }
+  }
 `;
 
 const SaveRowActions = styled.div`
@@ -237,20 +308,9 @@ const SaveRowActions = styled.div`
   margin-left: auto;
 `;
 
-const DiscardBtn = styled.button`
-  padding: 7px 16px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  cursor: pointer;
-  transition: color 150ms;
-  &:hover { color: var(--text-secondary); }
+/* Discard changes — the standard neutral outlined pill */
+const DiscardBtn = styled(PillButton).attrs({ $variant: 'neutral' as const, type: 'button' as const })`
+  @media (max-width: 768px) { order: 2; }
 `;
 
 const SaveHint = styled.div`
@@ -286,6 +346,13 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
   cursor: ${({ $disabled }) => $disabled ? 'not-allowed' : 'pointer'};
   transition: background 150ms, color 150ms;
   &:hover:not(:disabled) { background: var(--color-accent-subtle); }
+  @media (max-width: 768px) {
+    order: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
 `;
 
 /* ── Helpers ── */
@@ -303,7 +370,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
 const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
-  event: 'eventName', meeting: 'meetingName',
+  event: 'eventName', meeting: 'meetingName', task: 'taskDescription',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -367,6 +434,18 @@ export function EntryForm({
   const isFavorite = !!customFields._isFavorite;
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const [toolbarOpen, setToolbarOpen] = useState(false);
+  // ⋯ More menu: closes on an outside click or Escape
+  const [moreOpen, setMoreOpen] = useState(false);
+  const drawingControlRef = useRef<DrawingControls | null>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: MouseEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey); };
+  }, [moreOpen]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -669,22 +748,8 @@ export function EntryForm({
                 onClick={() => entryId && onBookmark?.()}
                 style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}
               >
-                <Icon name="bookmark" size={16} strokeWidth={2} />
+                <Icon name="bookmark" size={20} strokeWidth={1.8} />
               </IconBtn>
-              {/* Share is hidden on entries with images — sharing never
-                  distributes user-hosted imagery. Recipes are exempt: they
-                  share their formatted fields and the photo stays private. */}
-              {(images.length === 0 || isRecipe) && (
-                <IconBtn
-                  type="button"
-                  aria-label="Share entry"
-                  title="Share"
-                  onClick={() => entryId && onShare?.()}
-                  style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}
-                >
-                  <Icon name="share" size={16} strokeWidth={2} />
-                </IconBtn>
-              )}
               {imagesReady && (
                 <>
                   <input
@@ -707,7 +772,7 @@ export function EntryForm({
                     onClick={() => !imagesFull && !imageUploading && fileInputRef.current?.click()}
                     style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}
                   >
-                    {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={16} strokeWidth={2} />}
+                    {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={20} strokeWidth={1.8} />}
                   </IconBtn>
                   {onExistingImagesSelected && (
                     <IconBtn
@@ -718,29 +783,62 @@ export function EntryForm({
                       onClick={() => !imagesFull && setLibraryOpen(true)}
                       style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}
                     >
-                      <Icon name="archive" size={16} strokeWidth={2} />
+                      <MaterialIcon $size={22} aria-hidden="true">photo_library</MaterialIcon>
                     </IconBtn>
                   )}
                 </>
               )}
-              <IconBtn
-                type="button"
-                title="Dictate"
-                aria-label="Toggle dictation"
-                onClick={() => { setNotesExpanded(true); dictationControlRef?.current?.toggle(); }}
-              >
-                <Icon name="mic" size={16} strokeWidth={2} />
-              </IconBtn>
+              {/* Format: shows / hides the formatting bar (bold, lists, … and Draw) */}
               <IconBtn
                 type="button"
                 $active={toolbarOpen}
-                aria-label="Toggle drawing toolbar"
-                title="Draw"
-                aria-expanded={toolbarOpen}
+                aria-label="Formatting"
+                title="Format"
+                aria-pressed={toolbarOpen}
                 onClick={() => { setNotesExpanded(true); setToolbarOpen(!toolbarOpen); }}
               >
-                <Icon name="pencil" size={16} strokeWidth={2} />
+                <Icon name="type" size={20} strokeWidth={1.8} />
               </IconBtn>
+              {/* ⋯ More: Dictate, Share and Draw */}
+              <MoreWrap ref={moreRef}>
+                <IconBtn
+                  type="button"
+                  $active={moreOpen}
+                  aria-label="More actions"
+                  title="More"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen(o => !o)}
+                >
+                  <Icon name="more-horizontal" size={20} strokeWidth={2} />
+                </IconBtn>
+                {moreOpen && (
+                  <MoreMenu role="menu">
+                    {/* Every action is listed; one that can't be used right now says why */}
+                    <MoreItem type="button" role="menuitem"
+                      onClick={() => { setMoreOpen(false); setNotesExpanded(true); dictationControlRef?.current?.toggle(); }}>
+                      <Icon name="mic" size={16} strokeWidth={1.8} />
+                      <MoreText>Dictate</MoreText>
+                    </MoreItem>
+                    <MoreItem type="button" role="menuitem"
+                      disabled={!entryId || (images.length > 0 && !isRecipe)}
+                      onClick={() => { setMoreOpen(false); if (entryId) onShare?.(); }}>
+                      <Icon name="share" size={16} strokeWidth={1.8} />
+                      <MoreText>
+                        Share
+                        {!entryId ? <MoreHint>Save the entry first</MoreHint>
+                          : images.length > 0 && !isRecipe ? <MoreHint>Not for entries with images</MoreHint> : null}
+                      </MoreText>
+                    </MoreItem>
+                    <MoreItem type="button" role="menuitem"
+                      onClick={() => { setMoreOpen(false); setNotesExpanded(true); drawingControlRef.current?.open(); }}>
+                      <Icon name="pencil" size={16} strokeWidth={1.8} />
+                      <MoreText>Draw</MoreText>
+                    </MoreItem>
+                  </MoreMenu>
+                )}
+              </MoreWrap>
+              {(onToggleExpand || onClose) && <ToolDivider aria-hidden="true" />}
               {onToggleExpand && (
                 <IconBtn
                   type="button"
@@ -750,12 +848,12 @@ export function EntryForm({
                   aria-pressed={!!expanded}
                   onClick={onToggleExpand}
                 >
-                  <Icon name={expanded ? 'minimize' : 'maximize'} size={16} strokeWidth={2} />
+                  <Icon name={expanded ? 'minimize' : 'maximize'} size={20} strokeWidth={1.8} />
                 </IconBtn>
               )}
               {onClose && (
                 <IconBtn type="button" aria-label="Close" title="Close" onClick={onClose}>
-                  <Icon name="x" size={16} strokeWidth={2} />
+                  <Icon name="x" size={20} strokeWidth={1.8} />
                 </IconBtn>
               )}
           </EdActions>
@@ -791,6 +889,7 @@ export function EntryForm({
               onToolbarToggle={setToolbarOpen}
               hideToolbarToggle
               dictationControlRef={dictationControlRef}
+              drawingControlRef={drawingControlRef}
             />
           </EditorArea>
 
@@ -806,7 +905,7 @@ export function EntryForm({
                 )}
                 <CustomFieldsBody>
                   <FieldRowLayoutContext.Provider value={true}>
-                  {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: true, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />}
+                  {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />}
                   {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
                   {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
                   {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
@@ -880,7 +979,7 @@ export function EntryForm({
               Delete
             </FooterDeleteBtn>
           )}
-          {saveStatusNode}
+          {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
         </FooterLeft>
         <SaveRowActions>
           <DiscardBtn onClick={onNew}>Discard changes</DiscardBtn>

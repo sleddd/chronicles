@@ -1,158 +1,88 @@
-import styled from 'styled-components';
-import { Select } from '../../atoms/Select.js';
-import { TextInput } from '../../atoms/TextInput.js';
-import { DateInput } from '../../atoms/DateInput.js';
-import { Checkbox } from '../../atoms/Checkbox.js';
-import { FormField } from '../FormField.js';
+import { useId } from 'react';
+import { Icon } from '../../atoms/core/Icon.jsx';
 import type { MilestoneFieldValues } from '../../../types/fields.js';
 import type { GoalOption, LinkedTask } from '../../../types/ui.js';
+import {
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareDate, BareSelect, BoxText,
+} from './formKit.js';
 export type { MilestoneFieldValues } from '../../../types/fields.js';
 
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-`;
+/* Milestone fields — the same form in the journal editor and Quick Entry: the
+   objective as a big borderless title (an older milestone's text fills it
+   once), then one outlined box of rows — Goal (a bare "No goal ⌄" picker),
+   Status chips and Target date — each with a muted label on the left — then Notes. */
 
-/* Single column: paired fields join the form's column so every label lines up */
-const Row = styled.div`
-  display: contents;
-`;
-
-const LinkedTasksSection = styled.div`
-  margin-top: ${({ theme }) => theme.spacing.xs}px;
-`;
-
-const LinkedTasksLabel = styled.div`
-  font-size: ${({ theme }) => theme.fontSize.xs}px;
-  font-weight: ${({ theme }) => theme.fontWeight.semibold};
-  color: ${({ theme }) => theme.colors.textSecondary};
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: ${({ theme }) => theme.spacing.xs}px;
-`;
-
-const TaskItem = styled.div<{ $completed?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  font-size: ${({ theme }) => theme.fontSize.sm}px;
-  color: ${({ $completed, theme }) => $completed ? theme.colors.textMuted : theme.colors.text};
-  text-decoration: ${({ $completed }) => $completed ? 'line-through' : 'none'};
-  border-radius: 4px;
-
-  &:hover { background: rgba(0,0,0,0.02); }
-`;
-
-const TaskCheckBtn = styled.button<{ $completed?: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: ${({ $completed, theme }) => $completed ? theme.colors.success : theme.colors.textMuted};
-  background: none;
-  border: 1.5px solid ${({ $completed, theme }) => $completed ? theme.colors.success : theme.colors.border};
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.success};
-    color: ${({ theme }) => theme.colors.success};
-  }
-`;
-
-const TaskTitle = styled.span`
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const UnlinkBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  background: none;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
-
-  ${TaskItem}:hover & { opacity: 1; }
-
-  &:hover { color: ${({ theme }) => theme.colors.danger || '#ef4444'}; }
-`;
-
-const NoTasks = styled.div`
-  font-size: ${({ theme }) => theme.fontSize.xs}px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  padding: 4px 8px;
-  font-style: italic;
-`;
+const STATUSES: { value: MilestoneFieldValues['milestoneStatus']; label: string }[] = [
+  { value: 'not_started', label: 'Not started' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Done' },
+];
 
 interface MilestoneFieldsProps {
   values: MilestoneFieldValues;
   onChange: (values: MilestoneFieldValues) => void;
   goalOptions: GoalOption[];
+  /** Kept for callers; tasks show on the Planning board */
   linkedTasks?: LinkedTask[];
   onToggleTaskComplete?: (taskId: number, completed: boolean) => void;
   onUnlinkTask?: (taskId: number) => void;
 }
 
-export function MilestoneFields({ values, onChange, goalOptions, linkedTasks = [], onToggleTaskComplete, onUnlinkTask }: MilestoneFieldsProps) {
+export function MilestoneFields({ values, onChange, goalOptions }: MilestoneFieldsProps) {
+  const set = (patch: Partial<MilestoneFieldValues>) => onChange({ ...values, ...patch });
+  // Done wins; a board-only "planned" (or anything unknown) shows as Not started
+  const status: MilestoneFieldValues['milestoneStatus'] = values.isCompleted ? 'completed'
+    : values.milestoneStatus === 'in_progress' ? 'in_progress' : 'not_started';
+  const goalId = useId();
+  const dateId = useId();
+  const notesId = useId();
+
   return (
-    <Wrapper>
-      <FormField label="Milestone Objective">
-        <TextInput
+    <FormWrap>
+      <Section>
+        <TitleInput
           value={values.milestoneObjective ?? ''}
-          onChange={e => onChange({ ...values, milestoneObjective: e.target.value })}
+          onChange={e => set({ milestoneObjective: e.target.value })}
           placeholder="What does this milestone accomplish?"
+          aria-label="Milestone"
         />
-      </FormField>
-      <FormField label="Linked Goal">
-        <Select
-          value={values.parentGoalId?.toString() || ''}
-          onChange={e => onChange({ ...values, parentGoalId: e.target.value ? parseInt(e.target.value) : null })}
-        >
-          <option value="">No goal</option>
-          {goalOptions.map(g => (
-            <option key={g.id} value={g.id}>{g.title}</option>
-          ))}
-        </Select>
-      </FormField>
-      <Row>
-        <FormField label="Status">
-          <Select
-            value={values.isCompleted ? 'completed' : values.milestoneStatus}
-            onChange={e => {
-              const status = e.target.value as MilestoneFieldValues['milestoneStatus'];
-              onChange({ ...values, milestoneStatus: status, isCompleted: status === 'completed' });
-            }}
-          >
-            <option value="not_started">Not Started</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </Select>
-        </FormField>
-        <FormField label="Target Date">
-          <DateInput
-            value={values.targetDate}
-            onChange={e => onChange({ ...values, targetDate: e.target.value })}
-          />
-        </FormField>
-      </Row>
-    </Wrapper>
+      </Section>
+
+      <RowBox style={{ marginTop: 40 }}>
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={goalId}>Goal</RowLabel>
+          <BareSelect>
+            <select id={goalId} value={values.parentGoalId?.toString() || ''}
+              onChange={e => set({ parentGoalId: e.target.value ? parseInt(e.target.value, 10) : null })}>
+              <option value="">No goal</option>
+              {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+            </select>
+            <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+          </BareSelect>
+        </LabelledRow>
+        <LabelledRow>
+          <RowLabel>Status</RowLabel>
+          <Chips role="radiogroup" aria-label="Status">
+            {STATUSES.map(s => (
+              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
+                $active={status === s.value}
+                onClick={() => set({ milestoneStatus: s.value, isCompleted: s.value === 'completed' })}>
+                {s.label}
+              </Chip>
+            ))}
+          </Chips>
+        </LabelledRow>
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={dateId}>Target date</RowLabel>
+          <BareDate id={dateId} type="date" value={values.targetDate} onChange={e => set({ targetDate: e.target.value })} />
+        </LabelledRow>
+      </RowBox>
+
+      <Section style={{ marginTop: 40 }}>
+        <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
+        <BoxText id={notesId} value={values.notes ?? ''} placeholder="Additional details"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+    </FormWrap>
   );
 }

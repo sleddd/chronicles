@@ -1,21 +1,28 @@
-import styled from 'styled-components';
-import { Select } from '../../atoms/Select.js';
-import { TextInput } from '../../atoms/TextInput.js';
-import { DateInput } from '../../atoms/DateInput.js';
-import { FormField } from '../FormField.js';
+import { useId } from 'react';
 import type { GoalFieldValues } from '../../../types/fields.js';
+import {
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareDate, BoxText,
+} from './formKit.js';
 export type { GoalFieldValues } from '../../../types/fields.js';
 
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-`;
+/* Goal fields — the same form in the journal editor and Quick Entry: the
+   objective as a big borderless title (an older goal's text fills it once),
+   then one outlined box of rows — Type and Status as outline chips, Target
+   date — each with a muted label on the left, then Notes. Props only. */
 
-/* Single column: paired fields join the form's column so every label lines up */
-const Row = styled.div`
-  display: contents;
-`;
+const TYPES: { value: GoalFieldValues['goalType']; label: string }[] = [
+  { value: 'short_term', label: 'Short-term' },
+  { value: 'long_term', label: 'Long-term' },
+];
+
+/* Same statuses as the goals board's columns (Achieved = completed) */
+const STATUSES: { value: GoalFieldValues['goalStatus']; label: string }[] = [
+  { value: 'new', label: 'New' },
+  { value: 'planned', label: 'Planned' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'completed', label: 'Achieved' },
+];
 
 interface GoalFieldsProps {
   values: GoalFieldValues;
@@ -23,43 +30,57 @@ interface GoalFieldsProps {
 }
 
 export function GoalFields({ values, onChange }: GoalFieldsProps) {
+  const set = (patch: Partial<GoalFieldValues>) => onChange({ ...values, ...patch });
+  // Older goals may hold a legacy status ("active", "archived") — those show as New
+  const status = STATUSES.some(s => s.value === values.goalStatus) ? values.goalStatus : 'new';
+  const dateId = useId();
+  const notesId = useId();
+
   return (
-    <Wrapper>
-      <FormField label="Goal/Objective">
-        <TextInput
+    <FormWrap>
+      <Section>
+        <TitleInput
           value={values.goalObjective ?? ''}
-          onChange={e => onChange({ ...values, goalObjective: e.target.value })}
+          onChange={e => set({ goalObjective: e.target.value })}
           placeholder="What do you want to achieve?"
+          aria-label="Goal"
         />
-      </FormField>
-      <Row>
-        <FormField label="Type">
-          <Select
-            value={values.goalType}
-            onChange={e => onChange({ ...values, goalType: e.target.value as GoalFieldValues['goalType'] })}
-          >
-            <option value="short_term">Short-term</option>
-            <option value="long_term">Long-term</option>
-          </Select>
-        </FormField>
-        <FormField label="Status">
-          <Select
-            value={values.goalStatus}
-            onChange={e => onChange({ ...values, goalStatus: e.target.value as GoalFieldValues['goalStatus'] })}
-          >
-            <option value="new">New</option>
-            <option value="planned">Planned</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </Select>
-        </FormField>
-      </Row>
-      <FormField label="Target Date">
-        <DateInput
-          value={values.targetDate}
-          onChange={e => onChange({ ...values, targetDate: e.target.value })}
-        />
-      </FormField>
-    </Wrapper>
+      </Section>
+
+      <RowBox style={{ marginTop: 40 }}>
+        <LabelledRow>
+          <RowLabel>Type</RowLabel>
+          <Chips role="radiogroup" aria-label="Type">
+            {TYPES.map(t => (
+              <Chip key={t.value} type="button" role="radio" aria-checked={values.goalType === t.value}
+                $active={values.goalType === t.value} onClick={() => set({ goalType: t.value })}>
+                {t.label}
+              </Chip>
+            ))}
+          </Chips>
+        </LabelledRow>
+        <LabelledRow>
+          <RowLabel>Status</RowLabel>
+          <Chips role="radiogroup" aria-label="Status">
+            {STATUSES.map(s => (
+              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
+                $active={status === s.value} onClick={() => set({ goalStatus: s.value })}>
+                {s.label}
+              </Chip>
+            ))}
+          </Chips>
+        </LabelledRow>
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={dateId}>Target date</RowLabel>
+          <BareDate id={dateId} type="date" value={values.targetDate} onChange={e => set({ targetDate: e.target.value })} />
+        </LabelledRow>
+      </RowBox>
+
+      <Section style={{ marginTop: 40 }}>
+        <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
+        <BoxText id={notesId} value={values.notes ?? ''} placeholder="Additional details"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+    </FormWrap>
   );
 }

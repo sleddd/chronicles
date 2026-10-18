@@ -500,7 +500,7 @@ const QE_FIELDS_ONLY = new Set([
   'meals', 'medication', 'allergy', 'exercise', 'event', 'events', 'meeting', 'meetings',
   'book', 'books', 'quote', 'quotes', 'music', 'wellness',
   'goal', 'goals', 'milestone', 'milestones',
-  'shopping list', 'shopping lists', 'menu plan', 'meal plan', 'recipe', 'recipes',
+  'shopping list', 'shopping lists', 'menu plan', 'meal plan', 'recipe', 'recipes', 'task', 'tasks',
 ]);
 
 const SHOPPING_TOPICS = ['shopping list', 'shopping lists'];
@@ -795,7 +795,7 @@ function QuickEntryCard({ accentColor, topics }: { accentColor: string; topics: 
             case 'event': return <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...cf } as EventFieldValues} onChange={set} showCalendarSync={calendarSyncEnabled} />;
             case 'meeting': return <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...cf } as MeetingFieldValues} onChange={set} showCalendarSync={calendarSyncEnabled} />;
             case 'allergy': return <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...cf } as AllergyFieldValues} onChange={set} />;
-            case 'task': return <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: true, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...cf } as TaskFieldValues} onChange={set} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />;
+            case 'task': return <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...cf } as TaskFieldValues} onChange={set} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />;
             default: return null;
           }
         })()}

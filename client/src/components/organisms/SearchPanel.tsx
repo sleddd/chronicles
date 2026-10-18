@@ -3,8 +3,9 @@ import { DateInput } from '../atoms/DateInput.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 
-/* The journal's Search tab: keyword, topic and a From / To date range.
-   Keyword and dates apply while this tab is open; the topic filter stays on
+/* The journal's search filters, under the tool row while searching: topic and
+   a From / To date range (the keyword is the tool row's search box). Keyword
+   and dates apply while searching; the topic filter stays on
    across tabs (with its own Clear bar). Compact stacked labels to fit the
    narrow journal list panel. */
 
@@ -72,7 +73,6 @@ const ClearBtn = styled.button`
 
 export function SearchPanel() {
   const searchKeyword = useUIStore(s => s.searchKeyword);
-  const setSearchKeyword = useUIStore(s => s.setSearchKeyword);
   const selectedTopicId = useUIStore(s => s.selectedTopicId);
   const setSelectedTopicId = useUIStore(s => s.setSelectedTopicId);
   const topics = useEntriesStore(s => s.topics);
@@ -86,15 +86,6 @@ export function SearchPanel() {
 
   return (
     <Panel>
-      <Field>
-        <FieldLabel>Keyword</FieldLabel>
-        <input
-          type="search"
-          value={searchKeyword}
-          onChange={e => setSearchKeyword(e.target.value)}
-          placeholder="Words in the entry"
-        />
-      </Field>
       <Field>
         <FieldLabel>Topic</FieldLabel>
         <select

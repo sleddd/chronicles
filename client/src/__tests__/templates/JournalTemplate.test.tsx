@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
-import { JournalTemplate, SidePanel, EditorPanel, MobileBackButton } from '@/components/templates/JournalTemplate';
+import { JournalTemplate, SidePanel, EditorPanel } from '@/components/templates/JournalTemplate';
 import { renderWithTheme } from '../testUtils';
 
 vi.mock('@/stores/uiStore', () => ({
@@ -74,23 +74,18 @@ describe('EditorPanel', () => {
   });
 });
 
-describe('MobileBackButton', () => {
-  it('renders an Entries back label with an accessible name', () => {
-    renderWithTheme(<MobileBackButton onClick={() => {}} />);
-    expect(screen.getByText('Entries')).toBeInTheDocument();
-    expect(screen.getByLabelText('Back to entries')).toBeInTheDocument();
+describe('JournalTemplate back caret (phones/tablets, entry open)', () => {
+  it('shows a back caret before the title when onBack is given, and calls it', () => {
+    const onBack = vi.fn();
+    renderWithTheme(<JournalTemplate sidePanel={<div />} editorPanel={<div />} onBack={onBack} />);
+    // display:none on desktop widths (jsdom), so include hidden elements
+    fireEvent.click(screen.getByLabelText('Back to entries'));
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onClick when clicked', () => {
-    const handleClick = vi.fn();
-    renderWithTheme(<MobileBackButton onClick={handleClick} />);
-    fireEvent.click(screen.getByText('Entries'));
-    expect(handleClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders as a button element', () => {
-    renderWithTheme(<MobileBackButton onClick={() => {}} />);
-    // Button has display:none on desktop; use hidden option to find it
-    expect(screen.getByRole('button', { hidden: true })).toBeInTheDocument();
+  it('has no back caret (and no "Entries" bar) without onBack', () => {
+    renderWithTheme(<JournalTemplate sidePanel={<div />} editorPanel={<div />} />);
+    expect(screen.queryByLabelText('Back to entries')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entries')).not.toBeInTheDocument();
   });
 });

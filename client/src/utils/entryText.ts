@@ -18,6 +18,7 @@ export const NAME_FIELD_BY_TOPIC: Record<string, string> = {
   goal: 'goalObjective', goals: 'goalObjective',
   milestone: 'milestoneObjective', milestones: 'milestoneObjective',
   recipe: 'recipeName', recipes: 'recipeName',
+  task: 'taskDescription', tasks: 'taskDescription',
 };
 
 const QUOTE_TOPICS = ['quote', 'quotes'];

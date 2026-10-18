@@ -1,31 +1,32 @@
-import { useCallback, type KeyboardEvent } from 'react';
+import { useCallback, useRef, type KeyboardEvent } from 'react';
 import styled from 'styled-components';
 import { useUIStore } from '../../stores/uiStore.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
 
 type TabValue = Parameters<ReturnType<typeof useUIStore.getState>['setViewMode']>[0];
 
 type TabEntry = {
   value: TabValue;
   icon: string;
-  label: string;
   title: string;
   isToday?: boolean;
-  isNewEntry?: boolean;
 };
 
 const tabs: TabEntry[] = [
-  { value: 'date',      icon: 'wb_sunny',        label: 'Today',     title: 'Today',        isToday: true },
-  { value: 'all',       icon: 'list',            label: 'All',       title: 'All entries' },
-  { value: 'favorites', icon: 'bookmark',        label: 'Bookmarks', title: 'Bookmarked entries' },
-  { value: 'search',    icon: 'search',          label: 'Search',    title: 'Search entries' },
-  { value: 'all',       icon: 'add',             label: 'New',       title: 'New entry',    isNewEntry: true },
+  { value: 'date',      icon: 'wb_sunny', title: 'Today', isToday: true },
+  { value: 'all',       icon: 'list',     title: 'All entries' },
+  { value: 'favorites', icon: 'bookmark', title: 'Bookmarked entries' },
 ];
 
-/* First row of the journal list: exactly the sidebar logo block's height
-   (60px incl. its rule) so the two rules line up across the page. */
+/* The journal list's tool row (60px, same hairline as the editor's top bar so
+   the two read as one): a search box, then Today / All / Bookmarks as one
+   segmented group of icons. Typing searches; the tune button opens the topic
+   and date filters (the Search panel) without typing. New entry lives in the
+   page's title row. */
 const Container = styled.div`
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 10px;
   box-sizing: border-box;
   height: 60px;
   flex-shrink: 0;
@@ -33,52 +34,79 @@ const Container = styled.div`
   padding: 0 var(--s-4, 16px);
 `;
 
-const TabButton = styled.button<{ $active?: boolean }>`
+const SearchBox = styled.label<{ $active: boolean }>`
   flex: 1;
   min-width: 0;
-  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-card)')};
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  &:focus-within { border-color: var(--color-accent); }
+`;
+
+const SearchInput = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-secondary);
+  }
+  &::placeholder { color: var(--text-placeholder); }
+  &::-webkit-search-cancel-button { display: none; }
+`;
+
+const TuneBtn = styled.button<{ $active: boolean }>`
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-family: var(--ui, ${({ theme }) => theme.fontFamily.sans});
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: ${({ $active }) => $active ? 'var(--ink, #2b2824)' : 'var(--ink-3, #6b645a)'};
-  background: none;
-  border: 0;
-  border-bottom: 2px solid ${({ $active }) => $active ? 'var(--accent-stroke, #2b2824)' : 'transparent'};
-  margin-bottom: -1px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-muted)')};
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: color 150ms ease, border-color 150ms ease;
-
-  &:hover {
-    color: var(--ink, #2b2824);
-  }
+  &:hover { color: var(--text-primary); }
 `;
 
-const TabIcon = styled.span`
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 20px;
-  line-height: 1;
-  flex-shrink: 0;
-  letter-spacing: normal;
-  text-transform: none;
-  white-space: nowrap;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+/* Today / All / Bookmarks — one outlined group; the current one is lifted
+   onto --bg-active with its icon in the accent (no accent tint) */
+const Segments = styled.div`
+  flex: none;
+  display: flex;
+  gap: 2px;
+  height: 36px;
+  padding: 3px;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
 `;
 
-const TabLabel = styled.span<{ $visible: boolean }>`
-  display: ${({ $visible }) => $visible ? 'inline' : 'none'};
+const Segment = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-muted)')};
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
 function isSameDay(a: Date, b: Date) {
@@ -89,38 +117,46 @@ function isSameDay(a: Date, b: Date) {
 
 interface ViewTabsProps {
   onTodayClick?: () => void;
-  onNewEntry?: () => void;
 }
 
-export function ViewTabs({ onTodayClick, onNewEntry }: ViewTabsProps = {}) {
+export function ViewTabs({ onTodayClick }: ViewTabsProps = {}) {
   const viewMode = useUIStore(s => s.viewMode);
   const setViewMode = useUIStore(s => s.setViewMode);
   const selectedDate = useUIStore(s => s.selectedDate);
   const setSelectedDate = useUIStore(s => s.setSelectedDate);
+  const searchKeyword = useUIStore(s => s.searchKeyword) ?? '';
+  const setSearchKeyword = useUIStore(s => s.setSearchKeyword);
+  // The view to come back to when the search is cleared
+  const beforeSearch = useRef<TabValue>('date');
+  const searching = viewMode === 'search';
 
   const isTabActive = useCallback((tab: TabEntry) => {
-    if (tab.isNewEntry) return false;
     if (tab.isToday) return viewMode === 'date' && isSameDay(selectedDate, new Date());
     return viewMode === tab.value;
   }, [viewMode, selectedDate]);
 
   const handleTabClick = useCallback((tab: TabEntry) => {
-    if (tab.isNewEntry) {
-      onNewEntry?.();
-      return;
-    }
     if (tab.isToday) {
       setSelectedDate(new Date());
       setViewMode('date');
       onTodayClick?.();
       return;
     }
-    if (tab.value === 'search' && viewMode === 'search') {
-      setViewMode('all');
-    } else {
-      setViewMode(tab.value);
-    }
-  }, [viewMode, setViewMode, setSelectedDate, onTodayClick, onNewEntry]);
+    setViewMode(tab.value);
+  }, [setViewMode, setSelectedDate, onTodayClick]);
+
+  const enterSearch = () => {
+    if (!searching) { beforeSearch.current = viewMode; setViewMode('search'); }
+  };
+  const leaveSearch = () => {
+    setSearchKeyword?.('');
+    setViewMode(beforeSearch.current === 'search' ? 'all' : beforeSearch.current);
+  };
+
+  const onSearchChange = (v: string) => {
+    setSearchKeyword?.(v);
+    if (v) enterSearch();
+  };
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;
@@ -133,24 +169,43 @@ export function ViewTabs({ onTodayClick, onNewEntry }: ViewTabsProps = {}) {
   }, [handleTabClick]);
 
   return (
-    <Container role="tablist">
-      {tabs.map((tab, i) => {
-        const active = isTabActive(tab);
-        return (
-          <TabButton
-            key={`${tab.label}-${i}`}
-            role={tab.isNewEntry ? undefined : 'tab'}
-            aria-selected={tab.isNewEntry ? undefined : active}
-            aria-label={tab.title}
-            $active={active}
-            title={tab.title}
-            onClick={() => handleTabClick(tab)}
-            onKeyDown={e => handleKeyDown(e, i)}
-          >
-            <TabIcon aria-hidden="true">{tab.icon}</TabIcon>
-          </TabButton>
-        );
-      })}
+    <Container>
+      <SearchBox $active={searching}>
+        <MaterialIcon $size={20} aria-hidden="true">search</MaterialIcon>
+        <SearchInput
+          type="search"
+          value={searchKeyword}
+          placeholder="Search"
+          aria-label="Search entries"
+          onChange={e => onSearchChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape' && searching) { e.preventDefault(); leaveSearch(); } }}
+        />
+        <TuneBtn type="button" $active={searching} aria-pressed={searching}
+          aria-label={searching ? 'Close search filters' : 'Search filters (topic, dates)'}
+          title={searching ? 'Close search' : 'Topic & date filters'}
+          onClick={() => (searching ? leaveSearch() : enterSearch())}>
+          <MaterialIcon $size={18} aria-hidden="true">{searching ? 'close' : 'tune'}</MaterialIcon>
+        </TuneBtn>
+      </SearchBox>
+      <Segments role="tablist" aria-label="Show">
+        {tabs.map((tab, i) => {
+          const active = isTabActive(tab);
+          return (
+            <Segment
+              key={tab.title}
+              role="tab"
+              aria-selected={active}
+              aria-label={tab.title}
+              $active={active}
+              title={tab.title}
+              onClick={() => handleTabClick(tab)}
+              onKeyDown={e => handleKeyDown(e, i)}
+            >
+              <MaterialIcon $size={20} aria-hidden="true">{tab.icon}</MaterialIcon>
+            </Segment>
+          );
+        })}
+      </Segments>
     </Container>
   );
 }
