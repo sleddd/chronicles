@@ -12,10 +12,11 @@ export function HealthPrivacyView() {
   return (
     <LegalTemplate title="Consumer Health Data Privacy Policy" meta={`Effective ${D.effectiveDate} · Version ${LEGAL_VERSIONS.health}`}>
       <p>
-        Chronicles encrypts your health information on your own device before it reaches our servers, and we never
-        sell it, advertise with it, or track you. This page explains what health data Chronicles handles, where it goes,
-        and how you can see, export or delete it. It is written to meet Washington, Nevada and Connecticut law, and we
-        give every user the same protections wherever they live.
+        This policy covers the health information you enter in Chronicles: what we collect, where it goes, who can read
+        it, and how you can see, export or delete it. Most of what you enter is encrypted in your browser before it is
+        sent, so our servers store it in a form we can’t read. A few things are stored readable because the service
+        needs them, and they are listed under How it is protected. We don’t sell your data, show ads, or use tracking.
+        These protections apply to every user, wherever you live.
       </p>
 
       <h2>Who we are</h2>
@@ -43,7 +44,8 @@ export function HealthPrivacyView() {
       <p>
         Your entries, health logs, settings and AI keys are encrypted in your browser with AES-256-GCM before they are
         sent. The key that unlocks them comes from your password, and your password never leaves your device. We cannot
-        read your encrypted data, and neither could anyone who stole our database.
+        read your encrypted data, and a stolen copy of our database would show only scrambled data, as long as your
+        password is strong.
       </p>
       <p>A few items are stored on our servers without that encryption, because the service needs to read them:</p>
       <ul>
@@ -66,7 +68,8 @@ export function HealthPrivacyView() {
       <table>
         <thead><tr><th>Recipient</th><th>What it receives</th><th>When</th><th>Contact</th></tr></thead>
         <tbody>
-          <tr><td>{D.hostingProvider}</td><td>Your encrypted data, which it cannot read, plus the readable items listed above</td><td>Always, as our host</td><td><a href={D.hostingPrivacy} target="_blank" rel="noopener noreferrer">Render Privacy Policy</a></td></tr>
+          <tr><td>{D.hostingProvider}</td><td>Runs our server, so your encrypted data passes through it, plus the readable items listed above</td><td>Always, as our server host</td><td><a href={D.hostingPrivacy} target="_blank" rel="noopener noreferrer">Render Privacy Policy</a></td></tr>
+          <tr><td>{D.databaseProvider}</td><td>Stores our database: your encrypted data, which it cannot read, plus the readable items listed above</td><td>Always, as our database host</td><td><a href={D.databasePrivacy} target="_blank" rel="noopener noreferrer">Prisma Privacy Policy</a></td></tr>
           <tr><td>Google</td><td>Titles, times, locations and descriptions of event and meeting entries</td><td>Only if you connect Google Calendar</td><td><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a></td></tr>
           <tr><td>Your AI provider (Anthropic, OpenAI or Amazon Bedrock)</td><td>Only what you type into the chat or ask it to estimate, sent straight from your browser with your own key</td><td>Only if you turn on In-App AI and give consent</td><td>Your provider’s privacy page</td></tr>
           <tr><td>Your own Cloudflare R2 bucket</td><td>Encrypted photos, which only you can see. Photos are never shared.</td><td>Only if you add your bucket</td><td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">Cloudflare Privacy Policy</a></td></tr>
@@ -117,8 +120,8 @@ export function HealthPrivacyView() {
       <h2>When you delete your account</h2>
       <p>
         Your encrypted data, health logs, settings, sessions, share links, consent record and calendar connection are
-        erased from our database immediately. We don’t keep backups of the database, so no other copy remains with
-        us. We also revoke our access to your Google Calendar.
+        erased from our database immediately. Our database host keeps automatic daily backups, and your data leaves
+        them within {D.backupDays} days as they expire. We also revoke our access to your Google Calendar.
       </p>
       <p>
         Events already synced to your Google Calendar stay in your Google account until you remove them. Chats with your
@@ -147,7 +150,8 @@ export function HealthPrivacyView() {
       <h2>How long we keep it</h2>
       <p>
         We keep your data while your account is open. Sessions expire after 7 days and are purged the following day.
-        Share links stop working when they expire and are then purged. We don’t keep database backups. Security logs,
+        Share links stop working when they expire and are then purged. Our database host’s automatic backups are kept
+        for up to {D.backupDays} days. Security logs,
         which record sign-in events with an IP address, are kept only in our host’s log stream, which deletes them
         automatically on a rolling basis. The counts of when the AI chat showed crisis resources or paused for a likely
         minor are kept permanently; they hold only a date and never an account or anything you wrote.

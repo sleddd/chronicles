@@ -28,12 +28,13 @@ should read the policy, the Terms and part 4 before they go live.
 | Business name (Chronicles, not a filed entity yet) and effective date (Oct 18, 2026) | Done | `shared/src/legal/index.ts` |
 | No mailing address published (email is the contact for every request) | Decided | Consider a P.O. box or virtual mailbox if one is ever needed |
 | Host (Render), abuse email (support@ — all email goes there) | Done | `shared/src/legal/index.ts` |
-| Retention: no database backups; security logs only in Render's rolling log stream; AI-safety counts kept permanently (no account) | Done | Policy → How long we keep it. **Confirm Render isn't keeping automatic database backups on the current plan** — if it is, the policy must say how long |
+| Hosts: Render (server), Prisma Postgres (database) | Done | Policy → Who receives it |
+| Retention: Prisma daily snapshots (days with changes) kept 7 days on Starter/Pro, 30 on Business — the policy says "within 30 days"; security logs only in Render's rolling log stream; AI-safety counts kept permanently (no account) | Done | Policy → When you delete / How long we keep it. Update `backupDays` if the plan or provider changes |
 | Backup and log retention set at the host | **To do** | Part 2 |
 | Encrypt dose logs and topic names (Phase 2) | **To do** | Part 3 — then remove the line in the policy's readable items |
 | Settings audit, retire legacy unwrap, ICS description opt-in (Phase 2) | **To do** | Part 3 |
-| Google verification | **To do** | Part 5 |
-| Processor agreements (host) | **To do** | Part 6 |
+| Google verification | Done | Part 5 |
+| Processor agreements | Render DPA in place (https://render.com/dpa); **Prisma DPA: download from the Compliance section of the Prisma Console and keep a copy** (https://www.prisma.io/legal/dpa) | Part 6 |
 | Attorney review | **To do** | Policy, Terms, part 4 |
 | Next review | Oct 18, 2027 | And before any feature that changes where data goes |
 
@@ -42,7 +43,7 @@ Notes:
   privacy address (e.g. privacy@…); change `LEGAL_DETAILS.contactEmail` if you set one up.
 - There is no billing or email provider in the code, so the policy lists no payment processor or email provider.
   Add them to the recipient table before either ships.
-- Signing up from outside the US is not restricted (part 6). Decide before opening up internationally.
+- Sign-ups aren't limited to the US; the app is English-only with no translations. GDPR-style rules could still apply to people in the EU or UK who sign up — revisit before marketing outside the US.
 
 ## 2. Access, export, correction and deletion
 
@@ -81,7 +82,7 @@ Use the strictest rule across Washington, Nevada and Connecticut, so one process
 
 ### Still to do
 
-- [ ] Confirm the database has no automatic backups on the current Render plan (the policy says there are none). If backups are turned on later, add their retention to the policy first.
+- [x] Backups: Prisma Postgres snapshots daily on days with changes, kept 7 days (Starter/Pro) or 30 (Business); the policy says deleted data leaves them within 30 days. A restore could bring back data deleted since the snapshot — if you ever restore, re-run any deletions done after it.
 - [ ] Check how long Render keeps the log stream (`logSecurityEvent` output records IP addresses) and put the number in the policy if you want to state one.
 - [ ] Keep the policy's menu names (Settings → Data → Export All, Settings → Account → Delete account) in step with the app.
 
@@ -128,10 +129,11 @@ were ready sooner as unreasonable delay. Missing a notice can cost up to $53,088
 
 | Role | Person | Contact |
 | --- | --- | --- |
-| Incident lead | [YOUR NAME] | [PHONE, EMAIL] |
+| Incident lead | [YOUR NAME] | [PHONE], support@mydailychronicles.com |
 | Backup if you're unreachable | [NAME] | [PHONE, EMAIL] |
 | Privacy attorney | [NAME, FIRM] | [PHONE, EMAIL] |
-| Hosting support | [HOSTING PROVIDER] | [SUPPORT LINK] |
+| Server host support | Render | https://render.com/support |
+| Database host support | Prisma | https://www.prisma.io/support (Prisma Console → Support) |
 
 ### What counts as a breach
 

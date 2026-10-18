@@ -18,6 +18,11 @@ export const LEGAL_DETAILS = {
   effectiveDate: 'October 18, 2026',
   hostingProvider: 'Render (render.com)',
   hostingPrivacy: 'https://render.com/privacy',
+  databaseProvider: 'Prisma (prisma.io)',
+  databasePrivacy: 'https://www.prisma.io/legal/privacy',
+  /** Prisma Postgres keeps daily snapshots (on days with changes) for 7 days on Starter/Pro, 30 on Business —
+   *  30 is true on every plan. Update if the plan or provider changes. */
+  backupDays: '30',
   /** Every email (privacy, abuse, safety) goes to support */
   abuseEmail: 'support@mydailychronicles.com',
 } as const;
