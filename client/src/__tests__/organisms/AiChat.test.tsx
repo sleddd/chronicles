@@ -10,7 +10,8 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useAiReady', () => ({ useAiReady: () => true }));
 vi.mock('@/hooks/useOpenInJournal', () => ({ useOpenInJournal: () => vi.fn() }));
-vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ encryptPost: vi.fn() }) }));
+const lockFn = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ encryptPost: vi.fn(), lock: lockFn }) }));
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ topics: [], addDecryptedEntry: vi.fn() }),
 }));
@@ -23,7 +24,7 @@ vi.mock('@/services/aiAssistant', () => ({
 }));
 vi.mock('@/services/api', () => ({
   entries: { create: vi.fn() },
-  analytics: { crisisCard: vi.fn().mockResolvedValue({ ok: true }) },
+  analytics: { crisisCard: vi.fn().mockResolvedValue({ ok: true }), minorDetected: vi.fn().mockResolvedValue({ ok: true }) },
   aiChat: {
     status: vi.fn(async () => state.status),
     consent: vi.fn(async () => {
@@ -188,6 +189,38 @@ describe('AiChat safety', () => {
     openChat();
     await send('I wish I didn’t wake up');
     await waitFor(() => expect(analytics.crisisCard).toHaveBeenCalledWith('concern', 'suicide'));
+  });
+
+  it('minor (local check): shows the tagged reply without the tag and pauses for good', async () => {
+    (chatReply as any).mockResolvedValue('[[MINOR]]\nThank you for telling me. Chronicles is made for grown-ups.');
+    openChat();
+    await send('No. I am eight');
+    expect(await screen.findByText('Thank you for telling me. Chronicles is made for grown-ups.')).toBeInTheDocument();
+    expect(screen.queryByText(/\[\[MINOR\]\]/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
+    expect(screen.getByText('This chat is for adults. The account owner can resume it with their password.')).toBeInTheDocument();
+    expect(analytics.minorDetected).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Lock Chronicles' }));
+    expect(lockFn).toHaveBeenCalled();
+  });
+
+  it('minor (classifier): an untagged reply is replaced by the fixed one', async () => {
+    (classifyRisk as any).mockResolvedValue({ rating: 'none', kind: null, minor: true });
+    (chatReply as any).mockResolvedValue('Sure, let’s play a game!');
+    openChat();
+    await send('my teacher gave us homework at recess');
+    expect(await screen.findByText(/Chronicles is made for grown-ups, so I can't keep chatting/)).toBeInTheDocument();
+    expect(screen.queryByText('Sure, let’s play a game!')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lock Chronicles' })).toBeInTheDocument();
+  });
+
+  it('minor (model tag only): pauses too', async () => {
+    (chatReply as any).mockResolvedValue('[[MINOR]]\nThis chat is only for grown-ups, though.');
+    openChat();
+    await send('i just want to chat');
+    expect(await screen.findByText('This chat is only for grown-ups, though.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
+    expect(analytics.minorDetected).toHaveBeenCalledTimes(1);
   });
 
   it('tells a blocked account the chat is off', async () => {

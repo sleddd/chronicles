@@ -6,7 +6,7 @@
  *   npm run report:ai-safety -- --from 2026-01-01 --to 2026-12-31
  */
 import { prisma } from './prisma.js';
-import { countCrisisCards } from './analyticsQueries.js';
+import { countCrisisCards, countMinorDetected } from './analyticsQueries.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -22,6 +22,7 @@ async function main(): Promise<void> {
   const total = rows.reduce((n, r) => n + r.count, 0);
   console.log(`Crisis card shown, ${from} to ${to}: ${total}`);
   for (const r of rows) console.log(`  ${r.rating.padEnd(9)} ${r.riskKind.padEnd(16)} ${r.count}`);
+  console.log(`Chat paused for a likely minor: ${await countMinorDetected(from, to)}`);
 }
 
 main()

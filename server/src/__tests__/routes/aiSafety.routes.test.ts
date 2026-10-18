@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createTestApp, TEST_AUTH } from './testHelper.js';
 
-vi.mock('../../db/analyticsQueries.js', () => ({ recordCrisisCard: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../db/analyticsQueries.js', () => ({
+  recordCrisisCard: vi.fn().mockResolvedValue(undefined),
+  recordMinorDetected: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../../db/aiChatQueries.js', () => ({
   getAiChatStatus: vi.fn(),
   saveAiChatConsent: vi.fn().mockResolvedValue(undefined),
@@ -11,7 +14,7 @@ vi.mock('../../db/aiChatQueries.js', () => ({
 
 import analyticsRouter from '../../routes/analytics.js';
 import aiChatRouter from '../../routes/aiChat.js';
-import { recordCrisisCard } from '../../db/analyticsQueries.js';
+import { recordCrisisCard, recordMinorDetected } from '../../db/analyticsQueries.js';
 import { getAiChatStatus, saveAiChatConsent, withdrawAiChatConsent } from '../../db/aiChatQueries.js';
 
 const analyticsApp = createTestApp('/api/analytics', analyticsRouter);
@@ -41,6 +44,14 @@ describe('POST /api/analytics/crisis-card', () => {
       expect(res.status).toBe(400);
     }
     expect(recordCrisisCard).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/analytics/minor-detected', () => {
+  it('records the event with nothing else', async () => {
+    const res = await request(analyticsApp).post('/api/analytics/minor-detected').send({ text: 'ignored' });
+    expect(res.status).toBe(200);
+    expect(recordMinorDetected).toHaveBeenCalledWith();
   });
 });
 

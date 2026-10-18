@@ -21,6 +21,8 @@ vi.mock('@/stores/uiStore', () => ({
 
 const mockSignOut = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
+const mockLock = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ lock: mockLock }) }));
 
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -43,16 +45,14 @@ describe('Sidebar', () => {
 
   it('renders every nav destination', () => {
     renderAt();
-    for (const title of ['Today', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
+    expect(screen.queryByTitle('Today')).not.toBeInTheDocument();
+    for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByTitle(title)).toBeInTheDocument();
     }
   });
 
-  it('the logo and the Today item both open the dashboard', () => {
+  it('the logo opens the dashboard (there is no dashboard item)', () => {
     renderAt();
-    fireEvent.click(screen.getByTitle('Today'));
-    expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
-    mockNavigate.mockClear();
     fireEvent.click(screen.getByTitle('Chronicles'));
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
@@ -60,10 +60,17 @@ describe('Sidebar', () => {
   it('has a Sign out button under Settings that signs out', () => {
     renderAt();
     const titles = Array.from(document.querySelectorAll('button[title]')).map(b => b.getAttribute('title'));
-    expect(titles.slice(-2)).toEqual(['Settings', 'Sign out']);
+    expect(titles.slice(-3)).toEqual(['Settings', 'Lock — your password opens it again', 'Sign out']);
     fireEvent.click(screen.getByTitle('Sign out'));
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('locks from the Lock button just above Sign out', () => {
+    renderAt();
+    fireEvent.click(screen.getByTitle('Lock — your password opens it again'));
+    expect(mockLock).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).not.toHaveBeenCalled();
   });
 
   it('navigates when a nav item is clicked', () => {

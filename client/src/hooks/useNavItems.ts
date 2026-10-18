@@ -14,7 +14,8 @@ export interface NavItem {
  * The app's main destinations, in nav order, with which one is current.
  * Shared by the desktop rail (Sidebar) and the phone drop-down menu
  * (MobileChrome) so the two never drift apart. Feature-flagged sections
- * (Health, Finance) appear only when on.
+ * (Health, Finance) appear only when on. The dashboard has no item: the
+ * logo (rail and phone bar) opens it.
  */
 export function useNavItems(): NavItem[] {
   const { pathname } = useLocation();
@@ -24,7 +25,6 @@ export function useNavItems(): NavItem[] {
   const hasHealth = ff.medicationEnabled || ff.foodEnabled || ff.exerciseEnabled || ff.allergiesEnabled;
 
   const items: (NavItem | false)[] = [
-    { key: 'dashboard', label: 'Today', icon: 'dashboard', path: '/dashboard', active: at('/dashboard') },
     { key: 'journal', label: 'Journal', icon: 'book', path: '/journal', active: at('/journal') },
     { key: 'topics', label: 'Topics', icon: 'sell', path: '/topics', active: at('/topics') },
     !!hasHealth && { key: 'health', label: 'Health', icon: 'health_cross', path: '/health', active: under('/health') },

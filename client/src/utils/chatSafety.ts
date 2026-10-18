@@ -8,7 +8,12 @@ import type { RiskKind } from '@shared/validation/schemas.js';
 export type { RiskKind } from '@shared/validation/schemas.js';
 
 export type RiskRating = 'none' | 'concern' | 'elevated' | 'urgent';
-export interface RiskResult { rating: RiskRating; kind: RiskKind | null }
+export interface RiskResult {
+  rating: RiskRating;
+  kind: RiskKind | null;
+  /** The writer is (or very likely is) under 18 — set only when true */
+  minor?: true;
+}
 
 export const NO_RISK: RiskResult = { rating: 'none', kind: null };
 
@@ -91,6 +96,32 @@ export function replyPatternScreen(text: string): RiskKind | null {
   return REPLY_PATTERNS.find(p => p.re.test(t))?.kind ?? null;
 }
 
+// ── Under-18 check (local) ──────────────────────────────────────────────────
+// Only explicit statements ("I am eight", "I'm 12 years old", "I'm in 4th
+// grade"); hints like recess or homeroom are left to the classifier, since a
+// teacher journaling about their class would trip them.
+
+const AGE_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
+};
+const GRADE_WORDS = 'first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth';
+
+export function minorPattern(text: string): boolean {
+  const t = normalize(text);
+  const age = new RegExp(`\\b(?:i'?m|i am) (?:only |just )?(\\d{1,2}|${Object.keys(AGE_WORDS).join('|')})( (?:years?|yrs?) old| yo)?(?=$|[\\s.,!?;)]|$)(.{0,12})`, 'g');
+  for (const m of t.matchAll(age)) {
+    const n = /^\d+$/.test(m[1]) ? Number(m[1]) : AGE_WORDS[m[1]];
+    if (!(n >= 3 && n < 18)) continue;
+    // "I'm 12 years old" anywhere; a bare "I'm 12" only where the sentence
+    // ends or runs on with and/but/so ("No. I am eight") — never "I'm 5
+    // minutes away", "I'm five foot two", "I'm eight episodes in"
+    if (m[2]) return true;
+    if (/^(\s*$|[.!?,;)]|\s+(and|but|so)\b)/.test(m[3])) return true;
+  }
+  return new RegExp(`\\bi'?m in (?:the )?(?:(?:[1-9]|1[0-2])(?:st|nd|rd|th)?|${GRADE_WORDS}) grade\\b`).test(t);
+}
+
 // ── Layer 2: classification through the user's own AI key ───────────────────
 
 export function riskClassifierPrompt(): string {
@@ -103,7 +134,8 @@ export function riskClassifierPrompt(): string {
     'A suicide attempt or self-harm act in the past three months, or one happening now, is "urgent".',
     'When unsure between two ratings, choose the higher one.',
     'Jokes, figures of speech ("this traffic is killing me"), fiction, news and questions about other people with no sign of personal risk are "none".',
-    'Reply with only JSON: {"rating": "none" | "concern" | "elevated" | "urgent", "kind": "suicide" | "self_harm" | "eating_disorder" | null}.',
+    'Separately, set "minor" to true if the person says they are under 18, or what they write strongly suggests a child (school grades, homeroom, recess, asking a parent\'s permission). Judge only from what they write, not from the topic alone — an adult talking about their kids or students is not a minor.',
+    'Reply with only JSON: {"rating": "none" | "concern" | "elevated" | "urgent", "kind": "suicide" | "self_harm" | "eating_disorder" | null, "minor": true | false}.',
   ].join('\n');
 }
 
@@ -139,9 +171,10 @@ function firstJson(text: string): Record<string, unknown> | null {
  *  An unknown kind stays null rather than guessing. */
 export function parseClassification(text: string): RiskResult {
   const v = firstJson(text);
+  const minor = v?.minor === true ? { minor: true as const } : {};
   const rating = String(v?.rating ?? '').toLowerCase() as RiskRating;
-  if (!RATINGS.includes(rating) || rating === 'none') return NO_RISK;
-  return { rating, kind: KINDS.includes(v?.kind as RiskKind) ? v!.kind as RiskKind : null };
+  if (!RATINGS.includes(rating) || rating === 'none') return { ...NO_RISK, ...minor };
+  return { rating, kind: KINDS.includes(v?.kind as RiskKind) ? v!.kind as RiskKind : null, ...minor };
 }
 
 /** Read the reply screener's answer — the harmful kind, or null. */

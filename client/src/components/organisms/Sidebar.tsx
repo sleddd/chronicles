@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useNavItems } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
+import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 
 const SidebarRoot = styled.aside`
@@ -94,8 +95,8 @@ const NavScroll = styled.nav`
 `;
 
 /* Icon-only rail row — no dividers; the active row is lifted onto
-   --bg-rail-active with the accent tab. Settings sits at the bottom, with
-   Sign out under it. */
+   --bg-rail-active with the accent tab. Settings sits at the bottom, then
+   Lock (asks for the password again) and Sign out under it. */
 const NavIconBtn = styled.button<{ $active?: boolean; $pinned?: boolean }>`
   position: relative;
   flex: 0 0 auto;
@@ -157,6 +158,7 @@ export const Sidebar = memo(function Sidebar() {
   const navigate = useNavigate();
   const items = useNavItems();
   const signOut = useSignOut();
+  const { lock } = useEncryption();
 
   return (
     <SidebarRoot>
@@ -172,6 +174,10 @@ export const Sidebar = memo(function Sidebar() {
             <SrOnly>{item.label}</SrOnly>
           </NavIconBtn>
         ))}
+        <NavIconBtn onClick={lock} title="Lock — your password opens it again">
+          <MaterialIcon aria-hidden="true">lock</MaterialIcon>
+          <SrOnly>Lock</SrOnly>
+        </NavIconBtn>
         <NavIconBtn onClick={() => { void signOut(); }} title="Sign out">
           <MaterialIcon aria-hidden="true">logout</MaterialIcon>
           <SrOnly>Sign out</SrOnly>

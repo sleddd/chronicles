@@ -1,12 +1,13 @@
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
+import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEffect } from 'react';
 
 /* Top bar shown only on phones/tablets: the logo and the current page's name
@@ -67,7 +68,7 @@ const MenuButton = styled.button<{ $open: boolean }>`
 
 /* The menu: a sheet dropping from under the bar, full width, rounded at the
    bottom — one row per destination (accent icon + name); the current page
-   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings and Sign out, quieter. Escape, a
+   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings, Lock and Sign out, quieter. Escape, a
    destination or a tap outside closes it. */
 const Panel = styled.nav`
   display: none;
@@ -142,10 +143,12 @@ export function MobileChrome() {
   const setOpen = useUIStore(s => s.setMobileNavOpen);
   const navigate = useNavigate();
   const items = useNavItems();
+  const { pathname } = useLocation();
   const current = items.find(i => i.active);
   const main = items.filter(i => i.key !== 'settings');
   const settings = items.find(i => i.key === 'settings');
   const signOut = useSignOut();
+  const { lock } = useEncryption();
 
   useEffect(() => {
     if (!open) return;
@@ -167,7 +170,7 @@ export function MobileChrome() {
       <MobileNavBar $open={open}>
         <LogoContainer onClick={() => { setOpen(false); navigate('/dashboard'); }}>
           <BrandMark size={26} gradientId="logo-mobile" />
-          <PageName>{current?.label ?? 'Chronicles'}</PageName>
+          <PageName>{current?.label ?? (pathname === '/dashboard' ? 'Today' : 'Chronicles')}</PageName>
         </LogoContainer>
         <MenuButton $open={open} onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open} aria-controls="mobile-nav">
@@ -180,6 +183,10 @@ export function MobileChrome() {
           {main.map(i => row(i))}
           <MenuRule />
           {settings && row(settings, true)}
+          <NavRow type="button" $active={false} $quiet onClick={() => { setOpen(false); lock(); }}>
+            <MaterialIcon $size={22} aria-hidden="true">lock</MaterialIcon>
+            <span>Lock</span>
+          </NavRow>
           <NavRow type="button" $active={false} $quiet onClick={() => { setOpen(false); void signOut(); }}>
             <MaterialIcon $size={22} aria-hidden="true">logout</MaterialIcon>
             <span>Sign out</span>

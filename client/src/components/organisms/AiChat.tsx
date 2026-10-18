@@ -12,12 +12,12 @@ import { entries as entriesApi, analytics as analyticsApi } from '../../services
 import { autoNutritionOnSave, chatReply, classifyReply, classifyRisk, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
 import { mealForNow, nowTime } from '../../utils/foodLog.js';
 import { toDateStr } from '../../utils/dateUtils.js';
-import { chatSystemPrompt, chatTranscriptHtml, parseSaveCommand, textToEntryHtml, SAVED_CHATS_TOPIC, type TopicRef } from '../../utils/chatSave.js';
+import { MINOR_FALLBACK_REPLY, stripMinorTag, chatSystemPrompt, chatTranscriptHtml, parseSaveCommand, textToEntryHtml, SAVED_CHATS_TOPIC, type TopicRef } from '../../utils/chatSave.js';
 import { getOrCreateJournalTopic, getOrCreateTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
 import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../utils/chatStyle.js';
 import { AI_DISCLOSURE, AI_REMINDER, reminderDue } from '../../utils/chatDisclosure.js';
-import { maxRisk, patternScreen, replyNeedsReview, replyPatternScreen, NO_RISK, type RiskKind, type RiskResult } from '../../utils/chatSafety.js';
+import { maxRisk, minorPattern, patternScreen, replyNeedsReview, replyPatternScreen, NO_RISK, type RiskKind, type RiskResult } from '../../utils/chatSafety.js';
 import { useAiChatStore, hasCurrentConsent } from '../../stores/aiChatStore.js';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
 import { CrisisCard, SupportNotice } from '../molecules/CrisisCard.js';
@@ -266,6 +266,8 @@ const Empty = styled.div`
   line-height: 1.6;
   color: var(--text-tertiary);
   code { font-family: var(--mono, monospace); font-size: 12px; color: var(--text-secondary); }
+  p { margin: 0; }
+  p + p { margin-top: 12px; }
 `;
 
 /* The consent screen fills the panel in place of the log and message box */
@@ -360,7 +362,7 @@ export function AiChat() {
   const aiReady = useAiReady();
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const { encryptPost } = useEncryption();
+  const { encryptPost, lock } = useEncryption();
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
   const location = useLocation();
@@ -381,6 +383,8 @@ export function AiChat() {
   const [pinned, setPinned] = useState<{ kind: RiskKind | null } | null>(null);
   // Paused after an urgent sign until "Keep talking" (concern / elevated never pause)
   const [paused, setPaused] = useState<{ history: ChatTurn[]; kind: RiskKind | null } | null>(null);
+  // Paused for good (until the owner locks and unlocks) when the writer seems to be under 18
+  const [minorLocked, setMinorLocked] = useState(false);
   const [ageOk, setAgeOk] = useState(false);
   const [consentError, setConsentError] = useState('');
   const consentStatus = useAiChatStore(s => s.status);
@@ -455,6 +459,13 @@ export function AiChat() {
     push({ role: 'crisis', text: '', kind, rating, withheld: opts.withheld });
   };
 
+  /** The writer seems to be under 18: pause the chat for good and count it (no content). */
+  const lockForMinor = () => {
+    setMinorLocked(true);
+    setPaused(null);
+    void analyticsApi.minorDetected().catch(() => { /* counting never blocks the chat */ });
+  };
+
   /** A reply from the model, kept to the house style (one quiet rewrite, then scrubbed). */
   const generateReply = async (history: ChatTurn[], safe: boolean): Promise<string> => {
     const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '', safe, eatingSafeRef.current);
@@ -480,7 +491,10 @@ export function AiChat() {
     const harmful = replyPatternScreen(reply)
       ?? (replyNeedsReview(reply) ? await classifyReply(reply, lastUser).catch(() => userRisk.kind ?? 'suicide' as RiskKind) : null);
     if (harmful) return harmful;
-    push({ role: 'assistant', text: reply || '…' });
+    // The model follows the age rules by tagging its reply — strip the tag and pause
+    const { text, tagged } = stripMinorTag(reply);
+    push({ role: 'assistant', text: text || '…' });
+    if (tagged) lockForMinor();
     return null;
   };
 
@@ -606,7 +620,7 @@ export function AiChat() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || busy || paused) return;
+    if (!text || busy || paused || minorLocked) return;
     setInput('');
 
     // Every three hours, remind in the thread that this is an AI
@@ -640,7 +654,20 @@ export function AiChat() {
       const safeNow = safeModeRef.current || pattern.rating !== 'none';
       const replyP = generateReply(history, safeNow)
         .then(r => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e }));
-      const risk = maxRisk(pattern, await classifyRisk(history).catch(() => NO_RISK));
+      const classified = await classifyRisk(history).catch(() => NO_RISK);
+      const risk = maxRisk(pattern, classified);
+
+      // A likely minor (the local check or the classifier): the model's
+      // age-rules reply if it gave one, else a fixed one — then pause for good
+      if (minorPattern(text) || classified.minor) {
+        const res = await replyP;
+        const tagged = res.ok ? stripMinorTag(res.r) : null;
+        const safe = tagged?.tagged && tagged.text && !replyPatternScreen(tagged.text);
+        push({ role: 'assistant', text: safe ? tagged!.text : MINOR_FALLBACK_REPLY });
+        if (risk.rating !== 'none') showCrisis(risk);
+        lockForMinor();
+        return;
+      }
 
       // Urgent: pause, with the full card (911 first) pinned for the session
       if (risk.rating === 'urgent') {
@@ -728,10 +755,12 @@ export function AiChat() {
           {!paused && <Log ref={logRef} aria-live="polite">
             {messages.length === 0 && (
               <Empty>
+                <p>
                 {AI_DISCLOSURE}{' '}
                 {blocked ? 'In-App AI chat is turned off for this account.'
-                  : aiReady ? 'It’s here to help with Chronicles: estimating calories, sorting tasks, and thinking through entries. It isn’t a companion or a counselor. This chat isn’t saved.' : 'Set up In-App AI in Settings to chat.'}
-                <br />To keep something, type <code>/save topic text</code> — it becomes a journal entry — or <code>/save chat</code> to keep the whole conversation.
+                  : aiReady ? 'It’s here to help with Chronicles: estimating calories, sorting tasks, and thinking through entries. It isn’t a companion or a counselor. This chat isn’t saved and the AI cannot see anything in your journal.' : 'Set up In-App AI in Settings to chat.'}
+                </p>
+                <p>To keep something, type <code>/save topic text</code> — it becomes a journal entry — or <code>/save chat</code> to keep the whole conversation.</p>
               </Empty>
             )}
             {messages.map(m => m.role === 'crisis' ? (
@@ -756,7 +785,12 @@ export function AiChat() {
             )}
           </Log>}
           {/* While paused, the message bar holds Keep talking — always in view, never scrolled away */}
-          {paused ? (
+          {minorLocked ? (
+            <Composer>
+              <PausedNote>This chat is for adults. The account owner can resume it with their password.</PausedNote>
+              <PillButton type="button" onClick={lock}>Lock Chronicles</PillButton>
+            </Composer>
+          ) : paused ? (
             <Composer>
               <PausedNote>Chat paused</PausedNote>
               <PillButton type="button" onClick={() => void keepTalking()}>Keep talking</PillButton>

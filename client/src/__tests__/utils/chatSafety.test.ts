@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  replyNeedsReview, patternScreen, replyPatternScreen, parseClassification, parseReplyClassification, maxRisk,
+  minorPattern, replyNeedsReview, patternScreen, replyPatternScreen, parseClassification, parseReplyClassification, maxRisk,
   classifierTranscript, NO_RISK,
 } from '@/utils/chatSafety';
-import { chatSystemPrompt } from '@/utils/chatSave';
+import { chatSystemPrompt, stripMinorTag, MINOR_TAG } from '@/utils/chatSave';
 
 describe('patternScreen', () => {
   const cases: [string, string, string | null][] = [
@@ -108,5 +108,46 @@ describe('maxRisk + transcript + safe mode', () => {
     expect(p).not.toContain('might not be the best place');
     expect(p).toContain('never end or refuse the conversation');
     expect(p).toContain('do not call yourself their friend');
+  });
+});
+
+describe('minorPattern', () => {
+  it.each([
+    'No. I am eight',
+    'I’m 12 years old',
+    'i am 15 and i hate school',
+    'I\'m in 4th grade',
+    'im in fifth grade',
+    'I am only ten.',
+  ])('catches: %s', t => expect(minorPattern(t)).toBe(true));
+
+  it.each([
+    'I’m 5 minutes away',
+    'I’m five foot two',
+    'I’m eight episodes in',
+    'I’m 34 years old',
+    'I am 18',
+    'I teach 3rd grade',
+    'My son is 9 years old',
+    'I’m one of those people',
+    'When I was 12 I loved horses',
+  ])('ignores: %s', t => expect(minorPattern(t)).toBe(false));
+});
+
+describe('minor flag and tag', () => {
+  it('reads "minor" from the classifier, with or without a risk', () => {
+    expect(parseClassification('{"rating":"none","kind":null,"minor":true}')).toEqual({ rating: 'none', kind: null, minor: true });
+    expect(parseClassification('{"rating":"concern","kind":"self_harm","minor":true}')).toEqual({ rating: 'concern', kind: 'self_harm', minor: true });
+    expect(parseClassification('{"rating":"none","kind":null,"minor":false}')).toEqual(NO_RISK);
+  });
+  it('strips the model\'s tag', () => {
+    expect(stripMinorTag(`${MINOR_TAG}\nThank you for telling me.`)).toEqual({ text: 'Thank you for telling me.', tagged: true });
+    expect(stripMinorTag('Hello')).toEqual({ text: 'Hello', tagged: false });
+  });
+  it('always includes the age rules, with the one exception in the persona', () => {
+    const p = chatSystemPrompt(['Journal']);
+    expect(p).toContain('Chronicles is for adults 18 and older');
+    expect(p).toContain('The one exception is someone under 18');
+    expect(p).toContain('Childhelp at 1-800-422-4453');
   });
 });

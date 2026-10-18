@@ -21,6 +21,8 @@ vi.mock('@/stores/uiStore', () => ({
 
 const mockSignOut = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
+const mockLock = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ lock: mockLock }) }));
 
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -41,7 +43,7 @@ describe('MobileChrome drop-down menu', () => {
 
   it('shows every destination as an icon over its name, marking the current one', () => {
     renderAt('/journal');
-    for (const name of ['Today', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
+    for (const name of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByRole('button', { name: new RegExp(name), hidden: true })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: /Journal/, hidden: true })).toHaveAttribute('aria-current', 'page');
@@ -60,6 +62,15 @@ describe('MobileChrome drop-down menu', () => {
     expect(mockSetOpen).toHaveBeenCalledWith(false);
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('locks from the row just above Sign out, closing the menu', () => {
+    renderAt();
+    const rows = screen.getAllByRole('button', { hidden: true }).map(b => b.textContent);
+    expect(rows.indexOf('lockLock')).toBe(rows.indexOf('logoutSign out') - 1);
+    fireEvent.click(screen.getByRole('button', { name: 'Lock', hidden: true }));
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+    expect(mockLock).toHaveBeenCalledTimes(1);
   });
 
   it('is not shown while closed', () => {

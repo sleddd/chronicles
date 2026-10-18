@@ -142,6 +142,14 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
             The AI chat is for adults 18 and over. You confirm your age when you turn the chat on. If Chronicles has
             reason to believe an account belongs to someone under 18, the AI chat is turned off for that account.
           </p>
+          <p>
+            If what someone writes in the chat says, or strongly suggests, that they are under 18, the AI kindly tells
+            them the chat is made for grown-ups and that they did nothing wrong, and points them to a trusted adult. If
+            they mention being hurt or unsafe, it also gives them 911, Childhelp (1-800-422-4453) and 988. The chat then
+            pauses and stays paused until the account owner locks Chronicles and opens it again with their password.
+            Chronicles checks for this three ways: a pattern check inside Chronicles, the classification request
+            described below, and the AI’s own reply.
+          </p>
 
           <h4>How you’ll know it’s AI</h4>
           <p>Chronicles tells you plainly, in four ways:</p>
@@ -221,8 +229,9 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
 
           <h4>What Chronicles records</h4>
           <p>
-            Chronicles records only that crisis resources were shown, with the date, the rating, and the kind of risk. It
-            never records what you wrote, what the AI replied, or which account it was. These counts are used only if a
+            Chronicles records only that crisis resources were shown, with the date, the rating, and the kind of risk,
+            and that the chat paused for a likely minor, with the date. It never records what you wrote, what the AI
+            replied, or which account it was. These counts are used only if a
             report is requested.
           </p>
 

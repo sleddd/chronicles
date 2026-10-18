@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { crisisCardEventSchema } from '@chronicles/shared';
-import { recordCrisisCard } from '../db/analyticsQueries.js';
+import { recordCrisisCard, recordMinorDetected } from '../db/analyticsQueries.js';
 
 /* App analytics. Mounted behind authMiddleware only so strangers can't stuff
    the counts — the handlers never read req.auth and never log, so nothing
@@ -17,6 +17,16 @@ router.post('/crisis-card', async (req, res) => {
   }
   try {
     await recordCrisisCard(parsed.data.rating, parsed.data.kind);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to record event' });
+  }
+});
+
+// POST /api/analytics/minor-detected — the AI chat paused for a likely minor (no body)
+router.post('/minor-detected', async (_req, res) => {
+  try {
+    await recordMinorDetected();
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Failed to record event' });

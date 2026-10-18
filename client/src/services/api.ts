@@ -289,6 +289,7 @@ export const aiChat = {
 export const analytics = {
   crisisCard: (rating: CrisisRating, kind: RiskKind | null) =>
     request<{ ok: true }>('/analytics/crisis-card', { method: 'POST', body: { rating, kind } }),
+  minorDetected: () => request<{ ok: true }>('/analytics/minor-detected', { method: 'POST' }),
 };
 
 // =============================================================================
