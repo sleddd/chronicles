@@ -6,19 +6,25 @@ Capture the key moments of your day, organize with topics, and track health, goa
 
 All it takes is opening it up, select a topic, and enter one line for the day. Filters and code do the rest by sorting everything into views or you.
 
-Chronicles is in active design and development, with a phone app via React Native planned. 
+It works on phones and tablets and installs as an app from the browser. Chronicles is in active design and development, with a native phone app via React Native planned.
 
-## Screenshots
-These screenshots are from October 2026, but subject to change.
+## A Tour of Chronicles
+Screenshots are from October 2026 and may change.
 
-### Dashboard - Light and Dark Mode
+### Dashboard
+Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
+
 <img width="1400" height="736" alt="Screenshot 2026-10-17 at 10 07 35 PM" src="https://github.com/user-attachments/assets/2fefd689-c7ae-4b0b-bc9c-ef87f1afab80" />
 <img width="1455" height="736" alt="Screenshot 2026-10-17 at 9 47 23 PM" src="https://github.com/user-attachments/assets/aba3a457-703b-45ad-baca-63f970479cd4" />
 
-### Journal View - to sort, search, edit, and filter with. This is the main view.
+### Journal
+The main view, and where the app opens. Pick a topic, write a line (or fill in the topic's fields) and save. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket, voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and saving takes you back there.
+
 <img width="1460" height="738" alt="Screenshot 2026-10-17 at 9 44 50 PM" src="https://github.com/user-attachments/assets/063bd93e-17e8-4b6b-9951-366ab3ef7b8c" />
 
-### Health View - Meal, Exercise, Medication, Allergy, Wellness, and Symptom Tracking with basic reporting
+### Health
+A health dashboard with today's nutrition against your goals, a wellness check-in, quick meal and exercise logging and your medication schedule, plus tabs for Meals, Exercise, Symptoms, Med list and Allergies. Marking a dose taken adds its nutrients (a vitamin D supplement, say) to the day's totals. Reports chart water, mood and sleep over time, symptom frequency and severity, and the patterns between them, such as how water, foods or exercise relate to your symptoms. Medication lists, symptom logs and allergy records print for appointments.
+
 <img width="1449" height="741" alt="Screenshot 2026-10-17 at 9 50 52 PM" src="https://github.com/user-attachments/assets/a6aeda98-524f-4c77-a286-afbf1aed86b3" />
 <img width="1450" height="732" alt="Screenshot 2026-10-17 at 9 51 01 PM" src="https://github.com/user-attachments/assets/4b39780b-5ca7-447c-8c57-13d16cdfc40a" />
 <img width="1158" height="727" alt="Screenshot 2026-10-17 at 10 08 44 PM" src="https://github.com/user-attachments/assets/a2dbd91a-d1ab-4a07-a1d1-b57f80c26a7e" />
@@ -28,27 +34,39 @@ These screenshots are from October 2026, but subject to change.
 <img width="1446" height="731" alt="Screenshot 2026-10-17 at 9 51 27 PM" src="https://github.com/user-attachments/assets/4c2f211c-36bc-46a7-943a-ce61c3c8ca21" />
 <img width="1435" height="546" alt="Screenshot 2026-10-17 at 9 51 47 PM" src="https://github.com/user-attachments/assets/a6fee1bd-91a8-4df0-a6a0-0352408a8ec1" />
 
-### AI integration for calorie estimation and chat. It will auto-generate save suggestions and provide app assistance. AI has no access to your journal entries ensuring no private information gets to the AI unless you send it. It has no memory beyond chat context, so your chats are not remembered once they are cleared or you logout. However, there is a specific section for notes in your settings where you can add things you want your AI to always know. You must provide your own AI key via OpenAI, Claude/Anthropic, or AWS Bedrock.
+### In-App AI
+Optional, and you bring your own key from OpenAI, Claude (Anthropic) or Amazon Bedrock. It estimates calories and nutrients for meals and exercise, and a chat bubble helps with the app and suggests ready-made saves — `/save Meals oatmeal with berries` files a journal entry without going to the AI. The AI never sees your journal entries, only what you type to it. Chats aren't kept: they're gone when you clear them or sign out, unless you save one to your journal with `/save chat`. Add notes in Settings for things you want the AI to always know. Requests go from your browser straight to the provider, never through the Chronicles server.
+
 <img width="1460" height="735" alt="Screenshot 2026-10-17 at 9 46 26 PM" src="https://github.com/user-attachments/assets/a6c25896-569a-4ea7-8172-1a3ddac153d0" />
 
-### Browse by topic or full journal view - Add your own topics, remove topics, and add your own custom fields to topics.
+### Topics
+Entries are organized by topic — tasks, goals, meals, medication, recipes, books, quotes and more — or your own. Add, remove and reorder topics, choose their icons and give them custom fields (text, number, date, yes/no, link). Each topic's page lists its entries by month, with search. A topic can hide the text area so its entries are fields only, titled from what you filled in ("Piranesi — Susanna Clarke").
+
 <img width="1454" height="746" alt="Screenshot 2026-10-17 at 9 47 38 PM" src="https://github.com/user-attachments/assets/c7177ae8-6287-44d3-97d3-58ea72660437" />
 <img width="1464" height="731" alt="Screenshot 2026-10-17 at 9 47 49 PM" src="https://github.com/user-attachments/assets/9dbbb374-3cd1-4ea6-bb44-382f754a276f" />
 
-### Kanban for life planning with goals and milestones. Also allows tasks and todos with custom filtering view for quickly checking outstanding project tasks. 
+### Planning
+Goals, milestones, tasks and todos on Kanban boards or as lists. Drag a card to another column to change its status, or up and down to set its order. Milestones roll up into goals and tasks into milestones. Search, sort and filter by goal, milestone or status, and save the views you use often.
+
 <img width="1460" height="732" alt="Screenshot 2026-10-17 at 9 52 16 PM" src="https://github.com/user-attachments/assets/c3f87add-04a1-4e2b-afe0-4ad9d32a6ea5" />
 <img width="1455" height="734" alt="Screenshot 2026-10-17 at 9 52 02 PM" src="https://github.com/user-attachments/assets/bf3f6c0e-b0c3-4acb-9267-faffa85be020" />
 
-### Calendar for meetings, tasks, and events with Google and Apple Calendar integration
+### Calendar
+Day, week and month views of what's scheduled: events, meetings, task deadlines, goal target dates and bills due. Two-way sync with Google Calendar and a private subscription feed for Apple Calendar. Only titles, times and locations are synced, never your journal.
+
 <img width="1458" height="734" alt="Screenshot 2026-10-17 at 9 52 26 PM" src="https://github.com/user-attachments/assets/af8680bb-0fad-4699-85a8-dca4f166affb" />
 
-### Sort your kitchen with shopping checklists, meal planning, and printable recipes with ingredient checklist integration
+### From the Kitchen
+A kitchen dashboard with today's meals and your shopping list, a weekly menu planner, recipes and shopping lists. Recipes have checkable ingredients, numbered steps, a photo and a print view. Link recipes to menu slots and shopping lists, and turn a week's menu into a shopping list in one tap.
+
 <img width="1458" height="735" alt="Screenshot 2026-10-17 at 9 54 58 PM" src="https://github.com/user-attachments/assets/254e2ef1-d66c-4d53-b66e-b8d8fec047b9" />
 <img width="1450" height="740" alt="Screenshot 2026-10-17 at 9 55 07 PM" src="https://github.com/user-attachments/assets/0670fe02-87e2-422e-83fe-48a1da800f8c" />
 <img width="1120" height="743" alt="Screenshot 2026-10-17 at 9 56 35 PM" src="https://github.com/user-attachments/assets/f2934c16-c80b-410c-a2a7-08f794a5b4d7" />
 <img width="1455" height="726" alt="Screenshot 2026-10-17 at 9 55 39 PM" src="https://github.com/user-attachments/assets/af53e857-de29-423e-bebb-e1e696db768d" />
 
-### Optional Financial Tracking with all data exportable to csv
+### Finance (optional)
+Off until you turn it on in Settings. A manual budget by category, bills and subscriptions (mark paid, pause, cancel), savings funds, money goals, and reports on what you've paid by bill, category, month or year, with an optional paycheck reconcile. It's all encrypted in your browser and there are no bank connections. Export everything as CSV spreadsheets plus a JSON backup. See the [Finance disclaimer](#finance).
+
 <img width="1464" height="739" alt="Screenshot 2026-10-17 at 9 52 36 PM" src="https://github.com/user-attachments/assets/67bd72a4-63e2-4dbd-8748-890fd9ed1fda" />
 <img width="1448" height="743" alt="Screenshot 2026-10-17 at 9 52 47 PM" src="https://github.com/user-attachments/assets/dfa05480-7530-47ab-80c5-e4eac0ced4ad" />
 <img width="1460" height="739" alt="Screenshot 2026-10-17 at 9 52 58 PM" src="https://github.com/user-attachments/assets/ea31a2eb-9e5a-486a-9f21-04ed740edae1" />
@@ -57,52 +75,9 @@ These screenshots are from October 2026, but subject to change.
 <img width="1109" height="742" alt="Screenshot 2026-10-17 at 9 56 44 PM" src="https://github.com/user-attachments/assets/08c2d2f0-aff8-4c55-abef-bc7cd312eabd" />
 
 ### Settings
+Your account, theme (light or dark and 30 accent colors), which features are on, calendar sync, entry images, In-App AI, security (two-factor authentication, Remember me, active sessions, recovery key) and data import and export. Every section folds away.
+
 <img width="1456" height="734" alt="Screenshot 2026-10-17 at 9 55 55 PM" src="https://github.com/user-attachments/assets/28b58f16-c629-446f-ac54-75acaaded3dd" />
-
-
-
-## Full Feature List
-
-- **Zero-Knowledge Encryption** - AES-256-GCM client-side encryption with non-extractable keys; server never sees plaintext
-- **Two-Factor Authentication** - TOTP-based 2FA (authenticator app); inline setup wizard with QR code, confirmation step, and 8 backup codes; disable with password confirmation
-- **Dashboard Home** - Two-column drag-and-drop widget layout; quick entry, daily priorities, events & meetings, mini calendar, affirmations, daily wellness check-in, tasks, shopping list, medication schedule, weather, and menu plan; daily quote and greeting; Add your custom topic widget
-- **Rich Text Editor** - TipTap-based editor with formatting toolbar, inline freehand drawing, and voice dictation
-- **Voice Dictation** - Tap the mic button to dictate entries hands-free using the Web Speech API; interim text previews in real-time as you speak; works offline on iOS/Safari (on-device processing); auto-continues after silence
-- **Topic Organization** - Categorize entries with custom topics, icons, and drag-and-drop reordering; define your own custom fields per topic (text, number, date, yes/no, URL) — fields appear in the entry editor and dashboard quick entry; any topic can optionally hide the main text area so its entries are fields-only
-- **Fields-First Entries** - Structured topics are written in their fields, not a text area: meals (Meal Description), medication (Medication Name), allergies (Allergen), goals and milestones (Objective), shopping lists, menu plans, books, quotes, and exercise. Each entry's title is generated from its fields — "Piranesi — Susanna Clarke", "“Be here now” — Ram Dass", "Running · 30 min · 3 mi" — so lists, the calendar and search always show something meaningful. Any filled-in field is enough to save. Tasks keep the full text area for longer notes
-- **Clean, Consistent Forms** - Every form uses the same single-column rows with filled input boxes; nutrients sit in a compact grid with units inside each box
-- **Quick Tab Filters** - Today, Date (with active filter bar and clear button), Tasks, All, Bookmarks, and Search views; the Date view lists events and meetings on their scheduled day, matching the calendar
-- **Search** - Search by keyword, topic, and date range from the journal's Search tab; clicking a topic label on any row filters to that topic, with a clear bar to undo it
-- **Edit Anywhere, Return Where You Were** - Opening or creating an entry from any page (topics, health, planning, calendar, shopping) opens it full width in the journal with the list filtered to its topic; Save, New, Discard, or × takes you straight back to the page you came from
-- **Spreadsheet-Style Lists** - Every entry list shows the date as "OCT 11, 2026", highlights the first row as a hint, and highlights rows on hover with a soft grey fill and an accent bar on the left; swipe a row for Edit/Delete on touch devices
-- **Bulk Edit** - Select multiple journal entries (or all of them) and delete them in one go
-- **Breadcrumbs** - The editor's breadcrumb trail remembers where you came from (e.g. Journal / Health / Symptoms) and leads back there
-- **Goals & Milestones** - Track goals with milestone progress and task linking; milestone status cycle (Not Started → In Progress → Completed) with tap-to-advance on the card; goal cards display the entry's featured image as a banner
-- **Custom Planner Filters** - Cross-hierarchy search across goals, milestones, tasks, and todos; filter by keyword, item type, status, priority, parent goal, and parent milestone; save named filters that persist and can be reloaded in one tap. The applied filter lives in the page address, so it's still there after editing a result, reloading, or opening a bookmark
-- **From the Kitchen** - A kitchen dashboard (today's meals and your open shopping list as a tick-off checklist) plus Menu, Recipes, and Shopping Lists tabs; the weekly menu planner autosaves as you type or link a recipe; recipes render as a formatted recipe page — name, description, prep/cook/serves/calories/difficulty stats band, photo hero, checkable ingredients, and numbered method steps — with live serving scaling that recalculates ingredient amounts, one-tap "Add to shopping list" (appends all ingredients and cross-links the entries), and "Add to menu"
-- **Finance (opt-in)** - A manual, encrypted money tracker, off until you turn it on: a monthly **budget** by category (planned vs bills due vs spending), every **bill and subscription** with Mark paid, pause and cancel, **savings funds**, **financial goals** with progress rings, and **reports** on what you paid by bill, type, category, month or year. An optional **paycheck reconcile** tab walks through each paycheck — starting balance, bills being paid, leftover to spend, and ticking lines off as they clear the bank. No bank connections. Not a banking app — see the disclaimer under [Finance](#finance)
-- **Shopping Lists** - Checklist-style lists linkable to recipes; dashboard widget shows active list with inline check-off
-- **Health Tracking** - Medications, symptoms, meals, exercise, and allergies; a Health dashboard with today's nutrition, a wellness check-in, quick meal and exercise logging, and the medication schedule; printable medication lists (with dosage and schedule), symptom logs, and allergy records
-- **Meals Log & Nutrition** - Log meals with calories, iron, vitamin D, B12, and vitamin C; daily totals against your goals, a 7/30/90-day and yearly at-a-glance view, and a review table for correcting entries; medication doses with nutrients (e.g. a vitamin D supplement) count toward the day automatically
-- **Medication Schedule** - Daily dose tracking with time-based scheduling; real-time sync on tab focus
-- **Daily Wellness Check-in** - Tap-to-fill water glasses, mood faces (1–5), sleep hours, period toggle, and flow intensity on the dashboard and Health dashboard, with the next expected period estimated from your history; entries stored encrypted under the Wellness topic and fully editable in the journal
-- **Health Reporting** - Correlation analysis, severity trends, exercise impact, and wellness trends (water/mood/sleep) with cross-correlation insights (sleep→mood, water→symptoms, exercise→sleep, mood→symptoms); cycle calendar showing period and flow days by month; date range filtering
-- **Mini Calendar Widget** - Monthly grid on dashboard with entry-presence dots; click any day to jump to that day's journal entries
-- **Calendar View** - Month, week, and day views with today circled; the Today button jumps to today's day view; events and meetings appear on their scheduled date; add an entry for any day straight from the calendar
-- **Calendar Sync** - Two-way sync of Event and Meeting entries with Google Calendar (pick any calendar you own); optional import of events created directly in Google; read-only Apple Calendar subscription feed (ICS) for iPhone/iPad/Mac; connect, disconnect, and sync on demand from Settings
-- **Entry Images** - Attach up to 7 photos per entry, stored **zero-knowledge in your own Cloudflare R2 bucket**; images are encrypted in the browser with your master key before upload, so your bucket only ever holds ciphertext; thumbnail strip, tap-to-open lightbox, and an optional featured image that renders as a hero banner above the entry
-- **Entry Sharing** - Share entries via public links; the share dialog manages the links for that entry (create, copy, revoke). Shared copies are stored unencrypted on the server by design — creating a link is an explicit opt-out of zero-knowledge for that entry, and revoking it removes access. Sharing is hidden for entries with images, except recipes, which share their formatted text while the photo stays private
-- **Title-Led Entry Headers** - Events, meetings, quotes, books, music, goals, and milestones open with their own name in place of the date block — events/meetings add a date · time · location line, quotes render formatted with author attribution, books show title and author
-- **In-App AI (bring your own key)** - Optional calorie and nutrient estimates for meals and exercise using your own Claude (Anthropic), Amazon Bedrock, or OpenAI credentials, which are encrypted with your master key; requests go straight from your browser to the provider, and typed values are never overwritten
-- **In-App AI Chat** - A small chat bubble for talking things through; chats are never saved, and `/save <topic> <text>` turns a thought into an encrypted journal entry
-- **PWA Support** - Installable as a standalone app with offline shell caching
-- **Customizable Theme** - Light/dark mode with 30 muted accent color presets (reds, oranges, greens, blues, purples, and neutrals) that recolor the whole app; high-contrast text on the white light theme
-- **Display Name** - Edit your display name in place in Settings; it's shown in the dashboard greeting
-- **Data Import & Export** - Export all entries to CSV; import entries from CSV or a Daily Log JSON export, with downloadable example files for both
-- **Apple Pencil Support** - Scribble handwriting-to-text in all fields; freehand drawing canvas with pressure sensitivity, palm rejection, and undo — drawings saved inline as encrypted SVG
-- **Mobile Responsive** - Slide-out navigation on phones and tablets, one pane at a time in the journal (with an Entries back bar), touch-friendly tap targets, single-column dashboard and stacked form labels on small screens
-- **Weather** - Current conditions beside the date in the page header and a 5-day dashboard widget (Open-Meteo; set your city in Settings)
-- **Accessible** - ARIA roles, focus management, keyboard navigation, reduced motion support
 
 ## Privacy & Security
 
@@ -110,7 +85,8 @@ These screenshots are from October 2026, but subject to change.
 - **Images never touch the Chronicles server** — they are encrypted client-side and uploaded straight to your own R2 bucket with URLs signed in the browser; your R2 credentials are themselves encrypted with your master key, so the server stores only ciphertext it cannot read
 - **Two-factor authentication** (TOTP) — no external services; secrets stored encrypted server-side
 - Recovery key system allows password reset without compromising zero-knowledge design
-- **Sharing is the one deliberate exception**: creating a share link stores a plaintext copy of that entry on the server so the link works for anyone — you opt in per entry, and revoking the link removes access
+- **Your password never leaves your browser** — sign-in sends a separate value derived from it, which can't unlock your data
+- **Sharing and calendar sync are the deliberate exceptions**, and both are opt-in: a share link stores a plaintext copy of that entry on the server so anyone with the link can read it (revoking the link deletes it), and calendar sync sends event titles, times and locations to Google, or keeps an unencrypted copy of them on the server for the Apple Calendar feed
 - Schema-per-user database isolation (not row-level security)
 - Session management — view and revoke active sessions from any device
 - Non-extractable CryptoKeys — master key cannot be exported from the browser's crypto subsystem
@@ -138,59 +114,21 @@ This is a complete rebuild combining the best of the original Chronicles UI with
 - **Styling**: styled-components (CSS-in-JS) on the Chronicles design system (tokens in `client/src/App.tsx`, core primitives in `client/src/components/atoms/core/`): white / deep-charcoal themes, borderless tonal panels, filled inputs, Work Sans display type and Open Sans for UI
 
 ```
-chronicles-rebuild/
+chronicles/
 ├── client/          # React SPA (Vite + styled-components + PWA)
 ├── server/          # Express API (Prisma + PostgreSQL)
 ├── shared/          # Shared code (crypto, types, theme)
-└── docs/            # BLUEPRINT.md, ACCESSIBILITY_UX_PLAN.md
+└── docs/            # BLUEPRINT.md, ACCESSIBILITY_UX_PLAN.md, IMAGES_FEATURE_PLAN.md, THEME_DESIGN_UPDATE.md
 ```
 
 ## How It Works
-
-Chronicles is a daily journal. Capture moments, organize with topics, and track what matters to you.
-
-### Topics
-
-Topics categorize your entries — like tags or folders. Each has an icon and color.
-
-**Default Topics** with special fields:
-- **Task** - Todo items with completion tracking and auto-migration; written in the full text area
-- **Goal** - Objectives with milestone progress tracking; named by the Goal Objective field
-- **Milestone** - Checkpoints within goals, linkable to tasks; named by the Milestone Objective field
-- **Medication** - Medication Name, dosage, frequency, schedule times, dose logging, and nutrients per dose
-- **Meals** - Meal Description, meal type, calories, and micronutrients (iron, vitamin D, B12, vitamin C)
-- **Symptom** - Severity tracking (1-10 scale) with duration
-- **Exercise** - Type, duration, intensity, and distance tracking
-- **Allergy** - Allergen (the entry's name), severity, and reaction tracking
-- **Wellness** - Auto-created by the dashboard check-in widget; water, mood, and sleep fields
-- **Event** - Name, date/time, location, and contact details; opens with the event name as its header
-- **Meeting** - Name, attendees, topic, location, and scheduling
-- **Recipe** - Formatted recipe page: description, category, prep/cook/serves/calories/difficulty, checkable ingredients with serving scaling, numbered method steps, photo hero, shopping-list and menu integration
-- **Shopping List** - Checklist items with categories, linkable to recipes; titled automatically ("Shopping list created on Oct 7, 2026")
-- **Menu Plan** - Weekly meal slots, linkable to recipes; editable in the journal or on the Menu page
-- **Priorities** - Auto-created by the dashboard priorities widget
-- **Music / Books / TV/Movies** - Entertainment tracking; books are titled "Title — Author" and music leads with the artist from your custom fields
-- **Research / Idea / Quote** - Inspiration collection; quotes are titled "“Quote” — Author" and display formatted with author attribution
-
-You can create your own topics for anything else. Any topic can have **user-defined custom fields** — add them by editing a topic in the Topics view. Fields appear in the entry editor and Quick Entry widget. Supported types: text, number, date, yes/no, URL. Turn on "hide main text field" for a topic and its entries become fields-only, titled from their field values.
-
-### Navigation
-
-- **Dashboard** (`/`) - Home view with daily widgets and quick entry
-- **Journal** (`/journal`) - Main entry view with quick tab filters (Today, Date, Tasks, All, Bookmarks, Search)
-- **Topics** - Manage and browse entries by topic
-- **Health** (`/health`) - Health dashboard, Meals log, Exercise, Symptoms, Med List, Allergies, and Reports
-- **Calendar** - Month, week, and day views; today is circled and the Today button opens today's day view
-- **Planning** - Goals, Milestones, Tasks, Todos, and Filters tabs; Custom Filters view at `/goals/filter`
-- **From the Kitchen** (`/kitchen`) - Kitchen dashboard, Menu planner, Recipes, and Shopping Lists
-- **Finance** (`/finance`, opt-in — the $ icon) - Budget & Bills, Goals, Savings, Reconcile (its own opt-in switch), and Reports
 
 ### Finance
 
 An optional, manual money tracker — turn it on in **Settings → Features → Finance** (it's off by default). Nothing connects to your bank: you enter what you want to track, and it's encrypted in your browser like your journal.
 
 - **Budget & Bills** — Monthly categories with a planned amount, compared with the bills due that month (counted as soon as you add a bill) and the spending you log. List every bill and subscription with how often it's due and what it costs a month; **Mark paid** records a payment on the bill, and you can pause or cancel subscriptions you're reconsidering. Totals show your monthly and yearly bills and what subscriptions cost you.
-- **Goals** — A target amount and date, with a progress ring fed by a savings fund or an amount you enter.
+- **Goals** — A target amount and date, with a progress bar fed by a savings fund or an amount you enter.
 - **Savings** — Named funds (emergency fund, a trip, car repairs) with a log of what you add and take out.
 - **Reconcile** *(its own opt-in switch)* — For each paycheck: your bank balance once everything has posted, the bills you're paying, and what's left to spend. Tick each line as it clears the bank, then check your current balance against what it should be ("Matches" or "Off by $X").
 - **Reports** — Search what you've paid by bill name, type (bill or subscription) and category, for this or last month, this or last year, or any dates — totals by bill and by month.
@@ -199,16 +137,6 @@ An optional, manual money tracker — turn it on in **Settings → Features → 
 
 > **Disclaimer:** Chronicles takes reasonable steps to keep your data secure — everything in Finance is encrypted in your browser before it's saved, and the server never sees it. But Chronicles is **not a banking app or a financial service**, and no system is perfectly secure. You are responsible for your financial data: what you choose to store, keeping your own records and backups, and securing your account and devices. By using Finance you accept the risk of storing and maintaining that information here.
 
-### Health Reporting
-
-Analyze health data with correlation analysis:
-- **Symptom frequency** and **severity trends** over time
-- **Food-symptom correlations** — identify trigger ingredients
-- **Exercise impact** on symptom patterns
-- **Wellness trends** — water, mood, and sleep over time with cross-correlations (sleep→mood, water→symptoms, exercise→sleep, mood→symptoms)
-- **Calorie summaries** by meal type
-- **Date range filtering** — Today, Week, Month, Year, or custom date range
-
 ### Calendar Sync
 
 Keep Event and Meeting entries in sync with the calendars you already use:
@@ -216,30 +144,26 @@ Keep Event and Meeting entries in sync with the calendars you already use:
 - **Google Calendar (two-way)** — Connect your Google account in Settings → Calendar Sync and pick which calendar to sync to. Events and meetings you create in Chronicles appear there; edits and deletions propagate. Optionally import events created directly in Google (from today onward) as Chronicles entries.
 - **Apple Calendar (subscription feed)** — Enable the ICS feed to get a private `webcal://` URL you can subscribe to from iPhone, iPad, or Mac (one-way: Chronicles → Apple Calendar). Regenerate the URL any time if it leaks.
 
-Only event titles, times, and locations are synced — never your journal content. Requires Google OAuth credentials on the server (see `server/.env.example`); the Apple feed works with no external setup.
+Only event titles, times, and locations are synced — never your journal content. The Apple feed keeps an unencrypted copy of them on the Chronicles server so Apple Calendar can fetch it; turning the feed off deletes it. Requires Google OAuth credentials on the server (see `server/.env.example`); the Apple feed works with no external setup.
 
 ### Entry Images
 
 Add up to 7 photos to any journal entry — without giving up zero-knowledge:
 
 1. **Bring your own bucket** — Create a free Cloudflare R2 bucket and an API token (Object Read & Write, scoped to that bucket). Your storage, your bill (R2's free tier has no egress fees).
-2. **Enter credentials in Settings → Entry images** — They autosave as you type, get encrypted with your master key, and are stored as ciphertext the server cannot read. The setup guide in Settings walks through the bucket, token, and the required CORS policy, and an optional "Test connection" verifies everything from your browser.
+2. **Enter credentials in Settings → Entry Images** — They autosave as you type, get encrypted with your master key, and are stored as ciphertext the server cannot read. The setup guide in Settings walks through the bucket, token, and the required CORS policy, and an optional "Test connection" verifies everything from your browser.
 3. **Attach images in the editor** — Photos are downscaled, encrypted with AES-256-GCM in the browser, and uploaded directly to your bucket with browser-signed URLs. Chronicles' server never sees the images or your credentials — your bucket only ever contains encrypted noise.
 
-Star an image to feature it as a full-width banner above the entry (recipes and goal cards use it too); tap any thumbnail for a full-screen lightbox with keyboard and swipe navigation. Deleting an image or an entry (including bulk delete) also removes the objects from your bucket. Sharing is automatically disabled for entries that contain images — except recipes, which share only their formatted text while the photo stays in your bucket.
-
-### Printable Views
-
-Medication lists, symptom logs, and allergy records can be printed directly from the browser for sharing with healthcare providers.
+Star an image to feature it as a full-width banner above the entry (recipes use it as their photo, and goal cards show it as a small round picture); tap any thumbnail for a full-screen lightbox with keyboard and swipe navigation. Deleting an image or an entry (including bulk delete) also removes the objects from your bucket. Sharing is automatically disabled for entries that contain images — except recipes, which share only their formatted text while the photo stays in your bucket.
 
 ### Settings
 
 Each section is a collapsible card (all start collapsed; Settings remembers which you open):
 
-- **Account** - Username, display name (edit in place), and email (changing it asks for your password)
-- **Preferences** - Timezone and the weather forecast city
+- **Account** - Username, display name (edit in place), email (changing it asks for your password), and delete account (asks for your password, plus a 2FA code when 2FA is on)
+- **Preferences** - Timezone (weather cities are set from the dashboard's Customize view)
 - **Theme** - Light/dark mode and 30 accent color presets
-- **Features** - Enable/disable health tracking, planning, entertainment, cycle tracking, Finance and paycheck reconcile, and more
+- **Features** - Turn on or off meals, medication, goals, milestones, exercise, allergies, cycle tracking, entertainment and inspiration; Finance and paycheck reconcile are off until you turn them on
 - **Calendar Sync** - Connect Google Calendar, choose the target calendar, toggle imports, manage the Apple ICS feed, and clean up old events
 - **Entry Images** - Toggle the feature, enter your Cloudflare R2 credentials (autosaved and master-key encrypted), test the connection, and follow the built-in setup guide
 - **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant
@@ -271,6 +195,8 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
    Optional: to enable Google Calendar sync, add Google OAuth credentials and a
    `CALENDAR_TOKEN_KEY` (see comments in `.env.example`). Entry images need **no**
    server configuration — each user connects their own R2 bucket from Settings.
+   For a personal deployment, set `REGISTRATION_WHITELIST` to the emails allowed to
+   sign up; without it anyone can create an account on your server.
 
 4. Set up the database:
    ```bash
