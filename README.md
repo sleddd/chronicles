@@ -15,7 +15,6 @@ Screenshots are from October 2026 and may change.
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
 
 <img width="1418" height="739" alt="Screenshot 2026-10-17 at 10 32 40 PM" src="https://github.com/user-attachments/assets/8e59a461-2e89-48ba-860b-13d1427b5dc4" />
-<img width="1414" height="740" alt="Screenshot 2026-10-17 at 10 32 57 PM" src="https://github.com/user-attachments/assets/a1b61a40-f5c0-4198-a1ef-bcd0e5b5588b" />
 <img width="1408" height="736" alt="Screenshot 2026-10-17 at 10 33 18 PM" src="https://github.com/user-attachments/assets/3f0c37f4-ff8a-419e-aeb8-3c887ab0c0be" />
 
 
