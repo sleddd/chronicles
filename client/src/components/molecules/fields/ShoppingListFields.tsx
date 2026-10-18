@@ -36,7 +36,7 @@ const Wrapper = styled.div`
 const Section = styled.section`
   display: flex;
   flex-direction: column;
-  & + & { margin-top: 44px; }
+  & + & { margin-top: 32px; }
 `;
 
 const SectionHead = styled.div`

@@ -13,7 +13,7 @@ export const FormWrap = styled.div`
 export const Section = styled.section`
   display: flex;
   flex-direction: column;
-  & + & { margin-top: 40px; }
+  & + & { margin-top: 30px; }
 `;
 
 export const SectionHead = styled.div`
@@ -32,22 +32,8 @@ export const SectionLabel = styled.h3`
   color: var(--text-soft);
 `;
 
-/* A big borderless title field ("What did you eat?") */
-export const TitleInput = styled.input`
-  && {
-    width: 100%;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-display);
-    font-size: 34px;
-    font-weight: 300;
-    line-height: 1.2;
-    color: var(--text-primary);
-  }
-  &::placeholder { color: var(--text-hint); }
-`;
+/* A big borderless title field ("What did you eat?") — wraps and grows to fit */
+export { TitleInput } from './TitleInput.js';
 
 export const Chips = styled.div`
   display: flex;
@@ -60,8 +46,8 @@ export const Chip = styled.button<{ $active: boolean }>`
   height: 32px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-card)')};
-  background: transparent;
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-pill, var(--border-card))')};
+  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'var(--bg-control, transparent)')};
   font-family: var(--font-sans);
   font-size: 14px;
   color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')};

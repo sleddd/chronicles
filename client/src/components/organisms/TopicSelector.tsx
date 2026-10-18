@@ -152,19 +152,25 @@ interface TopicSelectorProps {
   onSelect: (id: number | null) => void;
   topics: { id: number; name: string; icon: string | null; color: string | null }[];
   filled?: boolean;
-  /** Show the "No topic" clear option in the list. Defaults to true. */
-  allowNone?: boolean;
   /** Hide the topic icon on the trigger (used when the picker renders as a breadcrumb). */
   hideIcon?: boolean;
 }
 
-export function TopicSelector({ selectedId, onSelect, topics, filled, allowNone = true, hideIcon = false }: TopicSelectorProps) {
+type PickerTopic = { id: number | null; name: string; icon: string | null };
+const isJournal = (t: { name: string }) => t.name.toLowerCase() === 'journal';
+
+/** Topic picker. There is no "No topic": an entry without one is saved under
+ *  Journal, so null shows — and is listed — as Journal (even before the
+ *  Journal topic exists; picking it then keeps null). Always A–Z. */
+export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false }: TopicSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
-  const selected = topics.find(t => t.id === selectedId);
+  const journalTopic = topics.find(isJournal);
+  const journal: PickerTopic = journalTopic ?? { id: null, name: 'Journal', icon: 'book' };
+  const selected: PickerTopic | undefined = selectedId === null ? journal : topics.find(t => t.id === selectedId);
 
   // Close on click outside
   useEffect(() => {
@@ -179,9 +185,12 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, allowNone 
     return () => document.removeEventListener('mousedown', handle);
   }, [open]);
 
+  // Always alphabetical (case-insensitive), whatever order the topics are kept in
+  const sorted: PickerTopic[] = [...topics, ...(journalTopic ? [] : [journal])]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   const filtered = search
-    ? topics.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
-    : topics;
+    ? sorted.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+    : sorted;
 
   return (
     <Wrapper ref={wrapperRef}>
@@ -192,7 +201,7 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, allowNone 
             {selected.name}
           </>
         ) : (
-          <Placeholder>No topic</Placeholder>
+          <Placeholder>Journal</Placeholder>
         )}
         <ChevronIcon $open={open}>
           <FontAwesomeIcon icon={faChevronDown} />
@@ -210,21 +219,13 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, allowNone 
             />
           </SearchWrapper>
           <ItemList>
-            {allowNone && (
-              <Item
-                $active={selectedId === null}
-                onClick={() => { onSelect(null); setOpen(false); setSearch(''); }}
-              >
-                No topic
-              </Item>
-            )}
             {filtered.length === 0 ? (
               <EmptyMessage>No topics found</EmptyMessage>
             ) : (
               filtered.map(t => (
                 <Item
-                  key={t.id}
-                  $active={selectedId === t.id}
+                  key={t.id ?? 'journal'}
+                  $active={selectedId === t.id || (selectedId === null && isJournal(t))}
                   onClick={() => { onSelect(t.id); setOpen(false); setSearch(''); }}
                 >
                   <TopicIcon $color={accentColor}><TopicGlyph name={t.icon} size={15} /></TopicIcon>

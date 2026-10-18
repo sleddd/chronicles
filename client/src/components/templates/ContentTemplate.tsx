@@ -42,7 +42,9 @@ const Main = styled.main`
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   min-height: 0;
-  background: ${({ theme }) => theme.colors.surfaceOverlay};
+  /* The page colour token (was the old theme's near-white overlay, which hid
+     the light page grey) */
+  background: var(--bg-app, ${({ theme }) => theme.colors.background});
   /* Phones: a little more room at the sides on top of each page's own 16px
      gutter, so content never runs close to the screen edge */
   @media (max-width: 768px) { padding-inline: 8px; }

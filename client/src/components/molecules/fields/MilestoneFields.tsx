@@ -48,7 +48,7 @@ export function MilestoneFields({ values, onChange, goalOptions }: MilestoneFiel
         />
       </Section>
 
-      <RowBox style={{ marginTop: 40 }}>
+      <RowBox style={{ marginTop: 30 }}>
         <LabelledRow>
           <RowLabel as="label" htmlFor={goalId}>Goal</RowLabel>
           <BareSelect>
@@ -78,7 +78,7 @@ export function MilestoneFields({ values, onChange, goalOptions }: MilestoneFiel
         </LabelledRow>
       </RowBox>
 
-      <Section style={{ marginTop: 40 }}>
+      <Section style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
         <BoxText id={notesId} value={values.notes ?? ''} placeholder="Additional details"
           onChange={e => set({ notes: e.target.value })} />

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
+import { TitleInput } from './TitleInput.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import type { RecipeFieldValues, RecipeIngredient, RecipeStep, RecipeCategory, RecipeDifficulty } from '../../../types/fields.js';
 export type { RecipeFieldValues } from '../../../types/fields.js';
@@ -43,23 +44,12 @@ const Wrapper = styled.div`
 const Section = styled.section`
   display: flex;
   flex-direction: column;
-  margin-top: 44px;
+  margin-top: 32px;
 `;
 
-const NameInput = styled.input`
-  && {
-    width: 100%;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-display);
-    font-size: 38px;
-    font-weight: 300;
-    line-height: 1.2;
-    color: var(--text-primary);
-  }
-  &::placeholder { color: var(--text-hint); }
+/* The shared title field (wraps and grows to fit), a size up */
+const NameInput = styled(TitleInput)`
+  && { font-size: 38px; }
 `;
 
 const DescInput = styled.input`
@@ -81,7 +71,7 @@ const DescInput = styled.input`
 const Strip = styled.div`
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  margin-top: 44px;
+  margin-top: 32px;
   border: 1px solid var(--border-card);
   border-radius: 10px;
   overflow: hidden;

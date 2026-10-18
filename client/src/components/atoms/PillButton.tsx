@@ -18,8 +18,8 @@ export const PillButton = styled.button<{ $variant?: 'accent' | 'neutral' }>`
   text-transform: uppercase;
   white-space: nowrap;
   color: ${({ $variant }) => ($variant === 'neutral' ? 'var(--text-secondary)' : 'var(--color-accent-line)')};
-  background: transparent;
-  border: 1px solid ${({ $variant }) => ($variant === 'neutral' ? 'var(--border-strong)' : 'var(--color-accent-line)')};
+  background: var(--bg-control, transparent);
+  border: 1px solid ${({ $variant }) => ($variant === 'neutral' ? 'var(--border-pill, var(--border-strong))' : 'var(--color-accent-line)')};
   border-radius: var(--r-full, 999px);
   cursor: pointer;
   transition: background 150ms, opacity 150ms;

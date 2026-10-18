@@ -29,7 +29,7 @@ export function AllergyFields({ values, onChange }: AllergyFieldsProps) {
         aria-label="Allergen"
       />
 
-      <Section style={{ marginTop: 40 }} aria-label="Reaction">
+      <Section style={{ marginTop: 30 }} aria-label="Reaction">
         <SectionHead><SectionLabel as="label" htmlFor={reactionId}>Reaction</SectionLabel></SectionHead>
         <BoxInput id={reactionId} value={values.reaction} placeholder="e.g. Hives, Swelling, Difficulty breathing"
           onChange={e => set({ reaction: e.target.value })} />

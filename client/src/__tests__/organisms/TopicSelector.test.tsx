@@ -29,11 +29,12 @@ const topics = [
 ];
 
 describe('TopicSelector', () => {
-  it('renders no topic placeholder when nothing selected', () => {
+  it('shows Journal when nothing is selected — there is no "No topic"', () => {
     renderWithTheme(
       <TopicSelector selectedId={null} onSelect={vi.fn()} topics={topics} />
     );
-    expect(screen.getByText('No topic')).toBeInTheDocument();
+    expect(screen.getByText('Journal')).toBeInTheDocument();
+    expect(screen.queryByText('No topic')).not.toBeInTheDocument();
   });
 
   it('renders selected topic name', () => {
@@ -47,7 +48,7 @@ describe('TopicSelector', () => {
     renderWithTheme(
       <TopicSelector selectedId={null} onSelect={vi.fn()} topics={topics} />
     );
-    fireEvent.click(screen.getByText('No topic'));
+    fireEvent.click(screen.getByText('Journal'));
     // Dropdown should now be visible with topics
     expect(screen.getByText('Work')).toBeInTheDocument();
     expect(screen.getByText('Personal')).toBeInTheDocument();
@@ -58,29 +59,38 @@ describe('TopicSelector', () => {
     renderWithTheme(
       <TopicSelector selectedId={null} onSelect={onSelect} topics={topics} />
     );
-    fireEvent.click(screen.getByText('No topic'));
+    fireEvent.click(screen.getByText('Journal'));
     fireEvent.click(screen.getByText('Work'));
     expect(onSelect).toHaveBeenCalledWith(1);
   });
 
-  it('calls onSelect with null when No topic is chosen', () => {
+  it('lists Journal (null until the topic exists) among the topics, A–Z, with no "No topic"', () => {
     const onSelect = vi.fn();
     renderWithTheme(
       <TopicSelector selectedId={1} onSelect={onSelect} topics={topics} />
     );
-    // Open dropdown
     fireEvent.click(screen.getByText('Work'));
-    // Click "No topic" in the dropdown
-    const noTopicItems = screen.getAllByText('No topic');
-    fireEvent.click(noTopicItems[noTopicItems.length - 1]);
+    expect(screen.queryByText('No topic')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Journal'));
     expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('shows the existing Journal topic for null and picks it by id', () => {
+    const onSelect = vi.fn();
+    const withJournal = [...topics, { id: 3, name: 'Journal', icon: 'book', color: null }];
+    renderWithTheme(
+      <TopicSelector selectedId={2} onSelect={onSelect} topics={withJournal} />
+    );
+    fireEvent.click(screen.getByText('Personal'));
+    fireEvent.click(screen.getByText('Journal'));
+    expect(onSelect).toHaveBeenCalledWith(3);
   });
 
   it('shows "No topics found" when search has no matches', () => {
     renderWithTheme(
       <TopicSelector selectedId={null} onSelect={vi.fn()} topics={topics} />
     );
-    fireEvent.click(screen.getByText('No topic'));
+    fireEvent.click(screen.getByText('Journal'));
     fireEvent.change(screen.getByTestId('search-input'), {
       target: { value: 'zzzzz' },
     });

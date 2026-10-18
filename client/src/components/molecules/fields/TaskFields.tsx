@@ -12,15 +12,15 @@ export type { TaskFieldValues } from '../../../types/fields.js';
 /* Task fields — the same form in the journal editor and Quick Entry: the task
    as a big borderless title ("What needs doing?"; an older task's text fills
    it once), then one outlined box of rows — Part of (goal and milestone pills),
-   Priority chips with a coloured dot, Deadline, Status chips and an
+   Priority chips (no dots), Deadline, Status chips and an
    Auto-migrate switch — then Notes. Props only. */
 
-const PRIORITIES: { value: TaskFieldValues['priority']; label: string; color: string }[] = [
-  { value: 'none', label: 'None', color: 'var(--control-border)' },
-  { value: 'low', label: 'Low', color: 'var(--chart-blue)' },
-  { value: 'medium', label: 'Medium', color: 'var(--chart-amber)' },
-  { value: 'high', label: 'High', color: 'var(--mood-1)' },
-  { value: 'urgent', label: 'Urgent', color: 'var(--color-danger)' },
+const PRIORITIES: { value: TaskFieldValues['priority']; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'urgent', label: 'Urgent' },
 ];
 
 type Status = 'todo' | 'in_progress' | 'done';
@@ -29,16 +29,6 @@ const STATUSES: { value: Status; label: string }[] = [
   { value: 'in_progress', label: 'In progress' },
   { value: 'done', label: 'Completed' },
 ];
-
-const Dot = styled.span<{ $color: string }>`
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 10px;
-  border-radius: 50%;
-  background: ${({ $color }) => $color};
-  vertical-align: 1px;
-`;
 
 const PartOf = styled.div`
   display: flex;
@@ -96,7 +86,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
         />
       </Section>
 
-      <RowBox style={{ marginTop: 40 }}>
+      <RowBox style={{ marginTop: 30 }}>
         <LabelledRow>
           <RowLabel>Part of</RowLabel>
           <PartOf>
@@ -130,7 +120,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
             {PRIORITIES.map(p => (
               <Chip key={p.value} type="button" role="radio" aria-checked={priority === p.value}
                 $active={priority === p.value} onClick={() => set({ priority: p.value })}>
-                <Dot $color={p.color} aria-hidden="true" />{p.label}
+                {p.label}
               </Chip>
             ))}
           </Chips>
@@ -163,7 +153,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
         </LabelledRow>
       </RowBox>
 
-      <Section style={{ marginTop: 40 }}>
+      <Section style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
         <BoxText id={notesId} value={values.notes ?? ''} placeholder="Additional details"
           onChange={e => set({ notes: e.target.value })} />

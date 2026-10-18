@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react';
 import styled from 'styled-components';
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor, useDroppable,
@@ -323,7 +324,14 @@ export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, o
 
   const columnOf = (id: number) => columns.find(c => c.items.some(i => i.id === id))?.key;
 
+  // Releasing a dragged card fires a click on it — that must not open the
+  // card (it would leave the board, and its filters). Clicks are ignored
+  // while dragging and for a moment after the drop.
+  const dragUntil = useRef(0);
+  const open = useCallback((id: number) => { if (Date.now() >= dragUntil.current) onOpen(id); }, [onOpen]);
+
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    dragUntil.current = Date.now() + 300;
     if (!over) return;
     const id = Number(active.id);
     const from = columnOf(id);
@@ -335,7 +343,10 @@ export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, o
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragStart={() => { dragUntil.current = Number.POSITIVE_INFINITY; }}
+      onDragCancel={() => { dragUntil.current = Date.now() + 300; }}
+      onDragEnd={handleDragEnd}>
       <Scroll>
         <Board $cols={columns.length}>
           {columns.map(col => (
@@ -355,7 +366,7 @@ export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, o
                     <Cards>
                       {col.items.length === 0
                         ? <Empty>Drop {noun}s here</Empty>
-                        : col.items.map(item => <BoardCard key={item.id} item={item} onOpen={onOpen} />)}
+                        : col.items.map(item => <BoardCard key={item.id} item={item} onOpen={open} />)}
                     </Cards>
                   </SortableContext>
                 </Column>

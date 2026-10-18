@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { Icon } from '../components/atoms/core/Icon.jsx';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
 import { JournalTemplate, SidePanel, EditorPanel } from '../components/templates/JournalTemplate.js';
@@ -30,7 +31,7 @@ import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageSt
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
 import { getOrCreateJournalTopic } from '../utils/getOrCreateJournalTopic.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
-import { hasEntryData, prepareEntryForSave } from '../utils/entrySave.js';
+import { hasEntryData, prepareEntryForSave, prioritiesTitle } from '../utils/entrySave.js';
 import type { RecipeFieldValues } from '../types/fields.js';
 import { recipeShareHtml } from '../utils/recipeShareHtml.js';
 import type { EncryptedPost } from '@shared/crypto/types';
@@ -128,13 +129,16 @@ const CrumbSlot = styled.div`
 
 /* Outlined accent pill (no fill) */
 const NewEntryPill = styled.button`
-  height: 32px;
-  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px 0 9px;
   border: 1px solid var(--color-accent);
   border-radius: 999px;
   background: transparent;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-accent);
   white-space: nowrap;
@@ -142,11 +146,6 @@ const NewEntryPill = styled.button`
   transition: border-color 120ms, color 120ms;
   &:hover { border-color: var(--color-accent-hover); color: var(--color-accent-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  /* Phones: across from the title */
-  @media (max-width: 768px) {
-    order: 1;
-    margin-left: auto;
-  }
 `;
 
 /** Compact change-detection signature for the entry's image set. */
@@ -375,8 +374,13 @@ export function JournalView() {
     }
     // Shopping lists have no text area — give an untitled one its dated title
     let contentToSave = currentContent;
-    if (!hasText && !hasDrawing && topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase() === 'shopping list') {
+    const autoTopicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
+    if (!hasText && !hasDrawing && autoTopicName === 'shopping list') {
       contentToSave = `<p>${defaultShoppingListTitle()}</p>`;
+      setEditorContent(contentToSave);
+    } else if (!hasText && !hasDrawing && autoTopicName === 'priorities') {
+      // …and a Priorities list "Priorities: 10/18/2026"
+      contentToSave = `<p>${prioritiesTitle()}</p>`;
       setEditorContent(contentToSave);
     }
     const metadata: Record<string, unknown> = {};
@@ -924,11 +928,14 @@ export function JournalView() {
                 }}
               /></CrumbSlot>
             )}
-            {/* New entry: an outlined pill in the title row */}
-            <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
-              New entry
-            </NewEntryPill>
           </HeaderActions>
+        )}
+        // New entry: an outlined pill right beside the title
+        titleAside={(
+          <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
+            <Icon name="plus" size={14} strokeWidth={2} aria-hidden="true" />
+            New entry
+          </NewEntryPill>
         )}
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>

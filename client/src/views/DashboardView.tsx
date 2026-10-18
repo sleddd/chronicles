@@ -25,7 +25,9 @@ import { entries as entriesApi, topics as topicsApi, settings as settingsApi } f
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { addDays, billOccurrences, formatCents } from '../utils/finance.js';
-import { MENU_SLOTS, latestOpenList, menuDays } from '../utils/kitchen.js';
+import { MENU_SLOTS, defaultShoppingListTitle, latestOpenList, menuDays } from '../utils/kitchen.js';
+import { getOrCreateTopic } from '../utils/getOrCreateJournalTopic.js';
+import { prioritiesTitle } from '../utils/entrySave.js';
 import { dailyQuote, greeting } from '../utils/dailyQuote.js';
 import { currentWeather, describeWeather, findPlace, hoursFromLocal, type CurrentWeather, type Place } from '../utils/weather.js';
 import type { DecryptedPost } from '@shared/crypto/types';
@@ -81,12 +83,12 @@ const Inner = styled.div`
   width: 100%;
   max-width: 1150px;
   margin: 0 auto;
-  padding: 44px 24px 64px;
-  @media (max-width: 768px) { padding: 28px 16px 48px; }
+  padding: 56px 24px 64px;
+  @media (max-width: 768px) { padding: 34px 16px 48px; }
 `;
 
 const Head = styled.div`
-  margin-top: 20px;
+  margin-top: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -125,7 +127,7 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  @media (max-width: 640px) { padding: 12px 0 0; }
+  @media (max-width: 640px) { padding: 12px 0 0; margin-bottom: 12px; }
 `;
 
 /* Customize view: the neutral pill, in sentence case at normal spacing (both themes) */
@@ -185,16 +187,18 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div`
-  margin-top: 40px;
-  @media (max-width: 640px) { margin-top: 28px; }
+  margin-top: 56px;
+  @media (max-width: 640px) { margin-top: 36px; }
 `;
 
 const Hero = styled.div<{ $single: boolean; $afterQuick?: boolean }>`
   display: grid;
   grid-template-columns: ${({ $single }) => ($single ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))')};
   gap: 24px;
-  margin-top: ${({ $afterQuick }) => ($afterQuick ? '24px' : '56px')};
-  @media (max-width: 640px) { margin-top: ${({ $afterQuick }) => ($afterQuick ? '24px' : '36px')}; }
+  margin-top: ${({ $afterQuick }) => ($afterQuick ? '40px' : '56px')};
+  /* A little air before the world clocks / the columns */
+  margin-bottom: 28px;
+  @media (max-width: 640px) { margin-top: ${({ $afterQuick }) => ($afterQuick ? '32px' : '36px')}; }
   @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
@@ -244,14 +248,14 @@ const NextActions = styled.div`
 `;
 
 /* World clocks: a one-line strip in a grey --bg-panel card (home first, in the accent,
-   then the others as many as fit); "All N cities" opens the grid — four across, wrapping */
+   then the others as many as fit); "All N cities" opens the grid of city tiles — four across, wrapping */
 const MAX_PLACES = 8;
 
 const Clocks = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 28px 24px;
-  padding: 22px 0 26px;
+  gap: 16px;
+  padding: 28px 0 32px;
   border-top: 1px solid var(--border-card); /* splits the open grid from the strip */
   @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
@@ -293,8 +297,14 @@ const StripCity = styled.span<{ $home?: boolean }>`
   small { margin-left: 8px; font-size: 14px; color: var(--text-hint); }
 `;
 
+/* Each city in the open grid is its own filled tile on the grey panel */
 const Clock = styled.div`
   min-width: 0;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: var(--bg-tile);
+  /* Light: --bg-tile is nearly the panel's grey — white tiles read instead */
+  html[data-theme='light'] & { background: var(--bg-control, var(--bg-app)); }
 `;
 
 const ClockHead = styled.div<{ $home: boolean }>`
@@ -303,12 +313,12 @@ const ClockHead = styled.div<{ $home: boolean }>`
   gap: 8px;
   font-family: var(--font-sans);
   font-size: 14px;
-  b { font-weight: 500; color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-secondary)')}; }
+  b { font-weight: 500; color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-muted)')}; }
   span { color: var(--text-muted); }
 `;
 
 const ClockTime = styled.div`
-  margin: 8px 0 6px;
+  margin: 14px 0 12px;
   font-family: var(--font-display);
   font-size: 40px;
   font-weight: 300;
@@ -325,6 +335,8 @@ const ClockWeather = styled.div`
   font-size: 14px;
   color: var(--text-soft);
   & > span:first-child { color: var(--color-accent); }
+  /* "58°F · Clear" in light italics (not the icon, which would slant) */
+  & > span:last-child { font-style: italic; font-weight: 300; letter-spacing: 0.02em; }
 `;
 
 /* Daily quote: in the Next up card's place (the grey panel) when it's on */
@@ -365,21 +377,25 @@ const QuoteBy = styled.p`
   margin: 16px 0 0;
   font-size: 15px;
   color: var(--text-muted);
+  @media (min-width: 901px) { margin-top: 22px; }
 `;
 
 const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 56px;
+  gap: 0 80px;
   margin-top: 44px;
-  /* Stacked: the same 44px between the two columns as between sections */
-  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); row-gap: 44px; }
+  /* Stacked: the same 56px between the two columns as between sections */
+  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); row-gap: 56px; }
+  /* Phones: these sections sit on the canvas with no card around them, so
+     they get their own side inset to sit in from the screen edge */
+  @media (max-width: 768px) { padding-inline: 12px; }
 `;
 
 const Col = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 44px;
+  gap: 56px;
   min-width: 0;
 `;
 
@@ -394,6 +410,13 @@ const SectionHead = styled.div`
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }
+`;
+
+/* Two things on the right of a section head (a count and a link) */
+const HeadAside = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
 `;
 
 const Row = styled.div`
@@ -698,15 +721,54 @@ const PNum = styled.span<{ $done?: boolean }>`
   color: ${({ $done }) => ($done ? 'var(--color-accent-link)' : 'var(--color-accent-link)')};
 `;
 
-const PText = styled.span<{ $done?: boolean }>`
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
-  text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
+/* A priority's text, edited in place (no box); done = muted + struck */
+const PText = styled.input<{ $done?: boolean }>`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    text-overflow: ellipsis;
+    color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
+    text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
+  }
 `;
+
+/* × to remove a priority — quiet until the row is hovered or focused */
+const PRemove = styled.button`
+  display: flex;
+  flex: none;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  *:hover > &, *:focus-within > &, &:focus-visible { opacity: 1; }
+  &:hover { color: var(--text-primary); }
+  @media (hover: none) { opacity: 1; }
+`;
+
+/** One priority's text: edited in place, saved on Enter or leaving the field;
+ *  clearing it removes the priority. Escape puts the saved text back. */
+function PriorityText({ item, onCommit }: { item: PriorityItem; onCommit: (text: string) => void }) {
+  const [text, setText] = useState(item.text);
+  useEffect(() => { setText(item.text); }, [item.text]);
+  const commit = () => { if (text.trim() !== item.text) onCommit(text.trim()); };
+  return (
+    <PText $done={item.done} value={text} aria-label={`Priority: ${item.text}`}
+      onChange={e => setText(e.target.value)} onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { setText(item.text); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); }
+      }} />
+  );
+}
 
 
 const BareInput = styled.input`
@@ -724,15 +786,19 @@ const BareInput = styled.input`
   &::placeholder { color: var(--text-hint); }
 `;
 
-/** Today's Priorities-topic entry and its items */
-function useTodayPriorities() {
+/** The newest Priorities-topic entry and its items. Not tied to today — the
+ *  list carries over midnight and stays until items are ticked or removed. */
+function usePriorities() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const today = toDateStr(new Date());
   const tid = topicIdByName(allTopics, 'priorities');
-  const entry = useMemo(() => entries.find(e =>
-    (e.metadata as Record<string, unknown>)?._taxonomyId === tid && tid !== undefined
-    && toDateStr(e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)) === today), [entries, tid, today]);
+  const entry = useMemo(() => {
+    if (tid === undefined) return undefined;
+    const time = (e: DecryptedPost) => new Date(e.createdAt).getTime();
+    return entries
+      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid)
+      .reduce<DecryptedPost | undefined>((best, e) => (!best || time(e) > time(best) ? e : best), undefined);
+  }, [entries, tid]);
   const items = ((entry ? cfOf(entry).priorities : undefined) as PriorityItem[] | undefined) ?? [];
   return { entry, items, tid };
 }
@@ -743,12 +809,19 @@ function Priorities() {
   const { encryptPost } = useEncryption();
   const save = useSaveFields();
   const [draft, setDraft] = useState('');
-  const { entry, items, tid } = useTodayPriorities();
+  const { entry, items, tid } = usePriorities();
   const done = items.filter(i => i.done).length;
-  const textOf = (list: PriorityItem[]) => `<p>${list.map(i => i.text.replace(/&/g, '&amp;').replace(/</g, '&lt;')).join(' · ')}</p>`;
+  const [starting, setStarting] = useState(false);
+  // The entry's title: "Priorities: 10/18/2026" — the list's own date
+  const textOf = (date = new Date()) => `<p>${prioritiesTitle(date)}</p>`;
 
   const write = async (next: PriorityItem[]) => {
-    if (entry) return save(entry, { ...cfOf(entry), priorities: next }, textOf(next));
+    if (entry) return save(entry, { ...cfOf(entry), priorities: next }, textOf(new Date(entry.createdAt)));
+    return create(next);
+  };
+
+  /** A new Priorities entry — the newest, so the dashboard shows it from now on */
+  const create = async (next: PriorityItem[]) => {
     let topicId = tid;
     if (topicId === undefined) {
       const t = await topicsApi.create({ name: 'Priorities', icon: 'flag' });
@@ -756,7 +829,7 @@ function Priorities() {
       topicId = t.id;
     }
     const metadata = { _taxonomyId: topicId, _customFields: { priorities: next } };
-    const content = textOf(next);
+    const content = textOf();
     const enc = await encryptPost(content, metadata);
     const res = await entriesApi.create({
       contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
@@ -765,6 +838,13 @@ function Priorities() {
     });
     addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
       createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+  };
+
+  // New list: starts an empty one; the old list stays in the journal
+  const startNew = async () => {
+    setStarting(true);
+    try { await create([]); } catch (err) { console.error('New priorities list failed:', err); }
+    finally { setStarting(false); }
   };
 
   const add = () => {
@@ -776,11 +856,24 @@ function Priorities() {
 
   return (
     <section aria-label="Today's priorities">
-      <SectionHead><h2>Today's priorities</h2>{items.length > 0 && <span>{done} of {items.length} done</span>}</SectionHead>
+      <SectionHead>
+        <h2>Today's priorities</h2>
+        {items.length > 0 && (
+          <HeadAside>
+            <span>{done} of {items.length} done</span>
+            <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
+          </HeadAside>
+        )}
+      </SectionHead>
       {items.map((p, i) => (
         <Row key={p.id}>
           <PNum>{i + 1}</PNum>
-          <PText $done={p.done}>{p.text}</PText>
+          <PriorityText item={p}
+            onCommit={text => void write(text ? items.map(x => (x.id === p.id ? { ...x, text } : x)) : items.filter(x => x.id !== p.id))} />
+          <PRemove type="button" aria-label={`Remove "${p.text}"`} title="Remove"
+            onClick={() => void write(items.filter(x => x.id !== p.id))}>
+            <Icon name="x" size={14} strokeWidth={2} />
+          </PRemove>
           <Checkbox checked={p.done} aria-label={p.done ? `Mark "${p.text}" not done` : `Mark "${p.text}" done`}
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
         </Row>
@@ -923,9 +1016,9 @@ const Pills = styled.div`
 const ItemPill = styled.button<{ $got: boolean }>`
   height: 36px;
   padding: 0 16px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-pill, var(--border-card));
   border-radius: 999px;
-  background: transparent;
+  background: var(--bg-control, transparent);
   font-family: var(--font-sans);
   font-size: 15px;
   color: ${({ $got }) => ($got ? 'var(--text-muted)' : 'var(--text-secondary)')};
@@ -934,18 +1027,76 @@ const ItemPill = styled.button<{ $got: boolean }>`
   &:hover { border-color: var(--control-border); }
 `;
 
+/* Add an item: an outlined pill with a + — Enter adds */
+const AddItem = styled.form`
+  background: var(--bg-control, transparent);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--border-pill, var(--border-card));
+  border-radius: var(--r-full, 999px);
+  color: var(--text-muted); /* the + */
+  &:focus-within { border-color: var(--color-accent); }
+`;
+
 function Shopping() {
   const navigate = useNavigate();
+  const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
+  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const { encryptPost } = useEncryption();
   const save = useSaveFields();
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
   const list = useMemo(() => latestOpenList(entries, topicIdByName(allTopics, 'shopping list', 'shopping lists')), [entries, allTopics]);
   const items = ((list ? cfOf(list).items : undefined) as ShoppingItem[] | undefined) ?? [];
   const left = items.filter(i => !i.checked).length;
+
+  // Adds to the open list; with none open, starts a new dated one
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = draft.trim();
+    if (!name) return;
+    setDraft('');
+    setError('');
+    const item: ShoppingItem = { id: crypto.randomUUID(), name, category: 'other', checked: false };
+    if (list) return save(list, { ...cfOf(list), items: [...items, item] });
+    try {
+      const topicId = await getOrCreateTopic('Shopping List', 'cart-shopping');
+      const content = `<p>${defaultShoppingListTitle()}</p>`;
+      const metadata = { _taxonomyId: topicId, _customFields: { items: [item], notes: '', linkedRecipeIds: [] } };
+      const enc = await encryptPost(content, metadata);
+      const res = await entriesApi.create({
+        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+        isEncrypted: true, taxonomyIds: [topicId],
+      });
+      addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
+        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+    } catch (err) {
+      console.error('Shopping list create failed:', err);
+      setDraft(name);
+      setError('That item didn’t save — try again.');
+    }
+  };
+
   return (
     <section aria-label="Shopping list">
-      <SectionHead><h2>Shopping list</h2>{list ? <span>{left} left</span> : <button type="button" onClick={() => navigate('/shopping')}>Start one</button>}</SectionHead>
-      {!list ? <Muted>No open shopping list.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : (
+      <SectionHead>
+        <h2>Shopping list</h2>
+        {list ? (
+          <HeadAside>
+            <span>{left} left</span>
+            {/* The full list in the journal editor — rename, remove items, notes… */}
+            <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>
+          </HeadAside>
+        ) : <button type="button" onClick={() => navigate('/shopping')}>Lists</button>}
+      </SectionHead>
+      {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : (
         <Pills>
           {[...items.filter(i => !i.checked), ...items.filter(i => i.checked)].map(i => (
             <ItemPill key={i.id} type="button" $got={!!i.checked} aria-pressed={!!i.checked}
@@ -955,6 +1106,11 @@ function Shopping() {
           ))}
         </Pills>
       )}
+      <AddItem onSubmit={e => void add(e)}>
+        <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
+        <BareInput value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list" />
+      </AddItem>
+      {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
     </section>
   );
 }

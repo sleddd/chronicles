@@ -202,9 +202,9 @@ const FilterSelect = styled.label<{ $set: boolean }>`
   align-items: center;
   height: 34px;
   max-width: 100%;
-  /* Chosen = solid accent with --on-accent text (white, or dark on a light accent); never a see-through tint */
-  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent)' : 'var(--border-default)')};
-  background: ${({ $set }) => ($set ? 'var(--color-accent)' : 'transparent')};
+  /* Chosen = accent outline + accent text, no fill */
+  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-default)')};
+  background: transparent;
   border-radius: 999px;
   &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   select {
@@ -217,7 +217,7 @@ const FilterSelect = styled.label<{ $set: boolean }>`
     appearance: none;
     font-family: var(--font-sans);
     font-size: 14px;
-    color: ${({ $set }) => ($set ? 'var(--on-accent, #ffffff)' : 'var(--text-secondary)')};
+    color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
     text-overflow: ellipsis;
     cursor: pointer;
   }
@@ -326,6 +326,12 @@ function avatarImage(meta: Record<string, unknown> | undefined): BoardItem['imag
   return img.thumbKey && img.thumbIv
     ? { key: img.thumbKey, iv: img.thumbIv, mimeType: img.mimeType }
     : { key: img.key, iv: img.iv, mimeType: img.mimeType };
+}
+
+/* Planning's sort and Tasks/Todos filters survive leaving the page (this tab only) */
+const FILTERS_KEY = 'planning-filters-v1';
+function savedFilters(): Partial<{ sortBy: PlanSort; goalFilter: number | null; milestoneFilter: number | null; statusFilter: TaskStatus | '' }> {
+  try { return JSON.parse(sessionStorage.getItem(FILTERS_KEY) || '{}'); } catch { return {}; }
 }
 
 export function GoalsView() {
@@ -576,14 +582,19 @@ export function GoalsView() {
 
   /* ── Search + sort, for the tab you're in ── */
   const [query, setQuery] = useState('');
-  const [sortBy, setSortBy] = useState<PlanSort>('newest');
+  const [sortBy, setSortBy] = useState<PlanSort>(() => savedFilters().sortBy ?? 'newest');
   // A saved view opened on another tab is applied once that tab is showing
   const pendingView = useRef<SavedPlanView | null>(null);
 
   /* ── Tasks / Todos filters: by goal, milestone and/or status ── */
-  const [goalFilter, setGoalFilter] = useState<number | null>(null);
-  const [milestoneFilter, setMilestoneFilter] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('');
+  const [goalFilter, setGoalFilter] = useState<number | null>(() => savedFilters().goalFilter ?? null);
+  const [milestoneFilter, setMilestoneFilter] = useState<number | null>(() => savedFilters().milestoneFilter ?? null);
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>(() => savedFilters().statusFilter ?? '');
+  // Kept for this browser tab, so opening a card in the journal and coming
+  // back finds the board as it was
+  useEffect(() => {
+    try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ sortBy, goalFilter, milestoneFilter, statusFilter })); } catch { /* storage unavailable */ }
+  }, [sortBy, goalFilter, milestoneFilter, statusFilter]);
   const milestoneGoal = useMemo(() => new Map(milestones.map(m => [m.id, m.parentGoalId])), [milestones]);
   // Milestones to pick from: those under the chosen goal, else all
   const milestoneChoices = useMemo(

@@ -74,9 +74,9 @@ const BackBtn = styled.button`
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text-primary);
+  color: var(--text-muted);
   cursor: pointer;
-  &:hover { color: var(--color-accent); }
+  &:hover { color: var(--text-primary); } /* brightens, never the accent */
   & > span {
     font-size: 56px;
     font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48;
@@ -242,6 +242,14 @@ export function TopicDetailView() {
       setEditing(false);
     } catch (err) { console.error('Failed to update topic:', err); }
   };
+  const deleteTopic = async () => {
+    if (!topic) return;
+    try {
+      await topicsApi.delete(topic.id);
+      setTopics(allTopics.filter(t => t.id !== topic.id));
+      navigate('/topics');
+    } catch (err) { console.error('Failed to delete topic:', err); }
+  };
   const changeFields = (defs: UserFieldDef[]) => {
     if (!topic) return;
     updateTopicFields(topic.id, defs);
@@ -302,6 +310,7 @@ export function TopicDetailView() {
               onFieldDefsChange={changeFields}
               hideTextField={!!topicHideText[topic.id]}
               onHideTextFieldChange={changeHideText}
+              onDelete={() => void deleteTopic()}
             />
           </EditBox>
         </Inner>

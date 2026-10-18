@@ -6,29 +6,23 @@ import { DOSE_NUTRIENTS, parseMedNutrients } from '../../../utils/medNutrients.j
 import type { MedicationFieldValues } from '../../../types/fields.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip,
-  Strip, Cell, CellHead, CellValue, CellInput, Unit, BoxText, FieldNote,
+  Strip, Cell, CellHead, CellValue, CellInput, Unit, BoxInput, BoxText, FieldNote,
 } from './formKit.js';
 export type { MedicationFieldValues } from '../../../types/fields.js';
 
 /* Medication fields (journal editor + Quick Entry): the name as a big
-   borderless title with the dosage as a quiet line under it; How often as
+   borderless title, then Dosage in an outlined box under its label; How often as
    outline chips; Reminders as time pills plus a dashed "+ Add time" pill;
    Nutrients per dose as an outlined strip; Notes behind "+ Add notes"; and a
    "Currently taking" card with a switch. Props only. */
 
-const DoseInput = styled.input`
-  && {
-    width: 100%;
-    margin-top: 12px;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 17px;
-    color: var(--text-soft);
-  }
-  &::placeholder { color: var(--text-hint); }
+/* A small grey italic aside after a section label */
+const LabelNote = styled.span`
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-muted);
 `;
 
 const Head = styled.div`
@@ -116,7 +110,7 @@ const StatusCard = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 40px;
+  margin-top: 30px;
   padding: 16px 18px;
   border: 1px solid var(--border-card);
   border-radius: 10px;
@@ -162,6 +156,7 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
   const [notesOpen, setNotesOpen] = useState(false);
   const showNotes = notesOpen || !!values.notes;
   const notesId = useId();
+  const doseId = useId();
   const aiKeys = new Set(cf.doseNutrientSource === 'ai'
     ? DOSE_NUTRIENTS.filter(n => String(cf[n.key] ?? '') !== '').map(n => n.key as string)
     : []);
@@ -188,13 +183,13 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
           placeholder="e.g. Montelukast"
           aria-label="Medication name"
         />
-        <DoseInput
-          value={values.dosage}
-          onChange={e => set({ dosage: e.target.value })}
-          placeholder="Dosage, e.g. 500mg"
-          aria-label="Dosage"
-        />
       </Head>
+
+      <Section style={{ marginTop: 30 }}>
+        <SectionHead><SectionLabel as="label" htmlFor={doseId}>Dosage</SectionLabel></SectionHead>
+        <BoxInput id={doseId} value={values.dosage} placeholder="e.g. 500mg"
+          onChange={e => set({ dosage: e.target.value })} />
+      </Section>
 
       <Section aria-label="How often">
         <SectionHead><SectionLabel>How often</SectionLabel></SectionHead>
@@ -228,7 +223,7 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
       </Section>
 
       <Section aria-label="Nutrients per dose">
-        <SectionHead><SectionLabel>Nutrients per dose</SectionLabel></SectionHead>
+        <SectionHead><SectionLabel>Nutrients per dose <LabelNote>(for supplements and vitamins)</LabelNote></SectionLabel></SectionHead>
         <NutrientStrip $cols={DOSE_NUTRIENTS.length}>
           {DOSE_NUTRIENTS.map(n => {
             const ai = aiKeys.has(n.key);

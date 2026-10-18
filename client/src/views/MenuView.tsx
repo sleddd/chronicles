@@ -164,7 +164,12 @@ const StatusMsg = styled.div`
 
 /* ── Desktop grid: meal slots down the side, days across; no cell rules ── */
 
+/* The week sits in the same centred column as the title and tabs, so the slot
+   labels line up with the tabs' left edge and the grid ends with their rule */
 const ScrollArea = styled.div`
+  width: 100%;
+  max-width: 1150px;
+  margin: 0 auto;
   overflow: auto;
   padding: 28px 24px 48px;
   /* Wide enough for the whole week: no scroll box, so the recipe menu can
@@ -175,10 +180,10 @@ const ScrollArea = styled.div`
 
 const PlannerGrid = styled.div`
   display: grid;
-  grid-template-columns: 130px repeat(7, minmax(150px, 1fr));
-  column-gap: 12px;
-  row-gap: 14px;
-  min-width: 1190px;
+  grid-template-columns: 110px repeat(7, minmax(118px, 1fr));
+  column-gap: 16px;
+  row-gap: 22px;
+  min-width: 1048px;
 `;
 
 const CornerCell = styled.div``;
@@ -188,7 +193,9 @@ const HeaderCell = styled.div<{ $isToday?: boolean }>`
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 0 18px 14px;
+  /* Flush with the tiles below: the day name lines up with their left edge
+     and the rule runs exactly their width */
+  padding: 0 2px 14px;
   border-bottom: 2px solid ${({ $isToday }) => ($isToday ? 'var(--color-accent)' : 'var(--border-subtle)')};
 `;
 
@@ -207,22 +214,21 @@ const DayDate = styled.span<{ $isToday?: boolean }>`
 `;
 
 const MealLabelCell = styled.div`
-  padding-top: 22px;
+  /* Level with the first line of the tiles' meal names */
+  padding-top: 16px;
   font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 400;
   color: var(--text-muted);
 `;
 
-/* A day's slot. Today's column sits on a faint band. */
+/* A day's slot: every cell is the same box — a tile fills it, or an empty
+   slot does — so the week reads as one even grid */
 const MealCell = styled.div<{ $isToday?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 176px;
-  padding: 6px;
-  border-radius: 10px;
-  background: ${({ $isToday }) => ($isToday ? 'var(--bg-today-col)' : 'transparent')};
+  min-height: 210px;
 `;
 
 /* Empty slot: just a quiet + to add a meal */
@@ -231,15 +237,14 @@ const AddSlotBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
-  border: 1.5px dashed transparent;
-  border-radius: 10px;
+  border: 1px dashed var(--border-dashed);
+  border-radius: 8px;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
   transition: color 120ms, border-color 120ms;
-  /* Hover: a dashed outline (no fill) and a brighter + */
-  &:hover { color: var(--text-soft); border-color: var(--border-dashed); }
+  /* Hover: a firmer dashed outline (no fill) and a brighter + */
+  &:hover { color: var(--text-soft); border-color: var(--control-border); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
@@ -249,7 +254,7 @@ const MealTile = styled.div`
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px 20px;
+  padding: 16px;
   border-radius: 8px;
   background: var(--bg-tile);
 `;
@@ -268,9 +273,9 @@ const MealTitle = styled.button`
   background: none;
   text-align: left;
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.35;
   color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
@@ -288,9 +293,9 @@ const MealInput = styled.textarea`
   min-width: 0;
   box-sizing: border-box;
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.35;
   padding: 0;
   border: none;
   background: transparent;
@@ -330,7 +335,7 @@ const RecipeLink = styled.button`
   border: none;
   background: none;
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--color-accent-link);
   cursor: pointer;

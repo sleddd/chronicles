@@ -7,6 +7,12 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** A Priorities list's title: "Priorities: 10/18/2026" (the list's date) */
+export function prioritiesTitle(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `Priorities: ${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()}`;
+}
+
 /** Whether an editor state has anything worth saving */
 export function hasEntryData(content: string, customFields: Record<string, unknown>, userFieldDefs: UserFieldDef[], imageCount = 0): boolean {
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
@@ -21,6 +27,7 @@ export function hasEntryData(content: string, customFields: Record<string, unkno
  * The text and fields an entry is saved with — shared by the journal editor
  * and the dashboard's Quick entry so both save the same way:
  * - a shopping list with no title gets a dated one
+ * - a Priorities list with no text gets "Priorities: mm/dd/yyyy"
  * - a fields-only entry gets its field summary as the text
  * - Meals / Exercise get blank (or stale AI) calories estimated; a failed
  *   estimate never blocks the save
@@ -36,6 +43,7 @@ export async function prepareEntryForSave(
   const fieldSummary = userFieldDefs.length > 0 ? summarizeUserFields(userFieldDefs, userFieldValues) : '';
   let finalContent = content;
   if (!hasText && topicName === 'shopping list') finalContent = `<p>${defaultShoppingListTitle()}</p>`;
+  else if (!hasText && topicName === 'priorities') finalContent = `<p>${prioritiesTitle()}</p>`;
   else if (!hasText && fieldSummary) finalContent = `<p>${escapeHtml(fieldSummary)}</p>`;
 
   let fields = customFields;

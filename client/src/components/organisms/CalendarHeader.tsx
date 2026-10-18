@@ -4,8 +4,9 @@ import type { CalendarViewMode } from '../../views/CalendarView.js';
 
 /* ── Styled ── */
 
+/* The title sits where the other pages' do (Topics, Health, Planning…: 53px) */
 export const TopBar = styled.div`
-  padding: 40px 24px 20px;
+  padding: 53px 24px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -15,21 +16,23 @@ export const TopBar = styled.div`
     flex-direction: column;
     align-items: flex-start;
     gap: 26px;
+    padding-top: 34px;
     padding-bottom: 44px;
   }
 `;
 
 export const TitleBlock = styled.div``;
 
-/* "October 2026": the month in soft white, the year in muted grey, both thin */
+/* "October 2026": both at the view titles' 200 — the month in soft white,
+   the year in muted grey */
 export const DisplayTitle = styled.h1`
   font-family: var(--font-display);
   font-size: 44px;
-  font-weight: 300;
+  font-weight: 200;
   line-height: 1;
   color: var(--text-secondary);
   margin: 0;
-  span { font-weight: 300; color: var(--text-muted); }
+  span { font-weight: 200; color: var(--text-muted); }
   @media (max-width: 480px) { font-size: 34px; }
 `;
 

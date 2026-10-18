@@ -88,6 +88,7 @@ const MeterMain = styled.div`
 
 /* Round icon tile tinted with the metric's colour */
 const Badge = styled.span<{ $color: string }>`
+  background: var(--bg-control, transparent);
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -97,7 +98,7 @@ const Badge = styled.span<{ $color: string }>`
   border-radius: 50%;
   color: ${({ $color }) => $color};
   /* No fill — a thin circle outline */
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-pill, var(--border-card));
 `;
 
 const Figure = styled.span`
@@ -140,8 +141,8 @@ const StepBtn = styled.button`
   height: 44px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid var(--border-default);
-  background: transparent;
+  border: 1px solid var(--border-pill, var(--border-default));
+  background: var(--bg-control, transparent);
   color: var(--text-tertiary);
   cursor: pointer;
   transition: border-color 120ms, color 120ms;
@@ -153,7 +154,7 @@ const StepBtn = styled.button`
 const Track = styled.div`
   height: 4px;
   border-radius: 2px;
-  background: var(--bg-sunken);
+  background: var(--progress-track, var(--bg-sunken));
   overflow: hidden;
 `;
 
@@ -161,7 +162,7 @@ const Fill = styled.div<{ $pct: number; $color: string }>`
   height: 100%;
   width: ${({ $pct }) => $pct}%;
   border-radius: 2px;
-  background: ${({ $color }) => $color};
+  background: var(--color-accent-fill, ${({ $color }) => $color});
   transition: width 200ms ease;
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
@@ -191,8 +192,9 @@ const FaceBtn = styled.button<{ $active: boolean; $color: string }>`
   border-radius: 50%;
   cursor: pointer;
   color: ${({ $active, $color }) => ($active ? $color : 'var(--text-disabled)')};
-  /* The chosen face is just the accent glyph — no disc, no ring */
-  background: transparent;
+  /* The chosen face is the accent glyph — in light on a pale accent disc
+     (--bg-selected, unset in dark: no disc there) */
+  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'transparent')};
   transition: color 120ms;
   &:hover { color: ${({ $color }) => $color}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -214,9 +216,10 @@ const Chip = styled.button<{ $active: boolean }>`
   font-weight: 500;
   border-radius: 999px;
   cursor: pointer;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-default)')};
-  /* Outline pill (like PillButton): chosen = accent outline + accent text, no fill */
-  background: transparent;
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-pill, var(--border-default))')};
+  /* Outline pill (like PillButton): chosen = accent outline + accent text
+     (on the pale --bg-selected in light; no fill in dark) */
+  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'var(--bg-control, transparent)')};
   color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--text-tertiary)')};
   transition: border-color 120ms, color 120ms, background 120ms;
   &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
@@ -249,7 +252,7 @@ const CompactWrapper = styled(Wrapper)`
   && ${StepBtn} { width: 30px; height: 30px; border-color: var(--border-card); color: var(--text-soft); & > span { font-size: 16px; } }
   && ${Faces} { gap: 6px 12px; }
   && ${FaceBtn} { width: 46px; height: 46px; & > span { font-size: 40px; } }
-  && ${Chips} { gap: 6px; }
+  && ${Chips} { gap: 10px 6px; /* room between wrapped rows */ }
   && ${Chip} { height: 29px; padding: 0 13px; font-size: 13px; font-weight: 400; }
   && ${Note} { margin-top: 6px; font-size: 12px; }
 `;
@@ -272,6 +275,7 @@ const QuadWrapper = styled(CompactWrapper)`
 `;
 
 const Quad = styled.div`
+  background: var(--bg-tracker, transparent);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   border: 1px solid var(--border-card);

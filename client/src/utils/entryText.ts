@@ -59,7 +59,12 @@ export function generatedEntryText(topicName: string, fields: Record<string, unk
     const v = fields[nameKey];
     return typeof v === 'string' ? v.trim() : '';
   }
-  if (t === 'exercise') return exerciseSummary({ exerciseType: 'running', distanceUnit: 'miles', ...fields });
+  if (t === 'exercise') {
+    // Nothing chosen or typed yet → no title (the form only *shows* Running as its default)
+    const set = (k: string) => fields[k] != null && String(fields[k]).trim() !== '';
+    if (!set('exerciseType') && !set('duration') && !set('distance')) return '';
+    return exerciseSummary({ exerciseType: 'running', distanceUnit: 'miles', ...fields });
+  }
   const userValues = (fields._userFields as Record<string, unknown>) ?? {};
   return fieldLedSummary(t, defs, userValues) || summarizeUserFields(defs, userValues);
 }

@@ -161,7 +161,8 @@ const AddField = styled.button`
   color: var(--color-accent-link);
   cursor: pointer;
   text-align: left;
-  &:hover { background: var(--bg-row-hover); }
+  &:hover:not(:disabled) { background: var(--bg-row-hover); }
+  &:disabled { color: var(--text-disabled); cursor: default; }
   &:first-child { border-top: none; }
 `;
 
@@ -182,9 +183,41 @@ const OptionCard = styled.div`
 
 const Actions = styled.div`
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 28px;
+`;
+
+/* Delete topic: neutral until hovered, then danger red; on the left */
+const DeleteBtn = styled(PillButton)`
+  margin-right: auto;
+  &&:hover:not(:disabled) { color: var(--color-danger); border-color: var(--color-danger); background: transparent; }
+`;
+
+/* The inline "are you sure": its own grey-shaded box above the action
+   row — the question, then red Delete beside Keep it */
+const Confirm = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--r-lg, 6px);
+  background: var(--bg-panel);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  & > div { display: flex; gap: 10px; flex-shrink: 0; }
+`;
+
+const DangerPill = styled(PillButton)`
+  && { color: var(--color-danger); border-color: var(--color-danger); }
+  &&:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 12%, transparent); }
 `;
 
 const FIELD_TYPES: { value: UserFieldDef['type']; label: string }[] = [
@@ -226,26 +259,36 @@ interface TopicEditFormProps {
   // Entry editor option: hide the main text area for this topic's entries
   hideTextField?: boolean;
   onHideTextFieldChange?: (hide: boolean) => void;
+  /** Delete the topic (asks once, inline). Left out → no Delete button */
+  onDelete?: () => void;
 }
 
 export function TopicEditForm({
   name, icon, saving, saveLabel = 'Save topic', cancelLabel = 'Cancel',
   onNameChange, onIconChange, onSave, onCancel, onKeyDown,
   topicId, fieldDefs = [], onFieldDefsChange,
-  hideTextField = false, onHideTextFieldChange,
+  hideTextField = false, onHideTextFieldChange, onDelete,
 }: TopicEditFormProps) {
   const [picking, setPicking] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newType, setNewType] = useState<UserFieldDef['type']>('text');
   const [adding, setAdding] = useState(false);
 
-  const handleAddField = () => {
+  const handleAddField = (keepAdding = false) => {
     if (!newLabel.trim()) return;
     const def: UserFieldDef = { id: `${Date.now()}`, label: newLabel.trim(), type: newType };
     onFieldDefsChange?.([...fieldDefs, def]);
     setNewLabel('');
     setNewType('text');
-    setAdding(false);
+    setAdding(keepAdding);
+  };
+
+  // "+ Add field" is always there: it keeps a field being typed and opens
+  // another blank row, so several fields can be added in one go
+  const addAnother = () => {
+    if (adding && newLabel.trim()) handleAddField(true);
+    else setAdding(true);
   };
 
   const removeField = (id: string) => onFieldDefsChange?.(fieldDefs.filter(f => f.id !== id));
@@ -296,14 +339,14 @@ export function TopicEditForm({
                 </RemoveBtn>
               </FieldRow>
             ))}
-            {adding ? (
+            {adding && (
               <FieldRow>
                 <LabelInput
                   aria-label="New field name"
                   value={newLabel}
                   onChange={e => setNewLabel(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter') { e.preventDefault(); handleAddField(); }
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddField(true); }
                     if (e.key === 'Escape') { setAdding(false); setNewLabel(''); }
                   }}
                   placeholder="Field name"
@@ -314,9 +357,9 @@ export function TopicEditForm({
                   <Icon name="x" size={14} strokeWidth={2} />
                 </RemoveBtn>
               </FieldRow>
-            ) : (
-              <AddField type="button" onClick={() => setAdding(true)}>+ Add field</AddField>
             )}
+            {/* Disabled only while the blank row is still empty */}
+            <AddField type="button" disabled={adding && !newLabel.trim()} onClick={addAnother}>+ Add field</AddField>
           </Box>
         </>
       )}
@@ -331,7 +374,20 @@ export function TopicEditForm({
         </OptionCard>
       )}
 
+      {onDelete && confirmDelete && (
+        <Confirm role="alert">
+          <span>Delete “{name.trim() || 'this topic'}”? Entries keep their data but lose this topic.</span>
+          <div>
+            <DangerPill type="button" onClick={onDelete}>Delete</DangerPill>
+            <PillButton type="button" $variant="neutral" onClick={() => setConfirmDelete(false)}>Keep it</PillButton>
+          </div>
+        </Confirm>
+      )}
+
       <Actions>
+        {onDelete && !confirmDelete && (
+          <DeleteBtn type="button" $variant="neutral" onClick={() => setConfirmDelete(true)}>Delete topic</DeleteBtn>
+        )}
         <PillButton type="button" $variant="neutral" onClick={onCancel}>{cancelLabel}</PillButton>
         <PillButton type="button" disabled={saving || !name.trim()} onClick={() => {
           if (adding && newLabel.trim()) handleAddField();

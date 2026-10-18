@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { TitleInput } from './TitleInput.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { Toggle } from '../../atoms/Toggle.js';
@@ -21,23 +22,12 @@ const Wrapper = styled.div`
 const Section = styled.section`
   display: flex;
   flex-direction: column;
-  margin-top: 40px;
+  margin-top: 30px;
 `;
 
-const NameInput = styled.input`
-  && {
-    width: 100%;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-display);
-    font-size: 38px;
-    font-weight: 300;
-    line-height: 1.2;
-    color: var(--text-primary);
-  }
-  &::placeholder { color: var(--text-hint); }
+/* The shared title field (wraps and grows to fit), a size up */
+const NameInput = styled(TitleInput)`
+  && { font-size: 38px; }
 `;
 
 const SectionHead = styled.div`
@@ -165,7 +155,7 @@ const SyncCard = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 36px;
+  margin-top: 28px;
   padding: 16px 18px;
   border: 1px solid var(--border-card);
   border-radius: 10px;

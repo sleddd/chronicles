@@ -17,12 +17,14 @@ const Head = styled.header`
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  /* The breadcrumb sits level with the middle of the title */
+  align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
-  padding: 28px 36px 30px;
+  /* The title sits where the other pages' do (Topics, Health, Planning…: 53px) */
+  padding: 53px 36px 30px;
   border-bottom: 1px solid var(--border-subtle);
-  @media (max-width: 768px) { padding: 20px 24px 14px; align-items: center; row-gap: 10px; }
+  @media (max-width: 768px) { padding: 34px 24px 32px; align-items: center; row-gap: 10px; }
 `;
 
 const TitleBlock = styled.div`
@@ -43,13 +45,21 @@ const BackBtn = styled.button`
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text-primary);
+  color: var(--text-muted);
   cursor: pointer;
+  /* A touch lower, level with the title's letters */
+  position: relative;
+  top: 3px;
   &:hover { color: var(--color-accent); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
   ${NAV_COMPACT} { display: flex; }
-  /* Light: a thin caret — the regular stroke reads too heavy on white */
-  html[data-theme='light'] & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
+  /* The title's weight (200), in both themes */
+  & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
+`;
+
+const TitleAside = styled.div`
+  display: flex;
+  margin-left: 24px;
 `;
 
 const Title = styled.h1`
@@ -133,6 +143,8 @@ interface JournalTemplateProps {
   editorPanel: ReactNode;
   /** Page title above both panels */
   title?: string;
+  /** Right beside the title (the New entry pill) */
+  titleAside?: ReactNode;
   /** At the right end of the title row (the open entry's breadcrumb) */
   headerAside?: ReactNode;
   /** Phones/tablets with an entry open: the back caret before the title */
@@ -140,7 +152,7 @@ interface JournalTemplateProps {
 }
 
 /** Journal layout: the page title, then side panel (list) + editor panel. */
-export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', headerAside, onBack }: JournalTemplateProps) {
+export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', titleAside, headerAside, onBack }: JournalTemplateProps) {
   return (
     <Page>
       <Head>
@@ -151,6 +163,7 @@ export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', hea
             </BackBtn>
           )}
           <Title>{title}</Title>
+          {titleAside && <TitleAside>{titleAside}</TitleAside>}
         </TitleBlock>
         {headerAside}
       </Head>

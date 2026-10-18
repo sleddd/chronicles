@@ -52,50 +52,56 @@ import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 /* Light greys are darkened a step for readability on the white canvas
    (tertiary ≈ 6:1, disabled/placeholder ≈ 3.7:1). */
 const LIGHT_CSS_VARS: Record<string, string> = {
-  /* Light needs weight to anchor it: near-black text (#1a1d23), a true mid
-     grey for secondary text (#5c626c), firmer card/input outlines (#d9dde2),
-     and the list + rail tinted #eef0f3 so they read as one panel. */
+  /* Soft light: a grey page (#f4f5f7) with near-white cards (#fbfbfc) and
+     controls (#fefefe), so nothing glares. Near-black text (#1f2128, 13:1),
+     card labels #4a505b (6.7:1), secondary text #575d68 (5.5:1), card
+     outlines #cdd1d8, dividers #bfc4cc, row rules #d3d7dd, pill / round-button
+     outlines #80868f (3:1); the journal list + rail share #dcdfe4. */
   /* DS semantic surfaces */
-  '--bg-app':            '#ffffff',
-  '--bg-surface':        '#ffffff',
-  '--bg-panel':          '#f6f7f9', /* report panels (Health → Reports) */
-  '--bg-elevated':       '#ffffff',
-  '--bg-sunken':         '#eef0f3',
-  '--bg-hover':          '#f8f9fa',
-  '--bg-active':         '#f0f2f5',
+  '--bg-app':            '#f4f5f7',
+  '--bg-surface':        '#fbfbfc',
+  '--bg-panel':          '#fbfbfc', /* report panels (Health → Reports) */
+  '--bg-elevated':       '#fefefe',
+  '--bg-sunken':         '#dcdfe4',
+  '--bg-hover':          '#eef0f3',
+  '--bg-active':         '#d3d7dd',
   '--bg-inverse':        '#1b1d26',
   /* DS text */
-  '--text-primary':      '#1a1d23',
-  '--text-secondary':    '#1a1d23',
+  '--text-primary':      '#1f2128',
+  '--text-secondary':    '#1f2128',
   '--text-tertiary':     '#2e333b',
   '--text-disabled':     '#6b7079',
   '--text-tab':          '#3a3f48',  /* inactive section tabs */
-  '--text-meta':         '#5c626c',  /* list-row topic + date: recede behind the entry */
-  '--text-muted':        '#5c626c',  /* card subtitles, chevrons, + icons */
-  '--text-placeholder':  '#80838c',
-  '--control-border':    '#9fa2ac',  /* unticked round checks */
-  '--border-card':       '#d9dde2',  /* card outlines + their inner rules/boxes */
-  '--bg-row-hover':      '#f3f4f7',  /* a row lifting inside a card on hover */
-  '--text-soft':         '#474c55',  /* toolbar text buttons, chevrons */
-  '--text-faint':        '#a3a6b0',  /* quiet + marks in empty slots */
-  '--bg-tile':           '#f3f4f7',  /* a filled tile on the canvas (menu meals) */
-  '--bg-lane':           '#eef0f4',  /* planning board swim lanes */
-  '--bg-lane-over':      '#e4e7ed',  /* a lane while a card is dragged over it */
-  '--bg-lane-card':      '#ffffff',  /* cards sitting in a lane */
-  '--bg-today-col':      '#f7f8fa',  /* today's column band */
-  '--border-pop':        '#d9dde2',  /* floating menus' outline */
-  '--border-dashed':     '#cfd3da',  /* dashed outline of an empty slot on hover */
-  '--text-hint':         '#8d9098',  /* placeholders in big borderless fields */
+  '--text-meta':         '#575d68',  /* list-row topic + date: recede behind the entry */
+  '--text-muted':        '#575d68',  /* card subtitles, chevrons, + icons */
+  '--text-placeholder':  '#575d68',
+  '--control-border':    '#80868f',  /* unticked round checks */
+  '--border-card':       '#cdd1d8',  /* card outlines + their inner rules/boxes */
+  '--bg-row-hover':      '#e6e8ec',  /* a row lifting inside a card on hover */
+  '--text-soft':         '#4a505b',  /* toolbar text buttons, chevrons */
+  '--text-faint':        '#9a9ea7',  /* quiet + marks in empty slots */
+  '--bg-tile':           '#fbfbfc',  /* a filled tile on the canvas (menu meals) */
+  '--bg-lane':           '#eaecef',  /* planning board swim lanes */
+  '--bg-lane-over':      '#e0e3e8',  /* a lane while a card is dragged over it */
+  '--bg-lane-card':      '#fefefe',  /* cards sitting in a lane */
+  '--bg-today-col':      '#fbfbfc',  /* today's column band */
+  '--border-pop':        '#cdd1d8',  /* floating menus' outline */
+  '--border-dashed':     '#bfc4cc',  /* dashed outline of an empty slot on hover */
+  '--text-hint':         '#7a808a',  /* placeholders in big borderless fields */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
-  '--border-subtle':     '#e2e5e9',
-  '--border-default':    '#d1d5db',
-  '--border-strong':     '#b8bdc5',
-  '--border-field':      '#d9dde2',  /* faint outline on styled-form boxes + nutrition panel */
+  '--border-subtle':     '#d3d7dd',
+  '--border-pill':       '#80868f',  /* pills, ± buttons, round controls (light only) */
+  '--progress-track':    '#d3d7dd',  /* empty part of a progress rule */
+  '--bg-control':        '#fefefe',  /* pills, the topic picker, ± buttons (light only) */
+  '--bg-tracker':        '#fbfbfc',  /* the wellness four-square card (light only) */
+  '--border-default':    '#bfc4cc',
+  '--border-strong':     '#a9afb8',
+  '--border-field':      '#cdd1d8',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
-  '--bg-rail':           '#eef0f3',
-  '--bg-rail-logo':      '#e3e6ea',
-  '--bg-rail-active':    '#ffffff',
+  '--bg-rail':           '#dcdfe4',
+  '--bg-rail-logo':      '#d3d7dd',
+  '--bg-rail-active':    '#f4f5f7',
   /* Chart series — muted, same chroma as the accent presets */
   '--chart-blue':        '#4f8fd1',
   '--chart-violet':      '#8a6fd1',
@@ -110,21 +116,21 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--color-info':        '#2f7fd8',  '--color-info-subtle':    '#e1eefb',
 
   /* DS neutral grays for light theme */
-  '--neutral-300': '#d9dde2',
+  '--neutral-300': '#cdd1d8',
   '--neutral-700': '#a0a0aa',
 
   /* ── Legacy aliases → DS values ── */
-  '--paper':             '#ffffff',
-  '--paper-deep':        '#eef0f3',
-  '--paper-surface':     '#ffffff',
-  '--paper-well':        '#f0f2f5',
-  '--paper-hover':       '#f8f9fa',
-  '--ink':               '#1a1d23',
+  '--paper':             '#f4f5f7',
+  '--paper-deep':        '#dcdfe4',
+  '--paper-surface':     '#fbfbfc',
+  '--paper-well':        '#e1e4e9',
+  '--paper-hover':       '#eef0f3',
+  '--ink':               '#1f2128',
   '--ink-2':             '#22262d',
   '--ink-3':             '#3a3a42',
   '--ink-4':             '#57575f',
-  '--rule':              '#d9dde2',
-  '--rule-2':            '#d9dde2',
+  '--rule':              '#cdd1d8',
+  '--rule-2':            '#cdd1d8',
   '--btn-primary':       '#18181c',
   '--btn-primary-ink':   '#ffffff',
   '--btn-primary-hover': '#28282e',
@@ -143,11 +149,11 @@ const LIGHT_CSS_VARS: Record<string, string> = {
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
-  '--bg-app':            '#20232a',
+  '--bg-app':            '#1f2229',
   '--bg-surface':        '#272a33',
   '--bg-panel':          '#24262d', /* report panels (Health → Reports) */
   '--bg-elevated':       '#2e323c',
-  '--bg-sunken':         '#1a1c22',
+  '--bg-sunken':         '#191b21',
   '--bg-hover':          '#2b2f38',
   '--bg-active':         '#333844',
   '--bg-inverse':        '#f1f2f5',
@@ -175,6 +181,11 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-inverse':      '#14161b',
   '--border-subtle':     '#2c2f3a',
   '--border-default':    '#343844',
+  /* Light-only tokens: empty = unset, so components use their own dark values */
+  '--border-pill':       '',
+  '--progress-track':    '',
+  '--bg-control':        '',
+  '--bg-tracker':        '',
   '--border-strong':     '#3e4350',
   '--border-field':      '#30333f',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
@@ -197,7 +208,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--neutral-700': '#cdd2da',
 
   /* ── Legacy aliases → DS values ── */
-  '--paper':             '#20232a',
+  '--paper':             '#1f2229',
   '--paper-deep':        '#1a1c22',
   '--paper-surface':     '#272a33',
   '--paper-well':        '#333844',
@@ -417,16 +428,22 @@ export function App() {
     root.style.setProperty('--color-accent-hover',  isDark ? mix(color, 255, 0.18) : deriveDarker(color, 0.85));
     root.style.setProperty('--color-accent-active', isDark ? mix(color, 255, 0.34) : deriveDarker(color, 0.70));
     root.style.setProperty('--color-accent-subtle', isDark ? `rgba(${r},${g},${b},0.22)` : `rgba(${r},${g},${b},0.10)`);
-    root.style.setProperty('--color-accent-text',   isDark ? color : deriveDarker(color, 0.74));
-    // Accent outlines + their text (pills, chosen chips): a deeper accent in light so it holds on white (Teal → ~#1f7f74)
-    root.style.setProperty('--color-accent-line',   isDark ? color : deriveDarker(color, 0.74));
+    root.style.setProperty('--color-accent-text',   isDark ? color : deriveDarker(color, 0.68));
+    // Accent outlines + their text (pills, chosen chips, Save): a deeper accent in light so it holds on white (Teal → ~#23706e, 5.2–5.9:1)
+    root.style.setProperty('--color-accent-line',   isDark ? color : deriveDarker(color, 0.68));
+    // Progress-rule fills: the accent in dark; a touch deeper in light (Teal → ~#2c8b88, 4.1:1)
+    root.style.setProperty('--color-accent-fill',   isDark ? color : deriveDarker(color, 0.84));
+    // Chosen pill / mood behind its accent text — light only (Teal → ~#daefee); unset in dark
+    if (isDark) root.style.removeProperty('--bg-selected');
+    else root.style.setProperty('--bg-selected', mix(color, 255, 0.82));
     root.style.setProperty('--on-accent', onAccent);
     // Lighter accent shades for text on dark (links, today's label); deeper in light
-    root.style.setProperty('--color-accent-link', isDark ? mix(color, 255, 0.24) : deriveDarker(color, 0.74));
-    root.style.setProperty('--color-accent-soft', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.74));
+    root.style.setProperty('--color-accent-link', isDark ? mix(color, 255, 0.24) : deriveDarker(color, 0.68));
+    root.style.setProperty('--color-accent-soft', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.68));
 
-    /* Nav accent (active rail icon + tab): the exact accent too */
-    root.style.setProperty('--color-accent-nav', color);
+    /* Nav accent (active rail icon + tab): the exact accent in dark, the deeper
+       text accent in light */
+    root.style.setProperty('--color-accent-nav', isDark ? color : deriveDarker(color, 0.68));
 
     /* Legacy accent tokens (existing components still read these) */
     root.style.setProperty('--accent', color);

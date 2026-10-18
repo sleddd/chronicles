@@ -91,7 +91,7 @@ export function UserFieldsForm({ fieldDefs, values, onChange }: UserFieldsFormPr
         if (i === 0 && f.type === 'text' && TITLE_LABEL.test(f.label.trim())) {
           return (
             <TitleInput key={f.id} value={str(val)} placeholder={label} aria-label={label}
-              onChange={e => set(f.id, e.target.value)} style={{ marginBottom: 32 }} />
+              onChange={e => set(f.id, e.target.value)} style={{ marginBottom: 24 }} />
           );
         }
 

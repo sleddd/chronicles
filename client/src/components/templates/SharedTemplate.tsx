@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 const Page = styled.div`
   min-height: 100vh;
-  background: ${({ theme }) => theme.colors.background};
+  background: var(--bg-app, ${({ theme }) => theme.colors.background});
   display: flex;
   flex-direction: column;
   align-items: center;

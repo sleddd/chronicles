@@ -33,6 +33,7 @@ import { EntryHeroBanner, EntryImageStrip, EntryLightbox } from './EntryImageGal
 import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
+import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -207,7 +208,8 @@ const CustomFieldsSection = styled.div<{ $noRule?: boolean }>`
   /* Fields-only entries: clear space under the header's bottom rule */
   padding: ${({ $noRule }) => ($noRule ? '16px' : 'var(--s-6, 24px)')} 0 var(--s-5, 20px);
   position: relative;
-  margin-top: var(--s-5, 20px);
+  /* Fields-only entries: the title field sits a little higher */
+  margin-top: ${({ $noRule }) => ($noRule ? '8px' : 'var(--s-5, 20px)')};
 `;
 
 const CustomFieldsBody = styled.div`
@@ -289,9 +291,11 @@ const FooterLeft = styled.div`
   min-width: 0;
 `;
 
-/* Footer — bottom-docked, outside the scroll area. Phones (not tablets):
-   the buttons stack full width — Save, Discard, Delete */
-const SaveRow = styled.div`
+/* Footer. Desktop / tablet: bottom-docked, outside the scroll area ($docked).
+   Phones (not tablets): in the page flow after the entry ($inFlow), the
+   buttons stacked full width — Save, Discard, Delete */
+const SaveRow = styled.div<{ $inFlow?: boolean }>`
+  ${({ $inFlow }) => ($inFlow ? '@media (max-width: 768px) { && { margin-top: 28px; padding-inline: 0; } }' : '')}
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -378,12 +382,13 @@ const QuickCard = styled.section`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 24px 24px 20px;
+  padding: 24px 40px 30px;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   background: var(--bg-panel);
   font-family: var(--font-sans);
-  @media (max-width: 480px) { padding: 20px 16px 16px; }
+  @media (max-width: 768px) { padding: 22px 24px 26px; }
+  @media (max-width: 480px) { padding: 20px 18px 22px; }
 `;
 
 const QuickHead = styled.div`
@@ -403,9 +408,9 @@ const QuickTopic = styled.div`
     height: 36px;
     padding: 0 14px 0 16px;
     gap: 16px;
-    border: 1px solid var(--border-card);
+    border: 1px solid var(--border-pill, var(--border-card));
     border-radius: var(--r-full, 999px);
-    background: transparent;
+    background: var(--bg-control, transparent);
     font-size: 15px;
     text-transform: none;
     color: var(--text-primary);
@@ -521,6 +526,8 @@ export function EntryForm({
   variant = 'journal',
 }: EntryFormProps) {
   const quick = variant === 'quick';
+  // Phones (not tablets): Save / Discard / Delete sit in the page flow, not docked
+  const phone = useMediaQuery('(max-width: 768px)');
   const ownDictationRef = useRef<DictationControls | null>(null);
   const dictRef = dictationControlRef ?? ownDictationRef;
   const [listening, setListening] = useState(false);
@@ -671,11 +678,15 @@ export function EntryForm({
 
   // The main text area is hidden entirely (no affordance) for every topic
   // except Journal: built-in structured topics always, custom topics via
-  // their "Hide main text field" option — the fields simply move up.
-  // Existing text content always stays visible (hiding it would read as data
-  // loss), and dictate/draw force-reveal the editor since they write into it.
+  // their "Hide main text field" option — the fields simply move up. That
+  // option always wins: an entry's text (often just the generated field
+  // summary) stays saved but hidden; Format / dictate / draw reveal it.
+  // Otherwise existing text keeps the text area showing.
   const [notesExpanded, setNotesExpanded] = useState(false);
   useEffect(() => { setNotesExpanded(false); }, [entryId]);
+  // Format reveals a hidden text area; closing it hides that space again
+  // (text already written keeps it showing where the topic allows)
+  const setFormatOpen = (open: boolean) => { setToolbarOpen(open); setNotesExpanded(open); };
   const hasTextContent = stripHtml(content).trim().length > 0 || content.includes('data-type="drawing"');
   const isJournalTopic = !selectedTopic || selectedTopic.name.toLowerCase() === 'journal';
   const hideByTopicOption = topicId != null && !!topicHideText[topicId];
@@ -694,14 +705,15 @@ export function EntryForm({
   const nameValue = nameKey && typeof customFields[nameKey] === 'string'
     ? (customFields[nameKey] as string).trim() : '';
   const contentText = stripHtml(content).trim();
-  // Menu plans too: their text is just "Menu: Oct 12 – Oct 18"
-  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || !!nameKey;
+  // Menu plans too: their text is just "Menu: Oct 12 – Oct 18"; and Priorities
+  // lists ("Priorities: 10/18/2026")
+  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || customType === 'priorities' || !!nameKey;
   // Wellness is fields only: its auto-save writes a summary ("3/8 glasses · …")
   // as the text, which must not bring the text area back
   const editorCollapsed = !notesExpanded && (
-    customType === 'event' || customType === 'wellness' || titleOnlyTopic ||
+    customType === 'event' || customType === 'wellness' || titleOnlyTopic || hideByTopicOption ||
     (!hasTextContent && !isJournalTopic && customType !== 'task'
-      && (customType !== null || hideByTopicOption || fieldLedTopic))
+      && (customType !== null || fieldLedTopic))
   );
 
   // Tasks used to have a separate "Task description" field; a task whose words
@@ -790,6 +802,18 @@ export function EntryForm({
       onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [quoteDef.id]: contentText } });
     }
   }, [entryId, isQuoteTopic, quoteDef?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Leaving a summary-led topic (e.g. Exercise → Journal) takes its generated
+  // line with it, so "Running · 30 min" never lingers as another topic's text
+  const prevTopicRef = useRef(topicId);
+  useEffect(() => {
+    if (prevTopicRef.current === topicId) return;
+    prevTopicRef.current = topicId;
+    const last = lastSummaryRef.current;
+    if (!summaryLedTopic && last.id === entryId && last.text && contentText === last.text) {
+      lastSummaryRef.current = { id: entryId, text: '' };
+      onContentChange('');
+    }
+  }, [topicId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!summaryLedTopic) return;
     lastSummaryRef.current = { id: entryId, text: fieldSummary };
@@ -832,6 +856,24 @@ export function EntryForm({
     </SaveButton>
   );
 
+  // Delete + save status, then Discard and Save entry
+  const footer = (
+    <>
+      <FooterLeft>
+        {entryId && onDelete && (
+          <FooterDeleteBtn type="button" $variant="neutral" onClick={onDelete} title="Delete entry">
+            Delete
+          </FooterDeleteBtn>
+        )}
+        {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
+      </FooterLeft>
+      <SaveRowActions>
+        <DiscardBtn onClick={onNew}>Discard changes</DiscardBtn>
+        {saveButton}
+      </SaveRowActions>
+    </>
+  );
+
   // The writing area and the topic's fields — the same in both layouts
   const body = (
     <>
@@ -860,7 +902,7 @@ export function EntryForm({
           placeholder={placeholder}
           onEnterSave={canSave && !isSaving ? onSave : undefined}
           toolbarOpen={toolbarOpen}
-          onToolbarToggle={setToolbarOpen}
+          onToolbarToggle={setFormatOpen}
           hideToolbarToggle
           dictationControlRef={dictRef}
           drawingControlRef={drawingControlRef}
@@ -940,7 +982,7 @@ export function EntryForm({
       <QuickFoot>
         <QuickTools aria-label="Entry tools">
           <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
-            onClick={() => { setNotesExpanded(true); setToolbarOpen(!toolbarOpen); }}>
+            onClick={() => setFormatOpen(!toolbarOpen)}>
             <Icon name="type" size={20} strokeWidth={1.8} />
           </IconBtn>
           <IconBtn type="button" aria-label="Draw" title="Draw"
@@ -968,7 +1010,6 @@ export function EntryForm({
               selectedId={topicId}
               onSelect={id => onTopicChange(id)}
               topics={topics}
-              allowNone={false}
               hideIcon
             />
           </CrumbTopic>
@@ -1029,7 +1070,7 @@ export function EntryForm({
                 aria-label="Formatting"
                 title="Format"
                 aria-pressed={toolbarOpen}
-                onClick={() => { setNotesExpanded(true); setToolbarOpen(!toolbarOpen); }}
+                onClick={() => setFormatOpen(!toolbarOpen)}
               >
                 <Icon name="type" size={20} strokeWidth={1.8} />
               </IconBtn>
@@ -1096,6 +1137,8 @@ export function EntryForm({
       <ScrollArea>
         <EdBody>
           {body}
+          {/* Phones: the footer in the page flow, after the entry */}
+          {phone && <SaveRow $inFlow>{footer}</SaveRow>}
         </EdBody>
       </ScrollArea>
 
@@ -1116,21 +1159,8 @@ export function EntryForm({
         />
       )}
 
-      {/* Footer — bottom-docked save/discard */}
-      <SaveRow>
-        <FooterLeft>
-          {entryId && onDelete && (
-            <FooterDeleteBtn type="button" $variant="neutral" onClick={onDelete} title="Delete entry">
-              Delete
-            </FooterDeleteBtn>
-          )}
-          {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
-        </FooterLeft>
-        <SaveRowActions>
-          <DiscardBtn onClick={onNew}>Discard changes</DiscardBtn>
-          {saveButton}
-        </SaveRowActions>
-      </SaveRow>
+      {/* Footer — bottom-docked save/discard (desktop / tablet) */}
+      {!phone && <SaveRow>{footer}</SaveRow>}
     </FormWrapper>
   );
 }

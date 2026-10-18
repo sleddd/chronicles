@@ -134,7 +134,9 @@ export function TopicsView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const navigate = useNavigate();
   const allTopics = useEntriesStore(s => s.allTopics);
-  const topics = useEntriesStore(s => s.topics);
+  const storeTopics = useEntriesStore(s => s.topics);
+  // Always A–Z (case-insensitive), like the topic picker
+  const topics = useMemo(() => [...storeTopics].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), [storeTopics]);
   const entries = useEntriesStore(s => s.decryptedEntries);
   const setTopics = useEntriesStore(s => s.setTopics);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -294,6 +296,7 @@ export function TopicsView() {
                         onFieldDefsChange={defs => handleFieldDefsChange(topic.id, defs)}
                         hideTextField={!!topicHideText[topic.id]}
                         onHideTextFieldChange={hide => handleHideTextChange(topic.id, hide)}
+                        onDelete={() => { setEditingId(null); void handleDelete(topic.id); }}
                       />
                     </EditWrap>
                   )}

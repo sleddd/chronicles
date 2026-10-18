@@ -65,7 +65,7 @@ const ProgressTrack = styled.div`
 const ProgressFill = styled.div<{ $percent: number }>`
   height: 100%;
   width: ${({ $percent }) => $percent}%;
-  background: var(--color-accent);
+  background: var(--color-accent-fill, var(--color-accent));
   border-radius: 2px;
   transition: width 0.4s ease;
 `;

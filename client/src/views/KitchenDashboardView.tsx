@@ -196,7 +196,7 @@ const Progress = styled.div`
 const ProgressFill = styled.div<{ $pct: number }>`
   height: 100%;
   width: ${({ $pct }) => $pct}%;
-  background: var(--color-accent);
+  background: var(--color-accent-fill, var(--color-accent));
   transition: width 200ms ease;
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;

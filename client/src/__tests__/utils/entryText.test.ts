@@ -16,6 +16,12 @@ describe('generatedEntryText (shared by journal editor and Quick Entry)', () => 
     expect(generatedEntryText('Exercise', { duration: '30' })).toBe('Running · 30 min');
   });
 
+  it('gives an untouched exercise entry no title (never a bare "Running")', () => {
+    expect(generatedEntryText('Exercise', {})).toBe('');
+    expect(generatedEntryText('Exercise', { notes: '', duration: '' })).toBe('');
+    expect(generatedEntryText('Exercise', { exerciseType: 'yoga' })).toBe('Yoga');
+  });
+
   it('formats books and quotes, else joins custom field values', () => {
     expect(generatedEntryText('Books', { _userFields: { t: 'Piranesi', a: 'Susanna Clarke' } }, bookDefs)).toBe('Piranesi — Susanna Clarke');
     expect(fieldLedSummary('Quotes', quoteDefs, { q: 'Be here now', a: 'Ram Dass' })).toBe('“Be here now” — Ram Dass');

@@ -128,11 +128,11 @@ export const lightTheme = {
   },
 } as const;
 
-/** Dark theme — soft slate canvas (#20232a) */
+/** Dark theme — soft slate canvas (#1f2229) */
 export const darkTheme = {
   ...shared,
   colors: {
-    background: '#20232a',
+    background: '#1f2229',
     surfaceDeep: '#1a1c22',
     surface: '#272a33',
     surfaceHover: '#2b2f38',
