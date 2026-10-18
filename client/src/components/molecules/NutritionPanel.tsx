@@ -60,6 +60,8 @@ const PanelLabel = styled.span`
   letter-spacing: 0.10rem;
   text-transform: uppercase;
   color: var(--text-secondary);
+  /* Light: sentence case at normal spacing */
+  html[data-theme='light'] & { text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 500; }
   /* Narrow cards (Log a Meal): smaller, tighter labels that stay on one line */
   [data-compact] & {
     font-size: 10px;
@@ -102,7 +104,10 @@ const CaloriesInput = styled(BareInput)`
   &&&& {
     width: 5.5ch;
     text-align: right;
+    /* The app's thin large figure (italic still = AI), not a bold number */
+    font-family: var(--font-display);
     font-size: 44px;
+    font-weight: 300;
     line-height: 1.1;
   }
 `;
@@ -148,7 +153,10 @@ const CellInput = styled(BareInput)`
   &&&& {
     flex: 1;
     width: 100%;
+    /* Thin Work Sans figures like the calories — not bold */
+    font-family: var(--font-display);
     font-size: 22px;
+    font-weight: 300;
     line-height: 1.2;
   }
 `;

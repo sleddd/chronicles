@@ -3,8 +3,9 @@ import { css } from 'styled-components';
 /*
  * ONE row style for every list in the app (journal, topic/health/goals/
  * shopping/planner lists, Topics):
- *   - journal (entryRow): rows on the sunken fill; the active row (hovered,
- *     or the open entry) lifts to the page colour — the editor's colour, with no
+ *   - journal (entryRow): rows have no fill of their own; hovering shows only the
+ *     3px accent bar (the background doesn't change); the open entry lifts to
+ *     the page colour — the editor's colour, with no
  *     divider between list and editor, so the open row runs into the edit area,
  *     and a 3px accent bar on its left edge
  *   - every other list (entryRowPlain): the reverse — rows on the page
@@ -29,18 +30,23 @@ const rowActivePlain = css`
   background: var(--bg-sunken);
 `;
 
-const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: boolean) => css<{ $active?: boolean; $hint?: boolean }>`
+/* Journal hover: just the accent bar — the background stays put */
+const rowHoverBar = css`
+  box-shadow: inset 3px 0 0 var(--color-accent);
+`;
+
+const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: boolean, hover = active) => css<{ $active?: boolean; $hint?: boolean }>`
   background: ${base};
   transition: background 120ms, box-shadow 120ms;
-  &:hover, &:focus-visible { ${active} outline: none; }
+  &:hover, &:focus-visible { ${hover} outline: none; }
   ${({ $active }) => $active && active}
   ${({ $hint }) => firstRowHint && $hint && css`
     html:not([data-entry-row-hover]) & { ${active} }
   `}
 `;
 
-/** Journal list: the active row lifts to the page (editor) colour with a 3px accent bar */
-export const entryRow = rowStyle('var(--bg-sunken)', rowActive, true);
+/** Journal list: rows unfilled; the open row sits on the page (editor) colour with a 3px accent bar; hover shows only the bar */
+export const entryRow = rowStyle('transparent', rowActive, true, rowHoverBar);
 /** Every other list (topic, health, goals, shopping, planner, Topics): page-colour rows, sunken active row, no bar */
 export const entryRowPlain = rowStyle('var(--bg-app)', rowActivePlain, false);
 

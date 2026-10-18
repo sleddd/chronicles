@@ -39,8 +39,8 @@ describe('CalendarGrid', () => {
 
   it('renders weekday headers starting on Sunday', () => {
     renderWithTheme(<CalendarGrid {...defaultProps} />);
-    const sun = screen.getAllByText('SUN')[0];
-    const mon = screen.getAllByText('MON')[0];
+    const sun = screen.getAllByText('Sun')[0];
+    const mon = screen.getAllByText('Mon')[0];
     expect(sun).toBeInTheDocument();
     expect(sun.compareDocumentPosition(mon) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

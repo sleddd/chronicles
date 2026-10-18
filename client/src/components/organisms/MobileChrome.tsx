@@ -5,17 +5,20 @@ import { Icon } from '../atoms/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
-import { useNavItems } from '../../hooks/useNavItems.js';
+import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useEffect } from 'react';
 
-/* Top bar shown only on mobile: logo + menu button. Fixed to the top, in the
-   nav rail's toned fill; the menu drops down beneath it. */
-const MobileNavBar = styled.div`
+/* Top bar shown only on phones/tablets: the logo and the current page's name
+   on the left, the menu button on the right; on the page colour with a
+   hairline under it (dropped while the menu is open, so bar and menu read as
+   one sheet). */
+const MobileNavBar = styled.div<{ $open: boolean }>`
   display: none;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--bg-rail);
+  padding: 0 10px 0 16px;
+  background: var(--bg-app);
+  border-bottom: 1px solid ${({ $open }) => ($open ? 'transparent' : 'var(--border-subtle)')};
   height: 56px;
   position: fixed;
   top: 0;
@@ -31,97 +34,88 @@ const MobileNavBar = styled.div`
 const LogoContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  min-width: 0;
   cursor: pointer;
 `;
 
-const Logo = styled.span`
-  font-family: var(--font-display);
+const PageName = styled.span`
+  font-family: var(--font-sans);
   font-size: 18px;
-  font-weight: 300;
-  letter-spacing: 0.04em;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
-const MenuButton = styled.button`
+/* ☰ — or, while open, × in a softly tinted square */
+const MenuButton = styled.button<{ $open: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
-  background: transparent;
-  cursor: pointer;
+  border-radius: 10px;
+  background: ${({ $open }) => ($open ? 'color-mix(in srgb, var(--color-accent) 8%, var(--bg-app))' : 'transparent')};
   color: var(--text-primary);
-  padding: 8px;
-  margin-right: -8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 `;
 
-/* The menu: drops down under the bar and fills the screen, full width and
-   full height. The destinations sit in its centre as a compact square grid,
-   three across — each an icon over its name in small letters. Escape or a
-   destination closes it. */
+/* The menu: a sheet dropping from under the bar, full width, rounded at the
+   bottom — one row per destination (icon + name); the current page on an
+   accent tint in the accent; a hairline, then Settings, quieter. Escape, a
+   destination or a tap outside closes it. */
 const Panel = styled.nav`
   display: none;
 
   ${NAV_COMPACT} {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
     position: fixed;
     top: 56px;
     left: 0;
     right: 0;
-    bottom: 0;
     z-index: 51;
+    max-height: calc(100dvh - 56px);
     overflow-y: auto;
-    padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px));
-    background: var(--bg-rail);
+    padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-app);
+    border-radius: 0 0 20px 20px;
+    box-shadow: var(--shadow-xl);
     animation: navDrop 180ms ease-out;
-    @keyframes navDrop { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+    @keyframes navDrop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { animation: none; }
   }
 `;
 
-/* The compact square grid in the middle of the menu */
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 96px);
-  gap: 12px;
-  margin: auto;
-  @media (max-width: 360px) { grid-template-columns: repeat(3, 84px); gap: 8px; }
-`;
-
-const NavTile = styled.button<{ $active: boolean }>`
+const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  aspect-ratio: 1;
-  padding: 8px 4px;
-  /* The current page = an accent border (icon + name stay neutral, a step
-     brighter); hover / press = a grey border. Never a fill. */
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
-  border-radius: var(--r-lg, 6px);
-  background: transparent;
-  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')};
+  gap: 18px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: ${({ $active }) => ($active ? 'color-mix(in srgb, var(--color-accent) 8%, var(--bg-app))' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: ${({ $active }) => ($active ? 600 : 400)};
+  color: ${({ $active, $quiet }) => ($active ? 'var(--color-accent-link)' : $quiet ? 'var(--text-muted)' : 'var(--text-primary)')};
+  text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 120ms, color 120ms;
-  /* Touch screens keep :hover after a tap, so hover only applies on real pointers */
-  @media (hover: hover) {
-    &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-secondary)')}; }
-  }
-  &:active { border-color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-secondary)')}; }
+  & > span:first-child { color: ${({ $active }) => ($active ? 'var(--color-accent-link)' : 'var(--text-muted)')}; }
+  @media (hover: hover) { &:hover { background: ${({ $active }) => ($active ? 'color-mix(in srgb, var(--color-accent) 8%, var(--bg-app))' : 'var(--bg-row-hover)')}; } }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
-const TileLabel = styled.span`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 1.2;
-  text-align: center;
+const MenuRule = styled.hr`
+  margin: 8px 14px;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
 `;
 
 const Overlay = styled.div<{ $open: boolean }>`
@@ -131,22 +125,25 @@ const Overlay = styled.div<{ $open: boolean }>`
     display: ${({ $open }) => ($open ? 'block' : 'none')};
     position: fixed;
     inset: 56px 0 0 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.3);
     z-index: 50;
   }
 `;
 
 /**
- * Phones/tablets (NAV_COMPACT): the top bar (logo + menu button) and the
- * full-width drop-down menu it opens — a 3-across grid of the same
- * destinations as the desktop rail (`useNavItems`). Open state lives in
- * uiStore (`mobileNavOpen`). Hidden on desktop.
+ * Phones/tablets (NAV_COMPACT): the top bar (logo + the current page's name +
+ * menu button) and the drop-down menu sheet it opens — the same destinations
+ * as the desktop rail (`useNavItems`), Settings last under a hairline. Open
+ * state lives in uiStore (`mobileNavOpen`). Hidden on desktop.
  */
 export function MobileChrome() {
   const open = useUIStore(s => s.mobileNavOpen);
   const setOpen = useUIStore(s => s.setMobileNavOpen);
   const navigate = useNavigate();
   const items = useNavItems();
+  const current = items.find(i => i.active);
+  const main = items.filter(i => i.key !== 'settings');
+  const settings = items.find(i => i.key === 'settings');
 
   useEffect(() => {
     if (!open) return;
@@ -154,30 +151,32 @@ export function MobileChrome() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, setOpen]);
+
+  const row = (item: NavItem, quiet = false) => (
+    <NavRow key={item.key} type="button" $active={item.active} $quiet={quiet} aria-current={item.active ? 'page' : undefined}
+      onClick={() => { setOpen(false); navigate(item.path); }}>
+      <MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon>
+      <span>{item.label}</span>
+    </NavRow>
+  );
+
   return (
     <>
-      <MobileNavBar>
+      <MobileNavBar $open={open}>
         <LogoContainer onClick={() => { setOpen(false); navigate('/journal', { state: { newEntry: Date.now() } }); }}>
-          <BrandMark size={32} gradientId="logo-mobile" />
-          <Logo>Chronicles</Logo>
+          <BrandMark size={26} gradientId="logo-mobile" />
+          <PageName>{current?.label ?? 'Chronicles'}</PageName>
         </LogoContainer>
-        <MenuButton onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'}
+        <MenuButton $open={open} onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open} aria-controls="mobile-nav">
-          <Icon name={open ? 'x' : 'menu'} size={20} strokeWidth={2} />
+          <Icon name={open ? 'x' : 'menu'} size={22} strokeWidth={2} />
         </MenuButton>
       </MobileNavBar>
       <Overlay $open={open} onClick={() => setOpen(false)} />
       {open && (
         <Panel id="mobile-nav" aria-label="Main">
-          <Grid>
-          {items.map(item => (
-            <NavTile key={item.key} type="button" $active={item.active} aria-current={item.active ? 'page' : undefined}
-              onClick={() => { setOpen(false); navigate(item.path); }}>
-              <MaterialIcon $size={28} aria-hidden="true">{item.icon}</MaterialIcon>
-              <TileLabel>{item.label}</TileLabel>
-            </NavTile>
-          ))}
-          </Grid>
+          {main.map(i => row(i))}
+          {settings && <><MenuRule />{row(settings, true)}</>}
         </Panel>
       )}
     </>

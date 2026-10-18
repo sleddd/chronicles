@@ -32,3 +32,32 @@ export const filledInputs = css`
     background-position: right 12px center;
   }
 `;
+
+/* Outlined DS inputs — the custom-field look (formKit's BoxInput): no fill, a
+   1px --border-card outline with 10px corners, accent outline on focus.
+   Doubled class so it beats filledInputs and FormField's filled rows nested
+   inside the same container. */
+export const outlinedInputs = css`
+  && ${TEXT_INPUTS}, && select, && textarea {
+    background-color: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: 10px;
+    min-height: 48px;
+    padding-left: 16px;
+    padding-right: 16px;
+    font-size: 16px;
+    color: var(--text-secondary);
+    outline: none !important;
+    transition: border-color 120ms;
+  }
+  && textarea { padding-top: 13px; padding-bottom: 13px; line-height: 1.5; }
+  && select { padding-right: 40px; background-position: right 16px center; }
+  && ${TEXT_INPUTS}:hover, && select:hover, && textarea:hover {
+    background-color: transparent !important;
+    border-color: var(--control-border) !important;
+  }
+  && ${TEXT_INPUTS}:focus, && select:focus, && textarea:focus {
+    border-color: var(--color-accent) !important;
+  }
+  && ${TEXT_INPUTS}::placeholder, && textarea::placeholder { color: var(--text-hint); }
+`;

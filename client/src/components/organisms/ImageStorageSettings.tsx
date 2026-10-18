@@ -288,7 +288,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
                 Without it, the browser cannot talk to the bucket and images will not upload:
                 <pre style={{
                   marginTop: 6, padding: 10, fontSize: 11, overflowX: 'auto',
-                  background: 'var(--bg-sunken)', borderRadius: 'var(--r-lg, 2px)', color: 'var(--text-secondary)',
+                  background: 'transparent', border: '1px solid var(--border-card)', borderRadius: 10, color: 'var(--text-secondary)',
                 }}>
 {JSON.stringify([{
   AllowedOrigins: [window.location.origin, 'http://localhost:5173'],

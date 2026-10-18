@@ -46,6 +46,20 @@ const GridPane = styled.div`
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--border-subtle);
+  /* Phones/tablets: the month and the chosen day's list scroll together */
+  @media (max-width: 900px) { overflow-y: auto; border-right: none; }
+`;
+
+/* Phones/tablets: the chosen day's list sits under the month */
+const MobileDetail = styled.div`
+  display: none;
+  @media (max-width: 900px) {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    margin: 12px 16px 0;
+    border-top: 1px solid var(--border-default);
+  }
 `;
 
 const DetailPane = styled.div`
@@ -225,6 +239,8 @@ export function CalendarView() {
               eventTopicIds={eventTopicIds}
               taskTopicIds={taskTopicIds}
               getTopicForEntry={getTopicForEntry}
+              bills={billsByDate.get(toDateStr(currentDate))}
+              onBillClick={openBills}
             />
           </GridPane>
         </Layout>
@@ -247,6 +263,8 @@ export function CalendarView() {
               taskTopicIds={taskTopicIds}
               selectedDate={selectedDate}
               getTopicForEntry={getTopicForEntry}
+              billsByDate={billsByDate}
+              onBillClick={openBills}
               onDayClick={handleDayClick}
               onDayDoubleClick={handleDayDoubleClick}
             />
@@ -273,6 +291,18 @@ export function CalendarView() {
             billsByDate={billsByDate}
             onBillClick={openBills}
           />
+          <MobileDetail>
+            <CalendarDayDetail
+              dateStr={selectedDate}
+              entries={selectedEntries}
+              allTopics={allTopics}
+              accentColor={accentColor}
+              eventTopicIds={eventTopicIds}
+              taskTopicIds={taskTopicIds}
+              onClose={() => {}}
+              bills={billsByDate.get(selectedDate)}
+            />
+          </MobileDetail>
         </GridPane>
         <DetailPane>
           <CalendarDayDetail

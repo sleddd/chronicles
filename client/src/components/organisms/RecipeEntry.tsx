@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import type { RecipeFieldValues, RecipeIngredient, RecipeStep } from '../../types/fields.js';
+import { TickMark } from '../atoms/TickMark.js';
 
 /* =============================================================================
    RecipeEntry — formatted read view for a Recipe entry.
@@ -289,16 +290,8 @@ const IngRow = styled.button`
 `;
 
 const IngCheck = styled.span<{ $checked?: boolean }>`
+  flex: none;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  border-radius: var(--r-md, 1px);
-  border: 1px solid ${({ $checked }) => $checked ? 'var(--color-accent)' : 'var(--border-strong)'};
-  background: ${({ $checked }) => $checked ? 'var(--color-accent)' : 'transparent'};
-  color: var(--on-accent, #fff);
 `;
 
 const IngText = styled.span`
@@ -480,7 +473,7 @@ export function RecipeEntry({
           {ingredients.map(ing => (
             <IngRow key={ing.id} type="button" onClick={() => onToggleIngredient(ing.id)}>
               <IngCheck $checked={!!ing.checked} aria-hidden>
-                {ing.checked && <Icon name="check" size={11} strokeWidth={3} />}
+                <TickMark checked={!!ing.checked} size={18} />
               </IngCheck>
               <IngText>
                 {ing.amount?.trim() ? `${scaleAmount(ing.amount, factor)} ` : ''}

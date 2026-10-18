@@ -11,6 +11,7 @@ import { toDateStr, formatTime12h, formatDateDisplay } from '../../utils/dateUti
 import type { DoseLogRecord } from '../../services/api.js';
 import type { ScheduledDose } from '../../types/health.js';
 import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { TickMark } from '../atoms/TickMark.js';
 
 /* ── Styled ── */
 
@@ -118,22 +119,18 @@ const DoseRow = styled.div`
   &:first-of-type { margin-top: 6px; }
 `;
 
-/* Round tick: grey ring, or a filled accent disc with a dark check */
+/* Round tick: the app's TickMark — grey ring, or the accent check-circle */
 const DoseCheckButton = styled.button<{ $taken: boolean }>`
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 17px;
-  height: 17px;
   padding: 0;
-  border-radius: 50%;
-  border: 1.5px solid ${({ $taken }) => ($taken ? 'var(--color-accent)' : 'var(--control-border)')};
-  background: ${({ $taken }) => ($taken ? 'var(--color-accent)' : 'transparent')};
-  color: var(--bg-sunken);
+  border: none;
+  background: transparent;
   cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 50%; }
   &:disabled { opacity: 0.5; cursor: wait; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 const DoseName = styled.span<{ $taken: boolean }>`
@@ -366,7 +363,7 @@ export function MedicationSchedule({ isReady, title = 'Medications' }: Medicatio
                       aria-pressed={isTaken}
                       aria-label={isTaken ? `Mark ${dose.medicationName} as not taken` : `Mark ${dose.medicationName} as taken`}
                     >
-                      {isTaken && <Icon name="check" size={13} strokeWidth={3} />}
+                      <TickMark checked={isTaken} />
                     </DoseCheckButton>
                     <DoseName $taken={isTaken}>{dose.medicationName}{dose.dosage ? ` ${dose.dosage}` : ''}</DoseName>
                     {isTaken && log?.takenAt && <DoseTakenAt>Taken {log.takenAt}</DoseTakenAt>}

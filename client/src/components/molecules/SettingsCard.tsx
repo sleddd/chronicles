@@ -1,13 +1,14 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
-import { filledInputs } from '../../styles/filledInputs.js';
+import { filledInputs, outlinedInputs } from '../../styles/filledInputs.js';
 
-/* Settings inputs use the same filled boxes as every other form */
+/* Settings inputs use the custom fields' outlined boxes (no fill) */
 const Card = styled.div`
   background: transparent;
   overflow: hidden;
   padding: 0;
   ${filledInputs}
+  ${outlinedInputs}
 `;
 
 const Row = styled.div<{ $noBorder?: boolean }>`

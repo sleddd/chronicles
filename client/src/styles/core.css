@@ -117,7 +117,7 @@
 .ch-check input { position: absolute; opacity: 0; width: 0; height: 0; }
 .ch-check__box {
   width: 18px; height: 18px; flex: none; border-radius: 50%;
-  border: 1.5px solid var(--color-accent); background: transparent;
+  border: 1.5px solid var(--control-border); background: transparent;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--on-accent);
   transition: var(--transition-colors), box-shadow var(--duration-fast) var(--ease-out);

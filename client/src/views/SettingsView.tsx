@@ -889,9 +889,10 @@ export function SettingsView() {
               onClick={() => handleThemeModeChange('light')}
               style={{
                 flex: 1,
-                // Selected: the same sunken fill as the input boxes
-                background: themeMode === 'light' ? 'var(--bg-sunken)' : 'transparent',
-                border: themeMode === 'light' ? '1px solid transparent' : undefined,
+                // Selected: accent outline + soft accent text, no fill (custom-field chips)
+                background: 'transparent',
+                border: `1px solid ${themeMode === 'light' ? 'var(--color-accent)' : 'var(--border-card)'}`,
+                color: themeMode === 'light' ? 'var(--color-accent-soft)' : 'var(--text-soft)',
                 fontWeight: themeMode === 'light' ? 600 : 400,
               }}
             >
@@ -902,9 +903,9 @@ export function SettingsView() {
               onClick={() => handleThemeModeChange('dark')}
               style={{
                 flex: 1,
-                background: themeMode === 'dark' ? '#1a1b1d' : 'transparent',
-                color: themeMode === 'dark' ? 'white' : undefined,
-                border: themeMode === 'dark' ? 'none' : undefined,
+                background: 'transparent',
+                border: `1px solid ${themeMode === 'dark' ? 'var(--color-accent)' : 'var(--border-card)'}`,
+                color: themeMode === 'dark' ? 'var(--color-accent-soft)' : 'var(--text-soft)',
                 fontWeight: themeMode === 'dark' ? 600 : 400,
               }}
             >

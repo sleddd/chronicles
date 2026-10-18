@@ -6,6 +6,8 @@ import { useUIStore } from '../../stores/uiStore.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../../types/topics.js';
 import type { CalendarViewMode } from '../../views/CalendarView.js';
+import type { CalendarBillItem } from '../../types/finance.js';
+import { formatCents } from '../../utils/finance.js';
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -56,121 +58,82 @@ const Wrapper = styled.div`
   background: var(--bg-app);
 `;
 
-const HeaderDivider = styled.div`
-  height: 1px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
-  margin-top: 16px;
-`;
-
 const List = styled.div`
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  @media (max-width: 768px) {
-    padding: 0 12px;
-  }
+  padding: 0 24px;
 `;
 
-const DayDivider = styled.div<{ $isToday: boolean; $accentColor: string }>`
+/* One row per day: big thin number + short weekday | the day's items */
+const DayRow = styled.div`
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  min-height: 80px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  @media (max-width: 640px) { grid-template-columns: 84px minmax(0, 1fr); gap: 12px; }
+`;
+
+const DayLabel = styled.div`
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 20px 24px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-app);
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  gap: 12px;
 `;
 
-const DayBigNum = styled.span<{ $isToday: boolean; $accentColor: string }>`
+const DayBigNum = styled.span<{ $isToday: boolean }>`
   font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 200;
+  font-size: 34px;
+  font-weight: 300;
   line-height: 1;
-  color: ${({ $isToday, $accentColor }) => $isToday ? $accentColor : 'var(--text-primary)'};
-  letter-spacing: -0.01em;
-  /* Today: a thin accent circle around the number */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6em;
-  height: 1.6em;
-  border-radius: 50%;
-  border: 1px solid ${({ $isToday, $accentColor }) => ($isToday ? $accentColor : 'transparent')};
+  color: ${({ $isToday }) => ($isToday ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
+  font-variant-numeric: tabular-nums;
 `;
 
 const DayWeekday = styled.span`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
-const EmptyDay = styled.div`
-  padding: 12px 24px 20px;
-  font-size: 13px;
-  color: var(--text-tertiary);
-`;
-
-const EntryRow = styled.div`
-  display: grid;
-  grid-template-columns: 64px 1fr auto;
-  gap: 20px;
-  align-items: center;
-  padding: 18px 24px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle);
-  transition: background 120ms ease;
-  &:hover { background: var(--bg-hover); }
-`;
-
-const DateCol = styled.div`
+const Items = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  line-height: 1;
-`;
-
-const TimeLabel = styled.span`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-`;
-
-const ContentArea = styled.div`
+  gap: 8px;
   min-width: 0;
 `;
 
-const TopicLabel = styled.div`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-bottom: 4px;
-`;
-
-const EntryTitle = styled.div`
+const Item = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
   font-family: var(--font-sans);
-  font-size: 17px;
-  font-weight: 400;
-  color: var(--text-primary);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  & > span:first-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  small { flex: none; font-size: 13px; color: var(--text-muted); }
+  &:hover { color: var(--text-primary); }
 `;
 
-const ChevronArea = styled.div`
-  display: none;
+const Dot = styled.i<{ $bill?: boolean }>`
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
+`;
+
+const Dash = styled.span`
+  color: var(--text-faint);
+  font-family: var(--font-sans);
 `;
 
 /* ── Component ── */
@@ -186,6 +149,9 @@ interface CalendarWeekViewProps {
   viewMode: CalendarViewMode;
   currentDate: Date;
   getTopicForEntry: (entry: DecryptedPost) => Topic | undefined;
+  /** Bills due by day (Finance on) */
+  billsByDate?: Map<string, CalendarBillItem[]>;
+  onBillClick?: (bill: CalendarBillItem) => void;
   onDayClick: (dateStr: string) => void;
   onDayDoubleClick: (dateStr: string) => void;
   onPrev: () => void;
@@ -196,7 +162,7 @@ interface CalendarWeekViewProps {
 
 export function CalendarWeekView({
   weekStart, entriesByDate, accentColor, eventTopicIds,
-  viewMode, getTopicForEntry,
+  viewMode, getTopicForEntry, billsByDate, onBillClick,
   onPrev, onNext, onToday, onViewMode,
 }: CalendarWeekViewProps) {
   const navigate = useNavigate();
@@ -226,49 +192,36 @@ export function CalendarWeekView({
         onToday={onToday}
         onViewMode={onViewMode}
       />
-      <HeaderDivider />
-
       <List>
         {days.map(date => {
           const dateStr = toDateStr(date);
           const dayEntries = entriesByDate.get(dateStr) || [];
+          const dayBills = billsByDate?.get(dateStr) || [];
           const isToday = isSameDay(date, today);
-          const weekday = date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-
           return (
-            <div key={dateStr}>
-              <DayDivider $isToday={isToday} $accentColor={accentColor}>
-                <DayBigNum $isToday={isToday} $accentColor={accentColor}>{date.getDate()}</DayBigNum>
-                <DayWeekday>{weekday}</DayWeekday>
-              </DayDivider>
-
-              {dayEntries.length === 0 ? (
-                <EmptyDay>No entries</EmptyDay>
-              ) : (
-                dayEntries.map(entry => {
+            <DayRow key={dateStr}>
+              <DayLabel>
+                <DayBigNum $isToday={isToday}>{date.getDate()}</DayBigNum>
+                <DayWeekday>{date.toLocaleDateString('en-US', { weekday: 'short' })}</DayWeekday>
+              </DayLabel>
+              <Items>
+                {dayBills.map(b => (
+                  <Item key={b.key} type="button" onClick={() => onBillClick?.(b)}>
+                    <Dot $bill aria-hidden="true" /><span>{b.name}</span><small>{formatCents(b.amountCents)} due</small>
+                  </Item>
+                ))}
+                {dayEntries.map(entry => {
                   const topic = getTopicForEntry(entry);
-                  const timeLabel = getTimeLabel(entry, eventTopicIds);
                   const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
-
                   return (
-                    <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
-                      <DateCol>
-                        <TimeLabel>{timeLabel}</TimeLabel>
-                      </DateCol>
-                      <ContentArea>
-                        {topic && <TopicLabel>{topic.name}</TopicLabel>}
-                        <EntryTitle>{title}</EntryTitle>
-                      </ContentArea>
-                      <ChevronArea>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </ChevronArea>
-                    </EntryRow>
+                    <Item key={entry.id} type="button" onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
+                      <Dot aria-hidden="true" /><span>{title}</span>{topic && <small>{topic.name} · {getTimeLabel(entry, eventTopicIds)}</small>}
+                    </Item>
                   );
-                })
-              )}
-            </div>
+                })}
+                {dayBills.length === 0 && dayEntries.length === 0 && <Dash aria-label="Nothing this day">—</Dash>}
+              </Items>
+            </DayRow>
           );
         })}
       </List>

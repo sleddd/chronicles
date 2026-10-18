@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { RecipeAutocomplete } from '../RecipeAutocomplete.js';
 import type { ShoppingListFieldValues, ShoppingItem, ShoppingCategory } from '../../../types/fields.js';
+import { TickMark } from '../../atoms/TickMark.js';
 export type { ShoppingListFieldValues } from '../../../types/fields.js';
 
 const CATEGORIES: { value: ShoppingCategory; label: string }[] = [
@@ -80,15 +81,11 @@ const Tick = styled.button<{ $done: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
   padding: 0;
-  border-radius: 50%;
-  border: 1.5px solid ${({ $done }) => ($done ? 'var(--color-accent)' : 'var(--control-border)')};
+  border: none;
   background: transparent;
-  color: var(--color-accent);
   cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 50%; }
 `;
 
 /* The item's name, edited in place — no box */
@@ -306,7 +303,7 @@ export function ShoppingListFields({ values, onChange, recipeOptions = [] }: Sho
               <Tick type="button" $done={item.checked} aria-pressed={item.checked}
                 aria-label={item.checked ? `Mark ${item.name || 'item'} as still needed` : `Tick off ${item.name || 'item'}`}
                 onClick={() => updateItem(index, { checked: !item.checked })}>
-                {item.checked && <Icon name="check" size={11} strokeWidth={3} />}
+                <TickMark checked={item.checked} />
               </Tick>
               <NameInput
                 $done={item.checked}

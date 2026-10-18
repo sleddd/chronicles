@@ -170,7 +170,7 @@ export function HealthDashboardView() {
           {food && <FoodGlance />}
 
           <Stack>
-            <WellnessCheckIn title="Wellness check-in" />
+            <WellnessCheckIn title="Wellness check-in" quad />
             {hasMeds && ff.medicationEnabled !== false && (food || exercise) ? (
               <Pair>
                 <QuickLog meal={food} exercise={exercise} />

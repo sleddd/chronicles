@@ -7,6 +7,10 @@ import { useUIStore } from '../../stores/uiStore.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../../types/topics.js';
 import type { CalendarViewMode } from '../../views/CalendarView.js';
+import type { CalendarBillItem } from '../../types/finance.js';
+import { formatCents } from '../../utils/finance.js';
+
+const NO_BILLS: CalendarBillItem[] = [];
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -33,105 +37,89 @@ const Wrapper = styled.div`
   background: var(--bg-app);
 `;
 
-const DateSubtitle = styled.div`
-  padding: 4px 24px 16px;
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+/* "Thursday, October 15" with Add entry across, a firmer rule under */
+const DayHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 24px;
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
-  @media (max-width: 768px) { display: none; }
 `;
 
-/* Row holding the Add entry pill, ruled off from the day's list */
-const AddEntryRow = styled.div`
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border-subtle);
-`;
-
-const Divider = styled.div`
-  height: 1px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
+const DayTitle = styled.h2`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  @media (max-width: 480px) { font-size: 22px; }
 `;
 
 const List = styled.div`
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  @media (max-width: 768px) {
-    padding: 0 12px;
-  }
+  padding: 0 24px;
 `;
 
 const EmptyMsg = styled.div`
-  padding: 60px 32px;
+  padding: 28px 0;
+  font-family: var(--font-sans);
   font-size: 14px;
-  color: var(--text-tertiary);
-  text-align: center;
+  color: var(--text-muted);
 `;
 
-/* journal-style entry row */
+/* time | kind over title */
 const EntryRow = styled.div`
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 180px minmax(0, 1fr);
   gap: 20px;
-  align-items: center;
-  padding: 18px 24px;
+  align-items: start;
+  padding: 18px 0;
   cursor: pointer;
   border-bottom: 1px solid var(--border-subtle);
-  transition: background 120ms ease;
-  &:hover { background: var(--bg-hover); }
-`;
-
-const DateCol = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1;
+  &:hover h3 { color: var(--text-primary); }
+  @media (max-width: 640px) { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
 `;
 
 const TimeLabel = styled.span`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-top: 5px;
-`;
-
-const ContentArea = styled.div`
-  min-width: 0;
+  padding-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
 `;
 
 const TopicLabel = styled.div`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
   margin-bottom: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-accent-link);
 `;
 
-const EntryTitle = styled.div`
+const EntryTitle = styled.h3`
+  margin: 0;
   font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 400;
-  color: var(--text-primary);
-  line-height: 1.3;
-  white-space: nowrap;
+  line-height: 1.35;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
-const ChevronArea = styled.div`
-  display: none;
+const BillDot = styled.i`
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--chart-amber);
 `;
-
 
 /* ── helpers ── */
 function getTimeLabel(entry: DecryptedPost, eventTopicIds: Set<number>): string {
@@ -167,6 +155,9 @@ interface CalendarDayViewProps {
   viewMode: CalendarViewMode;
   currentDate: Date;
   getTopicForEntry: (entry: DecryptedPost) => Topic | undefined;
+  /** Bills due this day (Finance on) */
+  bills?: CalendarBillItem[];
+  onBillClick?: (bill: CalendarBillItem) => void;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -175,26 +166,23 @@ interface CalendarDayViewProps {
 
 export function CalendarDayView({
   dateStr, entries, accentColor, eventTopicIds, viewMode,
-  currentDate, getTopicForEntry, onPrev, onNext, onToday, onViewMode,
+  getTopicForEntry, onPrev, onNext, onToday, onViewMode, bills = NO_BILLS, onBillClick,
 }: CalendarDayViewProps) {
   const navigate = useNavigate();
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
   const date = new Date(dateStr + 'T00:00:00');
-  const dayNum = date.getDate();
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
   const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const title = (
     <>{monthYear.split(' ')[0]} <span>{date.getFullYear()}</span></>
   );
 
-  const dateSubtitle = `${weekday}, ${monthYear.split(' ')[0]} ${dayNum}`;
+  const dateSubtitle = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
     <Wrapper>
       <CalendarHeader
         title={title}
-        subtitle={dateSubtitle}
         viewMode={viewMode}
         accentColor={accentColor}
         onPrev={onPrev}
@@ -202,37 +190,37 @@ export function CalendarDayView({
         onToday={onToday}
         onViewMode={onViewMode}
       />
-      <DateSubtitle>{dateSubtitle}</DateSubtitle>
-      <Divider />
+      <DayHead>
+        <DayTitle>{dateSubtitle}</DayTitle>
+        <PillButton type="button" onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
+          Add entry
+        </PillButton>
+      </DayHead>
 
       <List>
-        <AddEntryRow>
-          <PillButton type="button" onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
-            Add entry
-          </PillButton>
-        </AddEntryRow>
-        {entries.length === 0 ? (
-          <EmptyMsg>No entries for this day.</EmptyMsg>
+        {bills.map(b => (
+          <EntryRow key={b.key} onClick={() => onBillClick?.(b)}>
+            <TimeLabel>Due</TimeLabel>
+            <div>
+              <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />Bill</TopicLabel>
+              <EntryTitle>{b.name} · {formatCents(b.amountCents)}</EntryTitle>
+            </div>
+          </EntryRow>
+        ))}
+        {entries.length === 0 && bills.length === 0 ? (
+          <EmptyMsg>Nothing on this day.</EmptyMsg>
         ) : (
           entries.map(entry => {
             const topic = getTopicForEntry(entry);
             const timeLabel = getTimeLabel(entry, eventTopicIds);
             const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
-
             return (
               <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
-                <DateCol>
-                  {timeLabel && <TimeLabel>{timeLabel}</TimeLabel>}
-                </DateCol>
-                <ContentArea>
+                <TimeLabel>{timeLabel}</TimeLabel>
+                <div style={{ minWidth: 0 }}>
                   {topic && <TopicLabel>{topic.name}</TopicLabel>}
                   <EntryTitle>{title}</EntryTitle>
-                </ContentArea>
-                <ChevronArea>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </ChevronArea>
+                </div>
               </EntryRow>
             );
           })

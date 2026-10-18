@@ -26,7 +26,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
-export function WellnessCheckIn({ title }: { title?: string } = {}) {
+export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: boolean; bare?: boolean } = {}) {
   const { encryptPost } = useEncryption();
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -176,9 +176,13 @@ export function WellnessCheckIn({ title }: { title?: string } = {}) {
       water={water} sleep={sleep} mood={mood} flow={flow}
       onWater={setWater} onSleep={setSleep} onMood={setMood} onFlow={setFlow}
       cycleNote={nextPeriod}
-      compact
+      compact={!quad}
+      quad={quad}
     />
   );
+  // Bare (home dashboard): no panel or heading; a grid so the card stretches
+  // to the height of the card beside it
+  if (bare) return <section aria-label={title ?? 'Wellness check-in'} style={{ display: 'grid' }}>{panel}</section>;
   if (!title) return panel;
   return (
     <DashPanel aria-label={title}>

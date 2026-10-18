@@ -50,6 +50,8 @@ export const TopicCell = styled.span<{ $active?: boolean }>`
   letter-spacing: 0.12rem;
   text-transform: uppercase;
   color: var(--text-meta);
+  /* Light: sentence case at normal spacing ("Meals", not "MEALS") */
+  html[data-theme='light'] & { text-transform: none; letter-spacing: normal; font-size: 13px; }
 `;
 
 export const EntryCell = styled.div`

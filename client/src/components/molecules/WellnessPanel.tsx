@@ -96,7 +96,8 @@ const Badge = styled.span<{ $color: string }>`
   height: 56px;
   border-radius: 50%;
   color: ${({ $color }) => $color};
-  background: color-mix(in srgb, ${({ $color }) => $color} 16%, transparent);
+  /* No fill — a thin circle outline */
+  border: 1px solid var(--border-card);
 `;
 
 const Figure = styled.span`
@@ -190,8 +191,9 @@ const FaceBtn = styled.button<{ $active: boolean; $color: string }>`
   border-radius: 50%;
   cursor: pointer;
   color: ${({ $active, $color }) => ($active ? $color : 'var(--text-disabled)')};
-  background: ${({ $active, $color }) => ($active ? `color-mix(in srgb, ${$color} 16%, transparent)` : 'transparent')};
-  transition: color 120ms, background 120ms;
+  /* The chosen face is just the accent glyph — no disc, no ring */
+  background: transparent;
+  transition: color 120ms;
   &:hover { color: ${({ $color }) => $color}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   @media (max-width: 480px) { width: 54px; height: 54px; }
@@ -212,12 +214,12 @@ const Chip = styled.button<{ $active: boolean }>`
   font-weight: 500;
   border-radius: 999px;
   cursor: pointer;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-default)')};
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-default)')};
   /* Outline pill (like PillButton): chosen = accent outline + accent text, no fill */
   background: transparent;
-  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-tertiary)')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--text-tertiary)')};
   transition: border-color 120ms, color 120ms, background 120ms;
-  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-strong)')}; }
+  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -258,6 +260,29 @@ const Grid3 = styled.div`
   gap: 30px 40px;
   @container (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @container (max-width: 560px) { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+`;
+
+/* Four square (home dashboard): Water | Sleep over Mood | Cycle in one
+   outlined card, rules between the cells; compact sizes, smaller faces so
+   five fit a quarter-width cell; no tinted fills */
+const QuadWrapper = styled(CompactWrapper)`
+  display: grid;
+  && ${Faces} { gap: 6px; }
+  && ${FaceBtn} { width: 38px; height: 38px; & > span { font-size: 32px; } }
+`;
+
+const Quad = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  overflow: hidden;
+  & > * {
+    min-width: 0;
+    padding: 24px 26px;
+    box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
+  }
+  @container (max-width: 480px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
 `;
 
 interface MeterProps {
@@ -314,12 +339,14 @@ interface WellnessPanelProps {
   cycleNote?: React.ReactNode;
   /** About half the height (Health dashboard card) */
   compact?: boolean;
+  /** Four square: Water | Sleep over Mood | Cycle in an outlined 2×2 card (home dashboard) */
+  quad?: boolean;
 }
 
 
 export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
-  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact,
+  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad,
 }: WellnessPanelProps) {
   // One colour throughout: the accent (no per-metric blues, violets or mood hues)
   const accent = 'var(--color-accent)';
@@ -360,6 +387,10 @@ export function WellnessPanel({
       </Chips>
     </Cell>
   );
+
+  if (quad) {
+    return <QuadWrapper><Quad>{water$}{sleep$}{mood$}{cycle$}</Quad></QuadWrapper>;
+  }
 
   if (compact) {
     return <CompactWrapper><Grid3>{water$}{sleep$}{mood$}{cycle$}</Grid3></CompactWrapper>;

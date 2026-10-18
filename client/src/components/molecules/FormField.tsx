@@ -27,6 +27,8 @@ const RowWrapper = styled.div`
     text-transform: uppercase;
     color: var(--text-secondary);
   }
+  /* Light: sentence-case labels at normal spacing, a touch heavier */
+  html[data-theme='light'] & > label { text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 500; }
 
   & > :not(label) { min-width: 0; }
 

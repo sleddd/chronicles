@@ -39,6 +39,9 @@ const Wrapper = styled.div`
   min-height: 0;
   overflow: hidden;
   background: var(--bg-app);
+  /* The day's list scrolls in under it here, so the grid keeps its own height */
+  @media (max-width: 900px) { flex: none; min-height: 560px; }
+  @media (max-width: 768px) { min-height: 0; }
 `;
 
 const GridArea = styled.div`
@@ -46,120 +49,126 @@ const GridArea = styled.div`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 16px 0 0;
+  padding: 8px 24px 0;
   overflow: hidden;
 `;
 
+/* Sun … Sat, left-aligned over each column, a firmer rule under them */
 const WeekdayRow = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-default);
+  border-top: 1px solid var(--border-default);
+  padding-top: 12px;
 `;
 
 const WeekdayLabel = styled.div`
-  text-align: center;
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  padding: 6px 0;
+  padding: 0 14px 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
+/* Faint grid lines between cells; none round the outside */
 const DaysGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(6, 1fr);
   flex: 1;
   min-height: 0;
-  border-top: 1px solid var(--border-subtle);
-  border-left: 1px solid var(--border-subtle);
 `;
 
+const CELL_RULE = 'color-mix(in srgb, var(--border-subtle) 60%, var(--bg-app))';
+
 const DayCell = styled.div<{ $isOutside?: boolean; $isSelected?: boolean; $accentColor?: string }>`
-  border-right: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 6px 8px;
-  cursor: ${({ $isOutside }) => $isOutside ? 'default' : 'pointer'};
-  background: ${({ $isSelected, $accentColor }) => $isSelected ? `${$accentColor}14` : 'transparent'};
-  opacity: ${({ $isOutside }) => $isOutside ? 0.35 : 1};
+  border-bottom: 1px solid ${CELL_RULE};
+  &:not(:nth-child(7n)) { border-right: 1px solid ${CELL_RULE}; }
+  padding: 12px 10px 8px;
+  cursor: ${({ $isOutside }) => ($isOutside ? 'default' : 'pointer')};
+  background: ${({ $isSelected }) => ($isSelected ? 'var(--bg-panel)' : 'transparent')};
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
   transition: background 0.1s;
-  &:hover { background: ${({ $isOutside, $isSelected, $accentColor }) =>
-    $isOutside ? 'transparent' : $isSelected ? `${$accentColor}1a` : 'var(--bg-hover)'}; }
+  &:hover { background: ${({ $isOutside }) => ($isOutside ? 'transparent' : 'var(--bg-panel)')}; }
 `;
 
+/* Today: a filled accent disc with dark ink; the chosen day: accent text */
 const DayNumber = styled.div<{ $isToday?: boolean; $isSelected?: boolean; $accentColor: string }>`
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: ${({ $isToday }) => $isToday ? 700 : 400};
-  color: ${({ $isToday, $isSelected, $accentColor }) =>
-    $isToday ? $accentColor : $isSelected ? $accentColor : 'var(--text-secondary)'};
-  width: 26px;
-  height: 26px;
+  font-size: 15px;
+  font-weight: ${({ $isToday }) => ($isToday ? 600 : 400)};
+  color: ${({ $isToday, $isSelected }) =>
+    $isToday ? 'var(--bg-sunken)' : $isSelected ? 'var(--color-accent-link)' : 'var(--text-secondary)'};
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  /* Today: a thin accent circle around the number */
-  border: 1px solid ${({ $isToday, $accentColor }) => ($isToday ? $accentColor : 'transparent')};
-  background: transparent;
+  background: ${({ $isToday }) => ($isToday ? 'var(--color-accent)' : 'transparent')};
   flex-shrink: 0;
-  margin-bottom: 3px;
+  margin: -4px 0 12px -2px; /* room under the day number / today's disc */
 `;
 
 const DayItems = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   overflow: hidden;
   flex: 1;
   min-height: 0;
 `;
 
-const DayItem = styled.div`
-  flex-shrink: 0; /* never squash lines into each other — overflow goes to "+N more" */
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--text-secondary);
-  padding: 2px 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-radius: 2px;
-  font-weight: 400;
+/* "• AWS" — a dot (amber for bills, accent for entries) then the text */
+const Dot = styled.i<{ $bill?: boolean }>`
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
 `;
 
-/* A bill due that day (Finance): a quiet sunken chip, opens Budget & Bills */
-const BillItem = styled.button`
-  display: block;
+const DayItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
-  font-size: 11px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
   line-height: 1.3;
   color: var(--text-secondary);
-  background: var(--bg-sunken);
+  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+`;
+
+const BillItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  background: none;
   border: none;
-  padding: 2px 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-radius: 2px;
   cursor: pointer;
+  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   &:hover { color: var(--text-primary); }
 `;
 
 const MoreLabel = styled.div`
   flex-shrink: 0;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  padding: 1px 4px;
+  padding-left: 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
 `;
 
 /* ── Mobile list view ── */
@@ -169,91 +178,74 @@ const DesktopOnly = styled.div`
   @media (max-width: 768px) { display: none; }
 `;
 
-const MobileList = styled.div`
+/* Phones: a compact month — S M T W T F S, centred numbers, up to three dots
+   per day (amber = bill, accent = entry); today a filled accent disc, the
+   chosen day on --bg-panel. The day's list shows under it (CalendarView). */
+const MobileMonth = styled.div`
   display: none;
   @media (max-width: 768px) {
     display: block;
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 0 12px;
+    flex: none;
+    padding: 0 16px 8px;
   }
 `;
 
-const MobileDayRow = styled.div<{ $isToday: boolean; $accentColor: string }>`
+const MobileWeekdays = styled.div`
   display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  cursor: pointer;
-  transition: background 100ms;
-  &:hover { background: var(--bg-hover); }
+  grid-template-columns: repeat(7, 1fr);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-default);
+  span { text-align: center; font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+  border-top: 1px solid var(--border-default);
+  padding-top: 10px;
 `;
 
-const MobileDateCol = styled.div`
+const MobileDays = styled.div`
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 4px;
+  padding-top: 10px;
+`;
+
+const MobileDay = styled.button<{ $selected: boolean }>`
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  line-height: 1;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 52px;
+  padding: 6px 0 0;
+  border: none;
+  border-radius: 10px;
+  background: ${({ $selected }) => ($selected ? 'var(--bg-panel)' : 'transparent')};
+  cursor: pointer;
+  &:disabled { cursor: default; }
 `;
 
-const MobileDayNum = styled.span<{ $isToday: boolean; $accentColor: string }>`
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 200;
-  line-height: 1;
-  color: ${({ $isToday, $accentColor }) => $isToday ? $accentColor : 'var(--text-primary)'};
-  letter-spacing: -0.01em;
-  /* Today: a thin accent circle around the number */
+const MobileNum = styled.span<{ $today: boolean; $selected: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.6em;
-  height: 1.6em;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 1px solid ${({ $isToday, $accentColor }) => ($isToday ? $accentColor : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: ${({ $today }) => ($today ? 600 : 400)};
+  background: ${({ $today }) => ($today ? 'var(--color-accent)' : 'transparent')};
+  color: ${({ $today, $selected }) => ($today ? 'var(--bg-sunken)' : $selected ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
+  margin-bottom: 3px; /* a little room above the dots */
 `;
 
-const MobileDayName = styled.span`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-top: 5px;
-`;
-
-const MobileEntries = styled.div`
+const MobileDots = styled.span`
   display: flex;
-  flex-direction: column;
   gap: 3px;
-  padding-top: 4px;
-  min-width: 0;
-`;
-
-const MobileEntryChip = styled.div`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const MobileEmptyDay = styled.div`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-tertiary);
+  height: 6px;
 `;
 
 /** Lines that fit in a desktop month cell (items + the "+N more" line). */
 const MAX_LINES = 3;
 
-const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /* ── Component ── */
 
@@ -340,13 +332,13 @@ export function CalendarGrid({
                       <DayItems>
                         {dayBills.slice(0, billSlots).map(b => (
                           <BillItem key={b.key} type="button" title={billLabel(b)} onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>
-                            {billLabel(b)}
+                            <Dot $bill aria-hidden="true" /><span>{b.name}</span>
                           </BillItem>
                         ))}
                         {dayEntries.slice(0, entrySlots).map(entry => {
                           const topicName = getTopicName(entry);
                           const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 30) || topicName || 'Entry';
-                          return <DayItem key={entry.id}>{preview}</DayItem>;
+                          return <DayItem key={entry.id}><Dot aria-hidden="true" /><span>{preview}</span></DayItem>;
                         })}
                         {hidden > 0 && <MoreLabel>+{hidden} more</MoreLabel>}
                       </DayItems>
@@ -359,44 +351,29 @@ export function CalendarGrid({
         </GridArea>
       </DesktopOnly>
 
-      {/* Mobile: scrollable day list */}
-      <MobileList>
-        {days.filter(d => !d.isOutside).map(({ date }) => {
-          const dateStr = toDateStr(date);
-          const dayEntries = entriesByDate.get(dateStr) || [];
-          const dayBills = billsByDate?.get(dateStr) || [];
-          const isToday = isSameDay(date, today);
-          const weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-
-          return (
-            <MobileDayRow
-              key={dateStr}
-              $isToday={isToday}
-              $accentColor={accentColor}
-              onClick={() => onDayClick(dateStr)}
-            >
-              <MobileDateCol>
-                <MobileDayNum $isToday={isToday} $accentColor={accentColor}>{date.getDate()}</MobileDayNum>
-                <MobileDayName>{weekday}</MobileDayName>
-              </MobileDateCol>
-              <MobileEntries>
-                {dayBills.map(b => (
-                  <BillItem key={b.key} type="button" onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>{billLabel(b)}</BillItem>
-                ))}
-                {dayEntries.length === 0 ? (
-                  dayBills.length === 0 && <MobileEmptyDay>No entries</MobileEmptyDay>
-                ) : (
-                  dayEntries.map(entry => {
-                    const topicName = getTopicName(entry);
-                    const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 50) || topicName || 'Entry';
-                    return <MobileEntryChip key={entry.id}>{preview}</MobileEntryChip>;
-                  })
-                )}
-              </MobileEntries>
-            </MobileDayRow>
-          );
-        })}
-      </MobileList>
+      {/* Phones: compact month with dots */}
+      <MobileMonth>
+        <MobileWeekdays aria-hidden="true">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i}>{d}</span>)}</MobileWeekdays>
+        <MobileDays>
+          {days.map(({ date, isOutside }, i) => {
+            if (isOutside) return <span key={i} />;
+            const dateStr = toDateStr(date);
+            const nBills = billsByDate?.get(dateStr)?.length ?? 0;
+            const nEntries = entriesByDate.get(dateStr)?.length ?? 0;
+            const dots = [...Array(Math.min(nBills, 3)).fill(true), ...Array(Math.max(0, Math.min(nEntries, 3 - Math.min(nBills, 3)))).fill(false)] as boolean[];
+            const isToday = isSameDay(date, today);
+            const isSelected = selectedDate === dateStr;
+            return (
+              <MobileDay key={i} type="button" $selected={isSelected && !isToday} onClick={() => onDayClick(dateStr)}
+                aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${nBills + nEntries ? `, ${nBills + nEntries} item${nBills + nEntries === 1 ? '' : 's'}` : ''}`}
+                aria-pressed={isSelected}>
+                <MobileNum $today={isToday} $selected={isSelected}>{date.getDate()}</MobileNum>
+                <MobileDots aria-hidden="true">{dots.map((bill, k) => <Dot key={k} $bill={bill} />)}</MobileDots>
+              </MobileDay>
+            );
+          })}
+        </MobileDays>
+      </MobileMonth>
     </Wrapper>
   );
 }

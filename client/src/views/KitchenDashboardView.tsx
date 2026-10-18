@@ -19,6 +19,7 @@ import { toDateStr } from '../utils/dateUtils.js';
 import { longDay } from '../components/organisms/FoodLog.js';
 import { latestOpenList, menuDays, upcomingMeals } from '../utils/kitchen.js';
 import type { ShoppingItem } from '../types/fields.js';
+import { TickMark } from '../components/atoms/TickMark.js';
 
 /* ── Layout (mirrors the Health dashboard) ── */
 
@@ -230,13 +231,6 @@ const ItemBtn = styled.button<{ $done: boolean }>`
 const Tick = styled.span<{ $done: boolean }>`
   flex: none;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1.5px solid ${({ $done }) => ($done ? 'var(--color-accent)' : 'var(--control-border)')};
-  color: var(--color-accent);
 `;
 
 /* Add an item: an outlined box with a + — Enter adds */
@@ -348,7 +342,7 @@ function ShoppingChecklist({ list }: { list: ReturnType<typeof useOpenShoppingLi
             <ItemBtn type="button" $done={item.checked} aria-pressed={item.checked}
               onClick={() => void saveItems(items.map(i => (i.id === item.id ? { ...i, checked: !i.checked } : i)))}>
               <Tick $done={item.checked} aria-hidden="true">
-                {item.checked && <Icon name="check" size={11} strokeWidth={3} />}
+                <TickMark checked={item.checked} />
               </Tick>
               {item.name || 'Item'}
             </ItemBtn>

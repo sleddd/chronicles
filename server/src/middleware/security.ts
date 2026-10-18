@@ -7,6 +7,8 @@ import { bedrockOrigins } from '@chronicles/shared';
 // client-side, so the server can't name the one host to allow.
 const CONNECT_SRC = [
   "'self'",
+  'https://api.open-meteo.com',
+  'https://geocoding-api.open-meteo.com',
   'https://www.googleapis.com',
   'https://*.r2.cloudflarestorage.com',
   'https://api.anthropic.com',

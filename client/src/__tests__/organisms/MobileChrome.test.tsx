@@ -38,7 +38,7 @@ describe('MobileChrome drop-down menu', () => {
 
   it('shows every destination as an icon over its name, marking the current one', () => {
     renderAt('/journal');
-    for (const name of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
+    for (const name of ['Today', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByRole('button', { name: new RegExp(name), hidden: true })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: /Journal/, hidden: true })).toHaveAttribute('aria-current', 'page');

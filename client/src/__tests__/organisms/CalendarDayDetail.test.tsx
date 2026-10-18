@@ -36,7 +36,7 @@ describe('CalendarDayDetail', () => {
 
   it('shows empty state when no entries', () => {
     renderWithTheme(<CalendarDayDetail {...defaultProps} entries={[]} />);
-    expect(screen.getByText('No entries for this day.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing on this day.')).toBeInTheDocument();
   });
 
   it('renders entry count line for one entry', () => {

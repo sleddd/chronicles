@@ -5,119 +5,112 @@ import type { CalendarViewMode } from '../../views/CalendarView.js';
 /* ── Styled ── */
 
 export const TopBar = styled.div`
-  padding: 40px 24px 16px;
+  padding: 40px 24px 20px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
   flex-shrink: 0;
   @media (max-width: 768px) {
     flex-direction: column;
-    gap: 20px;
-    padding-bottom: 20px;
+    align-items: flex-start;
+    gap: 26px;
+    padding-bottom: 44px;
   }
 `;
 
 export const TitleBlock = styled.div``;
 
+/* "October 2026": the month in soft white, the year in muted grey, both thin */
 export const DisplayTitle = styled.h1`
   font-family: var(--font-display);
-  font-size: 48px;
-  font-weight: 200;
+  font-size: 44px;
+  font-weight: 300;
   line-height: 1;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
+  color: var(--text-secondary);
   margin: 0;
-  span { font-weight: 400; }
+  span { font-weight: 300; color: var(--text-muted); }
+  @media (max-width: 480px) { font-size: 34px; }
 `;
 
 const Controls = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  @media (max-width: 768px) {
-    margin-top: 0;
-    justify-content: flex-start;
-  }
+  gap: 10px;
 `;
 
-const TabGroup = styled.div`
+const box = `
   display: flex;
-  border: 1px solid var(--border-default);
-  border-radius: 3px;
-  overflow: hidden;
+  align-items: center;
+  height: 40px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+`;
+
+/* Day / Week / Month — the chosen one lifted onto --bg-active, its text the standard colour (no accent) */
+const TabGroup = styled.div`
+  ${box}
+  gap: 2px;
+  padding: 4px;
 `;
 
 const Tab = styled.button<{ $active?: boolean; $accent?: string }>`
-  padding: 6px 14px;
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  height: 30px;
+  padding: 0 14px;
   border: none;
+  border-radius: 7px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
-  background: ${({ $active, $accent }) => $active ? ($accent || 'var(--color-accent)') : 'var(--bg-surface)'};
-  color: ${({ $active }) => $active ? 'var(--on-accent, #fff)' : 'var(--text-secondary)'};
-  transition: background 0.1s, color 0.1s;
-  &:not(:last-child) { border-right: 1px solid var(--border-default); }
-  &:hover:not(:disabled) {
-    background: ${({ $active, $accent }) => $active ? ($accent || 'var(--color-accent)') : 'var(--bg-hover)'};
-  }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
 const TodayBtn = styled.button`
-  padding: 6px 14px;
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  border: 1px solid var(--border-default);
-  border-radius: 3px;
-  background: var(--bg-surface);
+  ${box}
+  padding: 0 18px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
   color: var(--text-secondary);
   cursor: pointer;
-  &:hover { background: var(--bg-hover); }
+  &:hover { border-color: var(--control-border); }
 `;
 
 const NavGroup = styled.div`
-  display: flex;
-  border: 1px solid var(--border-default);
-  border-radius: 3px;
-  overflow: hidden;
+  ${box}
+  padding: 0 4px;
 `;
 
 const NavBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: var(--bg-surface);
+  width: 32px;
+  height: 32px;
+  background: transparent;
   border: none;
+  border-radius: 7px;
   cursor: pointer;
-  color: var(--text-secondary);
-  &:first-child { border-right: 1px solid var(--border-default); }
-  &:hover { background: var(--bg-hover); }
+  color: var(--text-muted);
+  &:hover { color: var(--text-primary); }
 `;
-
-/* ── Component ── */
 
 const MobileSubtitle = styled.div`
   display: none;
   @media (max-width: 768px) {
     display: block;
-    font-family: var(--font-label, var(--font-sans));
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-    margin-top: 6px;
-    margin-bottom: 8px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 8px;
   }
 `;
+
+/* ── Component ── */
 
 interface CalendarHeaderProps {
   title: React.ReactNode;
@@ -139,14 +132,14 @@ export function CalendarHeader({ title, subtitle, viewMode, accentColor, onPrev,
       </TitleBlock>
       <Controls>
         <TabGroup>
-          <Tab $active={viewMode === 'day'} $accent={accentColor} onClick={() => onViewMode('day')}>DAY</Tab>
-          <Tab $active={viewMode === 'week'} $accent={accentColor} onClick={() => onViewMode('week')}>WEEK</Tab>
-          <Tab $active={viewMode === 'month'} $accent={accentColor} onClick={() => onViewMode('month')}>MONTH</Tab>
+          <Tab $active={viewMode === 'day'} $accent={accentColor} onClick={() => onViewMode('day')}>Day</Tab>
+          <Tab $active={viewMode === 'week'} $accent={accentColor} onClick={() => onViewMode('week')}>Week</Tab>
+          <Tab $active={viewMode === 'month'} $accent={accentColor} onClick={() => onViewMode('month')}>Month</Tab>
         </TabGroup>
-        <TodayBtn onClick={onToday}>TODAY</TodayBtn>
+        <TodayBtn onClick={onToday}>Today</TodayBtn>
         <NavGroup>
-          <NavBtn onClick={onPrev}><Icon name="chevron-left" size={14} strokeWidth={2} /></NavBtn>
-          <NavBtn onClick={onNext}><Icon name="chevron-right" size={14} strokeWidth={2} /></NavBtn>
+          <NavBtn onClick={onPrev} aria-label="Previous"><Icon name="chevron-left" size={14} strokeWidth={2} /></NavBtn>
+          <NavBtn onClick={onNext} aria-label="Next"><Icon name="chevron-right" size={14} strokeWidth={2} /></NavBtn>
         </NavGroup>
       </Controls>
     </TopBar>

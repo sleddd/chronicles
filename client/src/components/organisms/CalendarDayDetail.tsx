@@ -35,43 +35,45 @@ const Panel = styled.div`
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--bg-surface);
+  background: var(--bg-app);
 `;
 
 const DayHeader = styled.div`
-  padding: 24px 24px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  margin: 0 24px;
+  padding: 24px 0 18px;
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
+  @media (max-width: 900px) { margin: 0; }
 `;
 
 const DayNumberRow = styled.div`
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 14px;
 `;
 
 const BigDayNumber = styled.div`
   font-family: var(--font-display);
-  font-size: 64px;
+  font-size: 56px;
   font-weight: 300;
   line-height: 1;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 `;
 
 const WeekdayLabel = styled.div`
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text-muted);
 `;
 
 const CountLine = styled.div`
   margin-top: 6px;
   font-family: var(--font-sans);
   font-size: 13px;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
 `;
 
 const List = styled.div`
@@ -81,67 +83,60 @@ const List = styled.div`
   padding: 12px 0 48px;
 `;
 
+/* "• Title" over the kind (muted); on phones the kind sits on the right */
 const EventRow = styled.div<{ $accent: string }>`
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 20px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: baseline;
+  margin: 0 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  &:hover { background: var(--bg-hover); }
+  &:hover span:first-of-type { color: var(--text-primary); }
+  @media (max-width: 900px) { margin: 0; }
 `;
 
-const AccentBar = styled.div<{ $color: string }>`
-  width: 3px;
-  min-height: 36px;
-  border-radius: 2px;
-  background: ${({ $color }) => $color};
-  flex-shrink: 0;
-  align-self: stretch;
+const Dot = styled.i<{ $bill?: boolean }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  align-self: center;
+  background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
 `;
-
-const TimeCol = styled.div`
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--text-tertiary);
-  width: 44px;
-  flex-shrink: 0;
-  padding-top: 3px;
-  text-align: right;
-`;
-
 
 const EventContent = styled.div`
-  flex: 1;
   min-width: 0;
+  @media (max-width: 900px) { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 `;
 
-const EventTitle = styled.div`
+const EventTitle = styled.span`
+  display: block;
+  min-width: 0;
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  font-size: 16px;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const EventMeta = styled.div`
-  font-family: var(--font-label, var(--font-sans));
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-top: 2px;
+const EventMeta = styled.span`
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  @media (max-width: 900px) { margin-top: 0; flex: none; }
 `;
 
-
 const EmptyMsg = styled.div`
-  padding: 40px 24px;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  text-align: center;
+  padding: 20px 24px;
+  font-size: 15px;
+  color: var(--text-muted);
+  text-align: left;
+  @media (max-width: 900px) { padding: 20px 0; }
 `;
 
 /* ── Component ── */
@@ -166,7 +161,7 @@ export function CalendarDayDetail({
 
   const date = new Date(dateStr + 'T00:00:00');
   const dayNum = date.getDate();
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' });
 
   const eventCount = entries.filter(e => {
     const taxId = (e.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
@@ -213,8 +208,8 @@ export function CalendarDayDetail({
         <DayNumberRow>
           <BigDayNumber>{dayNum}</BigDayNumber>
           <WeekdayLabel>{weekday}</WeekdayLabel>
-          <PillButton type="button" style={{ marginLeft: 'auto', alignSelf: 'flex-start' }} onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
-            Add entry
+          <PillButton type="button" style={{ marginLeft: 'auto' }} onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
+            Add
           </PillButton>
         </DayNumberRow>
         {countLine && <CountLine>{countLine}</CountLine>}
@@ -223,16 +218,15 @@ export function CalendarDayDetail({
       <List>
         {bills.map(b => (
           <EventRow key={b.key} $accent={accentColor} onClick={() => navigate('/finance')}>
-            <TimeCol>Due</TimeCol>
-            <AccentBar $color="var(--border-strong)" />
+            <Dot $bill aria-hidden="true" />
             <EventContent>
               <EventTitle>{b.name}</EventTitle>
-              <EventMeta>BILL · {formatCents(b.amountCents)}</EventMeta>
+              <EventMeta>Bill · {formatCents(b.amountCents)} due</EventMeta>
             </EventContent>
           </EventRow>
         ))}
         {rows.length === 0 ? (
-          bills.length === 0 && <EmptyMsg>No entries for this day.</EmptyMsg>
+          bills.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>
         ) : (
           rows.map(entry => {
             const meta = entry.metadata as Record<string, unknown>;
@@ -247,18 +241,18 @@ export function CalendarDayDetail({
             if (isEvent) {
               const cf = meta._customFields as Partial<EventFieldValues & MeetingFieldValues> | undefined;
               timeLabel = formatTime(cf?.startTime);
-              const typeName = topic?.name?.toUpperCase() || 'EVENT';
+              const typeName = topic?.name || 'Event';
               const detail = (cf as Partial<MeetingFieldValues>)?.meetingTopic || cf?.location || '';
-              metaLine = detail ? `${typeName} · ${detail.toUpperCase()}` : typeName;
+              metaLine = detail ? `${typeName} · ${detail}` : typeName;
             } else {
               const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
               timeLabel = formatTime(`${String(created.getHours()).padStart(2, '0')}:${String(created.getMinutes()).padStart(2, '0')}`);
               if (isTask) {
                 const cf = meta._customFields as Partial<TaskFieldValues> | undefined;
                 const priority = cf?.priority;
-                metaLine = priority && priority !== 'none' ? `TASK · ${priority.toUpperCase()}` : 'TASK';
+                metaLine = priority && priority !== 'none' ? `Task · ${priority[0].toUpperCase()}${priority.slice(1)} priority` : 'Task';
               } else {
-                metaLine = topic?.name?.toUpperCase() || 'ENTRY';
+                metaLine = topic?.name || 'Entry';
               }
             }
 
@@ -270,9 +264,8 @@ export function CalendarDayDetail({
             };
 
             return (
-              <EventRow key={entry.id} $accent={accentColor} onClick={handleClick}>
-                <TimeCol>{timeLabel}</TimeCol>
-                <AccentBar $color={accentColor} />
+              <EventRow key={entry.id} $accent={accentColor} onClick={handleClick} title={timeLabel ? `${timeLabel} · ${metaLine}` : metaLine}>
+                <Dot aria-hidden="true" />
                 <EventContent>
                   <EventTitle>{title}</EventTitle>
                   <EventMeta>{metaLine}</EventMeta>

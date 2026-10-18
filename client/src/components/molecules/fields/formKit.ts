@@ -60,14 +60,14 @@ export const Chip = styled.button<{ $active: boolean }>`
   height: 32px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-card)')};
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-card)')};
   background: transparent;
   font-family: var(--font-sans);
   font-size: 14px;
   color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')};
   cursor: pointer;
   transition: border-color 120ms, color 120ms;
-  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--control-border)')}; }
+  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -87,7 +87,7 @@ export const Segments = styled.div`
 export const Segment = styled.button<{ $active: boolean }>`
   height: 30px;
   padding: 0 14px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'transparent')};
   border-radius: 7px;
   background: transparent;
   font-family: var(--font-sans);

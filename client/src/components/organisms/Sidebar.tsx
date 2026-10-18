@@ -159,7 +159,7 @@ export const Sidebar = memo(function Sidebar() {
     <SidebarRoot>
       {/* The logo starts a new entry in the journal, the home page (the Journal icon shows active) */}
       <LogoBtn $active={false} onClick={() => navigate('/journal', { state: { newEntry: Date.now() } })} title="Chronicles" aria-label="Chronicles — open the journal">
-        <BrandMark size={52} gradientId="logo-rail" />
+        <BrandMark size={28} gradientId="logo-rail" />
       </LogoBtn>
 
       <NavScroll>

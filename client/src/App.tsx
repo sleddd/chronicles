@@ -29,6 +29,7 @@ import { HealthView } from './views/HealthView.js';
 import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsLogView } from './views/MealsLogView.js';
 import { KitchenDashboardView } from './views/KitchenDashboardView.js';
+import { DashboardView } from './views/DashboardView.js';
 import { AiChat } from './components/organisms/AiChat.js';
 import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
@@ -51,43 +52,49 @@ import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 /* Light greys are darkened a step for readability on the white canvas
    (tertiary ≈ 6:1, disabled/placeholder ≈ 3.7:1). */
 const LIGHT_CSS_VARS: Record<string, string> = {
+  /* Light needs weight to anchor it: near-black text (#1a1d23), a true mid
+     grey for secondary text (#5c626c), firmer card/input outlines (#d9dde2),
+     and the list + rail tinted #eef0f3 so they read as one panel. */
   /* DS semantic surfaces */
   '--bg-app':            '#ffffff',
   '--bg-surface':        '#ffffff',
   '--bg-panel':          '#f6f7f9', /* report panels (Health → Reports) */
   '--bg-elevated':       '#ffffff',
-  '--bg-sunken':         '#f5f6f8',
+  '--bg-sunken':         '#eef0f3',
   '--bg-hover':          '#f8f9fa',
   '--bg-active':         '#f0f2f5',
   '--bg-inverse':        '#1b1d26',
   /* DS text */
-  '--text-primary':      '#18181c',
-  '--text-secondary':    '#26262c',
-  '--text-tertiary':     '#3a3a42',
-  '--text-disabled':     '#57575f',
-  '--text-tab':          '#3a3a42',  /* inactive section tabs */
-  '--text-meta':         '#8a8c95',  /* list-row topic + date: recede behind the entry */
-  '--text-muted':        '#8a8c95',  /* card subtitles, chevrons, + icons */
-  '--text-placeholder':  '#a0a3ab',
-  '--control-border':    '#c4c7d2',  /* unticked round checks */
-  '--border-card':       '#e4e6ec',  /* card outlines + their inner rules/boxes */
+  '--text-primary':      '#1a1d23',
+  '--text-secondary':    '#1a1d23',
+  '--text-tertiary':     '#2e333b',
+  '--text-disabled':     '#6b7079',
+  '--text-tab':          '#3a3f48',  /* inactive section tabs */
+  '--text-meta':         '#5c626c',  /* list-row topic + date: recede behind the entry */
+  '--text-muted':        '#5c626c',  /* card subtitles, chevrons, + icons */
+  '--text-placeholder':  '#80838c',
+  '--control-border':    '#9fa2ac',  /* unticked round checks */
+  '--border-card':       '#d9dde2',  /* card outlines + their inner rules/boxes */
   '--bg-row-hover':      '#f3f4f7',  /* a row lifting inside a card on hover */
-  '--text-soft':         '#6b6e77',  /* toolbar text buttons, chevrons */
-  '--text-faint':        '#c4c7d2',  /* quiet + marks in empty slots */
+  '--text-soft':         '#474c55',  /* toolbar text buttons, chevrons */
+  '--text-faint':        '#a3a6b0',  /* quiet + marks in empty slots */
   '--bg-tile':           '#f3f4f7',  /* a filled tile on the canvas (menu meals) */
+  '--bg-lane':           '#eef0f4',  /* planning board swim lanes */
+  '--bg-lane-over':      '#e4e7ed',  /* a lane while a card is dragged over it */
+  '--bg-lane-card':      '#ffffff',  /* cards sitting in a lane */
   '--bg-today-col':      '#f7f8fa',  /* today's column band */
-  '--border-pop':        '#e4e6ec',  /* floating menus' outline */
-  '--border-dashed':     '#d8dae2',  /* dashed outline of an empty slot on hover */
-  '--text-hint':         '#b3b6bd',  /* placeholders in big borderless fields */
+  '--border-pop':        '#d9dde2',  /* floating menus' outline */
+  '--border-dashed':     '#cfd3da',  /* dashed outline of an empty slot on hover */
+  '--text-hint':         '#8d9098',  /* placeholders in big borderless fields */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
-  '--border-subtle':     '#e4e6ec',
-  '--border-default':    '#d8dae2',
-  '--border-strong':     '#c4c7d2',
-  '--border-field':      '#e4e6ec',  /* faint outline on styled-form boxes + nutrition panel */
+  '--border-subtle':     '#e2e5e9',
+  '--border-default':    '#d1d5db',
+  '--border-strong':     '#b8bdc5',
+  '--border-field':      '#d9dde2',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
-  '--bg-rail':           '#f3f4f7',
-  '--bg-rail-logo':      '#e8eaef',
+  '--bg-rail':           '#eef0f3',
+  '--bg-rail-logo':      '#e3e6ea',
   '--bg-rail-active':    '#ffffff',
   /* Chart series — muted, same chroma as the accent presets */
   '--chart-blue':        '#4f8fd1',
@@ -103,21 +110,21 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--color-info':        '#2f7fd8',  '--color-info-subtle':    '#e1eefb',
 
   /* DS neutral grays for light theme */
-  '--neutral-300': '#e4e6ec',
+  '--neutral-300': '#d9dde2',
   '--neutral-700': '#a0a0aa',
 
   /* ── Legacy aliases → DS values ── */
   '--paper':             '#ffffff',
-  '--paper-deep':        '#f5f6f8',
+  '--paper-deep':        '#eef0f3',
   '--paper-surface':     '#ffffff',
   '--paper-well':        '#f0f2f5',
   '--paper-hover':       '#f8f9fa',
-  '--ink':               '#18181c',
-  '--ink-2':             '#2b2b31',
+  '--ink':               '#1a1d23',
+  '--ink-2':             '#22262d',
   '--ink-3':             '#3a3a42',
   '--ink-4':             '#57575f',
-  '--rule':              '#e4e6ec',
-  '--rule-2':            '#e4e6ec',
+  '--rule':              '#d9dde2',
+  '--rule-2':            '#d9dde2',
   '--btn-primary':       '#18181c',
   '--btn-primary-ink':   '#ffffff',
   '--btn-primary-hover': '#28282e',
@@ -158,6 +165,9 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-soft':         '#a5a8b0',  /* toolbar text buttons, chevrons */
   '--text-faint':        '#464a54',  /* quiet + marks in empty slots */
   '--bg-tile':           '#2c2e37',  /* a filled tile on the canvas (menu meals) */
+  '--bg-lane':           '#272a33',  /* planning board swim lanes */
+  '--bg-lane-over':      '#2b2f38',  /* a lane while a card is dragged over it */
+  '--bg-lane-card':      '#20232a',  /* cards sitting in a lane */
   '--bg-today-col':      '#262831',  /* today's column band */
   '--border-pop':        '#373a44',  /* floating menus' outline */
   '--border-dashed':     '#3b3f49',  /* dashed outline of an empty slot on hover */
@@ -407,11 +417,13 @@ export function App() {
     root.style.setProperty('--color-accent-hover',  isDark ? mix(color, 255, 0.18) : deriveDarker(color, 0.85));
     root.style.setProperty('--color-accent-active', isDark ? mix(color, 255, 0.34) : deriveDarker(color, 0.70));
     root.style.setProperty('--color-accent-subtle', isDark ? `rgba(${r},${g},${b},0.22)` : `rgba(${r},${g},${b},0.10)`);
-    root.style.setProperty('--color-accent-text',   isDark ? color : deriveDarker(color, 0.78));
+    root.style.setProperty('--color-accent-text',   isDark ? color : deriveDarker(color, 0.74));
+    // Accent outlines + their text (pills, chosen chips): a deeper accent in light so it holds on white (Teal → ~#1f7f74)
+    root.style.setProperty('--color-accent-line',   isDark ? color : deriveDarker(color, 0.74));
     root.style.setProperty('--on-accent', onAccent);
     // Lighter accent shades for text on dark (links, today's label); deeper in light
-    root.style.setProperty('--color-accent-link', isDark ? mix(color, 255, 0.24) : deriveDarker(color, 0.85));
-    root.style.setProperty('--color-accent-soft', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.78));
+    root.style.setProperty('--color-accent-link', isDark ? mix(color, 255, 0.24) : deriveDarker(color, 0.74));
+    root.style.setProperty('--color-accent-soft', isDark ? mix(color, 255, 0.40) : deriveDarker(color, 0.74));
 
     /* Nav accent (active rail icon + tab): the exact accent too */
     root.style.setProperty('--color-accent-nav', color);
@@ -452,6 +464,7 @@ export function App() {
               {/* Core */}
               <Route path="/" element={<Navigate to="/journal" replace state={{ newEntry: 1 }} />} />
               <Route path="/journal" element={<R><JournalView /></R>} />
+              <Route path="/dashboard" element={<R><DashboardView /></R>} />
               <Route path="/settings" element={<R><SettingsView /></R>} />
               <Route path="/topics" element={<R><TopicsView /></R>} />
               <Route path="/topics/:topicId" element={<R><TopicDetailView /></R>} />

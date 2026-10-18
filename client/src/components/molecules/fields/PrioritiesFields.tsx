@@ -2,6 +2,7 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { FormWrap, Section, SectionHead, SectionLabel, BoxInput } from './formKit.js';
+import { TickMark } from '../../atoms/TickMark.js';
 
 export interface PriorityItem { id: string; text: string; done: boolean; }
 export interface PrioritiesFieldValues { priorities: PriorityItem[]; }
@@ -32,15 +33,11 @@ const Tick = styled.button<{ $done: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
   padding: 0;
-  border-radius: 50%;
-  border: 1.5px solid ${({ $done }) => ($done ? 'var(--color-accent)' : 'var(--control-border)')};
-  background: ${({ $done }) => ($done ? 'var(--color-accent)' : 'transparent')};
-  color: var(--on-accent);
+  border: none;
+  background: transparent;
   cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 50%; }
 `;
 
 const ItemInput = styled.input`
@@ -107,7 +104,7 @@ export function PrioritiesFields({ values, onChange }: Props) {
           <Item key={p.id} $done={p.done}>
             <Tick type="button" $done={p.done} aria-pressed={p.done} aria-label={p.done ? `Mark priority ${i + 1} not done` : `Mark priority ${i + 1} done`}
               onClick={() => update(p.id, { done: !p.done })}>
-              {p.done && <Icon name="check" size={12} strokeWidth={3} />}
+              <TickMark checked={p.done} />
             </Tick>
             <ItemInput value={p.text} placeholder={`Priority ${i + 1}`} aria-label={`Priority ${i + 1}`}
               onChange={e => update(p.id, { text: e.target.value })} />

@@ -71,7 +71,7 @@ const Column = styled.section<{ $over?: boolean }>`
   gap: 10px;
   min-width: 0;
   padding: 14px 12px 12px;
-  background: ${({ $over }) => ($over ? 'var(--bg-hover)' : 'var(--bg-surface)')};
+  background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'var(--bg-lane)')};
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg, 6px);
   min-height: 160px;
@@ -135,7 +135,7 @@ const Card = styled.article<{ $dragging?: boolean }>`
   flex-direction: column;
   gap: 10px;
   padding: 14px 14px 12px;
-  background: var(--bg-app);
+  background: var(--bg-lane-card);
   border: 1px solid var(--border-default);
   border-radius: var(--r-lg, 6px);
   cursor: pointer;

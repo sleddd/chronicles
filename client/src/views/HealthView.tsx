@@ -72,7 +72,7 @@ const TabsRow = styled.div`
 `;
 
 const SubTabs = styled.div`
-  padding: 10px 0 4px;
+  padding: 24px 0 4px; /* room between the section tabs and the sub-sub tabs */
 `;
 
 const SummaryBar = styled.div`

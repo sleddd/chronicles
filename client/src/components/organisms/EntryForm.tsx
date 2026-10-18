@@ -170,11 +170,8 @@ const EdBody = styled.div`
   padding: var(--s-4, 16px) var(--s-5, 20px) var(--s-4, 16px);
 `;
 
-/* The topic picker (left of the action row) — restyle the
-   TopicSelector trigger to read as bright tracked-uppercase crumb text,
-   keeping its dropdown intact. */
 /* The topic picker at the left of the editor's top bar: the topic's name
-   in bold sentence case with a chevron (restyles the TopicSelector trigger,
+   in regular-weight sentence case with a chevron (restyles the TopicSelector trigger,
    keeping its dropdown intact). */
 const CrumbTopic = styled.div`
   & > div > button {
@@ -184,7 +181,7 @@ const CrumbTopic = styled.div`
     background: transparent;
     font-family: var(--font-sans);
     font-size: 18px;
-    font-weight: 600;
+    font-weight: 400;
     letter-spacing: normal;
     text-transform: none;
     color: var(--text-primary);
@@ -322,6 +319,7 @@ const SaveHint = styled.div`
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-4, ${({ theme }) => theme.colors.textFaint});
+  html[data-theme='light'] & { text-transform: none; letter-spacing: normal; font-size: 13px; }
 `;
 
 const StatusText = styled.span`
@@ -330,6 +328,7 @@ const StatusText = styled.span`
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--danger, #c0392b);
+  html[data-theme='light'] & { text-transform: none; letter-spacing: normal; font-size: 13px; }
 `;
 
 const SaveButton = styled.button<{ $disabled?: boolean }>`
@@ -339,13 +338,19 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
   font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: ${({ $disabled }) => $disabled ? 'var(--text-disabled)' : 'var(--color-accent)'};
+  color: ${({ $disabled }) => $disabled ? 'var(--text-disabled)' : 'var(--color-accent-line)'};
   background: transparent;
-  border: 1px solid ${({ $disabled }) => $disabled ? 'var(--border-default)' : 'var(--color-accent)'};
+  border: 1px solid ${({ $disabled }) => $disabled ? 'var(--border-default)' : 'var(--color-accent-line)'};
   border-radius: var(--r-full, 999px);
   cursor: ${({ $disabled }) => $disabled ? 'not-allowed' : 'pointer'};
   transition: background 150ms, color 150ms;
   &:hover:not(:disabled) { background: var(--color-accent-subtle); }
+  /* Light: the page's one solid focal point — a filled deep-accent pill, white text, sentence case */
+  html[data-theme='light'] & {
+    text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 600;
+    ${({ $disabled }) => ($disabled ? '' : 'background: var(--color-accent-line); border-color: var(--color-accent-line); color: #fff;')}
+  }
+  html[data-theme='light'] &:hover:not(:disabled) { ${({ $disabled }) => ($disabled ? '' : 'background: var(--color-accent-active); border-color: var(--color-accent-active);')} }
   @media (max-width: 768px) {
     order: 1;
     display: inline-flex;

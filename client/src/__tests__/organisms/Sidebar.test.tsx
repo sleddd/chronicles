@@ -40,14 +40,15 @@ describe('Sidebar', () => {
 
   it('renders every nav destination', () => {
     renderAt();
-    for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
+    for (const title of ['Today', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByTitle(title)).toBeInTheDocument();
     }
   });
 
-  it('the logo starts a new entry in the journal (there is no Dashboard)', () => {
+  it('the logo starts a new entry in the journal; Dashboard is its own item', () => {
     renderAt();
-    expect(screen.queryByTitle('Dashboard')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Today'));
+    expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
     fireEvent.click(screen.getByTitle('Chronicles'));
     expect(mockNavigate).toHaveBeenCalledWith('/journal', { state: { newEntry: expect.any(Number) } });
   });
