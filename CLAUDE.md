@@ -62,8 +62,11 @@ All UI must follow the rules below.
   A 3px accent stripe pins the very top of the app chrome.
 - **Type** — **Work Sans** for display/headings, set **thin (Light/200–300)** for an airy feel;
   **Open Sans** for UI, body, and metadata (uppercase + `~0.14em` tracking). Sentence case in UI.
-  Both are **bundled with the app** (`client/src/styles/fonts.css` + `src/assets/fonts/`, variable
-  weight) — never load them from Google Fonts, which Safari/iOS can block, leaving a system face.
+  Both are **bundled with the app** (`client/src/styles/fonts.css` + `src/assets/fonts/`) — never
+  load them from Google Fonts, which Safari/iOS can block, leaving a system face. **One static file
+  per weight and style**, never a single variable-weight file (iOS doesn't render those reliably):
+  Work Sans 100–700, Open Sans 300–700, normal + italic, latin + latin-ext. A new weight needs its
+  own files and `@font-face` rules (Fontsource packages have them).
 
 ### Two Themes: Light (white) and Dark (charcoal)
 Switched via `data-theme="dark"` on `<html>` (driven by `uiStore.themeMode`). The token layer
