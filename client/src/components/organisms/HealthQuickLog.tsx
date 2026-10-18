@@ -1,31 +1,139 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import styled from 'styled-components';
-import { PillButton } from '../atoms/PillButton.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
+import { mealForNow, nowTime } from '../../utils/foodLog.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
+import { useNewEntryInJournal } from '../../hooks/useOpenInJournal.js';
 import { estimateEntryCalories } from '../../services/aiAssistant.js';
-import { exerciseSummary } from '../../utils/exerciseSummary.js';
-import { ExerciseFields } from '../molecules/fields/ExerciseFields.js';
-import type { ExerciseFieldValues } from '../../types/fields.js';
+import { exerciseSummary, EXERCISE_TYPES } from '../../utils/exerciseSummary.js';
+import { useFoodLogActions } from './FoodLog.js';
+import { PillButton } from '../atoms/PillButton.js';
+import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import {
+  Section, TitleInput, Chips, Chip, DateTimeBox, DateTimeField, Unit, BoxText, FieldNote,
+} from '../molecules/fields/formKit.js';
+
+/* Health dashboard "Quick log": a Meal | Exercise switch, then the few fields
+   you need right now — meal name + meal chips, or activity chips — a
+   date | time | kcal (or min) box, and notes, then an outlined accent
+   Log pill. "More details" opens the full
+   form in the journal with what's typed so far. Unset date/time = now. */
 
 /* ── Styled ── */
 
+/* The quick form runs a size down from the journal's field forms */
+const QTitle = styled(TitleInput)`
+  && { font-size: 26px; }
+`;
+
+const QChip = styled(Chip)`
+  height: 28px;
+  padding: 0 13px;
+  font-size: 14px;
+`;
+
+const QField = styled(DateTimeField)`
+  && { height: 38px; padding: 0 14px; font-size: 14px; }
+`;
+
+const QNotes = styled(BoxText)`
+  && { min-height: 64px; padding: 10px 14px; font-size: 13px; }
+`;
+
+const QNote = styled(FieldNote)`
+  font-size: 12px;
+  margin-top: 8px;
+`;
+
+const QChips = styled(Chips)`
+  gap: 8px;
+`;
+
+const Switch = styled.div`
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+`;
+
+const SwitchBtn = styled.button<{ $active: boolean }>`
+  height: 30px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 8px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+/* date | time | amount */
+const WhenBox = styled(DateTimeBox)`
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    & > :last-child { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--border-card); }
+  }
+`;
+
+const Amount = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 16px;
+  cursor: text;
+  &:focus-within { box-shadow: inset 0 0 0 1px var(--color-accent); }
+`;
+
+const AmountInput = styled(QField)`
+  && { flex: 1; padding-right: 0; }
+  &&:focus { box-shadow: none; }
+  &::placeholder { color: var(--text-hint); }
+`;
+
+const Footer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+`;
+
+const MoreLink = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+`;
+
+const Status = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+`;
+
+
 /* ── Helpers ── */
-
-
-function nowTime(): string {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** Topic id by name — the server seeds Meals/Exercise, but recreate if deleted. */
+/** Topic id by name — recreated if deleted. */
 async function getOrCreateTopicId(name: string, icon: string): Promise<number> {
   const { allTopics, setTopics } = useEntriesStore.getState();
   let topic = allTopics.find(t => t.name.toLowerCase() === name.toLowerCase());
@@ -56,80 +164,191 @@ function useCreateEntry() {
   };
 }
 
+const MEALS = [
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'snack', label: 'Snack' },
+  { value: 'supplement', label: 'Supplement' },
+  { value: 'medication', label: 'Medication' },
+];
 
-const FormFooter = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-top: 18px;
-`;
+const ACTIVITY_LABEL: Record<string, string> = { strength: 'Strength' };
 
-const Note = styled.p`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0;
-`;
+const today = () => toDateStr(new Date());
 
-/* ── Exercise ── */
+/* ── Meal ── */
 
-const emptyExercise = (): ExerciseFieldValues => ({
-  exerciseType: 'walking', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles',
-  calories: '', performedDate: '', performedTime: '', notes: '',
-});
-
-export function ExerciseQuickLog() {
-  const createEntry = useCreateEntry();
+function MealQuick() {
   const aiReady = useAiReady();
-
-  // The same exercise form as the journal editor and Quick Entry
-  const [values, setValues] = useState<ExerciseFieldValues>(emptyExercise);
+  const actions = useFoodLogActions('Meals');
+  const openNew = useNewEntryInJournal();
+  const blank = () => ({ name: '', mealType: mealForNow(), date: today(), time: nowTime(), calories: '', notes: '' });
+  const [v, setV] = useState(blank);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
+  const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
 
-  const canSave = !!values.duration.trim() || !!values.distance.trim() || !!values.calories.trim();
+  const fields = () => ({
+    mealDescription: v.name.trim(), mealType: v.mealType,
+    consumedDate: v.date || today(), consumedTime: v.time || nowTime(),
+    calories: v.calories.trim(), ...(v.calories.trim() ? { caloriesSource: 'manual' } : {}),
+    ingredients: '', notes: v.notes.trim(),
+  });
 
-  const handleSubmit = async (e?: FormEvent) => {
-    e?.preventDefault();
-    if (!canSave || saving) return;
+  const log = async () => {
+    const name = v.name.trim();
+    if (!name || saving) return;
     setSaving(true); setStatus('');
     try {
-      const text = exerciseSummary(values as unknown as Record<string, unknown>);
-      let fields: Record<string, unknown> = {
-        ...values,
-        duration: values.duration.trim(),
-        distance: values.distance.trim(),
-        // Unset date/time = now
-        performedDate: values.performedDate || toDateStr(new Date()),
-        performedTime: values.performedTime || nowTime(),
-      };
-      // AI on and no calories typed → calculate them; a failed estimate still saves the workout
-      let note = '';
-      if (aiReady && !values.calories.trim() && (values.duration.trim() || values.distance.trim())) {
-        setStatus('Calculating calories burned…');
-        try { fields = await estimateEntryCalories('exercise', values.notes.trim(), fields); }
-        catch (err) { note = ` — calories not calculated (${err instanceof Error ? err.message : 'error'})`; }
-      }
-      const topicId = await getOrCreateTopicId('Exercise', 'dumbbell');
-      await createEntry(topicId, `<p>${escapeHtml(text)}</p>`, fields);
-      setValues(emptyExercise());
-      setStatus(fields.calories ? `Logged · ${String(fields.calories)} cal burned` : `Logged${note}`);
-      setTimeout(() => setStatus(''), note ? 5000 : 2500);
+      const f = fields();
+      const id = await actions.create(f.consumedDate, name, f);
+      if (aiReady) void actions.fill(id);
+      setV(blank());
+      setStatus(`Logged ${name}`);
+      setTimeout(() => setStatus(''), 2600);
     } catch (err) {
-      console.error('Failed to log exercise:', err);
-      setStatus('Could not save — try again');
+      console.error('Failed to log meal:', err);
+      setStatus('That didn’t save — try again');
     } finally { setSaving(false); }
   };
 
+  const more = async () => openNew(await getOrCreateTopicId('Meals', 'utensils'), fields());
+
   return (
-    <div>
-      <ExerciseFields values={values} onChange={setValues} />
-      <FormFooter>
-        <Note role="status">{status}</Note>
-        <PillButton type="button" onClick={() => void handleSubmit()} disabled={saving || !canSave}>{saving ? 'Logging…' : 'Log exercise'}</PillButton>
-      </FormFooter>
-    </div>
+    <>
+      <QTitle value={v.name} placeholder="What did you eat?" aria-label="What did you eat?"
+        onChange={e => set({ name: e.target.value })}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+      <Section style={{ marginTop: 20 }}>
+        <QChips role="radiogroup" aria-label="Meal">
+          {MEALS.map(m => (
+            <QChip key={m.value} type="button" role="radio" aria-checked={v.mealType === m.value}
+              $active={v.mealType === m.value} onClick={() => set({ mealType: m.value })}>{m.label}</QChip>
+          ))}
+        </QChips>
+      </Section>
+      <Section style={{ marginTop: 20 }}>
+        <WhenBox>
+          <QField type="date" value={v.date} aria-label="Date" onChange={e => set({ date: e.target.value })} />
+          <QField type="time" value={v.time} aria-label="Time" onChange={e => set({ time: e.target.value })} />
+          <Amount>
+            <AmountInput inputMode="numeric" value={v.calories} placeholder="kcal" aria-label="Calories"
+              onChange={e => set({ calories: e.target.value.replace(/[^\d.]/g, '') })} />
+            {v.calories && <Unit>kcal</Unit>}
+          </Amount>
+        </WhenBox>
+        {aiReady && <QNote>Leave calories and nutrients blank and AI will estimate them.</QNote>}
+      </Section>
+      <Section style={{ marginTop: 20 }}>
+        <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+      <Footer>
+        <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
+        <Status role="status" aria-live="polite">{status}</Status>
+        <PillButton type="button" onClick={() => void log()} disabled={saving || !v.name.trim()}>
+          {saving ? 'Logging…' : 'Log meal'}
+        </PillButton>
+      </Footer>
+    </>
+  );
+}
+
+/* ── Exercise ── */
+
+function ExerciseQuick() {
+  const aiReady = useAiReady();
+  const createEntry = useCreateEntry();
+  const openNew = useNewEntryInJournal();
+  const blank = () => ({ type: 'walking', date: today(), time: nowTime(), duration: '', notes: '' });
+  const [v, setV] = useState(blank);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+  const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
+
+  const fields = (): Record<string, unknown> => ({
+    exerciseType: v.type, duration: v.duration.trim(), intensity: 'medium', distance: '', distanceUnit: 'miles',
+    calories: '', performedDate: v.date || today(), performedTime: v.time || nowTime(), notes: v.notes.trim(),
+  });
+
+  const log = async () => {
+    if (!v.duration.trim() || saving) return;
+    setSaving(true); setStatus('');
+    try {
+      let f = fields();
+      let note = '';
+      if (aiReady) {
+        setStatus('Calculating calories burned…');
+        try { f = await estimateEntryCalories('exercise', v.notes.trim(), f); }
+        catch (err) { note = ` — calories not calculated (${err instanceof Error ? err.message : 'error'})`; }
+      }
+      const topicId = await getOrCreateTopicId('Exercise', 'dumbbell');
+      await createEntry(topicId, `<p>${escapeHtml(exerciseSummary(f))}</p>`, f);
+      setV(blank());
+      setStatus(f.calories ? `Logged · ${String(f.calories)} cal burned` : `Logged${note}`);
+      setTimeout(() => setStatus(''), note ? 5000 : 2600);
+    } catch (err) {
+      console.error('Failed to log exercise:', err);
+      setStatus('That didn’t save — try again');
+    } finally { setSaving(false); }
+  };
+
+  const more = async () => openNew(await getOrCreateTopicId('Exercise', 'dumbbell'), fields());
+
+  return (
+    <>
+      <QChips role="radiogroup" aria-label="Activity">
+        {EXERCISE_TYPES.map(t => (
+          <QChip key={t.value} type="button" role="radio" aria-checked={v.type === t.value}
+            $active={v.type === t.value} onClick={() => set({ type: t.value })}>{ACTIVITY_LABEL[t.value] ?? t.label}</QChip>
+        ))}
+      </QChips>
+      <Section style={{ marginTop: 20 }}>
+        <WhenBox>
+          <QField type="date" value={v.date} aria-label="Date" onChange={e => set({ date: e.target.value })} />
+          <QField type="time" value={v.time} aria-label="Time" onChange={e => set({ time: e.target.value })} />
+          <Amount>
+            <AmountInput inputMode="numeric" value={v.duration} placeholder="Duration" aria-label="Duration (min)"
+              onChange={e => set({ duration: e.target.value.replace(/[^\d.]/g, '') })}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+            <Unit>min</Unit>
+          </Amount>
+        </WhenBox>
+        {aiReady && <QNote>Calories burned are calculated by AI when you log.</QNote>}
+      </Section>
+      <Section style={{ marginTop: 20 }}>
+        <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+      <Footer>
+        <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
+        <Status role="status" aria-live="polite">{status}</Status>
+        <PillButton type="button" onClick={() => void log()} disabled={saving || !v.duration.trim()}>
+          {saving ? 'Logging…' : 'Log exercise'}
+        </PillButton>
+      </Footer>
+    </>
+  );
+}
+
+/* ── Panel ── */
+
+export function QuickLog({ meal = true, exercise = true }: { meal?: boolean; exercise?: boolean }) {
+  const [kind, setKind] = useState<'meal' | 'exercise'>(meal ? 'meal' : 'exercise');
+  if (!meal && !exercise) return null;
+  return (
+    <DashPanel aria-label="Quick log">
+      <DashPanelHead
+        title="Quick log"
+        aside={meal && exercise ? (
+          <Switch role="tablist" aria-label="Log a">
+            <SwitchBtn type="button" role="tab" aria-selected={kind === 'meal'} $active={kind === 'meal'} onClick={() => setKind('meal')}>Meal</SwitchBtn>
+            <SwitchBtn type="button" role="tab" aria-selected={kind === 'exercise'} $active={kind === 'exercise'} onClick={() => setKind('exercise')}>Exercise</SwitchBtn>
+          </Switch>
+        ) : undefined}
+      />
+      {kind === 'meal' ? <MealQuick /> : <ExerciseQuick />}
+    </DashPanel>
   );
 }

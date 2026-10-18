@@ -131,7 +131,8 @@ describe('HealthReportingView (ready)', () => {
 
   it('renders period filter tabs', () => {
     renderWithTheme(<HealthReportingView />);
-    expect(screen.getByTestId('filter-tabs')).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Report period' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Week')).toBeInTheDocument();
     expect(screen.getByText('Month')).toBeInTheDocument();
     expect(screen.getByText('Year')).toBeInTheDocument();

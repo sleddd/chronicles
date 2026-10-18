@@ -8,9 +8,7 @@ import { JournalTemplate, SidePanel, EditorPanel } from '../components/templates
 import { LoadingCenter } from '../components/atoms/LoadingCenter.js';
 import { EmptyEditor } from '../components/atoms/EmptyEditor.js';
 import { SidePadding } from '../components/atoms/SidePadding.js';
-import { QuickEntryCard } from '../components/atoms/QuickEntryCard.js';
 import { ViewTabs } from '../components/organisms/ViewTabs.js';
-import { QuickEntry } from '../components/organisms/QuickEntry.js';
 import { EntryList } from '../components/organisms/EntryList.js';
 import { EntryForm } from '../components/organisms/EntryForm.js';
 import { EntryBreadcrumb } from '../components/molecules/EntryBreadcrumb.js';
@@ -244,7 +242,21 @@ export function JournalView() {
   }, []);
 
   useEffect(() => {
-    const state = location.state as { newEntryDate?: string; newEntryTopicId?: number; newEntryFields?: Record<string, unknown>; from?: string } | null;
+    const state = location.state as { newEntry?: number; newEntryDate?: string; newEntryTopicId?: number; newEntryFields?: Record<string, unknown>; from?: string } | null;
+    // The logo (home): a fresh blank entry, even when the journal is already open
+    if (state?.newEntry) {
+      setSelectedEntryId(null);
+      setEditorContent(''); setEditorTopicId(null); setCustomFields({}); setWidgetType(null);
+      setEntryImages([]); setFeaturedKey(null); setImageError('');
+      setLastSavedAt(null);
+      setPendingEntryDate(null);
+      setPendingNewTopicId(null);
+      setPendingNewFields(null);
+      setEditorExpanded(false);
+      setShowMobileEditor(true);
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
     if (state?.newEntryTopicId) {
       setSelectedEntryId(null);
       setPendingNewTopicId(state.newEntryTopicId);
@@ -266,12 +278,14 @@ export function JournalView() {
     }
   }, [location.state]);
 
-  // The journal opens on today (the Today tab) — unless you arrive to edit an
-  // entry from another view, or a day was already picked (mini calendar)
+  // The journal is home: it opens on today (the Today tab) with a blank new
+  // entry in the editor — unless you arrive to edit an entry from another view
   useEffect(() => {
     const state = location.state as { from?: string; newEntryTopicId?: number; newEntryDate?: string } | null;
     if (state?.from || state?.newEntryTopicId || state?.newEntryDate) return;
     const ui = useUIStore.getState();
+    ui.setSelectedEntryId(null);
+    ui.setShowMobileEditor(true);
     if (ui.viewMode !== 'date') {
       ui.setSelectedDate(new Date());
       ui.setViewMode('date');
@@ -900,21 +914,6 @@ export function JournalView() {
     // Store is already updated optimistically by EntryList
   }, [decryptedEntries, encryptPost]);
 
-  const handleQuickCreate = useCallback(async (content: string, topicId: number | null) => {
-    try {
-      const metadata: Record<string, unknown> = {};
-      if (topicId) metadata._taxonomyId = topicId;
-      const encrypted = await encryptPost(content, metadata);
-      const result = await entriesApi.create({
-        contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
-        metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
-        isEncrypted: true, taxonomyIds: topicId ? [topicId] : [],
-      });
-      addDecryptedEntry({ id: result.id as number, content, metadata, isEncrypted: true,
-        createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string) });
-    } catch (err) { console.error('Quick create failed:', err); }
-  }, [encryptPost]);
-
   if (encryptionData?.encryptionEnabled && !isUnlocked && !isRestoring) {
     return (<><AppTemplate><EmptyEditor>Unlock your journal to view entries</EmptyEditor></AppTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
   }
@@ -971,9 +970,6 @@ export function JournalView() {
               </DateFilterBar>
             )}
             {viewMode === 'search' && <SearchPanel />}
-            <QuickEntryCard>
-              <QuickEntry onCreateEntry={handleQuickCreate} />
-            </QuickEntryCard>
             <EntryList onToggleBookmark={handleBookmarkFromCard} />
           </SidePanel>
         }

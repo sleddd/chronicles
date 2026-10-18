@@ -5,9 +5,9 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import styled from 'styled-components';
 import { DateInput } from '../components/atoms/DateInput.js';
-import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthReport } from '../components/organisms/HealthReport.js';
+import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -25,19 +25,20 @@ import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Period filter ── */
 
+/* `short` is what phones show so the switch stays beside the title */
 const PERIOD_OPTIONS = [
-  { value: 'today' as const, label: 'Today' },
-  { value: 'week' as const, label: 'Week' },
-  { value: 'month' as const, label: 'Month' },
-  { value: 'year' as const, label: 'Year' },
-  { value: 'custom' as const, label: 'Custom' },
+  { value: 'today' as const, label: 'Today', short: 'Day' },
+  { value: 'week' as const, label: 'Week', short: 'Wk' },
+  { value: 'month' as const, label: 'Month', short: 'Mo' },
+  { value: 'year' as const, label: 'Year', short: 'Yr' },
+  { value: 'custom' as const, label: 'Custom', short: null },
 ];
 
 const DateRangeRow = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 4px;
+  padding: 20px 0 0;
   font-size: 15px;
   color: ${({ theme }) => theme.colors.textMuted};
   @media (max-width: 480px) { padding: 10px 0; gap: 8px; }
@@ -60,8 +61,52 @@ const Inner = styled.div`
   @media (max-width: 768px) { padding: 0 16px 48px; }
 `;
 
+/* Title on the left, the period switch across from it */
 const Head = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
   padding: 53px 0 28px; /* room under the title before the tabs */
+  @media (max-width: 600px) { flex-wrap: nowrap; gap: 12px; }
+`;
+
+/* Today / Week / Month / Year / Custom — one outlined group; the chosen one is
+   lifted onto --bg-active in the soft accent */
+const Periods = styled.div`
+  display: flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  @media (max-width: 600px) { flex: none; padding: 3px; border-radius: 10px; }
+`;
+
+const PeriodBtn = styled.button<{ $active: boolean }>`
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  /* Phones: short labels (Day, Wk, Mo, Yr) and a calendar icon for Custom */
+  .short { display: none; }
+  @media (max-width: 600px) {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 14px;
+    .full { display: none; }
+    .short { display: inline-flex; vertical-align: middle; }
+  }
 `;
 
 const Title = styled.h1`
@@ -76,10 +121,6 @@ const Title = styled.h1`
 
 const TabsRow = styled.div`
   margin: 0;
-`;
-
-const SubTabs = styled.div`
-  padding: 10px 0 4px;
 `;
 
 /* ── Helpers ── */
@@ -246,11 +287,20 @@ export function HealthReportingView() {
         <Inner>
           <Head>
             <Title>Health</Title>
+            <Periods role="tablist" aria-label="Report period">
+              {PERIOD_OPTIONS.map(o => (
+                <PeriodBtn key={o.value} type="button" role="tab" aria-selected={period === o.value}
+                  aria-label={o.label} title={o.label}
+                  $active={period === o.value} onClick={() => setPeriod(o.value)}>
+                  <span className="full">{o.label}</span>
+                  <span className="short" aria-hidden="true">
+                    {o.short ?? <MaterialIcon $size={18}>calendar_month</MaterialIcon>}
+                  </span>
+                </PeriodBtn>
+              ))}
+            </Periods>
           </Head>
           <TabsRow><HealthTabBar /></TabsRow>
-          <SubTabs>
-            <FilterTabs options={PERIOD_OPTIONS} active={period} onChange={setPeriod} flush bordered={false} />
-          </SubTabs>
           {period === 'custom' && (
             <DateRangeRow>
               <span>From</span>

@@ -138,24 +138,32 @@ describe('SymptomFields', () => {
     notes: '',
   };
 
-  it('renders severity, time occurred, duration, and notes', () => {
+  it('renders the severity scale, When (date, time, lasted) and Notes', () => {
     renderWithTheme(<SymptomFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('Severity')).toBeInTheDocument();
-    expect(screen.getByText('Time Occurred')).toBeInTheDocument();
-    expect(screen.getByText('Duration (minutes)')).toBeInTheDocument();
-    expect(screen.getByText('Notes')).toBeInTheDocument();
+    expect(screen.getAllByText('Severity').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('radio')).toHaveLength(10);
+    expect(screen.getByText('When')).toBeInTheDocument();
+    expect(screen.getByLabelText('Lasted (minutes)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Notes')).toBeInTheDocument();
   });
 
-  it('displays severity value', () => {
+  it('shows the level as a figure with its word, and marks the chosen tile', () => {
     renderWithTheme(<SymptomFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('5/10')).toBeInTheDocument();
+    expect(screen.getByText('/ 10 · Moderate')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Severity 5' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('calls onChange when duration changes', () => {
+  it('sets the severity when a tile is tapped', () => {
     const onChange = vi.fn();
     renderWithTheme(<SymptomFields values={defaultValues} onChange={onChange} />);
-    const durationInput = screen.getByPlaceholderText('Minutes');
-    fireEvent.change(durationInput, { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Severity 8' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ severity: 8 }));
+  });
+
+  it('calls onChange when how long it lasted changes', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<SymptomFields values={defaultValues} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Lasted (minutes)'), { target: { value: '30' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ duration: '30' }));
   });
 });
@@ -516,5 +524,35 @@ describe('TaskFields', () => {
     // Priority is also a select, so target the milestone one by its empty option
     fireEvent.change(screen.getByDisplayValue('No milestone'), { target: { value: '1' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ parentMilestoneId: 1 }));
+  });
+});
+
+/* ═══════════════════════ UserFieldsForm ═══════════════════════ */
+
+import { UserFieldsForm } from '@/components/molecules/fields/UserFieldsForm';
+
+describe('UserFieldsForm', () => {
+  const defs = [
+    { id: 'title', label: 'Title', type: 'text' as const },
+    { id: 'quote', label: 'Favourite quote', type: 'text' as const },
+    { id: 'rating', label: 'Rating', type: 'number' as const },
+    { id: 'link', label: 'Link', type: 'url' as const },
+    { id: 'reread', label: 'Would reread', type: 'boolean' as const },
+  ];
+
+  it('renders every field type, the leading title as the big title', () => {
+    renderWithTheme(<UserFieldsForm fieldDefs={defs} values={{ title: 'Piranesi', quote: 'The Beauty of the House', rating: 5 }} onChange={() => {}} />);
+    expect(screen.getByLabelText('Title')).toHaveValue('Piranesi');
+    expect(screen.getByLabelText('Favourite quote').tagName).toBe('TEXTAREA');
+    expect(screen.getByLabelText('Rating')).toHaveValue('5');
+    expect(screen.getByText('https://')).toBeInTheDocument();
+    expect(screen.getByLabelText('Would reread')).toBeInTheDocument();
+  });
+
+  it('stores numbers as numbers', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<UserFieldsForm fieldDefs={defs} values={{}} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Rating'), { target: { value: '4' } });
+    expect(onChange).toHaveBeenCalledWith({ rating: 4 });
   });
 });

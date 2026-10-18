@@ -1,58 +1,80 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
 
-/* Report stat tile: tracked caption, thin Work Sans figure, a 4px progress bar in
-   the metric's own colour, then the name. Every tile has a hairline outline; the chosen
-   one (with onSelect, e.g. to switch a TrendChart) lifts onto --bg-hover with a brighter one. */
+/* Report stat tile: a --bg-panel card with the metric's name top-left and a
+   muted caption top-right, a large thin Work Sans figure with its unit, and a
+   4px progress rule in the metric's own colour. The chosen one (with onSelect,
+   e.g. to switch a TrendChart) gets a hairline outline. */
 
 const Tile = styled.button<{ $selected?: boolean; $static?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 2px;
   min-width: 0;
-  padding: 16px 14px 14px;
+  padding: 20px 22px 22px;
   text-align: left;
   font: inherit;
   color: inherit;
-  background: ${({ $selected }) => ($selected ? 'var(--bg-hover)' : 'transparent')};
-  border: 1px solid ${({ $selected }) => ($selected ? 'var(--border-strong)' : 'var(--border-default)')};
-  border-radius: var(--r-lg, 6px);
+  background: var(--bg-panel);
+  border: 1px solid ${({ $selected }) => ($selected ? 'var(--control-border)' : 'transparent')};
+  border-radius: 12px;
   cursor: ${({ $static }) => ($static ? 'default' : 'pointer')};
-  transition: background 200ms ease, border-color 200ms ease;
-
-  ${({ $static, $selected }) => (!$static && !$selected ? '&:hover { background: var(--bg-hover); }' : '')}
+  transition: border-color 200ms ease;
+  ${({ $static, $selected }) => (!$static && !$selected ? '&:hover { border-color: var(--border-card); }' : '')}
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (max-width: 480px) { padding: 18px; }
+`;
+
+const Head = styled.span`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+`;
+
+const Name = styled.span`
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-soft);
+`;
+
+const Caption = styled.span`
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: right;
 `;
 
 const Delta = styled.span<{ $dir?: 'up' | 'down' }>`
-  font-family: var(--font-label);
-  font-size: 11px;
-  color: var(--text-tertiary);
-  min-height: 15px;
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
   &::before {
     content: ${({ $dir }) => ($dir === 'up' ? "'▲ '" : $dir === 'down' ? "'▼ '" : "''")};
-    font-size: 8px;
+    font-size: 9px;
     color: ${({ $dir }) => ($dir === 'down' ? 'var(--color-warning)' : 'var(--color-accent)')};
   }
 `;
 
 const Figure = styled.span`
+  margin: 14px 0 18px;
   font-family: var(--font-display);
-  font-weight: 200;
-  font-size: 40px;
-  line-height: 1.05;
-  margin: 2px 0 8px;
+  font-weight: 300;
+  font-size: 36px;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
-  small { font-size: 16px; color: var(--text-tertiary); margin-left: 2px; }
+  small { margin-left: 6px; font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text-muted); }
   @media (max-width: 480px) { font-size: 32px; }
 `;
 
 const Track = styled.span`
   display: block;
   height: 4px;
-  background: var(--bg-sunken); /* --border-subtle vanishes on a card's fill */
+  background: var(--bg-row-hover);
   border-radius: 2px;
   overflow: hidden;
 `;
@@ -67,41 +89,28 @@ const Fill = styled.span<{ $pct: number; $color: string }>`
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
-const Name = styled.span`
-  font-family: var(--font-display);
-  font-weight: 300;
-  font-size: 18px;
-  color: var(--text-primary);
-  margin-top: 10px;
-`;
-
-const Caption = styled.span`
-  font-family: var(--font-label);
-  font-size: 12px;
-  color: var(--text-tertiary);
-`;
-
 export const StatTileRow = styled.div<{ $cols?: number }>`
   display: grid;
   grid-template-columns: repeat(${({ $cols }) => $cols ?? 4}, minmax(0, 1fr));
-  gap: 8px;
-  @media (max-width: 620px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  gap: 20px;
+  @media (max-width: 900px) { gap: 12px; }
+  @media (max-width: 680px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 export interface StatTileProps {
   /** The figure, e.g. "7.2" */
   value: ReactNode;
-  /** Small suffix after the figure, e.g. "h" or "/5" */
+  /** Small suffix after the figure, e.g. "h" or "/ 5" */
   unit?: string;
-  /** Metric name under the bar, e.g. "Sleep" */
+  /** Metric name, top-left, e.g. "Sleep" */
   name: string;
-  /** Muted line under the name, e.g. "Avg per night" */
+  /** Muted note, top-right, e.g. "avg per night" */
   caption?: ReactNode;
-  /** Line above the figure, e.g. "4% vs last month" */
+  /** Line under the name, e.g. "4% vs last month" */
   delta?: { text: string; dir?: 'up' | 'down' };
-  /** 0..1 — fills the bar; omit for no bar */
+  /** 0..1 — fills the rule; omit for no rule */
   progress?: number;
-  /** Bar colour (CSS value); defaults to the accent */
+  /** Rule colour (CSS value); defaults to the accent */
   color?: string;
   selected?: boolean;
   onSelect?: () => void;
@@ -118,13 +127,15 @@ export function StatTile({ value, unit, name, caption, delta, progress, color, s
       aria-pressed={isStatic ? undefined : !!selected}
       onClick={onSelect}
     >
-      <Delta $dir={delta?.dir}>{delta?.text ?? ''}</Delta>
+      <Head>
+        <Name>{name}</Name>
+        {caption && <Caption>{caption}</Caption>}
+      </Head>
+      {delta && <Delta $dir={delta.dir}>{delta.text}</Delta>}
       <Figure>{value}{unit && <small>{unit}</small>}</Figure>
       {progress !== undefined && (
         <Track><Fill $pct={Math.max(0, Math.min(1, progress)) * 100} $color={color ?? 'var(--color-accent)'} /></Track>
       )}
-      <Name>{name}</Name>
-      {caption && <Caption>{caption}</Caption>}
     </Tile>
   );
 }

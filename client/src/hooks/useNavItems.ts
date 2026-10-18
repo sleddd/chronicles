@@ -24,7 +24,6 @@ export function useNavItems(): NavItem[] {
   const hasHealth = ff.medicationEnabled || ff.foodEnabled || ff.exerciseEnabled || ff.allergiesEnabled;
 
   const items: (NavItem | false)[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: 'home', path: '/', active: at('/') },
     { key: 'journal', label: 'Journal', icon: 'book', path: '/journal', active: at('/journal') },
     { key: 'topics', label: 'Topics', icon: 'sell', path: '/topics', active: at('/topics') },
     !!hasHealth && { key: 'health', label: 'Health', icon: 'health_cross', path: '/health', active: under('/health') },

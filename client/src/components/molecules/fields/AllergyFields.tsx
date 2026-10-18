@@ -1,16 +1,14 @@
-import styled from 'styled-components';
-import { RangeInput } from '../../atoms/RangeInput.js';
-import { TextInput } from '../../atoms/TextInput.js';
-import { Textarea } from '../../atoms/Textarea.js';
-import { FormField } from '../FormField.js';
+import { useId } from 'react';
 import type { AllergyFieldValues } from '../../../types/fields.js';
+import {
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, BoxInput, BoxText, DateTimeBox, DateTimeField,
+} from './formKit.js';
+import { SeveritySection } from './SymptomFields.js';
 export type { AllergyFieldValues } from '../../../types/fields.js';
 
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-`;
+/* Allergy fields (journal editor): the allergen as a big borderless title, the
+   shared 1–10 Severity scale, Reaction in an outlined box, When (date | time)
+   and Notes. Props only. */
 
 interface AllergyFieldsProps {
   values: AllergyFieldValues;
@@ -18,39 +16,42 @@ interface AllergyFieldsProps {
 }
 
 export function AllergyFields({ values, onChange }: AllergyFieldsProps) {
+  const set = (patch: Partial<AllergyFieldValues>) => onChange({ ...values, ...patch });
+  const reactionId = useId();
+  const notesId = useId();
+
   return (
-    <Wrapper>
-      <FormField label="Allergen">
-        <TextInput
-          value={values.allergen}
-          onChange={e => onChange({ ...values, allergen: e.target.value })}
-          placeholder="e.g. Peanuts, Pollen, Dust"
-        />
-      </FormField>
-      <FormField label="Severity">
-        <RangeInput
-          min={1}
-          max={10}
-          value={values.severity}
-          displayValue={`${values.severity}/10`}
-          onChange={e => onChange({ ...values, severity: parseInt((e.target as HTMLInputElement).value) })}
-        />
-      </FormField>
-      <FormField label="Reaction">
-        <TextInput
-          value={values.reaction}
-          onChange={e => onChange({ ...values, reaction: e.target.value })}
-          placeholder="e.g. Hives, Swelling, Difficulty breathing"
-        />
-      </FormField>
-      <FormField label="Notes">
-        <Textarea
-          value={values.notes}
-          onChange={e => onChange({ ...values, notes: e.target.value })}
-          placeholder="Additional details"
-          style={{ minHeight: 60 }}
-        />
-      </FormField>
-    </Wrapper>
+    <FormWrap>
+      <TitleInput
+        value={values.allergen}
+        onChange={e => set({ allergen: e.target.value })}
+        placeholder="e.g. Peanuts, Pollen, Dust"
+        aria-label="Allergen"
+      />
+
+      <Section style={{ marginTop: 40 }} aria-label="Reaction">
+        <SectionHead><SectionLabel as="label" htmlFor={reactionId}>Reaction</SectionLabel></SectionHead>
+        <BoxInput id={reactionId} value={values.reaction} placeholder="e.g. Hives, Swelling, Difficulty breathing"
+          onChange={e => set({ reaction: e.target.value })} />
+      </Section>
+
+      <SeveritySection value={values.severity} onChange={n => set({ severity: n })} />
+
+      <Section aria-label="When">
+        <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
+        <DateTimeBox>
+          <DateTimeField type="date" value={values.occurredDate ?? ''} aria-label="Date"
+            onChange={e => set({ occurredDate: e.target.value })} />
+          <DateTimeField type="time" value={values.occurredTime ?? ''} aria-label="Time"
+            onChange={e => set({ occurredTime: e.target.value })} />
+        </DateTimeBox>
+      </Section>
+
+      <Section>
+        <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
+        <BoxText id={notesId} value={values.notes} placeholder="Additional details"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+    </FormWrap>
   );
 }

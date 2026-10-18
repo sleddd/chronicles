@@ -75,13 +75,6 @@ interface UIState {
   setTopicHideText: (map: Record<number, boolean>) => void;
   updateTopicHideText: (topicId: number, hide: boolean) => void;
 
-  // Weather widget
-  weatherEnabled: boolean;
-  weatherCity: string;
-  weatherUnit: 'f' | 'c';
-  setWeatherEnabled: (v: boolean) => void;
-  setWeatherCity: (city: string) => void;
-  setWeatherUnit: (unit: 'f' | 'c') => void;
 
   // Cycle tracking
   cycleTrackingEnabled: boolean;
@@ -165,12 +158,6 @@ export const useUIStore = create<UIState>((set) => ({
   setTopicHideText: (map) => set({ topicHideText: map }),
   updateTopicHideText: (topicId, hide) => set(s => ({ topicHideText: { ...s.topicHideText, [topicId]: hide } })),
 
-  weatherEnabled: false,
-  weatherCity: '',
-  weatherUnit: 'f',
-  setWeatherEnabled: (v) => set({ weatherEnabled: v }),
-  setWeatherCity: (city) => set({ weatherCity: city }),
-  setWeatherUnit: (unit) => set({ weatherUnit: unit }),
 
   cycleTrackingEnabled: false,
   setCycleTrackingEnabled: (v) => set({ cycleTrackingEnabled: v }),

@@ -587,7 +587,8 @@ export function EntryForm({
   const isJournalTopic = !selectedTopic || selectedTopic.name.toLowerCase() === 'journal';
   const hideByTopicOption = topicId != null && !!topicHideText[topicId];
   // Quote/Books/Music entries live in their custom fields — no text area
-  const fieldLedTopic = ['quote', 'quotes', 'book', 'books', 'music']
+  // …but only once the topic has fields: with none defined, the text area stays
+  const fieldLedTopic = userFieldDefs.length > 0 && ['quote', 'quotes', 'book', 'books', 'music']
     .includes(selectedTopic?.name.toLowerCase() ?? '');
   // Shopping lists: the text is only ever a title, which is automated
   // ("Shopping list created on Oct 7, 2026") — so no text area at all.
@@ -671,7 +672,7 @@ export function EntryForm({
   const isBookTopic = topicNameLower === 'book' || topicNameLower === 'books';
   // Exercise likewise: "Running · 30 min · 3 mi" (notes have their own field)
   const isExerciseTopic = customType === 'exercise';
-  const summaryLedTopic = isQuoteTopic || isBookTopic || isExerciseTopic;
+  const summaryLedTopic = ((isQuoteTopic || isBookTopic) && userFieldDefs.length > 0) || isExerciseTopic;
   const quoteDef = isQuoteTopic ? userFieldDefs.find(d => ['quote', 'text'].some(p => d.label.toLowerCase().includes(p))) : undefined;
   // Same rules as the dashboard Quick Entry (utils/entryText)
   const fieldSummary = isQuoteTopic || isBookTopic

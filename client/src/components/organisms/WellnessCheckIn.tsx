@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { WellnessPanel, WATER_GOAL, type FlowIntensity } from '../molecules/WellnessPanel.js';
+import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
@@ -25,7 +26,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
-export function WellnessCheckIn() {
+export function WellnessCheckIn({ title }: { title?: string } = {}) {
   const { encryptPost } = useEncryption();
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -167,15 +168,22 @@ export function WellnessCheckIn() {
   };
 
   const nextPeriod = prediction
-    ? `Estimated next period: ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
-    : 'Estimated next period: log a period day to estimate';
+    ? `Next period est. ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
+    : 'Log a period day to estimate the next';
 
-  return (
+  const panel = (
     <WellnessPanel
       water={water} sleep={sleep} mood={mood} flow={flow}
       onWater={setWater} onSleep={setSleep} onMood={setMood} onFlow={setFlow}
       cycleNote={nextPeriod}
       compact
     />
+  );
+  if (!title) return panel;
+  return (
+    <DashPanel aria-label={title}>
+      <DashPanelHead title={title} aside={entry ? 'Logged today' : 'Not logged yet'} />
+      {panel}
+    </DashPanel>
   );
 }

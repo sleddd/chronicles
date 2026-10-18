@@ -1,9 +1,5 @@
 import styled from 'styled-components';
-import { ScrollList } from '../atoms/ScrollList.js';
-import { CorrelationChart } from '../molecules/charts/CorrelationChart.js';
-import { FrequencyChart } from '../molecules/charts/FrequencyChart.js';
-import { SeverityTrendChart } from '../molecules/charts/SeverityTrendChart.js';
-import { TrendChart } from '../molecules/charts/TrendChart.js';
+import { TrendChart, ChartLegend, type TrendSeries } from '../molecules/charts/TrendChart.js';
 import { StatTile, StatTileRow } from '../molecules/StatTile.js';
 import type { PeriodType } from '../../types/health.js';
 import type {
@@ -18,196 +14,299 @@ import type {
 import {
   calculateCorrelations,
   calculateExerciseCorrelations,
-  calculateSymptomFrequency,
-  calculateSeverityTrend,
   calculateExerciseImpact,
   calculateExerciseFrequency,
   calculateSymptomCoOccurrences,
   calculateWellnessTrend,
   calculateWellnessInsights,
 } from '../../utils/correlationAnalysis.js';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
-/* ── Styled ── */
+/* Health → Reports. Sections (Wellness, Symptoms, Meals, Exercise) are big
+   thin Work Sans headings on the canvas; their content sits in --bg-panel
+   cards (12px corners, no outline). Insights are outlined boxes inside a
+   panel. Props only apart from local UI state (the chosen wellness metric). */
 
-/* Report section — the same filled, bordered card as the dashboards (CollapsibleCard). */
-const SectionCard = styled.div`
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg, 6px);
-  background: var(--bg-surface);
-  padding: 20px 24px;
-  @media (max-width: 480px) { padding: 16px; }
+/* ── Layout ── */
+
+const Report = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0 32px;
 `;
 
-const SectionTitle = styled.h3`
+const SectionHeading = styled.h2`
+  margin: 44px 0 26px;
   font-family: var(--font-display);
-  font-size: ${({ theme }) => theme.typography.h3.fontSize};
+  font-size: 24px;
   font-weight: 300;
-  color: ${({ theme }) => theme.colors.text};
-  margin: 0 0 24px; /* clear space between a section's header and its content */
+  line-height: 1.1;
+  color: var(--text-secondary);
+  &:first-child { margin-top: 32px; }
+  @media (max-width: 480px) { font-size: 22px; margin-top: 36px; }
 `;
 
-/* Sits right under its title; the header's space goes below it instead */
-const SectionDesc = styled.p`
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin: -18px 0 24px;
+const Stack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  @media (max-width: 900px) { gap: 12px; }
 `;
+
+const Grid = styled.div<{ $cols: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+`;
+
+export const Panel = styled.section`
+  min-width: 0;
+  padding: 24px 28px 28px;
+  background: var(--bg-panel);
+  border-radius: 12px;
+  @media (max-width: 480px) { padding: 18px; }
+`;
+
+const PanelHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-bottom: 28px;
+`;
+
+const PanelTitle = styled.h3`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+`;
+
+const PanelSub = styled.p`
+  margin: 4px 0 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+const Quiet = styled.p`
+  margin: 16px 0 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  &:first-child { margin-top: 0; }
+`;
+
+/* ── Insights ── */
+
+const InsightBox = styled.div`
+  padding: 18px 24px 20px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  & + & { margin-top: 12px; }
+  @media (max-width: 480px) { padding: 18px; }
+`;
+
+const InsightHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+`;
+
+const Pill = styled.span<{ $found?: boolean }>`
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  background: ${({ $found }) => ($found
+    ? 'color-mix(in oklab, var(--chart-green) 16%, var(--bg-panel))'
+    : 'var(--bg-row-hover)')};
+  color: ${({ $found }) => ($found ? 'color-mix(in oklab, var(--chart-green), white 25%)' : 'var(--text-muted)')};
+`;
+
+const Facts = styled.dl`
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 26px;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  dt { color: var(--text-muted); }
+  dd { margin: 0; color: var(--text-secondary); }
+`;
+
+/* "6+ glasses: avg 0.0 symptoms/day" → ["6+ glasses", "0.0 symptoms / day"] */
+function splitFact(line: string): [string, string] {
+  const i = line.indexOf(': ');
+  if (i < 0) return ['', line];
+  return [line.slice(0, i), line.slice(i + 2).replace(/^avg /, '').replace(/\s*\/\s*day/, ' / day')];
+}
+
+/* ── Symptom bars ── */
+
+const SEVERITY_BANDS = [
+  { name: 'Mild', range: '1–3', color: 'var(--mood-4)' },
+  { name: 'Moderate', range: '4–6', color: 'var(--chart-amber)' },
+  { name: 'Severe', range: '7–10', color: 'var(--mood-1)' },
+];
+const bandColor = (sev: number) => SEVERITY_BANDS[sev <= 3 ? 0 : sev <= 6 ? 1 : 2].color;
+
+const Legend = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  span { display: inline-flex; align-items: center; gap: 8px; }
+  i { width: 11px; height: 11px; border-radius: 3px; }
+`;
+
+const Bars = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 260px;
+  @media (max-width: 480px) { gap: 6px; height: 200px; }
+`;
+
+const BarCol = styled.div`
+  flex: 1;
+  min-width: 0;
+  max-width: 54px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+`;
+
+const BarCount = styled.span`
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+`;
+
+const Bar = styled.div<{ $h: number; $color: string }>`
+  width: 100%;
+  height: ${({ $h }) => $h}%;
+  min-height: 6px;
+  border-radius: 6px 6px 3px 3px;
+  background: ${({ $color }) => $color};
+`;
+
+const BarLabel = styled.span`
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+`;
+
+/* ── Lists ── */
 
 const ListRow = styled.div`
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  padding: 6px 0;
+  gap: 24px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
   font-size: 15px;
+  &:last-child { padding-bottom: 0; }
 `;
 
-const ListLabel = styled.span`
-  color: ${({ theme }) => theme.colors.text};
-  text-transform: capitalize;
-`;
-
-const ListValue = styled.span`
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const CoRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  & + & { margin-top: 6px; }
-`;
-
-const CoLabels = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  color: ${({ theme }) => theme.colors.text};
-`;
-
-const CoArrow = styled.span`
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const CoBadge = styled.span<{ $color: string }>`
-  font-size: 13px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
-  background: ${({ $color }) => `${$color}18`};
-  color: ${({ $color }) => $color};
-`;
-
-const CoMeta = styled.div`
-  text-align: right;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const ExFreqRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-`;
-
-const ExFreqLabel = styled.span`
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  width: 80px;
-  flex-shrink: 0;
-`;
-
-const ExFreqBar = styled.div`
-  flex: 1;
-  height: 12px;
-  border-radius: 6px;
-  background: ${({ theme }) => theme.colors.border};
+const ListName = styled.span`
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  &::first-letter { text-transform: uppercase; }
 `;
 
-const ExFreqFill = styled.div<{ $width: number; $color: string }>`
-  height: 100%;
-  width: ${({ $width }) => $width}%;
-  background: ${({ $color }) => $color};
-  border-radius: 6px;
+const ListCount = styled.span`
+  flex: none;
+  color: var(--text-muted);
 `;
 
-const ExFreqValue = styled.span`
+/* ── Exercise ── */
+
+const BigFigures = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 32px;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 200;
+  line-height: 1;
+  color: var(--text-secondary);
+  small { margin-left: 8px; font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text-muted); }
+`;
+
+const WeekRow = styled.div`
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 18px;
+  font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ theme }) => theme.colors.text};
-  width: 80px;
-  text-align: right;
-  flex-shrink: 0;
+  & + & { margin-top: 14px; }
+  & > span:first-child { color: var(--text-muted); }
+  & > span:last-child { color: var(--text-secondary); }
+  @media (max-width: 480px) { gap: 12px; font-size: 15px; }
+`;
+
+const WeekBar = styled.div<{ $pct: number }>`
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat left / ${({ $pct }) => Math.max(4, $pct)}% 100%;
 `;
 
 const ImpactRow = styled.div`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 8px 10px;
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  & + & { margin-top: 6px; }
+  gap: 16px;
+  font-family: var(--font-sans);
+  & + & { margin-top: 18px; }
 `;
 
-const ImpactLeft = styled.div``;
-const ImpactName = styled.span`
-  font-size: 16px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text};
-  text-transform: capitalize;
+const ImpactName = styled.div`
+  font-size: 15px;
+  color: var(--text-secondary);
+  &::first-letter { text-transform: uppercase; }
 `;
+
 const ImpactSub = styled.div`
+  margin-top: 4px;
   font-size: 13px;
-  color: ${({ theme }) => theme.colors.textMuted};
+  color: var(--text-muted);
 `;
 
-const ImpactRight = styled.div`
-  text-align: right;
-`;
-
-const ImpactArrow = styled.div`
+const ImpactChange = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   font-size: 15px;
-  color: ${({ theme }) => theme.colors.textMuted};
+  color: var(--text-muted);
+  white-space: nowrap;
 `;
 
-const ImpactChange = styled.div<{ $positive: boolean; $neutral: boolean }>`
-  font-size: 15px;
-  font-weight: 500;
-  color: ${({ $positive, $neutral, theme }) => $neutral ? theme.colors.textMuted : $positive ? theme.colors.success : theme.colors.danger};
-`;
-
-const InsightRow = styled.div`
-  padding: 10px 12px;
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  & + & { margin-top: 8px; }
-`;
-
-const InsightLabel = styled.div`
-  font-size: 15px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text};
-  margin-bottom: 4px;
-`;
-
-const InsightDetail = styled.div`
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  line-height: 1.5;
-`;
-
-const InsightBadge = styled.span<{ $positive: boolean }>`
-  display: inline-block;
-  font-size: 12px;
+const Delta = styled.b<{ $worse: boolean; $flat: boolean }>`
   font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 3px;
-  margin-left: 6px;
-  background: ${({ $positive }) => $positive ? 'var(--color-success-subtle)' : 'var(--bg-sunken)'};
-  color: ${({ $positive }) => $positive ? 'var(--color-success)' : 'var(--text-tertiary)'};
+  color: ${({ $worse, $flat }) => ($flat ? 'var(--text-muted)' : $worse ? 'var(--mood-1)' : 'var(--chart-green)')};
 `;
 
 /* ── Helpers ── */
@@ -220,7 +319,7 @@ const METRICS: Record<WellnessMetric, { name: string; color: string; max: number
   sleep: { name: 'Sleep', color: 'var(--chart-violet)', max: 10, unit: 'h', pick: p => p.sleepHours },
 };
 
-/* Trailing 7-day average of the logged (non-zero) days — the pale comparison line. */
+/* Trailing 7-day average of the logged (non-zero) days — the dashed comparison line. */
 function rollingAverage(vals: (number | null)[]): (number | null)[] {
   return vals.map((_, i) => {
     const win = vals.slice(Math.max(0, i - 6), i + 1).filter((v): v is number => v !== null);
@@ -228,16 +327,24 @@ function rollingAverage(vals: (number | null)[]): (number | null)[] {
   });
 }
 
-const shortDate = (iso: string) => {
-  const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
+const dayLabel = (iso: string) =>
+  new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+const localDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/* "W2026-10-11" → "Week of Oct 11", "2026-10" → "Oct 2026" */
+function periodLabel(key: string): string {
+  if (key.startsWith('W')) return `Week of ${dayLabel(key.slice(1))}`;
+  if (/^\d{4}-\d{2}$/.test(key)) return new Date(key + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return dayLabel(key);
+}
+
+const PERIOD_TITLE: Record<PeriodType, string> = {
+  today: 'Today', week: 'This week', month: 'This month', year: 'This year', custom: 'This period',
 };
 
-function strengthColor(c: number): string {
-  if (c >= 75) return '#9B4444';
-  if (c >= 50) return '#B5704F';
-  return '#B8965A';
-}
+const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
 
 /* ── Props ── */
 
@@ -248,23 +355,17 @@ interface HealthReportProps {
   exercises: DecryptedExercise[];
   wellness: DecryptedWellness[];
   period: PeriodType;
-  accentColor: string;
+  /** Kept for callers; the report now draws in the accent token directly */
+  accentColor?: string;
 }
 
 /* ── Component ── */
 
-export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, period, accentColor }: HealthReportProps) {
-  const today = new Date();
+export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, period }: HealthReportProps) {
   const correlations = useMemo(() => {
     if (symptoms.length === 0) return [];
     return [...calculateCorrelations(symptoms, foods, medLogs), ...calculateExerciseCorrelations(symptoms, exercises)];
   }, [symptoms, foods, medLogs, exercises]);
-
-  const symptomFrequency = useMemo(() =>
-    symptoms.length > 0 ? calculateSymptomFrequency(symptoms, period === 'year' ? 'month' : 'day') : [], [symptoms, period]);
-
-  const severityTrend = useMemo(() =>
-    symptoms.length > 0 ? calculateSeverityTrend(symptoms, period === 'year' ? 'week' : 'day') : [], [symptoms, period]);
 
   const coOccurrences = useMemo(() =>
     symptoms.length > 0 ? calculateSymptomCoOccurrences(symptoms) : [], [symptoms]);
@@ -275,22 +376,28 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
   const exerciseFrequency = useMemo(() =>
     exercises.length > 0 ? calculateExerciseFrequency(exercises, period === 'year' ? 'month' : 'week') : [], [exercises, period]);
 
-  const exerciseSummary = useMemo(() => {
-    if (exercises.length === 0) return null;
-    const byType = exercises.reduce((acc, e) => {
-      const k = e.exerciseType.toLowerCase();
-      if (!acc[k]) acc[k] = { count: 0, duration: 0 };
-      acc[k].count++;
-      acc[k].duration += e.duration;
-      return acc;
-    }, {} as Record<string, { count: number; duration: number }>);
-    return byType;
-  }, [exercises]);
+  /* Symptoms per day (per month over a year): count + average severity */
+  const symptomBars = useMemo(() => {
+    const byKey = new Map<string, number[]>();
+    for (const s of symptoms) {
+      const d = new Date(s.occurredAt);
+      const key = period === 'year' ? localDay(d).slice(0, 7) : localDay(d);
+      byKey.set(key, [...(byKey.get(key) ?? []), s.severity || 5]);
+    }
+    return [...byKey.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12)
+      .map(([key, sevs]) => ({ key, count: sevs.length, avg: sevs.reduce((t, v) => t + v, 0) / sevs.length }));
+  }, [symptoms, period]);
 
   const topSymptoms = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const s of symptoms) { const k = s.name.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const counts = new Map<string, { name: string; n: number }>();
+    for (const s of symptoms) {
+      const k = s.name.toLowerCase();
+      const cur = counts.get(k);
+      counts.set(k, { name: cur?.name ?? s.name, n: (cur?.n ?? 0) + 1 });
+    }
+    return [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 5);
   }, [symptoms]);
 
   const topIngredients = useMemo(() => {
@@ -298,6 +405,19 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
     for (const f of foods) for (const ing of f.ingredients) { const k = ing.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [foods]);
+
+  const exerciseTotals = useMemo(() => {
+    if (exercises.length === 0) return null;
+    const byType = new Map<string, number>();
+    for (const e of exercises) byType.set(e.exerciseType.toLowerCase(), (byType.get(e.exerciseType.toLowerCase()) ?? 0) + 1);
+    const types = [...byType.entries()].sort((a, b) => b[1] - a[1]);
+    const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+    return {
+      sessions: exercises.length,
+      minutes: exercises.reduce((t, e) => t + (e.duration || 0), 0),
+      note: types.length === 1 ? `All logged as ${cap(types[0][0])}` : `Mostly ${cap(types[0][0])} · ${types.length} types`,
+    };
+  }, [exercises]);
 
   const wellnessTrend: WellnessTrendPoint[] = useMemo(() =>
     wellness.length > 0 ? calculateWellnessTrend(wellness) : [], [wellness]);
@@ -308,196 +428,243 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
 
   const wellnessSummary = useMemo(() => {
     if (wellness.length === 0) return null;
-    const withWater = wellness.filter(w => w.waterGlasses > 0);
-    const withMood  = wellness.filter(w => w.moodScore > 0);
-    const withSleep = wellness.filter(w => w.sleepHours > 0);
-    const withSleepQ = wellness.filter(w => w.sleepQuality > 0);
-    return {
-      avgWater:  withWater.length  > 0 ? withWater.reduce((s, w) => s + w.waterGlasses, 0) / withWater.length : 0,
-      avgMood:   withMood.length   > 0 ? withMood.reduce((s, w) => s + w.moodScore, 0) / withMood.length : 0,
-      avgSleep:  withSleep.length  > 0 ? withSleep.reduce((s, w) => s + w.sleepHours, 0) / withSleep.length : 0,
-      avgSleepQ: withSleepQ.length > 0 ? withSleepQ.reduce((s, w) => s + w.sleepQuality, 0) / withSleepQ.length : 0,
-      days: wellness.length,
+    const avg = (pick: (w: DecryptedWellness) => number) => {
+      const xs = wellness.map(pick).filter(v => v > 0);
+      return xs.length ? xs.reduce((t, v) => t + v, 0) / xs.length : 0;
     };
+    return { avgWater: avg(w => w.waterGlasses), avgMood: avg(w => w.moodScore), avgSleep: avg(w => w.sleepHours), days: wellness.length };
   }, [wellness]);
 
   const [metric, setMetric] = useState<WellnessMetric>('sleep');
   const chart = useMemo(() => {
     const m = METRICS[metric];
     const values = wellnessTrend.map(p => (m.pick(p) > 0 ? m.pick(p) : null));
-    return { m, labels: wellnessTrend.map(p => shortDate(p.date)), values, avg: rollingAverage(values) };
+    const series: TrendSeries[] = [
+      { label: 'Daily', values, color: m.color },
+      { label: '7-day average', values: rollingAverage(values), ghost: true },
+    ];
+    return { m, labels: wellnessTrend.map(p => dayLabel(p.date)), series };
   }, [wellnessTrend, metric]);
 
+  const hasAnything = wellness.length > 0 || symptoms.length > 0 || exercises.length > 0 || topIngredients.length > 0;
+  const maxBar = Math.max(1, ...symptomBars.map(b => b.count));
+  const maxWeek = Math.max(1, ...exerciseFrequency.map(d => d.count));
+
+  if (!hasAnything) {
+    return <Report><Quiet style={{ marginTop: 40 }}>Nothing logged in this period yet. Wellness check-ins, symptoms, meals and exercise show up here as you log them.</Quiet></Report>;
+  }
+
   return (
-    <ScrollList $gap="24px" $padding="16px 0">
-      {/* Wellness: one tile per metric above the chart; the chosen tile drives it */}
-      {wellnessSummary && (
-        <SectionCard>
-          <SectionTitle>Wellness Trends</SectionTitle>
-          <StatTileRow $cols={3} style={{ marginBottom: 24 }}>
-            <StatTile
-              value={wellnessSummary.avgWater.toFixed(1)} unit="/8" name="Water"
-              caption={`Avg glasses · ${wellnessSummary.days} days`}
-              progress={wellnessSummary.avgWater / 8} color={METRICS.water.color}
-              selected={metric === 'water'} onSelect={() => setMetric('water')}
-            />
-            <StatTile
-              value={wellnessSummary.avgMood > 0 ? wellnessSummary.avgMood.toFixed(1) : '—'} unit="/5" name="Mood"
-              caption="Avg score"
-              progress={wellnessSummary.avgMood / 5} color={METRICS.mood.color}
-              selected={metric === 'mood'} onSelect={() => setMetric('mood')}
-            />
-            <StatTile
-              value={wellnessSummary.avgSleep > 0 ? wellnessSummary.avgSleep.toFixed(1) : '—'} unit="h" name="Sleep"
-              caption={wellnessSummary.avgSleepQ > 0 ? `Avg per night · quality ${wellnessSummary.avgSleepQ.toFixed(1)}/5` : 'Avg per night'}
-              progress={wellnessSummary.avgSleep / 10} color={METRICS.sleep.color}
-              selected={metric === 'sleep'} onSelect={() => setMetric('sleep')}
-            />
-          </StatTileRow>
-          {wellnessTrend.length > 1 && (
-            <TrendChart
-              ariaLabel={`${chart.m.name} by day`}
-              labels={chart.labels}
-              yMax={chart.m.max}
-              formatTick={v => `${v}${chart.m.unit}`}
-              series={[
-                { label: chart.m.name, values: chart.values, color: chart.m.color },
-                { label: '7-day average', values: chart.avg, ghost: true },
-              ]}
-            />
-          )}
-        </SectionCard>
+    <Report>
+      {(wellnessSummary || symptoms.length > 0) && (
+        <>
+          <SectionHeading>Wellness</SectionHeading>
+          <Stack>
+            {wellnessSummary && (
+              <StatTileRow $cols={3}>
+                <StatTile
+                  value={wellnessSummary.avgWater.toFixed(1)} unit="/ 8" name="Water"
+                  caption={`avg glasses · ${wellnessSummary.days} ${plural(wellnessSummary.days, 'day')}`}
+                  progress={wellnessSummary.avgWater / 8} color={METRICS.water.color}
+                  selected={metric === 'water'} onSelect={() => setMetric('water')}
+                />
+                <StatTile
+                  value={wellnessSummary.avgMood > 0 ? wellnessSummary.avgMood.toFixed(1) : '—'} unit="/ 5" name="Mood"
+                  caption="avg score"
+                  progress={wellnessSummary.avgMood / 5} color={METRICS.mood.color}
+                  selected={metric === 'mood'} onSelect={() => setMetric('mood')}
+                />
+                <StatTile
+                  value={wellnessSummary.avgSleep > 0 ? wellnessSummary.avgSleep.toFixed(1) : '—'} unit="h" name="Sleep"
+                  caption="avg per night"
+                  progress={wellnessSummary.avgSleep / 10} color={METRICS.sleep.color}
+                  selected={metric === 'sleep'} onSelect={() => setMetric('sleep')}
+                />
+              </StatTileRow>
+            )}
+
+            {wellnessTrend.length > 1 && (
+              <Panel aria-label={`${chart.m.name} over time`}>
+                <PanelHead>
+                  <PanelTitle>{chart.m.name} over time</PanelTitle>
+                  <ChartLegend series={chart.series} />
+                </PanelHead>
+                <TrendChart
+                  ariaLabel={`${chart.m.name} by day`}
+                  labels={chart.labels}
+                  yMax={chart.m.max}
+                  formatTick={v => `${v}${chart.m.unit}`}
+                  series={chart.series}
+                />
+              </Panel>
+            )}
+
+            <Panel aria-label="Insights">
+              <PanelHead>
+                <div>
+                  <PanelTitle>Insights</PanelTitle>
+                  <PanelSub>Cross-correlations between sleep, water, mood, exercise, and symptoms</PanelSub>
+                </div>
+              </PanelHead>
+              {wellnessInsights.map((insight, i) => (
+                <InsightBox key={`w${i}`}>
+                  <InsightHead>
+                    {insight.label}
+                    <Pill $found={insight.direction === 'positive'}>
+                      {insight.direction === 'positive' ? 'Pattern found' : 'Tracking'} · {insight.dataPoints} {plural(insight.dataPoints, 'day')}
+                    </Pill>
+                  </InsightHead>
+                  <Facts>
+                    {[insight.high, insight.low].map(line => {
+                      const [k, v] = splitFact(line);
+                      return <div key={line} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>;
+                    })}
+                  </Facts>
+                </InsightBox>
+              ))}
+              {correlations.slice(0, 10).map((c, i) => (
+                <InsightBox key={`c${i}`}>
+                  <InsightHead>
+                    {c.trigger.name} → {c.symptom.name}
+                    <Pill $found>{c.correlation}% · {c.occurrences} {plural(c.occurrences, 'time')}</Pill>
+                  </InsightHead>
+                  <Facts>
+                    <dt>Seen</dt><dd>{c.occurrences} of {c.totalSymptomOccurrences} {plural(c.totalSymptomOccurrences, 'time')}</dd>
+                    {c.avgTimeToSymptom > 0 && (
+                      <><dt>Usually</dt><dd>~{c.avgTimeToSymptom < 60 ? `${c.avgTimeToSymptom} min` : `${Math.round(c.avgTimeToSymptom / 60)}h`} after</dd></>
+                    )}
+                  </Facts>
+                </InsightBox>
+              ))}
+              {wellnessInsights.length === 0 && correlations.length === 0 ? (
+                <Quiet>No patterns yet. Keep logging wellness, food, symptoms, and medications to find them.</Quiet>
+              ) : correlations.length === 0 && (
+                <Quiet>No food or medication correlations yet. Keep logging food, symptoms, and medications to find patterns.</Quiet>
+              )}
+            </Panel>
+          </Stack>
+        </>
       )}
 
-      {/* Wellness cross-correlation insights */}
-      {wellnessInsights.length > 0 && (
-        <SectionCard>
-          <SectionTitle>Wellness Insights</SectionTitle>
-          <SectionDesc>Cross-correlations between sleep, water, mood, exercise, and symptoms</SectionDesc>
-          {wellnessInsights.map((insight, i) => (
-            <InsightRow key={i}>
-              <InsightLabel>
-                {insight.label}
-                <InsightBadge $positive={insight.direction === 'positive'}>
-                  {insight.direction === 'positive' ? 'pattern found' : 'tracking'} · {insight.dataPoints} days
-                </InsightBadge>
-              </InsightLabel>
-              <InsightDetail>
-                {insight.high}<br />{insight.low}
-              </InsightDetail>
-            </InsightRow>
-          ))}
-        </SectionCard>
+      {symptoms.length > 0 && (
+        <>
+          <SectionHeading>Symptoms</SectionHeading>
+          <Stack>
+            <Grid $cols={2}>
+              <Panel aria-label="Frequency and severity">
+                <PanelHead>
+                  <PanelTitle>Frequency and severity</PanelTitle>
+                  <Legend>
+                    {SEVERITY_BANDS.map(b => <span key={b.name}><i style={{ background: b.color }} />{b.name} {b.range}</span>)}
+                  </Legend>
+                </PanelHead>
+                <Bars role="img" aria-label="Symptoms per day, coloured by average severity">
+                  {symptomBars.map(b => (
+                    <BarCol key={b.key} title={`${periodLabel(b.key)}: ${b.count} · avg severity ${b.avg.toFixed(1)}`}>
+                      <BarCount>{b.count}</BarCount>
+                      <Bar $h={(b.count / maxBar) * 78} $color={bandColor(Math.round(b.avg))} />
+                    </BarCol>
+                  ))}
+                </Bars>
+                <Bars as="div" aria-hidden="true" style={{ height: 'auto', marginTop: 10 }}>
+                  {symptomBars.map(b => (
+                    <BarCol key={b.key} style={{ height: 'auto' }}><BarLabel>{periodLabel(b.key).replace(/ \d{4}$/, '')}</BarLabel></BarCol>
+                  ))}
+                </Bars>
+              </Panel>
+
+              <Panel aria-label="Most common">
+                <PanelHead><PanelTitle>Most common</PanelTitle></PanelHead>
+                {topSymptoms.map(t => (
+                  <ListRow key={t.name}><ListName title={t.name}>{t.name}</ListName><ListCount>{t.n}×</ListCount></ListRow>
+                ))}
+              </Panel>
+            </Grid>
+
+            {coOccurrences.length > 0 && (
+              <Panel aria-label="Often together">
+                <PanelHead>
+                  <div>
+                    <PanelTitle>Often together</PanelTitle>
+                    <PanelSub>Symptoms that tend to occur within 24 hours of each other</PanelSub>
+                  </div>
+                </PanelHead>
+                {coOccurrences.slice(0, 8).map((co, i) => (
+                  <ListRow key={i}>
+                    <ListName>{co.symptom1.name} ↔ {co.symptom2.name}</ListName>
+                    <ListCount>{co.correlation}% · {co.coOccurrences}×</ListCount>
+                  </ListRow>
+                ))}
+              </Panel>
+            )}
+          </Stack>
+        </>
       )}
 
-      {/* Correlations */}
-      <CorrelationChart data={correlations} title="Correlations Detected" />
-
-      {/* Co-occurrences */}
-      {coOccurrences.length > 0 && (
-        <SectionCard>
-          <SectionTitle>Symptom Co-occurrences</SectionTitle>
-          <SectionDesc>Symptoms that tend to occur together within 24 hours</SectionDesc>
-          {coOccurrences.slice(0, 10).map((co, i) => (
-            <CoRow key={i}>
-              <CoLabels>
-                <span>{co.symptom1.name}</span>
-                <CoArrow>&harr;</CoArrow>
-                <span>{co.symptom2.name}</span>
-              </CoLabels>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <CoBadge $color={strengthColor(co.correlation)}>{co.correlation}%</CoBadge>
-                <CoMeta>
-                  <div>{co.coOccurrences} co-occurrences</div>
-                  {co.avgTimeBetween > 0 && (
-                    <div>~{co.avgTimeBetween < 60 ? `${co.avgTimeBetween}m` : `${Math.round(co.avgTimeBetween / 60)}h`} apart</div>
-                  )}
-                </CoMeta>
-              </div>
-            </CoRow>
-          ))}
-        </SectionCard>
-      )}
-
-      {/* Symptom frequency */}
-      <FrequencyChart data={symptomFrequency} title="Symptom Frequency" color={accentColor} />
-
-      {/* Severity trend */}
-      <SeverityTrendChart data={severityTrend} title="Severity Trend Over Time" />
-
-      {/* Top symptoms */}
-      {topSymptoms.length > 0 && (
-        <SectionCard>
-          <SectionTitle>Most Common Symptoms</SectionTitle>
-          {topSymptoms.map(([name, count]) => (
-            <ListRow key={name}><ListLabel>{name}</ListLabel><ListValue>{count} occurrence{count !== 1 ? 's' : ''}</ListValue></ListRow>
-          ))}
-        </SectionCard>
-      )}
-
-      {/* Top ingredients */}
       {topIngredients.length > 0 && (
-        <SectionCard>
-          <SectionTitle>Most Consumed Ingredients</SectionTitle>
-          {topIngredients.map(([name, count]) => (
-            <ListRow key={name}><ListLabel>{name}</ListLabel><ListValue>{count} time{count !== 1 ? 's' : ''}</ListValue></ListRow>
-          ))}
-        </SectionCard>
-      )}
-
-      {/* Exercise summary */}
-      {exerciseSummary && (
-        <SectionCard>
-          <SectionTitle>Exercise Summary</SectionTitle>
-          {Object.entries(exerciseSummary)
-            .sort((a, b) => b[1].count - a[1].count)
-            .slice(0, 5)
-            .map(([type, data]) => (
-              <ListRow key={type}><ListLabel>{type}</ListLabel><ListValue>{data.count} session{data.count !== 1 ? 's' : ''} ({data.duration} min)</ListValue></ListRow>
+        <>
+          <SectionHeading>Meals</SectionHeading>
+          <Panel aria-label="Most eaten ingredients">
+            <PanelHead><PanelTitle>Most eaten ingredients</PanelTitle></PanelHead>
+            {topIngredients.map(([name, count]) => (
+              <ListRow key={name}><ListName>{name}</ListName><ListCount>{count}×</ListCount></ListRow>
             ))}
-        </SectionCard>
+          </Panel>
+        </>
       )}
 
-      {/* Exercise frequency */}
-      {exerciseFrequency.length > 0 && (
-        <SectionCard>
-          <SectionTitle>Exercise Frequency</SectionTitle>
-          {exerciseFrequency.slice(-7).map(data => {
-            const maxCount = Math.max(...exerciseFrequency.map(d => d.count));
-            return (
-              <ExFreqRow key={data.period}>
-                <ExFreqLabel>{data.period}</ExFreqLabel>
-                <ExFreqBar><ExFreqFill $width={maxCount > 0 ? (data.count / maxCount) * 100 : 0} $color={accentColor} /></ExFreqBar>
-                <ExFreqValue>{data.count} ({data.totalDuration} min)</ExFreqValue>
-              </ExFreqRow>
-            );
-          })}
-        </SectionCard>
-      )}
+      {exerciseTotals && (
+        <>
+          <SectionHeading>Exercise</SectionHeading>
+          <Grid $cols={3}>
+            <Panel aria-label={PERIOD_TITLE[period]}>
+              <PanelHead><PanelTitle>{PERIOD_TITLE[period]}</PanelTitle></PanelHead>
+              <BigFigures>
+                <span>{exerciseTotals.sessions}<small>{plural(exerciseTotals.sessions, 'session')}</small></span>
+                <span>{exerciseTotals.minutes}<small>min</small></span>
+              </BigFigures>
+              <Quiet>{exerciseTotals.note}</Quiet>
+            </Panel>
 
-      {/* Exercise impact on symptoms */}
-      {exerciseImpact.length > 0 && (
-        <SectionCard>
-          <SectionTitle>Exercise Impact on Symptoms</SectionTitle>
-          <SectionDesc>How symptom severity changes after different exercise types (within 24 hours)</SectionDesc>
-          {exerciseImpact.map(impact => (
-            <ImpactRow key={impact.exerciseType}>
-              <ImpactLeft>
-                <ImpactName>{impact.exerciseType}</ImpactName>
-                <ImpactSub>{impact.occurrences} data points</ImpactSub>
-              </ImpactLeft>
-              <ImpactRight>
-                <ImpactArrow>Before: {impact.avgSeverityBefore} &rarr; After: {impact.avgSeverityAfter}</ImpactArrow>
-                <ImpactChange $positive={impact.improvement > 0} $neutral={impact.improvement === 0}>
-                  {impact.improvement > 0 ? '\u2193' : impact.improvement < 0 ? '\u2191' : '\u2212'}{' '}
-                  {Math.abs(impact.improvement)} point{Math.abs(impact.improvement) !== 1 ? 's' : ''}{' '}
-                  {impact.improvement > 0 ? 'improvement' : impact.improvement < 0 ? 'increase' : 'no change'}
-                </ImpactChange>
-              </ImpactRight>
-            </ImpactRow>
-          ))}
-        </SectionCard>
+            <Panel aria-label={period === 'year' ? 'By month' : 'By week'}>
+              <PanelHead><PanelTitle>{period === 'year' ? 'By month' : 'By week'}</PanelTitle></PanelHead>
+              {exerciseFrequency.slice(-6).map(d => (
+                <WeekRow key={d.period}>
+                  <span>{periodLabel(d.period)}</span>
+                  <WeekBar $pct={(d.count / maxWeek) * 100} />
+                  <span>{d.count} · {d.totalDuration} min</span>
+                </WeekRow>
+              ))}
+            </Panel>
+
+            <Panel aria-label="Impact on symptoms">
+              <PanelHead>
+                <div>
+                  <PanelTitle>Impact on symptoms</PanelTitle>
+                  <PanelSub>Severity change within 24 hours</PanelSub>
+                </div>
+              </PanelHead>
+              {exerciseImpact.length === 0 ? (
+                <Quiet>Not enough symptoms around your workouts yet.</Quiet>
+              ) : exerciseImpact.map(impact => {
+                const change = +(impact.avgSeverityAfter - impact.avgSeverityBefore).toFixed(1);
+                return (
+                  <ImpactRow key={impact.exerciseType}>
+                    <div>
+                      <ImpactName>{impact.exerciseType}</ImpactName>
+                      <ImpactSub>{impact.occurrences} data {plural(impact.occurrences, 'point')}</ImpactSub>
+                    </div>
+                    <ImpactChange>
+                      <span>{impact.avgSeverityBefore} → {impact.avgSeverityAfter}</span>
+                      <Delta $worse={change > 0} $flat={change === 0}>{change > 0 ? `+${change}` : change < 0 ? `−${Math.abs(change)}` : '±0'}</Delta>
+                    </ImpactChange>
+                  </ImpactRow>
+                );
+              })}
+            </Panel>
+          </Grid>
+        </>
       )}
-    </ScrollList>
+    </Report>
   );
 }

@@ -15,7 +15,6 @@ import { EmptyEditor } from '@/components/atoms/EmptyEditor';
 import { SidePadding } from '@/components/atoms/SidePadding';
 import { AuthForm } from '@/components/atoms/AuthForm';
 import { ErrorBanner } from '@/components/atoms/ErrorBanner';
-import { QuickEntryCard } from '@/components/atoms/QuickEntryCard';
 import { DragHandle } from '@/components/atoms/DragHandle';
 import { DateTimeInput } from '@/components/atoms/DateTimeInput';
 import {
@@ -223,19 +222,6 @@ describe('DateTimeInput', () => {
       target: { value: '15:30' },
     });
     expect(onTimeChange).toHaveBeenCalledWith('15:30');
-  });
-});
-
-// --- QuickEntryCard ---
-describe('QuickEntryCard', () => {
-  it('renders without crashing', () => {
-    const { container } = renderWithTheme(<QuickEntryCard>Card content</QuickEntryCard>);
-    expect(container.firstChild).toBeInTheDocument();
-  });
-
-  it('renders children', () => {
-    renderWithTheme(<QuickEntryCard>Quick entry form</QuickEntryCard>);
-    expect(screen.getByText('Quick entry form')).toBeInTheDocument();
   });
 });
 

@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import styled from 'styled-components';
-import { TextInput } from '../../atoms/TextInput.js';
-import { Select } from '../../atoms/Select.js';
-import { FormField } from '../FormField.js';
+import { Icon } from '../../atoms/core/Icon.jsx';
+import { FormWrap, Section, SectionHead, SectionLabel, BoxInput, RowBox, LabelledRow, RowLabel, BareSelect } from './formKit.js';
 import type { MenuPlanDay, MenuMealSlot, MealSlotType } from '../../../types/fields.js';
 
 export interface MenuPlanFieldValues {
@@ -34,34 +33,34 @@ function fmtDay(d: Date): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Menu plan fields (journal editor): Week starting as an outlined date box,
+   then each day as a sentence-case label over one outlined box of meal rows —
+   the slot name muted on the left, the meal typed in place, and a recipe pill
+   picker on the right. Props only. */
+
+const DayRow = styled(LabelledRow)`
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  min-height: 56px;
+  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
-/* One day: a tracked label, then a field row per meal (no boxes or rules) */
-const DaySection = styled.section`
-  display: flex;
-  flex-direction: column;
-  margin-top: 16px;
+const MealInput = styled.input`
+  && {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-secondary);
+  }
+  &::placeholder { color: var(--text-hint); }
 `;
 
-const DayHeader = styled.h4`
-  margin: 0 0 4px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-`;
-
-const SlotInputs = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 8px;
-  @media (max-width: 480px) { grid-template-columns: minmax(0, 1fr); }
+const WeekDate = styled(BoxInput)`
+  &&&&& { max-width: 260px; color-scheme: light dark; }
 `;
 
 interface MenuPlanFieldsProps {
@@ -106,50 +105,52 @@ export function MenuPlanFields({ values, onChange, recipeOptions = [] }: MenuPla
   };
 
   return (
-    <Wrapper>
-      <FormField label="Week Starting">
-        <TextInput
-          type="date"
-          value={values.weekStart || ''}
-          onChange={e => onChange({ ...values, weekStart: e.target.value })}
-        />
-      </FormField>
+    <FormWrap>
+      <Section aria-label="Week starting">
+        <SectionHead><SectionLabel>Week starting</SectionLabel></SectionHead>
+        <WeekDate type="date" value={values.weekStart || ''} aria-label="Week starting"
+          onChange={e => onChange({ ...values, weekStart: e.target.value })} />
+      </Section>
 
       {weekDays.map(day => {
         const dateStr = toDateStr(day);
         return (
-          <DaySection key={dateStr} aria-label={fmtDay(day)}>
-            <DayHeader>{fmtDay(day)}</DayHeader>
-            {MEAL_SLOTS.map(({ key, label }) => {
-              const slot = days[dateStr]?.[key] || emptySlot();
-              return (
-                <FormField key={key} label={label}>
-                  <SlotInputs>
-                    <TextInput
+          <Section key={dateStr} aria-label={fmtDay(day)}>
+            <SectionHead><SectionLabel>{fmtDay(day)}</SectionLabel></SectionHead>
+            <RowBox>
+              {MEAL_SLOTS.map(({ key, label }) => {
+                const slot = days[dateStr]?.[key] || emptySlot();
+                return (
+                  <DayRow key={key}>
+                    <RowLabel>{label}</RowLabel>
+                    <MealInput
                       value={slot.mealName}
                       onChange={e => updateSlot(dateStr, key, { mealName: e.target.value })}
-                      placeholder="Meal"
+                      placeholder="Add a meal"
                       aria-label={`${fmtDay(day)} ${label}`}
                     />
                     {recipeOptions.length > 0 && (
-                      <Select
-                        value={slot.recipeId?.toString() || ''}
-                        onChange={e => handleRecipeChange(dateStr, key, e.target.value ? parseInt(e.target.value) : null)}
-                        aria-label={`${fmtDay(day)} ${label} recipe`}
-                      >
-                        <option value="">Link recipe…</option>
-                        {recipeOptions.map(r => (
-                          <option key={r.id} value={r.id}>{r.title}</option>
-                        ))}
-                      </Select>
+                      <BareSelect>
+                        <select
+                          value={slot.recipeId?.toString() || ''}
+                          onChange={e => handleRecipeChange(dateStr, key, e.target.value ? parseInt(e.target.value) : null)}
+                          aria-label={`${fmtDay(day)} ${label} recipe`}
+                        >
+                          <option value="">Link recipe</option>
+                          {recipeOptions.map(r => (
+                            <option key={r.id} value={r.id}>{r.title}</option>
+                          ))}
+                        </select>
+                        <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+                      </BareSelect>
                     )}
-                  </SlotInputs>
-                </FormField>
-              );
-            })}
-          </DaySection>
+                  </DayRow>
+                );
+              })}
+            </RowBox>
+          </Section>
         );
       })}
-    </Wrapper>
+    </FormWrap>
   );
 }

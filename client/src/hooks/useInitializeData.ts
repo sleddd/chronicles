@@ -28,9 +28,6 @@ export function useInitializeData() {
   const setBackgroundImage = useUIStore(s => s.setBackgroundImage);
   const setBackgroundOpacity = useUIStore(s => s.setBackgroundOpacity);
   const setDisplayName = useUIStore(s => s.setDisplayName);
-  const setWeatherEnabled = useUIStore(s => s.setWeatherEnabled);
-  const setWeatherCity = useUIStore(s => s.setWeatherCity);
-  const setWeatherUnit = useUIStore(s => s.setWeatherUnit);
   const setTopicCustomFields = useUIStore(s => s.setTopicCustomFields);
   const setTopicHideText = useUIStore(s => s.setTopicHideText);
   const setCycleTrackingEnabled = useUIStore(s => s.setCycleTrackingEnabled);
@@ -80,9 +77,6 @@ export function useInitializeData() {
         if (settingsMap.topicHideText && typeof settingsMap.topicHideText === 'object' && !Array.isArray(settingsMap.topicHideText)) {
           setTopicHideText(settingsMap.topicHideText as Record<number, boolean>);
         }
-        if (typeof settingsMap.weatherEnabled === 'boolean') setWeatherEnabled(settingsMap.weatherEnabled);
-        if (typeof settingsMap.weatherCity === 'string') setWeatherCity(settingsMap.weatherCity);
-        if (settingsMap.weatherUnit === 'f' || settingsMap.weatherUnit === 'c') setWeatherUnit(settingsMap.weatherUnit);
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
         // Entry images are opt-in — defaults false, deliberately NOT in the default-true flag bag
         if (typeof settingsMap.imagesEnabled === 'boolean') setImagesEnabled(settingsMap.imagesEnabled);

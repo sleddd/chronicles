@@ -128,10 +128,6 @@ vi.mock('@/components/atoms/SidePadding', () => ({
   SidePadding: ({ children }: any) => <div>{children}</div>,
 }));
 
-vi.mock('@/components/atoms/QuickEntryCard', () => ({
-  QuickEntryCard: ({ children }: any) => <div>{children}</div>,
-}));
-
 vi.mock('@/components/atoms/Spinner', () => ({
   Spinner: () => <span data-testid="spinner">Loading...</span>,
 }));
@@ -142,10 +138,6 @@ vi.mock('@/components/molecules/TopicFilterBar', () => ({
 
 vi.mock('@/components/organisms/ViewTabs', () => ({
   ViewTabs: () => <div data-testid="view-tabs" />,
-}));
-
-vi.mock('@/components/organisms/QuickEntry', () => ({
-  QuickEntry: () => <div data-testid="quick-entry" />,
 }));
 
 vi.mock('@/components/organisms/EntryList', () => ({
@@ -246,9 +238,9 @@ describe('JournalView (unlocked, loaded)', () => {
     expect(screen.getByTestId('view-tabs')).toBeInTheDocument();
   });
 
-  it('renders the quick entry component', () => {
+  it('has no quick entry box (new entries open in the editor)', () => {
     renderWithTheme(<JournalView />);
-    expect(screen.getByTestId('quick-entry')).toBeInTheDocument();
+    expect(screen.queryByTestId('quick-entry')).not.toBeInTheDocument();
   });
 });
 

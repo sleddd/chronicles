@@ -189,6 +189,24 @@ describe('EntryForm', () => {
       expect(screen.getByTestId('editor')).toBeVisible();
     });
 
+    it('shows a field-led topic\'s own fields in the outlined style (title first)', () => {
+      renderWithTheme(
+        <EntryForm {...defaultProps} entryId={20} isEditing topicId={11}
+          topics={[{ id: 11, name: 'Books', icon: null, color: null }]} content=""
+          customFields={{ _userFields: { title: 'Piranesi', author: 'Susanna Clarke' } }} />
+      );
+      expect(screen.getByLabelText('Title')).toHaveValue('Piranesi');
+      expect(screen.getByLabelText('Author')).toHaveValue('Susanna Clarke');
+    });
+
+    it('keeps the text area for Music when the topic has no fields yet', () => {
+      renderWithTheme(
+        <EntryForm {...defaultProps} entryId={21} isEditing topicId={30}
+          topics={[{ id: 30, name: 'Music', icon: null, color: null }]} content="<p>Khruangbin</p>" />
+      );
+      expect(screen.getByTestId('editor')).toBeVisible();
+    });
+
     it('hides the editor for field-led topics like Books', () => {
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={5}
@@ -350,7 +368,7 @@ describe('EntryForm', () => {
           topics={[{ id: 14, name: 'Menu Plan', icon: null, color: null }]} content="<p>Menu: Oct 12 – Oct 18</p>"
           customFields={{ weekStart: '2026-10-12', days: { '2026-10-12': { dinner: { mealName: 'Tacos', recipeId: null, recipeName: '' } } } }} />
       );
-      expect(screen.getByText('Week Starting')).toBeInTheDocument();
+      expect(screen.getByText('Week starting')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Tacos')).toBeInTheDocument();
       expect(screen.getByTestId('editor')).not.toBeVisible();
     });

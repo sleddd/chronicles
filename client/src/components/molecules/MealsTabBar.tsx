@@ -11,7 +11,7 @@ const TABS: { label: string; path: string }[] = [
   { label: 'Dashboard', path: '/kitchen' },
   { label: 'Menu', path: '/menu' },
   { label: 'Recipes', path: '/menu/recipes' },
-  { label: 'Shopping Lists', path: '/shopping' },
+  { label: 'Shopping lists', path: '/shopping' },
 ];
 
 /** Tabs for the From the Kitchen section. */

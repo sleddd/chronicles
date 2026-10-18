@@ -35,7 +35,6 @@ import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.j
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
 import { ShoppingListsView } from './views/ShoppingListsView.js';
-import { DashboardView } from './views/DashboardView.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
@@ -55,6 +54,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   /* DS semantic surfaces */
   '--bg-app':            '#ffffff',
   '--bg-surface':        '#ffffff',
+  '--bg-panel':          '#f6f7f9', /* report panels (Health → Reports) */
   '--bg-elevated':       '#ffffff',
   '--bg-sunken':         '#f5f6f8',
   '--bg-hover':          '#f8f9fa',
@@ -138,6 +138,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
 const DARK_CSS_VARS: Record<string, string> = {
   '--bg-app':            '#20232a',
   '--bg-surface':        '#272a33',
+  '--bg-panel':          '#24262d', /* report panels (Health → Reports) */
   '--bg-elevated':       '#2e323c',
   '--bg-sunken':         '#1a1c22',
   '--bg-hover':          '#2b2f38',
@@ -449,7 +450,7 @@ export function App() {
               <Route path="/share/:token" element={<SharedEntryView />} />
 
               {/* Core */}
-              <Route path="/" element={<R><DashboardView /></R>} />
+              <Route path="/" element={<Navigate to="/journal" replace state={{ newEntry: 1 }} />} />
               <Route path="/journal" element={<R><JournalView /></R>} />
               <Route path="/settings" element={<R><SettingsView /></R>} />
               <Route path="/topics" element={<R><TopicsView /></R>} />

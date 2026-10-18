@@ -1,13 +1,6 @@
 import { useCallback, useMemo, useState, type MouseEvent } from 'react';
 import styled from 'styled-components';
-import { TextInput } from '../atoms/TextInput.js';
 import { Select } from '../atoms/Select.js';
-import { PillButton } from '../atoms/PillButton.js';
-import { UnitLabel } from '../atoms/UnitLabel.js';
-import { FormField } from '../molecules/FormField.js';
-import { FoodFields } from '../molecules/fields/FoodFields.js';
-import type { FoodFieldValues } from '../../types/fields.js';
-import { FilterTabs } from '../molecules/FilterTabs.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
@@ -16,20 +9,18 @@ import { autoNutritionOnSave, estimateEntryNutrition, nutrientsToEstimate } from
 import { deleteEntryWithImages } from '../../utils/entryActions.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import {
-  MEAL_TYPE_OPTIONS, goalMet, mealForNow, nowTime, parseDay, shiftDay, summarizeDay, type FoodRow,
+  MEAL_TYPE_OPTIONS, goalMet, parseDay, shiftDay, summarizeDay, type FoodRow,
 } from '../../utils/foodLog.js';
 import {
-  NUTRIENTS, formatNutrient, nutrientNumber, nutrientSourceOf, withManualNutrient,
+  NUTRIENTS, formatNutrient, nutrientNumber, nutrientSourceOf,
   type NutrientGoals, type NutrientKey,
 } from '../../types/nutrition.js';
-import { tableColumnRules } from '../../styles/columnRules.js';
 
-/* ══ Shared section chrome (flat sections: top rule + tracked label row) ══ */
+/* ══ Shared section chrome: a thin Work Sans heading row, content under it ══ */
 
 export const Section = styled.section`
-  margin-top: 40px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 14px;
+  margin-top: 44px;
+  @media (max-width: 768px) { margin-top: 44px; }
 `;
 
 export const SectionHead = styled.div`
@@ -38,36 +29,34 @@ export const SectionHead = styled.div`
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px 16px;
-  margin-bottom: 14px;
+  margin-bottom: 24px;
   min-height: 32px;
 `;
 
 export const SectionLabel = styled.h2`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1.15;
   color: var(--text-secondary);
   margin: 0;
+  @media (max-width: 480px) { font-size: 20px; }
 `;
 
 export const SectionNote = styled.p`
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   margin: 0;
 `;
 
 /** Accent text action used in section heads ("See all", "Fill missing with AI"). */
 export const TextAction = styled.button`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-accent);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-accent-link);
   background: transparent;
   border: none;
   padding: 4px 0;
@@ -82,19 +71,7 @@ const ErrorNote = styled(SectionNote)`
 `;
 
 /* One field per row. */
-const FieldStack = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
 
-const FormFooter = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-top: 18px;
-`;
 
 /* ══ Actions ══ */
 
@@ -176,7 +153,7 @@ export function useFoodLogActions(topicName: string) {
 
   const remove = useCallback((id: number) => deleteEntryWithImages(id), []);
 
-  return { create, save, fill, remove, pending, aiError, setAiError };
+  return { create, save, fill, remove, pending, aiError, setAiError, topicId };
 }
 
 export type FoodLogActions = ReturnType<typeof useFoodLogActions>;
@@ -184,62 +161,66 @@ export type FoodLogActions = ReturnType<typeof useFoodLogActions>;
 
 /* ══ Today at a glance ══ */
 
+/* One outlined --bg-panel strip, a cell per nutrient split by rules: the name,
+   a thin figure with "/ goal unit", and a 4px progress rule */
 const Glance = styled.div`
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 24px;
-  @media (max-width: 860px) { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 20px; }
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  @media (max-width: 860px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 480px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 
 const Stat = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
+  padding: 18px 22px 20px;
+  box-shadow: -1px 0 0 var(--border-subtle), 0 -1px 0 var(--border-subtle); /* rules between cells */
+  @media (max-width: 480px) { padding: 18px 18px 22px; }
 `;
 
 const StatLabel = styled.span`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-soft);
 `;
 
 const StatValue = styled.span<{ $met?: boolean }>`
   font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 200;
-  line-height: 1.1;
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: ${({ $met }) => ($met ? 'var(--color-success)' : 'var(--text-primary)')};
-  small { font-family: var(--font-sans); font-size: 12px; font-weight: 400; color: var(--text-tertiary); margin-left: 4px; }
-`;
-
-const StatGoal = styled.span`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: ${({ $met }) => ($met ? 'var(--chart-green)' : 'var(--text-primary)')};
+  small { font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--text-muted); margin-left: 8px; }
+  @media (max-width: 480px) { font-size: 22px; small { font-size: 12px; } }
 `;
 
 const Track = styled.div`
-  height: 3px;
-  background: var(--border-subtle);
-  border-radius: var(--r-full, 999px);
-  overflow: hidden;
+  height: 4px;
   margin-top: 4px;
+  background: var(--border-card);
+  border-radius: 2px;
+  overflow: hidden;
 `;
 
 const Fill = styled.div<{ $pct: number; $met: boolean }>`
   height: 100%;
   width: ${({ $pct }) => $pct}%;
-  background: ${({ $met }) => ($met ? 'var(--color-success)' : 'var(--color-accent)')};
+  background: ${({ $met }) => ($met ? 'var(--chart-green)' : 'var(--color-accent)')};
+  border-radius: 2px;
   transition: width 300ms ease-out;
 `;
 
-/** The selected day's totals against goals — five quiet stat columns with progress rules. */
+/** The selected day's totals against goals — one outlined strip of five cells with progress rules. */
 export function DayAtAGlance({ rows, goals }: { rows: FoodRow[]; goals: NutrientGoals }) {
   const summary = useMemo(() => summarizeDay(rows), [rows]);
   return (
@@ -252,82 +233,17 @@ export function DayAtAGlance({ rows, goals }: { rows: FoodRow[]; goals: Nutrient
         return (
           <Stat key={n.key}>
             <StatLabel>{n.label}</StatLabel>
-            <StatValue $met={met}>
-              {total === null ? '—' : formatNutrient(total, n.key)}
-              {total !== null && n.unit && <small>{n.unit}</small>}
+            <StatValue $met={met} title={met ? 'Goal met' : undefined}>
+              {total === null ? '0' : formatNutrient(total, n.key)}
+              <small>{goal ? `/ ${formatNutrient(goal, n.key)} ${n.unit || 'kcal'}` : (n.unit || 'kcal')}</small>
             </StatValue>
-            <StatGoal>
-              {goal ? `${met ? 'Goal met · ' : 'of '}${formatNutrient(goal, n.key)}${n.unit ? ` ${n.unit}` : ''}` : 'No goal set'}
-            </StatGoal>
-            {goal ? <Track><Fill $pct={pct} $met={met} /></Track> : null}
+            <Track>{goal ? <Fill $pct={pct} $met={met} /> : null}</Track>
           </Stat>
         );
       })}
     </Glance>
   );
 }
-
-/* ══ Log food form ══ */
-
-interface FoodAddFormProps {
-  day: string;
-  actions: FoodLogActions;
-  aiReady: boolean;
-  onStatus: (msg: string) => void;
-  /** Label for the submit button */
-  submitLabel?: string;
-}
-
-/** Item, type and the nutrition panel; blank nutrients are AI-filled after adding. */
-export function FoodAddForm({ day, actions, aiReady, onStatus, submitLabel = 'Log food' }: FoodAddFormProps) {
-  // The same meal form as the journal editor and Quick Entry
-  const blank = (): FoodFieldValues => ({
-    mealDescription: '', mealType: mealForNow() as FoodFieldValues['mealType'],
-    consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '',
-  } as FoodFieldValues);
-  const [values, setValues] = useState<FoodFieldValues>(blank);
-  const [saving, setSaving] = useState(false);
-  const name = (values.mealDescription ?? '').trim();
-
-  const handleAdd = async () => {
-    if (!name || saving) return;
-    setSaving(true);
-    try {
-      const raw = values as unknown as Record<string, unknown>;
-      let fields: Record<string, unknown> = {
-        ...raw,
-        mealDescription: name,
-        // Unset date/time = the day being viewed (and now, when that's today)
-        consumedDate: values.consumedDate || day,
-        consumedTime: values.consumedTime || (day === toDateStr(new Date()) ? nowTime() : ''),
-        notes: values.notes.trim(),
-        ingredients: values.ingredients.trim(),
-      };
-      for (const n of NUTRIENTS) {
-        const v = String(raw[n.key] ?? '').trim();
-        fields = v ? withManualNutrient(fields, n.key, v) : { ...fields, [n.key]: '' };
-      }
-      const id = await actions.create(day, name, fields);
-      onStatus(`Added ${name}`);
-      if (aiReady) void actions.fill(id);
-      setValues(blank());
-    } catch (err) {
-      console.error('Failed to add food:', err);
-      onStatus('That didn’t save — try again');
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <div>
-      <FoodFields values={values} onChange={setValues} compact onEnter={() => void handleAdd()} />
-      <FormFooter>
-        <PillButton type="button" onClick={handleAdd} disabled={saving || !name}>{saving ? 'Logging…' : submitLabel}</PillButton>
-      </FormFooter>
-    </div>
-  );
-}
-
-
 
 /* ══ Day navigation ══ */
 
@@ -336,37 +252,51 @@ export function longDay(day: string): string {
   return day === toDateStr(new Date()) ? `Today — ${t}` : t;
 }
 
+/* ‹ Today › in one outlined pill; the label opens a date picker */
 const DayNav = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
 `;
 
 const NavIcon = styled.button`
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: var(--r-md, 2px);
+  border-radius: 50%;
   cursor: pointer;
-  &:hover { background: var(--bg-hover); color: var(--text-primary); }
+  &:hover { color: var(--text-primary); }
 `;
 
-const DateInput = styled.input`
+const DayPick = styled.label`
+  position: relative;
+  min-width: 96px;
+  padding: 0 8px;
+  text-align: center;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 500;
   color: var(--text-primary);
-  background: var(--bg-sunken);
-  border: none;
-  border-radius: var(--r-md, 2px);
-  padding: 6px 10px;
-  color-scheme: light dark;
+  cursor: pointer;
+  input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+    color-scheme: light dark;
+  }
 `;
 
 export function DayNavigator({ day, onChange }: { day: string; onChange: (day: string) => void }) {
@@ -374,27 +304,34 @@ export function DayNavigator({ day, onChange }: { day: string; onChange: (day: s
   return (
     <DayNav>
       <NavIcon type="button" onClick={() => onChange(shiftDay(day, -1))} aria-label="Previous day">‹</NavIcon>
-      <DateInput type="date" value={day} onChange={e => e.target.value && onChange(e.target.value)} aria-label="Day to show" />
+      <DayPick>
+        {isToday ? 'Today' : parseDay(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        <input type="date" value={day} onChange={e => e.target.value && onChange(e.target.value)} aria-label="Day to show" />
+      </DayPick>
       <NavIcon type="button" onClick={() => onChange(shiftDay(day, 1))} aria-label="Next day">›</NavIcon>
-      {!isToday && <TextAction type="button" onClick={() => onChange(toDateStr(new Date()))} style={{ marginLeft: 8 }}>Today</TextAction>}
     </DayNav>
   );
 }
 
 export const DayTitle = styled.p`
   font-family: var(--font-display);
-  font-weight: 200;
-  font-size: 26px;
-  line-height: 1.2;
-  color: var(--text-primary);
+  font-weight: 300;
+  font-size: 40px;
+  line-height: 1.1;
+  color: var(--text-secondary);
   margin: 0 0 18px;
+  @media (max-width: 480px) { font-size: 30px; }
 `;
 
 /* ══ Tables ══ */
 
+/* Tables sit in one outlined --bg-panel box; rows split by hairlines, no column rules */
 const Scroll = styled.div`
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
 `;
 
 const Table = styled.table<{ $min: number }>`
@@ -402,37 +339,37 @@ const Table = styled.table<{ $min: number }>`
   min-width: ${({ $min }) => $min}px;
   border-collapse: collapse;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-primary);
 
   th, td {
     text-align: left;
-    padding: 12px 10px;
+    padding: 16px 14px;
     border-bottom: 1px solid var(--border-subtle);
-    vertical-align: middle;
+    vertical-align: top;
   }
-  th:first-child, td:first-child { padding-left: 4px; }
-  ${tableColumnRules}
+  th:first-child, td:first-child { padding-left: 24px; }
+  th:last-child, td:last-child { padding-right: 24px; }
+  tbody tr:last-child td { border-bottom: none; }
   th {
-    font-family: var(--font-label);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--text-tertiary);
     white-space: nowrap;
-    padding-top: 6px;
-    padding-bottom: 10px;
+    padding-top: 18px;
+    padding-bottom: 4px;
+    border-bottom: none;
   }
-  th .unit { text-transform: none; letter-spacing: 0.04em; font-weight: 400; }
+  th .unit { font-weight: 500; }
   th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td.ai { color: var(--text-tertiary); font-style: italic; }
+  td.ai { color: var(--text-muted); font-style: italic; }
   td.muted { color: var(--text-disabled); }
+  td.met { color: var(--color-accent); }
 `;
 
 const ItemRow = styled.tr`
   cursor: pointer;
-  &:hover td { background: var(--bg-hover); }
+  &:hover td { background: var(--bg-row-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
   .actions { opacity: 0; transition: opacity 120ms; }
   &:hover .actions, &:focus-within .actions { opacity: 1; }
@@ -440,19 +377,15 @@ const ItemRow = styled.tr`
 `;
 
 const ItemName = styled.div`
-  font-size: 14px;
-  color: var(--text-primary);
+  font-size: 15px;
+  color: var(--text-secondary);
 `;
 
 const ItemMeta = styled.div`
-  margin-top: 2px;
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  span.note { font-family: var(--font-sans); font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: 6px; }
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  span.note { margin-left: 6px; }
 `;
 
 const RowActions = styled.div`
@@ -462,12 +395,9 @@ const RowActions = styled.div`
 `;
 
 const RowAction = styled.button<{ $danger?: boolean }>`
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-tertiary)')};
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-muted)')};
   background: transparent;
   border: none;
   padding: 4px 0;
@@ -479,23 +409,15 @@ const RowAction = styled.button<{ $danger?: boolean }>`
 const TotalRow = styled.tr`
   td {
     font-weight: 600;
-    border-bottom: none;
-    border-top: 1px solid var(--border-default);
-    padding-top: 14px;
+    border-top: 1px solid var(--border-card);
   }
-  td.lbl {
-    font-family: var(--font-label);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-  }
-  td.met { color: var(--color-success); }
+  td.lbl { font-weight: 500; color: var(--text-secondary); }
+  td.met { color: var(--color-accent); }
 `;
 
 const EmptyCell = styled.td`
   text-align: center !important;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   padding: 28px !important;
 `;
 
@@ -648,18 +570,23 @@ export type TotalWindow = typeof TOTAL_WINDOWS[number]['value'];
 
 const DayRow = styled.tr<{ $sel?: boolean }>`
   cursor: pointer;
-  td { background: ${({ $sel }) => ($sel ? 'var(--color-accent-subtle)' : 'transparent')}; }
-  td:first-child { box-shadow: ${({ $sel }) => ($sel ? 'inset 2px 0 0 var(--color-accent)' : 'none')}; }
-  &:hover td { background: var(--bg-hover); }
+  td { background: ${({ $sel }) => ($sel ? 'var(--bg-row-hover)' : 'transparent')}; }
+  &:hover td { background: var(--bg-row-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
   td.day { white-space: nowrap; }
-  td.met { color: var(--color-success); font-weight: 600; }
-  td.list { font-size: 13px; color: var(--text-secondary); min-width: 160px; max-width: 280px; }
+  td.list {
+    min-width: 220px;
+    max-width: 440px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    div { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  }
 `;
 
+/* The goals sit under the column names, muted, inside the header */
 const GoalRow = styled.tr`
-  td { font-size: 12px; color: var(--text-tertiary); padding-top: 8px; padding-bottom: 8px; }
-  td:first-child { font-family: var(--font-label); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+  th { font-size: 13px; font-weight: 400; color: var(--text-muted); padding-top: 0; padding-bottom: 14px; border-bottom: 1px solid var(--border-subtle); }
 `;
 
 interface FoodTotalsTableProps {
@@ -680,16 +607,16 @@ export function FoodTotalsTable({ days, goals, selected, onOpen }: FoodTotalsTab
             <th>Took</th>
             <th>Noticed</th>
           </tr>
-        </thead>
-        <tbody>
           <GoalRow>
-            <td>Goal</td>
+            <th>Goal</th>
             {NUTRIENTS.map(n => {
               const g = goals[n.key];
-              return <td key={n.key} className="num">{g === null || g === undefined ? '—' : `${formatNutrient(g, n.key)}${n.key === 'calories' ? '+' : ''}`}</td>;
+              return <th key={n.key} className="num">{g === null || g === undefined ? '—' : `${formatNutrient(g, n.key)}${n.key === 'calories' ? '+' : ''}`}</th>;
             })}
-            <td /><td />
+            <th /><th />
           </GoalRow>
+        </thead>
+        <tbody>
           {days.map(({ day, rows, noticed }) => {
             const summary = summarizeDay(rows);
             const took = countNames(rows.filter(r => r.mealType === 'supplement' || r.mealType === 'medication').map(r => r.item));
@@ -702,14 +629,14 @@ export function FoodTotalsTable({ days, goals, selected, onOpen }: FoodTotalsTab
                 onClick={() => onOpen(day)}
                 onKeyDown={e => { if (e.key === 'Enter') onOpen(day); }}
               >
-                <td className="day">{parseDay(day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                <td className="day">{parseDay(day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</td>
                 {NUTRIENTS.map(n => (
                   <td key={n.key} className={`num${goalMet(goals, n.key, summary) ? ' met' : ''}`}>
                     {summary.has[n.key] ? formatNutrient(summary.totals[n.key], n.key) : '—'}
                   </td>
                 ))}
-                <td className="list">{took || '—'}</td>
-                <td className="list">{noticed.length ? [...new Set(noticed)].join('; ') : '—'}</td>
+                <td className="list"><div>{took || '—'}</div></td>
+                <td className="list"><div>{noticed.length ? [...new Set(noticed)].join(', ') : '—'}</div></td>
               </DayRow>
             );
           })}
@@ -725,8 +652,40 @@ function countNames(names: string[]): string {
   return [...counts.entries()].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ');
 }
 
+/* 7 days / 30 days / 90 days / Year — one outlined group, the chosen one lifted */
+const Windows = styled.div`
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+`;
+
+const WindowBtn = styled.button<{ $active: boolean }>`
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  @media (max-width: 480px) { padding: 0 9px; font-size: 13px; }
+`;
+
 export function TotalsWindowTabs({ value, onChange }: { value: TotalWindow; onChange: (v: TotalWindow) => void }) {
-  return <FilterTabs options={[...TOTAL_WINDOWS]} active={value} onChange={onChange} flush bordered={false} />;
+  return (
+    <Windows role="tablist" aria-label="History range">
+      {TOTAL_WINDOWS.map(w => (
+        <WindowBtn key={w.value} type="button" role="tab" aria-selected={value === w.value}
+          $active={value === w.value} onClick={() => onChange(w.value)}>{w.label}</WindowBtn>
+      ))}
+    </Windows>
+  );
 }
 
 /* ══ Goals ══ */
@@ -736,25 +695,115 @@ interface NutritionGoalsPanelProps {
   onChange: (next: NutrientGoals) => Promise<void>;
 }
 
-/** Daily targets in field rows; each saves when you leave the field. */
+const GoalsHead = styled.div`
+  margin-bottom: 26px;
+`;
+
+const GoalsTitle = styled.h3`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text-secondary);
+`;
+
+const GoalsSub = styled.p`
+  margin: 4px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+/* Five outlined boxes: name (+ "at least") on top, the target typed large with its unit */
+const GoalGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+  @media (max-width: 1024px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 560px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+`;
+
+const GoalBox = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px 20px 18px;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  cursor: text;
+  &:focus-within { border-color: var(--color-accent); }
+  @media (max-width: 560px) { padding: 14px 16px 16px; }
+`;
+
+const GoalTop = styled.span`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
+  small { font-size: 13px; color: var(--text-muted); }
+`;
+
+const GoalValue = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  small { flex: none; font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+`;
+
+const GoalInput = styled.input`
+  && {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 300;
+    line-height: 1.1;
+    color: var(--text-secondary);
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  &::placeholder { color: var(--text-hint); font-size: 16px; }
+`;
+
+/** Daily targets as five outlined boxes; each saves when you leave it. */
 export function NutritionGoalsPanel({ goals, onChange }: NutritionGoalsPanelProps) {
   return (
-    <FieldStack>
-      {NUTRIENTS.map(n => (
-        <FormField key={`${n.key}-${goals[n.key] ?? ''}`} label={<UnitLabel label={n.label} unit={n.key === 'calories' ? 'at least' : n.unit || undefined} />}>
-          <TextInput
-            type="number" step={n.step} min="0" inputMode="decimal"
-            defaultValue={goals[n.key] === null || goals[n.key] === undefined ? '' : formatNutrient(goals[n.key], n.key)}
-            placeholder="No goal"
-            aria-label={`${n.label} goal`}
-            onBlur={e => {
-              const next = nutrientNumber(e.target.value);
-              if (next === goals[n.key]) return;
-              void onChange({ ...goals, [n.key]: next });
-            }}
-          />
-        </FormField>
-      ))}
-    </FieldStack>
+    <section aria-label="Daily nutrition goals">
+      <GoalsHead>
+        <GoalsTitle>Daily nutrition goals</GoalsTitle>
+        <GoalsSub>Used for the totals above and the goal-met highlights in history.</GoalsSub>
+      </GoalsHead>
+      <GoalGrid>
+        {NUTRIENTS.map(n => (
+          <GoalBox key={`${n.key}-${goals[n.key] ?? ''}`}>
+            <GoalTop>{n.label}{n.key === 'calories' && <small>at least</small>}</GoalTop>
+            <GoalValue>
+              <GoalInput
+                inputMode="decimal"
+                defaultValue={goals[n.key] === null || goals[n.key] === undefined ? '' : formatNutrient(goals[n.key], n.key)}
+                placeholder="No goal"
+                aria-label={`${n.label} goal`}
+                onBlur={e => {
+                  const next = nutrientNumber(e.target.value);
+                  if (next === goals[n.key]) return;
+                  void onChange({ ...goals, [n.key]: next });
+                }}
+              />
+              <small>{n.unit || 'kcal'}</small>
+            </GoalValue>
+          </GoalBox>
+        ))}
+      </GoalGrid>
+    </section>
   );
 }

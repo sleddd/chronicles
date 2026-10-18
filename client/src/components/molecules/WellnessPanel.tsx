@@ -64,6 +64,14 @@ const Label = styled.span`
   color: var(--text-disabled);
 `;
 
+/* "Next period est. Fri, Nov 6" — across from the Cycle label */
+const CycleNote = styled.span`
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+`;
+
 const Meter = styled.div`
   display: flex;
   flex-direction: column;
@@ -222,21 +230,34 @@ const Note = styled.p`
 
 /* Compact (Health dashboard): about half the height — smaller figures,
    buttons and faces, tighter spacing; same layout and divider */
+/* Compact (Health dashboard, journal): Water | Sleep | Mood across, Cycle
+   under Water; smaller figures, buttons and faces; no rules */
 const CompactWrapper = styled(Wrapper)`
-  && ${Section} { padding: 22px 0 4px; }
-  && ${Section}:first-child { padding-top: 0; padding-bottom: 22px; }
-  && ${Head} { margin-bottom: 8px; }
-  && ${Meter} { gap: 10px; }
+  && ${Head} { margin-bottom: 12px; }
+  && ${Label} { font-size: 13px; color: var(--text-soft); }
+  && ${Meter} { gap: 0; }
+  && ${Meter} > ${Label} { margin-bottom: 12px; }
   && ${MeterMain} { gap: 12px; }
-  && ${Badge} { width: 38px; height: 38px; & > span { font-size: 20px; } }
-  && ${Fig} { font-size: 38px; }
-  && ${Unit}, && ${Label}, && ${MoodName} { font-size: 14px; }
-  && ${Steppers} { gap: 6px; }
-  && ${StepBtn} { width: 32px; height: 32px; & > span { font-size: 18px; } }
-  && ${Faces} { gap: 4px 6px; }
-  && ${FaceBtn} { width: 44px; height: 44px; & > span { font-size: 30px; } }
-  && ${Chip} { padding: 6px 16px; font-size: 14px; }
-  && ${Note} { margin-top: 8px; font-size: 13px; }
+  && ${Track} { margin-top: 16px; height: 3px; }
+  && ${Badge} { width: 38px; height: 38px; & > span { font-size: 22px; } }
+  && ${Fig} { font-size: 32px; color: var(--text-secondary); }
+  && ${Unit} { font-size: 13px; color: var(--text-muted); }
+  && ${MoodName} { font-size: 13px; }
+  && ${Steppers} { gap: 10px; }
+  && ${StepBtn} { width: 30px; height: 30px; border-color: var(--border-card); color: var(--text-soft); & > span { font-size: 16px; } }
+  && ${Faces} { gap: 6px 12px; }
+  && ${FaceBtn} { width: 46px; height: 46px; & > span { font-size: 40px; } }
+  && ${Chips} { gap: 6px; }
+  && ${Chip} { height: 29px; padding: 0 13px; font-size: 13px; font-weight: 400; }
+  && ${Note} { margin-top: 6px; font-size: 12px; }
+`;
+
+const Grid3 = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 30px 40px;
+  @container (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container (max-width: 560px) { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 `;
 
 interface MeterProps {
@@ -295,9 +316,6 @@ interface WellnessPanelProps {
   compact?: boolean;
 }
 
-function PanelRoot({ $compact, children }: { $compact?: boolean; children: React.ReactNode }) {
-  return $compact ? <CompactWrapper>{children}</CompactWrapper> : <Wrapper>{children}</Wrapper>;
-}
 
 export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
@@ -305,47 +323,53 @@ export function WellnessPanel({
 }: WellnessPanelProps) {
   // One colour throughout: the accent (no per-metric blues, violets or mood hues)
   const accent = 'var(--color-accent)';
+  const water$ = (
+    <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
+      max={WATER_MAX} unit={`of ${waterGoal} glasses`} noun="glasses of water" onChange={onWater} />
+  );
+  const sleep$ = (
+    <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
+      max={SLEEP_MAX} unit="hours" noun="hours of sleep" onChange={onSleep} />
+  );
+  const mood$ = (
+    <Cell>
+      <Head>
+        <Label>Mood</Label>
+        {mood > 0 && <MoodName $color={accent}>{MOODS[mood - 1].label}</MoodName>}
+      </Head>
+      <Faces role="group" aria-label="Mood">
+        {MOODS.map((m, i) => (
+          <FaceBtn key={m.icon} type="button" $active={mood === i + 1} $color={accent}
+            aria-label={`Mood: ${m.label}`} aria-pressed={mood === i + 1}
+            onClick={() => onMood(mood === i + 1 ? 0 : i + 1)}>
+            <MaterialIcon $size={40}>{m.icon}</MaterialIcon>
+          </FaceBtn>
+        ))}
+      </Faces>
+    </Cell>
+  );
+  const cycle$ = showCycle && (
+    <Cell>
+      <Head><Label>Cycle</Label>{cycleNote && <CycleNote>{cycleNote}</CycleNote>}</Head>
+      <Chips role="group" aria-label="Cycle">
+        {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
+          <Chip key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
+            {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
+          </Chip>
+        ))}
+      </Chips>
+    </Cell>
+  );
+
+  if (compact) {
+    return <CompactWrapper><Grid3>{water$}{sleep$}{mood$}{cycle$}</Grid3></CompactWrapper>;
+  }
+
   return (
-    <PanelRoot $compact={compact}>
-      <PairRow>
-        <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
-          max={WATER_MAX} unit={`of ${waterGoal} glasses`} noun="glasses of water" onChange={onWater} />
-        <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
-          max={SLEEP_MAX} unit="hours" noun="hours of sleep" onChange={onSleep} />
-      </PairRow>
-
+    <Wrapper>
+      <PairRow>{water$}{sleep$}</PairRow>
       {/* Mood | Cycle side by side, like Water | Sleep */}
-      <PairRow>
-        <Cell>
-          <Head>
-            <Label>Mood</Label>
-            {mood > 0 && <MoodName $color={accent}>{MOODS[mood - 1].label}</MoodName>}
-          </Head>
-          <Faces role="group" aria-label="Mood">
-            {MOODS.map((m, i) => (
-              <FaceBtn key={m.icon} type="button" $active={mood === i + 1} $color={accent}
-                aria-label={`Mood: ${m.label}`} aria-pressed={mood === i + 1}
-                onClick={() => onMood(mood === i + 1 ? 0 : i + 1)}>
-                <MaterialIcon $size={40}>{m.icon}</MaterialIcon>
-              </FaceBtn>
-            ))}
-          </Faces>
-        </Cell>
-
-        {showCycle && (
-          <Cell>
-            <Head><Label>Cycle</Label></Head>
-            <Chips role="group" aria-label="Cycle">
-              {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
-                <Chip key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
-                  {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
-                </Chip>
-              ))}
-            </Chips>
-            {cycleNote && <Note>{cycleNote}</Note>}
-          </Cell>
-        )}
-      </PairRow>
-    </PanelRoot>
+      <PairRow>{mood$}{cycle$}</PairRow>
+    </Wrapper>
   );
 }

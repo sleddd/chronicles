@@ -51,9 +51,10 @@ describe('MedicationSchedule', () => {
     expect(screen.getByTitle('Next day')).toBeInTheDocument();
   });
 
-  it('renders help text', () => {
+  it('titles the panel and says Today for the current day', () => {
     renderWithTheme(<MedicationSchedule isReady={true} />);
-    expect(screen.getByText(/Click the circle to mark/)).toBeInTheDocument();
+    expect(screen.getByText('Medications')).toBeInTheDocument();
+    expect(screen.getByText('Today')).toBeInTheDocument();
   });
 
   it('shows empty state when no medications', async () => {
@@ -62,5 +63,28 @@ describe('MedicationSchedule', () => {
     await waitFor(() => {
       expect(screen.getByText('No medications scheduled')).toBeInTheDocument();
     });
+  });
+});
+
+describe('MedicationSchedule — grouped doses', () => {
+  it('groups doses by time with a count and Take all, which marks each one taken', async () => {
+    vi.resetModules();
+    vi.doMock('@/stores/entriesStore', () => ({
+      useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
+        selector({
+          allTopics: [{ id: 9, name: 'Medication' }],
+          decryptedEntries: [
+            { id: 1, content: '<p>Vitamin C</p>', metadata: { _taxonomyId: 9, _customFields: { scheduleTimes: ['08:00'], isActive: true } } },
+            { id: 2, content: '<p>Montelukast</p>', metadata: { _taxonomyId: 9, _customFields: { scheduleTimes: ['08:00'], isActive: true } } },
+          ],
+        }),
+    }));
+    const api = await import('@/services/api');
+    const { MedicationSchedule: Fresh } = await import('@/components/organisms/MedicationSchedule');
+    renderWithTheme(<Fresh isReady={true} />);
+    await waitFor(() => expect(screen.getByText('Vitamin C')).toBeInTheDocument());
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
+    screen.getByRole('button', { name: 'Take all' }).click();
+    await waitFor(() => expect((api.doses.log as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2));
   });
 });

@@ -1,136 +1,128 @@
+import { useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../../atoms/core/Icon.jsx';
-import { DEFAULT_ACCENT_COLOR } from '../../../styles/accent.js';
+import { FormWrap, Section, SectionHead, SectionLabel, BoxInput } from './formKit.js';
 
 export interface PriorityItem { id: string; text: string; done: boolean; }
 export interface PrioritiesFieldValues { priorities: PriorityItem[]; }
 
-const Row = styled.div<{ $done?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: ${({ $done }) => $done ? 0.5 : 1};
-`;
+/* Priorities fields (journal editor): up to five rows — a round tick circle,
+   the priority edited in place, × to remove — then an outlined "+ Add a
+   priority" box (Enter adds). Same look as the shopping list items. Props only. */
 
-const Num = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.textMuted};
-  width: 14px;
-  flex-shrink: 0;
-`;
+const MAX = 5;
 
-const CheckBtn = styled.button<{ $done?: boolean; $color: string }>`
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid ${({ $done, $color, theme }) => $done ? $color : theme.colors.border};
-  border-radius: 3px;
-  background: ${({ $done, $color }) => $done ? $color : 'transparent'};
-  cursor: pointer;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 10px;
-  padding: 0;
-  transition: background 0.15s, border-color 0.15s;
-`;
-
-const Input = styled.input`
-  flex: 1;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
+const Count = styled.span`
+  font-family: var(--font-sans);
   font-size: 15px;
-  font-weight: 300;
-  color: ${({ theme }) => theme.colors.text};
-  padding: 4px 8px;
-  outline: none;
-  font-family: ${({ theme }) => theme.fontFamily.sans};
-  &::placeholder { color: ${({ theme }) => theme.colors.textMuted}; }
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
+  color: var(--text-muted);
 `;
 
-const RemoveBtn = styled.button`
+const Item = styled.div<{ $done: boolean }>`
   display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  & + & { border-top: 1px solid var(--border-subtle); }
+  input { text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')}; opacity: ${({ $done }) => ($done ? 0.6 : 1)}; }
+`;
+
+const Tick = styled.button<{ $done: boolean }>`
+  flex: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 12px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  &:hover { color: ${({ theme }) => theme.colors.text}; }
+  border-radius: 50%;
+  border: 1.5px solid ${({ $done }) => ($done ? 'var(--color-accent)' : 'var(--control-border)')};
+  background: ${({ $done }) => ($done ? 'var(--color-accent)' : 'transparent')};
+  color: var(--on-accent);
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-const AddBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
+const ItemInput = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-secondary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
+const Remove = styled.button`
+  flex: none;
+  display: inline-flex;
+  padding: 4px;
   border: none;
   background: none;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 300;
-  color: ${({ theme }) => theme.colors.textMuted};
-  padding: 4px 0;
-  margin-top: 4px;
-  &:hover { color: ${({ theme }) => theme.colors.text}; }
+  &:hover { color: var(--color-danger); }
 `;
 
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+const AddBox = styled(BoxInput)`
+  margin-top: 12px;
 `;
 
 interface Props {
   values: PrioritiesFieldValues;
   onChange: (v: PrioritiesFieldValues) => void;
+  /** Kept for existing callers; the tick uses the accent token */
   accentColor?: string;
 }
 
-export function PrioritiesFields({ values, onChange, accentColor = DEFAULT_ACCENT_COLOR }: Props) {
+export function PrioritiesFields({ values, onChange }: Props) {
   const { priorities } = values;
+  const [draft, setDraft] = useState('');
 
   const update = (id: string, patch: Partial<PriorityItem>) =>
     onChange({ priorities: priorities.map(p => p.id === id ? { ...p, ...patch } : p) });
-
-  const remove = (id: string) =>
-    onChange({ priorities: priorities.filter(p => p.id !== id) });
-
+  const remove = (id: string) => onChange({ priorities: priorities.filter(p => p.id !== id) });
   const add = () => {
-    if (priorities.length >= 5) return;
-    onChange({ priorities: [...priorities, { id: Date.now().toString(), text: '', done: false }] });
+    const text = draft.trim();
+    if (!text || priorities.length >= MAX) return;
+    onChange({ priorities: [...priorities, { id: Date.now().toString(), text, done: false }] });
+    setDraft('');
   };
 
+  const left = priorities.filter(p => !p.done).length;
+
   return (
-    <Wrapper>
-      {priorities.map((p, i) => (
-        <Row key={p.id} $done={p.done}>
-          <CheckBtn $done={p.done} $color={accentColor} onClick={() => update(p.id, { done: !p.done })}>
-            {p.done && <Icon name="check" size={10} strokeWidth={2} />}
-          </CheckBtn>
-          <Num>{i + 1}</Num>
-          <Input
-            value={p.text}
-            placeholder={`Priority ${i + 1}`}
-            onChange={e => update(p.id, { text: e.target.value })}
-          />
-          <RemoveBtn onClick={() => remove(p.id)}>
-            <Icon name="trash" size={12} strokeWidth={2} />
-          </RemoveBtn>
-        </Row>
-      ))}
-      {priorities.length < 5 && (
-        <AddBtn onClick={add}>
-          <Icon name="plus" size={12} strokeWidth={2} /> Add priority
-        </AddBtn>
-      )}
-    </Wrapper>
+    <FormWrap>
+      <Section aria-label="Priorities">
+        <SectionHead>
+          <SectionLabel>Priorities</SectionLabel>
+          {priorities.length > 0 && <Count>{left} of {priorities.length} left</Count>}
+        </SectionHead>
+        {priorities.map((p, i) => (
+          <Item key={p.id} $done={p.done}>
+            <Tick type="button" $done={p.done} aria-pressed={p.done} aria-label={p.done ? `Mark priority ${i + 1} not done` : `Mark priority ${i + 1} done`}
+              onClick={() => update(p.id, { done: !p.done })}>
+              {p.done && <Icon name="check" size={12} strokeWidth={3} />}
+            </Tick>
+            <ItemInput value={p.text} placeholder={`Priority ${i + 1}`} aria-label={`Priority ${i + 1}`}
+              onChange={e => update(p.id, { text: e.target.value })} />
+            <Remove type="button" aria-label={`Remove priority ${i + 1}`} onClick={() => remove(p.id)}>
+              <Icon name="x" size={14} strokeWidth={2} />
+            </Remove>
+          </Item>
+        ))}
+        {priorities.length < MAX && (
+          <AddBox value={draft} placeholder="+ Add a priority" aria-label="Add a priority"
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            onBlur={add} />
+        )}
+      </Section>
+    </FormWrap>
   );
 }

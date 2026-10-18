@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { StatTile } from '@/components/molecules/StatTile';
-import { TrendChart } from '@/components/molecules/charts/TrendChart';
+import { TrendChart, ChartLegend } from '@/components/molecules/charts/TrendChart';
 import { renderWithTheme } from '../testUtils';
 
 describe('StatTile', () => {
@@ -36,7 +36,10 @@ describe('TrendChart', () => {
     );
     const main = [...container.querySelectorAll('path')].find(p => p.getAttribute('stroke') === 'red')!;
     expect(main.getAttribute('d')!.match(/M/g)).toHaveLength(2);
-    expect(screen.getByText('7-day average')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Sleep by day' })).toBeInTheDocument();
+    // The ghost series is dashed; its legend lives in ChartLegend
+    expect(container.querySelector('path[stroke-dasharray]')).not.toBeNull();
+    renderWithTheme(<ChartLegend series={[{ label: 'Daily', values: [] }, { label: '7-day average', values: [], ghost: true }]} />);
+    expect(screen.getByText('7-day average')).toBeInTheDocument();
   });
 });

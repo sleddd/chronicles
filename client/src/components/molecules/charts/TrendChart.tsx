@@ -1,9 +1,10 @@
 import styled from 'styled-components';
 
-/* Quiet line chart (the reports style): faint gridlines, tertiary-grey tick labels,
-   the main series in its colour with a soft area wash and dots (the last one larger),
-   and any comparison series as pale "ghost" lines behind it. Pure SVG; null values
-   break the line. Every colour is a CSS value, so both themes work. */
+/* Quiet line chart (the reports style): faint gridlines over a firmer baseline,
+   muted sentence-case tick labels, the main series in its colour with dots (the
+   last one larger), and any comparison series as dashed grey "ghost" lines behind
+   it. The legend is drawn by the caller (`ChartLegend`) in its card's title row.
+   Pure SVG; null values break the line. Every colour is a CSS value. */
 
 export interface TrendSeries {
   label: string;
@@ -26,32 +27,50 @@ interface TrendChartProps {
   ariaLabel: string;
 }
 
-const W = 640;
-const H = 240;
-const PAD = { l: 44, r: 12, t: 12, b: 28 };
+const W = 900;
+const H = 230;
+const PAD = { l: 44, r: 8, t: 10, b: 36 };
 
 const Svg = styled.svg`
   display: block;
   width: 100%;
   height: auto;
+  overflow: visible;
   text {
-    font-family: var(--font-label);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    fill: var(--text-tertiary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    fill: var(--text-muted);
   }
 `;
 
-const Legend = styled.div`
+/* "— Daily  - - 7-day average": sits at the right of a chart card's title row */
+const LegendRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  margin-top: 10px;
-  font-family: var(--font-label);
-  font-size: 12px;
-  color: var(--text-secondary);
-  i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  span { display: inline-flex; align-items: center; gap: 8px; }
 `;
+
+const Swatch = styled.i<{ $color: string; $dashed?: boolean }>`
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px ${({ $dashed }) => ($dashed ? 'dashed' : 'solid')} ${({ $color }) => $color};
+`;
+
+export function ChartLegend({ series }: { series: TrendSeries[] }) {
+  const main = series.find(s => !s.ghost);
+  return (
+    <LegendRow>
+      {main && <span><Swatch $color={main.color ?? 'var(--color-accent)'} />{main.label}</span>}
+      {series.filter(s => s.ghost).map(s => <span key={s.label}><Swatch $color="var(--text-placeholder)" $dashed />{s.label}</span>)}
+    </LegendRow>
+  );
+}
 
 function niceMax(v: number): number {
   if (v <= 0) return 1;
@@ -64,7 +83,7 @@ export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => Str
   const n = labels.length;
   const all = series.flatMap(s => s.values).filter((v): v is number => v !== null);
   const top = yMax ?? niceMax(Math.max(0, ...all));
-  const ticks = yTicks ?? [0, 0.25, 0.5, 0.75, 1].map(f => +(top * f).toFixed(2));
+  const ticks = yTicks ?? [0, 0.5, 1].map(f => +(top * f).toFixed(2));
   const x = (i: number) => PAD.l + (n <= 1 ? 0 : (i * (W - PAD.l - PAD.r)) / (n - 1));
   const y = (v: number) => PAD.t + (H - PAD.t - PAD.b) * (1 - Math.min(v, top) / top);
 
@@ -90,46 +109,29 @@ export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => Str
   const lastIdx = main ? main.values.reduce<number>((last, v, i) => (v === null ? last : i), -1) : -1;
 
   return (
-    <div>
-      <Svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
-        {ticks.map(t => (
-          <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke="var(--border-subtle)" strokeWidth={1} />
-            <text x={PAD.l - 8} y={y(t) + 3} textAnchor="end">{formatTick(t)}</text>
-          </g>
-        ))}
-        {labels.map((l, i) => showLabel(i) && (
-          <text key={i} x={x(i)} y={H - 8} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>{l}</text>
-        ))}
-        {ghosts.map((s, gi) => (
-          <path key={s.label} d={path(s.values)} fill="none" stroke="var(--border-strong)"
-            strokeWidth={1.25} opacity={gi === 0 ? 1 : 0.6} />
-        ))}
-        {main && (
-          <>
-            {lastIdx > 0 && (() => {
-              /* Area wash under the first unbroken run up to the last point */
-              const firstIdx = main.values.findIndex(v => v !== null);
-              const run = main.values.slice(firstIdx, lastIdx + 1);
-              if (run.some(v => v === null)) return null;
-              const d = `${path(main.values.map((v, i) => (i < firstIdx || i > lastIdx ? null : v)))} L${x(lastIdx)} ${y(0)} L${x(firstIdx)} ${y(0)} Z`;
-              return <path d={d} fill={mainColor} fillOpacity={0.1} stroke="none" />;
-            })()}
-            <path d={path(main.values)} fill="none" stroke={mainColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            {main.values.map((v, i) => v !== null && (
-              <circle key={i} cx={x(i)} cy={y(v)} r={i === lastIdx ? 4 : n > 31 ? 0 : 2.5} fill={mainColor} />
-            ))}
-          </>
-        )}
-      </Svg>
-      {series.length > 1 && (
-        <Legend>
-          {main && <span><i style={{ background: mainColor }} />{main.label}</span>}
-          {ghosts.map((s, gi) => (
-            <span key={s.label}><i style={{ background: 'var(--border-strong)', opacity: gi === 0 ? 1 : 0.6 }} />{s.label}</span>
+    <Svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)}
+            stroke={t === 0 ? 'var(--border-card)' : 'var(--border-subtle)'} strokeWidth={t === 0 ? 1.5 : 1} />
+          <text x={PAD.l - 10} y={y(t) + 4} textAnchor="end">{formatTick(t)}</text>
+        </g>
+      ))}
+      {labels.map((l, i) => showLabel(i) && (
+        <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>{l}</text>
+      ))}
+      {ghosts.map((s, gi) => (
+        <path key={s.label} d={path(s.values)} fill="none" stroke="var(--text-placeholder)"
+          strokeWidth={1.5} strokeDasharray="5 6" opacity={gi === 0 ? 1 : 0.6} />
+      ))}
+      {main && (
+        <>
+          <path d={path(main.values)} fill="none" stroke={mainColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          {main.values.map((v, i) => v !== null && (
+            <circle key={i} cx={x(i)} cy={y(v)} r={i === lastIdx ? 5.5 : n > 31 ? 0 : 4.5} fill={mainColor} />
           ))}
-        </Legend>
+        </>
       )}
-    </div>
+    </Svg>
   );
 }

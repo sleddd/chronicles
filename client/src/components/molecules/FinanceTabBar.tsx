@@ -7,7 +7,7 @@ const TabBtn = SectionTab;
 export const FINANCE_TITLE = 'Finance';
 
 export const FINANCE_TABS: { label: string; path: string; reconcile?: boolean }[] = [
-  { label: 'Budget & Bills', path: '/finance' },
+  { label: 'Budget & bills', path: '/finance' },
   { label: 'Goals', path: '/finance/goals' },
   { label: 'Savings', path: '/finance/savings' },
   { label: 'Reconcile', path: '/finance/reconcile', reconcile: true },

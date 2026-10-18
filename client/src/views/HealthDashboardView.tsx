@@ -1,23 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
-import { ExerciseQuickLog } from '../components/organisms/HealthQuickLog.js';
+import { QuickLog } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
-import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
-import { DayAtAGlance, FoodAddForm, useFoodLogActions } from '../components/organisms/FoodLog.js';
-import { useAiReady } from '../hooks/useAiReady.js';
+import { DayAtAGlance } from '../components/organisms/FoodLog.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
-import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
+import { NAV_COMPACT } from '../styles/breakpoints.js';
 
 /* ── Layout (mirrors HealthView) ── */
 
@@ -54,61 +52,47 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Two columns on desktop (meal + exercise | meds); stacked on tablet and phone. */
-const LogGrid = styled.div`
+/* One column of panels under the "Today" strip */
+const Stack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+  @media (max-width: 768px) { gap: 16px; margin-top: 24px; }
+`;
+
+/* Desktop: Quick log | Medications side by side; one column on tablets and phones */
+const Pair = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
-  margin-top: 24px;
-  ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); }
+  ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
-
-const WellnessWrap = styled.div`
-  margin-top: 24px;
-`;
-
-const Column = styled.div`
+/* "Today" + the date, then the nutrient strip */
+const TodayHead = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 24px;
-  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 36px 0 24px;
 `;
 
-/* ── Helpers ── */
-
-
-const CARDS_KEY = 'health-dashboard-collapsed-v2';
-
-function LogPanel(props: { id: string; title: string; defaultOpen?: boolean; children: ReactNode }) {
-  return <CollapsibleCard storageKey={CARDS_KEY} {...props} />;
-}
-
-/* ── Food ── */
-
-const GlanceWrap = styled.div`
-  margin-top: 32px;
+const TodayTitle = styled.h2`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1.1;
+  color: var(--text-secondary);
+  @media (max-width: 480px) { font-size: 22px; }
 `;
 
-const Toast = styled.div<{ $show: boolean }>`
-  position: fixed;
-  left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: 50;
-  max-width: 90vw;
-  padding: 10px 18px;
+const TodayDate = styled.span`
   font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-inverse, #fff);
-  background: var(--bg-inverse, #1b1d26);
-  border-radius: var(--r-md, 2px);
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.25));
-  opacity: ${({ $show }) => ($show ? 1 : 0)};
-  pointer-events: none;
-  transition: opacity 200ms ease-out;
-  @media (prefers-reduced-motion: reduce) { transition: none; }
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
 /** Today's nutrient totals against the daily goals. */
@@ -121,28 +105,7 @@ function FoodGlance() {
   const mealsTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'meals')?.id, [allTopics]);
   const todayRows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
 
-  return <GlanceWrap><DayAtAGlance rows={todayRows} goals={goals} /></GlanceWrap>;
-}
-
-/** The shared Log food form for today, with a status toast. */
-function MealLog() {
-  const aiReady = useAiReady();
-  const actions = useFoodLogActions('Meals');
-  const [status, setStatus] = useState('');
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  const say = (msg: string) => {
-    setStatus(msg);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setStatus(''), 2600);
-  };
-
-  return (
-    <>
-      <FoodAddForm day={toDateStr(new Date())} actions={actions} aiReady={aiReady} onStatus={say} />
-      <Toast $show={!!status} role="status" aria-live="polite">{status}</Toast>
-    </>
-  );
+  return <DayAtAGlance rows={todayRows} goals={goals} />;
 }
 
 /** True when an active medication has at least one scheduled dose time. */
@@ -164,8 +127,9 @@ function useHasScheduledMeds(): boolean {
 /* ── View ── */
 
 /**
- * Health dashboard — the landing tab for Health: quick food and exercise
- * logging for today, today's medication schedule, then the allergy list.
+ * Health dashboard — the landing tab for Health: today's nutrient strip, then
+ * one column of panels: the wellness check-in, a quick meal / exercise log and
+ * the day's medications.
  */
 export function HealthDashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
@@ -199,25 +163,26 @@ export function HealthDashboardView() {
           </Head>
           <HealthTabBar />
 
+          <TodayHead>
+            <TodayTitle>Today</TodayTitle>
+            <TodayDate>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</TodayDate>
+          </TodayHead>
           {food && <FoodGlance />}
 
-          <WellnessWrap>
-            <LogPanel id="wellness" title="Wellness Check-in"><WellnessCheckIn /></LogPanel>
-          </WellnessWrap>
-
-          {/* Left: Log a Meal with Log Exercise under it; right: Medication Schedule */}
-          <LogGrid>
-            <Column>
-              {food && <LogPanel id="meal" title="Log a Meal" defaultOpen={false}><MealLog /></LogPanel>}
-              {exercise && <LogPanel id="exercise" title="Log Exercise" defaultOpen={false}><ExerciseQuickLog /></LogPanel>}
-            </Column>
-            {hasMeds && ff.medicationEnabled !== false && (
-              <Column>
-                <LogPanel id="meds" title="Medication Schedule"><MedicationSchedule isReady={isReady} /></LogPanel>
-              </Column>
+          <Stack>
+            <WellnessCheckIn title="Wellness check-in" />
+            {hasMeds && ff.medicationEnabled !== false && (food || exercise) ? (
+              <Pair>
+                <QuickLog meal={food} exercise={exercise} />
+                <MedicationSchedule isReady={isReady} />
+              </Pair>
+            ) : (
+              <>
+                <QuickLog meal={food} exercise={exercise} />
+                {hasMeds && ff.medicationEnabled !== false && <MedicationSchedule isReady={isReady} />}
+              </>
             )}
-          </LogGrid>
-
+          </Stack>
         </Inner>
       </Page>
     </ContentTemplate>

@@ -7,10 +7,12 @@ import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import {
   AiErrorNote, DayAtAGlance, DayNavigator, DayTitle, FillMissingAction, FoodDayList, FoodTotalsTable,
-  NutritionGoalsPanel, Section, SectionHead, SectionLabel, SectionNote, TotalsWindowTabs, longDay,
+  NutritionGoalsPanel, Section, SectionHead, SectionLabel, SectionNote, TextAction, TotalsWindowTabs, longDay,
   useFoodLogActions, type TotalWindow,
 } from '../components/organisms/FoodLog.js';
-import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
+import { PillButton } from '../components/atoms/PillButton.js';
+import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
+import { mealForNow, nowTime } from '../utils/foodLog.js';
 import { useAiReady } from '../hooks/useAiReady.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -72,12 +74,44 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Right-aligned "Fill N missing with AI"; collapses to nothing when the action is hidden. */
-const FillRow = styled.div`
+const HeadActions = styled.div`
   display: flex;
-  justify-content: flex-end;
-  &:not(:empty) { margin-bottom: 12px; }
+  align-items: center;
+  gap: 20px;
 `;
+
+/* Nothing logged: a dashed box with the note and a Log a meal pill */
+const EmptyBox = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 22px 28px;
+  border: 1px dashed var(--border-dashed);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
+  @media (max-width: 480px) { padding: 20px; }
+`;
+
+const Legend = styled.p`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  i { width: 10px; height: 10px; border-radius: 50%; background: var(--color-accent); }
+`;
+
+const smooth = (): ScrollBehavior =>
+  (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
+const shortDay = (d: string) =>
+  new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
 interface MealsLogViewProps {
   /** Page title — defaults to "Health". */
@@ -100,7 +134,9 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
   const today = toDateStr(new Date());
   const [day, setDay] = useState(today);
   const [windowDays, setWindowDays] = useState<TotalWindow>('30');
-  const sheetRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const goalsRef = useRef<HTMLElement>(null);
+  const openNew = useNewEntryInJournal();
 
   const [goals, saveGoals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
   const aiReady = useAiReady();
@@ -136,7 +172,13 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
 
   const openDay = (d: string) => {
     setDay(d);
-    sheetRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    sheetRef.current?.scrollIntoView({ behavior: smooth() });
+  };
+
+  /* A new Meals entry in the journal, dated the day being viewed */
+  const logMeal = async () => {
+    const id = mealsTopicId ?? await actions.topicId();
+    openNew(id, { mealType: mealForNow(), consumedDate: day, consumedTime: day === today ? nowTime() : '' });
   };
 
   if (needsUnlock) return (
@@ -161,42 +203,60 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
           <Head><Title>{title}</Title></Head>
           {tabBar ?? <HealthTabBar />}
 
-          <Section aria-label="Day" ref={sheetRef} style={{ borderTop: 'none', marginTop: 28 }}>
-            <SectionHead style={{ marginBottom: 32 }}>
-              <DayTitle style={{ margin: 0 }}>{longDay(day).replace(/^Today — /, '')}</DayTitle>
+          <Section aria-label="Day" ref={sheetRef} style={{ marginTop: 40 }}>
+            <SectionHead style={{ marginBottom: 0 }}>
+              <DayTitle style={{ margin: 0 }}>{longDay(day).replace(/^Today — /, '').replace(/, \d{4}$/, '')}</DayTitle>
               <DayNavigator day={day} onChange={setDay} />
+            </SectionHead>
+          </Section>
+
+          <Section aria-label="Daily totals" style={{ marginTop: 40 }}>
+            <SectionHead>
+              <SectionLabel>Daily totals</SectionLabel>
+              <TextAction type="button" onClick={() => goalsRef.current?.scrollIntoView({ behavior: smooth() })}>Edit goals</TextAction>
             </SectionHead>
             <DayAtAGlance rows={dayRows} goals={goals} />
           </Section>
 
-          {/* No rule under the day's tallies */}
-          <Section aria-label="Logged items" style={{ borderTop: 'none', marginTop: 28 }}>
-            <CollapsibleCard id="logged" title={day === today ? 'Review what you logged today' : 'Review what you logged'} storageKey="meals-log-collapsed" defaultOpen={false}>
-              <FillRow><FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} /></FillRow>
-              <AiErrorNote actions={actions} />
-              <FoodDayList rows={dayRows} goals={goals} actions={actions} aiReady={aiReady} onStatus={say} />
-              {dayRows.length > 0 && <SectionNote style={{ marginTop: 10 }}>Select an item to edit it. Grey italic numbers are AI estimates.</SectionNote>}
-            </CollapsibleCard>
+          <Section aria-label="Logged items">
+            <SectionHead>
+              <SectionLabel>{day === today ? 'Logged today' : `Logged ${shortDay(day)}`}</SectionLabel>
+              {dayRows.length > 0 && (
+                <HeadActions>
+                  <FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} />
+                  <PillButton type="button" onClick={() => void logMeal()}>+ Log a meal</PillButton>
+                </HeadActions>
+              )}
+            </SectionHead>
+            <AiErrorNote actions={actions} />
+            {dayRows.length === 0 ? (
+              <EmptyBox>
+                <span>{day === today ? 'Nothing logged yet today.' : 'Nothing logged this day.'}</span>
+                <PillButton type="button" onClick={() => void logMeal()}>+ Log a meal</PillButton>
+              </EmptyBox>
+            ) : (
+              <>
+                <FoodDayList rows={dayRows} goals={goals} actions={actions} aiReady={aiReady} onStatus={say} />
+                <SectionNote style={{ marginTop: 14 }}>Select an item to edit it. Grey italic numbers are AI estimates.</SectionNote>
+              </>
+            )}
           </Section>
 
-          {/* No rule between the Logged list and this section */}
-          <Section aria-label="Meals At-a-Glance" style={{ borderTop: 'none' }}>
+          <Section aria-label="History">
             <SectionHead>
-              <SectionLabel>Meals At-a-Glance</SectionLabel>
+              <SectionLabel>History</SectionLabel>
               <TotalsWindowTabs value={windowDays} onChange={setWindowDays} />
             </SectionHead>
             {totalsDays.length === 0
               ? <SectionNote>No days logged in this range yet.</SectionNote>
               : <>
                   <FoodTotalsTable days={totalsDays} goals={goals} selected={day} onOpen={openDay} />
-                  <SectionNote style={{ marginTop: 10 }}>Green means the day reached its goal. Select a day to open it.</SectionNote>
+                  <Legend><i />Goal met</Legend>
                 </>}
           </Section>
 
-          <Section aria-label="Daily nutrition goals" style={{ borderTop: 'none' }}>
-            <CollapsibleCard id="nutrition-goals" title="Adjust Your Daily Nutrition Goals" storageKey="meals-log-collapsed" defaultOpen={false}>
-              <NutritionGoalsPanel goals={goals} onChange={saveGoals} />
-            </CollapsibleCard>
+          <Section ref={goalsRef}>
+            <NutritionGoalsPanel goals={goals} onChange={saveGoals} />
           </Section>
         </Inner>
       </Page>

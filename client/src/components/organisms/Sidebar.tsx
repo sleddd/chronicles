@@ -154,18 +154,16 @@ const MaterialIcon = styled.span<{ $size?: number }>`
 export const Sidebar = memo(function Sidebar() {
   const navigate = useNavigate();
   const items = useNavItems();
-  const home = items[0]; // Dashboard — the logo cell
-  const rows = items.slice(1);
 
   return (
     <SidebarRoot>
-      <LogoBtn $active={home.active} onClick={() => navigate(home.path)} title={home.label} aria-label={home.label}>
+      {/* The logo starts a new entry in the journal, the home page (the Journal icon shows active) */}
+      <LogoBtn $active={false} onClick={() => navigate('/journal', { state: { newEntry: Date.now() } })} title="Chronicles" aria-label="Chronicles — open the journal">
         <BrandMark size={52} gradientId="logo-rail" />
-        <SrOnly>{home.label}</SrOnly>
       </LogoBtn>
 
       <NavScroll>
-        {rows.map(item => (
+        {items.map(item => (
           <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={item.label}>
             <MaterialIcon aria-hidden="true">{item.icon}</MaterialIcon>
             <SrOnly>{item.label}</SrOnly>

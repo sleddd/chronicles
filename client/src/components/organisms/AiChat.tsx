@@ -19,13 +19,10 @@ import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../
 
 /* ── Styles (floating overlay: the one place a shadow is allowed) ── */
 
-/* High enough to clear the bottom Save bars (journal editor, forms); the
-   dashboard sits higher still — Quick Entry fills that page, so its Save bar
-   is in the bottom-right corner. The panel opens just above the bubble
-   (bubble + 52px + 12px gap). */
+/* High enough to clear the bottom Save bars (journal editor, forms). The
+   panel opens just above the bubble (bubble + 52px + 12px gap). */
 const POS = {
   default: { bubble: '112px', bubblePhone: '96px', panel: '176px', panelPhone: '160px' },
-  dashboard: { bubble: '168px', bubblePhone: '168px', panel: '232px', panelPhone: '232px' },
 };
 type Pos = typeof POS.default;
 
@@ -291,7 +288,7 @@ export function AiChat() {
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
   const location = useLocation();
-  const pos = location.pathname === '/' ? POS.dashboard : POS.default;
+  const pos = POS.default;
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
