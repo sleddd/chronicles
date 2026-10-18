@@ -19,6 +19,10 @@ import {
   type BedrockCredentials,
   type BedrockModelOption,
 } from './bedrock.js';
+import {
+  classifierTranscript, parseClassification, parseReplyClassification, replyClassifierPrompt, riskClassifierPrompt,
+  type RiskKind, type RiskResult,
+} from '../utils/chatSafety.js';
 import { NUTRIENTS, NUTRIENT_KEYS, nutrientSourceOf, type NutrientKey, type NutrientSource } from '../types/nutrition.js';
 
 export type { BedrockAuth, BedrockModelOption };
@@ -325,6 +329,17 @@ function complete(cfg: AiConfig, system: string, prompt: string): Promise<string
 /** Free-form reply to an ongoing (unsaved) chat with the user's configured model. */
 export async function chatReply(system: string, turns: ChatTurn[]): Promise<string> {
   return completeTurns(requireReady(), system, turns, { mode: 'chat' });
+}
+
+/** Safety layer 2: rate the latest user message (in context) for risk. Uses the user's own key. */
+export async function classifyRisk(turns: ChatTurn[]): Promise<RiskResult> {
+  return parseClassification(await complete(requireReady(), riskClassifierPrompt(), classifierTranscript(turns)));
+}
+
+/** Safety layer 2 for replies: the kind of harmful content in an AI reply, or null. */
+export async function classifyReply(reply: string, lastUser: string): Promise<RiskKind | null> {
+  const prompt = `<user_message>\n${lastUser.slice(0, 2000)}\n</user_message>\n<ai_reply>\n${reply.slice(0, 8000)}\n</ai_reply>`;
+  return parseReplyClassification(await complete(requireReady(), replyClassifierPrompt(), prompt));
 }
 
 // ── Calorie estimates ────────────────────────────────────────────────────────

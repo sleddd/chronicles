@@ -3,6 +3,8 @@
  * Always sends X-Requested-With header for CSRF protection on cookie-based auth
  */
 
+import type { CrisisRating, RiskKind } from '@shared/validation/schemas.js';
+
 const BASE_URL = '/api';
 
 interface RequestOptions {
@@ -272,6 +274,24 @@ export const settings = {
 };
 
 // =============================================================================
+// AI chat consent + app analytics (the analytics rows carry no account)
+// =============================================================================
+
+export interface AiChatStatus { consentAt: string | null; consentVersion: number | null; blocked: boolean }
+
+export const aiChat = {
+  status: () => request<AiChatStatus>('/ai-chat'),
+  consent: (version: number) =>
+    request<AiChatStatus>('/ai-chat/consent', { method: 'POST', body: { version, ageConfirmed: true } }),
+  withdraw: () => request<AiChatStatus>('/ai-chat/consent', { method: 'DELETE' }),
+};
+
+export const analytics = {
+  crisisCard: (rating: CrisisRating, kind: RiskKind | null) =>
+    request<{ ok: true }>('/analytics/crisis-card', { method: 'POST', body: { rating, kind } }),
+};
+
+// =============================================================================
 // Sessions
 // =============================================================================
 
@@ -409,7 +429,7 @@ export const calendar = {
 };
 
 export { ApiError };
-export default { auth, entries, topics, settings, sessions, doses, finance, shares, calendar };
+export default { auth, entries, topics, settings, sessions, doses, finance, shares, calendar, aiChat, analytics };
 
 /**
  * How long to wait before retrying a failed initial load: the server's

@@ -198,3 +198,20 @@ export const upsertSettingSchema = z.object({
   (data) => JSON.stringify(data.value).length <= 65536,
   { message: 'Setting value too large (max 64KB)', path: ['value'] }
 );
+
+// AI chat safety — the crisis card's risk ratings and kinds (screening runs in
+// the browser; the server only counts that a card was shown)
+export const RISK_RATINGS = ['concern', 'elevated', 'urgent'] as const;
+export const RISK_KINDS = ['suicide', 'self_harm', 'eating_disorder'] as const;
+export type CrisisRating = typeof RISK_RATINGS[number];
+export type RiskKind = typeof RISK_KINDS[number];
+
+export const crisisCardEventSchema = z.object({
+  rating: z.enum(RISK_RATINGS),
+  kind: z.enum(RISK_KINDS).nullable(),
+}).strict();
+
+export const aiChatConsentSchema = z.object({
+  version: z.number().int().min(1).max(1000),
+  ageConfirmed: z.literal(true),
+}).strict();

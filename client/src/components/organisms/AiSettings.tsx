@@ -8,6 +8,8 @@ import { Select } from '../atoms/Select.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { Textarea } from '../atoms/Textarea.js';
 import { MAX_CHAT_NOTES } from '../../utils/chatSave.js';
+import { AiSafetyProtocol } from '../molecules/AiSafetyProtocol.js';
+import { useAiChatStore } from '../../stores/aiChatStore.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
 import {
@@ -197,6 +199,11 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const errStyle = { fontSize: 13, marginTop: 8, color: 'var(--color-danger, #c0392b)' } as const;
   const okStyle = { fontSize: 13, marginTop: 8, color: 'var(--text-secondary)' } as const;
   const inputRow = { display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 } as const;
+  const chatStatus = useAiChatStore(st => st.status);
+  const loadChatStatus = useAiChatStore(st => st.load);
+  const withdrawChatConsent = useAiChatStore(st => st.withdraw);
+  useEffect(() => { void loadChatStatus(); }, [loadChatStatus]);
+
   const labelStyle = {
     fontFamily: 'var(--font-label)', fontSize: 11, fontWeight: 700,
     letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)',
@@ -352,6 +359,12 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
           </SettingsRow>
         </>
       )}
+
+      <AiSafetyProtocol
+        consentAt={chatStatus?.consentAt ?? null}
+        blocked={!!chatStatus?.blocked}
+        onWithdraw={() => { void withdrawChatConsent().catch(() => {}); }}
+      />
     </SettingsCard>
   );
 }

@@ -8,14 +8,19 @@ import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
-import { entries as entriesApi } from '../../services/api.js';
-import { autoNutritionOnSave, chatReply, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
+import { entries as entriesApi, analytics as analyticsApi } from '../../services/api.js';
+import { autoNutritionOnSave, chatReply, classifyReply, classifyRisk, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
 import { mealForNow, nowTime } from '../../utils/foodLog.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { chatSystemPrompt, chatTranscriptHtml, parseSaveCommand, textToEntryHtml, SAVED_CHATS_TOPIC, type TopicRef } from '../../utils/chatSave.js';
 import { getOrCreateJournalTopic, getOrCreateTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
 import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../utils/chatStyle.js';
+import { AI_DISCLOSURE, AI_REMINDER, reminderDue } from '../../utils/chatDisclosure.js';
+import { maxRisk, patternScreen, replyNeedsReview, replyPatternScreen, NO_RISK, type RiskKind, type RiskResult } from '../../utils/chatSafety.js';
+import { useAiChatStore, hasCurrentConsent } from '../../stores/aiChatStore.js';
+import { Checkbox } from '../atoms/core/Checkbox.jsx';
+import { CrisisCard } from '../molecules/CrisisCard.js';
 
 /* ── Styles (floating overlay: the one place a shadow is allowed) ── */
 
@@ -230,12 +235,46 @@ const Empty = styled.div`
   code { font-family: var(--mono, monospace); font-size: 12px; color: var(--text-secondary); }
 `;
 
+/* The consent screen fills the panel in place of the log and message box */
+const Consent = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--text-primary);
+  }
+  ul { margin: 0; padding-left: 18px; }
+  li + li { margin-top: 6px; }
+`;
+
+const ConsentActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+`;
+
 /* ── Model ── */
 
 interface ChatMessage {
   id: number;
-  role: 'user' | 'assistant' | 'note';
+  role: 'user' | 'assistant' | 'note' | 'crisis';
   text: string;
+  /** Crisis card: the kind of risk, and whether the AI's reply was withheld */
+  kind?: RiskKind | null;
+  rating?: 'concern' | 'elevated' | 'urgent';
+  withheld?: boolean;
   error?: boolean;
   /** Set on the confirmation note after a /save */
   savedEntryId?: number;
@@ -298,6 +337,25 @@ export function AiChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // When the session began or the AI disclosure was last repeated (memory only)
+  const disclosedAtRef = useRef(Date.now());
+  // Safety (memory only, kept through Clear, gone with the session): once a
+  // risk sign appears the AI answers under the safe conversation rules; an
+  // urgent sign pins the crisis card at the top for the rest of the session
+  const safeModeRef = useRef(false);
+  // Once eating-disorder risk appears: no calorie numbers in the chat or on /save Meals
+  const eatingSafeRef = useRef(false);
+  const [pinned, setPinned] = useState<{ kind: RiskKind | null } | null>(null);
+  // Paused after an elevated/urgent sign until "Keep talking"
+  const [paused, setPaused] = useState<{ history: ChatTurn[]; cardId: number | null; kind: RiskKind | null } | null>(null);
+  const [ageOk, setAgeOk] = useState(false);
+  const [consentError, setConsentError] = useState('');
+  const consentStatus = useAiChatStore(s => s.status);
+  const loadConsent = useAiChatStore(s => s.load);
+  const acceptConsent = useAiChatStore(s => s.accept);
+  const blocked = !!consentStatus?.blocked;
+  const consented = hasCurrentConsent(consentStatus);
+  const chatOn = aiReady && consented;
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -319,6 +377,8 @@ export function AiChat() {
     return refs;
   }, [topics]);
 
+  useEffect(() => { void loadConsent(); }, [loadConsent]);
+
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
@@ -334,8 +394,76 @@ export function AiChat() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const push = (...msgs: Omit<ChatMessage, 'id'>[]) =>
-    setMessages(prev => [...prev, ...msgs.map(m => ({ ...m, id: nextId++ }))]);
+  const push = (...msgs: Omit<ChatMessage, 'id'>[]) => {
+    const withIds = msgs.map(m => ({ ...m, id: nextId++ }));
+    setMessages(prev => [...prev, ...withIds]);
+    return withIds[withIds.length - 1]?.id ?? 0;
+  };
+
+  /** Show the crisis card and count it (rating + kind only — never the account or the words). */
+  const showCrisis = (risk: RiskResult, opts: { withheld?: boolean } = {}): number => {
+    const rating = risk.rating === 'none' ? 'concern' : risk.rating;
+    const kind = risk.kind;
+    void analyticsApi.crisisCard(rating, kind).catch(() => { /* counting never blocks the chat */ });
+    safeModeRef.current = true;
+    if (kind === 'eating_disorder') eatingSafeRef.current = true;
+    if (rating === 'urgent') {
+      setPinned({ kind });
+      return push({ role: 'note', text: 'Chat paused. Help is pinned at the top of this chat.' });
+    }
+    return push({ role: 'crisis', text: '', kind, rating, withheld: opts.withheld });
+  };
+
+  /** A reply from the model, kept to the house style (one quiet rewrite, then scrubbed). */
+  const generateReply = async (history: ChatTurn[], safe: boolean): Promise<string> => {
+    const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '', safe, eatingSafeRef.current);
+    let reply = (await chatReply(system, history)).trim();
+    const found = findBanned(reply);
+    if (found.length) {
+      try {
+        const rewritten = (await chatReply(system, [
+          ...history, { role: 'assistant', content: reply }, { role: 'user', content: rewriteInstruction(found) },
+        ])).trim();
+        if (rewritten) reply = rewritten;
+      } catch { /* keep the original; it's scrubbed below */ }
+    }
+    return limitEmojis(findBanned(reply).length ? scrubBanned(reply) : reply);
+  };
+
+  /** Screen a reply (patterns + the classifier) and show it — or withhold it behind the crisis card. */
+  const deliver = async (reply: string, history: ChatTurn[], userRisk: RiskResult, cardShown: boolean) => {
+    const lastUser = history[history.length - 1]?.content ?? '';
+    // Patterns first; the classifier reviews only replies that touch these
+    // topics, and if that review fails the reply is withheld (fail closed)
+    const harmful = replyPatternScreen(reply)
+      ?? (replyNeedsReview(reply) ? await classifyReply(reply, lastUser).catch(() => userRisk.kind ?? 'suicide' as RiskKind) : null);
+    if (harmful) {
+      if (cardShown) push({ role: 'note', text: 'The reply was withheld because it wasn’t safe to show.' });
+      else showCrisis({ rating: userRisk.rating === 'none' ? 'concern' : userRisk.rating, kind: harmful }, { withheld: true });
+      return;
+    }
+    push({ role: 'assistant', text: reply || '…' });
+  };
+
+  const keepTalking = async () => {
+    if (!paused) return;
+    const { history, kind } = paused;
+    setPaused(null);
+    setBusy(true);
+    try {
+      await deliver(await generateReply(history, true), history, { rating: 'elevated', kind }, true);
+    } catch (err) {
+      push({ role: 'note', error: true, text: err instanceof Error ? err.message : 'In-App AI didn’t answer — try again.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const giveConsent = async () => {
+    setConsentError('');
+    try { await acceptConsent(); disclosedAtRef.current = Date.now(); }
+    catch (err) { setConsentError(err instanceof Error ? err.message : 'That didn’t save — try again.'); }
+  };
 
   const handleSave = async (raw: string) => {
     const cmd = parseSaveCommand(raw, topicRefs);
@@ -403,7 +531,7 @@ export function AiChat() {
         let cf: Record<string, unknown> = {
           mealDescription: cmd.text, mealType: mealForNow(now), consumedDate: toDateStr(now), consumedTime: nowTime(now), notes: '',
         };
-        if (aiReady) {
+        if (aiReady && !eatingSafeRef.current) {
           try {
             const filled = await autoNutritionOnSave(cmd.text, cf);
             if (filled) { cf = filled; estimated = true; }
@@ -436,13 +564,23 @@ export function AiChat() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || paused) return;
     setInput('');
+
+    // Every three hours, remind in the thread that this is an AI
+    if (reminderDue(disclosedAtRef.current)) {
+      disclosedAtRef.current = Date.now();
+      push({ role: 'note', text: AI_REMINDER });
+    }
 
     if (parseSaveCommand(text, topicRefs).kind !== 'none') { await handleSave(text); return; }
 
-    if (!aiReady) {
-      push({ role: 'user', text }, { role: 'note', text: 'Set up In-App AI to chat.', settingsLink: true });
+    if (!chatOn) {
+      push({ role: 'user', text }, blocked
+        ? { role: 'note', text: 'In-App AI chat is turned off for this account.' }
+        : aiReady
+          ? { role: 'note', text: 'Turn on the chat first.' }
+          : { role: 'note', text: 'Set up In-App AI to chat.', settingsLink: true });
       return;
     }
 
@@ -453,21 +591,27 @@ export function AiChat() {
     push({ role: 'user', text });
     setBusy(true);
     try {
-      const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '');
-      let reply = (await chatReply(system, history)).trim();
-      // House style: if a banned phrase slipped through, ask for one quiet
-      // rewrite; whatever still remains is removed before display
-      const found = findBanned(reply);
-      if (found.length) {
-        try {
-          const rewritten = (await chatReply(system, [
-            ...history, { role: 'assistant', content: reply }, { role: 'user', content: rewriteInstruction(found) },
-          ])).trim();
-          if (rewritten) reply = rewritten;
-        } catch { /* keep the original; it's scrubbed below */ }
+      // Screening: the local pattern check, and the classifier through the
+      // user's key in parallel with the reply (used only if nothing is found)
+      const pattern = patternScreen(text);
+      if (pattern.kind === 'eating_disorder') eatingSafeRef.current = true;
+      const safeNow = safeModeRef.current || pattern.rating !== 'none';
+      const replyP = generateReply(history, safeNow)
+        .then(r => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e }));
+      const risk = maxRisk(pattern, await classifyRisk(history).catch(() => NO_RISK));
+
+      if (risk.rating === 'elevated' || risk.rating === 'urgent') {
+        const cardId = showCrisis(risk);
+        setPaused({ history, cardId: risk.rating === 'urgent' ? null : cardId, kind: risk.kind });
+        return;
       }
-      reply = limitEmojis(findBanned(reply).length ? scrubBanned(reply) : reply);
-      push({ role: 'assistant', text: reply || '…' });
+      let res = await replyP;
+      if (risk.rating === 'concern') {
+        showCrisis(risk);
+        if (!safeNow) res = await generateReply(history, true).then(r => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e }));
+      }
+      if (!res.ok) throw res.e;
+      await deliver(res.r, history, risk, risk.rating !== 'none');
     } catch (err) {
       push({ role: 'note', error: true, text: err instanceof Error ? err.message : 'In-App AI didn’t answer — try again.' });
     } finally {
@@ -489,20 +633,60 @@ export function AiChat() {
       {open && (
         <Panel $pos={pos} role="dialog" aria-label="In-App AI chat">
           <Head>
-            <Title>In-App AI<span>Not saved</span></Title>
-            {messages.length > 0 && <HeadBtn type="button" onClick={() => setMessages([])}>Clear</HeadBtn>}
+            <Title>In-App AI<span>· Not a person.</span></Title>
+            {messages.length > 0 && (
+              <HeadBtn type="button" onClick={() => { setMessages([]); setPaused(null); disclosedAtRef.current = Date.now(); }}>Clear</HeadBtn>
+            )}
             <HeadBtn type="button" onClick={() => setOpen(false)} aria-label="Close chat">
               <Icon name="x" size={18} strokeWidth={2} aria-hidden="true" />
             </HeadBtn>
           </Head>
+          {aiReady && !blocked && !consented ? (
+            <Consent>
+              <h3>Before you chat</h3>
+              <ul>
+                <li>{AI_DISCLOSURE}</li>
+                <li>The chat is for adults 18 and over.</li>
+                <li>Your messages go to the AI provider you chose in Settings, under its terms and data rules. Chronicles doesn’t keep the chat unless you type <code>/save</code>.</li>
+                <li>Every message is screened for signs of suicide, self-harm or eating disorder risk. If one appears, the chat pauses and shows crisis resources, starting with the 988 Suicide &amp; Crisis Lifeline.</li>
+                <li>Chronicles records only that the crisis card was shown — the date, the rating and the kind of risk. Never what you wrote, or that it was you.</li>
+                <li>The AI isn’t a therapist, doctor or crisis counselor, and it can’t contact anyone for you. In immediate danger, call 911.</li>
+              </ul>
+              <Checkbox label="I’m 18 or older" checked={ageOk} onChange={e => setAgeOk(e.target.checked)} />
+              <div>
+                <LinkBtn type="button" style={{ marginLeft: 0 }} onClick={() => { navigate('/settings'); setOpen(false); }}>
+                  Read the full safety protocol
+                </LinkBtn>
+                {' '}in Settings → In-App AI.
+              </div>
+              {consentError && <ErrorText role="alert">{consentError}</ErrorText>}
+              <ConsentActions>
+                <PillButton type="button" $variant="neutral" onClick={() => setOpen(false)}>Not now</PillButton>
+                <PillButton type="button" disabled={!ageOk} onClick={() => void giveConsent()}>Turn on chat</PillButton>
+              </ConsentActions>
+            </Consent>
+          ) : (<>
+          {pinned && (paused && paused.cardId === null ? (
+            <CrisisCard urgent paused kind={pinned.kind} style={{ margin: '10px 12px 0', maxHeight: '55%', overflowY: 'auto' }}
+              action={<PillButton type="button" $variant="neutral" onClick={() => void keepTalking()}>Keep talking</PillButton>} />
+          ) : (
+            <CrisisCard compact kind={pinned.kind} />
+          ))}
           <Log ref={logRef} aria-live="polite">
             {messages.length === 0 && (
               <Empty>
-                {aiReady ? 'Ask anything. This chat isn’t saved.' : 'Set up In-App AI in Settings to chat.'}
+                {AI_DISCLOSURE}{' '}
+                {blocked ? 'In-App AI chat is turned off for this account.'
+                  : aiReady ? 'It’s here to help with Chronicles: estimating calories, sorting tasks, and thinking through entries. It isn’t a companion or a counselor. This chat isn’t saved.' : 'Set up In-App AI in Settings to chat.'}
                 <br />To keep something, type <code>/save topic text</code> — it becomes a journal entry — or <code>/save chat</code> to keep the whole conversation.
               </Empty>
             )}
-            {messages.map(m => (
+            {messages.map(m => m.role === 'crisis' ? (
+              <CrisisCard key={m.id} kind={m.kind ?? null} withheld={m.withheld} paused={paused?.cardId === m.id}
+                action={paused?.cardId === m.id
+                  ? <PillButton type="button" $variant="neutral" onClick={() => void keepTalking()}>Keep talking</PillButton>
+                  : undefined} />
+            ) : (
               <Msg key={m.id} $role={m.role}>
                 {m.error ? <ErrorText>{m.text}</ErrorText>
                   : m.role === 'assistant' ? renderReply(m.text, useSuggestion)
@@ -524,13 +708,15 @@ export function AiChat() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={aiReady ? 'Message, or /save topic text' : '/save topic text'}
+              placeholder={paused ? 'Chat paused — choose Keep talking to go on' : chatOn ? 'Message, or /save topic text' : '/save topic text'}
+              disabled={!!paused}
               aria-label="Message"
             />
-            <PillButton type="button" onClick={() => void send()} disabled={busy || !input.trim()} style={{ minWidth: 0, padding: '9px 16px' }}>
+            <PillButton type="button" onClick={() => void send()} disabled={busy || !!paused || !input.trim()} style={{ minWidth: 0, padding: '9px 16px' }}>
               Send
             </PillButton>
           </Composer>
+          </>)}
         </Panel>
       )}
       <Bubble
