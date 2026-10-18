@@ -95,7 +95,7 @@ A `CollapsibleCard` "Text to journal" under Settings, built from `FormField` / `
 
 - **MMS photos:** seal each image with the inbox key into `inbox_items` (bytea, capped at ~5 MB); the browser opens it and moves it into R2 through the existing image pipeline (`processImage` → `encryptBytes` → R2 PUT). Only when Entry Images is set up; otherwise the text is saved and the photo dropped, with a note
 - **Email to journal:** a per-user random address (`j-<random>@in.chronicles…`) through an inbound-mail webhook (Postmark/SES), into the same sealed inbox. Same trade-off as SMS
-- **Voice memos:** text-to-speech is out; speech-to-text through the user's own AI provider would happen client side after import
+- **Voice memos:** an audio clip sealed like an MMS photo, then transcribed client side after import through the user's own AI provider
 
 ## Costs and setup
 
