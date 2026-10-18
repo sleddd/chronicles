@@ -462,7 +462,7 @@ export function App() {
               <Route path="/share/:token" element={<SharedEntryView />} />
 
               {/* Core */}
-              <Route path="/" element={<Navigate to="/journal" replace state={{ newEntry: 1 }} />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/journal" element={<R><JournalView /></R>} />
               <Route path="/dashboard" element={<R><DashboardView /></R>} />
               <Route path="/settings" element={<R><SettingsView /></R>} />

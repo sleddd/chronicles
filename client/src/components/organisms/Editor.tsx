@@ -67,7 +67,8 @@ const ToolbarRow = styled.div<{ $collapsed: boolean }>`
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 0 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 8px;
   ${({ $collapsed }) => $collapsed && `
@@ -76,6 +77,7 @@ const ToolbarRow = styled.div<{ $collapsed: boolean }>`
     right: 0;
     z-index: 2;
     padding: 4px 16px;
+    border-top: none;
     border-bottom: none;
     margin-bottom: 0;
   `}
@@ -116,11 +118,12 @@ const ToolbarDivider = styled.div`
 `;
 
 const ToolbarButton = styled.button<{ $active?: boolean }>`
-  padding: 5px 8px;
+  padding: 4px 7px;
   font-family: ${({ theme }) => theme.fontFamily.ui};
-  font-size: 16px;
+  font-size: 14px;
   font-weight: ${({ $active }) => $active ? 600 : 400};
-  color: ${({ $active, theme }) => $active ? theme.colors.text : theme.colors.textSecondary};
+  /* Recede in grey; the active format and hover come up to body text */
+  color: ${({ $active }) => $active ? 'var(--text-primary)' : 'var(--text-muted)'};
   background: transparent;
   border: none;
   border-radius: ${({ theme }) => theme.borderRadius.sm}px;
@@ -128,7 +131,7 @@ const ToolbarButton = styled.button<{ $active?: boolean }>`
   transition: color 0.15s;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.text};
+    color: var(--text-primary);
   }
 `;
 
@@ -274,6 +277,14 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
             }
             return false;
           },
+          // Ctrl/⌘ + Enter saves too (the dashboard's Quick entry hint)
+          'Mod-Enter': () => {
+            if (saveRef.current) {
+              saveRef.current();
+              return true;
+            }
+            return false;
+          },
         };
       },
     }),
@@ -405,7 +416,7 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
                 aria-label="Insert drawing"
                 title="Insert drawing (Apple Pencil)"
                 onClick={() => setDrawingOpen(true)}
-              ><Icon name="pencil" size={16} strokeWidth={2} /></ToolbarButton>
+              ><Icon name="pencil" size={14} strokeWidth={2} /></ToolbarButton>
             </Toolbar>
           )}
           {!hideToolbarToggle && <ToolbarToggle $open={toolbarOpen} onClick={() => setToolbarOpen(!toolbarOpen)} aria-label="Toggle formatting toolbar" aria-expanded={toolbarOpen}>

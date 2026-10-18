@@ -165,7 +165,7 @@ export function MobileChrome() {
   return (
     <>
       <MobileNavBar $open={open}>
-        <LogoContainer onClick={() => { setOpen(false); navigate('/journal', { state: { newEntry: Date.now() } }); }}>
+        <LogoContainer onClick={() => { setOpen(false); navigate('/dashboard'); }}>
           <BrandMark size={26} gradientId="logo-mobile" />
           <PageName>{current?.label ?? 'Chronicles'}</PageName>
         </LogoContainer>

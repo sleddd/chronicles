@@ -215,14 +215,25 @@ const CustomFieldsBody = styled.div`
   & > div { gap: 0 !important; }
 `;
 
-const EditorArea = styled.div<{ $hidden?: boolean }>`
+const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean }>`
   display: ${({ $hidden }) => ($hidden ? 'none' : 'flex')};
   flex-direction: column;
   overflow: hidden;
-  margin-top: 24px;
-  /* A real writing area even when the entry is one line (journal editor only —
-     Quick Entry and cards share Editor and stay compact) */
-  .tiptap { min-height: 220px; }
+  margin-top: ${({ $quick }) => ($quick ? '8px' : '24px')};
+  /* A real writing area even when the entry is one line */
+  .tiptap { min-height: ${({ $quick }) => ($quick ? '120px' : '220px')}; }
+  /* Quick entry: airy thin Work Sans, the prompt in italics */
+  ${({ $quick }) => ($quick ? `
+    .tiptap {
+      padding: 12px 0 20px;
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 300;
+      line-height: 1.5;
+      color: var(--text-primary);
+    }
+    .tiptap p.is-editor-empty:first-child::before { font-style: italic; color: var(--text-muted); }
+  ` : '')}
 `;
 
 /* "Done editing — view recipe" — accent text button above the recipe fields. */
@@ -360,6 +371,74 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
   }
 `;
 
+/* ── Quick entry (dashboard) ── */
+
+/* The card: --bg-panel with a hairline outline, the dashboard cards' 14px corners */
+const QuickCard = styled.section`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 24px 24px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  font-family: var(--font-sans);
+  @media (max-width: 480px) { padding: 20px 16px 16px; }
+`;
+
+const QuickHead = styled.div`
+  display: flex;
+  align-items: center;
+  /* Just the topic pill, on the right */
+  justify-content: flex-end;
+  /* Above the writing area, so the topic menu drops over it */
+  position: relative;
+  z-index: 5;
+`;
+
+/* The topic picker as an outlined pill ("No topic ⌄"), its menu right-aligned */
+const QuickTopic = styled.div`
+  & > div > button {
+    min-width: 132px;
+    height: 36px;
+    padding: 0 14px 0 16px;
+    gap: 16px;
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-full, 999px);
+    background: transparent;
+    font-size: 15px;
+    text-transform: none;
+    color: var(--text-primary);
+  }
+  & > div > button:hover { background: var(--bg-hover); }
+  & > div > button > span:last-child { color: var(--text-muted); font-size: 11px; }
+  & > div > div { left: auto; right: 0; }
+`;
+
+/* Hairline under the writing area, then the tools and Save entry */
+const QuickFoot = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+`;
+
+const QuickTools = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-left: -8px;
+`;
+
+/* Only shown when a save fails */
+const QuickError = styled.p`
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--color-danger);
+`;
+
 /* ── Helpers ── */
 
 const TOPIC_TO_TYPE: Record<string, string> = {
@@ -425,6 +504,10 @@ interface EntryFormProps {
   imageUploading?: boolean;
   imageError?: string;
   imagesReady?: boolean;
+  /** 'quick': the dashboard's Quick entry — the same editor and fields in a
+   *  card: the topic pill on top, Format / Draw / Dictate and
+   *  Save entry under it (no top bar, images or Delete) */
+  variant?: 'journal' | 'quick';
 }
 
 export function EntryForm({
@@ -435,7 +518,12 @@ export function EntryForm({
   dictationControlRef,
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured,
   imageUploading = false, imageError, imagesReady = false,
+  variant = 'journal',
 }: EntryFormProps) {
+  const quick = variant === 'quick';
+  const ownDictationRef = useRef<DictationControls | null>(null);
+  const dictRef = dictationControlRef ?? ownDictationRef;
+  const [listening, setListening] = useState(false);
   const isFavorite = !!customFields._isFavorite;
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
   const [toolbarOpen, setToolbarOpen] = useState(false);
@@ -730,6 +818,146 @@ export function EntryForm({
     return null;
   })();
 
+  const saveButton = (
+    <SaveButton
+      $disabled={!canSave || isSaving}
+      disabled={!canSave || isSaving}
+      onClick={async () => {
+        await onSave();
+        // Saving a recipe lands back on the formatted recipe view
+        if (isRecipe) setRecipeEditing(false);
+      }}
+    >
+      {isSaving ? <><Spinner size={14} /> Saving...</> : 'Save entry'}
+    </SaveButton>
+  );
+
+  // The writing area and the topic's fields — the same in both layouts
+  const body = (
+    <>
+      {/* Featured image hero — at the top, above the topic / actions row
+          (recipes place it inside their own layout) */}
+      {featuredImage && !recipeViewMode && <EntryHeroBanner image={featuredImage} />}
+
+      {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
+
+      {/* Recipe read view — the formatted recipe page */}
+      {recipeViewMode && (
+        <RecipeEntry
+          values={recipeValues}
+          hero={featuredImage ? <EntryHeroBanner image={featuredImage} /> : null}
+          onToggleIngredient={toggleRecipeIngredient}
+          onEdit={() => setRecipeEditing(true)}
+        />
+      )}
+
+
+      {/* Rich text editor — hidden entirely for structured topics */}
+      <EditorArea $hidden={editorHidden} $quick={quick}>
+        <Editor
+          content={content}
+          onChange={onContentChange}
+          placeholder={placeholder}
+          onEnterSave={canSave && !isSaving ? onSave : undefined}
+          toolbarOpen={toolbarOpen}
+          onToolbarToggle={setToolbarOpen}
+          hideToolbarToggle
+          dictationControlRef={dictRef}
+          drawingControlRef={drawingControlRef}
+          onDictationChange={quick ? setListening : undefined}
+        />
+      </EditorArea>
+
+      {/* Custom fields, below editor — recipes in view mode render the
+          formatted page instead; "Edit recipe" brings the fields back */}
+      {customType && !recipeViewMode && (
+        <CustomFieldsSection $noRule={editorHidden}>
+            {isRecipe && recipeHasContent && (
+              <ViewRecipeBtn type="button" onClick={() => setRecipeEditing(false)}>
+                <Icon name="check" size={12} strokeWidth={2.5} />
+                Done editing — view recipe
+              </ViewRecipeBtn>
+            )}
+            <CustomFieldsBody>
+              <FieldRowLayoutContext.Provider value={true}>
+              {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />}
+              {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
+              {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
+              {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
+              {customType === 'symptom' && <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
+              {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
+              {customType === 'meeting' && <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as MeetingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
+              {customType === 'allergy' && <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as AllergyFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType === 'menu_plan' && <MenuPlanFields values={{ weekStart: '', days: {}, ...(customFields as Partial<MenuPlanFieldValues>) } as MenuPlanFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
+              {customType === 'shopping_list' && <ShoppingListFields values={{ items: [], notes: '', linkedRecipeIds: [], ...(customFields as Partial<ShoppingListFieldValues>) } as ShoppingListFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
+              {customType === 'recipe' && <RecipeFields values={{ servings: '', prepTime: '', cookTime: '', cuisine: '', ingredients: [], instructions: '', linkedShoppingListIds: [], ...(customFields as Partial<RecipeFieldValues>) } as RecipeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} shoppingListOptions={shoppingListOptions} />}
+              {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
+              </FieldRowLayoutContext.Provider>
+            </CustomFieldsBody>
+        </CustomFieldsSection>
+      )}
+
+      {/* User-defined custom fields */}
+      {userFieldDefs.length > 0 && !recipeViewMode && (
+        <CustomFieldsSection $noRule={editorHidden}>
+            <CustomFieldsBody>
+              <FieldRowLayoutContext.Provider value={true}>
+                <UserFieldsForm
+                  fieldDefs={userFieldDefs}
+                  values={(customFields._userFields as Record<string, unknown>) ?? {}}
+                  onChange={vals => onCustomFieldsChange({ ...customFields, _userFields: vals })}
+                />
+              </FieldRowLayoutContext.Provider>
+            </CustomFieldsBody>
+        </CustomFieldsSection>
+      )}
+
+      {/* Image thumbnail strip at the bottom of the post */}
+      {(imagesReady || images.length > 0) && (
+        <EntryImageStrip
+          images={images}
+          featuredKey={featuredKey}
+          uploading={imageUploading}
+          onSetFeatured={key => onSetFeatured?.(key)}
+          onRemove={key => onImageRemoved?.(key)}
+          onOpen={setLightboxIndex}
+        />
+      )}
+    </>
+  );
+
+  if (quick) return (
+    <QuickCard aria-label="Quick entry">
+      <QuickHead>
+        <QuickTopic>
+          <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon />
+        </QuickTopic>
+      </QuickHead>
+      {body}
+      <QuickFoot>
+        <QuickTools aria-label="Entry tools">
+          <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
+            onClick={() => { setNotesExpanded(true); setToolbarOpen(!toolbarOpen); }}>
+            <Icon name="type" size={20} strokeWidth={1.8} />
+          </IconBtn>
+          <IconBtn type="button" aria-label="Draw" title="Draw"
+            onClick={() => { setNotesExpanded(true); drawingControlRef.current?.open(); }}>
+            <Icon name="pencil" size={20} strokeWidth={1.8} />
+          </IconBtn>
+          <IconBtn type="button" $active={listening} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Dictate" aria-pressed={listening}
+            onClick={() => { setNotesExpanded(true); dictRef.current?.toggle(); }}>
+            <Icon name="mic" size={20} strokeWidth={1.8} />
+          </IconBtn>
+        </QuickTools>
+        {saveButton}
+      </QuickFoot>
+      {saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
+    </QuickCard>
+  );
+
   return (
     <FormWrapper>
           {/* Top bar, outside the scroll: topic picker left, entry actions right — same
@@ -822,7 +1050,7 @@ export function EntryForm({
                   <MoreMenu role="menu">
                     {/* Every action is listed; one that can't be used right now says why */}
                     <MoreItem type="button" role="menuitem"
-                      onClick={() => { setMoreOpen(false); setNotesExpanded(true); dictationControlRef?.current?.toggle(); }}>
+                      onClick={() => { setMoreOpen(false); setNotesExpanded(true); dictRef.current?.toggle(); }}>
                       <Icon name="mic" size={16} strokeWidth={1.8} />
                       <MoreText>Dictate</MoreText>
                     </MoreItem>
@@ -867,96 +1095,7 @@ export function EntryForm({
       {/* Scrollable body */}
       <ScrollArea>
         <EdBody>
-          {/* Featured image hero — at the top, above the topic / actions row
-              (recipes place it inside their own layout) */}
-          {featuredImage && !recipeViewMode && <EntryHeroBanner image={featuredImage} />}
-
-          {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
-
-          {/* Recipe read view — the formatted recipe page */}
-          {recipeViewMode && (
-            <RecipeEntry
-              values={recipeValues}
-              hero={featuredImage ? <EntryHeroBanner image={featuredImage} /> : null}
-              onToggleIngredient={toggleRecipeIngredient}
-              onEdit={() => setRecipeEditing(true)}
-            />
-          )}
-
-
-          {/* Rich text editor — hidden entirely for structured topics */}
-          <EditorArea $hidden={editorHidden}>
-            <Editor
-              content={content}
-              onChange={onContentChange}
-              placeholder={placeholder}
-              onEnterSave={canSave && !isSaving ? onSave : undefined}
-              toolbarOpen={toolbarOpen}
-              onToolbarToggle={setToolbarOpen}
-              hideToolbarToggle
-              dictationControlRef={dictationControlRef}
-              drawingControlRef={drawingControlRef}
-            />
-          </EditorArea>
-
-          {/* Custom fields, below editor — recipes in view mode render the
-              formatted page instead; "Edit recipe" brings the fields back */}
-          {customType && !recipeViewMode && (
-            <CustomFieldsSection $noRule={editorHidden}>
-                {isRecipe && recipeHasContent && (
-                  <ViewRecipeBtn type="button" onClick={() => setRecipeEditing(false)}>
-                    <Icon name="check" size={12} strokeWidth={2.5} />
-                    Done editing — view recipe
-                  </ViewRecipeBtn>
-                )}
-                <CustomFieldsBody>
-                  <FieldRowLayoutContext.Provider value={true}>
-                  {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />}
-                  {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
-                  {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
-                  {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
-                  {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
-                  {customType === 'symptom' && <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
-                  {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
-                  {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
-                  {customType === 'meeting' && <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as MeetingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
-                  {customType === 'allergy' && <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as AllergyFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
-                  {customType === 'menu_plan' && <MenuPlanFields values={{ weekStart: '', days: {}, ...(customFields as Partial<MenuPlanFieldValues>) } as MenuPlanFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
-                  {customType === 'shopping_list' && <ShoppingListFields values={{ items: [], notes: '', linkedRecipeIds: [], ...(customFields as Partial<ShoppingListFieldValues>) } as ShoppingListFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
-                  {customType === 'recipe' && <RecipeFields values={{ servings: '', prepTime: '', cookTime: '', cuisine: '', ingredients: [], instructions: '', linkedShoppingListIds: [], ...(customFields as Partial<RecipeFieldValues>) } as RecipeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} shoppingListOptions={shoppingListOptions} />}
-                  {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
-                  {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
-                  </FieldRowLayoutContext.Provider>
-                </CustomFieldsBody>
-            </CustomFieldsSection>
-          )}
-
-          {/* User-defined custom fields */}
-          {userFieldDefs.length > 0 && !recipeViewMode && (
-            <CustomFieldsSection $noRule={editorHidden}>
-                <CustomFieldsBody>
-                  <FieldRowLayoutContext.Provider value={true}>
-                    <UserFieldsForm
-                      fieldDefs={userFieldDefs}
-                      values={(customFields._userFields as Record<string, unknown>) ?? {}}
-                      onChange={vals => onCustomFieldsChange({ ...customFields, _userFields: vals })}
-                    />
-                  </FieldRowLayoutContext.Provider>
-                </CustomFieldsBody>
-            </CustomFieldsSection>
-          )}
-
-          {/* Image thumbnail strip at the bottom of the post */}
-          {(imagesReady || images.length > 0) && (
-            <EntryImageStrip
-              images={images}
-              featuredKey={featuredKey}
-              uploading={imageUploading}
-              onSetFeatured={key => onSetFeatured?.(key)}
-              onRemove={key => onImageRemoved?.(key)}
-              onOpen={setLightboxIndex}
-            />
-          )}
+          {body}
         </EdBody>
       </ScrollArea>
 
@@ -989,17 +1128,7 @@ export function EntryForm({
         </FooterLeft>
         <SaveRowActions>
           <DiscardBtn onClick={onNew}>Discard changes</DiscardBtn>
-          <SaveButton
-            $disabled={!canSave || isSaving}
-            disabled={!canSave || isSaving}
-            onClick={async () => {
-              await onSave();
-              // Saving a recipe lands back on the formatted recipe view
-              if (isRecipe) setRecipeEditing(false);
-            }}
-          >
-            {isSaving ? <><Spinner size={14} /> Saving...</> : 'Save entry'}
-          </SaveButton>
+          {saveButton}
         </SaveRowActions>
       </SaveRow>
     </FormWrapper>

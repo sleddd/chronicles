@@ -25,11 +25,12 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, retryDelayMs } from '../services/api.js';
 import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
-import { loadAiConfig, autoCaloriesOnSave } from '../services/aiAssistant.js';
+import { loadAiConfig } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
 import { getOrCreateJournalTopic } from '../utils/getOrCreateJournalTopic.js';
-import { stripHtml, summarizeUserFields, builtinEntryName } from '../utils/stripHtml.js';
+import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
+import { hasEntryData, prepareEntryForSave } from '../utils/entrySave.js';
 import type { RecipeFieldValues } from '../types/fields.js';
 import { recipeShareHtml } from '../utils/recipeShareHtml.js';
 import type { EncryptedPost } from '@shared/crypto/types';
@@ -152,9 +153,6 @@ const NewEntryPill = styled.button`
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
   JSON.stringify([imgs.map(i => i.key), featured]);
 
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 export function JournalView() {
   const { encryptionData } = useAuth();
@@ -589,14 +587,8 @@ export function JournalView() {
   }, [selectedEntryId, decryptedEntries, pendingNewTopicId, pendingNewFields]);
 
   const handleSave = useCallback(async () => {
-    const hasDrawing = editorContent.includes('data-type="drawing"');
-    const hasText = !!stripHtml(editorContent).trim();
     const userFieldDefs = editorTopicId != null ? (topicCustomFields[editorTopicId] ?? []) : [];
-    const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
-    const hasFieldValues = userFieldDefs.length > 0 && summarizeUserFields(userFieldDefs, userFieldValues) !== '';
-    const hasFieldData = Object.keys(customFields).length > 0;
-    if (!hasText && !hasDrawing && !hasFieldValues && !hasFieldData && entryImages.length === 0) return;
-    let finalContent = editorContent;
+    if (!hasEntryData(editorContent, customFields, userFieldDefs, entryImages.length)) return;
     setIsSaving(true); setSaveStatus('');
 
     // Resolve effective topic — fall back to "Journal" if none selected
@@ -610,22 +602,13 @@ export function JournalView() {
       // AI assistant: fill blank calories on Meals/Exercise entries, or refresh
       // an earlier AI estimate whose inputs changed. A failed estimate never
       // blocks the save.
-      let fieldsToSave = customFields;
+      // (dated shopping-list title, fields-only summary, AI calories — utils/entrySave)
       const topicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
-      // A shopping list saved without a title gets a dated one
-      if (!hasText && !hasDrawing && topicName === 'shopping list') {
-        finalContent = `<p>${defaultShoppingListTitle()}</p>`;
-        setEditorContent(finalContent);
-      } else if (!hasText && !hasDrawing && hasFieldValues) {
-        // Fields-only entries (no text area) still get a readable title in every list
-        finalContent = `<p>${escapeHtml(summarizeUserFields(userFieldDefs, userFieldValues))}</p>`;
-        setEditorContent(finalContent);
-      }
-      const calorieKind = topicName === 'meals' ? 'food' : topicName === 'exercise' ? 'exercise' : null;
-      if (calorieKind) {
-        const estimated = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields).catch(() => null);
-        if (estimated) { fieldsToSave = estimated; setCustomFields(estimated); }
-      }
+      const prepared = await prepareEntryForSave(editorContent, customFields, topicName, userFieldDefs);
+      const finalContent = prepared.content;
+      const fieldsToSave = prepared.customFields;
+      if (finalContent !== editorContent) setEditorContent(finalContent);
+      if (fieldsToSave !== customFields) setCustomFields(fieldsToSave);
 
       const metadata: Record<string, unknown> = {};
       if (effectiveTopicId) metadata._taxonomyId = effectiveTopicId;
@@ -637,7 +620,7 @@ export function JournalView() {
       }
       const encrypted = await encryptPost(finalContent, metadata);
 
-      // Saving keeps the entry open — the editor stays put with a saved status
+      // Save the entry (it closes once saved — see below)
       if (selectedEntryId) {
         await entriesApi.update(selectedEntryId, {
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
@@ -658,13 +641,14 @@ export function JournalView() {
         setSelectedEntryId(result.id as number);
       }
       loadedStateRef.current = { content: finalContent, customFields: JSON.stringify(fieldsToSave), images: imagesSig(entryImages, featuredKey) };
-      setLastSavedAt(new Date());
-      // Edit view: saving closes the editor and returns to the view it came from
-      if (originPath) {
-        setEditorExpanded(false);
-        setShowMobileEditor(false);
-        navigate(originPath);
-      }
+      // Saving closes the entry: the editor goes back to a blank new entry
+      // (phones show the list); edit view returns to the view it came from
+      setPendingNewTopicId(null);
+      setPendingNewFields(null);
+      setSelectedEntryId(null);
+      setEditorExpanded(false);
+      setShowMobileEditor(false);
+      if (originPath) navigate(originPath);
     } catch (err) { console.error('Save failed:', err); setSaveStatus('Save failed'); }
     finally { setIsSaving(false); }
   }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate]);

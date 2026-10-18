@@ -11,6 +11,7 @@ import { Toggle } from '../components/atoms/Toggle.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
+import { QuickEntry } from '../components/organisms/QuickEntry.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
@@ -42,9 +43,10 @@ import type { PriorityItem } from '../components/molecules/fields/PrioritiesFiel
 
 /* ── Config ── */
 
-type SectionKey = 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'menu' | 'meds' | 'shopping';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'menu' | 'meds' | 'shopping';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: 'quickEntry', label: 'Quick entry' },
   { key: 'nextUp', label: 'Next up (when the quote is off)' },
   { key: 'wellness', label: 'Wellness check-in' },
   { key: 'clocks', label: 'World clocks & weather' },
@@ -181,12 +183,18 @@ const OutlineBtn = styled.button`
 `;
 
 /* Next up | Wellness check-in */
-const Hero = styled.div<{ $single: boolean }>`
+/* Quick entry: the journal's editor in a card, straight under the greeting */
+const QuickWrap = styled.div`
+  margin-top: 40px;
+  @media (max-width: 640px) { margin-top: 28px; }
+`;
+
+const Hero = styled.div<{ $single: boolean; $afterQuick?: boolean }>`
   display: grid;
   grid-template-columns: ${({ $single }) => ($single ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))')};
   gap: 24px;
-  margin-top: 56px;
-  @media (max-width: 640px) { margin-top: 36px; }
+  margin-top: ${({ $afterQuick }) => ($afterQuick ? '24px' : '56px')};
+  @media (max-width: 640px) { margin-top: ${({ $afterQuick }) => ($afterQuick ? '24px' : '36px')}; }
   @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
@@ -322,26 +330,35 @@ const ClockWeather = styled.div`
 /* Daily quote: in the Next up card's place (the grey panel) when it's on */
 /* The quote and its author as one block, centred vertically in the card,
    left-aligned */
+/* The daily quote's card: roomier top and a narrower right side so the
+   quote isn't squeezed; a wider right side on desktop */
+const QuoteCard = styled(NextCard)`
+  padding-top: 36px;
+  padding-right: 24px;
+  @media (min-width: 901px) { padding-right: 40px; }
+`;
+
 const QuoteBody = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Just under the "Daily quote" label, not centred in the card */
+  justify-content: flex-start;
   align-items: flex-start;
   text-align: left;
-  padding: 18px 0 8px;
+  padding: 36px 0 8px;
+  @media (min-width: 901px) { padding-top: 44px; }
 `;
 
 const QuoteText = styled.blockquote`
   margin: 0;
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 300;
   font-style: italic;
   line-height: 1.35;
   color: var(--text-primary);
-  text-wrap: balance;
-  @media (max-width: 480px) { font-size: 23px; }
+  @media (max-width: 480px) { font-size: 19px; }
 `;
 
 const QuoteBy = styled.p`
@@ -355,7 +372,8 @@ const Columns = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 56px;
   margin-top: 44px;
-  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
+  /* Stacked: the same 44px between the two columns as between sections */
+  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); row-gap: 44px; }
 `;
 
 const Col = styled.div`
@@ -374,7 +392,7 @@ const SectionHead = styled.div`
   border-bottom: 1px solid var(--border-default);
   h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
-  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--color-accent-link); cursor: pointer; }
+  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }
 `;
 
@@ -1015,22 +1033,22 @@ export function DashboardView() {
 
   // The card beside the wellness check-in: the daily quote when it's on, else Next up (medications)
   const lead = shown('quote') ? (
-    <NextCard aria-label="Daily quote">
+    <QuoteCard aria-label="Daily quote">
       <NextTop $plain><b>Daily quote</b></NextTop>
       <QuoteBody>
         <QuoteText>{quote.text}</QuoteText>
         <QuoteBy>— {quote.author}</QuoteBy>
       </QuoteBody>
-    </NextCard>
+    </QuoteCard>
   ) : shown('nextUp') && medsOn ? <NextUp doses={doses} now={now} /> : null;
 
   const left: ReactNode[] = [];
   const right: ReactNode[] = [];
   if (shown('priorities')) left.push(<Priorities key="p" />);
   if (shown('comingUp')) left.push(<ComingUp key="c" financeOn={financeOn} doses={doses} now={now} />);
+  if (shown('shopping')) right.push(<Shopping key="s" />);
   if (shown('menu') && kitchenOn) right.push(<Menu key="m" />);
   if (shown('meds') && medsOn) right.push(<Medications key="d" doses={doses} />);
-  if (shown('shopping')) right.push(<Shopping key="s" />);
 
   return (
     <ContentTemplate>
@@ -1084,8 +1102,10 @@ export function DashboardView() {
             </Customize>
           )}
 
+          {shown('quickEntry') && <QuickWrap><QuickEntry /></QuickWrap>}
+
           {(lead || shown('wellness')) && (
-            <Hero $single={!(lead && shown('wellness'))}>
+            <Hero $single={!(lead && shown('wellness'))} $afterQuick={shown('quickEntry')}>
               {lead}
               {shown('wellness') && <WellnessCheckIn title="Wellness check-in" quad bare />}
             </Hero>

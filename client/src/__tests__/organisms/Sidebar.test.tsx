@@ -48,12 +48,13 @@ describe('Sidebar', () => {
     }
   });
 
-  it('the logo starts a new entry in the journal; Dashboard is its own item', () => {
+  it('the logo and the Today item both open the dashboard', () => {
     renderAt();
     fireEvent.click(screen.getByTitle('Today'));
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    mockNavigate.mockClear();
     fireEvent.click(screen.getByTitle('Chronicles'));
-    expect(mockNavigate).toHaveBeenCalledWith('/journal', { state: { newEntry: expect.any(Number) } });
+    expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
 
   it('has a Sign out button under Settings that signs out', () => {
