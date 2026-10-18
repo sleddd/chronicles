@@ -82,7 +82,7 @@ const TuneBtn = styled.button<{ $active: boolean }>`
 `;
 
 /* Today / All / Bookmarks — one outlined group; the current one is lifted
-   onto --bg-active with its icon in the accent (no accent tint) */
+   onto --bg-active with its icon bright (--text-primary, never the accent) */
 const Segments = styled.div`
   flex: none;
   display: flex;
@@ -102,10 +102,10 @@ const Segment = styled.button<{ $active?: boolean }>`
   border: none;
   border-radius: 6px;
   background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
-  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-primary)')}; }
+  &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 

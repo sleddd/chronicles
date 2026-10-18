@@ -17,6 +17,7 @@ import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { useTodayDoses, type DoseGroup } from '../hooks/useTodayDoses.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
+import { useAuth } from '../contexts/AuthContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
@@ -108,7 +109,7 @@ const Hello = styled.h1`
   margin: 0;
   font-family: var(--font-display);
   font-size: 56px;
-  font-weight: 300;
+  font-weight: 200; /* the view titles' weight */
   line-height: 1.1;
   color: var(--text-primary);
   text-wrap: balance;
@@ -122,7 +123,7 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  @media (max-width: 640px) { padding: 34px 0 0; }
+  @media (max-width: 640px) { padding: 12px 0 0; }
 `;
 
 /* Customize view: the neutral pill, in sentence case at normal spacing (both themes) */
@@ -948,6 +949,7 @@ export function DashboardView() {
   const [config, saveConfig, configLoaded] = useEncryptedSetting<DashboardConfig>('dashboardConfig', DEFAULT_CONFIG);
   const [customizing, setCustomizing] = useState(false);
   const displayName = useUIStore(s => s.displayName) ?? '';
+  const { user } = useAuth();
   const themeMode = useUIStore(s => s.themeMode);
   const setThemeMode = useUIStore(s => s.setThemeMode);
   const changeTheme = (mode: 'light' | 'dark') => {
@@ -989,7 +991,9 @@ export function DashboardView() {
     homeWeather && hd && home ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()} in ${home.name}` : null,
   ].filter(Boolean).join(' · ');
   const financeOn = ff.financeEnabled === true;
-  const hello = displayName.trim() ? `${greeting(now)}, ${displayName.trim()}` : greeting(now);
+  // "Good evening, Alex" — the display name, else the username
+  const helloName = displayName.trim() || user?.username?.trim() || '';
+  const hello = helloName ? `${greeting(now)}, ${helloName}` : greeting(now);
   const quote = dailyQuote(now);
   const kitchenOn = true;
 

@@ -44,6 +44,9 @@ const Main = styled.main<{ $lightBg?: boolean }>`
   -webkit-overflow-scrolling: touch;
   min-height: 0;
   background: ${({ $lightBg, theme }) => $lightBg ? theme.colors.surfaceOverlayLight : theme.colors.surfaceOverlay};
+  /* Phones: a little more room at the sides on top of each page's own 16px
+     gutter, so content never runs close to the screen edge */
+  @media (max-width: 768px) { padding-inline: 8px; }
 `;
 
 interface ContentTemplateProps {

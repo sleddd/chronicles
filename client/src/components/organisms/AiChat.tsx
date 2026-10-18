@@ -12,8 +12,8 @@ import { entries as entriesApi } from '../../services/api.js';
 import { autoNutritionOnSave, chatReply, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
 import { mealForNow, nowTime } from '../../utils/foodLog.js';
 import { toDateStr } from '../../utils/dateUtils.js';
-import { chatSystemPrompt, parseSaveCommand, textToEntryHtml, type TopicRef } from '../../utils/chatSave.js';
-import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
+import { chatSystemPrompt, chatTranscriptHtml, parseSaveCommand, textToEntryHtml, SAVED_CHATS_TOPIC, type TopicRef } from '../../utils/chatSave.js';
+import { getOrCreateJournalTopic, getOrCreateTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
 import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../utils/chatStyle.js';
 
@@ -276,7 +276,8 @@ function renderReply(text: string, onUse: (cmd: string) => void): ReactNode {
 
 /**
  * Floating, unsaved AI chat. Messages live only in this component — closing
- * the page or locking the journal clears them. `/save <topic> <text>` saves
+ * the page or locking the journal clears them. `/save chat` saves the whole
+ * conversation to the "Saved Chats" topic. `/save <topic> <text>` saves
  * text as an encrypted journal entry (no AI involved, nothing sent anywhere
  * but the existing encrypted entries API).
  */
@@ -337,7 +338,43 @@ export function AiChat() {
     const cmd = parseSaveCommand(raw, topicRefs);
     push({ role: 'user', text: raw });
     if (cmd.kind === 'help') {
-      push({ role: 'note', text: 'Type /save, a topic, then the text — for example: /save Journal Felt calm after my walk today.' });
+      push({ role: 'note', text: 'Type /save chat to keep this conversation, or /save, a topic, then the text — for example: /save Journal Felt calm after my walk today.' });
+      return;
+    }
+    if (cmd.kind === 'chat') {
+      // The conversation so far (no notes, errors or /save commands), oldest first
+      const turns = messages
+        .filter((m): m is ChatMessage & { role: 'user' | 'assistant' } => (m.role === 'user' || m.role === 'assistant') && !m.error)
+        .filter(m => parseSaveCommand(m.text, topicRefs).kind === 'none')
+        .map(m => ({ role: m.role, text: m.text }));
+      if (!turns.length) {
+        push({ role: 'note', error: true, text: 'Nothing to save yet — chat first, then type /save chat.' });
+        return;
+      }
+      setBusy(true);
+      try {
+        const topicId = await getOrCreateTopic(SAVED_CHATS_TOPIC, 'comments');
+        const content = chatTranscriptHtml(turns);
+        const metadata: Record<string, unknown> = { _taxonomyId: topicId, _widgetType: 'saved-chat' };
+        const encrypted = await encryptPost(content, metadata);
+        const result = await entriesApi.create({
+          contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
+          metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
+          isEncrypted: true, taxonomyIds: [topicId],
+        });
+        const id = result.id as number;
+        addDecryptedEntry({
+          id, content, metadata, isEncrypted: true,
+          createdAt: new Date(result.createdAt as string),
+          updatedAt: new Date((result.updatedAt || result.createdAt) as string),
+        });
+        push({ role: 'note', text: `Chat saved to ${SAVED_CHATS_TOPIC}.`, savedEntryId: id });
+      } catch (err) {
+        console.error('Chat save failed:', err);
+        push({ role: 'note', error: true, text: 'That didn’t save — try again.' });
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     if (cmd.kind === 'noTopic') {
@@ -459,7 +496,7 @@ export function AiChat() {
             {messages.length === 0 && (
               <Empty>
                 {aiReady ? 'Ask anything. This chat isn’t saved.' : 'Set up In-App AI in Settings to chat.'}
-                <br />To keep something, type <code>/save topic text</code> — it becomes a journal entry.
+                <br />To keep something, type <code>/save topic text</code> — it becomes a journal entry — or <code>/save chat</code> to keep the whole conversation.
               </Empty>
             )}
             {messages.map(m => (

@@ -10,7 +10,7 @@ import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import {
   searchAndSort, PLAN_SORTS, PLAN_TAB_PATHS, isSameView, parseSavedViews,
-  type PlanSort, type PlanRow, type SavedPlanView, type PlanViewState,
+  type PlanSort, type PlanRow, type SavedPlanView, type PlanViewState, type PlanTabKey,
 } from '../utils/planningView.js';
 import { usePrivateSettings } from '../services/privateSettings.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
@@ -23,6 +23,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
+import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { entries as entriesApi } from '../services/api.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -413,14 +414,20 @@ export function GoalsView() {
 
   const goalTitles = useMemo(() => new Map(goals.map(g => [g.id, g.title])), [goals]);
 
+  /* Board order, set by dragging a card up or down in its column and kept as
+     the master-key-encrypted setting `planningOrder` (ids per tab, top first).
+     It is the "Newest" order: cards never placed yet (new ones) sit on top,
+     newest first, then the ones you've arranged, in your order. */
+  const [planOrder, savePlanOrder] = useEncryptedSetting<PlanOrder>('planningOrder', NO_PLAN_ORDER);
+
   // Sorted lists
   const filteredGoals = useMemo(() =>
-    [...goals].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
-  [goals]);
+    inPlanOrder([...goals].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), planOrder.goals),
+  [goals, planOrder.goals]);
 
   const filteredMilestones = useMemo(() =>
-    [...milestones].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
-  [milestones]);
+    inPlanOrder([...milestones].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), planOrder.milestones),
+  [milestones, planOrder.milestones]);
 
   // Shared persist helper
   const persistEntry = useCallback(async (id: number, content: string, taxonomyId: number, customFields: Record<string, unknown>) => {
@@ -495,8 +502,8 @@ export function GoalsView() {
   useEffect(() => { setOrderedGoals(filteredGoals); }, [filteredGoals]);
   useEffect(() => { setOrderedMilestones(filteredMilestones); }, [filteredMilestones]);
 
-  const sortedTasks = useMemo(() => [...linkedTasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), [linkedTasks]);
-  const sortedTodos = useMemo(() => [...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), [todos]);
+  const sortedTasks = useMemo(() => inPlanOrder([...linkedTasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), planOrder.tasks), [linkedTasks, planOrder.tasks]);
+  const sortedTodos = useMemo(() => inPlanOrder([...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), planOrder.todos), [todos, planOrder.todos]);
 
   /* ── Status changes (board drag) ── */
 
@@ -528,12 +535,15 @@ export function GoalsView() {
     } catch (err) { console.error('Failed to update task status:', err); }
   }, [tasks, persistEntry, syncParentMilestone]);
 
-  const reorder = <T extends { id: number }>(set: React.Dispatch<React.SetStateAction<T[]>>) => (id: number, overId: number) =>
-    set(prev => {
-      const from = prev.findIndex(x => x.id === id);
-      const to = prev.findIndex(x => x.id === overId);
-      return from === -1 || to === -1 ? prev : arrayMove(prev, from, to);
-    });
+  // A card dropped on another in its column: move it to that card's place in
+  // the tab's whole board order (filters only hide cards) and save it
+  const reorder = (kind: PlanTabKey, list: { id: number }[]) => (id: number, overId: number) => {
+    const ids = list.map(x => x.id);
+    const from = ids.indexOf(id);
+    const to = ids.indexOf(overId);
+    if (from === -1 || to === -1) return;
+    void savePlanOrder({ ...planOrder, [kind]: arrayMove(ids, from, to) }).catch(err => console.error('Failed to save board order:', err));
+  };
 
   const handleDeleteEntry = useCallback(async (id: number) => {
     try { await deleteEntryWithImages(id); }
@@ -670,8 +680,9 @@ export function GoalsView() {
     setConfirmDelete(false);
   };
 
-  // Dragging to reorder only makes sense in the board's own order
-  const refined = !!query.trim() || sort !== 'newest' || ((tab === 'tasks' || tab === 'todos') && filtersSet);
+  // Dragging to reorder only makes sense in the board's own order (filters
+  // just hide cards, so they don't stop it)
+  const refined = !!query.trim() || sort !== 'newest';
 
   /* ── Board cards ── */
   const milestoneTitles = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
@@ -892,7 +903,7 @@ export function GoalsView() {
           )}
 
           <Body>
-            {refined && shownCount === 0 && (view === 'list' || !!query.trim() || filtersSet) && (
+            {(refined || filtersSet) && shownCount === 0 && (view === 'list' || !!query.trim() || filtersSet) && (
               <NoMatch role="status">
                 {query.trim() ? <>Nothing in {tab} matches “{query.trim()}”.</> : <>No {tab} match these filters.</>}
               </NoMatch>
@@ -901,7 +912,7 @@ export function GoalsView() {
               ? <EmptyState message="No goals found." submessage="Create a journal entry with the Goal topic to get started." />
               : view === 'board'
                 ? <KanbanBoard columns={goalColumns} noun="goal" onOpen={openInJournal}
-                    onMove={persistGoalStatus} onReorder={refined ? undefined : reorder(setOrderedGoals)}
+                    onMove={persistGoalStatus} onReorder={refined ? undefined : reorder('goals', orderedGoals)}
                     onAdd={key => addIn({ goalStatus: key })()} />
                 : renderRows(shownGoals.map(g => ({ ...g, isCompleted: normalizeRoadmapStatus(g.goalStatus) === 'completed' })), false))}
 
@@ -909,7 +920,7 @@ export function GoalsView() {
               ? <EmptyState message="No milestones found." submessage="Create a journal entry with the Milestone topic to get started." />
               : view === 'board'
                 ? <KanbanBoard columns={milestoneColumns} noun="milestone" onOpen={openInJournal}
-                    onMove={persistMilestoneStatus} onReorder={refined ? undefined : reorder(setOrderedMilestones)}
+                    onMove={persistMilestoneStatus} onReorder={refined ? undefined : reorder('milestones', orderedMilestones)}
                     onAdd={key => addIn(milestoneFieldsForStatus(key))()} />
                 : renderRows(shownMilestones, false))}
 
@@ -917,7 +928,7 @@ export function GoalsView() {
               ? <EmptyState message="No tasks found." submessage="Tasks linked to a goal or milestone show here; unlinked ones are Todos." />
               : view === 'board'
                 ? <KanbanBoard columns={taskColumns(shownTasks)} noun="task" onOpen={openInJournal}
-                    onMove={persistTaskStatus}
+                    onMove={persistTaskStatus} onReorder={refined ? undefined : reorder('tasks', sortedTasks)}
                     onAdd={key => addIn({ ...taskFieldsForStatus(key), ...filterLink })()} />
                 : renderRows(shownTasks, tasksMixed))}
 
@@ -925,7 +936,7 @@ export function GoalsView() {
               ? <EmptyState message="No todos found." submessage="Create a task without linking it to a milestone or goal." />
               : view === 'board'
                 ? <KanbanBoard columns={taskColumns(shownTodos)} noun="todo" onOpen={openInJournal}
-                    onMove={persistTaskStatus}
+                    onMove={persistTaskStatus} onReorder={refined ? undefined : reorder('todos', sortedTodos)}
                     onAdd={key => addIn({ ...taskFieldsForStatus(key) })()} />
                 : renderRows(shownTodos, todosMixed))}
           </Body>
@@ -933,4 +944,18 @@ export function GoalsView() {
       </Page>
     </ContentTemplate>
   );
+}
+
+/* ── Board order ── */
+
+type PlanOrder = Partial<Record<PlanTabKey, number[]>>;
+const NO_PLAN_ORDER: PlanOrder = {};
+
+/** Cards not yet placed keep their given order on top; placed ones follow in the saved order */
+function inPlanOrder<T extends { id: number }>(list: T[], ids: number[] | undefined): T[] {
+  if (!ids?.length) return list;
+  const rank = new Map(ids.map((id, i) => [id, i]));
+  const unplaced = list.filter(x => !rank.has(x.id));
+  const placed = list.filter(x => rank.has(x.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+  return [...unplaced, ...placed];
 }

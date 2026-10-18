@@ -23,7 +23,7 @@ const Head = styled.header`
   gap: 12px 24px;
   padding: 28px 36px 30px;
   border-bottom: 1px solid var(--border-subtle);
-  @media (max-width: 768px) { padding: 20px 16px 14px; align-items: center; row-gap: 10px; }
+  @media (max-width: 768px) { padding: 20px 24px 14px; align-items: center; row-gap: 10px; }
 `;
 
 const TitleBlock = styled.div`
@@ -49,6 +49,8 @@ const BackBtn = styled.button`
   &:hover { color: var(--color-accent); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
   ${NAV_COMPACT} { display: flex; }
+  /* Light: a thin caret — the regular stroke reads too heavy on white */
+  html[data-theme='light'] & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
 `;
 
 const Title = styled.h1`

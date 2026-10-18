@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSaveCommand, textToEntryHtml, chatSystemPrompt } from '../../utils/chatSave.js';
+import { parseSaveCommand, textToEntryHtml, chatSystemPrompt, chatTranscriptHtml } from '../../utils/chatSave.js';
 
 const topics = [
   { id: 1, name: 'Journal' },
@@ -16,6 +16,12 @@ describe('parseSaveCommand', () => {
 
   it('shows help for a bare /save', () => {
     expect(parseSaveCommand('  /save ', topics)).toEqual({ kind: 'help' });
+  });
+
+  it('reads /save chat (any case) as saving the whole conversation', () => {
+    expect(parseSaveCommand('/save chat', topics)).toEqual({ kind: 'chat' });
+    expect(parseSaveCommand('/Save Chats ', topics)).toEqual({ kind: 'chat' });
+    expect(parseSaveCommand('/save chatty notes', topics)).toEqual({ kind: 'noTopic', attempted: 'chatty' });
   });
 
   it('matches topics case-insensitively, longest name first', () => {
@@ -45,5 +51,14 @@ describe('textToEntryHtml', () => {
 describe('chatSystemPrompt', () => {
   it('lists the user\'s topics for /save suggestions', () => {
     expect(chatSystemPrompt(['Journal', 'Meals'])).toContain('Journal, Meals');
+  });
+});
+
+describe('chatTranscriptHtml', () => {
+  it('writes each turn under a bold You / AI line, escaping text', () => {
+    expect(chatTranscriptHtml([
+      { role: 'user', text: 'Hi <there>' },
+      { role: 'assistant', text: 'Hello\n\nSecond' },
+    ])).toBe('<p><strong>You</strong></p><p>Hi &lt;there&gt;</p><p><strong>AI</strong></p><p>Hello</p><p>Second</p>');
   });
 });

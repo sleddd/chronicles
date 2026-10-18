@@ -1,6 +1,7 @@
 /**
  * `/save <topic> <text>` from the AI chat — saves the text as a journal entry
- * under that topic. The topic is matched against the user's topic names
+ * under that topic. `/save chat` on its own saves the whole conversation to
+ * the "Saved Chats" topic instead (see `chatTranscriptHtml`). The topic is matched against the user's topic names
  * (case-insensitive, longest name first) so multi-word names like
  * "Shopping List" work without quotes.
  */
@@ -15,6 +16,7 @@ export interface TopicRef {
 export type SaveCommand =
   | { kind: 'none' }                                  // not a /save command
   | { kind: 'help' }                                  // "/save" on its own
+  | { kind: 'chat' }                                  // "/save chat" — the whole conversation
   | { kind: 'noTopic'; attempted: string }            // first word(s) match no topic
   | { kind: 'noText'; topic: TopicRef }               // topic but nothing to save
   | { kind: 'save'; topic: TopicRef; text: string };
@@ -25,6 +27,7 @@ export function parseSaveCommand(input: string, topics: TopicRef[]): SaveCommand
   if (!m) return { kind: 'none' };
   const rest = (m[1] ?? '').trim();
   if (!rest) return { kind: 'help' };
+  if (/^chats?$/i.test(rest)) return { kind: 'chat' };
 
   const lower = rest.toLowerCase();
   const byLength = [...topics].sort((a, b) => b.name.length - a.name.length);
@@ -37,6 +40,14 @@ export function parseSaveCommand(input: string, topics: TopicRef[]): SaveCommand
     return text ? { kind: 'save', topic, text } : { kind: 'noText', topic };
   }
   return { kind: 'noTopic', attempted: rest.split(/\s+/)[0] };
+}
+
+/** The topic `/save chat` saves conversations to (created on first use) */
+export const SAVED_CHATS_TOPIC = 'Saved Chats';
+
+/** A conversation → entry HTML: each turn under a bold "You" / "AI" line */
+export function chatTranscriptHtml(turns: { role: 'user' | 'assistant'; text: string }[]): string {
+  return turns.map(t => `<p><strong>${t.role === 'user' ? 'You' : 'AI'}</strong></p>${textToEntryHtml(t.text)}`).join('');
 }
 
 /** Plain text → the editor's HTML (paragraphs, line breaks kept). */
@@ -73,7 +84,7 @@ export function chatSystemPrompt(topicNames: string[], userNotes = ''): string {
     'You are In-App AI, the assistant built into Chronicles, a private, end-to-end encrypted personal journal.',
     CHAT_PERSONA,
     'Keep replies clear and fairly short. Basic Markdown is fine: short paragraphs, bullet or numbered lists, **bold** and *italic*. No tables or images.',
-    'This chat is not saved — it disappears when the window closes or the journal locks.',
+    'This chat is not saved — it disappears when the window closes or the journal locks — unless the user sends `/save chat`, which keeps the whole conversation in their "Saved Chats" topic.',
     'When the user shares or arrives at something worth keeping (a decision, plan, idea, reflection, health note, list, quote), suggest saving it.',
     'To suggest a save, write the exact command on its own line in backticks, like `/save Journal Text to keep`, using the topic that fits best.',
     topicNames.length

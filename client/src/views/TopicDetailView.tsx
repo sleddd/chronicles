@@ -7,6 +7,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PillButton } from '../components/atoms/PillButton.js';
+import { RowMenu } from '../components/molecules/FinanceParts.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
@@ -117,6 +118,15 @@ const HeadActions = styled.div`
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  @media (max-width: 768px) { display: none; }
+`;
+
+/* Phones: Edit topic and New … fold into a ⋯ menu across from the title */
+const HeadMenu = styled.div`
+  display: none;
+  flex-shrink: 0;
+  button[aria-haspopup] { font-size: 22px; color: var(--text-secondary); }
+  @media (max-width: 768px) { display: block; }
 `;
 
 /* "Search books" — a rounded outlined search box */
@@ -152,18 +162,18 @@ const Search = styled.label`
    caret's: caret box (56px, pulled in 20 + 10) + the icon's 6px margin + the
    glyph's own side bearing ≈ 34px (smaller caret on phones) */
 const ICON_INSET = '34px';
-const ICON_INSET_PHONE = '29px';
 
+/* Desktop: content lines up with the topic icon; phones (≤768px): with the back caret */
 const Body = styled.div`
   padding-left: ${ICON_INSET};
-  @media (max-width: 480px) { padding-left: ${ICON_INSET_PHONE}; }
+  @media (max-width: 768px) { padding-left: 0; }
 `;
 
 const EditBox = styled.div`
   max-width: 704px;
   margin-top: 8px;
   padding: 0 32px 0 ${ICON_INSET};
-  @media (max-width: 480px) { padding: 0 16px 0 ${ICON_INSET_PHONE}; }
+  @media (max-width: 768px) { padding: 0 16px 0 0; }
 `;
 
 /* ── View ── */
@@ -315,6 +325,12 @@ export function TopicDetailView() {
               <PillButton type="button" $variant="neutral" onClick={startEdit}>Edit topic</PillButton>
               <PillButton type="button" onClick={() => newEntry(topic.id)}>New {singular(topic.name)}</PillButton>
             </HeadActions>
+            <HeadMenu>
+              <RowMenu label={`${topic.name} actions`} items={[
+                { label: `New ${singular(topic.name)}`, onSelect: () => newEntry(topic.id) },
+                { label: 'Edit topic', onSelect: startEdit },
+              ]} />
+            </HeadMenu>
           </Head>
 
           <Body>

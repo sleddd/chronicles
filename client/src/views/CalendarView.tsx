@@ -58,6 +58,7 @@ const MobileDetail = styled.div`
     flex-direction: column;
     flex: none;
     margin: 12px 16px 0;
+    @media (max-width: 768px) { margin: 12px 24px 0; }
     border-top: 1px solid var(--border-default);
   }
 `;

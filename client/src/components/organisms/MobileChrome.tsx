@@ -65,8 +65,8 @@ const MenuButton = styled.button<{ $open: boolean }>`
 `;
 
 /* The menu: a sheet dropping from under the bar, full width, rounded at the
-   bottom — one row per destination (icon + name); the current page on an
-   accent tint in the accent; a hairline, then Settings, quieter. Escape, a
+   bottom — one row per destination (accent icon + name); the current page
+   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings, quieter. Escape, a
    destination or a tap outside closes it. */
 const Panel = styled.nav`
   display: none;
@@ -99,16 +99,16 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   padding: 0 14px;
   border: none;
   border-radius: 10px;
-  background: ${({ $active }) => ($active ? 'color-mix(in srgb, var(--color-accent) 8%, var(--bg-app))' : 'transparent')};
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: ${({ $active }) => ($active ? 600 : 400)};
-  color: ${({ $active, $quiet }) => ($active ? 'var(--color-accent-link)' : $quiet ? 'var(--text-muted)' : 'var(--text-primary)')};
+  color: ${({ $active, $quiet }) => ($active ? 'var(--text-primary)' : $quiet ? 'var(--text-muted)' : 'var(--text-primary)')};
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  & > span:first-child { color: ${({ $active }) => ($active ? 'var(--color-accent-link)' : 'var(--text-muted)')}; }
-  @media (hover: hover) { &:hover { background: ${({ $active }) => ($active ? 'color-mix(in srgb, var(--color-accent) 8%, var(--bg-app))' : 'var(--bg-row-hover)')}; } }
+  & > span:first-child { color: var(--color-accent); }
+  @media (hover: hover) { &:hover { background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'var(--bg-row-hover)')}; } }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 

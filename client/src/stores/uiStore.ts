@@ -159,7 +159,7 @@ export const useUIStore = create<UIState>((set) => ({
   updateTopicHideText: (topicId, hide) => set(s => ({ topicHideText: { ...s.topicHideText, [topicId]: hide } })),
 
 
-  cycleTrackingEnabled: false,
+  cycleTrackingEnabled: true,
   setCycleTrackingEnabled: (v) => set({ cycleTrackingEnabled: v }),
 
   imagesEnabled: false,

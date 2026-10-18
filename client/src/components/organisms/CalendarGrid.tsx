@@ -186,7 +186,7 @@ const MobileMonth = styled.div`
   @media (max-width: 768px) {
     display: block;
     flex: none;
-    padding: 0 16px 8px;
+    padding: 0 24px 8px;
   }
 `;
 
