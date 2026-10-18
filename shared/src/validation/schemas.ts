@@ -123,11 +123,14 @@ export const createShareSchema = z.object({
 // content or metadata (the client also refuses to display plaintext posts).
 const ENCRYPTED_FIELD = z.string().min(1).max(2_000_000);
 const IV_FIELD = z.string().min(1).max(64);
+// One cap for metadata on create and update — when they differed, an entry
+// could be created that no later edit was allowed to save
+const METADATA_FIELD = z.string().min(1).max(200_000, 'Metadata too large');
 
 export const createPostSchema = z.object({
   contentEncrypted: ENCRYPTED_FIELD,
   contentIv: IV_FIELD,
-  metadataEncrypted: ENCRYPTED_FIELD,
+  metadataEncrypted: METADATA_FIELD,
   metadataIv: IV_FIELD,
   isEncrypted: z.literal(true, { errorMap: () => ({ message: 'Entries must be encrypted' }) }),
   taxonomyIds: z.array(z.number()).optional(),
@@ -139,7 +142,7 @@ export const createPostSchema = z.object({
 export const updatePostSchema = z.object({
   contentEncrypted: ENCRYPTED_FIELD.optional(),
   contentIv: IV_FIELD.optional(),
-  metadataEncrypted: z.string().min(1).max(20000, 'Metadata too large').optional(),
+  metadataEncrypted: METADATA_FIELD.optional(),
   metadataIv: IV_FIELD.optional(),
   taxonomyIds: z.array(z.number()).optional(),
 }).refine(

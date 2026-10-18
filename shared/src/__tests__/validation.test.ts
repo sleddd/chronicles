@@ -403,8 +403,14 @@ describe('updatePostSchema', () => {
     expect(updatePostSchema.safeParse({ taxonomyIds: [1] }).success).toBe(true);
   });
 
-  it('rejects encrypted metadata over 20000 chars', () => {
-    expect(updatePostSchema.safeParse({ ...fields, metadataEncrypted: 'x'.repeat(20001) }).success).toBe(false);
+  it('rejects encrypted metadata over 200,000 chars', () => {
+    expect(updatePostSchema.safeParse({ ...fields, metadataEncrypted: 'x'.repeat(200_001) }).success).toBe(false);
+  });
+
+  it('accepts on update any metadata size create accepts', () => {
+    // An entry that could be created must stay editable
+    expect(updatePostSchema.safeParse({ ...fields, metadataEncrypted: 'x'.repeat(200_000) }).success).toBe(true);
+    expect(createPostSchema.safeParse({ ...fields, isEncrypted: true, metadataEncrypted: 'x'.repeat(200_001) }).success).toBe(false);
   });
 });
 

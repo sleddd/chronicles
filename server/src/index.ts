@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { securityHeaders } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes, { upgradeStoredCredentials } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
@@ -69,6 +70,10 @@ app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 }));
+// Entries carry two encrypted fields of up to 2M chars each (drawings make
+// big ones), so they get a larger body limit; everything else stays at 1mb.
+// The second parser skips bodies the first already read.
+app.use('/api/entries', express.json({ limit: '5mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(securityHeaders);
@@ -90,15 +95,7 @@ app.use('/api/finance', authMiddleware, apiLimiter, financeRoutes);
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 
-// Global error handler — sanitize errors in production
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('Unhandled error:', err.message);
-  } else {
-    console.error('Unhandled error:', err);
-  }
-  res.status(500).json({ error: 'Internal server error' });
-});
+app.use(errorHandler);
 
 // Serve client static files in production
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

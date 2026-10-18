@@ -266,6 +266,19 @@ export const AUTH_PREFIX = 'auth1$';
 
 export const isLegacyAuthHash = (stored: string) => !stored.startsWith(AUTH_PREFIX);
 
+// Whether any account still has a legacy hash. While one does, an unknown email
+// must answer like a legacy account (`legacyAuth`) so the two can't be told
+// apart. Once none are left, an unknown email answers like an upgraded account
+// instead — otherwise `legacyAuth` would mark every unknown email, and a
+// mistyped email would make the client send the password itself. Starts true
+// (the safe answer for legacy accounts) until the startup count says otherwise.
+let legacyHashesRemain = true;
+
+async function countLegacyHashes(): Promise<void> {
+  const n = await prisma.account.count({ where: { NOT: { passwordHash: { startsWith: AUTH_PREFIX } } } });
+  legacyHashesRemain = n > 0;
+}
+
 async function hashAuthSecret(authSecret: string): Promise<string> {
   return AUTH_PREFIX + await bcrypt.hash(authSecret, BCRYPT_ROUNDS);
 }
@@ -281,6 +294,7 @@ async function upgradeAuthHash(accountId: number, checkedHash: string, upgradedH
   if (!isLegacyAuthHash(checkedHash)) return;
   await prisma.account.updateMany({ where: { id: accountId, passwordHash: checkedHash }, data: { passwordHash: upgradedHash } });
   logSecurityEvent('auth_hash_upgraded', { accountId });
+  await countLegacyHashes().catch(() => { /* keep the safe answer */ });
 }
 
 // The recovery check stores SHA-256 of the client's proof (PBKDF2 of the
@@ -319,6 +333,7 @@ export async function upgradeStoredCredentials(): Promise<{ recoverySealed: numb
     where: { revokedAt: null, account: { NOT: { passwordHash: { startsWith: AUTH_PREFIX } } } },
     data: { revokedAt: new Date(), revokedReason: 'auth_upgrade' },
   });
+  await countLegacyHashes();
   return { recoverySealed: unsealed.length, sessionsRevoked: revoked.count };
 }
 
@@ -461,11 +476,12 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
     const account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
-    const legacy = !account || isLegacyAuthHash(account.passwordHash);
+    const legacy = account ? isLegacyAuthHash(account.passwordHash) : legacyHashesRemain;
     if (legacy && !legacyPassword) {
       // A legacy account can only be checked against the password, so ask the
       // client for it once. Nothing was checked, so nothing counts as a
-      // failure. An unknown email answers exactly like a legacy account.
+      // failure. While legacy accounts exist, an unknown email answers exactly
+      // like one; after that it falls through to the plain "no account" reply.
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials', legacyAuth: true });

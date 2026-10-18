@@ -350,7 +350,10 @@ describe('Metadata size limit', () => {
       'utf8'
     );
     expect(content).toContain("isEncrypted: z.literal(true");
-    expect(content).toContain("max(20000, 'Metadata too large')");
+    expect(content).toContain("max(200_000, 'Metadata too large')");
+    // One cap shared by create and update
+    expect(content).toMatch(/createPostSchema[\s\S]*?metadataEncrypted: METADATA_FIELD,/);
+    expect(content).toMatch(/updatePostSchema[\s\S]*?metadataEncrypted: METADATA_FIELD\.optional\(\)/);
   });
 });
 

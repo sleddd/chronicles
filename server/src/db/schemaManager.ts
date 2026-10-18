@@ -181,7 +181,16 @@ export async function registerTenant(
     },
   });
 
-  await createTenantSchema(schemaName);
+  // DDL can't share a Prisma transaction with the account insert, so undo by
+  // hand: a half-made schema would leave an account that can't be used and an
+  // email that can never register again
+  try {
+    await createTenantSchema(schemaName);
+  } catch (err) {
+    await dropTenantSchema(schemaName).catch(() => {});
+    await prisma.account.delete({ where: { id: account.id } }).catch(() => {});
+    throw err;
+  }
 
   return {
     account: {

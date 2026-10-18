@@ -11,6 +11,8 @@ vi.mock('../../db/prisma.js', () => ({
     account: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -63,7 +65,7 @@ vi.mock('bcryptjs', () => ({
   },
 }));
 
-import authRouter from '../../routes/auth.js';
+import authRouter, { upgradeStoredCredentials } from '../../routes/auth.js';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
@@ -837,6 +839,70 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Invalid email');
+    });
+  });
+  // =========================================================================
+  // Unknown emails once every legacy hash is gone
+  // =========================================================================
+  describe('legacy-hash tracking', () => {
+    // The flag is module state — count with legacy hashes left again afterwards
+    // Its own email, so the per-email failure count from earlier tests can't lock it
+    const body = { email: 'tracking@example.com', authSecret: SECRET };
+    const mockLoginAccount = () => ({
+      id: 1, email: 'tracking@example.com', username: 'testuser', passwordHash: AUTH_HASH,
+      tenantSchemaName: 'usr_1_a1b2c3', encryptionEnabled: true, kekSalt: Buffer.from('salt'),
+      encryptedMasterKey: Buffer.from('key'), kekWrapIv: Buffer.from('iv'), kekIterations: 600000,
+      recoveryWrappedMK: Buffer.from('rmk'), recoveryWrapIv: Buffer.from('riv'),
+    });
+
+    async function setLegacyCount(n: number) {
+      (prisma.account.findMany as any).mockResolvedValue([]);
+      (prisma.session.updateMany as any).mockResolvedValue({ count: 0 });
+      (prisma.account.count as any).mockResolvedValue(n);
+      await upgradeStoredCredentials();
+    }
+
+    it('counts legacy hashes at startup', async () => {
+      await setLegacyCount(0);
+      expect(prisma.account.count).toHaveBeenCalledWith({ where: { NOT: { passwordHash: { startsWith: 'auth1$' } } } });
+      await setLegacyCount(1);
+    });
+
+    it('answers an unknown email like an upgraded account when no legacy hashes remain', async () => {
+      await setLegacyCount(0);
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+      const unknown = await request(app).post('/api/auth/login').send(body);
+
+      (prisma.account.findUnique as any).mockResolvedValue(mockLoginAccount());
+      (bcrypt.compare as any).mockResolvedValue(false);
+      const wrong = await request(app).post('/api/auth/login').send(body);
+
+      // Same reply, and no legacyAuth — so the client never sends the password
+      expect(unknown.status).toBe(401);
+      expect(unknown.body).toEqual({ error: 'Invalid credentials' });
+      expect(wrong.body).toEqual(unknown.body);
+      await setLegacyCount(1);
+    });
+
+    it('still asks a remaining legacy account for its password', async () => {
+      await setLegacyCount(0);
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockLoginAccount(), passwordHash: LEGACY_HASH });
+      const res = await request(app).post('/api/auth/login').send(body);
+      expect(res.body).toEqual({ error: 'Invalid credentials', legacyAuth: true });
+      await setLegacyCount(1);
+    });
+
+    it('recounts after a legacy account upgrades', async () => {
+      await setLegacyCount(1);
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockLoginAccount(), passwordHash: LEGACY_HASH, totpEnabled: false });
+      (bcrypt.compare as any).mockResolvedValue(true);
+      (prisma.account.count as any).mockResolvedValue(0);
+      await request(app).post('/api/auth/login').send({ ...body, legacyPassword: 'OldPassword1!xyz' });
+
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+      const unknown = await request(app).post('/api/auth/login').send(body);
+      expect(unknown.body).toEqual({ error: 'Invalid credentials' });
+      await setLegacyCount(1);
     });
   });
 });
