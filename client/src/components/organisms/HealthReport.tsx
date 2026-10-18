@@ -44,6 +44,7 @@ const SectionHeading = styled.h2`
   color: var(--text-secondary);
   &:first-child { margin-top: 32px; }
   @media (max-width: 480px) { font-size: 22px; margin-top: 36px; }
+  padding-left: 16px;
 `;
 
 const Stack = styled.div`

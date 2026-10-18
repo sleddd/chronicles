@@ -11,11 +11,19 @@ import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJourna
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { MonthGroups } from '../components/molecules/MonthGroups.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
+import { singular } from '../utils/singular.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { entries as entriesApi } from '../services/api.js';
+import { topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { usePrivateSettings } from '../services/privateSettings.js';
+import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
+import { TopicIcon } from '../components/molecules/IconPicker.js';
+import { Icon } from '../components/atoms/core/Icon.jsx';
+import { entryTitleText } from '../utils/entryTitle.js';
+import type { UserFieldDef } from '../types/userFields.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
@@ -96,13 +104,66 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
+/* Topic icon beside the title, in the accent at the title's thin weight */
+const TitleIcon = styled.span`
+  display: inline-flex;
+  margin: 0 14px 0 6px;
+  color: var(--color-accent);
+  & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
+`;
+
+const HeadActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+`;
+
+/* "Search books" — a rounded outlined search box */
+const Search = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  margin-top: 20px;
+  padding: 0 20px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  color: var(--text-muted);
+  &:focus-within { border-color: var(--control-border); }
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-secondary);
+  }
+  input::placeholder { color: var(--text-hint); }
+  input::-webkit-search-cancel-button { display: none; }
+`;
+
 /* ── Rows ── */
 
-const List = styled.div`
-  display: flex;
-  flex-direction: column;
-  /* Breathing room between the topic title and its entries */
-  margin-top: 28px;
+/* Everything under the title starts at the topic icon's left edge, not the
+   caret's: caret box (56px, pulled in 20 + 10) + the icon's 6px margin + the
+   glyph's own side bearing ≈ 34px (smaller caret on phones) */
+const ICON_INSET = '34px';
+const ICON_INSET_PHONE = '29px';
+
+const Body = styled.div`
+  padding-left: ${ICON_INSET};
+  @media (max-width: 480px) { padding-left: ${ICON_INSET_PHONE}; }
+`;
+
+const EditBox = styled.div`
+  max-width: 704px;
+  margin-top: 8px;
+  padding: 0 32px 0 ${ICON_INSET};
+  @media (max-width: 480px) { padding: 0 16px 0 ${ICON_INSET_PHONE}; }
 `;
 
 /* ── View ── */
@@ -133,6 +194,57 @@ export function TopicDetailView() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [entries, topic]);
 
+  // The topic's own fields: the first one is the row's title, the rest its muted line
+  const fieldDefs = useUIStore(s => (topic ? s.topicCustomFields[topic.id] : undefined)) ?? NO_DEFS;
+  const rowText = useCallback((entry: DecryptedPost) => {
+    const vals = (((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)?._userFields as Record<string, unknown>) ?? {};
+    const texts = fieldDefs.map(d => vals[d.id]).filter(v => v !== undefined && v !== null && v !== '' && typeof v !== 'boolean').map(String);
+    if (!fieldDefs.length || !vals[fieldDefs[0].id]) return null;
+    return { title: texts[0], sub: texts.slice(1).join(' · ') };
+  }, [fieldDefs]);
+
+  const [query, setQuery] = useState('');
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return topicEntries;
+    return topicEntries.filter(e => {
+      const t = rowText(e);
+      const hay = `${entryTitleText(e.content)} ${t?.title ?? ''} ${t?.sub ?? ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [topicEntries, query, rowText]);
+
+
+  // Inline topic editor (same as the Topics list's)
+  const setTopics = useEntriesStore(s => s.setTopics);
+  const updateTopicFields = useUIStore(s => s.updateTopicFields);
+  const topicHideText = useUIStore(s => s.topicHideText);
+  const { savePrivateSetting } = usePrivateSettings();
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editIcon, setEditIcon] = useState<string | null>(null);
+  const startEdit = () => { if (!topic) return; setEditName(topic.name); setEditIcon(topic.icon); setEditing(true); };
+  const saveEdit = async () => {
+    if (!topic || !editName.trim()) return;
+    try {
+      const updated = await topicsApi.update(topic.id, { name: editName.trim(), icon: editIcon || undefined });
+      setTopics(allTopics.map(t => (t.id === topic.id ? updated : t)));
+      setEditing(false);
+    } catch (err) { console.error('Failed to update topic:', err); }
+  };
+  const changeFields = (defs: UserFieldDef[]) => {
+    if (!topic) return;
+    updateTopicFields(topic.id, defs);
+    savePrivateSetting('topicCustomFields', { ...useUIStore.getState().topicCustomFields, [topic.id]: defs })
+      .catch(err => console.error('Failed to save topic fields:', err));
+  };
+  const changeHideText = (hide: boolean) => {
+    if (!topic) return;
+    useUIStore.getState().updateTopicHideText(topic.id, hide);
+    settingsApi.upsert('topicHideText', useUIStore.getState().topicHideText)
+      .catch(err => console.error('Failed to save topic option:', err));
+  };
+
   if (needsUnlock) return (
     <>
       <ContentTemplate><EmptyState message="Unlock your journal to view this topic" /></ContentTemplate>
@@ -154,6 +266,39 @@ export function TopicDetailView() {
     </ContentTemplate>
   );
 
+  if (editing) return (
+    <ContentTemplate>
+      <Page>
+        <Inner>
+          <Head>
+            <TitleBlock>
+              <BackBtn onClick={() => setEditing(false)} aria-label={`Back to ${topic.name}`}>
+                <MaterialIcon $size={56} aria-hidden="true">chevron_left</MaterialIcon>
+              </BackBtn>
+              <Title>Edit topic</Title>
+            </TitleBlock>
+          </Head>
+          <EditBox>
+            <TopicEditForm
+              name={editName}
+              icon={editIcon}
+              cancelLabel="Close"
+              onNameChange={setEditName}
+              onIconChange={setEditIcon}
+              onSave={() => void saveEdit()}
+              onCancel={() => setEditing(false)}
+              topicId={topic.id}
+              fieldDefs={fieldDefs}
+              onFieldDefsChange={changeFields}
+              hideTextField={!!topicHideText[topic.id]}
+              onHideTextFieldChange={changeHideText}
+            />
+          </EditBox>
+        </Inner>
+      </Page>
+    </ContentTemplate>
+  );
+
   return (
     <ContentTemplate>
       <Page>
@@ -163,42 +308,54 @@ export function TopicDetailView() {
               <BackBtn onClick={() => navigate('/topics')} aria-label="Back to topics">
                 <MaterialIcon $size={56} aria-hidden="true">chevron_left</MaterialIcon>
               </BackBtn>
+              <TitleIcon><TopicIcon name={topic.icon} size={40} /></TitleIcon>
               <Title>{topic.name}</Title>
             </TitleBlock>
-            <PillButton type="button" onClick={() => newEntry(topic.id)} style={{ flexShrink: 0 }}>
-              New entry
-            </PillButton>
+            <HeadActions>
+              <PillButton type="button" $variant="neutral" onClick={startEdit}>Edit topic</PillButton>
+              <PillButton type="button" onClick={() => newEntry(topic.id)}>New {singular(topic.name)}</PillButton>
+            </HeadActions>
           </Head>
 
+          <Body>
+          {topicEntries.length > 0 && (
+            <Search>
+              <Icon name="search" size={16} strokeWidth={2} />
+              <input type="search" aria-label={`Search ${topic.name}`} value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${topic.name.toLowerCase()}`} />
+            </Search>
+          )}
 
           {topicEntries.length === 0 ? (
             <EmptyState message={`No ${topic.name.toLowerCase()} entries yet.`} />
+          ) : shown.length === 0 ? (
+            <EmptyState message="Nothing matches that search." />
           ) : (
-            <List>
-              {topicEntries.map((entry: DecryptedPost, i: number) => {
-                const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
-                return (
-                  <SwipeActions
-                    key={entry.id}
-                    accentColor={accentColor}
-                    onEdit={() => openInJournal(entry.id)}
-                    onDelete={() => handleDeleteEntry(entry.id)}
-                  >
-                    <EntryListCard
-                      hint={i === 0}
-                      content={entry.content}
-                      createdAt={created}
-                      topicColor={topic.color || accentColor}
-                      fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
-                      onClick={() => openInJournal(entry.id)}
-                    />
-                  </SwipeActions>
-                );
-              })}
-            </List>
+            <MonthGroups items={shown} keyOf={e => e.id} dateOf={e => (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt))}>{(entry: DecryptedPost) => {
+              const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
+              const t = rowText(entry);
+              return (
+                <SwipeActions accentColor={accentColor} onDelete={() => handleDeleteEntry(entry.id)}>
+                  <EntryListCard
+                    content={t ? `<p>${escapeHtml(t.title)}</p>` : entry.content}
+                    preview={t?.sub || undefined}
+                    createdAt={created}
+                    topicColor={topic.color || accentColor}
+                    fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
+                    onClick={() => openInJournal(entry.id)}
+                  />
+                </SwipeActions>
+              );
+            }}</MonthGroups>
           )}
+          </Body>
         </Inner>
       </Page>
     </ContentTemplate>
   );
+}
+
+const NO_DEFS: UserFieldDef[] = [];
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

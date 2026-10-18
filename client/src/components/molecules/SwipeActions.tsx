@@ -1,7 +1,6 @@
 import { useRef, useCallback, useEffect, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
-import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
 /* ── Constants ── */
 
@@ -91,17 +90,17 @@ const SrOnly = styled.span`
 
 interface SwipeActionsProps {
   children: ReactNode;
-  onEdit?: () => void;
   onDelete: () => void;
+  /** Kept for existing callers (unused since the swipe Edit button went) */
   accentColor?: string;
   disabled?: boolean;
   buttonWidth?: number;
 }
 
 export function SwipeActions({
-  children, onEdit, onDelete, accentColor = DEFAULT_ACCENT_COLOR, disabled, buttonWidth = 70,
+  children, onDelete, disabled, buttonWidth = 70,
 }: SwipeActionsProps) {
-  const actionW       = buttonWidth * (onEdit ? 2 : 1);
+  const actionW       = buttonWidth;
   const contentRef    = useRef<HTMLDivElement>(null);
   const barRef        = useRef<HTMLDivElement>(null);
   const isOpen        = useRef(false);
@@ -252,17 +251,6 @@ export function SwipeActions({
       </Content>
 
       <ActionBar ref={barRef} style={{ width: actionW }}>
-        {onEdit && (
-          <ActionBtn
-            $bg={muteColor(accentColor)}
-            onMouseDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); snap(false); onEdit(); }}
-            aria-label="Edit"
-          >
-            <Icon name="pencil" size={18} strokeWidth={2} />
-            <SrOnly>Edit</SrOnly>
-          </ActionBtn>
-        )}
         <ActionBtn
           $bg={muteColor('#EF4444')}
           onMouseDown={e => e.stopPropagation()}

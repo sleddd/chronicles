@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
-import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
+import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -151,20 +151,6 @@ const Divider = styled.span`
   @media (max-width: 768px) { display: none; }
 `;
 
-/* Quiet sentence-case text actions ("New recipe", "Make shopping list") */
-const TextBtn = styled.button`
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 400;
-  color: var(--text-soft);
-  white-space: nowrap;
-  cursor: pointer;
-  &:hover:not(:disabled) { color: var(--text-primary); }
-  &:disabled { opacity: 0.5; cursor: default; }
-`;
 
 const TabsRow = styled.div`
   margin: 0;
@@ -420,7 +406,6 @@ export function MenuView() {
   // The empty slot opened from its + (meal box with recipe suggestions)
   const [pickingCell, setPickingCell] = useState<string | null>(null);
   const openInJournal = useOpenInJournal();
-  const newEntry = useNewEntryInJournal();
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -784,13 +769,10 @@ export function MenuView() {
                 </NavBtn>
               </WeekNav>
               <Divider aria-hidden="true" />
-              <TextBtn type="button" onClick={() => {
-                const recipeTopic = allTopics.find(t => recipeTopicIds.has(t.id));
-                if (recipeTopic) newEntry(recipeTopic.id); else navigate('/menu/recipes');
-              }}>New recipe</TextBtn>
-              <TextBtn type="button" onClick={handleGenerateShoppingList} disabled={isGenerating}>
+              {/* Same small pill as Save menu, with a grey outline */}
+              <PillButton type="button" $variant="neutral" onClick={handleGenerateShoppingList} disabled={isGenerating}>
                 {isGenerating ? 'Making list…' : 'Make shopping list'}
-              </TextBtn>
+              </PillButton>
               {/* The app's standard outlined action pill */}
               <PillButton type="button" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? 'Saving…' : 'Save menu'}

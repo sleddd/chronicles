@@ -242,7 +242,7 @@ export function EditableEntryCard({ entry, topic, accentColor, onDeleted, metaFi
 
   return (
     <Card $accentColor={accentColor} $flat={hideDate} $flush={flush}>
-      <SwipeActions onEdit={handleOpen} onDelete={handleDelete} accentColor={accentColor}>
+      <SwipeActions onDelete={handleDelete} accentColor={accentColor}>
       <Row role="button" tabIndex={0} onClick={handleOpen} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpen(); } }} $noDate={hideDate} $flush={flush} $rightDate={showRightDate}>
         {!hideDate && !showRightDate && (
           <DateCol>

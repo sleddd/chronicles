@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
-import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
+import { Icon } from '../components/atoms/core/Icon.jsx';
 import {
-  Note, StatStrip, Stat, Table, Row, TotalRow, Cell, SubText, Tag, InlineForm, Field, Money,
+  Note, StatBoxRow, StatCell, SheetHead, SheetHeading, SheetBox, SHEET_RULE,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -20,74 +20,180 @@ const Center = styled.div`
   padding: 48px 0;
 `;
 
-const Filters = styled(InlineForm)`
-  margin-bottom: 32px;
-`;
-
-const Cards = styled.div`
+/* Search pill + three picker pills in one row */
+const Filters = styled.form`
   display: flex;
-  flex-direction: column;
-  gap: 24px;
-  margin-top: 32px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 32px 0 24px;
 `;
 
-const CARDS_KEY = 'finance-reports-collapsed-v1';
+const pill = `
+  display: flex;
+  align-items: center;
+  height: 40px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  &:focus-within { border-color: var(--control-border); }
+`;
 
+const Search = styled.label`
+  ${pill}
+  flex: 1 1 260px;
+  gap: 10px;
+  padding: 0 18px;
+  color: var(--text-muted);
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  input::placeholder { color: var(--text-hint); }
+  input::-webkit-search-cancel-button { display: none; }
+`;
 
-const BILL_COLS = 'minmax(0, 1fr) 140px 90px 130px 130px';
-const MONTH_COLS = 'minmax(0, 1fr) 90px 140px';
-const PAY_COLS = '130px minmax(0, 1fr) 140px 120px';
-const BILL_COLS_PHONE = 'minmax(0, 1fr) 110px';
-const PAY_COLS_PHONE = '100px minmax(0, 1fr) 100px';
+const Picker = styled.label`
+  ${pill}
+  position: relative;
+  flex: 0 0 auto;
+  select {
+    height: 100%;
+    padding: 0 38px 0 18px;
+    border: none !important;
+    background: transparent !important;
+    appearance: none;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  option { color: var(--text-primary); background: var(--bg-surface); }
+  & > span { position: absolute; right: 14px; display: inline-flex; color: var(--text-muted); pointer-events: none; }
+`;
 
-const BillRow = styled(Row)`
-  & > :nth-child(2) { text-align: center; }
-  @media (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) 110px;
-    & > :nth-child(2), & > :nth-child(3), & > :nth-child(4) { display: none; }
+const DateBox = styled(Picker)`
+  input {
+    height: 100%;
+    padding: 0 14px;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+    color-scheme: light dark;
   }
 `;
 
-const BillHead = styled(TotalRow)`
-  /* Top rule closes the table; the column rules run up to it */
-  border-top: 1px solid var(--border-subtle);
-  & > * { padding-top: 12px; }
-  font-size: 10px;
-  color: var(--text-tertiary);
-  & > :nth-child(2) { text-align: center; }
-  @media (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) 110px;
-    & > :nth-child(2), & > :nth-child(3), & > :nth-child(4) { display: none; }
-  }
+const Section = styled.section`
+  margin-top: 44px;
 `;
 
-const MonthHead = styled(TotalRow)`
-  /* Top rule closes the table; the column rules run up to it */
-  border-top: 1px solid var(--border-subtle);
-  & > * { padding-top: 12px; }
-  font-size: 10px;
-  color: var(--text-tertiary);
-`;
-
-const PayRow = styled(Row)`
-  @media (max-width: 640px) {
-    grid-template-columns: 100px minmax(0, 1fr) 100px;
-    & > :nth-child(3) { display: none; }
-  }
-`;
-
-/* Totals: the card heading font, a touch smaller, amounts italic */
-const Totals = styled(TotalRow)`
-  border-top: 1px solid var(--border-subtle);
-  & > * { padding-top: 18px; }
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 300;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--text-primary);
+/* Sheet rows: by bill */
+const BillGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 90px 110px 110px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 28px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-  & > :not(:first-child) { font-style: italic; }
+  & > :nth-child(n+3) { text-align: right; }
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
+  .muted { color: var(--text-muted); }
+  b { font-weight: 500; }
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr) 100px;
+    padding: 12px 16px;
+    & > :nth-child(2), & > :nth-child(3), & > :nth-child(4) { display: none; }
+  }
+`;
+
+const BillHeadGrid = styled(BillGrid)`
+  padding-top: 16px;
+  padding-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+/* By month: month | bar | payments | total */
+const MonthGrid = styled.div<{ $empty?: boolean; $total?: boolean }>`
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 120px 110px;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 28px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: ${({ $empty }) => ($empty ? 'var(--text-muted)' : 'var(--text-secondary)')};
+  background: ${({ $total }) => ($total ? 'var(--bg-panel)' : 'transparent')};
+  font-weight: ${({ $total }) => ($total ? 500 : 400)};
+  font-variant-numeric: tabular-nums;
+  & > :nth-child(n+3) { text-align: right; }
+  & > :nth-child(3) { font-size: 14px; color: var(--text-muted); font-weight: 400; }
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr) 100px;
+    padding: 12px 16px;
+    & > :nth-child(2), & > :nth-child(3) { display: none; }
+  }
+`;
+
+const MonthBar = styled.div<{ $pct: number }>`
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat left / ${({ $pct }) => $pct}% 100%, ${SHEET_RULE};
+`;
+
+/* Every payment, grouped by day */
+const DayHead = styled.div`
+  padding: 10px 28px;
+  background: var(--bg-panel);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  & + * { border-top: 1px solid ${SHEET_RULE}; }
+  * + & { border-top: 1px solid ${SHEET_RULE}; }
+`;
+
+const PayGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px 110px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 28px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  & > :nth-child(2) { font-size: 14px; color: var(--text-muted); }
+  & > :nth-child(3) { text-align: right; }
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  em { margin-left: 8px; font-style: normal; font-size: 12px; color: var(--text-muted); }
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr) 100px;
+    padding: 12px 16px;
+    & > :nth-child(2) { display: none; }
+  }
+`;
+
+const Empty = styled.p`
+  margin: 0;
+  padding: 20px 28px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
 const PERIODS: { value: ReportPeriod; label: string }[] = [
@@ -146,121 +252,135 @@ function Reports() {
   const avg = averagePerMonth(summary.byMonth, today);
   const rangeLabel = `${formatDay(range.start)} – ${formatDay(range.end)}`;
 
+  const subsBills = new Set(matches.filter(r => r.kind === 'subscription').map(r => r.billId));
+  const maxMonth = Math.max(1, ...summary.byMonth.map(m => m.totalCents));
+  const byDay = (() => {
+    const map = new Map<string, typeof matches>();
+    for (const r of [...matches].reverse()) map.set(r.date, [...(map.get(r.date) ?? []), r]);
+    return [...map.entries()];
+  })();
+
   return (
     <section>
       <Filters onSubmit={e => e.preventDefault()}>
-        <Field $grow><span>Search bills</span>
-          <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Type a bill name (e.g. rent, Netflix…)" />
-        </Field>
-        <Field $w="150px"><span>Type</span>
-          <select value={kind} onChange={e => setKind(e.target.value as Bill['kind'] | 'all')}>
+        <Search>
+          <Icon name="search" size={16} strokeWidth={2} />
+          <input type="search" aria-label="Search bills" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search bills, e.g. rent, Netflix" />
+        </Search>
+        <Picker>
+          <select aria-label="Type" value={kind} onChange={e => setKind(e.target.value as Bill['kind'] | 'all')}>
             <option value="all">All types</option>
             <option value="bill">Bills</option>
             <option value="subscription">Subscriptions</option>
           </select>
-        </Field>
-        <Field $w="170px"><span>Category</span>
-          <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+          <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+        </Picker>
+        <Picker>
+          <select aria-label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
             <option value="all">All categories</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             <option value={UNCATEGORIZED}>No category</option>
           </select>
-        </Field>
-        <Field $w="160px"><span>Period</span>
-          <select value={period} onChange={e => setPeriod(e.target.value as ReportPeriod)}>
+          <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+        </Picker>
+        <Picker>
+          <select aria-label="Period" value={period} onChange={e => setPeriod(e.target.value as ReportPeriod)}>
             {PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
-        </Field>
+          <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+        </Picker>
         {period === 'custom' && (
           <>
-            <Field $w="170px"><span>From</span><input type="date" value={from} onChange={e => e.target.value && setFrom(e.target.value)} /></Field>
-            <Field $w="170px"><span>To</span><input type="date" value={to} onChange={e => e.target.value && setTo(e.target.value)} /></Field>
+            <DateBox><input type="date" aria-label="From" value={from} onChange={e => e.target.value && setFrom(e.target.value)} /></DateBox>
+            <DateBox><input type="date" aria-label="To" value={to} onChange={e => e.target.value && setTo(e.target.value)} /></DateBox>
           </>
         )}
       </Filters>
 
-      <StatStrip $cols={4}>
-        <Stat label="Total paid" cents={summary.totalCents} sub={rangeLabel} />
-        <Stat
-          label="Average paid a month"
+      <StatBoxRow $cols={4}>
+        <StatCell label="Total paid" cents={summary.totalCents} sub={rangeLabel} />
+        <StatCell
+          label="Average a month"
           cents={avg.averageCents}
           sub={avg.months ? `Over ${avg.months} month${avg.months === 1 ? '' : 's'} so far` : 'No payments yet'}
         />
-        <Stat label="Biggest bill" cents={summary.byBill[0]?.totalCents ?? 0} sub={summary.byBill[0]?.name ?? '—'} />
-        <Stat
+        <StatCell label="Biggest bill" cents={summary.byBill[0]?.totalCents ?? 0} sub={summary.byBill[0]?.name ?? '—'} />
+        <StatCell
           label="On subscriptions"
           cents={matches.filter(r => r.kind === 'subscription').reduce((t, r) => t + r.amountCents, 0)}
-          sub={`${summary.count} payment${summary.count === 1 ? '' : 's'} · ${summary.byBill.length} bill${summary.byBill.length === 1 ? '' : 's'}`}
+          sub={`${subsBills.size} subscription${subsBills.size === 1 ? '' : 's'}`}
         />
-      </StatStrip>
-
+      </StatBoxRow>
 
       {records.length === 0 ? (
-        <Note style={{ marginTop: 32, fontStyle: 'italic' }}>
-          Nothing paid yet. Use Mark paid on Budget &amp; Bills{reconcileOn ? ' or add bills to a payday on Reconcile' : ''}, and your payments show up here.
+        <Note style={{ marginTop: 32 }}>
+          Nothing paid yet. Use Mark paid on Budget &amp; bills{reconcileOn ? ' or add bills to a payday on Reconcile' : ''}, and your payments show up here.
         </Note>
       ) : (
-        <Cards>
-          <CollapsibleCard id="by-bill" title="By bill" storageKey={CARDS_KEY}>
-            {summary.byBill.length === 0 ? (
-              <Note style={{ fontStyle: 'italic' }}>No payments match these filters.</Note>
-            ) : (
-              <Table $cols={BILL_COLS} $phoneCols={BILL_COLS_PHONE}>
-                <BillHead $cols={BILL_COLS} aria-hidden="true">
-                  <span>Bill</span><span>Category</span><Cell $right>Payments</Cell><Cell $right>Last paid</Cell><Cell $right>Total</Cell>
-                </BillHead>
-                {summary.byBill.map(b => (
-                  <BillRow key={b.billId} $cols={BILL_COLS}>
-                    <span>{b.name}<SubText style={{ fontWeight: 500 }}>{KIND_LABEL[b.kind]}</SubText></span>
-                    <Cell $muted $small>{catName(b.categoryId) ?? '—'}</Cell>
-                    <Cell $right>{b.count}</Cell>
-                    <Cell $right $muted $small>{formatDay(b.lastPaid)}</Cell>
-                    <Cell $right><Money cents={b.totalCents} /></Cell>
-                  </BillRow>
-                ))}
-                <Totals $cols={BILL_COLS}>
-                  <span>Total</span><span /><Cell $right>{summary.count}</Cell><span /><Cell $right>{formatCents(summary.totalCents)}</Cell>
-                </Totals>
-              </Table>
-            )}
-          </CollapsibleCard>
+        <>
+          <Section aria-label="By bill">
+            <SheetHead><SheetHeading>By bill</SheetHeading></SheetHead>
+            <SheetBox>
+              {summary.byBill.length === 0 ? <Empty>No payments match these filters.</Empty> : (
+                <>
+                  <BillHeadGrid aria-hidden="true"><span>Bill</span><span>Category</span><span>Payments</span><span>Last paid</span><span>Total</span></BillHeadGrid>
+                  {summary.byBill.map(b => (
+                    <BillGrid key={b.billId}>
+                      <span>{b.name}<small>{KIND_LABEL[b.kind]}</small></span>
+                      <span>{catName(b.categoryId) ?? '—'}</span>
+                      <span>{b.count}</span>
+                      <span className="muted">{shortDay(b.lastPaid, today)}</span>
+                      <b>{formatCents(b.totalCents)}</b>
+                    </BillGrid>
+                  ))}
+                </>
+              )}
+            </SheetBox>
+          </Section>
 
-          <CollapsibleCard id="by-month" title="By month" storageKey={CARDS_KEY}>
-            <Table $cols={MONTH_COLS}>
-              <MonthHead $cols={MONTH_COLS} aria-hidden="true">
-                <span>Month</span><Cell $right>Payments</Cell><Cell $right>Paid</Cell>
-              </MonthHead>
+          <Section aria-label="By month">
+            <SheetHead><SheetHeading>By month</SheetHeading></SheetHead>
+            <SheetBox>
               {summary.byMonth.map(m => (
-                <Row key={m.month} $cols={MONTH_COLS} $muted={m.count === 0}>
+                <MonthGrid key={m.month} $empty={m.count === 0}>
                   <span>{formatMonth(m.month)}</span>
-                  <Cell $right>{m.count || '—'}</Cell>
-                  <Cell $right>{m.count ? <Money cents={m.totalCents} /> : '—'}</Cell>
-                </Row>
+                  <MonthBar $pct={(m.totalCents / maxMonth) * 100} />
+                  <span>{m.count ? `${m.count} payment${m.count === 1 ? '' : 's'}` : '—'}</span>
+                  <span>{m.count ? formatCents(m.totalCents) : '—'}</span>
+                </MonthGrid>
               ))}
-              <Totals $cols={MONTH_COLS}>
-                <span>Total</span><Cell $right>{summary.count}</Cell><Cell $right>{formatCents(summary.totalCents)}</Cell>
-              </Totals>
-            </Table>
-          </CollapsibleCard>
+              <MonthGrid $total>
+                <span>Total</span><span />
+                <span>{summary.count} payment{summary.count === 1 ? '' : 's'}</span>
+                <span>{formatCents(summary.totalCents)}</span>
+              </MonthGrid>
+            </SheetBox>
+          </Section>
 
-          <CollapsibleCard id="payments" title="Every payment" storageKey={CARDS_KEY} defaultOpen={false}>
-            {matches.length === 0 ? (
-              <Note style={{ fontStyle: 'italic' }}>No payments match these filters.</Note>
-            ) : (
-              <Table $cols={PAY_COLS} $phoneCols={PAY_COLS_PHONE}>
-                {[...matches].reverse().map(r => (
-                  <PayRow key={r.key} $cols={PAY_COLS}>
-                    <Cell $small $muted>{formatDay(r.date)}</Cell>
-                    <span>{r.name}{r.source === 'reconcile' && <Tag>Reconcile</Tag>}</span>
-                    <Cell $muted $small>{catName(r.categoryId) ?? '—'}</Cell>
-                    <Cell $right><Money cents={r.amountCents} /></Cell>
-                  </PayRow>
-                ))}
-              </Table>
-            )}
-          </CollapsibleCard>
-        </Cards>
+          <Section aria-label="Every payment">
+            <SheetHead><SheetHeading>Every payment</SheetHeading></SheetHead>
+            <SheetBox>
+              {byDay.length === 0 ? <Empty>No payments match these filters.</Empty> : byDay.map(([day, rows]) => (
+                <div key={day}>
+                  <DayHead>{formatDay(day)}</DayHead>
+                  {rows.map(r => (
+                    <PayGrid key={r.key}>
+                      <span>{r.name}{r.source === 'reconcile' && <em>Reconcile</em>}</span>
+                      <span>{catName(r.categoryId) ?? '—'}</span>
+                      <span>{formatCents(r.amountCents)}</span>
+                    </PayGrid>
+                  ))}
+                </div>
+              ))}
+            </SheetBox>
+          </Section>
+        </>
       )}
     </section>
   );
+}
+
+/** "Oct 16" this year, "Apr 1, 2027" otherwise */
+function shortDay(day: string, today: string): string {
+  return day.slice(0, 4) === today.slice(0, 4) ? formatDay(day).replace(/, \d{4}$/, '') : formatDay(day);
 }

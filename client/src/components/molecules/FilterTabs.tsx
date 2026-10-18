@@ -1,49 +1,43 @@
 import styled from 'styled-components';
 import { useRef, useCallback, type KeyboardEvent } from 'react';
 
+/* Sub-sub tabs (All / Today / This week…): one outlined group; the chosen
+   option is lifted onto --bg-active in the soft accent. */
 const Row = styled.div<{ $flush?: boolean; $bordered?: boolean }>`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
-  flex-wrap: wrap;
-  padding: ${({ $flush }) => ($flush ? '8px 0' : '8px 24px')};
-  ${({ $bordered, theme }) => $bordered !== false && `border-bottom: 1px solid var(--rule, ${theme.colors.border});`}
-  @media (max-width: 768px) { padding: ${({ $flush }) => ($flush ? '8px 0' : '8px 16px')}; }
-  @media (max-width: 480px) { padding: ${({ $flush }) => ($flush ? '8px 0' : '8px 12px')}; }
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
 `;
 
 const Label = styled.span`
-  font-family: var(--mono, ${({ theme }) => theme.fontFamily.mono});
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-4, ${({ theme }) => theme.colors.textFaint});
+  padding: 0 8px 0 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
   white-space: nowrap;
-  margin-right: 4px;
   flex-shrink: 0;
 `;
 
 const Btn = styled.button<{ $active?: boolean; $flush?: boolean }>`
-  padding: 5px 12px;
-  font-family: var(--ui, 'Montserrat', ${({ theme }) => theme.fontFamily.ui});
-  font-size: 13px;
-  font-weight: ${({ $active }) => $active ? 600 : 400};
-  color: ${({ $active }) =>
-    $active ? 'var(--color-accent)' : 'var(--ink-3, #6b645a)'};
-  background: transparent;
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: 7px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   white-space: nowrap;
-  transition: color 120ms ease;
-
-  /* Align the first tab's text with the column's left edge when flush. */
-  ${({ $flush }) => $flush && `&:first-of-type { padding-left: 0; }`}
-
-  &:hover:not([aria-selected="true"]) {
-    color: var(--ink, #2b2824);
-  }
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+  &:hover:not([aria-selected="true"]) { color: var(--text-secondary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
 interface FilterTabsProps<T extends string> {

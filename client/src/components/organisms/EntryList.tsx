@@ -131,6 +131,19 @@ interface EntryListProps {
 
 /* Memoized: the journal re-renders on every keystroke in the editor, and the
    list (which reads its data from the stores) must not re-render with it. */
+/* All view: the month above its entries — thin Work Sans on the canvas, inset
+   to the rows' text, with a rule under it */
+const MonthHead = styled.h3`
+  margin: 0;
+  padding: 22px 20px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  background: var(--bg-app);
+`;
+
 export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryListProps = {}) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const topics = useEntriesStore(s => s.topics);
@@ -382,8 +395,16 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
       </BulkBar>
       {/* First row carries the active hint only while no (visible) entry is open */}
       {groups.map(([dateKey, groupEntries], groupIndex) => {
+        // All: a "Month YYYY" heading wherever the month changes
+        const monthKey = dateKey.slice(0, 7);
+        const newMonth = viewMode === 'all' && (groupIndex === 0 || groups[groupIndex - 1][0].slice(0, 7) !== monthKey);
         return (
           <div key={dateKey}>
+            {newMonth && (
+              <MonthHead>
+                {new Date(`${monthKey}-15T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </MonthHead>
+            )}
             {groupEntries.map((entry, rowIndex) => {
               const meta = entry.metadata as Record<string, unknown>;
               const customFields = meta?._customFields as Record<string, unknown> | undefined;

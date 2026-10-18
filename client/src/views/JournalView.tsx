@@ -946,7 +946,7 @@ export function JournalView() {
             )}
             {/* New entry: an outlined pill in the title row */}
             <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
-              + New entry
+              New entry
             </NewEntryPill>
           </HeaderActions>
         )}

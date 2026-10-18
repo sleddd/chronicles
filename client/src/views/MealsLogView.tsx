@@ -224,7 +224,7 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
               {dayRows.length > 0 && (
                 <HeadActions>
                   <FillMissingAction rows={dayRows} actions={actions} aiReady={aiReady} />
-                  <PillButton type="button" onClick={() => void logMeal()}>+ Log a meal</PillButton>
+                  <PillButton type="button" onClick={() => void logMeal()}>Log a meal</PillButton>
                 </HeadActions>
               )}
             </SectionHead>
@@ -232,7 +232,7 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
             {dayRows.length === 0 ? (
               <EmptyBox>
                 <span>{day === today ? 'Nothing logged yet today.' : 'Nothing logged this day.'}</span>
-                <PillButton type="button" onClick={() => void logMeal()}>+ Log a meal</PillButton>
+                <PillButton type="button" onClick={() => void logMeal()}>Log a meal</PillButton>
               </EmptyBox>
             ) : (
               <>

@@ -1,17 +1,15 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
-import { PillButton } from '../atoms/PillButton.js';
-import { CollapsibleCard } from './CollapsibleCard.js';
+import { Icon } from '../atoms/core/Icon.jsx';
 import {
-  SectionHead, SectionLabel, Note, TextAction, SmallPill, StatStrip, Stat, Money, Table, Row, TotalRow,
-  Cell, SubText, Tag, InlineForm, Field, SmallBtn, Actions, ConfirmDelete, ClearBox, ErrorNote,
+  Note, Tag, ConfirmDelete, ClearBox, SmallBtn, RowMenu, type RowMenuItem,
+  SheetHead, SheetHeading, SheetBox, SheetLink, SHEET_RULE, StatBoxRow, StatCell, FieldRow, OutlineBtn, RowBtn,
 } from '../molecules/FinanceParts.js';
 import {
   balanceCheck, formatCents, formatDay, isReadyToSpend, newId, parseMoney, paydaySummary,
   suggestBillsForPayday, todayStr, centsToInput,
 } from '../../utils/finance.js';
 import type { FinanceRecord, Payday, PaydayItem, PaydaySpend } from '../../types/finance.js';
-import { continueRules } from '../../styles/columnRules.js';
 
 export type PaydayRecord = FinanceRecord<'paydays'>;
 
@@ -24,124 +22,137 @@ interface PaydayEditorProps {
 
 /* ── Layout bits ── */
 
-/* "Current payday" row in the Paydays card: label · date + balance · close/delete,
-   between hairlines, above the history list */
-const CurrentRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 20px;
-  padding: 14px 0;
-  border-top: 1px solid var(--border-subtle);
-  /* No bottom rule: the history list's first row draws the line below */
+const Section = styled.section`
+  margin-top: 44px;
 `;
 
-const CurrentLabel = styled.span`
-  align-self: center;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  white-space: nowrap;
-`;
-
-const HeaderFields = styled(InlineForm)`
-  flex-wrap: nowrap;
-  gap: 10px;
-  @media (max-width: 640px) { flex-wrap: wrap; }
-`;
-
-const RowControls = styled(Actions)`
-  margin-left: auto;
-  align-self: center;
-`;
-
-const Banner = styled.div<{ $ready: boolean }>`
-  margin-top: 24px;
-  padding: 14px 16px;
-  border-radius: var(--r-lg, 2px);
+const Hint = styled.p`
+  margin: 12px 0 0;
   font-family: var(--font-sans);
-  font-size: 15px;
-  background: ${({ $ready }) => ($ready ? 'var(--color-accent)' : 'var(--bg-sunken)')};
-  color: ${({ $ready }) => ($ready ? 'var(--on-accent)' : 'var(--text-secondary)')};
+  font-size: 13px;
+  color: var(--text-muted);
+  button { padding: 0; border: none; background: none; font: inherit; color: var(--color-accent-link); cursor: pointer; }
+  button:hover { text-decoration: underline; }
+`;
+
+/* Status line under the totals: neutral, or the accent when it's OK to spend */
+const Banner = styled.div<{ $ready: boolean }>`
+  margin-top: 16px;
+  padding: 12px 18px;
+  border: 1px solid ${({ $ready }) => ($ready ? 'var(--color-accent)' : 'var(--border-subtle)')};
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $ready }) => ($ready ? 'var(--color-accent-link)' : 'var(--text-soft)')};
   strong { font-weight: 600; }
 `;
 
-const ITEM_COLS = '28px minmax(0, 1fr) 110px 120px minmax(0, auto)';
-const ITEM_COLS_PHONE = '28px minmax(0, 1fr) 96px';
-
-const ItemRow = styled(Row)`
+/* Line rows: tick | name + note | amount | status | actions */
+const Line = styled.div<{ $muted?: boolean }>`
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 110px 130px auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: ${({ $muted }) => ($muted ? 'var(--text-muted)' : 'var(--text-secondary)')};
+  font-variant-numeric: tabular-nums;
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  & > :nth-child(3) { text-align: right; }
+  small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
+  .status { font-size: 13px; color: var(--text-muted); }
   @media (max-width: 640px) {
-    grid-template-columns: ${ITEM_COLS_PHONE};
+    grid-template-columns: 22px minmax(0, 1fr) 96px;
+    padding: 12px 14px;
     & > :nth-child(4) { display: none; }
-    & > :nth-child(5) { grid-column: 2 / -1; justify-content: flex-start; padding-top: 0; ${continueRules(96 - 8)} }
+    & > :nth-child(5) { grid-column: 2 / -1; }
   }
 `;
 
-const ItemTotal = styled(TotalRow)`
-  @media (max-width: 640px) {
-    grid-template-columns: ${ITEM_COLS_PHONE};
-    & > :nth-child(4), & > :nth-child(5) { display: none; }
-  }
+const LineTotal = styled(Line)`
+  background: var(--bg-panel);
+  font-weight: 500;
 `;
 
+const LineActions = styled.div`
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+`;
+
+const ListBox = styled(SheetBox)`
+  margin-bottom: 14px;
+`;
+
+/* Bill picker: a --bg-panel box of checkable bills */
 const Picker = styled.div`
-  margin: 4px 0 16px;
-  padding: 12px 16px 16px;
-  background: var(--bg-sunken);
-  border-radius: var(--r-lg, 2px);
+  margin-bottom: 14px;
+  padding: 14px 20px 18px;
+  background: var(--bg-panel);
+  border-radius: 12px;
+`;
+
+const PickHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-soft);
 `;
 
 const PickRow = styled.label`
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto 110px;
+  grid-template-columns: 22px minmax(0, 1fr) auto 110px;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 9px 0;
   font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-primary);
+  font-size: 15px;
+  color: var(--text-secondary);
   cursor: pointer;
-  &:last-of-type { border-bottom: none; }
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  .due { font-size: 13px; color: var(--text-muted); }
   input[type='text'] {
     width: 100%;
-    min-height: 30px;
-    padding: 0 8px;
+    height: 32px;
+    padding: 0 10px;
     text-align: right;
+    font-family: var(--font-sans);
     font-size: 14px;
-    background: var(--bg-app) !important;
-    border: none;
-    border-radius: var(--r-md, 1px);
-    color: var(--text-primary);
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    outline: none;
   }
 `;
 
-const CheckResult = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px 24px;
-  margin-top: 18px;
+const AddBtn = styled(OutlineBtn)`
+  height: 30px;
+  padding: 0 14px;
+`;
+
+/* "Bank says | $ 0.00 | Check" */
+const CheckRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  & > form { flex: 0 1 360px; }
+  .lbl { color: var(--text-muted); }
 `;
 
 const Verdict = styled.p<{ $ok: boolean }>`
-  margin: 16px 0 0;
+  margin: 14px 0 0;
   font-family: var(--font-sans);
-  font-size: 15px;
-  color: ${({ $ok }) => ($ok ? 'var(--color-success)' : 'var(--color-danger)')};
-`;
-
-/** Open/closed memory for the Reconcile cards. */
-export const RECONCILE_CARDS_KEY = 'finance-reconcile-collapsed-v1';
-
-const CardGap = styled.div`
-  margin-top: 24px;
-`;
-
-const AddLink = styled(TextAction)`
-  margin-top: 4px;
+  font-size: 14px;
+  color: ${({ $ok }) => ($ok ? 'var(--chart-green)' : 'var(--color-danger)')};
 `;
 
 /* ── Helpers ── */
@@ -150,14 +161,23 @@ function categoryName(categories: FinanceRecord<'budget'>[], id?: string): strin
   return id ? categories.find(c => c.id === id)?.name : undefined;
 }
 
+const Chevron = () => (
+  <span style={{ marginLeft: -18, pointerEvents: 'none', display: 'inline-flex', color: 'var(--text-muted)' }} aria-hidden="true">
+    <Icon name="chevron-down" size={14} strokeWidth={2} />
+  </span>
+);
+
 function CategorySelect({ value, onChange, categories, name }: {
   value: string; onChange: (v: string) => void; categories: FinanceRecord<'budget'>[]; name: string;
 }) {
   return (
-    <select aria-label={name} value={value} onChange={e => onChange(e.target.value)}>
-      <option value="">No category</option>
-      {categories.filter(c => !c.archived || c.id === value).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-    </select>
+    <>
+      <select aria-label={name} value={value} onChange={e => onChange(e.target.value)} style={{ appearance: 'none', paddingRight: 22, cursor: 'pointer' }}>
+        <option value="">No category</option>
+        {categories.filter(c => !c.archived || c.id === value).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <Chevron />
+    </>
   );
 }
 
@@ -189,12 +209,15 @@ function draftFromItem(i: PaydayItem): LineDraft {
   };
 }
 
-function LineForm({ initial, categories, submitLabel, onSubmit, onCancel }: {
+/** One outlined row: description | Paying ⌄ | $ amount | category ⌄ | Add — plus a
+    second row for a combined line's count and period. */
+function LineForm({ initial, categories, submitLabel, onSubmit, onCancel, hint }: {
   initial: LineDraft;
   categories: FinanceRecord<'budget'>[];
   submitLabel: string;
   onSubmit: (d: LineDraft, cents: number) => void;
   onCancel?: () => void;
+  hint?: boolean;
 }) {
   const [d, setD] = useState(initial);
   const cents = parseMoney(d.amount);
@@ -207,43 +230,39 @@ function LineForm({ initial, categories, submitLabel, onSubmit, onCancel }: {
     if (!onCancel) setD({ ...blankLine, categoryId: d.categoryId });
   };
   return (
-    <InlineForm onSubmit={submit}>
-      <Field $grow><span>Description</span>
-        <input value={d.description} onChange={e => set({ description: e.target.value })} placeholder={d.combined ? 'Uber' : 'Rent, phone, check #104…'} />
-      </Field>
-      <Field $w="110px"><span>Type</span>
-        <select value={d.direction} onChange={e => set({ direction: e.target.value as 'out' | 'in' })}>
-          <option value="out">Paying</option>
-          <option value="in">Coming in</option>
-        </select>
-      </Field>
-      <Field $w="120px"><span>Amount</span>
-        <input inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" />
-      </Field>
-      <Field $w="160px"><span>Category</span>
-        <CategorySelect name="Category" value={d.categoryId} onChange={v => set({ categoryId: v })} categories={categories} />
-      </Field>
-      {d.combined && (
-        <>
-          <Field $w="90px"><span>How many</span>
-            <input inputMode="numeric" value={d.combinedCount} onChange={e => set({ combinedCount: e.target.value.replace(/\D/g, '') })} placeholder="9" />
-          </Field>
-          <Field $w="140px"><span>Period</span>
-            <input value={d.combinedPeriod} onChange={e => set({ combinedPeriod: e.target.value })} placeholder="Oct 1–15" />
-          </Field>
-        </>
+    <form onSubmit={submit}>
+      <FieldRow $cols="minmax(0, 1fr) 150px 130px 190px auto">
+        <label><input aria-label="Description" value={d.description} onChange={e => set({ description: e.target.value })} placeholder={d.combined ? 'Uber' : 'Rent, phone, check #104…'} /></label>
+        <label>
+          <select aria-label="Type" value={d.direction} onChange={e => set({ direction: e.target.value as 'out' | 'in' })} style={{ appearance: 'none', paddingRight: 22, cursor: 'pointer' }}>
+            <option value="out">Paying</option>
+            <option value="in">Coming in</option>
+          </select>
+          <Chevron />
+        </label>
+        <label><span className="pre">$</span><input aria-label="Amount" inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" /></label>
+        <label><CategorySelect name="Category" value={d.categoryId} onChange={v => set({ categoryId: v })} categories={categories} /></label>
+        <label style={{ gap: 6, padding: '0 6px' }}>
+          {onCancel && <AddBtn type="button" $tone="neutral" onClick={onCancel}>Cancel</AddBtn>}
+          <AddBtn type="submit" disabled={!valid}>{submitLabel}</AddBtn>
+        </label>
+      </FieldRow>
+      {(d.combined || (onCancel && d.clearedOn)) && (
+        <FieldRow $cols={d.combined && onCancel && d.clearedOn ? '140px 180px 180px' : d.combined ? '140px 200px' : '200px'} style={{ marginTop: 8, width: 'fit-content', maxWidth: '100%' }}>
+          {d.combined && <label><input aria-label="How many" inputMode="numeric" value={d.combinedCount} onChange={e => set({ combinedCount: e.target.value.replace(/\D/g, '') })} placeholder="How many (9)" /></label>}
+          {d.combined && <label><input aria-label="Period" value={d.combinedPeriod} onChange={e => set({ combinedPeriod: e.target.value })} placeholder="Period (Oct 1–15)" /></label>}
+          {onCancel && d.clearedOn && <label><input type="date" aria-label="Cleared on" value={d.clearedOn} onChange={e => set({ clearedOn: e.target.value })} /></label>}
+        </FieldRow>
       )}
-      {onCancel && d.clearedOn && (
-        <Field $w="170px"><span>Cleared on</span>
-          <input type="date" value={d.clearedOn} onChange={e => set({ clearedOn: e.target.value })} />
-        </Field>
+      {hint && (
+        <Hint>
+          Waiting lines haven't cleared the bank yet. Combined groups several bills into one payment —{' '}
+          <button type="button" aria-pressed={d.combined} onClick={() => set({ combined: !d.combined })}>
+            {d.combined ? 'make this a single line' : 'make this a combined line'}
+          </button>.
+        </Hint>
       )}
-      <Actions>
-        <SmallBtn type="button" $on={d.combined} aria-pressed={d.combined} onClick={() => set({ combined: !d.combined })}>Combined</SmallBtn>
-        <PillButton type="submit" disabled={!valid}>{submitLabel}</PillButton>
-        {onCancel && <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>}
-      </Actions>
-    </InlineForm>
+    </form>
   );
 }
 
@@ -277,24 +296,26 @@ function BillPicker({ payday, bills, onAdd, onClose }: {
   if (suggestions.length === 0) {
     return (
       <Picker>
-        <Note>No bills to add — every active bill is already on this payday, or none are set up yet (add them under Budget &amp; Bills).</Note>
-        <AddLink type="button" onClick={onClose}>Close</AddLink>
+        <PickHead>
+          <span>No bills to add — every active bill is already on this payday, or none are set up yet (add them under Budget &amp; bills).</span>
+          <SheetLink type="button" onClick={onClose}>Close</SheetLink>
+        </PickHead>
       </Picker>
     );
   }
 
   return (
     <Picker>
-      <SectionHead><SectionLabel>Pick the bills you're paying</SectionLabel><TextAction type="button" onClick={onClose}>Close</TextAction></SectionHead>
+      <PickHead><span>Pick the bills you're paying</span><SheetLink type="button" onClick={onClose}>Close</SheetLink></PickHead>
       {suggestions.map(s => (
         <PickRow key={s.bill.id}>
-          <input type="checkbox" checked={!!picked[s.bill.id]} onChange={e => setPicked(p => ({ ...p, [s.bill.id]: e.target.checked }))} />
+          <ClearBox checked={!!picked[s.bill.id]} onChange={e => setPicked(p => ({ ...p, [s.bill.id]: e.target.checked }))} aria-label={`Pay ${s.bill.name}`} />
           <span>
             {s.bill.name}
             {s.bill.kind === 'subscription' && <Tag>Subscription</Tag>}
             {s.bill.autopay && <Tag>Autopay</Tag>}
           </span>
-          <Cell $muted $small>Due {formatDay(s.due)}</Cell>
+          <span className="due">Due {formatDay(s.due)}</span>
           <input
             type="text"
             inputMode="decimal"
@@ -304,8 +325,8 @@ function BillPicker({ payday, bills, onAdd, onClose }: {
           />
         </PickRow>
       ))}
-      <Actions style={{ marginTop: 12 }}>
-        <PillButton
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+        <OutlineBtn
           type="button"
           disabled={chosen.length === 0}
           onClick={() => onAdd(chosen.map(s => ({
@@ -318,8 +339,8 @@ function BillPicker({ payday, bills, onAdd, onClose }: {
           })))}
         >
           Add {chosen.length || ''} {chosen.length === 1 ? 'bill' : 'bills'}
-        </PillButton>
-      </Actions>
+        </OutlineBtn>
+      </div>
     </Picker>
   );
 }
@@ -336,26 +357,28 @@ function SpendForm({ categories, defaultDate, onAdd }: {
   const cents = parseMoney(amount);
   const valid = description.trim() !== '' && cents !== null && cents > 0;
   return (
-    <InlineForm onSubmit={e => {
+    <form onSubmit={e => {
       e.preventDefault();
       if (!valid || cents === null) return;
       onAdd({ id: newId(), date, description: description.trim(), amountCents: cents, categoryId: categoryId || undefined });
       setDescription(''); setAmount('');
     }}>
-      <Field $w="170px"><span>Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></Field>
-      <Field $grow><span>What</span><input value={description} onChange={e => setDescription(e.target.value)} placeholder="Groceries, gas…" /></Field>
-      <Field $w="120px"><span>Amount</span><input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></Field>
-      <Field $w="160px"><span>Category</span><CategorySelect name="Spending category" value={categoryId} onChange={setCategoryId} categories={categories} /></Field>
-      <Actions><PillButton type="submit" disabled={!valid}>Add</PillButton></Actions>
-    </InlineForm>
+      <FieldRow $cols="170px minmax(0, 1fr) 130px 190px auto">
+        <label><input type="date" aria-label="Date" value={date} onChange={e => setDate(e.target.value)} /></label>
+        <label><input aria-label="What" value={description} onChange={e => setDescription(e.target.value)} placeholder="Groceries, gas…" /></label>
+        <label><span className="pre">$</span><input aria-label="Amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></label>
+        <label><CategorySelect name="Spending category" value={categoryId} onChange={setCategoryId} categories={categories} /></label>
+        <label style={{ padding: '0 6px' }}><AddBtn type="submit" disabled={!valid}>Add</AddBtn></label>
+      </FieldRow>
+    </form>
   );
 }
 
 /* ── Editor ── */
 
 /**
- * One payday: starting balance → the bills being paid → what's left to spend,
- * ticking each line as it clears, and a balance check against the bank.
+ * One payday: totals, the bills being paid (tick each as it clears), spending
+ * from the leftover, and a balance check against the bank.
  */
 export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEditorProps) {
   const [picking, setPicking] = useState(false);
@@ -370,6 +393,7 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
   const items = payday.items.filter(i => !i.carriedOver);
   const carried = payday.items.length - items.length;
   const billName = (id?: string) => (id ? bills.find(b => b.id === id)?.name : undefined);
+  const outCount = items.filter(i => i.direction === 'out').length;
 
   const update = (patch: Partial<Payday>) => onChange({ ...payday, ...patch });
   const setItems = (next: PaydayItem[]) => update({ items: [...next, ...payday.items.filter(i => i.carriedOver)] });
@@ -388,13 +412,13 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
 
   return (
     <div>
-
-      <StatStrip $cols={4}>
-        <Stat label="Starting balance" cents={payday.startingBalanceCents} sub={formatDay(payday.date)} />
-        <Stat label="Paying" cents={summary.payingCents} sub={summary.incomingCents ? `+${formatCents(summary.incomingCents)} coming in` : `${items.filter(i => i.direction === 'out').length} lines`} />
-        <Stat label="Leftover to spend" cents={summary.leftoverCents} tone={summary.leftoverCents < 0 ? 'danger' : 'default'} sub={summary.spentCents ? `after ${formatCents(summary.spentCents)} spent` : undefined} />
-        <Stat label="Still waiting" cents={summary.waitingCents} tone="muted" sub={summary.waitingCount ? `${summary.waitingCount} not cleared yet` : 'Everything cleared'} />
-      </StatStrip>
+      <StatBoxRow $cols={4} style={{ marginTop: 24 }}>
+        <StatCell label="Starting balance" cents={payday.startingBalanceCents} sub={formatDay(payday.date)} />
+        <StatCell label="Paying" cents={summary.payingCents} sub={summary.incomingCents ? `+${formatCents(summary.incomingCents)} coming in` : `${outCount} line${outCount === 1 ? '' : 's'}`} />
+        <StatCell label="Leftover to spend" cents={summary.leftoverCents} tone={summary.leftoverCents < 0 ? 'danger' : 'accent'}
+          sub={summary.spentCents ? `after ${formatCents(summary.spentCents)} spent` : 'Nothing spent yet'} />
+        <StatCell label="Still waiting" cents={summary.waitingCents} sub={summary.waitingCount ? `${summary.waitingCount} not cleared yet` : 'Everything cleared'} />
+      </StatBoxRow>
 
       {(items.length > 0 || payday.spending.length > 0) && (
         <Banner $ready={ready} role="status">
@@ -407,15 +431,11 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
       )}
 
       {/* ── Bills / payments ── */}
-      <CardGap>
-      <CollapsibleCard
-        id="paying"
-        title="Bills I'm paying"
-        storageKey={RECONCILE_CARDS_KEY}
-        action={closed ? undefined : (
-          <SmallPill type="button" style={{ marginRight: 16 }} onClick={() => setPicking(p => !p)}>{picking ? 'Close' : 'Add bills'}</SmallPill>
-        )}
-      >
+      <Section aria-label="Bills I'm paying">
+        <SheetHead>
+          <SheetHeading>Bills I'm paying</SheetHeading>
+          {!closed && <SheetLink type="button" onClick={() => setPicking(p => !p)}>{picking ? 'Close' : '+ Add from my bills'}</SheetLink>}
+        </SheetHead>
         {picking && !closed && (
           <BillPicker
             payday={payday}
@@ -425,9 +445,9 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
           />
         )}
         {items.length > 0 && (
-          <Table $cols={ITEM_COLS} $phoneCols={ITEM_COLS_PHONE}>
+          <ListBox>
             {items.map(i => (editingId === i.id ? (
-              <div key={i.id} style={{ padding: '12px 0', borderTop: '1px solid var(--border-subtle)' }}>
+              <div key={i.id} style={{ padding: 12 }}>
                 <LineForm
                   initial={draftFromItem(i)}
                   categories={categories}
@@ -437,92 +457,81 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
                 />
               </div>
             ) : (
-              <ItemRow key={i.id} $cols={ITEM_COLS} $muted={!!i.clearedOn}>
+              <Line key={i.id} $muted={!!i.clearedOn}>
                 <ClearBox checked={!!i.clearedOn} disabled={closed} aria-label={`${i.description} cleared`} onChange={e => toggleItem(i.id, e.target.checked)} />
                 <span>
                   {i.description}
                   {i.combinedCount ? <Tag>{i.combinedCount} combined</Tag> : i.combinedPeriod ? <Tag>Combined</Tag> : null}
                   {i.direction === 'in' && <Tag $tone="accent">Coming in</Tag>}
-                  <SubText>
-                    {[i.combinedPeriod, categoryName(categories, i.categoryId ?? bills.find(b => b.id === i.billId)?.categoryId), i.billId && !billName(i.billId) ? 'bill removed' : undefined]
-                      .filter(Boolean).join(' · ') || ' '}
-                  </SubText>
+                  {(() => {
+                    const note = [i.combinedPeriod, categoryName(categories, i.categoryId ?? bills.find(b => b.id === i.billId)?.categoryId), i.billId && !billName(i.billId) ? 'bill removed' : undefined].filter(Boolean).join(' · ');
+                    return note ? <small>{note}</small> : null;
+                  })()}
                 </span>
-                <Cell $right><Money cents={i.amountCents} out={i.direction === 'out'} /></Cell>
-                <Cell $muted $small>{i.clearedOn ? `Cleared ${formatDay(i.clearedOn)}` : 'Waiting'}</Cell>
-                <Actions>
+                <span>{i.direction === 'out' ? '−' : '+'}{formatCents(i.amountCents)}</span>
+                <span className="status">{i.clearedOn ? `Cleared ${formatDay(i.clearedOn)}` : 'Waiting'}</span>
+                <LineActions>
                   {!closed && <SmallBtn type="button" onClick={() => setEditingId(i.id)}>Edit</SmallBtn>}
                   {!closed && <ConfirmDelete label="Remove" onConfirm={() => setItems(items.filter(x => x.id !== i.id))} />}
-                </Actions>
-              </ItemRow>
+                </LineActions>
+              </Line>
             )))}
-            <ItemTotal $cols={ITEM_COLS}>
+            <LineTotal>
               <span />
               <span>Total paying</span>
-              <Cell $right><Money cents={summary.payingCents - summary.incomingCents} out={summary.payingCents >= summary.incomingCents} /></Cell>
-              <span />
-              <span />
-            </ItemTotal>
-          </Table>
+              <span>{summary.payingCents >= summary.incomingCents ? '−' : '+'}{formatCents(Math.abs(summary.payingCents - summary.incomingCents))}</span>
+              <span /><span />
+            </LineTotal>
+          </ListBox>
         )}
-        {carried > 0 && <Note style={{ marginTop: 8 }}>{carried} waiting {carried === 1 ? 'line was' : 'lines were'} carried over to a newer payday.</Note>}
-        {!closed && (
-          <div style={{ marginTop: 16 }}>
-            <LineForm initial={blankLine} categories={categories} submitLabel="Add line" onSubmit={(d, cents) => setItems([...items, itemFromDraft(d, cents)])} />
-          </div>
-        )}
-      </CollapsibleCard>
-      </CardGap>
+        {carried > 0 && <Note style={{ marginBottom: 12 }}>{carried} waiting {carried === 1 ? 'line was' : 'lines were'} carried over to a newer payday.</Note>}
+        {!closed && <LineForm initial={blankLine} categories={categories} submitLabel="Add" onSubmit={(d, cents) => setItems([...items, itemFromDraft(d, cents)])} hint />}
+      </Section>
 
       {/* ── Spending from leftover ── */}
-      <CardGap>
-      <CollapsibleCard
-        id="spending"
-        title="Spending from leftover"
-        storageKey={RECONCILE_CARDS_KEY}
-        action={payday.spending.length > 0
-          ? <Cell $muted $small style={{ marginRight: 16 }}>{formatCents(summary.spentCents)} spent · {formatCents(summary.leftoverCents)} left</Cell>
-          : undefined}
-      >
+      <Section aria-label="Spending from leftover">
+        <SheetHead>
+          <SheetHeading>Spending from leftover</SheetHeading>
+          {payday.spending.length > 0 && <Hint style={{ margin: 0 }}>{formatCents(summary.spentCents)} spent · {formatCents(summary.leftoverCents)} left</Hint>}
+        </SheetHead>
         {payday.spending.length > 0 && (
-          <Table $cols={ITEM_COLS} $phoneCols={ITEM_COLS_PHONE}>
+          <ListBox>
             {[...payday.spending].sort((a, b) => a.date.localeCompare(b.date)).map(s => (
-              <ItemRow key={s.id} $cols={ITEM_COLS} $muted={!!s.clearedOn}>
+              <Line key={s.id} $muted={!!s.clearedOn}>
                 <ClearBox checked={!!s.clearedOn} disabled={closed} aria-label={`${s.description} cleared`} onChange={e => toggleSpend(s.id, e.target.checked)} />
-                <span>{s.description}<SubText>{[formatDay(s.date), categoryName(categories, s.categoryId)].filter(Boolean).join(' · ')}</SubText></span>
-                <Cell $right><Money cents={s.amountCents} out /></Cell>
-                <Cell $muted $small>{s.clearedOn ? `Cleared ${formatDay(s.clearedOn)}` : 'Waiting'}</Cell>
-                <Actions>{!closed && <ConfirmDelete label="Remove" onConfirm={() => update({ spending: payday.spending.filter(x => x.id !== s.id) })} />}</Actions>
-              </ItemRow>
+                <span>{s.description}<small>{[formatDay(s.date), categoryName(categories, s.categoryId)].filter(Boolean).join(' · ')}</small></span>
+                <span>−{formatCents(s.amountCents)}</span>
+                <span className="status">{s.clearedOn ? `Cleared ${formatDay(s.clearedOn)}` : 'Waiting'}</span>
+                <LineActions>{!closed && <ConfirmDelete label="Remove" onConfirm={() => update({ spending: payday.spending.filter(x => x.id !== s.id) })} />}</LineActions>
+              </Line>
             ))}
-          </Table>
+          </ListBox>
         )}
-        {!closed && (
-          <div style={{ marginTop: 16 }}>
-            <SpendForm categories={categories} defaultDate={todayStr() >= payday.date ? todayStr() : payday.date} onAdd={s => update({ spending: [...payday.spending, s] })} />
-          </div>
-        )}
-      </CollapsibleCard>
-      </CardGap>
+        {!closed && <SpendForm categories={categories} defaultDate={todayStr() >= payday.date ? todayStr() : payday.date} onAdd={s => update({ spending: [...payday.spending, s] })} />}
+      </Section>
 
       {/* ── Balance check ── */}
-      <CardGap>
-      <CollapsibleCard id="balance" title="Check my balance" storageKey={RECONCILE_CARDS_KEY}>
+      <Section aria-label="Check my balance">
+        <SheetHead><SheetHeading>Check my balance</SheetHeading></SheetHead>
         {!closed && (
-          <InlineForm onSubmit={runCheck}>
-            <Field $w="200px"><span>Current bank balance</span>
-              <input inputMode="decimal" value={bankText} onChange={e => setBankText(e.target.value)} placeholder="0.00" />
-            </Field>
-            <Actions><PillButton type="submit" disabled={parseMoney(bankText) === null}>Check</PillButton></Actions>
-          </InlineForm>
+          <CheckRow>
+            <form onSubmit={runCheck}>
+              <FieldRow $cols="auto minmax(0, 1fr) auto">
+                <label><span className="lbl">Bank says</span></label>
+                <label><span className="pre">$</span><input aria-label="Current bank balance" inputMode="decimal" value={bankText} onChange={e => setBankText(e.target.value)} placeholder="0.00" /></label>
+                <label style={{ padding: '0 6px' }}><AddBtn type="submit" disabled={parseMoney(bankText) === null}>Check</AddBtn></label>
+              </FieldRow>
+            </form>
+            {!check && <span>Enter what your bank shows to compare</span>}
+          </CheckRow>
         )}
         {check && lastCheck && (
           <>
-            <CheckResult>
-              <Stat label="Bank shows" cents={lastCheck.balanceCents} sub={new Date(lastCheck.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} />
-              <Stat label="Should show" cents={check.expectedCents} sub="Start − cleared lines" />
-              <Stat label="Available now" cents={check.availableCents} sub="Bank − still waiting" tone={check.availableCents < 0 ? 'danger' : 'default'} />
-            </CheckResult>
+            <StatBoxRow $cols={3} style={{ marginTop: 16 }}>
+              <StatCell label="Bank shows" cents={lastCheck.balanceCents} sub={new Date(lastCheck.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} />
+              <StatCell label="Should show" cents={check.expectedCents} sub="Start − cleared lines" />
+              <StatCell label="Available now" cents={check.availableCents} sub="Bank − still waiting" tone={check.availableCents < 0 ? 'danger' : undefined} />
+            </StatBoxRow>
             <Verdict $ok={check.matches} role="status">
               {check.matches
                 ? 'Matches ✓ — nothing unexpected went through.'
@@ -530,20 +539,68 @@ export function PaydayEditor({ payday, bills, categories, onChange }: PaydayEdit
             </Verdict>
           </>
         )}
-      </CollapsibleCard>
-      </CardGap>
+      </Section>
     </div>
   );
 }
 
+/* ── Payday header: a --bg-panel bar with the date and starting balance ── */
+
+const HeaderBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 24px;
+  margin-top: 32px;
+  background: var(--bg-panel);
+  border-radius: 12px;
+  /* && beats FinanceShell's "first block has no top padding" rule */
+  && { padding: 18px 22px; }
+`;
+
+const HeadField = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  & > span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+  input {
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 17px;
+    color: var(--text-secondary);
+    color-scheme: light dark;
+    font-variant-numeric: tabular-nums;
+  }
+  input::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; margin-left: 18px; }
+  & + & { padding-left: 24px; border-left: 1px solid var(--border-card); }
+`;
+
+const Money$ = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  color: var(--text-secondary);
+  input { width: 140px; }
+`;
+
+const HeaderRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+`;
 
 /**
- * The current payday's row in the Paydays card: its date and starting balance
- * (the balance saves on blur / Enter; a bad amount reverts), then close /
- * reopen and delete on the right.
+ * The payday's header: date and starting balance (saves on blur / Enter; a bad
+ * amount reverts), Close / Reopen, and a ⋯ menu (New payday, Delete).
  */
-export function CurrentPaydayRow({ payday, onChange, onDelete }: {
-  payday: PaydayRecord; onChange: (next: PaydayRecord) => void; onDelete: () => void;
+export function PaydayHeader({ payday, onChange, onDelete, onNew }: {
+  payday: PaydayRecord; onChange: (next: PaydayRecord) => void; onDelete: () => void; onNew: () => void;
 }) {
   const [startText, setStartText] = useState(centsToInput(payday.startingBalanceCents));
   const closed = payday.status === 'closed';
@@ -553,23 +610,28 @@ export function CurrentPaydayRow({ payday, onChange, onDelete }: {
     setStartText(centsToInput(cents));
     if (cents !== payday.startingBalanceCents) onChange({ ...payday, startingBalanceCents: cents });
   };
+  const menu: RowMenuItem[] = [
+    { label: 'New payday', onSelect: onNew },
+    { label: 'Delete payday', danger: true, confirmLabel: 'Click again to delete', onSelect: onDelete },
+  ];
   return (
-    <CurrentRow>
-      <CurrentLabel>Current payday</CurrentLabel>
-      <HeaderFields onSubmit={e => { e.preventDefault(); saveStart(); }}>
-        <Field $w="170px"><span>Payday</span>
+    <HeaderBar>
+      <form style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }} onSubmit={e => { e.preventDefault(); saveStart(); }}>
+        <HeadField>
+          <span>{closed ? 'Payday (closed)' : 'Current payday'}</span>
           <input type="date" value={payday.date} disabled={closed} onChange={e => e.target.value && onChange({ ...payday, date: e.target.value })} />
-        </Field>
-        <Field $w="170px"><span>Starting balance</span>
-          <input inputMode="decimal" value={startText} disabled={closed} onChange={e => setStartText(e.target.value)} onBlur={saveStart} placeholder="0.00" />
-        </Field>
-      </HeaderFields>
-      <RowControls>
+        </HeadField>
+        <HeadField>
+          <span>Starting balance</span>
+          <Money$>$<input inputMode="decimal" aria-label="Starting balance" value={startText} disabled={closed} onChange={e => setStartText(e.target.value)} onBlur={saveStart} placeholder="0.00" /></Money$>
+        </HeadField>
+      </form>
+      <HeaderRight>
         {closed
-          ? <SmallBtn type="button" onClick={() => onChange({ ...payday, status: 'open', closedOn: undefined })}>Reopen</SmallBtn>
-          : <SmallBtn type="button" onClick={() => onChange({ ...payday, status: 'closed', closedOn: todayStr() })}>Close this payday</SmallBtn>}
-        <ConfirmDelete label="Delete" onConfirm={onDelete} />
-      </RowControls>
-    </CurrentRow>
+          ? <RowBtn type="button" onClick={() => onChange({ ...payday, status: 'open', closedOn: undefined })}>Reopen payday</RowBtn>
+          : <RowBtn type="button" onClick={() => onChange({ ...payday, status: 'closed', closedOn: todayStr() })}>Close payday</RowBtn>}
+        <RowMenu label="More payday actions" items={menu} />
+      </HeaderRight>
+    </HeaderBar>
   );
 }

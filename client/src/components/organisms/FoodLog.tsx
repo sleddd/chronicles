@@ -41,6 +41,7 @@ export const SectionLabel = styled.h2`
   color: var(--text-secondary);
   margin: 0;
   @media (max-width: 480px) { font-size: 20px; }
+  padding-left: 16px;
 `;
 
 export const SectionNote = styled.p`
@@ -705,6 +706,7 @@ const GoalsTitle = styled.h3`
   font-size: 22px;
   font-weight: 300;
   color: var(--text-secondary);
+  padding-left: 16px;
 `;
 
 const GoalsSub = styled.p`
@@ -712,6 +714,7 @@ const GoalsSub = styled.p`
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-muted);
+  padding-left: 16px;
 `;
 
 /* Five outlined boxes: name (+ "at least") on top, the target typed large with its unit */

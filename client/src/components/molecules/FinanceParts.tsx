@@ -408,21 +408,21 @@ export function ConfirmDelete({ onConfirm, label = 'Delete' }: { onConfirm: () =
 /** A native checkbox styled as the "cleared ✓" box. */
 export const ClearBox = styled.input.attrs({ type: 'checkbox' })`
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   margin: 0;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 4px;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
   background: transparent;
   cursor: pointer;
   display: grid;
   place-content: center;
   &::after {
     content: '';
-    width: 10px;
-    height: 6px;
-    border-left: 2px solid var(--on-accent);
-    border-bottom: 2px solid var(--on-accent);
+    width: 8px;
+    height: 4px;
+    border-left: 2px solid var(--bg-sunken);
+    border-bottom: 2px solid var(--bg-sunken);
     transform: rotate(-45deg) translate(1px, -1px);
     opacity: 0;
   }
@@ -439,12 +439,16 @@ const MenuWrap = styled.div`
   display: inline-flex;
 `;
 
+/* A quiet ⋯ — no outline, muted until hovered */
 const MenuButton = styled(SmallBtn)`
   min-width: 32px;
-  padding: 3px 8px;
-  font-size: 14px;
+  padding: 4px 8px;
+  border: none;
+  font-size: 16px;
   line-height: 1;
   letter-spacing: 0.1em;
+  color: var(--text-muted);
+  &:hover:not(:disabled) { background: transparent; color: var(--text-primary); }
 `;
 
 /* A floating overlay — the one place a shadow is allowed */
@@ -453,11 +457,11 @@ const MenuList = styled.div`
   top: calc(100% + 4px);
   right: 0;
   z-index: 20;
-  min-width: 180px;
-  padding: 4px 0;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--bg-tile);
+  border: 1px solid var(--border-pop);
+  border-radius: 10px;
   box-shadow: var(--shadow-lg);
 `;
 
@@ -467,12 +471,13 @@ const MenuItem = styled.button<{ $danger?: boolean }>`
   padding: 8px 14px;
   text-align: left;
   font-family: var(--font-sans);
-  font-size: 13.5px;
-  color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-primary)')};
+  font-size: 14px;
+  border-radius: 6px;
+  color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-secondary)')};
   background: transparent;
   border: none;
   cursor: pointer;
-  &:hover, &:focus-visible { background: var(--bg-hover); outline: none; }
+  &:hover, &:focus-visible { background: var(--bg-row-hover); outline: none; }
 `;
 
 export interface RowMenuItem {
@@ -534,3 +539,277 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
     </MenuWrap>
   );
 }
+
+/* ── Sheet look (Budget & bills): thin headings, outlined boxes on the canvas ── */
+
+/** "Budget · October 2026", "Log spending", "Bills & subscriptions" */
+export const SheetHeading = styled.h2`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  @media (max-width: 480px) { font-size: 22px; }
+  padding-left: 16px;
+`;
+
+export const SheetHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+`;
+
+/** One outlined box (no fill) holding a sheet's rows */
+export const SheetBox = styled.div`
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+`;
+
+/** Faint rule between sheet rows */
+export const SHEET_RULE = 'color-mix(in srgb, var(--border-subtle) 55%, var(--bg-app))';
+
+/** Accent link in sentence case ("Manage categories") */
+export const SheetLink = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+`;
+
+/** One outlined group of options; the chosen one lifted onto --bg-active */
+export const Seg = styled.div`
+  display: flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+`;
+
+export const SegBtn = styled.button<{ $active: boolean }>`
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 7px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+/** Quiet outlined button in a sheet row ("Mark paid") */
+export const RowBtn = styled.button`
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-soft);
+  white-space: nowrap;
+  cursor: pointer;
+  &:hover:not(:disabled) { border-color: var(--control-border); color: var(--text-primary); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/** Status pill on a bill: overdue (rose) or due today / tomorrow (amber) */
+export const DueBadge = styled.span<{ $tone: 'overdue' | 'soon' }>`
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  white-space: nowrap;
+  background: ${({ $tone }) => ($tone === 'overdue'
+    ? 'color-mix(in srgb, var(--mood-1) 14%, var(--bg-app))'
+    : 'color-mix(in srgb, var(--chart-amber) 14%, var(--bg-app))')};
+  color: ${({ $tone }) => ($tone === 'overdue'
+    ? 'color-mix(in srgb, var(--mood-1), white 12%)'
+    : 'color-mix(in srgb, var(--chart-amber), white 20%)')};
+`;
+
+/** Muted amber note under an amount ("$155.00 unpaid") */
+export const UNPAID_COLOR = 'color-mix(in oklab, var(--chart-amber) 70%, var(--text-muted))';
+
+/* ‹ October 2026 › in one outlined pill (Budget, in the Finance title row) */
+const MonthPillBox = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  span {
+    min-width: 120px;
+    text-align: center;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+`;
+
+const MonthCaret = styled.button`
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+export function MonthPill({ label, onPrev, onNext }: { label: string; onPrev: () => void; onNext: () => void }) {
+  return (
+    <MonthPillBox>
+      <MonthCaret type="button" aria-label="Previous month" onClick={onPrev}>‹</MonthCaret>
+      <span aria-live="polite">{label}</span>
+      <MonthCaret type="button" aria-label="Next month" onClick={onNext}>›</MonthCaret>
+    </MonthPillBox>
+  );
+}
+
+/* One outlined --bg-panel strip of stat cells split by rules (Budget's totals) */
+export const StatBoxRow = styled.div<{ $cols: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  @media (max-width: 760px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+`;
+
+const StatCellBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 22px 20px;
+  box-shadow: -1px 0 0 var(--border-subtle), 0 -1px 0 var(--border-subtle);
+`;
+
+const StatCellLabel = styled.span`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-soft);
+`;
+
+const StatCellValue = styled.span<{ $tone?: Tone }>`
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  color: ${({ $tone }) => ($tone === 'accent' ? 'var(--color-accent-link)' : $tone === 'danger' ? 'var(--color-danger)' : 'var(--text-secondary)')};
+  @media (max-width: 480px) { font-size: 22px; }
+`;
+
+const StatCellSub = styled.span`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+export function StatCell({ label, cents, sub, tone }: { label: string; cents: number; sub?: ReactNode; tone?: Tone }) {
+  return (
+    <StatCellBox>
+      <StatCellLabel>{label}</StatCellLabel>
+      <StatCellValue $tone={tone}>{formatCents(cents)}</StatCellValue>
+      {sub && <StatCellSub>{sub}</StatCellSub>}
+    </StatCellBox>
+  );
+}
+
+/** Sentence-case outline button (Add to fund / Take out): accent or neutral */
+export const OutlineBtn = styled.button<{ $tone?: 'accent' | 'neutral' }>`
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid ${({ $tone }) => ($tone === 'neutral' ? 'var(--border-card)' : 'var(--color-accent)')};
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ $tone }) => ($tone === 'neutral' ? 'var(--text-soft)' : 'var(--color-accent-link)')};
+  white-space: nowrap;
+  cursor: pointer;
+  &:hover:not(:disabled) { border-color: ${({ $tone }) => ($tone === 'neutral' ? 'var(--control-border)' : 'var(--color-accent-hover)')}; color: ${({ $tone }) => ($tone === 'neutral' ? 'var(--text-primary)' : 'var(--color-accent-soft)')}; }
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/** A --bg-panel card (Savings funds, Goals) */
+export const PanelCard = styled.div`
+  min-width: 0;
+  padding: 20px 22px 22px;
+  background: var(--bg-panel);
+  border-radius: 12px;
+`;
+
+export const CardTitle = styled.h3`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--text-secondary);
+`;
+
+/** One outlined row of bare fields split by rules (date | amount | note) */
+export const FieldRow = styled.div<{ $cols: string }>`
+  display: grid;
+  grid-template-columns: ${({ $cols }) => $cols};
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  overflow: hidden;
+  & > label { display: flex; align-items: center; min-width: 0; height: 38px; padding: 0 12px; }
+  & > label + label { border-left: 1px solid var(--border-card); }
+  &:focus-within { border-color: var(--control-border); }
+  input, select {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+    color-scheme: light dark;
+  }
+  input::placeholder { color: var(--text-hint); }
+  input::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
+  .pre { margin-right: 3px; font-family: var(--font-sans); font-size: 14px; color: var(--text-hint); }
+`;
+

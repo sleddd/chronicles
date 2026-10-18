@@ -6,7 +6,8 @@ import { BillsTable } from '../components/organisms/BillsTable.js';
 import { BudgetTable } from '../components/organisms/BudgetTable.js';
 import { SpendingLog } from '../components/organisms/SpendingLog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
-import { todayStr } from '../utils/finance.js';
+import { formatMonth, shiftMonth, todayStr } from '../utils/finance.js';
+import { MonthPill } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
 
 const Center = styled.div`
@@ -17,21 +18,23 @@ const Center = styled.div`
 
 /** Budget & Bills: the monthly budget by category, spending for the month, then every bill and subscription. */
 export function FinanceBudgetView() {
+  const [month, setMonth] = useState(() => todayStr().slice(0, 7));
   return (
-    <FinanceShell>
-      <BudgetAndBills />
+    <FinanceShell headerAside={(
+      <MonthPill label={formatMonth(month)} onPrev={() => setMonth(m => shiftMonth(m, -1))} onNext={() => setMonth(m => shiftMonth(m, 1))} />
+    )}>
+      <BudgetAndBills month={month} />
     </FinanceShell>
   );
 }
 
-function BudgetAndBills() {
+function BudgetAndBills({ month }: { month: string }) {
   // Reconcile's paydays feed the budget only when it's switched on
   const reconcileOn = useEntriesStore(s => s.featureFlags.reconcileEnabled === true);
   const bills = useFinance('bills');
   const budget = useFinance('budget');
   const expenses = useFinance('expenses');
   const paydays = useFinance('paydays', { enabled: reconcileOn });
-  const [month, setMonth] = useState(() => todayStr().slice(0, 7));
   const categories = useMemo(() => [...budget.records].sort((a, b) => a.order - b.order), [budget.records]);
   const paydayRecords = reconcileOn ? paydays.records : NO_PAYDAYS;
 
@@ -46,7 +49,6 @@ function BudgetAndBills() {
         expenses={expenses.records}
         paydays={paydayRecords}
         month={month}
-        onMonthChange={setMonth}
         onSave={c => budget.save(c)}
         onDelete={id => void budget.remove(id)}
       />

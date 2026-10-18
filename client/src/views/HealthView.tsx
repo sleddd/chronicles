@@ -7,11 +7,13 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { MonthGroups } from '../components/molecules/MonthGroups.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { PrintButton } from '../components/atoms/PrintButton.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
+import { singular } from '../utils/singular.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
@@ -197,15 +199,17 @@ interface HealthViewProps {
   printTitle?: string;
   /** Tab bar shown under the title — defaults to the Health tabs. */
   tabBar?: React.ReactNode;
+  /** The New button's label — defaults to "New <topic>" (New recipe, New symptom…) */
+  newLabel?: string;
 }
 
 /**
  * Unified single-column Health entry page: "Health" title, the Health tab bar
  * (tabs), a date filter (sub-tabs), then the entry list. Entries swipe to
- * reveal edit/delete; clicking (or swipe-edit) opens the entry in the journal
- * editor — its breadcrumb leads back here.
+ * reveal Delete; clicking opens the entry in the journal editor — its
+ * breadcrumb leads back here.
  */
-export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar }: HealthViewProps) {
+export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel }: HealthViewProps) {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -301,7 +305,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-print-hide>
                 {addTopic && (
                   <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
-                    New entry
+                    {newLabel ?? `New ${singular(addTopic.name)}`}
                   </PillButton>
                 )}
                 {printable && <PrintButton />}
@@ -368,20 +372,16 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             <div data-print-hide={printable || undefined}><EmptyState message="No entries yet." /></div>
           ) : (
             <List data-print-hide={printable || undefined}>
-              {sortedEntries.map((entry, i) => {
+              <MonthGroups items={sortedEntries} keyOf={e => e.id} dateOf={e => (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt))}>{entry => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);
                 return (
                   <SwipeActions
                     key={entry.id}
                     accentColor={accentColor}
-                    onEdit={() => openInJournal(entry.id)}
                     onDelete={() => handleDelete(entry.id)}
                   >
                     <EntryListCard
-                      // The first row's top rule marks where the list starts — but not
-                      // straight under the tab bar, whose own hairline would double it
-                      hint={i === 0 && showDateFilter}
                       content={entry.content}
                       createdAt={created}
                       topicName={mixedTopics ? topic?.name : undefined}
@@ -390,7 +390,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
                     />
                   </SwipeActions>
                 );
-              })}
+              }}</MonthGroups>
             </List>
           )}
         </Inner>

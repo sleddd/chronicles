@@ -526,7 +526,7 @@ export function PlannerFilterView() {
     hinted = true;
     const topic = allTopics.find(tp => tp.id === taxonomyId);
     return (
-      <SwipeActions key={id} accentColor={accentColor} onEdit={() => openInJournal(id)} onDelete={() => handleDeleteEntry(id)}>
+      <SwipeActions key={id} accentColor={accentColor} onDelete={() => handleDeleteEntry(id)}>
         <EntryListCard
           content={entry.content}
           createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}

@@ -108,9 +108,10 @@ describe('TopicsView', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/topics/1');
   });
 
-  it('shows an add-new-topic row', () => {
+  it('has a New topic button in the header that opens the form', () => {
     renderWithTheme(<TopicsView />);
-    expect(screen.getByText('Add new topic…')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New topic' }));
+    expect(screen.getByTestId('topic-edit-form')).toBeInTheDocument();
   });
 });
 

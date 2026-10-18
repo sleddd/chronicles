@@ -6,6 +6,7 @@ import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
+import { PillButton } from '../components/atoms/PillButton.js';
 import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
@@ -39,7 +40,11 @@ const Inner = styled.div`
 /* ── Header ── */
 
 const Head = styled.div`
-  padding: 53px 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 53px 0 28px;
 `;
 
 const Title = styled.h1`
@@ -54,59 +59,53 @@ const Title = styled.h1`
 
 /* ── Topic rows ── */
 
+/* A firmer rule under the title, then hairlines between rows */
 const List = styled.div`
   display: flex;
   flex-direction: column;
+  border-top: 1px solid var(--border-default);
 `;
 
 /* Shared row style (styles/entryRow) — same as every entry list. */
 const Row = styled.button<{ $hint?: boolean }>`
   display: grid;
-  grid-template-columns: 32px 1fr auto 20px;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   width: 100%;
-  padding: 20px 16px;
+  padding: 18px 0;
   border: none;
-  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
   ${entryRowPlain}
 `;
 
+/* Topic icon in the accent, thin */
 const RowIcon = styled.span`
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--text-primary);
+  justify-content: flex-start;
+  color: var(--color-accent);
+  & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24; }
 `;
 
 const RowName = styled.span`
-  font-family: var(--font-sans);
-  font-size: 20px;
-  font-weight: 400;
-  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `;
 
 const RowCount = styled.span`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
   white-space: nowrap;
-`;
-
-const RowChevron = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-tertiary);
 `;
 
 const Confirm = styled.div`
@@ -120,52 +119,13 @@ const Confirm = styled.div`
   color: var(--text-secondary);
 `;
 
-const ConfirmBtn = styled.button<{ $danger?: boolean }>`
-  padding: 6px 14px;
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border: 1px solid ${({ $danger }) => ($danger ? 'transparent' : 'var(--border-default)')};
-  border-radius: var(--r-md, 4px);
-  background: ${({ $danger }) => ($danger ? '#e11d48' : 'transparent')};
-  color: ${({ $danger }) => ($danger ? '#fff' : 'var(--text-secondary)')};
-  cursor: pointer;
-  &:hover { opacity: 0.85; }
+/* Delete = an outlined pill in the danger red; Cancel = the neutral pill */
+const DangerPill = styled(PillButton)`
+  && { color: var(--color-danger); border-color: var(--color-danger); }
+  &&:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 12%, transparent); }
 `;
-
-/* ── Add-topic row ── */
-
-const AddRow = styled.button`
-  display: grid;
-  grid-template-columns: 32px 1fr;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  padding: 20px 4px;
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  cursor: pointer;
-  text-align: left;
-  color: var(--text-tertiary);
-  transition: color 120ms ease, background 120ms ease;
-
-  &:hover { color: var(--text-primary); background: var(--bg-hover); }
-`;
-
-const AddLabel = styled.span`
-  font-family: var(--font-sans);
-  font-size: 20px;
-  font-weight: 400;
-  font-style: italic;
-`;
-
 const EditWrap = styled.div`
-  border-top: 1px solid var(--border-subtle);
-  padding: 8px 0;
+  padding: 8px 0 28px;
 `;
 
 /* ── View ── */
@@ -272,31 +232,49 @@ export function TopicsView() {
         <Inner>
           <Head>
             <Title>Topics</Title>
+            {!adding && (
+              <PillButton type="button" onClick={() => { setAdding(true); setEditingId(null); setConfirmDeleteId(null); }}>New topic</PillButton>
+            )}
           </Head>
 
+          {/* New topic — opens under the title */}
+          {adding && (
+            <EditWrap>
+              <TopicEditForm
+                name={addName}
+                icon={addIcon}
+                accentColor={accentColor}
+                saveLabel="Add topic"
+                cancelLabel="Cancel"
+                onNameChange={setAddName}
+                onIconChange={setAddIcon}
+                onSave={handleAddSave}
+                onCancel={() => { setAdding(false); setAddName(''); setAddIcon(null); }}
+              />
+            </EditWrap>
+          )}
+
           <List>
-            {topics.map((topic, i) => {
+            {topics.map(topic => {
               const count = entryCounts.get(topic.id) ?? 0;
               return (
                 <div key={topic.id}>
                   <SwipeActions
                     accentColor={accentColor}
-                    onEdit={() => startEdit(topic)}
                     onDelete={() => { setConfirmDeleteId(topic.id); setEditingId(null); }}
                   >
-                    <Row $hint={i === 0} onClick={() => { clearRowHover(); navigate(`/topics/${topic.id}`); }} {...rowHoverHandlers}>
-                      <RowIcon><TopicIcon name={topic.icon} size={22} /></RowIcon>
+                    <Row onClick={() => { clearRowHover(); navigate(`/topics/${topic.id}`); }} {...rowHoverHandlers}>
+                      <RowIcon><TopicIcon name={topic.icon} size={26} /></RowIcon>
                       <RowName>{topic.name}</RowName>
                       <RowCount>{count.toLocaleString()} {count === 1 ? 'entry' : 'entries'}</RowCount>
-                      <RowChevron><MaterialIcon $size={20} aria-hidden="true">chevron_right</MaterialIcon></RowChevron>
                     </Row>
                   </SwipeActions>
 
                   {confirmDeleteId === topic.id && (
                     <Confirm>
                       Delete “{topic.name}”? Entries keep their data but lose this topic.
-                      <ConfirmBtn $danger onClick={() => handleDelete(topic.id)}>Delete</ConfirmBtn>
-                      <ConfirmBtn onClick={() => setConfirmDeleteId(null)}>Cancel</ConfirmBtn>
+                      <DangerPill type="button" onClick={() => handleDelete(topic.id)}>Delete</DangerPill>
+                      <PillButton type="button" $variant="neutral" onClick={() => setConfirmDeleteId(null)}>Cancel</PillButton>
                     </Confirm>
                   )}
 
@@ -323,27 +301,6 @@ export function TopicsView() {
               );
             })}
 
-            {/* Add new topic — final row */}
-            {adding ? (
-              <EditWrap>
-                <TopicEditForm
-                  name={addName}
-                  icon={addIcon}
-                  accentColor={accentColor}
-                  saveLabel="Add topic"
-                  cancelLabel="Cancel"
-                  onNameChange={setAddName}
-                  onIconChange={setAddIcon}
-                  onSave={handleAddSave}
-                  onCancel={() => { setAdding(false); setAddName(''); setAddIcon(null); }}
-                />
-              </EditWrap>
-            ) : (
-              <AddRow onClick={() => { setAdding(true); setEditingId(null); setConfirmDeleteId(null); }}>
-                <RowIcon><MaterialIcon $size={22} aria-hidden="true">add</MaterialIcon></RowIcon>
-                <AddLabel>Add new topic…</AddLabel>
-              </AddRow>
-            )}
           </List>
         </Inner>
       </Page>

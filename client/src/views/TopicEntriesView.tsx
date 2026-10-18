@@ -7,6 +7,7 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { MonthGroups } from '../components/molecules/MonthGroups.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
@@ -156,7 +157,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
             <EmptyState message={`No ${title.toLowerCase()} entries yet.`} />
           ) : (
             <List>
-              {filtered.map((entry, i) => {
+              <MonthGroups items={filtered} keyOf={e => e.id} dateOf={e => (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt))}>{entry => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 const topic = getTopicForEntry(entry);
 
@@ -185,11 +186,9 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
                   <SwipeActions
                     key={entry.id}
                     accentColor={accentColor}
-                    onEdit={() => openInJournal(entry.id)}
                     onDelete={() => handleDeleteEntry(entry.id)}
                   >
                     <EntryListCard
-                      hint={i === 0}
                       content={entry.content}
                       createdAt={created}
                       topicName={mixedTopics ? topic?.name : undefined}
@@ -200,7 +199,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
                     />
                   </SwipeActions>
                 );
-              })}
+              }}</MonthGroups>
             </List>
           )}
         </Inner>

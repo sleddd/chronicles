@@ -754,7 +754,7 @@ export function GoalsView() {
       if (!entry) return null;
       const topic = allTopics.find(tp => tp.id === t.taxonomyId);
       return (
-        <SwipeActions key={t.id} accentColor={accentColor} onEdit={() => openInJournal(t.id)} onDelete={() => handleDeleteEntry(t.id)}>
+        <SwipeActions key={t.id} accentColor={accentColor} onDelete={() => handleDeleteEntry(t.id)}>
           <EntryListCard
             // First-row top rule only when filters sit between it and the tabs
             // (straight under the tab bar its hairline would double up)

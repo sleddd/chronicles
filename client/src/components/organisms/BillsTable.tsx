@@ -3,15 +3,14 @@ import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import { FormField } from '../molecules/FormField.js';
 import {
-  SectionHead, Note, SmallPill, Table, Row, TotalRow, Cell, SubText, Tag,
-  SmallBtn, Chips, Actions, Money, ErrorNote, RowMenu, type RowMenuItem,
+  Actions, ErrorNote, RowMenu, type RowMenuItem,
+  SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge,
 } from '../molecules/FinanceParts.js';
 import {
-  billCounts, billTotals, centsToInput, formatCents, formatDay, latestPayment, markBillPaid, monthlyEquivalent, primaryBillAction,
+  billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaid, monthlyEquivalent, primaryBillAction,
   newId, nextUnpaidDue, parseMoney, todayStr, undoLastPayment,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
-import { continueRules } from '../../styles/columnRules.js';
 
 type BillRecord = FinanceRecord<'bills'>;
 
@@ -24,66 +23,90 @@ interface BillsTableProps {
 
 type Filter = 'all' | 'subscriptions' | 'paused' | 'cancelled';
 
-/* Bordered like the Categories / Spending cards, but always open (not collapsible) */
-const BillsSection = styled.section`
-  margin-top: 24px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--r-lg, 2px);
-  padding: 20px 24px;
-  @media (max-width: 480px) { padding: 16px; }
+const Wrap = styled.section`
+  margin-top: 56px;
+  @media (max-width: 768px) { margin-top: 44px; }
 `;
 
-/* Same title style as the CollapsibleCard titles */
-const CardTitle = styled.h3`
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 300;
-  line-height: 1.2;
-  color: var(--text-primary);
+const HeadRight = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
 `;
 
-// Name · category (centred, compact) · amount (with room either side) · due · actions
-const COLS = 'minmax(0, 1fr) 140px 170px 120px minmax(0, auto)';
-/* Phone: name | amount. Wide enough for the 18px total; ROW_PAD_X = Row's side padding */
-const PHONE_AMOUNT = 130;
-const ROW_PAD_X = 8;
-const PHONE_COLS = `minmax(0, 1fr) ${PHONE_AMOUNT}px`;
-
-const BillRow = styled(Row)`
-  & > :nth-child(2) { text-align: center; }
-  & > :nth-child(3) { padding-left: 28px; padding-right: 28px; }
+/* name + "Bill · Category" | amount /mo | due | Mark paid | ⋯ */
+const BillLine = styled.div<{ $muted?: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 170px 96px 32px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px 14px 28px;
+  font-family: var(--font-sans);
+  color: ${({ $muted }) => ($muted ? 'var(--text-muted)' : 'var(--text-secondary)')};
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
   @media (max-width: 760px) {
-    & > :nth-child(2), & > :nth-child(4) { display: none; }
-    && > :nth-child(5) { grid-column: 1 / -1; justify-content: flex-start; border-left: 0; padding-left: 0; padding-top: 0; ${continueRules(PHONE_AMOUNT - ROW_PAD_X)} }
-    & > :nth-child(3) { padding-left: 10px; padding-right: 0; }
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 12px 16px;
+    & > :nth-child(3) { grid-column: 1; }
+    & > :nth-child(4) { grid-column: 2; grid-row: 2; justify-self: end; }
+    & > :nth-child(5) { display: none; }
   }
 `;
 
-/* Totals row: title and amounts all in the card heading font, a touch smaller */
-const BillTotal = styled(TotalRow)`
-  border-top: 1px solid var(--border-subtle);
-  & > * { padding-top: 18px; }
-  & > :nth-child(3) { padding-left: 28px; padding-right: 28px; }
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 300;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--text-primary);
+const BillName = styled.div`
+  min-width: 0;
+  font-size: 15px;
+  span { display: block; margin-top: 3px; font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+`;
+
+const Amount = styled.div<{ $strike?: boolean }>`
+  text-align: right;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
-  /* The amounts are italic; the title stays upright */
-  & > :not(:first-child) { font-style: italic; }
-  @media (max-width: 760px) {
-    & > :nth-child(2), & > :nth-child(4), & > :nth-child(5) { display: none; }
-    & > :nth-child(3) { padding-left: 10px; padding-right: 0; overflow: visible; overflow-wrap: anywhere; }
-  }
+  text-decoration: ${({ $strike }) => ($strike ? 'line-through' : 'none')};
+  small { margin-left: 3px; font-size: 12px; color: var(--text-muted); }
+`;
+
+const Due = styled.div`
+  font-size: 14px;
+  color: var(--text-secondary);
+  small { display: block; margin-top: 2px; font-size: 12px; color: var(--text-muted); }
+`;
+
+const TagNote = styled.em`
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-muted);
+`;
+
+/* Monthly · Yearly · Subscriptions, right-aligned on a --bg-panel footer */
+const Totals = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 28px;
+  padding: 16px 28px;
+  background: var(--bg-panel);
+  border-top: 1px solid ${SHEET_RULE};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  b { margin-left: 6px; font-size: 16px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+`;
+
+const EmptyNote = styled.p`
+  margin: 0;
+  padding: 22px 28px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
 const EditorBox = styled.div`
   grid-column: 1 / -1;
   padding: 8px 0 16px;
-  border-top: 1px solid var(--border-subtle);
   input[type='checkbox'] { width: 18px; height: 18px; flex: 0 0 auto; }
 `;
 
@@ -221,7 +244,7 @@ function BillActions({ bill, due, today, onSave, onEdit, onStatus, onDelete }: {
   const undoPaid = () => void onSave(undoLastPayment(bill));
   const paid = latestPayment(bill);
 
-  const menu: RowMenuItem[] = [];
+  const menu: RowMenuItem[] = [{ label: 'Edit', onSelect: onEdit }];
   // Whichever payment action isn't up front
   if (primary !== 'mark' && due) menu.push({ label: `Mark paid early (due ${formatDay(due)})`, onSelect: markPaid });
   if (primary !== 'undo' && paid) menu.push({ label: `Undo last payment (${formatDay(paid.paidOn)})`, onSelect: undoPaid });
@@ -233,9 +256,9 @@ function BillActions({ bill, due, today, onSave, onEdit, onStatus, onDelete }: {
 
   return (
     <>
-      {primary === 'mark' && <SmallBtn type="button" onClick={markPaid}>Mark paid</SmallBtn>}
-      {primary === 'undo' && <SmallBtn type="button" onClick={undoPaid}>Undo paid</SmallBtn>}
-      <SmallBtn type="button" onClick={onEdit}>Edit</SmallBtn>
+      {primary === 'mark' ? <RowBtn type="button" onClick={markPaid}>Mark paid</RowBtn>
+        : primary === 'undo' ? <RowBtn type="button" onClick={undoPaid}>Undo paid</RowBtn>
+        : <span />}
       <RowMenu label={`More actions for ${bill.name}`} items={menu} />
     </>
   );
@@ -276,74 +299,79 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
   const setStatus = (b: BillRecord, status: BillStatus) =>
     void onSave({ ...b, status, cancelledOn: status === 'cancelled' ? today : undefined });
 
+  const dueCell = (bill: BillRecord, due: string | null) => {
+    if (!due) return billCounts(bill) ? <Due style={{ color: 'var(--text-muted)' }}>Paid</Due> : <Due style={{ color: 'var(--text-muted)' }}>—</Due>;
+    const days = daysBetween(today, due);
+    const short = formatShort(due, today);
+    if (days < 0) return <Due><DueBadge $tone="overdue">Overdue · {short}</DueBadge></Due>;
+    if (days === 0) return <Due><DueBadge $tone="soon">Due today</DueBadge></Due>;
+    if (days === 1) return <Due><DueBadge $tone="soon">Due tomorrow</DueBadge></Due>;
+    return <Due>{short}</Due>;
+  };
+
   return (
-    <BillsSection>
-      <SectionHead style={{ marginBottom: 32 }}>
-        <CardTitle>Bills &amp; subscriptions</CardTitle>
-        <SmallPill type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>Add bill</SmallPill>
-      </SectionHead>
-      <Chips style={{ marginBottom: 24 }}>
-        {FILTERS.map(f => (
-          <SmallBtn key={f.value} type="button" $on={filter === f.value} aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
-            {f.label}
-          </SmallBtn>
-        ))}
-      </Chips>
+    <Wrap aria-label="Bills and subscriptions">
+      <SheetHead>
+        <SheetHeading>Bills &amp; subscriptions</SheetHeading>
+        <HeadRight>
+          <Seg role="tablist" aria-label="Show">
+            {FILTERS.map(f => (
+              <SegBtn key={f.value} type="button" role="tab" aria-selected={filter === f.value} $active={filter === f.value} onClick={() => setFilter(f.value)}>
+                {f.label}
+              </SegBtn>
+            ))}
+          </Seg>
+          <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>+ Add bill</PillButton>
+        </HeadRight>
+      </SheetHead>
 
       {editing === 'new' && <BillEditor categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />}
 
-      {rows.length === 0 ? (
-        <Note>
-          {bills.length === 0
-            ? 'List your rent, utilities, phone, insurance and subscriptions here. They count in your budget right away; mark each one paid when you pay it.'
-            : 'Nothing here for this filter.'}
-        </Note>
-      ) : (
-        <Table $cols={COLS} $phoneCols={PHONE_COLS} $phoneAt={760}>
-          {rows.map(({ bill, due }) => (editing === bill.id ? (
-            <BillEditor key={bill.id} bill={bill} categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />
-          ) : (
-            <BillRow key={bill.id} $cols={COLS} $muted={!billCounts(bill)}>
-              <span>
-                {bill.name}
-                {bill.status === 'paused' && <Tag>Paused</Tag>}
-                {bill.status === 'cancelled' && <Tag>Cancelled{bill.cancelledOn ? ` ${formatDay(bill.cancelledOn)}` : ''}</Tag>}
-                <SubText style={{ fontWeight: 500 }}>{bill.kind === 'subscription' ? 'Subscription' : 'Bill'}</SubText>
-              </span>
-              <Cell $muted $small>{catName(bill.categoryId) ?? '—'}</Cell>
-              <Cell $right>
-                <Money cents={monthlyEquivalent(bill)} strike={!billCounts(bill)} />
-                <SubText>a month</SubText>
-              </Cell>
-              <Cell $small $muted={!due}>
-                {due ? (due < today ? <span style={{ color: 'var(--color-danger)' }}>Overdue {formatDay(due)}</span> : `Due ${formatDay(due)}`) : billCounts(bill) ? 'Paid' : '—'}
-                {latestPayment(bill) && <SubText>Paid {formatDay(latestPayment(bill)!.paidOn)}</SubText>}
-              </Cell>
-              <Actions>
-                <BillActions
-                  bill={bill}
-                  due={due}
-                  today={today}
-                  onSave={onSave}
-                  onEdit={() => setEditing(bill.id)}
-                  onStatus={status => setStatus(bill, status)}
-                  onDelete={() => onDelete(bill.id)}
-                />
-              </Actions>
-            </BillRow>
-          )))}
-          {bills.some(billCounts) && (
-            <BillTotal $cols={COLS}>
-              <span>Total Active Bills</span>
-              <span />
-              <Cell $right>{formatCents(totals.monthly)}/mo</Cell>
-              <Cell>{formatCents(totals.yearly)}/yr</Cell>
-              <Cell $right>Subscriptions {formatCents(totals.subscriptionsMonthly)}/mo</Cell>
-            </BillTotal>
-          )}
-        </Table>
-      )}
-
-    </BillsSection>
+      <SheetBox>
+        {rows.length === 0 ? (
+          <EmptyNote>
+            {bills.length === 0
+              ? 'List your rent, utilities, phone, insurance and subscriptions here. They count in your budget right away; mark each one paid when you pay it.'
+              : 'Nothing here for this filter.'}
+          </EmptyNote>
+        ) : rows.map(({ bill, due }) => (editing === bill.id ? (
+          <div key={bill.id} style={{ padding: '4px 20px 4px 28px' }}>
+            <BillEditor bill={bill} categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />
+          </div>
+        ) : (
+          <BillLine key={bill.id} $muted={!billCounts(bill)}>
+            <BillName>
+              {bill.name}
+              {bill.status === 'paused' && <TagNote>Paused</TagNote>}
+              {bill.status === 'cancelled' && <TagNote>Cancelled{bill.cancelledOn ? ` ${formatDay(bill.cancelledOn)}` : ''}</TagNote>}
+              <span>{bill.kind === 'subscription' ? 'Subscription' : 'Bill'}{catName(bill.categoryId) ? ` · ${catName(bill.categoryId)}` : ''}</span>
+            </BillName>
+            <Amount $strike={!billCounts(bill)}>{formatCents(monthlyEquivalent(bill))}<small>/mo</small></Amount>
+            {dueCell(bill, due)}
+            <BillActions
+              bill={bill}
+              due={due}
+              today={today}
+              onSave={onSave}
+              onEdit={() => setEditing(bill.id)}
+              onStatus={status => setStatus(bill, status)}
+              onDelete={() => onDelete(bill.id)}
+            />
+          </BillLine>
+        )))}
+        {bills.some(billCounts) && (
+          <Totals>
+            <span>Monthly<b>{formatCents(totals.monthly)}</b></span>
+            <span>Yearly<b>{formatCents(totals.yearly)}</b></span>
+            <span>Subscriptions<b>{formatCents(totals.subscriptionsMonthly)}</b>/mo</span>
+          </Totals>
+        )}
+      </SheetBox>
+    </Wrap>
   );
+}
+
+/** "Oct 15" this year, "Apr 1, 2027" otherwise */
+function formatShort(day: string, today: string): string {
+  return day.slice(0, 4) === today.slice(0, 4) ? formatDay(day).replace(/, \d{4}$/, '') : formatDay(day);
 }

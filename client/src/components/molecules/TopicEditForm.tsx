@@ -1,154 +1,190 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
-import { IconPicker } from './IconPicker.js';
-import { Checkbox } from '../atoms/Checkbox.js';
+import { Toggle } from '../atoms/Toggle.js';
+import { PillButton } from '../atoms/PillButton.js';
+import { IconPicker, TopicIcon } from './IconPicker.js';
 import type { UserFieldDef } from '../../types/userFields.js';
 
-const Card = styled.div`
-  margin: 8px;
-  padding: 12px;
-  border: none;
-  border-radius: 0;
+/* Topic editor: an outlined icon tile (tap to pick an icon) beside the name as
+   a big thin title; "Custom fields" — one outlined box of rows (name typed in
+   place, a type pill, ×) ending in "+ Add field"; a "Hide main text field"
+   card with a switch; Close + Save topic. Props only. */
+
+const Wrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+`;
+
+const Top = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 20px;
+`;
+
+const IconTile = styled.button<{ $open: boolean }>`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid ${({ $open }) => ($open ? 'var(--color-accent)' : 'var(--border-card)')};
+  border-radius: 10px;
   background: transparent;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 16px;
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.text};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  outline: none;
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
-`;
-
-const IconSection = styled.div`
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  padding: 8px;
-`;
-
-const IconLabel = styled.div`
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-bottom: 4px;
-`;
-
-const Actions = styled.div`
-  display: flex;
-  gap: 8px;
-`;
-
-const PrimaryBtn = styled.button<{ $color: string; $disabled?: boolean }>`
-  flex: 1;
-  padding: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
-  background: ${({ $color, $disabled, theme }) => $disabled ? theme.colors.border : $color};
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  cursor: ${({ $disabled }) => $disabled ? 'not-allowed' : 'pointer'};
-`;
-
-const GhostBtn = styled.button`
-  padding: 8px 16px;
-  font-size: 16px;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  background: none;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
+  color: var(--color-accent);
   cursor: pointer;
-  &:hover { background: rgba(0, 0, 0, 0.04); }
+  &:hover { border-color: var(--control-border); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-/* ── Custom fields section ── */
-
-const FieldsSection = styled.div`
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+const NameInput = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 300;
+    line-height: 1.2;
+    color: var(--text-primary);
+  }
+  &::placeholder { color: var(--text-hint); }
 `;
 
-const FieldsSectionLabel = styled.div`
-  font-size: 13px;
+const PickerBox = styled.div`
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+`;
+
+const Label = styled.div`
+  margin-top: 32px;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05rem;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-bottom: 2px;
+  color: var(--text-soft);
+`;
+
+const Sub = styled.div`
+  margin: 4px 0 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+const Box = styled.div`
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  overflow: hidden;
 `;
 
 const FieldRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 14px;
+  min-height: 48px;
+  padding: 6px 12px 6px 16px;
+  & + & { border-top: 1px solid color-mix(in srgb, var(--border-card) 70%, var(--bg-app)); }
 `;
 
-const FieldLabelInput = styled.input`
-  flex: 1;
-  padding: 5px 8px;
+const LabelInput = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-secondary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
+/* "Text ⌄" — an outlined pill holding the select */
+const TypePill = styled.label`
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  &:focus-within { border-color: var(--color-accent); }
+  select {
+    height: 100%;
+    padding: 0 30px 0 14px;
+    border: none;
+    background: transparent;
+    appearance: none;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--text-soft);
+    cursor: pointer;
+  }
+  option { color: var(--text-primary); background: var(--bg-surface); }
+  & > span { position: absolute; right: 10px; display: inline-flex; color: var(--text-muted); pointer-events: none; }
+`;
+
+const RemoveBtn = styled.button`
+  flex: none;
+  display: inline-flex;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--color-danger); }
+`;
+
+const AddField = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 16px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border-card) 70%, var(--bg-app));
+  background: transparent;
+  font-family: var(--font-sans);
   font-size: 15px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  outline: none;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text};
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
-`;
-
-const TypeSelect = styled.select`
-  padding: 5px 6px;
-  font-size: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text};
-  outline: none;
+  color: var(--color-accent-link);
   cursor: pointer;
+  text-align: left;
+  &:hover { background: var(--bg-row-hover); }
+  &:first-child { border-top: none; }
 `;
 
-const IconActionBtn = styled.button`
+const OptionCard = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 13px;
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
-  &:hover { color: ${({ theme }) => theme.colors.text}; background: rgba(0,0,0,0.06); }
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  /* Scoped to the text block — a bare "span" rule would reach the switch's knob */
+  .opt-title { display: block; font-weight: 400; font-size: 15px; color: var(--text-secondary); }
+  .opt-note { display: block; margin-top: 3px; font-size: 13px; color: var(--text-muted); }
 `;
 
-const AddFieldRow = styled.div`
+const Actions = styled.div`
   display: flex;
-  align-items: center;
-  gap: 6px;
-`;
-
-const AddFieldBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 3px 0;
-  &:hover { color: ${({ theme }) => theme.colors.text}; }
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
 `;
 
 const FIELD_TYPES: { value: UserFieldDef['type']; label: string }[] = [
@@ -159,10 +195,22 @@ const FIELD_TYPES: { value: UserFieldDef['type']; label: string }[] = [
   { value: 'url',     label: 'URL' },
 ];
 
+function TypeSelect({ value, onChange, label }: { value: UserFieldDef['type']; onChange: (t: UserFieldDef['type']) => void; label: string }) {
+  return (
+    <TypePill>
+      <select aria-label={label} value={value} onChange={e => onChange(e.target.value as UserFieldDef['type'])}>
+        {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+      </select>
+      <span aria-hidden="true"><Icon name="chevron-down" size={13} strokeWidth={2} /></span>
+    </TypePill>
+  );
+}
+
 interface TopicEditFormProps {
   name: string;
   icon: string | null;
-  accentColor: string;
+  /** Kept for existing callers; the form draws in the accent token */
+  accentColor?: string;
   saving?: boolean;
   saveLabel?: string;
   cancelLabel?: string;
@@ -181,11 +229,12 @@ interface TopicEditFormProps {
 }
 
 export function TopicEditForm({
-  name, icon, accentColor, saving, saveLabel = 'Save', cancelLabel = 'Cancel',
+  name, icon, saving, saveLabel = 'Save topic', cancelLabel = 'Cancel',
   onNameChange, onIconChange, onSave, onCancel, onKeyDown,
   topicId, fieldDefs = [], onFieldDefsChange,
   hideTextField = false, onHideTextFieldChange,
 }: TopicEditFormProps) {
+  const [picking, setPicking] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newType, setNewType] = useState<UserFieldDef['type']>('text');
   const [adding, setAdding] = useState(false);
@@ -199,102 +248,98 @@ export function TopicEditForm({
     setAdding(false);
   };
 
-  const handleRemoveField = (id: string) => {
-    onFieldDefsChange?.(fieldDefs.filter(f => f.id !== id));
-  };
-
-  const handleLabelChange = (id: string, label: string) => {
-    onFieldDefsChange?.(fieldDefs.map(f => f.id === id ? { ...f, label } : f));
-  };
-
-  const handleTypeChange = (id: string, type: UserFieldDef['type']) => {
-    onFieldDefsChange?.(fieldDefs.map(f => f.id === id ? { ...f, type } : f));
-  };
+  const removeField = (id: string) => onFieldDefsChange?.(fieldDefs.filter(f => f.id !== id));
+  const patchField = (id: string, patch: Partial<UserFieldDef>) =>
+    onFieldDefsChange?.(fieldDefs.map(f => (f.id === id ? { ...f, ...patch } : f)));
 
   return (
-    <Card>
-      <Input
-        value={name}
-        onChange={e => onNameChange(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter') onSave();
-          if (e.key === 'Escape') onCancel();
-          onKeyDown?.(e);
-        }}
-        placeholder="Topic name"
-        autoFocus
-      />
-      <IconSection>
-        <IconLabel>Icon (optional)</IconLabel>
-        <IconPicker selectedIcon={icon} onSelectIcon={onIconChange} />
-      </IconSection>
+    <Wrap>
+      <Top>
+        <IconTile type="button" $open={picking} aria-expanded={picking} aria-label="Choose an icon" title="Choose an icon" onClick={() => setPicking(p => !p)}>
+          <TopicIcon name={icon} size={24} />
+        </IconTile>
+        <NameInput
+          value={name}
+          onChange={e => onNameChange(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onSave();
+            if (e.key === 'Escape') onCancel();
+            onKeyDown?.(e);
+          }}
+          placeholder="Topic name"
+          aria-label="Topic name"
+          autoFocus
+        />
+      </Top>
+      {picking && (
+        <PickerBox>
+          <IconPicker selectedIcon={icon} onSelectIcon={i => { onIconChange(i); setPicking(false); }} />
+        </PickerBox>
+      )}
 
       {topicId !== undefined && onFieldDefsChange && (
-        <FieldsSection>
-          <FieldsSectionLabel>Custom Fields</FieldsSectionLabel>
-          {fieldDefs.map(f => (
-            <FieldRow key={f.id}>
-              <FieldLabelInput
-                value={f.label}
-                onChange={e => handleLabelChange(f.id, e.target.value)}
-                onBlur={e => { if (!e.target.value.trim()) handleRemoveField(f.id); }}
-              />
-              <TypeSelect value={f.type} onChange={e => handleTypeChange(f.id, e.target.value as UserFieldDef['type'])}>
-                {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </TypeSelect>
-              <IconActionBtn onClick={() => handleRemoveField(f.id)} title="Remove field">
-                <Icon name="x" size={14} strokeWidth={2} />
-              </IconActionBtn>
-            </FieldRow>
-          ))}
-          {adding ? (
-            <AddFieldRow>
-              <FieldLabelInput
-                value={newLabel}
-                onChange={e => setNewLabel(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleAddField();
-                  if (e.key === 'Escape') { setAdding(false); setNewLabel(''); }
-                }}
-                placeholder="Field name"
-                autoFocus
-              />
-              <TypeSelect value={newType} onChange={e => setNewType(e.target.value as UserFieldDef['type'])}>
-                {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </TypeSelect>
-              <IconActionBtn onClick={handleAddField} title="Add">
-                <Icon name="plus" size={14} strokeWidth={2} />
-              </IconActionBtn>
-              <IconActionBtn onClick={() => { setAdding(false); setNewLabel(''); }} title="Cancel">
-                <Icon name="x" size={14} strokeWidth={2} />
-              </IconActionBtn>
-            </AddFieldRow>
-          ) : (
-            <AddFieldBtn onClick={() => setAdding(true)}>
-              <Icon name="plus" size={10} strokeWidth={2} />
-              Add field
-            </AddFieldBtn>
-          )}
-        </FieldsSection>
+        <>
+          <Label>Custom fields</Label>
+          <Sub>Shown on every entry in this topic</Sub>
+          <Box>
+            {fieldDefs.map(f => (
+              <FieldRow key={f.id}>
+                <LabelInput
+                  aria-label="Field name"
+                  value={f.label}
+                  onChange={e => patchField(f.id, { label: e.target.value })}
+                  onBlur={e => { if (!e.target.value.trim()) removeField(f.id); }}
+                />
+                <TypeSelect label={`${f.label} type`} value={f.type} onChange={t => patchField(f.id, { type: t })} />
+                <RemoveBtn type="button" onClick={() => removeField(f.id)} aria-label={`Remove ${f.label}`} title="Remove field">
+                  <Icon name="x" size={14} strokeWidth={2} />
+                </RemoveBtn>
+              </FieldRow>
+            ))}
+            {adding ? (
+              <FieldRow>
+                <LabelInput
+                  aria-label="New field name"
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddField(); }
+                    if (e.key === 'Escape') { setAdding(false); setNewLabel(''); }
+                  }}
+                  placeholder="Field name"
+                  autoFocus
+                />
+                <TypeSelect label="New field type" value={newType} onChange={setNewType} />
+                <RemoveBtn type="button" onClick={() => { setAdding(false); setNewLabel(''); }} aria-label="Cancel new field" title="Cancel">
+                  <Icon name="x" size={14} strokeWidth={2} />
+                </RemoveBtn>
+              </FieldRow>
+            ) : (
+              <AddField type="button" onClick={() => setAdding(true)}>+ Add field</AddField>
+            )}
+          </Box>
+        </>
       )}
 
       {topicId !== undefined && onHideTextFieldChange && (
-        <Checkbox
-          checked={hideTextField}
-          onChange={onHideTextFieldChange}
-          label="Hide main text field (entries use custom fields; notes can be expanded)"
-        />
+        <OptionCard>
+          <div>
+            <strong className="opt-title">Hide main text field</strong>
+            <span className="opt-note">Entries use custom fields; notes can be expanded</span>
+          </div>
+          <Toggle checked={hideTextField} aria-label="Hide main text field" onChange={onHideTextFieldChange} />
+        </OptionCard>
       )}
 
       <Actions>
-        <PrimaryBtn $color={accentColor} $disabled={saving || !name.trim()} disabled={saving || !name.trim()} onClick={() => {
+        <PillButton type="button" $variant="neutral" onClick={onCancel}>{cancelLabel}</PillButton>
+        <PillButton type="button" disabled={saving || !name.trim()} onClick={() => {
           if (adding && newLabel.trim()) handleAddField();
           onSave();
         }}>
-          {saving ? 'Saving...' : saveLabel}
-        </PrimaryBtn>
-        <GhostBtn onClick={onCancel}>{cancelLabel}</GhostBtn>
+          {saving ? 'Saving…' : saveLabel}
+        </PillButton>
       </Actions>
-    </Card>
+    </Wrap>
   );
 }

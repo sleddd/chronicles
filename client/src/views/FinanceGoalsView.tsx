@@ -5,7 +5,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
 import { FormField } from '../components/molecules/FormField.js';
 import {
-  Section, SectionHead, Note, SmallPill, Tag, SubText, ProgressRing, Actions, SmallBtn, ConfirmDelete, ErrorNote,
+  Note, Actions, ErrorNote, RowMenu, RowBtn, PanelCard, CardTitle, type RowMenuItem,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { centsToInput, formatCents, formatDay, goalProgress, parseMoney, daysBetween, todayStr } from '../utils/finance.js';
@@ -17,45 +17,69 @@ const Center = styled.div`
   padding: 48px 0;
 `;
 
-const GoalRow = styled.div`
-  padding: 18px 0;
-  border-top: 1px solid var(--border-subtle);
-  &:last-child { border-bottom: 1px solid var(--border-subtle); }
-`;
-
-const GoalTop = styled.div`
+/* "2 active goals · $121.00 paid toward $8,940.00" with "+ New goal" across */
+const Top = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 16px;
-  margin-bottom: 10px;
-`;
-
-/* Amount + circle progress on the right, the ring in a little from the edge */
-const Progress = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  & > svg { margin-right: 20px; }
-`;
-
-const GoalName = styled.span<{ $done?: boolean }>`
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 300;
-  color: var(--text-primary);
-  text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
-`;
-
-/* "By Feb 16, 2027 · 123 days left / $0.00 of $6,000.00 · 0%" — italic, left of the ring */
-const Amounts = styled.span`
-  font-style: italic;
-  strong { font-weight: inherit; color: var(--text-primary); }
+  gap: 16px;
+  margin: 32px 0 24px;
   font-family: var(--font-sans);
   font-size: 15px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+`;
+
+const List = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+const GoalTop = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+`;
+
+const GoalName = styled(CardTitle)<{ $done?: boolean }>`
+  font-size: 22px;
+  text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
+  em { margin-left: 10px; font-family: var(--font-sans); font-style: normal; font-size: 13px; color: var(--text-muted); }
+`;
+
+const Sub = styled.div`
+  margin-top: 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+const Right = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+`;
+
+const Track = styled.div<{ $pct: number; $done: boolean }>`
+  height: 5px;
+  margin: 30px 0 12px;
+  border-radius: 3px;
+  background: linear-gradient(${({ $done }) => ($done ? 'var(--chart-green)' : 'var(--color-accent)')}, ${({ $done }) => ($done ? 'var(--chart-green)' : 'var(--color-accent)')}) no-repeat left / ${({ $pct }) => Math.max(2, $pct)}% 100%, var(--border-card);
+`;
+
+const Amounts = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  b { font-weight: 500; color: var(--text-secondary); }
+  .pct { color: var(--color-accent-link); }
 `;
 
 const EditorBox = styled.div`
@@ -179,55 +203,62 @@ function Goals() {
   const order = { active: 0, paused: 1, achieved: 2 } as const;
   const sorted = [...goals.records].sort((a, b) => order[a.status] - order[b.status] || (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999'));
 
+  const active = goals.records.filter(g => g.status === 'active');
+  const paid = active.reduce((t, g) => t + goalProgress(g, savings.records).currentCents, 0);
+  const toward = active.reduce((t, g) => t + g.targetCents, 0);
+
   return (
-    <Section>
-      <SectionHead style={{ justifyContent: 'flex-end' }}>
-        <SmallPill type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>New goal</SmallPill>
-      </SectionHead>
-      {editing === 'new' && <GoalEditor pots={savings.records} onSave={g => goals.save(g)} onCancel={() => setEditing(null)} />}
+    <section>
+      <Top>
+        <span>{active.length} active goal{active.length === 1 ? '' : 's'}{active.length ? ` · ${formatCents(paid)} paid toward ${formatCents(toward)}` : ''}</span>
+        <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>{editing === 'new' ? 'Close' : 'New finance goal'}</PillButton>
+      </Top>
+      {editing === 'new' && <PanelCard style={{ marginBottom: 16 }}><GoalEditor pots={savings.records} onSave={g => goals.save(g)} onCancel={() => setEditing(null)} /></PanelCard>}
       {sorted.length === 0 && editing !== 'new' ? (
         <Note>Set a target — an emergency fund, paying off a card, a trip — and watch your progress. Link a savings fund to track it automatically.</Note>
       ) : (
-        <div>
+        <List>
           {sorted.map(g => {
             if (editing === g.id) {
-              return <GoalEditor key={g.id} goal={g} pots={savings.records} onSave={x => goals.save(x)} onCancel={() => setEditing(null)} />;
+              return <PanelCard key={g.id}><GoalEditor goal={g} pots={savings.records} onSave={x => goals.save(x)} onCancel={() => setEditing(null)} /></PanelCard>;
             }
             const p = goalProgress(g, savings.records);
             const pot = g.savingsPotId ? savings.records.find(s => s.id === g.savingsPotId) : undefined;
+            const pct = Math.round(p.fraction * 100);
+            const sub = [dueNote(g.targetDate), pot ? `Tracking ${pot.name}` : g.savingsPotId ? 'Linked fund was deleted' : undefined, g.notes].filter(Boolean).join(' · ');
+            const menu: RowMenuItem[] = [
+              { label: 'Edit', onSelect: () => setEditing(g.id) },
+              ...(g.status === 'active' ? [{ label: 'Pause', onSelect: () => void goals.save({ ...g, status: 'paused' as const }) }] : []),
+              ...(g.status !== 'active' ? [{ label: 'Make active', onSelect: () => void goals.save({ ...g, status: 'active' as const }) }] : []),
+              { label: 'Delete goal', danger: true, confirmLabel: 'Click again to delete', onSelect: () => void goals.remove(g.id) },
+            ];
             return (
-              <GoalRow key={g.id}>
+              <PanelCard key={g.id} aria-label={g.name}>
                 <GoalTop>
-                  <span>
-                    <GoalName $done={g.status === 'achieved'}>{g.name}</GoalName>
-                    {g.status === 'paused' && <Tag>Paused</Tag>}
-                    {g.status === 'achieved' && <Tag $tone="success">Achieved</Tag>}
-                    {g.status === 'active' && p.reached && <Tag $tone="success">Reached</Tag>}
-                  </span>
-                  <Progress>
-                    <Amounts>
-                      {dueNote(g.targetDate) && <>{dueNote(g.targetDate)} / </>}
-                      {/* The amount stands out in the theme's main text colour */}
-                      <strong>{formatCents(p.currentCents)} of {formatCents(p.targetCents)} · {Math.round(p.fraction * 100)}%</strong>
-                    </Amounts>
-                    <ProgressRing fraction={p.fraction} tone={p.reached ? 'success' : 'default'} size={28} label={`${g.name}: ${Math.round(p.fraction * 100)}% of target`} />
-                  </Progress>
+                  <div style={{ minWidth: 0 }}>
+                    <GoalName $done={g.status === 'achieved'}>
+                      {g.name}
+                      {g.status === 'paused' && <em>Paused</em>}
+                      {g.status === 'achieved' && <em>Achieved</em>}
+                      {g.status === 'active' && p.reached && <em>Reached</em>}
+                    </GoalName>
+                    {sub && <Sub>{sub}</Sub>}
+                  </div>
+                  <Right>
+                    {g.status !== 'achieved' && <RowBtn type="button" onClick={() => void goals.save({ ...g, status: 'achieved' })}>Mark achieved</RowBtn>}
+                    <RowMenu label={`More actions for ${g.name}`} items={menu} />
+                  </Right>
                 </GoalTop>
-                {(pot || g.savingsPotId || g.notes) && (
-                  <SubText style={{ marginTop: 8 }}>
-                    {[pot ? `Tracking ${pot.name}` : g.savingsPotId ? 'Linked fund was deleted' : undefined, g.notes].filter(Boolean).join(' · ')}
-                  </SubText>
-                )}
-                <Actions style={{ justifyContent: 'flex-start', marginTop: 10 }}>
-                  {g.status !== 'achieved' && <SmallBtn type="button" onClick={() => void goals.save({ ...g, status: 'achieved' })}>Mark achieved</SmallBtn>}
-                  <SmallBtn type="button" onClick={() => setEditing(g.id)}>Edit</SmallBtn>
-                  <ConfirmDelete onConfirm={() => void goals.remove(g.id)} />
-                </Actions>
-              </GoalRow>
+                <Track $pct={Math.min(100, pct)} $done={p.reached || g.status === 'achieved'} aria-label={`${pct}% of target`} />
+                <Amounts>
+                  <span><b>{formatCents(p.currentCents)}</b> of {formatCents(p.targetCents)}</span>
+                  <span className="pct">{pct}%</span>
+                </Amounts>
+              </PanelCard>
             );
           })}
-        </div>
+        </List>
       )}
-    </Section>
+    </section>
   );
 }

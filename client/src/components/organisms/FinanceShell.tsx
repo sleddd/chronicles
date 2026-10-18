@@ -28,7 +28,13 @@ const Inner = styled.div`
   @media (max-width: 768px) { padding: 0 16px 48px; }
 `;
 
+/* Title on the left, the tab's own control (Budget's month) across from it */
 const Head = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
   padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
@@ -72,7 +78,7 @@ const Center = styled.div`
  * — routes aren't gated, so a bookmarked link lands here. Children render
  * only when it's on.
  */
-export function FinanceShell({ children, requiresReconcile = false }: { children: ReactNode; requiresReconcile?: boolean }) {
+export function FinanceShell({ children, requiresReconcile = false, headerAside }: { children: ReactNode; requiresReconcile?: boolean; headerAside?: ReactNode }) {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const enabled = useEntriesStore(s => s.featureFlags.financeEnabled === true);
   const reconcileOn = useEntriesStore(s => s.featureFlags.reconcileEnabled === true);
@@ -94,7 +100,7 @@ export function FinanceShell({ children, requiresReconcile = false }: { children
     <ContentTemplate>
       <Page>
         <Inner>
-          <Head><Title>{FINANCE_TITLE}</Title></Head>
+          <Head><Title>{FINANCE_TITLE}</Title>{enabled && headerAside}</Head>
           {enabled ? (
             <>
               <FinanceTabBar showReconcile={reconcileOn} />

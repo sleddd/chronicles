@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import { Icon } from '../atoms/core/Icon.jsx';
-import { CollapsibleCard } from './CollapsibleCard.js';
 import {
-  Note, StatStrip, Stat, Table, Row, TotalRow, Cell,
-  InlineForm, Field, SmallBtn, Actions, ConfirmDelete, ProgressRing, CellInput, Money, SubText,
+  Note, Actions, CellInput, StatBoxRow, StatCell,
+  SheetHead, SheetHeading, SheetBox, SheetLink, SHEET_RULE, UNPAID_COLOR,
 } from '../molecules/FinanceParts.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import {
-  budgetSummary, billTotals, centsToInput, formatCents, formatMonth, parseMoney, shiftMonth, UNCATEGORIZED,
+  budgetSummary, billTotals, centsToInput, formatCents, formatMonth, parseMoney, UNCATEGORIZED,
 } from '../../utils/finance.js';
 import { STARTER_CATEGORIES, type BudgetCategory, type FinanceRecord } from '../../types/finance.js';
 
@@ -19,119 +19,195 @@ interface BudgetTableProps {
   /** Reconcile's paydays (empty when it's off). */
   paydays: FinanceRecord<'paydays'>[];
   month: string;
-  onMonthChange: (month: string) => void;
   onSave: (category: BudgetCategory & { id?: string }) => Promise<unknown>;
   onDelete: (id: string) => void;
 }
 
-const COLS = 'minmax(0, 1.4fr) 120px repeat(3, minmax(0, 1fr))';
-const PHONE_COLS = 'minmax(0, 1fr) 100px 100px';
-
 /* First block on the page: FinanceShell places it just under the tabs, no top rule. */
 const Top = styled.section`
-  /* Month switcher sits closer to the tabs than other tabs' first blocks */
-  &&& { margin-top: 8px; }
+  &&& { margin-top: 32px; }
 `;
 
-const BudgetRow = styled(Row)`
-  @media (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) 100px 100px;
-    & > :nth-child(3), & > :nth-child(4) { display: none; }
-  }
+const Section = styled.section`
+  margin-top: 48px;
 `;
 
-const BudgetTotal = styled(TotalRow)`
-  @media (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) 100px 100px;
-    & > :nth-child(3), & > :nth-child(4) { display: none; }
-  }
-`;
+const COLS = 'minmax(0, 1.6fr) repeat(4, minmax(0, 1fr))';
 
-/* Totals row: rule on top, the card heading font a touch smaller (like Bills'
-   Total Active Bills), amounts italic */
-const BudgetTotals = styled(BudgetTotal)`
-  & > * { padding-top: 14px; }
-  border-top: 1px solid var(--border-subtle);
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 300;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--text-primary);
+const Grid = styled.div`
+  display: grid;
+  grid-template-columns: ${COLS};
+  align-items: center;
+  gap: 16px;
+  padding: 14px 28px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-  & > :not(:first-child) { font-style: italic; }
+  & > :not(:first-child) { text-align: right; }
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr) 90px 90px;
+    padding: 12px 16px;
+    & > :nth-child(3), & > :nth-child(4) { display: none; }
+  }
 `;
 
-const HeadRow = styled(BudgetTotal)`
-  /* Sits right on the stats' hairline; the gap is inside the cells so the column rules reach it */
-  & > * { padding-top: 14px; }
-  font-size: 10px;
-  color: var(--text-tertiary);
+const HeadGrid = styled(Grid)`
+  padding-top: 16px;
+  padding-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
 `;
 
-/* Month switcher: ‹ on the left, the month centred, › on the right, with a
-   hairline under it (none above — it's the first thing under the tabs). */
-const Month = styled.div`
+const Name = styled.div`
+  min-width: 0;
+  span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+`;
+
+/* 3px bar under the name: share of the budget used (bills + spending) */
+const Bar = styled.div<{ $pct: number; $over: boolean }>`
+  width: min(100%, 160px);
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: linear-gradient(${({ $over }) => ($over ? 'var(--color-danger)' : 'var(--color-accent)')}, ${({ $over }) => ($over ? 'var(--color-danger)' : 'var(--color-accent)')}) no-repeat left / ${({ $pct }) => $pct}% 100%, ${SHEET_RULE};
+`;
+
+const Unpaid = styled.span`
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: ${UNPAID_COLOR};
+`;
+
+const Quiet = styled.span`
+  color: var(--text-muted);
+`;
+
+/* Categories: one outlined box of rows — ↑/↓, the name (click to rename),
+   archive and delete icons — ending in an "+ Add a category" row */
+const CatRow = styled.div<{ $archived?: boolean }>`
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 46px;
+  padding: 4px 16px 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: ${({ $archived }) => ($archived ? 'var(--text-muted)' : 'var(--text-secondary)')};
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+`;
+
+const Move = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  button {
+    display: inline-flex;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    &:hover:not(:disabled) { color: var(--text-primary); }
+    &:disabled { opacity: 0.3; cursor: default; }
+  }
+`;
+
+const CatName = styled.button`
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+  small { margin-left: 8px; font-size: 12px; color: var(--text-muted); }
+`;
+
+const IconBtns = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  margin: 0 0 36px;
-  padding: 0 0 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  span { flex: 1; text-align: center; }
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 300;
-  color: var(--text-primary);
+  gap: 18px;
 `;
 
-/* Large plain prev/next carets for the month switcher */
-const CaretBtn = styled.button`
+const IconBtn = styled.button<{ $danger?: boolean }>`
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  color: var(--text-secondary);
-  background: transparent;
+  gap: 6px;
+  padding: 2px;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  &:hover { color: var(--text-primary); background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-`;
-
-/** Open/closed memory for the Budget & Bills cards. */
-export const FINANCE_CARDS_KEY = 'finance-budget-collapsed-v1';
-
-const CardGap = styled.div`
-  margin-top: 32px;
-`;
-
-/* Category name on the left, its budget-used ring on the right */
-const NameCell = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  /* Ring sits in a little from the column's right edge */
-  & > svg { margin-right: 20px; }
-`;
-
-const ManageRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border-subtle);
+  background: none;
   font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-primary);
-  & > :first-child { flex: 1; min-width: 0; }
+  font-size: 13px;
+  color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
+const RenameInput = styled.input`
+  && {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+`;
+
+const AddCat = styled.form`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0 20px;
+  background: var(--bg-panel);
+  border-top: 1px solid ${SHEET_RULE};
+  color: var(--text-muted);
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-secondary);
+  }
+  input::placeholder { color: var(--text-hint); }
+`;
+
+const Count = styled.span`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+/* The planned amount reads as plain text until you click into it */
+const PlainInput = styled(CellInput)`
+  && {
+    min-height: 28px;
+    padding: 0 6px;
+    background-color: transparent !important;
+    font-size: 15px;
+    color: var(--text-secondary);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  &&:hover { background-color: var(--bg-row-hover) !important; }
+  &&:focus { background-color: var(--bg-sunken) !important; }
 `;
 
 /** Planned amount typed straight into the row; saved on blur / Enter. */
@@ -144,14 +220,13 @@ function PlannedInput({ category, onSave }: { category: FinanceRecord<'budget'>;
     setText(centsToInput(cents));
   };
   return (
-    <CellInput
+    <PlainInput
       inputMode="decimal"
       aria-label={`${category.name} planned per month`}
       value={text}
       onChange={e => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-      style={{ textAlign: 'right' }}
     />
   );
 }
@@ -161,7 +236,7 @@ function PlannedInput({ category, onSave }: { category: FinanceRecord<'budget'>;
  * month (straight from the bills list — paid ones are marked, not counted
  * twice) and what was spent.
  */
-export function BudgetTable({ categories, bills, expenses, paydays, month, onMonthChange, onSave, onDelete }: BudgetTableProps) {
+export function BudgetTable({ categories, bills, expenses, paydays, month, onSave, onDelete }: BudgetTableProps) {
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [seeding, setSeeding] = useState(false);
@@ -181,125 +256,145 @@ export function BudgetTable({ categories, bills, expenses, paydays, month, onMon
     setSeeding(false);
   };
 
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [managing, setManaging] = useState(false);
+  const remaining = summary.totals.plannedCents > 0 ? Math.max(0, Math.round((summary.totals.leftCents / summary.totals.plannedCents) * 100)) : 0;
+  const activeCount = sortedCats.filter(c => !c.archived).length;
+  const move = (idx: number, dir: -1 | 1) => {
+    const c = sortedCats[idx];
+    const other = sortedCats[idx + dir];
+    if (!other) return;
+    void onSave({ ...c, order: other.order });
+    void onSave({ ...other, order: c.order === other.order ? c.order - dir : c.order });
+  };
+  const commitRename = (c: FinanceRecord<'budget'>) => {
+    if (renaming && renaming.name.trim() && renaming.name.trim() !== c.name) void onSave({ ...c, name: renaming.name.trim() });
+    setRenaming(null);
+  };
+
   return (
     <Top>
-      {/* Month switcher first, right under the tabs; the stats and table below are for this month */}
-      <Month>
-        <CaretBtn type="button" aria-label="Previous month" onClick={() => onMonthChange(shiftMonth(month, -1))}>
-          <Icon name="chevron-left" size={32} strokeWidth={1.5} />
-        </CaretBtn>
-        <span>{formatMonth(month)}</span>
-        <CaretBtn type="button" aria-label="Next month" onClick={() => onMonthChange(shiftMonth(month, 1))}>
-          <Icon name="chevron-right" size={32} strokeWidth={1.5} />
-        </CaretBtn>
-      </Month>
+      <StatBoxRow $cols={4}>
+        <StatCell label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
+        <StatCell label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
+        <StatCell label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
+        <StatCell label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'accent'}
+          sub={summary.totals.leftCents < 0 ? 'Over plan' : `${remaining}% of plan remaining`} />
+      </StatBoxRow>
 
-      {/* Hairline between the stats and the category table's headers */}
-      <StatStrip $cols={4} style={{ paddingBottom: 36, borderBottom: '1px solid var(--border-subtle)' }}>
-        <Stat label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
-        <Stat label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
-        <Stat label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
-        <Stat label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'default'} />
-      </StatStrip>
+      <Section aria-label="By category">
+        <SheetHead><SheetHeading>By category</SheetHeading></SheetHead>
+        {sortedCats.length === 0 ? (
+          <>
+            <Note>Set up categories with a planned amount each month — start with a set below, or add your own under Categories. Bills count in their category as soon as you add them, and spending you log fills in the rest.</Note>
+            <Actions style={{ justifyContent: 'flex-start', marginTop: 12 }}>
+              <PillButton type="button" disabled={seeding} onClick={() => void addStarters()}>Add starter categories</PillButton>
+            </Actions>
+          </>
+        ) : (
+          <SheetBox role="table" aria-label={`Budget for ${formatMonth(month)}`}>
+            <HeadGrid role="row">
+              <span>Category</span><span>Planned</span><span>Bills</span><span>Spent</span><span>Left</span>
+            </HeadGrid>
+            {summary.rows.map(r => {
+              const cat = sortedCats.find(c => c.id === r.categoryId);
+              const used = r.billsCents + r.spendingCents;
+              const over = r.leftCents < 0;
+              const unpaid = r.billsCents - r.paidCents;
+              return (
+                <Grid key={r.categoryId} role="row" style={cat?.archived ? { color: 'var(--text-muted)' } : undefined}>
+                  <Name>
+                    <span>{r.name}</span>
+                    <Bar $pct={r.plannedCents > 0 ? Math.min(100, (used / r.plannedCents) * 100) : 0} $over={over}
+                      aria-label={r.plannedCents > 0 ? `${Math.round((used / r.plannedCents) * 100)}% of budget used` : undefined} />
+                  </Name>
+                  {cat && r.categoryId !== UNCATEGORIZED
+                    ? <span><PlannedInput key={`${cat.id}:${cat.monthlyPlannedCents}`} category={cat} onSave={onSave} /></span>
+                    : <Quiet>—</Quiet>}
+                  <span>
+                    {formatCents(r.billsCents)}
+                    {unpaid > 0 && <Unpaid>{formatCents(unpaid)} unpaid</Unpaid>}
+                  </span>
+                  {r.spendingCents ? <span>{formatCents(r.spendingCents)}</span> : <Quiet>{formatCents(0)}</Quiet>}
+                  {over
+                    ? <span style={{ color: 'var(--color-danger)' }}>{formatCents(-r.leftCents)} over</span>
+                    : r.leftCents > 0
+                      ? <span style={{ color: 'var(--color-accent-link)' }}>{formatCents(r.leftCents)}</span>
+                      : <Quiet>{formatCents(0)}</Quiet>}
+                </Grid>
+              );
+            })}
+          </SheetBox>
+        )}
+        {/* The category editor stays folded away until asked for */}
+        <SheetLink type="button" style={{ marginTop: 18 }} aria-expanded={managing} onClick={() => setManaging(m => !m)}>
+          {managing ? 'Done managing categories' : 'Manage categories'}
+        </SheetLink>
+      </Section>
 
-
-      {sortedCats.length === 0 ? (
-        <>
-          <Note>Set up categories with a planned amount each month — start with a set below, or add your own under Categories. Bills count in their category as soon as you add them, and spending you log fills in the rest.</Note>
-          <Actions style={{ justifyContent: 'flex-start', marginTop: 12 }}>
-            <PillButton type="button" disabled={seeding} onClick={() => void addStarters()}>Add starter categories</PillButton>
-          </Actions>
-        </>
-      ) : (
-        <Table $cols={COLS} $phoneCols={PHONE_COLS}>
-          <HeadRow $cols={COLS} aria-hidden="true">
-            <span>Category</span><Cell $right>Planned</Cell><Cell $right>Bills</Cell><Cell $right>Spending</Cell><Cell $right>Left</Cell>
-          </HeadRow>
-          {summary.rows.map(r => {
-            const cat = sortedCats.find(c => c.id === r.categoryId);
-            const used = r.billsCents + r.spendingCents;
-            const over = r.leftCents < 0;
-            return (
-              <BudgetRow key={r.categoryId} $cols={COLS} $muted={cat?.archived}>
-                <NameCell>
-                  <span>{r.name}</span>
-                  {r.plannedCents > 0 && (
-                    <ProgressRing
-                      fraction={used / r.plannedCents}
-                      tone={over ? 'danger' : 'default'}
-                      label={`${r.name}: ${Math.round((used / r.plannedCents) * 100)}% of budget used`}
-                    />
-                  )}
-                </NameCell>
-                {cat && r.categoryId !== UNCATEGORIZED
-                  ? <Cell $right><PlannedInput key={`${cat.id}:${cat.monthlyPlannedCents}`} category={cat} onSave={onSave} /></Cell>
-                  : <Cell $right $muted>—</Cell>}
-                <Cell $right>
-                  <Money cents={r.billsCents} />
-                  {r.billsCents > 0 && <SubText>{r.paidCents >= r.billsCents ? 'all paid' : r.paidCents ? `${formatCents(r.paidCents)} paid` : 'unpaid'}</SubText>}
-                </Cell>
-                <Cell $right><Money cents={r.spendingCents} /></Cell>
-                <Cell $right style={over ? { color: 'var(--color-danger)' } : undefined}>
-                  {over ? `${formatCents(-r.leftCents)} over` : formatCents(r.leftCents)}
-                </Cell>
-              </BudgetRow>
-            );
-          })}
-          <BudgetTotals $cols={COLS}>
-            <span>Totals</span>
-            <Cell $right>{formatCents(summary.totals.plannedCents)}</Cell>
-            <Cell $right>{formatCents(summary.totals.billsCents)}</Cell>
-            <Cell $right>{formatCents(summary.totals.spendingCents)}</Cell>
-            <Cell $right>{formatCents(summary.totals.leftCents)}</Cell>
-          </BudgetTotals>
-        </Table>
-      )}
-
-      <CardGap>
-        <CollapsibleCard id="categories" title="Categories" storageKey={FINANCE_CARDS_KEY} defaultOpen={false}>
-          {sortedCats.length === 0 && <Note>No categories yet.</Note>}
+      {managing && <Section aria-label="Categories">
+        <SheetHead>
+          <SheetHeading>Categories</SheetHeading>
+          <Count>{activeCount} active</Count>
+        </SheetHead>
+        <SheetBox>
           {sortedCats.map((c, idx) => (
-            <ManageRow key={c.id}>
+            <CatRow key={c.id} $archived={c.archived}>
+              <Move>
+                <button type="button" aria-label={`Move ${c.name} up`} disabled={idx === 0} onClick={() => move(idx, -1)}>
+                  <Icon name="chevron-up" size={16} strokeWidth={2} />
+                </button>
+                <button type="button" aria-label={`Move ${c.name} down`} disabled={idx === sortedCats.length - 1} onClick={() => move(idx, 1)}>
+                  <Icon name="chevron-down" size={16} strokeWidth={2} />
+                </button>
+              </Move>
               {renaming?.id === c.id ? (
-                <CellInput
+                <RenameInput
                   aria-label="Category name"
                   value={renaming.name}
                   autoFocus
                   onChange={e => setRenaming({ id: c.id, name: e.target.value })}
+                  onBlur={() => commitRename(c)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter' && renaming.name.trim()) { void onSave({ ...c, name: renaming.name.trim() }); setRenaming(null); }
+                    if (e.key === 'Enter') commitRename(c);
                     if (e.key === 'Escape') setRenaming(null);
                   }}
                 />
               ) : (
-                <span style={{ color: c.archived ? 'var(--text-tertiary)' : undefined }}>{c.name}{c.archived ? ' (archived)' : ''}</span>
+                <CatName type="button" title="Rename" onClick={() => setRenaming({ id: c.id, name: c.name })}>
+                  {c.name}{c.archived && <small>Archived</small>}
+                </CatName>
               )}
-              <Actions>
-                {renaming?.id === c.id
-                  ? <SmallBtn type="button" disabled={!renaming.name.trim()} onClick={() => { void onSave({ ...c, name: renaming.name.trim() }); setRenaming(null); }}>Save</SmallBtn>
-                  : <SmallBtn type="button" onClick={() => setRenaming({ id: c.id, name: c.name })}>Rename</SmallBtn>}
-                <SmallBtn type="button" disabled={idx === 0} aria-label={`Move ${c.name} up`} onClick={() => {
-                  const prev = sortedCats[idx - 1];
-                  void onSave({ ...c, order: prev.order });
-                  void onSave({ ...prev, order: c.order === prev.order ? c.order + 1 : c.order });
-                }}>↑</SmallBtn>
-                <SmallBtn type="button" onClick={() => void onSave({ ...c, archived: !c.archived || undefined })}>{c.archived ? 'Restore' : 'Archive'}</SmallBtn>
-                <ConfirmDelete onConfirm={() => onDelete(c.id)} />
-              </Actions>
-            </ManageRow>
+              <IconBtns>
+                <IconBtn type="button" title={c.archived ? 'Restore' : 'Archive'} aria-label={c.archived ? `Restore ${c.name}` : `Archive ${c.name}`}
+                  onClick={() => void onSave({ ...c, archived: !c.archived || undefined })}>
+                  <MaterialIcon $size={20}>{c.archived ? 'unarchive' : 'archive'}</MaterialIcon>
+                </IconBtn>
+                {deleting === c.id ? (
+                  <IconBtn type="button" $danger autoFocus onBlur={() => setDeleting(null)}
+                    onClick={() => { setDeleting(null); onDelete(c.id); }} aria-label={`Confirm delete ${c.name}`}>
+                    <MaterialIcon $size={20}>delete</MaterialIcon>Delete?
+                  </IconBtn>
+                ) : (
+                  <IconBtn type="button" title="Delete" aria-label={`Delete ${c.name}`} onClick={() => setDeleting(c.id)}>
+                    <MaterialIcon $size={20}>delete</MaterialIcon>
+                  </IconBtn>
+                )}
+              </IconBtns>
+            </CatRow>
           ))}
-          <InlineForm style={{ marginTop: 24 }} onSubmit={e => {
+          <AddCat onSubmit={e => {
             e.preventDefault();
             if (!newName.trim()) return;
             void onSave({ name: newName.trim(), monthlyPlannedCents: 0, order: nextOrder });
             setNewName('');
           }}>
-            <Field $grow><input aria-label="New category" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Type to add a new category (e.g. pets, kids, gifts…)" /></Field>
-            <Actions><PillButton type="submit" disabled={!newName.trim()}>Add</PillButton></Actions>
-          </InlineForm>
-          <Note style={{ marginTop: 20, fontStyle: 'italic' }}>Archive keeps a category's history but hides it from new bills and spending. Deleting leaves its lines uncategorized.</Note>
-        </CollapsibleCard>
-      </CardGap>
+            <Icon name="plus" size={16} strokeWidth={2} />
+            <input aria-label="Add a category" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Add a category, e.g. pets, kids, gifts" />
+          </AddCat>
+        </SheetBox>
+        <Note style={{ marginTop: 12, color: 'var(--text-muted)' }}>Click a name to rename it. Archive keeps a category's history but hides it from new bills and spending; deleting leaves its lines uncategorized.</Note>
+      </Section>}
     </Top>
   );
 }

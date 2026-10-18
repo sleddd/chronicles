@@ -62,9 +62,9 @@ describe('EditableEntryCard (swipeable row — no inline editing)', () => {
     expect(openInJournal).toHaveBeenCalledWith(42);
   });
 
-  it('exposes swipe edit and delete actions', () => {
+  it('swipes to Delete only (no swipe Edit — tapping the row opens it)', () => {
     renderCard();
-    expect(screen.getByLabelText('Edit')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Edit')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Delete')).toBeInTheDocument();
   });
 
@@ -74,11 +74,5 @@ describe('EditableEntryCard (swipeable row — no inline editing)', () => {
     fireEvent.click(screen.getByLabelText('Delete'));
     await waitFor(() => expect(deleteEntryWithImages).toHaveBeenCalledWith(42));
     expect(onDeleted).toHaveBeenCalled();
-  });
-
-  it('swipe-edit opens the journal editor', () => {
-    renderCard();
-    fireEvent.click(screen.getByLabelText('Edit'));
-    expect(openInJournal).toHaveBeenCalledWith(42);
   });
 });

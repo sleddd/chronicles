@@ -7,6 +7,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { MonthGroups } from '../components/molecules/MonthGroups.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
@@ -161,17 +162,15 @@ export function ShoppingListsView() {
             />
           ) : (
             <List>
-              {visible.map(({ entry, completed }, i) => {
+              <MonthGroups items={visible} keyOf={v => v.entry.id} dateOf={v => (v.entry.createdAt instanceof Date ? v.entry.createdAt : new Date(v.entry.createdAt))}>{({ entry, completed }) => {
                 const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
                 return (
                   <SwipeActions
                     key={entry.id}
                     accentColor={accentColor}
-                    onEdit={() => openInJournal(entry.id)}
                     onDelete={() => handleDelete(entry.id)}
                   >
                     <EntryListCard
-                      hint={i === 0}
                       content={entry.content}
                       createdAt={created}
                       completed={completed}
@@ -180,7 +179,7 @@ export function ShoppingListsView() {
                     />
                   </SwipeActions>
                 );
-              })}
+              }}</MonthGroups>
             </List>
           )}
         </Inner>

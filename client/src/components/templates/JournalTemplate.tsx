@@ -21,7 +21,7 @@ const Head = styled.header`
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px 24px;
-  padding: 28px 36px 20px;
+  padding: 28px 36px 30px;
   border-bottom: 1px solid var(--border-subtle);
   @media (max-width: 768px) { padding: 20px 16px 14px; align-items: center; row-gap: 10px; }
 `;

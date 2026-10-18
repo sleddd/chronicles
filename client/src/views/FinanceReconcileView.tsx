@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { PillButton } from '../components/atoms/PillButton.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
-import { CurrentPaydayRow, PaydayEditor, RECONCILE_CARDS_KEY, type PaydayRecord } from '../components/organisms/PaydayEditor.js';
-import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
+import { PaydayEditor, PaydayHeader, type PaydayRecord } from '../components/organisms/PaydayEditor.js';
 import {
-  Note, TextAction, SmallPill, Table, Row, Cell, Tag, InlineForm, Field, Actions, Money, ErrorNote,
+  Note, TextAction, ErrorNote, ClearBox, FieldRow, OutlineBtn, SheetHead, SheetHeading, SheetBox, SheetLink, SHEET_RULE,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
-import { formatDay, isReadyToSpend, newId, parseMoney, paydaySummary, sortPaydays, todayStr } from '../utils/finance.js';
+import { formatCents, formatDay, isReadyToSpend, newId, parseMoney, paydaySummary, sortPaydays, todayStr } from '../utils/finance.js';
 import type { Payday, PaydayItem } from '../types/finance.js';
 
 const Center = styled.div`
@@ -19,7 +17,7 @@ const Center = styled.div`
 `;
 
 const StartBox = styled.div`
-  margin-top: 28px;
+  margin-top: 32px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -28,33 +26,53 @@ const StartBox = styled.div`
 const Check = styled.label`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-family: var(--font-sans);
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--text-soft);
   cursor: pointer;
 `;
 
-const HISTORY_COLS = 'minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)) 110px';
-const HISTORY_COLS_PHONE = 'minmax(0, 1fr) minmax(0, 1fr) 90px';
+const Section = styled.section`
+  margin-top: 44px;
+`;
 
-const HistoryRow = styled(Row)`
-  cursor: pointer;
+/* Past paydays: payday | starting | paid | leftover | status */
+const HistGrid = styled.div<{ $active?: boolean; $head?: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)) 130px;
+  align-items: center;
+  gap: 16px;
+  padding: ${({ $head }) => ($head ? '16px 28px 12px' : '14px 28px')};
+  font-family: var(--font-sans);
+  font-size: ${({ $head }) => ($head ? '13px' : '15px')};
+  color: ${({ $head }) => ($head ? 'var(--text-muted)' : 'var(--text-secondary)')};
+  background: ${({ $active }) => ($active ? 'var(--bg-row-hover)' : 'transparent')};
+  cursor: ${({ $head }) => ($head ? 'default' : 'pointer')};
+  font-variant-numeric: tabular-nums;
+  & > :not(:first-child) { text-align: right; }
+  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  ${({ $head }) => ($head ? '' : '&:hover { background: var(--bg-row-hover); }')}
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  small { margin-left: 6px; font-size: 13px; color: var(--text-muted); }
+  .left { color: var(--color-accent-link); }
   @media (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 90px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 110px;
+    padding-left: 16px; padding-right: 16px;
     & > :nth-child(2), & > :nth-child(3) { display: none; }
   }
 `;
 
-const HistoryHead = styled(HistoryRow)`
-  cursor: default;
-  font-family: var(--font-label);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  &:hover { background: transparent; }
+const StatusPill = styled.span<{ $tone: 'ok' | 'muted' }>`
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: ${({ $tone }) => ($tone === 'ok' ? 'color-mix(in srgb, var(--color-accent) 16%, var(--bg-app))' : 'var(--bg-row-hover)')};
+  color: ${({ $tone }) => ($tone === 'ok' ? 'var(--color-accent-link)' : 'var(--text-muted)')};
 `;
 
 /** Waiting lines on a payday that could move to a new one. */
@@ -79,22 +97,24 @@ function StartPayday({ previous, onStart, onCancel }: {
         Start with your bank balance once everything has posted (paycheck included). Then add the bills you're paying,
         and tick each one off as it clears.
       </Note>
-      <InlineForm onSubmit={e => {
+      <form onSubmit={e => {
         e.preventDefault();
         if (cents === null) return;
         const carried = carry ? waiting.map(i => ({ ...i, id: newId(), clearedOn: undefined })) : [];
         onStart({ date, startingBalanceCents: cents, status: 'open', items: carried, spending: [], balanceChecks: [] }, carry && waiting.length ? previous : undefined);
       }}>
-        <Field $w="170px"><span>Payday</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></Field>
-        <Field $w="200px"><span>Starting balance</span><input inputMode="decimal" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0.00" autoFocus /></Field>
-        <Actions>
-          <PillButton type="submit" disabled={cents === null || !date}>Start payday</PillButton>
-          {onCancel && <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>}
-        </Actions>
-      </InlineForm>
+        <FieldRow $cols="180px 200px auto" style={{ width: 'fit-content', maxWidth: '100%' }}>
+          <label><input type="date" aria-label="Payday" value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label><span className="pre">$</span><input aria-label="Starting balance" inputMode="decimal" value={balance} onChange={e => setBalance(e.target.value)} placeholder="Starting balance" autoFocus /></label>
+          <label style={{ gap: 6, padding: '0 6px' }}>
+            {onCancel && <OutlineBtn type="button" $tone="neutral" style={{ height: 30 }} onClick={onCancel}>Cancel</OutlineBtn>}
+            <OutlineBtn type="submit" style={{ height: 30 }} disabled={cents === null || !date}>Start payday</OutlineBtn>
+          </label>
+        </FieldRow>
+      </form>
       {waiting.length > 0 && previous && (
         <Check>
-          <input type="checkbox" checked={carry} onChange={e => setCarry(e.target.checked)} />
+          <ClearBox checked={carry} onChange={e => setCarry(e.target.checked)} />
           Carry over {waiting.length} line{waiting.length === 1 ? '' : 's'} still waiting from {formatDay(previous.date)} (and close that payday)
         </Check>
       )}
@@ -156,44 +176,40 @@ function Reconcile() {
       {!current || starting ? (
         <StartPayday previous={sorted[0]} onStart={(p, from) => void start(p, from)} onCancel={current ? () => setStarting(false) : undefined} />
       ) : (
-        <PaydayEditor
-          key={current.id}
-          payday={current}
-          bills={bills.records}
-          categories={categories}
-          onChange={next => void paydays.save(next)}
-        />
+        <>
+          <PaydayHeader
+            key={`h-${current.id}`}
+            payday={current}
+            onChange={next => void paydays.save(next)}
+            onDelete={() => { void paydays.remove(current.id); setSelectedId(null); }}
+            onNew={() => setStarting(true)}
+          />
+          <PaydayEditor
+            key={current.id}
+            payday={current}
+            bills={bills.records}
+            categories={categories}
+            onChange={next => void paydays.save(next)}
+          />
+        </>
       )}
 
       {sorted.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-        <CollapsibleCard
-          id="paydays"
-          title="Paydays"
-          storageKey={RECONCILE_CARDS_KEY}
-          action={starting ? undefined : (
-            <SmallPill type="button" style={{ marginRight: 16 }} onClick={() => setStarting(true)}>New payday</SmallPill>
-          )}
-        >
-          {!starting && current && (
-            <CurrentPaydayRow
-              key={current.id}
-              payday={current}
-              onChange={next => void paydays.save(next)}
-              onDelete={() => { void paydays.remove(current.id); setSelectedId(null); }}
-            />
-          )}
-          <Table $cols={HISTORY_COLS} $phoneCols={HISTORY_COLS_PHONE}>
-            <HistoryHead $cols={HISTORY_COLS} as="div" aria-hidden="true">
-              <span>Payday</span><Cell $right>Starting</Cell><Cell $right>Paid</Cell><Cell $right>Leftover</Cell><Cell $right>Status</Cell>
-            </HistoryHead>
+        <Section aria-label="Past paydays">
+          <SheetHead>
+            <SheetHeading>Past paydays</SheetHeading>
+            {!starting && <SheetLink type="button" onClick={() => setStarting(true)}>+ New payday</SheetLink>}
+          </SheetHead>
+          <SheetBox>
+            <HistGrid $head aria-hidden="true">
+              <span>Payday</span><span>Starting</span><span>Paid</span><span>Leftover</span><span>Status</span>
+            </HistGrid>
             {sorted.map(p => {
               const s = paydaySummary(p);
               const active = !starting && current?.id === p.id;
               return (
-                <HistoryRow
+                <HistGrid
                   key={p.id}
-                  $cols={HISTORY_COLS}
                   $active={active}
                   role="button"
                   tabIndex={0}
@@ -201,19 +217,22 @@ function Reconcile() {
                   onClick={() => { setSelectedId(p.id); setStarting(false); window.scrollTo?.({ top: 0 }); }}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(p.id); setStarting(false); } }}
                 >
-                  <span>{formatDay(p.date)}</span>
-                  <Cell $right><Money cents={p.startingBalanceCents} /></Cell>
-                  <Cell $right><Money cents={s.payingCents} out /></Cell>
-                  <Cell $right><Money cents={s.leftoverCents} /></Cell>
-                  <Cell $right>
-                    {p.status === 'closed' ? <Tag>Closed</Tag> : isReadyToSpend(p) ? <Tag $tone="accent">OK to spend</Tag> : <Tag>{s.waitingCount} waiting</Tag>}
-                  </Cell>
-                </HistoryRow>
+                  <span>{formatDay(p.date)}{active && <small>· current</small>}</span>
+                  <span>{formatCents(p.startingBalanceCents)}</span>
+                  <span>−{formatCents(s.payingCents)}</span>
+                  <span className="left">{formatCents(s.leftoverCents)}</span>
+                  <span>
+                    {p.status === 'closed'
+                      ? <StatusPill $tone="muted">Closed</StatusPill>
+                      : s.waitingCount === 0
+                        ? <StatusPill $tone="ok">{isReadyToSpend(p) ? 'OK to spend' : 'All cleared'}</StatusPill>
+                        : <StatusPill $tone="muted">{s.waitingCount} waiting</StatusPill>}
+                  </span>
+                </HistGrid>
               );
             })}
-          </Table>
-        </CollapsibleCard>
-        </div>
+          </SheetBox>
+        </Section>
       )}
     </>
   );

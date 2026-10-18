@@ -21,7 +21,7 @@ describe('TopicEditForm', () => {
 
   it('renders save and cancel buttons', () => {
     renderWithTheme(<TopicEditForm {...baseProps} />);
-    expect(screen.getByText('Save')).toBeInTheDocument();
+    expect(screen.getByText('Save topic')).toBeInTheDocument();
     expect(screen.getByText('Cancel')).toBeInTheDocument();
   });
 
@@ -40,7 +40,7 @@ describe('TopicEditForm', () => {
   it('calls onSave when save is clicked', () => {
     const onSave = vi.fn();
     renderWithTheme(<TopicEditForm {...baseProps} onSave={onSave} />);
-    fireEvent.click(screen.getByText('Save'));
+    fireEvent.click(screen.getByText('Save topic'));
     expect(onSave).toHaveBeenCalledOnce();
   });
 
@@ -67,17 +67,19 @@ describe('TopicEditForm', () => {
 
   it('disables save button when name is empty', () => {
     renderWithTheme(<TopicEditForm {...baseProps} name="" />);
-    const saveBtn = screen.getByText('Save');
+    const saveBtn = screen.getByText('Save topic');
     expect(saveBtn).toBeDisabled();
   });
 
   it('disables save button when saving', () => {
     renderWithTheme(<TopicEditForm {...baseProps} saving />);
-    expect(screen.getByText('Saving...')).toBeDisabled();
+    expect(screen.getByText('Saving…')).toBeDisabled();
   });
 
   it('renders icon picker section', () => {
     renderWithTheme(<TopicEditForm {...baseProps} />);
-    expect(screen.getByText('Icon (optional)')).toBeInTheDocument();
+    // The icon tile opens the picker
+    fireEvent.click(screen.getByRole('button', { name: 'Choose an icon' }));
+    expect(screen.getByTitle('No icon')).toBeInTheDocument();
   });
 });
