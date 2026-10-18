@@ -14,8 +14,9 @@ Screenshots are from October 2026 and may change.
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
 
-<img width="1418" height="739" alt="Screenshot 2026-10-17 at 10 32 40 PM" src="https://github.com/user-attachments/assets/8e59a461-2e89-48ba-860b-13d1427b5dc4" />
-<img width="1408" height="736" alt="Screenshot 2026-10-17 at 10 33 18 PM" src="https://github.com/user-attachments/assets/3f0c37f4-ff8a-419e-aeb8-3c887ab0c0be" />
+<img width="1341" height="709" alt="Screenshot 2026-10-18 at 1 05 04 PM" src="https://github.com/user-attachments/assets/3de508c0-a605-4d6f-8124-b6690bfe069c" />
+<img width="1334" height="721" alt="Screenshot 2026-10-18 at 1 05 13 PM" src="https://github.com/user-attachments/assets/0ed9a807-f600-43fd-a6cc-495910b3f6a5" />
+<img width="1332" height="717" alt="Screenshot 2026-10-18 at 1 04 55 PM" src="https://github.com/user-attachments/assets/ce364ad3-a8d5-41d1-b480-70aed8ffe458" />
 
 
 ### Journal
