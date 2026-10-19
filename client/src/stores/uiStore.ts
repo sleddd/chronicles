@@ -63,6 +63,8 @@ interface UIState {
 
   // Profile
   displayName: string;
+  /** Drop what was decrypted into this store (lock): reloaded from sealed settings on unlock */
+  clearPrivateState: () => void;
   setDisplayName: (name: string) => void;
 
   // User-defined custom fields per topic
@@ -154,6 +156,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   displayName: '',
   setDisplayName: (name) => set({ displayName: name }),
+  clearPrivateState: () => set({ displayName: '', topicCustomFields: {}, topicHideText: {}, googleCalendarId: '' }),
 
   topicCustomFields: {},
   setTopicCustomFields: (fields) => set({ topicCustomFields: fields }),

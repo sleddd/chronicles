@@ -7,6 +7,8 @@ import { clearImageCache, rederiveImageStorageConfig } from '../services/imageSt
 import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
 import { clearRecordCipher, installRecordCipher } from '../services/recordCipher.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
+import { useEntriesStore } from '../stores/entriesStore.js';
+import { useUIStore } from '../stores/uiStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
   hasRememberedUnlock, lastActivity, markActivity, startRemembering, storeRemembered,
@@ -128,6 +130,10 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearRecordCipher();
     // And the decrypted Finance records
     clearFinanceCache();
+    // And every decrypted entry, topic and private setting held in the stores:
+    // after an auto-lock nothing readable stays in memory; unlocking reloads
+    useEntriesStore.getState().clearAll();
+    useUIStore.getState().clearPrivateState();
     setIsUnlocked(false);
   }, []);
 

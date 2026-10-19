@@ -197,15 +197,13 @@ export async function deleteTaxonomy(schemaName: string, id: number): Promise<vo
 
 export async function reorderTaxonomies(schemaName: string, orderedIds: number[]): Promise<void> {
   const s = escapeSchema(schemaName);
-  await prisma.$transaction(async (tx) => {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await tx.$executeRawUnsafe(
-        `UPDATE ${s}.taxonomies SET sort_order = $1 WHERE id = $2`,
-        i,
-        orderedIds[i]
-      );
-    }
-  });
+  // One statement: each id's position in the list becomes its sort order
+  await prisma.$executeRawUnsafe(
+    `UPDATE ${s}.taxonomies t SET sort_order = o.pos - 1
+     FROM unnest($1::int[]) WITH ORDINALITY AS o(id, pos)
+     WHERE t.id = o.id`,
+    orderedIds
+  );
 }
 
 // =============================================================================

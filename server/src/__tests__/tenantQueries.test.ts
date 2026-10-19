@@ -225,39 +225,22 @@ describe('Taxonomy queries', () => {
   });
 
   describe('reorderTaxonomies', () => {
-    it('updates sort_order for each taxonomy in order', async () => {
-      const txMock = { $executeRawUnsafe: vi.fn().mockResolvedValue(1) };
-      mockTransaction.mockImplementation(async (cb: (tx: typeof txMock) => Promise<void>) => {
-        await cb(txMock);
-      });
+    it('sets every sort_order in one statement, from the list position', async () => {
+      mockExecuteRawUnsafe.mockResolvedValue(3);
 
       await reorderTaxonomies(SCHEMA, [10, 20, 30]);
 
-      expect(txMock.$executeRawUnsafe).toHaveBeenCalledTimes(3);
-
-      // First taxonomy gets sort_order 0
-      expect(txMock.$executeRawUnsafe.mock.calls[0][0]).toContain('UPDATE usr_1_abc123.taxonomies SET sort_order = $1 WHERE id = $2');
-      expect(txMock.$executeRawUnsafe.mock.calls[0][1]).toBe(0);
-      expect(txMock.$executeRawUnsafe.mock.calls[0][2]).toBe(10);
-
-      // Second taxonomy gets sort_order 1
-      expect(txMock.$executeRawUnsafe.mock.calls[1][1]).toBe(1);
-      expect(txMock.$executeRawUnsafe.mock.calls[1][2]).toBe(20);
-
-      // Third taxonomy gets sort_order 2
-      expect(txMock.$executeRawUnsafe.mock.calls[2][1]).toBe(2);
-      expect(txMock.$executeRawUnsafe.mock.calls[2][2]).toBe(30);
+      expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(1);
+      expect(mockTransaction).not.toHaveBeenCalled();
+      const [sql, ids] = mockExecuteRawUnsafe.mock.calls[0];
+      expect(sql).toContain('UPDATE usr_1_abc123.taxonomies t SET sort_order = o.pos - 1');
+      expect(sql).toContain('unnest($1::int[]) WITH ORDINALITY');
+      expect(ids).toEqual([10, 20, 30]);
     });
 
-    it('handles empty array without errors', async () => {
-      const txMock = { $executeRawUnsafe: vi.fn() };
-      mockTransaction.mockImplementation(async (cb: (tx: typeof txMock) => Promise<void>) => {
-        await cb(txMock);
-      });
-
-      await reorderTaxonomies(SCHEMA, []);
-
-      expect(txMock.$executeRawUnsafe).not.toHaveBeenCalled();
+    it('handles an empty array without errors', async () => {
+      mockExecuteRawUnsafe.mockResolvedValue(0);
+      await expect(reorderTaxonomies(SCHEMA, [])).resolves.toBeUndefined();
     });
   });
 });

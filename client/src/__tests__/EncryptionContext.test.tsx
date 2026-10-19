@@ -114,6 +114,23 @@ describe('EncryptionProvider – lock', () => {
 
     expect(result.current.isUnlocked).toBe(false);
   });
+
+  it('drops decrypted entries, topics and private settings from the stores', async () => {
+    const { useEntriesStore } = await import('../stores/entriesStore.js');
+    const { useUIStore } = await import('../stores/uiStore.js');
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    useEntriesStore.setState({ decryptedEntries: [{ id: 1, content: 'secret' }] as never, isInitialized: true });
+    useUIStore.setState({ displayName: 'Alex', topicCustomFields: { 1: [] } });
+
+    act(() => { result.current.lock(); });
+
+    expect(useEntriesStore.getState().decryptedEntries).toEqual([]);
+    expect(useEntriesStore.getState().isInitialized).toBe(false);
+    expect(useUIStore.getState().displayName).toBe('');
+    expect(useUIStore.getState().topicCustomFields).toEqual({});
+  });
 });
 
 describe('EncryptionProvider – setupEncryption', () => {

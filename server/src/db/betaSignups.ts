@@ -20,7 +20,13 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-const csvCell = (v: string | null) => (v == null ? '' : /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+// Applicants type these fields on a public form: a cell starting with a
+// formula character gets a leading ' so a spreadsheet shows it as text
+const csvCell = (v: string | null) => {
+  if (v == null) return '';
+  const safe = /^[=+\-@\t\r|]/.test(v) ? `'${v}` : v;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+};
 
 /** "approved", "signed up" or nothing — how far this person has got */
 const progress = (r: BetaSignup) => (r.signedUp ? ' · signed up' : r.approvedAt ? ' · approved' : '');

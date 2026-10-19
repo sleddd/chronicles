@@ -32,10 +32,11 @@ router.post('/reorder', async (req, res) => {
       res.status(400).json({ error: 'topicIds must be an array of numbers' });
       return;
     }
-    // Validate all IDs belong to this tenant
+    // Validate all IDs belong to this tenant, each at most once — a body of
+    // repeated ids would otherwise run one UPDATE per entry in one transaction
     const existing = await getAllTaxonomies(req.auth!.tenantSchemaName);
     const existingIds = new Set(existing.map(t => t.id));
-    if (!topicIds.every(id => existingIds.has(id))) {
+    if (topicIds.length > existingIds.size || new Set(topicIds).size !== topicIds.length || !topicIds.every(id => existingIds.has(id))) {
       res.status(400).json({ error: 'Invalid topic IDs' });
       return;
     }

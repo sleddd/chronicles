@@ -119,6 +119,13 @@ describe('Topic Routes (encrypted names)', () => {
       expect(res.body.error).toBe('Invalid topic IDs');
     });
 
+    it('returns 400 for repeated ids (a cheap body would otherwise run one update each)', async () => {
+      (getAllTaxonomies as any).mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      const res = await request(app).post('/api/topics/reorder').send({ topicIds: Array(1000).fill(1) });
+      expect(res.status).toBe(400);
+      expect(reorderTaxonomies).not.toHaveBeenCalled();
+    });
+
     it('returns 500 on database error', async () => {
       (getAllTaxonomies as any).mockResolvedValue([{ id: 1 }]);
       (reorderTaxonomies as any).mockRejectedValue(new Error('DB error'));
