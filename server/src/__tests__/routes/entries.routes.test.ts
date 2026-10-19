@@ -8,6 +8,9 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getPost: vi.fn(),
   createPost: vi.fn(),
   createPosts: vi.fn(),
+  ensurePostSync: vi.fn().mockResolvedValue(undefined),
+  getSyncCursor: vi.fn(),
+  getPostChanges: vi.fn(),
   updatePost: vi.fn(),
   deletePost: vi.fn(),
   setPostTaxonomies: vi.fn(),
@@ -32,7 +35,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getAllPosts, getPost, createPost, createPosts, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts } from '../../db/tenantQueries.js';
+import { getAllPosts, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -281,6 +284,42 @@ describe('Entry Routes', () => {
   });
 
   // =========================================================================
+  describe('entry sync', () => {
+    it('makes sure change tracking is in place before any entries route', async () => {
+      (getAllPosts as any).mockResolvedValue([]);
+      await request(app).get('/api/entries');
+      expect(ensurePostSync).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
+    });
+
+    it('gives a cursor and a scope for this account', async () => {
+      (getSyncCursor as any).mockResolvedValue('1234');
+      const res = await request(app).get('/api/entries/cursor');
+      expect(res.status).toBe(200);
+      expect(res.body.cursor).toBe('1234');
+      expect(res.body.scope).toMatch(/^[a-f0-9]{32}$/);
+    });
+
+    it('sends changes since a cursor, entries in wire form', async () => {
+      (getPostChanges as any).mockResolvedValue({
+        reset: false, cursor: '1300',
+        entries: [{ id: 4, contentEncrypted: Buffer.from('c'), contentIv: Buffer.from('i'), metadataEncrypted: Buffer.from('m'), metadataIv: Buffer.from('j') }],
+        deleted: [2, 3],
+      });
+      const res = await request(app).get('/api/entries/changes?since=1234');
+      expect(getPostChanges).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '1234');
+      expect(res.body).toMatchObject({ reset: false, cursor: '1300', deleted: [2, 3] });
+      expect(res.body.entries[0].contentEncrypted).toBe(Buffer.from('c').toString('base64'));
+    });
+
+    it('tells the client to reload everything when asked, and refuses a bad cursor', async () => {
+      (getPostChanges as any).mockResolvedValue({ reset: true });
+      const res = await request(app).get('/api/entries/changes?since=5');
+      expect(res.body).toMatchObject({ reset: true });
+      expect((await request(app).get('/api/entries/changes?since=abc')).status).toBe(400);
+      expect((await request(app).get('/api/entries/changes')).status).toBe(400);
+    });
+  });
+
   // GET /api/entries/:id
   // =========================================================================
   describe('GET /api/entries/:id', () => {

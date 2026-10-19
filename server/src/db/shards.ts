@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { prisma, createPooledClient } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
+import { ensurePostSyncFunction } from './tenantQueries.js';
 
 // Each user is a Postgres schema; a database comfortably holds a few thousand
 // (see docs/SCALE_TEST_REPORT.md). Past that, user schemas go on further
@@ -112,8 +113,9 @@ export async function initShards(): Promise<void> {
   if (!present) {
     await prisma.$executeRawUnsafe(`ALTER TABLE public.accounts ADD COLUMN IF NOT EXISTS shard_id INTEGER NOT NULL DEFAULT 1`);
   }
-  for (const id of shardIds().slice(1)) {
-    await shardClient(id).$queryRawUnsafe('SELECT 1');
+  // Every database answers and has the entry-sync trigger function
+  for (const id of shardIds()) {
+    await ensurePostSyncFunction(shardClient(id));
   }
   const used = await prisma.account.groupBy({ by: ['shardId'], _count: { _all: true } });
   const missing = used.filter(u => !clients.has(u.shardId) && !shardUrls.has(u.shardId)).map(u => u.shardId);

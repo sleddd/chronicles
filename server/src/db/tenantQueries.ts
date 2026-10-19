@@ -431,6 +431,115 @@ export async function deletePost(schemaName: string, id: number): Promise<void> 
 }
 
 // =============================================================================
+// Entry sync: what changed since a client last loaded
+// =============================================================================
+//
+// The browser keeps its entries (still encrypted) between visits and asks only
+// for what changed. A trigger stamps every inserted or updated post with the
+// writing transaction's id (change_xid) and records every deleted id in
+// deleted_posts, so no write path can be missed. A client's cursor is the
+// snapshot xmin taken *before* it read: every transaction below it had
+// finished, so nothing is skipped; anything at or above it may be sent twice,
+// which the client handles by id.
+
+/** The trigger function, once per database (each shard's public schema). */
+const SYNC_FUNCTION_SQL = `CREATE OR REPLACE FUNCTION public.chronicles_post_changed() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    EXECUTE format('INSERT INTO %I.deleted_posts (id, change_xid) VALUES ($1, pg_current_xact_id())', TG_TABLE_SCHEMA) USING OLD.id;
+    RETURN OLD;
+  END IF;
+  NEW.change_xid := pg_current_xact_id();
+  RETURN NEW;
+END
+$fn$`;
+
+/** Create the trigger function in a database if it isn't there yet. */
+export async function ensurePostSyncFunction(db: { $queryRawUnsafe: <T>(sql: string, ...v: unknown[]) => Promise<T>; $executeRawUnsafe: (sql: string, ...v: unknown[]) => Promise<number> }): Promise<void> {
+  const [{ present }] = await db.$queryRawUnsafe<{ present: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'public' AND p.proname = 'chronicles_post_changed') AS present`
+  );
+  if (!present) await db.$executeRawUnsafe(SYNC_FUNCTION_SQL);
+}
+
+/** Change tracking for a schema's posts (new schemas get these at creation). */
+export function postSyncStatements(s: string): string[] {
+  return [
+    // A constant default: no table rewrite; older rows sort before any cursor
+    `ALTER TABLE ${s}.posts ADD COLUMN IF NOT EXISTS change_xid xid8 NOT NULL DEFAULT '0'`,
+    `CREATE INDEX IF NOT EXISTS idx_${s}_posts_change ON ${s}.posts (change_xid)`,
+    `CREATE TABLE IF NOT EXISTS ${s}.deleted_posts (id INTEGER NOT NULL, change_xid xid8 NOT NULL)`,
+    `DROP TRIGGER IF EXISTS posts_sync_write ON ${s}.posts`,
+    `CREATE TRIGGER posts_sync_write BEFORE INSERT OR UPDATE ON ${s}.posts FOR EACH ROW EXECUTE FUNCTION public.chronicles_post_changed()`,
+    `DROP TRIGGER IF EXISTS posts_sync_delete ON ${s}.posts`,
+    `CREATE TRIGGER posts_sync_delete AFTER DELETE ON ${s}.posts FOR EACH ROW EXECUTE FUNCTION public.chronicles_post_changed()`,
+  ];
+}
+
+const postSyncReady = new Set<string>();
+
+/** JIT migration for change tracking: one catalog read once it's in place. */
+export async function ensurePostSync(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  if (postSyncReady.has(s)) return;
+  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_class t ON t.oid = a.attrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = $1 AND t.relname = 'posts' AND a.attname = 'change_xid' AND NOT a.attisdropped)
+        AND EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace WHERE n.nspname = $1 AND t.relname = 'deleted_posts')
+        AND (SELECT count(*) FROM pg_trigger g JOIN pg_class t ON t.oid = g.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+              WHERE n.nspname = $1 AND g.tgname IN ('posts_sync_write', 'posts_sync_delete')) = 2 AS ready`,
+    s
+  );
+  if (!ready) {
+    await ensurePostSyncFunction(db);
+    await db.$transaction(postSyncStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  }
+  postSyncReady.add(s);
+}
+
+/** A cursor taken before reading: every transaction below it has finished. */
+export async function getSyncCursor(schemaName: string): Promise<string> {
+  const db = await tenantDb(schemaName);
+  const [{ cursor }] = await db.$queryRawUnsafe<{ cursor: string }[]>(
+    `SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS cursor`
+  );
+  return cursor;
+}
+
+export type PostChanges =
+  | { reset: true }
+  | { reset: false; cursor: string; entries: TenantPost[]; deleted: number[] };
+
+/**
+ * Entries written and ids deleted since `since` (a cursor from this database).
+ * `reset` when the client should load everything instead: more than `limit`
+ * changes, or a cursor from the future (the database was restored).
+ */
+export async function getPostChanges(schemaName: string, since: string, limit = 5000): Promise<PostChanges> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const [{ cursor, future }] = await db.$queryRawUnsafe<{ cursor: string; future: boolean }[]>(
+    `SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS cursor,
+            $1::xid8 > pg_snapshot_xmax(pg_current_snapshot()) AS future`,
+    since
+  );
+  if (future) return { reset: true };
+  const entries = await db.$queryRawUnsafe<TenantPost[]>(
+    `SELECT ${POST_SELECT} FROM ${s}.posts WHERE change_xid >= $1::xid8 ORDER BY change_xid, id LIMIT $2`,
+    since, limit + 1
+  );
+  if (entries.length > limit) return { reset: true };
+  const deleted = await db.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT DISTINCT id FROM ${s}.deleted_posts WHERE change_xid >= $1::xid8`,
+    since
+  );
+  return { reset: false, cursor, entries, deleted: deleted.map(d => d.id) };
+}
+
+// =============================================================================
 // Finance records (one encrypted JSON payload per row)
 // =============================================================================
 

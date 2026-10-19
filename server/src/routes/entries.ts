@@ -1,11 +1,28 @@
 import { Router } from 'express';
-import { createPost, createPosts, type CreatePostInput, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts } from '../db/tenantQueries.js';
+import crypto from 'crypto';
+import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
 
 const router = Router();
+
+// Every write is change-tracked for the browser's sync (a trigger per schema,
+// added on first use for older accounts) — in place before any route runs
+router.use(async (req, res, next) => {
+  try {
+    await ensurePostSync(req.auth!.tenantSchemaName);
+    next();
+  } catch (err) {
+    console.error('Entry sync setup error:', err);
+    res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// Which journal a browser cache belongs to: a cache from another account (or
+// one deleted and made again under the same email) never matches
+const syncScope = (schemaName: string) => crypto.createHash('sha256').update(`chronicles:sync:${schemaName}`).digest('hex').slice(0, 32);
 
 // Entry→topic links are no longer stored in plaintext (post_taxonomies told
 // the server which entries were Medication, Symptom, etc.). The topic lives
@@ -36,6 +53,45 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('Get entries error:', err);
     res.status(500).json({ error: 'Failed to fetch entries' });
+  }
+});
+
+// GET /api/entries/cursor — Where a full load starts: take it before reading
+// every page, then ask /changes from it next time
+router.get('/cursor', async (req, res) => {
+  try {
+    res.json({ cursor: await getSyncCursor(req.auth!.tenantSchemaName), scope: syncScope(req.auth!.tenantSchemaName) });
+  } catch (err) {
+    console.error('Entry cursor error:', err);
+    res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// GET /api/entries/changes?since=<cursor> — Entries written and ids deleted
+// since the cursor, and the next cursor. { reset: true } means load everything
+router.get('/changes', async (req, res) => {
+  try {
+    const since = String(req.query.since ?? '');
+    if (!/^\d{1,20}$/.test(since)) {
+      res.status(400).json({ error: 'Invalid cursor' });
+      return;
+    }
+    const changes = await getPostChanges(req.auth!.tenantSchemaName, since);
+    const scope = syncScope(req.auth!.tenantSchemaName);
+    if (changes.reset) {
+      res.json({ reset: true, scope });
+      return;
+    }
+    res.json({
+      reset: false,
+      scope,
+      cursor: changes.cursor,
+      entries: changes.entries.map(p => serializePost(p as unknown as Record<string, unknown>)),
+      deleted: changes.deleted,
+    });
+  } catch (err) {
+    console.error('Entry changes error:', err);
+    res.status(500).json({ error: 'Failed to load entries' });
   }
 });
 
