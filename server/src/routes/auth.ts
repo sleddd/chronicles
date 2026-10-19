@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import bcrypt from 'bcryptjs';
+import bcrypt, { HasherBusyError } from '../services/passwordHasher.js';
 import crypto from 'crypto';
 import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
@@ -310,6 +310,13 @@ async function hashAuthSecret(authSecret: string): Promise<string> {
   return AUTH_PREFIX + await bcrypt.hash(authSecret, BCRYPT_ROUNDS);
 }
 
+/** A sign-in burst filled the hashing queue: say "try again" (503) rather than fail. */
+function sendIfHasherBusy(err: unknown, res: Response): boolean {
+  if (!(err instanceof HasherBusyError)) return false;
+  res.set('Retry-After', '5').status(503).json({ error: 'Lots of people are signing in right now. Please try again in a few seconds.' });
+  return true;
+}
+
 /** Check a derived sign-in secret. Anything but an auth1$ hash never matches. */
 async function checkAuthSecret(stored: string, authSecret: string): Promise<boolean> {
   if (!stored.startsWith(AUTH_PREFIX)) return false;
@@ -460,6 +467,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       user: { email: account.email, username: account.username },
     });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Registration error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Registration failed' });
   }
@@ -567,6 +575,7 @@ router.post('/login', authLimiter, async (req, res) => {
       encryption: buildEncryptionResponse(account),
     });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Login error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Login failed' });
   }
@@ -654,6 +663,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Change password error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Password change failed' });
   }
@@ -704,6 +714,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true, email: normalizedEmail });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Change email error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Email change failed' });
   }
@@ -840,6 +851,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
       },
     });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Recovery error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Recovery failed' });
   }
@@ -1015,6 +1027,7 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
     logSecurityEvent('2fa_enabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ backupCodes });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('2FA enable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: '2FA enable failed' });
   }
@@ -1071,6 +1084,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     logSecurityEvent('2fa_disabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('2FA disable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: '2FA disable failed' });
   }
@@ -1129,6 +1143,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
     clearRememberCookie(res);
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Account delete error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Account deletion failed' });
   }
@@ -1224,6 +1239,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
     logSecurityEvent('recovery_key_regenerated', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Recovery key regeneration error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save recovery key' });
   }

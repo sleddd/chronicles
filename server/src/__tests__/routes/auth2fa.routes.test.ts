@@ -43,21 +43,22 @@ vi.mock('../../middleware/rateLimiter.js', () => ({
 
 vi.mock('../../utils/securityLogger.js', () => ({ logSecurityEvent: vi.fn() }));
 
-vi.mock('bcryptjs', () => ({
+vi.mock('../../services/passwordHasher.js', () => ({
   default: {
     hash: vi.fn().mockResolvedValue('$2a$12$hashedpassword'),
     compare: vi.fn().mockResolvedValue(true),
   },
+  HasherBusyError: class HasherBusyError extends Error {},
 }));
 
 import authRouter, { resetAuthStateForTests } from '../../routes/auth.js';
 import * as authMw from '../../middleware/auth.js';
-import bcryptMock from 'bcryptjs';
+import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { decryptToken } from '../../services/tokenCrypto.js';
 import { deleteAccountById } from '../../db/schemaManager.js';
 import { revokeGoogleAccess } from '../../services/googleRevoke.js';
-import bcrypt from 'bcryptjs';
+import bcrypt from '../../services/passwordHasher.js';
 
 function buildApp() {
   const app = express();
