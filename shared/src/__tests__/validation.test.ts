@@ -434,15 +434,18 @@ describe('updatePostSchema', () => {
 // createTaxonomySchema
 // ============================================================================
 describe('createTaxonomySchema', () => {
-  it('accepts an encrypted payload with an optional colour', () => {
-    expect(createTaxonomySchema.safeParse({ payload: 'c2VhbGVk', iv: 'aXY=' }).success).toBe(true);
-    expect(createTaxonomySchema.safeParse({ payload: 'c2VhbGVk', iv: 'aXY=', color: '#AbCdEf' }).success).toBe(true);
+  const T = { id: 3, format: 2, payload: 'c2VhbGVk', iv: 'aXY=' };
+  it('accepts an encrypted payload under a reserved id, with an optional colour', () => {
+    expect(createTaxonomySchema.safeParse(T).success).toBe(true);
+    expect(createTaxonomySchema.safeParse({ ...T, color: '#AbCdEf' }).success).toBe(true);
   });
-  it('refuses a plaintext name or icon, a missing iv and a bad colour', () => {
+  it('refuses a plaintext name or icon, a missing iv or id, an older format and a bad colour', () => {
     expect(createTaxonomySchema.safeParse({ name: 'Work' }).success).toBe(false);
-    expect(createTaxonomySchema.safeParse({ payload: 'x', iv: 'y', icon: 'pills' }).success).toBe(false);
-    expect(createTaxonomySchema.safeParse({ payload: 'x' }).success).toBe(false);
-    const bad = createTaxonomySchema.safeParse({ payload: 'x', iv: 'y', color: 'red' });
+    expect(createTaxonomySchema.safeParse({ ...T, icon: 'pills' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ id: 3, format: 2, payload: 'x' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ format: 2, payload: 'x', iv: 'y' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ id: 3, payload: 'x', iv: 'y' }).success).toBe(false);
+    const bad = createTaxonomySchema.safeParse({ ...T, color: 'red' });
     expect(bad.success).toBe(false);
     if (!bad.success) expect(bad.error.errors[0].message).toBe('Invalid hex color');
   });
@@ -454,21 +457,25 @@ describe('createTaxonomySchema', () => {
 });
 
 describe('updateTaxonomySchema', () => {
-  it('accepts a payload with its iv, or just a colour', () => {
-    expect(updateTaxonomySchema.safeParse({ payload: 'x', iv: 'y' }).success).toBe(true);
+  it('accepts a payload with its iv (format 2), or just a colour', () => {
+    expect(updateTaxonomySchema.safeParse({ format: 2, payload: 'x', iv: 'y' }).success).toBe(true);
     expect(updateTaxonomySchema.safeParse({ color: '#123456' }).success).toBe(true);
   });
-  it('needs payload and iv together, and refuses plaintext', () => {
-    expect(updateTaxonomySchema.safeParse({ payload: 'x' }).success).toBe(false);
+  it('needs payload and iv together, format 2 with a payload, and refuses plaintext', () => {
+    expect(updateTaxonomySchema.safeParse({ format: 2, payload: 'x' }).success).toBe(false);
+    expect(updateTaxonomySchema.safeParse({ payload: 'x', iv: 'y' }).success).toBe(false);
     expect(updateTaxonomySchema.safeParse({ name: 'Work' }).success).toBe(false);
   });
 });
 
 describe('putDoseRecordSchema', () => {
-  it('takes only the date, payload and iv', () => {
-    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: 'x', iv: 'y' }).success).toBe(true);
-    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: 'x', iv: 'y', status: 'taken' }).success).toBe(false);
-    expect(putDoseRecordSchema.safeParse({ date: 'April 3', payload: 'x', iv: 'y' }).success).toBe(false);
+  it('takes only the format, date, payload and iv', () => {
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: 'x', iv: 'y' }).success).toBe(true);
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: 'x', iv: 'y', status: 'taken' }).success).toBe(false);
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: 'April 3', payload: 'x', iv: 'y' }).success).toBe(false);
+  });
+  it('refuses a dose from an older client (not sealed to its day)', () => {
+    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: 'x', iv: 'y' }).success).toBe(false);
   });
 });
 
