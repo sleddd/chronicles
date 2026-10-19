@@ -11,6 +11,7 @@
 
 import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
+import { isSealed, openSetting, sealSetting } from './settingCipher.js';
 import {
   bedrockConverse,
   fallbackBedrockModels,
@@ -90,13 +91,14 @@ export const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   openai: 'OpenAI',
 };
 
-type EncryptBytesFn = (data: ArrayBuffer) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
-type DecryptBytesFn = (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+type EncryptBytesFn = (data: ArrayBuffer, aad?: string) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
+type DecryptBytesFn = (ciphertext: ArrayBuffer, iv: string, aad?: string) => Promise<ArrayBuffer>;
 
 /** Value shape of the `aiConfig` setting: master-key ciphertext. */
 export interface EncryptedAiConfig {
   ciphertext: string; // base64
   iv: string;         // base64
+  v?: 2;              // bound to the setting's key (settingCipher.ts)
 }
 
 // ── In-memory credential state (mirrors the master key's lifecycle) ─────────
@@ -154,12 +156,10 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
   encryptedConfig = null;
   try {
     if (!value || typeof value !== 'object') return;
-    const { ciphertext, iv } = value as Partial<EncryptedAiConfig>;
-    if (typeof ciphertext !== 'string' || typeof iv !== 'string') return;
-    encryptedConfig = { ciphertext, iv };
+    if (!isSealed(value)) return;
+    encryptedConfig = value;
     try {
-      const plaintext = await decryptBytes(base64ToArrayBuffer(ciphertext), iv);
-      const parsed = JSON.parse(new TextDecoder().decode(plaintext));
+      const parsed = await openSetting('aiConfig', value, decryptBytes) as Record<string, unknown> | null;
       // Bedrock always signs in with IAM access keys (the API-key option was removed)
       if (parsed && typeof parsed === 'object') {
         const cfg: AiConfig = { ...DEFAULT_AI_CONFIG, ...parsed, bedrockAuth: 'iam' };
@@ -197,9 +197,7 @@ export function setAiConfig(cfg: AiConfig | null, encrypted: EncryptedAiConfig |
 
 /** Encrypt a config for storage in the `aiConfig` setting. */
 export async function encryptAiConfig(cfg: AiConfig, encryptBytes: EncryptBytesFn): Promise<EncryptedAiConfig> {
-  const data = new TextEncoder().encode(JSON.stringify(cfg));
-  const { ciphertext, iv } = await encryptBytes(data.buffer as ArrayBuffer);
-  return { ciphertext: arrayBufferToBase64(ciphertext), iv };
+  return sealSetting('aiConfig', cfg, encryptBytes) as Promise<EncryptedAiConfig>;
 }
 
 // ── Provider calls ───────────────────────────────────────────────────────────

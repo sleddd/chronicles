@@ -1,89 +1,153 @@
 import { useCallback } from 'react';
 import { useEncryption } from '../contexts/EncryptionContext.js';
-import { settings as settingsApi } from './api.js';
-import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
-import { KNOWN_FEATURE_FLAGS, OPT_IN_FEATURE_FLAGS } from '../utils/featureFlags.js';
+import { settings as settingsApi, calendar as calendarApi } from './api.js';
+import { isSealed, isBound, sealSetting, openSetting, openUnbound, type SealedValue, type EncryptBytes, type DecryptBytes } from './settingCipher.js';
+import { PRIVATE_SETTING_KEYS } from '@shared/validation/sealedSettings.js';
 
 /**
+ * Encrypted settings.
+ *
  * Settings that say something personal (your name, where you live, what you
- * search for, the fields you track) are stored encrypted with the master key,
- * in the same `{ ciphertext, iv }` shape as `useEncryptedSetting`. Values saved
- * before this was introduced are still plaintext on the server: `openPrivateSettings`
- * reads them as-is and `migratePrivateSettings` re-saves them sealed.
- * Feature switches and Cycle Tracking are private too: on their own they say
- * which health features (medication, meals, cycle…) someone uses.
+ * search for, the fields you track, which health features you use, whether
+ * calendar data leaves the device) are stored encrypted with the master key.
+ * So are the master-key settings with their own hooks (`useEncryptedSetting`:
+ * nutrition goals, the dashboard, planning order) and the AI / R2 credentials.
+ *
+ * Every sealed value is `{ ciphertext, iv, v: 2 }`, AES-GCM with the AAD
+ * `chronicles:setting:v2:<key>`, so the server can't move a ciphertext from one
+ * setting to another (e.g. any sealed `true` into `icsIncludeDetails`).
+ *
+ * Values sealed before (`{ ciphertext, iv }`, no AAD) are opened and re-sealed
+ * once by `migrateSettings`, which then writes the sealed marker
+ * `settingsSealV2`. Once the marker exists no unbound value is accepted, so an
+ * old ciphertext the server kept can't be replayed under another key.
+ * Plaintext values of private keys are refused — except the few keys that
+ * only became private with v2 (`NEWLY_PRIVATE`), which are sealed by that same
+ * one-time migration, before the marker.
  */
-export const PRIVATE_SETTING_KEYS = [
-  'displayName', 'weatherCity', 'timezone', 'plannerFilters', 'topicCustomFields', 'planningViews',
-  ...KNOWN_FEATURE_FLAGS, ...OPT_IN_FEATURE_FLAGS, 'cycleTrackingEnabled', 'icsIncludeDetails',
-] as const;
+export { PRIVATE_SETTING_KEYS };
 export type PrivateSettingKey = typeof PRIVATE_SETTING_KEYS[number];
 
-export interface SealedValue { ciphertext: string; iv: string }
+const PRIVATE = new Set<string>(PRIVATE_SETTING_KEYS);
+const NEWLY_PRIVATE = new Set<string>(['calendarSyncEnabled', 'googleCalendarId', 'calendarImportMode', 'imagesEnabled', 'topicHideText']);
 
-type EncryptBytes = (data: ArrayBuffer) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
-type DecryptBytes = (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+/** Sealed marker: present once every setting of the account is on the v2 format. */
+export const SEAL_MARKER_KEY = 'settingsSealV2';
 
-export function isSealed(v: unknown): v is SealedValue {
-  return !!v && typeof v === 'object' && !Array.isArray(v)
-    && typeof (v as SealedValue).ciphertext === 'string'
-    && typeof (v as SealedValue).iv === 'string'
-    && Object.keys(v).length === 2;
+export { isSealed, sealSetting, openSetting, openForExport, settingAad, type SealedValue } from './settingCipher.js';
+
+/** Whether the account is past the one-time migration (the marker exists and opens). */
+async function isMigrated(map: Record<string, unknown>, decryptBytes: DecryptBytes): Promise<boolean> {
+  const marker = map[SEAL_MARKER_KEY];
+  if (marker === undefined || marker === null) return false;
+  // A marker that is there but doesn't open still counts: refusing unbound
+  // values is the safe side, and only the server could have damaged it
+  if (!isSealed(marker)) return true;
+  try { await openSetting(SEAL_MARKER_KEY, marker, decryptBytes); } catch { /* still migrated */ }
+  return true;
 }
 
-export async function sealValue(value: unknown, encryptBytes: EncryptBytes): Promise<SealedValue> {
-  const data = new TextEncoder().encode(JSON.stringify(value));
-  const { ciphertext, iv } = await encryptBytes(data.buffer as ArrayBuffer);
-  return { ciphertext: arrayBufferToBase64(ciphertext), iv };
-}
-
-export async function openValue(sealed: SealedValue, decryptBytes: DecryptBytes): Promise<unknown> {
-  const plain = await decryptBytes(base64ToArrayBuffer(sealed.ciphertext), sealed.iv);
-  return JSON.parse(new TextDecoder().decode(plain));
+export interface OpenedSettings {
+  /** Keys still to re-seal (only ever non-empty before the marker exists) */
+  toReseal: string[];
+  migrated: boolean;
 }
 
 /**
- * Decrypt the private keys of a settings map in place. Returns the keys that
- * were still plaintext (to be migrated). A value that fails to decrypt is
- * dropped, so callers fall back to their defaults.
+ * Open every sealed value of a settings map in place (any key) and drop what
+ * may not be trusted: values that fail to open, unbound values once migrated,
+ * and plaintext values of private keys. Callers then fall back to defaults.
  */
-export async function openPrivateSettings(map: Record<string, unknown>, decryptBytes: DecryptBytes): Promise<PrivateSettingKey[]> {
-  const legacy: PrivateSettingKey[] = [];
-  await Promise.all(PRIVATE_SETTING_KEYS.map(async key => {
+export async function openSettingsMap(map: Record<string, unknown>, decryptBytes: DecryptBytes): Promise<OpenedSettings> {
+  const migrated = await isMigrated(map, decryptBytes);
+  delete map[SEAL_MARKER_KEY];
+  const toReseal: string[] = [];
+  await Promise.all(Object.keys(map).map(async key => {
     const v = map[key];
     if (v === undefined || v === null) return;
     if (isSealed(v)) {
-      try { map[key] = await openValue(v, decryptBytes); }
-      catch { delete map[key]; }
-    } else {
-      legacy.push(key);
+      if (isBound(v)) {
+        try { map[key] = await openSetting(key, v, decryptBytes); }
+        catch { delete map[key]; }
+      } else if (!migrated) {
+        try { map[key] = await openUnbound(v, decryptBytes); toReseal.push(key); }
+        catch { delete map[key]; }
+      } else {
+        delete map[key];
+      }
+    } else if (PRIVATE.has(key)) {
+      if (!migrated && NEWLY_PRIVATE.has(key)) toReseal.push(key);
+      else delete map[key];
     }
   }));
-  return legacy;
+  return { toReseal, migrated };
 }
 
-/** Re-save plaintext private settings sealed. Best-effort: a failure retries next load. */
-export async function migratePrivateSettings(map: Record<string, unknown>, keys: PrivateSettingKey[], encryptBytes: EncryptBytes): Promise<void> {
-  for (const key of keys) {
-    try { await settingsApi.upsert(key, await sealValue(map[key], encryptBytes)); }
-    catch { /* stays plaintext until the next successful load */ }
+/**
+ * The one-time move to v2: re-seal what `openSettingsMap` listed (the map
+ * holds their opened values), then write the marker. Returns the new sealed
+ * values by key (the AI / R2 loaders take the sealed blob). If any write fails
+ * it throws before the marker, and the next load tries again.
+ *
+ * It also records the ICS feed switch on the device side (`icsFeedEnabled`):
+ * from now on the feed is only uploaded while that sealed switch is on, so the
+ * server reporting the feed as enabled is never enough on its own. Accounts
+ * that already had the feed keep it, read from the server this one time.
+ */
+export async function migrateSettings(
+  map: Record<string, unknown>,
+  opened: OpenedSettings,
+  encryptBytes: EncryptBytes,
+): Promise<Record<string, SealedValue>> {
+  const resealed: Record<string, SealedValue> = {};
+  if (opened.migrated) return resealed;
+  for (const key of opened.toReseal) {
+    resealed[key] = await sealSetting(key, map[key], encryptBytes);
+    await settingsApi.upsert(key, resealed[key]);
   }
+  if (map.icsFeedEnabled === undefined) {
+    const status = await calendarApi.getStatus();
+    map.icsFeedEnabled = status.icsEnabled === true;
+    await settingsApi.upsert('icsFeedEnabled', await sealSetting('icsFeedEnabled', map.icsFeedEnabled, encryptBytes));
+  }
+  await settingsApi.upsert(SEAL_MARKER_KEY, await sealSetting(SEAL_MARKER_KEY, true, encryptBytes));
+  return resealed;
 }
 
-/** Load all settings with the private ones decrypted. */
+/**
+ * Startup: the settings rows opened (`map`), the one-time migration run (a
+ * failure is retried next load), and `sealed(key)` — the sealed blob of a
+ * setting whose loader keeps it (AI and R2 credentials re-open it on unlock).
+ */
+export async function openStartupSettings(
+  rows: { key: string; value: unknown }[],
+  decryptBytes: DecryptBytes,
+  encryptBytes: EncryptBytes,
+): Promise<{ map: Record<string, unknown>; sealed: (key: string) => unknown }> {
+  const map: Record<string, unknown> = {};
+  for (const r of rows) map[r.key] = r.value;
+  const raw = { ...map };
+  const opened = await openSettingsMap(map, decryptBytes);
+  let resealed: Record<string, SealedValue> = {};
+  try { resealed = await migrateSettings(map, opened, encryptBytes); }
+  catch (err) { console.warn('Settings will be re-sealed at the next load:', err instanceof Error ? err.message : err); }
+  return { map, sealed: key => resealed[key] ?? raw[key] };
+}
+
+/** Load all settings, opened. */
 export async function loadSettingsMap(decryptBytes: DecryptBytes): Promise<Record<string, unknown>> {
   const all = await settingsApi.getAll();
   const map: Record<string, unknown> = {};
   for (const s of all) map[s.key] = s.value;
-  await openPrivateSettings(map, decryptBytes);
+  await openSettingsMap(map, decryptBytes);
   return map;
 }
 
-/** `savePrivateSetting(key, value)` — encrypts with the master key, then saves. */
+/** `savePrivateSetting(key, value)` — seals with the master key, then saves. */
 export function usePrivateSettings() {
   const { encryptBytes, decryptBytes } = useEncryption();
   const savePrivateSetting = useCallback(async (key: PrivateSettingKey, value: unknown) => {
-    await settingsApi.upsert(key, await sealValue(value, encryptBytes));
+    await settingsApi.upsert(key, await sealSetting(key, value, encryptBytes));
   }, [encryptBytes]);
   const loadPrivateSettings = useCallback(() => loadSettingsMap(decryptBytes), [decryptBytes]);
   return { savePrivateSetting, loadPrivateSettings };

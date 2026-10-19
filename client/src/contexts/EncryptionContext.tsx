@@ -33,8 +33,9 @@ interface EncryptionContextValue {
   encryptPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
   decryptPost: (post: EncryptedPost) => Promise<DecryptedPost>;
   decryptPosts: (posts: EncryptedPost[]) => Promise<DecryptedPost[]>;
-  encryptBytes: (data: ArrayBuffer) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
-  decryptBytes: (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+  /** Optional `aad` binds the ciphertext to what it is (a setting's key, an image's object key) */
+  encryptBytes: (data: ArrayBuffer, aad?: string) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
+  decryptBytes: (ciphertext: ArrayBuffer, iv: string, aad?: string) => Promise<ArrayBuffer>;
   /** Encrypt one Finance record (AAD bound to kind + id). */
   encryptRecord: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
   decryptRecord: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
@@ -65,8 +66,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     masterKeyRef.current = key;
     // Restore the in-memory R2 credentials (cleared on lock) from their
     // master-key-encrypted blob so image display/cleanup keeps working
-    void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
-    void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
+    void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
     // Topic names and dose records are sealed by the API layer itself
     installRecordCipher(encryptionService, key);
     setIsUnlocked(true);
@@ -166,12 +167,12 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     return encryptionService.decryptPosts(getKey(), posts);
   }, []);
 
-  const encryptBytes = useCallback(async (data: ArrayBuffer) => {
-    return encryptionService.encryptFile(getKey(), data);
+  const encryptBytes = useCallback(async (data: ArrayBuffer, aad?: string) => {
+    return encryptionService.encryptFile(getKey(), data, aad);
   }, []);
 
-  const decryptBytes = useCallback(async (ciphertext: ArrayBuffer, iv: string) => {
-    return encryptionService.decryptFile(getKey(), ciphertext, iv);
+  const decryptBytes = useCallback(async (ciphertext: ArrayBuffer, iv: string, aad?: string) => {
+    return encryptionService.decryptFile(getKey(), ciphertext, iv, aad);
   }, []);
 
   const encryptRecord = useCallback(async (kind: string, id: string, record: unknown) => {
@@ -198,8 +199,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const key = await toNonExtractable(extractableKey);
     masterKeyRef.current = key;
     encryptionParamsRef.current = null; // Recovery path — no stored params
-    void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
-    void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
+    void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
     // Topic names and dose records are sealed by the API layer itself
     installRecordCipher(encryptionService, key);
     setIsUnlocked(true);

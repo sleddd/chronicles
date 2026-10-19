@@ -8,7 +8,7 @@ import { loadImageStorageConfig } from '../services/imageStorage.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
-import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
@@ -58,11 +58,8 @@ export function useInitializeData() {
         void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
 
         // Apply theme settings
-        const settingsMap: Record<string, unknown> = {};
-        for (const s of settingsData) settingsMap[s.key] = s.value;
-        // Personal settings are master-key encrypted; old plaintext ones get sealed now
-        const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
-        if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
+        // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
+        const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         // No saved accent → Teal (never the previous account's colour)
         const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
         setAccentColor(accent);
@@ -77,14 +74,15 @@ export function useInitializeData() {
         }
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
         useUIStore.getState().setIcsIncludeDetails(settingsMap.icsIncludeDetails === true);
+        useUIStore.getState().setIcsFeedEnabled(settingsMap.icsFeedEnabled === true);
         // Entry images are opt-in — defaults false, deliberately NOT in the default-true flag bag
         if (typeof settingsMap.imagesEnabled === 'boolean') setImagesEnabled(settingsMap.imagesEnabled);
         // R2 credentials live in a master-key-encrypted setting; decrypt client-side
-        loadImageStorageConfig(settingsMap.imageStorageConfig, decryptBytes)
+        loadImageStorageConfig(sealed('imageStorageConfig'), decryptBytes)
           .then(setImagesConfigured)
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
-        void loadAiConfig(settingsMap.aiConfig, decryptBytes);
+        void loadAiConfig(sealed('aiConfig'), decryptBytes);
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.googleCalendarId === 'string') setGoogleCalendarId(settingsMap.googleCalendarId);
         if (typeof settingsMap.googleSyncToken === 'string') setGoogleSyncToken(settingsMap.googleSyncToken);

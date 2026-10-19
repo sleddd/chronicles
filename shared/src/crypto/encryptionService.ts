@@ -325,9 +325,10 @@ class EncryptionService {
    */
   async encryptFile(
     masterKey: CryptoKey,
-    data: ArrayBuffer
+    data: ArrayBuffer,
+    aad?: string
   ): Promise<{ ciphertext: ArrayBuffer; iv: string }> {
-    return encryptBytes(masterKey, data);
+    return encryptBytes(masterKey, data, aad);
   }
 
   /**
@@ -336,9 +337,10 @@ class EncryptionService {
   async decryptFile(
     masterKey: CryptoKey,
     ciphertext: ArrayBuffer,
-    ivBase64: string
+    ivBase64: string,
+    aad?: string
   ): Promise<ArrayBuffer> {
-    return decryptBytes(masterKey, ciphertext, ivBase64);
+    return decryptBytes(masterKey, ciphertext, ivBase64, aad);
   }
 
   /**

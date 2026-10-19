@@ -564,7 +564,8 @@ export async function runCalendarSync(deps: SyncRuntimeDeps): Promise<void> {
       await pushPhase(deps, ui.googleCalendarId);
     }
 
-    if (status.icsEnabled) {
+    // Both: the feed as this account switched it on (sealed) and as the server has it
+    if (status.icsEnabled && ui.icsFeedEnabled) {
       await icsPhase();
     }
 

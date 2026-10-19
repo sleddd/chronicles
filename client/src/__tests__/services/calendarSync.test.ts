@@ -90,6 +90,7 @@ function setupStores(entries: DecryptedPost[], uiOverrides: Record<string, unkno
     googleCalendarId: CAL_ID,
     googleSyncToken: '',
     calendarImportMode: 'chroniclesOnly',
+    icsFeedEnabled: true,
     ...uiOverrides,
   });
 }
@@ -432,6 +433,18 @@ describe('calendarSync guards', () => {
 
     expect(getCalendarSyncUiState().googleDisconnected).toBe(true);
     expect(fetchCalls).toHaveLength(0);
+  });
+
+  it('never uploads the feed on the server\'s word alone (the sealed device switch is off)', async () => {
+    (calendarApi.getStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      googleConnected: false, googleEmail: null, icsEnabled: true, icsToken: 'b'.repeat(64),
+    });
+    setupStores([makeEntry(11, { ...eventFields })], { icsFeedEnabled: false });
+    stubGoogleFetch([]);
+
+    await runCalendarSync(deps);
+
+    expect(calendarApi.uploadIcs).not.toHaveBeenCalled();
   });
 
   it('uploads the ICS feed when enabled, even without Google', async () => {

@@ -25,7 +25,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi, retryDelayMs } from '../services/api.js';
-import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { openStartupSettings } from '../services/privateSettings.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
@@ -474,10 +474,8 @@ export function JournalView() {
         // The old plaintext dose log is re-saved encrypted, once per session
         void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
         // Apply saved theme settings
-        const settingsMap: Record<string, unknown> = {};
-        for (const s of settingsData) settingsMap[s.key] = s.value;
-        const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
-        if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
+        // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
+        const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') setAccentColor(settingsMap.accentColor);
         { const pref = parseThemePreference(settingsMap.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
@@ -491,15 +489,16 @@ export function JournalView() {
         // app initializes via /journal
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') useUIStore.getState().setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
         useUIStore.getState().setIcsIncludeDetails(settingsMap.icsIncludeDetails === true);
+        useUIStore.getState().setIcsFeedEnabled(settingsMap.icsFeedEnabled === true);
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') useUIStore.getState().setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.displayName === 'string') useUIStore.getState().setDisplayName(settingsMap.displayName);
         // Entry images are opt-in (default false); credentials are a master-key-encrypted setting
         if (typeof settingsMap.imagesEnabled === 'boolean') setImagesEnabled(settingsMap.imagesEnabled);
-        loadImageStorageConfig(settingsMap.imageStorageConfig, decryptBytes)
+        loadImageStorageConfig(sealed('imageStorageConfig'), decryptBytes)
           .then(setImagesConfigured)
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
-        void loadAiConfig(settingsMap.aiConfig, decryptBytes);
+        void loadAiConfig(sealed('aiConfig'), decryptBytes);
         // Feature flags (must be set before setTopics so filtering works);
         // never-saved flags default to enabled, same as useInitializeData
         setFeatureFlags(featureFlagsFrom(settingsMap));

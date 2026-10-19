@@ -16,8 +16,9 @@ vi.mock('../contexts/EncryptionContext.js', () => ({ useEncryption: () => encryp
 vi.mock('../services/imageStorage.js', () => ({ loadImageStorageConfig: vi.fn().mockResolvedValue(false) }));
 vi.mock('../services/aiAssistant.js', () => ({ loadAiConfig: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../services/privateSettings.js', () => ({
-  openPrivateSettings: vi.fn().mockResolvedValue([]),
-  migratePrivateSettings: vi.fn().mockResolvedValue(undefined),
+  openStartupSettings: vi.fn(async (rows: { key: string; value: unknown }[]) => ({
+    map: Object.fromEntries(rows.map(r => [r.key, r.value])), sealed: () => undefined,
+  })),
 }));
 vi.mock('../services/api.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api.js')>();
@@ -31,7 +32,7 @@ vi.mock('../services/api.js', async (importOriginal) => {
 
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, ApiError } from '../services/api.js';
-import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { openStartupSettings } from '../services/privateSettings.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
@@ -59,7 +60,6 @@ describe('useInitializeData', () => {
     encryptionState.decryptPosts.mockImplementation(async ([p]: any[]) => [{
       id: p.id, content: `entry ${p.id}`, metadata: {}, isEncrypted: true, createdAt: p.createdAt, updatedAt: p.updatedAt,
     }]);
-    (openPrivateSettings as any).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -114,19 +114,12 @@ describe('useInitializeData', () => {
     expect(useEntriesStore.getState().decryptedEntries.map(e => e.content)).toEqual(['entry 1', '[Decryption failed]', 'entry 3']);
   });
 
-  it('seals plaintext private settings left from before encryption', async () => {
+  it('opens settings through the shared startup path (sealed, key-bound, migrated once)', async () => {
     serverReturns([{ key: 'displayName', value: 'Alex' }]);
-    (openPrivateSettings as any).mockResolvedValue(['displayName']);
     const { result } = renderHook(() => useInitializeData());
     await waitFor(() => expect(result.current.isReady).toBe(true));
-    expect(migratePrivateSettings).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'Alex' }), ['displayName'], encryptionState.encryptBytes);
-  });
-
-  it('does not migrate when every private setting is already sealed', async () => {
-    serverReturns();
-    const { result } = renderHook(() => useInitializeData());
-    await waitFor(() => expect(result.current.isReady).toBe(true));
-    expect(migratePrivateSettings).not.toHaveBeenCalled();
+    expect(openStartupSettings).toHaveBeenCalledWith([{ key: 'displayName', value: 'Alex' }], encryptionState.decryptBytes, encryptionState.encryptBytes);
+    expect(useUIStore.getState().displayName).toBe('Alex');
   });
 
   describe('a failed load', () => {

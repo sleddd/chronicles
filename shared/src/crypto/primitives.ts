@@ -246,11 +246,12 @@ export async function encrypt(
  */
 export async function encryptBytes(
   masterKey: CryptoKey,
-  data: ArrayBuffer
+  data: ArrayBuffer,
+  aad?: string
 ): Promise<{ ciphertext: ArrayBuffer; iv: string }> {
   const iv = generateIv();
   const ciphertext = await crypto.subtle.encrypt(
-    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, ...(aad !== undefined && { additionalData: stringToArrayBuffer(aad) }) },
     masterKey,
     data
   );
@@ -258,16 +259,17 @@ export async function encryptBytes(
 }
 
 /**
- * Decrypt binary data with AES-GCM
+ * Decrypt binary data with AES-GCM (with the AAD it was encrypted with, if any)
  */
 export async function decryptBytes(
   masterKey: CryptoKey,
   ciphertext: ArrayBuffer,
-  ivBase64: string
+  ivBase64: string,
+  aad?: string
 ): Promise<ArrayBuffer> {
   const iv = base64ToUint8Array(ivBase64);
   return crypto.subtle.decrypt(
-    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, ...(aad !== undefined && { additionalData: stringToArrayBuffer(aad) }) },
     masterKey,
     ciphertext
   );

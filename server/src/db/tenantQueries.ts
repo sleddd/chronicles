@@ -60,6 +60,18 @@ export async function getAllSettings(schemaName: string): Promise<TenantSetting[
   );
 }
 
+export async function countSettings(schemaName: string): Promise<number> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT COUNT(*) AS n FROM ${s}.settings`);
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function settingExists(schemaName: string, key: string): Promise<boolean> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ e: boolean }[]>(`SELECT EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) AS e`, key);
+  return !!rows[0]?.e;
+}
+
 export async function upsertSetting(schemaName: string, key: string, value: unknown): Promise<TenantSetting> {
   const s = escapeSchema(schemaName);
   const result = await prisma.$queryRawUnsafe<TenantSetting[]>(

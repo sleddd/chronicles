@@ -6,6 +6,7 @@ import { TextInput } from '../atoms/TextInput.js';
 import { PasswordInput } from '../atoms/PasswordInput.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { usePrivateSettings } from '../../services/privateSettings.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
 import { imageStorageConfigSchema } from '@shared/validation/schemas.js';
@@ -29,6 +30,7 @@ import {
  */
 export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const { encryptBytes } = useEncryption();
+  const { savePrivateSetting } = usePrivateSettings();
   const imagesEnabled = useUIStore(s => s.imagesEnabled);
   const setImagesEnabled = useUIStore(s => s.setImagesEnabled);
   const imagesConfigured = useUIStore(s => s.imagesConfigured);
@@ -73,7 +75,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
 
   const handleToggle = async (enabled: boolean) => {
     setImagesEnabled(enabled);
-    await settingsApi.upsert('imagesEnabled', enabled).catch(() => {});
+    await savePrivateSetting('imagesEnabled', enabled).catch(() => {});
   };
 
   /** Persist whatever is entered — partial drafts included. Nothing typed is ever lost. */

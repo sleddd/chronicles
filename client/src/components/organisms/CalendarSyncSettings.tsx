@@ -109,7 +109,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
 
   const handleSyncToggle = async (enabled: boolean) => {
     setCalendarSyncEnabled(enabled);
-    await settingsApi.upsert('calendarSyncEnabled', enabled).catch(() => {});
+    await savePrivateSetting('calendarSyncEnabled', enabled).catch(() => {});
     if (enabled) kickSync();
   };
 
@@ -137,7 +137,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
     setPendingCalendarId(null);
     setGoogleCalendarId(id);
     setGoogleSyncToken('');
-    await settingsApi.upsert('googleCalendarId', id).catch(() => {});
+    await savePrivateSetting('googleCalendarId', id).catch(() => {});
     await settingsApi.upsert('googleSyncToken', '').catch(() => {});
     kickSync();
   };
@@ -155,7 +155,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
   const handleImportModeToggle = async (importAll: boolean) => {
     const mode = importAll ? 'all' : 'chroniclesOnly';
     setCalendarImportMode(mode);
-    await settingsApi.upsert('calendarImportMode', mode).catch(() => {});
+    await savePrivateSetting('calendarImportMode', mode).catch(() => {});
     if (importAll) {
       // Clear the incremental sync token to force a full listing — events created
       // in Google before import was enabled were already consumed by the token
@@ -204,6 +204,8 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
       } else {
         await calendarApi.disableIcs();
       }
+      useUIStore.getState().setIcsFeedEnabled(enabled);
+      await savePrivateSetting('icsFeedEnabled', enabled);
       invalidateCalendarStatus();
       refreshStatus();
       if (enabled) kickSync();
