@@ -270,3 +270,18 @@ export const breachNoticeSchema = z.object({
   d => d.breachNotice === 'email' || (d.postalAddress ?? '').length >= 8,
   { message: 'Add a postal address for mailed notices', path: ['postalAddress'] },
 );
+
+// Landing page: beta applications (public, no account); past the last seat they wait on the waitlist.
+// `website` is a honeypot — people never see it, so anything in it is a bot.
+export const BETA_TRACK_OPTIONS = ['journal', 'health', 'planning', 'calendar', 'kitchen', 'finance', 'everything'] as const;
+export const BETA_DEVICE_OPTIONS = ['ios', 'android', 'desktop', 'mixed'] as const;
+
+export const betaApplicationSchema = z.object({
+  name: z.string().trim().min(1, 'Add your name').max(100),
+  email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254),
+  trackFirst: z.enum(BETA_TRACK_OPTIONS),
+  device: z.enum(BETA_DEVICE_OPTIONS),
+  ageConfirmed: z.literal(true, { errorMap: () => ({ message: 'You must be 18 or older to join' }) }),
+  riskAccepted: z.literal(true, { errorMap: () => ({ message: 'Tick the box to show you understand the beta' }) }),
+  website: z.string().max(200).optional(),
+}).strict();

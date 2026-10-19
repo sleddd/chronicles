@@ -57,7 +57,7 @@ export function RegisterView() {
   const handleConfirm = useCallback(() => {
     // Clear recovery key from memory before navigating
     setRecoveryKey(null);
-    navigate('/');
+    navigate('/dashboard');
   }, [navigate]);
 
   if (recoveryKey) {

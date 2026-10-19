@@ -21,6 +21,7 @@
     "ai:block": "tsx src/db/aiChatBlock.ts",
     "account:delete": "tsx src/db/deleteAccount.ts",
     "notice": "tsx src/db/appNotice.ts",
+    "beta": "tsx src/db/betaSignups.ts",
     "migrate:phase2-status": "tsx src/db/phase2Status.ts"
   },
   "dependencies": {

@@ -21,7 +21,9 @@ import analyticsRoutes from './routes/analytics.js';
 import aiChatRoutes from './routes/aiChat.js';
 import consentRoutes from './routes/consent.js';
 import noticeRoutes from './routes/notice.js';
+import betaRoutes from './routes/beta.js';
 import { initConsentTable } from './db/consentQueries.js';
+import { initBetaTable } from './db/betaQueries.js';
 import { initAppNoticeTable } from './db/appNoticeQueries.js';
 import { initKeyWrapTable } from './db/keyWrapQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
@@ -105,6 +107,7 @@ app.use('/api/ai-chat', authMiddleware, apiLimiter, aiChatRoutes);
 app.use('/api/consent', authMiddleware, apiLimiter, consentRoutes);
 app.use('/api/notice', authMiddleware, apiLimiter, noticeRoutes);
 app.use('/api/analytics', authMiddleware, apiLimiter, analyticsRoutes); // never tied to the account
+app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 
@@ -130,6 +133,7 @@ initAiChatTable().catch(err => console.error('Failed to init AI chat table:', er
 initConsentTable().catch(err => console.error('Failed to init consent table:', err));
 initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err));
 initKeyWrapTable().catch(err => console.error('Failed to init key-wrap table:', err));
+initBetaTable().catch(err => console.error('Failed to init beta table:', err));
 upgradeStoredCredentials().then(({ recoverySealed, sessionsRevoked }) => {
   if (recoverySealed || sessionsRevoked) console.log(`Credential upgrade: ${recoverySealed} recovery check(s) sealed, ${sessionsRevoked} legacy session(s) signed out`);
 }).catch(err => console.error('Credential upgrade failed:', err instanceof Error ? err.message : err));

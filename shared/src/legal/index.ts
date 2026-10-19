@@ -26,3 +26,14 @@ export const LEGAL_DETAILS = {
   /** Every email (privacy, abuse, safety) goes to support */
   abuseEmail: 'support@mydailychronicles.com',
 } as const;
+
+/**
+ * The public landing page's beta offer. `seats` is the number of beta places;
+ * applications after the last seat join the waitlist automatically.
+ */
+export const BETA_DETAILS = {
+  seats: 30,
+  priceTerms: 'Billing starts when it releases after the beta. The price is still being set, but it won’t be more than $20 a month.',
+  copyrightHolder: 'Claudette Raynor',
+  githubUrl: 'https://github.com/cv01d/chronicles',
+} as const;

@@ -7,6 +7,8 @@ import { GlobalStyle } from './styles/GlobalStyle.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.js';
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
+import { LandingView } from './views/LandingView.js';
+import { BugReportView } from './views/BugReportView.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
@@ -381,12 +383,18 @@ function deriveAccentScale(base: string): Record<string, string> {
   };
 }
 
+/** The landing page, sign-in screens, shares and legal pages — no chat or notice banner there */
+const PUBLIC_PREFIXES = ['/login', '/sign-up', '/register', '/recover', '/share', '/health-privacy', '/terms', '/report-a-bug'];
+function isPublicPage(pathname: string): boolean {
+  return pathname === '/' || PUBLIC_PREFIXES.some(p => pathname.startsWith(p));
+}
+
 /** The floating AI chat — only for a signed-in, unlocked journal, never on public pages. */
 function ChatGate() {
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
   const { pathname } = useLocation();
-  const publicPage = ['/login', '/register', '/recover', '/share', '/health-privacy', '/terms'].some(p => pathname.startsWith(p));
+  const publicPage = isPublicPage(pathname);
   if (!isAuthenticated || !isUnlocked || publicPage) return null;
   return <AiChat />;
 }
@@ -395,7 +403,7 @@ function ChatGate() {
 function NoticeGate() {
   const { isAuthenticated } = useAuth();
   const { pathname } = useLocation();
-  const publicPage = ['/login', '/register', '/recover', '/share', '/health-privacy', '/terms'].some(p => pathname.startsWith(p));
+  const publicPage = isPublicPage(pathname);
   if (!isAuthenticated || publicPage) return null;
   return <NoticeBanner />;
 }
@@ -499,14 +507,16 @@ export function App() {
             <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginView />} />
-              <Route path="/register" element={<RegisterView />} />
+              <Route path="/" element={<LandingView />} />
+              <Route path="/sign-up" element={<RegisterView />} />
+              <Route path="/register" element={<Navigate to="/sign-up" replace />} />
               <Route path="/recover" element={<RecoverView />} />
               <Route path="/share/:token" element={<SharedEntryView />} />
               <Route path="/health-privacy" element={<HealthPrivacyView />} />
               <Route path="/terms" element={<TermsView />} />
+              <Route path="/report-a-bug" element={<BugReportView />} />
 
               {/* Core */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/journal" element={<R><JournalView /></R>} />
               <Route path="/dashboard" element={<R><DashboardView /></R>} />
               <Route path="/settings" element={<R><SettingsView /></R>} />

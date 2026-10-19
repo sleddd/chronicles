@@ -65,7 +65,7 @@ describe('LoginView', () => {
   it('renders footer with link to register', () => {
     renderWithTheme(<LoginView />);
     const link = screen.getByRole('link', { name: 'Create an account' });
-    expect(link).toHaveAttribute('href', '/register');
+    expect(link).toHaveAttribute('href', '/sign-up');
   });
 
   it('navigates to /recover when forgot password is clicked', () => {

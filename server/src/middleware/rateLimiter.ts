@@ -83,3 +83,15 @@ export const shareLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
 });
+
+/**
+ * Landing page limiter — beta applications and waitlist sign-ups.
+ * 10 per hour per IP: a person submits once or twice; this stops list stuffing.
+ */
+export const betaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-ups from here, please try again later' },
+});

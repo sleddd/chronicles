@@ -66,6 +66,11 @@ describe('Sidebar', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it('has no Report a bug button (that lives in Settings)', () => {
+    renderAt();
+    expect(screen.queryByTitle('Report a bug')).toBeNull();
+  });
+
   it('locks from the Lock button just above Sign out', () => {
     renderAt();
     fireEvent.click(screen.getByTitle('Lock — your password opens it again'));

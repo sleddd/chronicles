@@ -239,6 +239,8 @@ Google user data section (add to the privacy policy the consent screen links to)
 - [x] Self-hosted icon font.
 - [x] Seed buttons hidden in production.
 - [x] No image sharing (photos and drawings), enforced on the server too.
+- [x] Landing page beta / waitlist (`public.beta_signups`): name, email, track-first and device for each application (applications after the last seat wait on the waitlist; there is no email-only waitlist form); no account link; covered by the policy's "Beta applications and the waitlist" section. `npm run beta` (server) lists it, `-- --csv` exports, `-- --remove <email>` deletes on request.
+- [ ] After the launch email goes out, delete the waitlist (`npm run beta -- --remove …`, or truncate `public.beta_signups`), as the policy promises.
 - [ ] Main privacy policy (if one is published elsewhere): "no third-party analytics or tracking", the Google user data section, and a link to the health policy.
 - [ ] Processor contracts: the host's data processing agreement, signed copy kept, limited to your instructions.
 - [ ] Terms: abuse address (`LEGAL_DETAILS.abuseEmail`). If you ever learn of apparent CSAM, report it to NCMEC's CyberTipline as soon as reasonably possible and preserve the report's contents for one year. Don't open, copy or forward it. Report it, then call your attorney.

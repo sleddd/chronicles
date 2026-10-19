@@ -390,6 +390,15 @@ export const notice = {
   get: () => request<{ notice: AppNotice | null }>('/notice'),
 };
 
+// Public landing page — no account needed
+export interface BetaApplication {
+  name: string; email: string; trackFirst: string; device: string; website?: string;
+}
+export const beta = {
+  apply: (a: BetaApplication) =>
+    request<{ status: 'seat' | 'waitlist' }>('/beta/apply', { method: 'POST', body: { ...a, ageConfirmed: true, riskAccepted: true } }),
+};
+
 export const analytics = {
   crisisCard: (rating: CrisisRating, kind: RiskKind | null) =>
     request<{ ok: true }>('/analytics/crisis-card', { method: 'POST', body: { rating, kind } }),

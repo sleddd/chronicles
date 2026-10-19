@@ -157,6 +157,15 @@ export function HealthPrivacyView() {
         minor are kept permanently; they hold only a date and never an account or anything you wrote.
       </p>
 
+      <h2>Beta applications and the waitlist</h2>
+      <p>
+        The home page lets people without an account apply for the beta. An application keeps your name, email, what
+        you’d track first and the device you’ll use most. If the beta seats are taken, your application waits on the
+        waitlist. This isn’t health data and isn’t linked to an account. We use it only to offer you a beta seat or to send
+        one email when Chronicles opens to everyone, never for marketing, and we don’t share it. We delete it after that
+        email is sent, or sooner if you ask at <a href={`mailto:${D.contactEmail}`}>{D.contactEmail}</a>.
+      </p>
+
       <h2>Age limit</h2>
       <p>Chronicles is for adults 18 and older. If we learn that an account belongs to someone under 18, we delete it.</p>
 

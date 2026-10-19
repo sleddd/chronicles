@@ -131,7 +131,7 @@ export function LoginView() {
       );
     }
 
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const handleSubmitOtp = async () => {
@@ -156,7 +156,7 @@ export function LoginView() {
           savedRemember
         );
       }
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Invalid code';
       // The session timed out (5 minutes): there's nothing left to retry, so
@@ -236,7 +236,7 @@ export function LoginView() {
     <AuthTemplate
       title="Chronicles"
       brand
-      footer={<>New here? <Link to="/register">Create an account</Link></>}
+      footer={<>New here? <Link to="/sign-up">Create an account</Link></>}
     >
       {signInNote && <ErrorBanner role="status">{signInNote}</ErrorBanner>}
       <LoginForm

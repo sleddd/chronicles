@@ -51,6 +51,7 @@ directions_boat
 directions_car
 directions_run
 downhill_skiing
+download
 eco
 edit
 elderly
@@ -79,6 +80,7 @@ history_edu
 home
 hotel
 icecream
+image
 inbox
 key
 landscape
@@ -105,6 +107,7 @@ monitoring
 mood
 movie
 music_note
+notifications_off
 nutrition
 palette
 park
@@ -178,6 +181,7 @@ unarchive
 vaccines
 videocam
 view_kanban
+visibility_off
 volunteer_activism
 warning
 water_drop

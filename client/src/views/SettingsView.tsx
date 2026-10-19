@@ -36,6 +36,7 @@ import { usePrivateSettings, type PrivateSettingKey } from '../services/privateS
 import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, finance as financeApi, doses as dosesApi, ApiError } from '../services/api.js';
 import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
 import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
+import { BugReportForm } from '../components/organisms/BugReportForm.js';
 import { seedTestData } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
@@ -1370,6 +1371,13 @@ export function SettingsView() {
             <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a>
             <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
           </PolicyLinks>
+        </GuideBody>
+      </Section>
+
+      <Section id="report-a-bug" title="Report a Bug">
+        <GuideBody>
+          Something broken or confusing? Tell us here. Chronicles has no crash reporting, so a report is how we find out.
+          <div style={{ marginTop: 16 }}><BugReportForm /></div>
         </GuideBody>
       </Section>
 

@@ -206,7 +206,7 @@ export function RecoverView() {
       {step === 'newKey' && newRecoveryKey && (
         <RecoveryKeyDisplay
           recoveryKey={newRecoveryKey}
-          onConfirm={() => navigate('/')}
+          onConfirm={() => navigate('/dashboard')}
         />
       )}
     </AuthTemplate>
