@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -178,10 +178,9 @@ const PrivacyHead = styled.div`
   @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); gap: 20px; p { font-size: 17px; } }
 `;
 
-/* Section headings set in capitals */
-const CapsTitle = styled(H2)`
+/* The Questions heading, at 300 */
+const FaqTitle = styled(H2)`
   font-weight: 300;
-  text-transform: uppercase;
 `;
 
 /* The How it works heading: title case, a touch heavier, more room under it */
@@ -363,20 +362,23 @@ const FaqLayout = styled(Container)`
 
 const Faq = styled.div`
   border-top: 1px solid var(--border-default);
-  details { border-bottom: 1px solid var(--border-subtle); }
-  summary {
+  > div { border-bottom: 1px solid var(--border-subtle); }
+  h3 { margin: 0; }
+  button {
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
     padding: 18px 0;
-    list-style: none;
+    border: none;
+    background: none;
+    text-align: left;
     cursor: pointer;
     font-family: var(--font-display);
     font-size: 20px;
     font-weight: 300;
     color: var(--text-primary);
-    &::-webkit-details-marker { display: none; }
-    /* The app's chevron (CollapsibleCard), on the right */
+    /* The app's chevron (CollapsibleCard), on the right, turning as it opens */
     &::after {
       content: '';
       flex: none;
@@ -386,13 +388,40 @@ const Faq = styled.div`
       border-right: 1.5px solid var(--text-muted);
       border-bottom: 1.5px solid var(--text-muted);
       transform: translateY(-3px) rotate(45deg);
-      transition: transform 0.15s ease;
+      transition: transform 0.3s ease;
     }
+    &[aria-expanded='true']::after { transform: translateY(2px) rotate(-135deg); }
     &:focus-visible { outline: none; box-shadow: var(--shadow-ring); }
   }
-  details[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+  /* The answer slides open and shut: its row grows from 0fr to 1fr */
+  [role='region'] {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 0.35s ease, opacity 0.3s ease;
+  }
+  [role='region'][data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+  [role='region'] > div { overflow: hidden; }
   p { margin: 0 0 20px; max-width: 640px; font-size: 15px; }
+  @media (prefers-reduced-motion: reduce) {
+    button::after, [role='region'] { transition: none; }
+  }
 `;
+
+/** One question: a button that slides its answer open and shut */
+function FaqItem({ id, q, a, style }: { id: string; q: string; a: string; style?: CSSProperties }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-reveal style={style}>
+      <h3>
+        <button type="button" id={`${id}-q`} aria-expanded={open} aria-controls={`${id}-a`} onClick={() => setOpen(o => !o)}>{q}</button>
+      </h3>
+      <div role="region" id={`${id}-a`} aria-labelledby={`${id}-q`} data-open={open} inert={!open}>
+        <div><p>{a}</p></div>
+      </div>
+    </div>
+  );
+}
 
 /** True when Chronicles runs as an installed app (home-screen PWA) */
 function isInstalledApp(): boolean {
@@ -511,13 +540,10 @@ export function LandingView() {
 
       <DarkAppBand aria-labelledby="faq-title">
         <FaqLayout>
-          <CapsTitle id="faq-title" data-reveal>Questions</CapsTitle>
+          <FaqTitle id="faq-title" data-reveal>Questions</FaqTitle>
           <Faq>
             {QUESTIONS.map(({ q, a }, i) => (
-              <details key={q} data-reveal style={delay(i * 0.6)}>
-                <summary>{q}</summary>
-                <p>{a}</p>
-              </details>
+              <FaqItem key={q} id={`faq-${i}`} q={q} a={a} style={delay(i * 0.6)} />
             ))}
           </Faq>
         </FaqLayout>
