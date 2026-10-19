@@ -158,10 +158,11 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
 
   const setupEncryption = useCallback(async (password: string): Promise<SetupEncryptionResult> => {
     const result = await encryptionService.setupEncryption(password);
-    masterKeyRef.current = result.masterKey;
-    setIsUnlocked(true);
+    // A full install, like an unlock: without the record cipher a new account
+    // couldn't seal (or seed) its topics until the next unlock
+    install(result.masterKey);
     return result;
-  }, []);
+  }, [install]);
 
   const getKey = () => {
     if (!masterKeyRef.current) throw new Error('Encryption not unlocked');

@@ -145,6 +145,8 @@ describe('EncryptionProvider – setupEncryption', () => {
       masterKey: fakeCryptoKey,
     };
     mockSetupEncryption.mockResolvedValue(setupResult);
+    // No cipher left over from an earlier test
+    (await import('../services/recordCipher.js')).clearRecordCipher();
 
     const { result } = renderHook(() => useEncryption(), { wrapper });
 
@@ -156,6 +158,9 @@ describe('EncryptionProvider – setupEncryption', () => {
     expect(result.current.isUnlocked).toBe(true);
     expect(returned).toEqual(setupResult);
     expect(mockSetupEncryption).toHaveBeenCalledWith('password');
+    // The record cipher is installed too, so a new account can seal its topics right away
+    const { recordCipher } = await import('../services/recordCipher.js');
+    expect(() => recordCipher()).not.toThrow();
   });
 });
 
