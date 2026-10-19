@@ -252,6 +252,8 @@ PostgreSQL Database
 
 **Schema naming**: `usr_{counter}_{random_hex}` — NOT derived from user info for security.
 
+**Shards** (`server/src/db/shards.ts`, runbook `docs/SHARDING.md`): user schemas can live on several databases. The main database (`DATABASE_URL`) keeps accounts, sessions and every shared table and is shard 1; extra ones come from `SHARD_DATABASE_URLS` (`2=postgresql://… 3=…`); `accounts.shard_id` says where a schema lives (added at startup, default 1); new accounts go to the first shard under `SHARD_CAPACITY` (5000). **Tenant SQL always goes through `tenantDb(schemaName)`** (or `shardClient(id)`), never the main `prisma` client — `tenantQueries.ts`, `schemaManager.ts` and the maintenance scripts do; shared tables (`public.*`) always use `prisma`. A tenant query must never touch `public.*` (different database). Scripts close pools with `disconnectShards()`.
+
 ### Two-Layer Security Model
 
 1. **Authentication Layer (Server)**: bcrypt hash (12 rounds, run in worker threads by `services/passwordHasher.ts` — never on the main thread) of a **derived sign-in secret**, split-token database sessions with immediate revocation, optional TOTP 2FA

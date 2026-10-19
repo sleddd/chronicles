@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
+import { MAIN_SHARD, shardClient, shardForNewAccount, tenantDb, forgetTenant } from './shards.js';
 import { financeTableStatements, doseRecordStatements } from './tenantQueries.js';
 
 // =============================================================================
@@ -93,21 +94,25 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
   ];
 }
 
-async function createTenantSchema(schemaName: string): Promise<void> {
+async function createTenantSchema(schemaName: string, shardId = MAIN_SHARD): Promise<void> {
+  const db = shardClient(shardId);
   const statements = generateTenantSchemaStatements(schemaName);
   for (const sql of statements) {
-    await prisma.$executeRawUnsafe(sql);
+    await db.$executeRawUnsafe(sql);
   }
 }
 
-async function dropTenantSchema(schemaName: string): Promise<void> {
+/** Drop a user's schema on its shard (given, else looked up while the account still exists). */
+async function dropTenantSchema(schemaName: string, shardId?: number): Promise<void> {
   const escaped = escapeSchema(schemaName);
-  await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${escaped} CASCADE`);
+  const db = shardId === undefined ? await tenantDb(escaped) : shardClient(shardId);
+  await db.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${escaped} CASCADE`);
+  forgetTenant(escaped);
 }
 
-async function tenantSchemaExists(schemaName: string): Promise<boolean> {
+async function tenantSchemaExists(schemaName: string, shardId = MAIN_SHARD): Promise<boolean> {
   const escaped = escapeSchema(schemaName);
-  const result = await prisma.$queryRaw<{ exists: boolean }[]>`
+  const result = await shardClient(shardId).$queryRaw<{ exists: boolean }[]>`
     SELECT EXISTS (
       SELECT 1 FROM information_schema.schemata
       WHERE schema_name = ${escaped}
@@ -137,6 +142,7 @@ export async function registerTenant(
   encryptionParams?: EncryptionSetupParams
 ) {
   const schemaName = await generateSchemaName();
+  const shardId = await shardForNewAccount();
 
   const account = await prisma.account.create({
     data: {
@@ -144,6 +150,7 @@ export async function registerTenant(
       username,
       passwordHash,
       tenantSchemaName: schemaName,
+      shardId,
       ...(encryptionParams && {
         kekSalt: new Uint8Array(encryptionParams.kekSalt) as Uint8Array<ArrayBuffer>,
         encryptedMasterKey: new Uint8Array(encryptionParams.encryptedMasterKey) as Uint8Array<ArrayBuffer>,
@@ -161,9 +168,9 @@ export async function registerTenant(
   // hand: a half-made schema would leave an account that can't be used and an
   // email that can never register again
   try {
-    await createTenantSchema(schemaName);
+    await createTenantSchema(schemaName, shardId);
   } catch (err) {
-    await dropTenantSchema(schemaName).catch(() => {});
+    await dropTenantSchema(schemaName, shardId).catch(() => {});
     await prisma.account.delete({ where: { id: account.id } }).catch(() => {});
     throw err;
   }

@@ -1,4 +1,4 @@
-import { prisma } from './prisma.js';
+import { shardIds, shardClient } from './shards.js';
 
 // pg_dump locks every table it dumps in one transaction. Each user is a schema
 // of ~12-16 tables, and the lock table holds about max_locks_per_transaction ×
@@ -26,22 +26,29 @@ export function dumpLockAdvice(c: LockCapacity): string | null {
     + `Set max_locks_per_transaction to at least ${suggested}, or rely on physical backups, and test a restore.`;
 }
 
-/** Read the numbers from the database and log a warning when backups are at risk. */
+/** Check every database (each shard is backed up on its own) and log a warning per shard at risk. */
 export async function checkBackupLockCapacity(): Promise<string | null> {
-  const [row] = await prisma.$queryRawUnsafe<{ tables: bigint; max_locks: string; max_connections: string; max_prepared: string }[]>(
-    `SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-                AND n.nspname NOT LIKE 'pg_toast%') AS tables,
-            current_setting('max_locks_per_transaction') AS max_locks,
-            current_setting('max_connections') AS max_connections,
-            current_setting('max_prepared_transactions') AS max_prepared`
-  );
-  const advice = dumpLockAdvice({
-    tables: Number(row.tables),
-    maxLocks: Number(row.max_locks),
-    maxConnections: Number(row.max_connections),
-    maxPrepared: Number(row.max_prepared),
-  });
-  if (advice) console.warn(`WARNING: ${advice}`);
-  return advice;
+  const warnings: string[] = [];
+  for (const id of shardIds()) {
+    const [row] = await shardClient(id).$queryRawUnsafe<{ tables: bigint; max_locks: string; max_connections: string; max_prepared: string }[]>(
+      `SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND n.nspname NOT LIKE 'pg_toast%') AS tables,
+              current_setting('max_locks_per_transaction') AS max_locks,
+              current_setting('max_connections') AS max_connections,
+              current_setting('max_prepared_transactions') AS max_prepared`
+    );
+    const advice = dumpLockAdvice({
+      tables: Number(row.tables),
+      maxLocks: Number(row.max_locks),
+      maxConnections: Number(row.max_connections),
+      maxPrepared: Number(row.max_prepared),
+    });
+    if (advice) {
+      const message = shardIds().length > 1 ? `Shard ${id}: ${advice}` : advice;
+      console.warn(`WARNING: ${message}`);
+      warnings.push(message);
+    }
+  }
+  return warnings.length ? warnings.join('\n') : null;
 }

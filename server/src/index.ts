@@ -29,6 +29,7 @@ import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
 import { checkBackupLockCapacity } from './db/backupCheck.js';
+import { initShards } from './db/shards.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -132,7 +133,15 @@ app.get('{/*path}', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-// Init + periodic cleanup + listen
+// Init + periodic cleanup + listen. The shard column comes first: every
+// account query reads it, so nothing may run before it exists
+try {
+  await initShards();
+} catch (err) {
+  console.error('Database shard setup failed:', err instanceof Error ? err.message : err);
+  process.exit(1);
+}
+
 initSharesTable()
   .then(() => purgeDeadShares())
   .then(count => { if (count > 0) console.log(`Deleted ${count} revoked/expired share(s)`); })

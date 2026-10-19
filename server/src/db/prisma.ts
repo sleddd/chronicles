@@ -31,28 +31,33 @@ function pooledUrl(url: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}connection_limit=${POOL_SIZE}`;
 }
 
-const url = pooledUrl(databaseUrl);
-const createClient = () => new PrismaClient({ datasources: { db: { url } } });
+/**
+ * A client for one database: capped pool, connections swapped for fresh ones
+ * every DB_POOL_RECYCLE_MINUTES. Every caller holds the returned object; it
+ * always forwards to the current client.
+ */
+export function createPooledClient(databaseUrl: string): PrismaClient {
+  const url = pooledUrl(databaseUrl);
+  const createClient = () => new PrismaClient({ datasources: { db: { url } } });
+  let current = createClient();
 
-let current = createClient();
+  if (RECYCLE_MINUTES > 0) {
+    setInterval(() => {
+      const old = current;
+      current = createClient();
+      setTimeout(() => {
+        old.$disconnect().catch(err => console.error('Closing old database pool failed:', err instanceof Error ? err.message : err));
+      }, DRAIN_MS).unref();
+    }, RECYCLE_MINUTES * 60_000).unref();
+  }
 
-/** Swap in a fresh client; the old one closes after DRAIN_MS. */
-export function recyclePrismaPool(): void {
-  const old = current;
-  current = createClient();
-  setTimeout(() => {
-    old.$disconnect().catch(err => console.error('Closing old database pool failed:', err instanceof Error ? err.message : err));
-  }, DRAIN_MS).unref();
+  return new Proxy({} as PrismaClient, {
+    get(_target, prop) {
+      const value = Reflect.get(current, prop, current);
+      return typeof value === 'function' ? value.bind(current) : value;
+    },
+  });
 }
 
-if (RECYCLE_MINUTES > 0) {
-  setInterval(recyclePrismaPool, RECYCLE_MINUTES * 60_000).unref();
-}
-
-// Every caller holds this one object; it always forwards to the current client
-export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop) {
-    const value = Reflect.get(current, prop, current);
-    return typeof value === 'function' ? value.bind(current) : value;
-  },
-});
+/** The main database: accounts, sessions and the shared tables (and shard 1's user schemas). */
+export const prisma = createPooledClient(databaseUrl);

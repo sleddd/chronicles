@@ -11,6 +11,7 @@
  */
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
+import { tenantDb, disconnectShards } from './shards.js';
 
 async function main(): Promise<void> {
   const apply = process.argv.includes('--apply');
@@ -18,10 +19,11 @@ async function main(): Promise<void> {
   let total = 0;
   for (const { tenantSchemaName } of accounts) {
     const s = escapeSchema(tenantSchemaName);
-    const [{ count }] = await prisma.$queryRawUnsafe<{ count: bigint }[]>(`SELECT COUNT(*) AS count FROM ${s}.post_taxonomies`);
+    const db = await tenantDb(s);
+    const [{ count }] = await db.$queryRawUnsafe<{ count: bigint }[]>(`SELECT COUNT(*) AS count FROM ${s}.post_taxonomies`);
     const n = Number(count);
     total += n;
-    if (apply && n > 0) await prisma.$executeRawUnsafe(`DELETE FROM ${s}.post_taxonomies`);
+    if (apply && n > 0) await db.$executeRawUnsafe(`DELETE FROM ${s}.post_taxonomies`);
     console.log(`${s}: ${n} link(s)${apply && n > 0 ? ' deleted' : ''}`);
   }
   console.log(apply ? `Deleted ${total} link(s).` : `Dry run: ${total} link(s) would be deleted. Re-run with --apply to delete.`);
@@ -29,4 +31,4 @@ async function main(): Promise<void> {
 
 main()
   .catch(err => { console.error(err instanceof Error ? err.message : err); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => disconnectShards());
