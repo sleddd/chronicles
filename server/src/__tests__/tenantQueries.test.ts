@@ -366,7 +366,7 @@ describe('Post queries', () => {
 
       const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
       expect(sql).toContain('usr_1_abc123.posts');
-      expect(sql).toContain('ORDER BY created_at DESC');
+      expect(sql).toContain('ORDER BY created_at DESC, id DESC');
       expect(sql).toContain('LIMIT $1 OFFSET $2');
       expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(1000);
       expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(0);

@@ -258,7 +258,7 @@ describe('auth', () => {
 // ---------------------------------------------------------------------------
 
 describe('entries', () => {
-  it('getAll fetches every entry in one request', async () => {
+  it('getAll fetches a journal under 5000 entries in one request', async () => {
     fetchSpy = mockFetchResponse([]);
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -266,6 +266,26 @@ describe('entries', () => {
 
     // Topic filtering relies on the whole journal being in the store
     expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries?limit=5000');
+  });
+
+  it('getAll pages past 5000 entries and skips ids repeated across pages', async () => {
+    const page = (from: number, n: number) => Array.from({ length: n }, (_, k) => ({ id: from - k }));
+    const pages: Record<string, unknown[]> = {
+      '/api/entries?limit=5000': page(12000, 5000),
+      // an entry saved while paging shifts the next page by one: 7001 repeats
+      '/api/entries?limit=5000&offset=5000': page(7001, 5000),
+      '/api/entries?limit=5000&offset=10000': page(2001, 2001),
+    };
+    fetchSpy = vi.fn(async (url: string) => ({
+      ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => pages[url],
+    }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const all = await entries.getAll();
+
+    expect(fetchSpy.mock.calls.map(c => c[0])).toEqual(Object.keys(pages));
+    expect(all).toHaveLength(12000);
+    expect(new Set(all.map(e => e.id)).size).toBe(12000);
   });
 
   it('get fetches /entries/:id', async () => {

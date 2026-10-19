@@ -24,11 +24,13 @@ function serializePost(post: Record<string, unknown>) {
   return result;
 }
 
-// GET /api/entries — Get all entries (paginated)
+// GET /api/entries — Get all entries, a page at a time (newest first). The
+// client pages until a short page comes back, so a journal can hold more than
+// one page; the offset is uncapped for that reason.
 router.get('/', async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 5000, 1), 10000);
-    const offset = Math.min(Math.max(parseInt(req.query.offset as string) || 0, 0), 10000);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const posts = await getAllPosts(req.auth!.tenantSchemaName, { limit, offset });
     res.json(posts.map(p => serializePost(p as unknown as Record<string, unknown>)));
   } catch (err) {

@@ -88,6 +88,14 @@ describe('Entry Routes', () => {
       expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 10000, offset: 0 });
     });
 
+    it('allows offsets past 10000 so large journals can page to the end', async () => {
+      (getAllPosts as any).mockResolvedValue([]);
+
+      await request(app).get('/api/entries?limit=5000&offset=15000');
+
+      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 15000 });
+    });
+
     it('returns 500 on database error', async () => {
       (getAllPosts as any).mockRejectedValue(new Error('DB error'));
 

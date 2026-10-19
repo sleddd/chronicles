@@ -315,7 +315,8 @@ export async function getAllPosts(
 ): Promise<TenantPost[]> {
   const s = escapeSchema(schemaName);
   return prisma.$queryRawUnsafe<TenantPost[]>(
-    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+    // id breaks created_at ties so pages never overlap or skip
+    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
     options?.limit || 1000,
     options?.offset || 0
   );

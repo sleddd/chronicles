@@ -226,8 +226,27 @@ function withoutTopicLink(data: Record<string, unknown>): Record<string, unknown
   return rest;
 }
 
+const ENTRY_PAGE = 5000;
+
 export const entries = {
-  getAll: () => request<Record<string, unknown>[]>('/entries?limit=5000'),
+  // Every entry, newest first. The server sends at most ENTRY_PAGE a request,
+  // so a journal past that size is read in pages until a short one comes back
+  // (one request for almost everyone). Ids seen on an earlier page are skipped:
+  // an entry saved meanwhile shifts the pages by one.
+  getAll: async (): Promise<Record<string, unknown>[]> => {
+    const all: Record<string, unknown>[] = [];
+    const seen = new Set<unknown>();
+    for (let offset = 0; ; offset += ENTRY_PAGE) {
+      const page = await request<Record<string, unknown>[]>(`/entries?limit=${ENTRY_PAGE}${offset ? `&offset=${offset}` : ''}`);
+      if (!Array.isArray(page)) return page;
+      for (const e of page) {
+        if (seen.has(e.id)) continue;
+        seen.add(e.id);
+        all.push(e);
+      }
+      if (page.length < ENTRY_PAGE) return all;
+    }
+  },
 
   get: (id: number) => request<Record<string, unknown>>(`/entries/${id}`),
 
