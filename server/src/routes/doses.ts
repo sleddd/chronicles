@@ -1,15 +1,14 @@
 import { Router } from 'express';
-import { doseRecordIdSchema, putDoseRecordSchema } from '@chronicles/shared';
+import { doseRecordIdSchema, putDoseRecordSchema, resealDoseRecordsSchema } from '@chronicles/shared';
 import {
-  ensureDoseRecordsTable, getDoseRecords, upsertDoseRecord, deleteDoseRecord,
-  getLegacyDoseLogs, deleteLegacyDoseLogs, type DoseRecordRow,
+  ensureDoseRecordsTable, getDoseRecords, upsertDoseRecord, deleteDoseRecord, resealDoseRecords, type DoseRecordRow,
 } from '../db/tenantQueries.js';
 
 /* Medication dose records are opaque to the server: each row is one AES-GCM
    payload (medication, scheduled time, status, taken at) the browser encrypted
-   with AAD bound to the row id. Only the day is readable, for the day query.
-   The old plaintext log (medication_dose_logs) is read once by the browser,
-   re-saved encrypted, and deleted (/legacy). */
+   with AAD bound to the row id and its day. Only the day is readable, for the
+   day query. Records sealed before the day was bound are re-saved once
+   (/reseal). The old plaintext log is no longer read. */
 
 const router = Router();
 
@@ -54,23 +53,26 @@ router.get('/all', async (req, res) => {
   }
 });
 
-// GET /api/doses/legacy — old plaintext logs still to migrate ([] once done)
-router.get('/legacy', async (req, res) => {
-  try {
-    res.json({ logs: await getLegacyDoseLogs(req.auth!.tenantSchemaName) });
-  } catch (err) {
-    console.error('Get legacy dose logs error:', err);
-    res.status(500).json({ error: 'Failed to fetch legacy doses' });
+// PUT /api/doses/reseal — re-save older records bound to their day (keeps updated_at)
+router.put('/reseal', async (req, res) => {
+  const body = resealDoseRecordsSchema.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.errors[0].message });
+    return;
   }
-});
-
-// DELETE /api/doses/legacy — the browser has re-saved them encrypted
-router.delete('/legacy', async (req, res) => {
+  if (new Set(body.data.records.map(r => r.id)).size !== body.data.records.length) {
+    res.status(400).json({ error: 'Each record once' });
+    return;
+  }
   try {
-    res.json({ deleted: await deleteLegacyDoseLogs(req.auth!.tenantSchemaName) });
+    await ensureDoseRecordsTable(req.auth!.tenantSchemaName);
+    const resealed = await resealDoseRecords(req.auth!.tenantSchemaName, body.data.records.map(r => ({
+      id: r.id, date: r.date, payload: Buffer.from(r.payload, 'base64'), iv: Buffer.from(r.iv, 'base64'),
+    })));
+    res.json({ resealed });
   } catch (err) {
-    console.error('Delete legacy dose logs error:', err);
-    res.status(500).json({ error: 'Failed to delete legacy doses' });
+    console.error('Reseal dose records error:', err);
+    res.status(500).json({ error: 'Failed to re-save doses' });
   }
 });
 

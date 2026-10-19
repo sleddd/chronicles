@@ -27,7 +27,7 @@ export const SEALED_SETTING_KEYS: readonly string[] = [
   ...PRIVATE_SETTING_KEYS,
   'nutritionGoals', 'dashboardConfig', 'planningOrder',
   'aiConfig', 'imageStorageConfig',
-  'settingsSealV2', 'entriesSealV3',
+  'settingsSealV2', 'entriesSealV3', 'topicsSealV2', 'dosesSealV2',
 ];
 
 /** A value sealed bound to its key (the only shape stored for SEALED_SETTING_KEYS). */

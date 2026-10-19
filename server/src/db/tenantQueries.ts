@@ -124,10 +124,21 @@ export async function ensureTopicEncryptionColumns(schemaName: string): Promise<
   topicColumnsReady.add(s);
 }
 
+/** Reserve ids for new topics (a topic's payload is bound to its id, so it's needed first). */
+export async function reserveTaxonomyIds(schemaName: string, count: number): Promise<number[]> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT nextval('${s}.taxonomies_id_seq')::int AS id FROM generate_series(1, $1)`,
+    count
+  );
+  return rows.map(r => r.id);
+}
+
+/** Create a topic under a reserved id. Null when the id was never handed out or is taken. */
 export async function createTaxonomy(
   schemaName: string,
-  data: { payload: string; iv: string; color?: string }
-): Promise<TenantTaxonomy> {
+  data: { id: number; payload: string; iv: string; color?: string }
+): Promise<TenantTaxonomy | null> {
   const s = escapeSchema(schemaName);
   // Auto-assign sort_order as max + 1
   const maxResult = await prisma.$queryRawUnsafe<{ max_order: number | null }[]>(
@@ -135,15 +146,18 @@ export async function createTaxonomy(
   );
   const nextOrder = (maxResult[0]?.max_order ?? -1) + 1;
   const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(
-    `INSERT INTO ${s}.taxonomies (color, sort_order, payload_encrypted, payload_iv)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO ${s}.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)
+     SELECT $1, $2, $3, $4, $5
+     WHERE $1 <= (SELECT last_value FROM ${s}.taxonomies_id_seq)
+     ON CONFLICT (id) DO NOTHING
      RETURNING ${TAXONOMY_COLUMNS}`,
+    data.id,
     data.color ?? null,
     nextOrder,
     Buffer.from(data.payload, 'base64'),
     Buffer.from(data.iv, 'base64'),
   );
-  return toTaxonomy(result[0]);
+  return result[0] ? toTaxonomy(result[0]) : null;
 }
 
 export async function getTaxonomy(schemaName: string, id: number): Promise<TenantTaxonomy | null> {
@@ -514,53 +528,18 @@ export async function deleteDoseRecord(schemaName: string, id: string): Promise<
   return (await prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_records WHERE id = $1`, id)) > 0;
 }
 
-async function legacyDoseTableExists(s: string): Promise<boolean> {
-  const r = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
-    `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'medication_dose_logs') as exists`, s);
-  return !!r[0]?.exists;
-}
-
-/** Legacy plaintext dose logs still waiting for the browser to migrate them ([] once gone). */
-export async function getLegacyDoseLogs(schemaName: string): Promise<DoseLog[]> {
+/**
+ * Re-save dose records sealed the newer way (bound to their day as well as
+ * their id). Only rows that exist, on the same day, are touched; updated_at
+ * stays. Returns how many were re-sealed.
+ */
+export async function resealDoseRecords(schemaName: string, records: { id: string; date: string; payload: Buffer; iv: Buffer }[]): Promise<number> {
   const s = escapeSchema(schemaName);
-  if (!(await legacyDoseTableExists(s))) return [];
-  return getAllDoseLogs(schemaName);
-}
-
-/** Delete the legacy plaintext dose logs (after the browser has migrated them). */
-export async function deleteLegacyDoseLogs(schemaName: string): Promise<number> {
-  const s = escapeSchema(schemaName);
-  if (!(await legacyDoseTableExists(s))) return 0;
-  return prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_logs`);
-}
-
-// =============================================================================
-// Medication Dose Logs (legacy, plaintext — read only for migration)
-// =============================================================================
-
-export interface DoseLog {
-  id: number;
-  medicationPostId: number;
-  scheduledTime: string;
-  takenAt: string | null;
-  date: string;
-  status: string;
-  createdAt: Date;
-}
-
-/** Every dose log, oldest first (Settings → Data → Export All). */
-export async function getAllDoseLogs(schemaName: string): Promise<DoseLog[]> {
-  const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<DoseLog[]>(
-    `SELECT id, medication_post_id as "medicationPostId",
-            TO_CHAR(scheduled_time, 'HH24:MI') as "scheduledTime",
-            taken_at as "takenAt",
-            TO_CHAR(date, 'YYYY-MM-DD') as "date",
-            status, created_at as "createdAt"
-     FROM ${s}.medication_dose_logs
-     ORDER BY date ASC, scheduled_time ASC`
-  );
-  return rows.map(r => ({ ...r, id: Number(r.id), medicationPostId: Number(r.medicationPostId) }));
+  const counts = await prisma.$transaction(records.map(r => prisma.$executeRawUnsafe(
+    `UPDATE ${s}.medication_dose_records SET payload_encrypted = $1, payload_iv = $2 WHERE id = $3 AND date = $4::date`,
+    r.payload, r.iv, r.id, r.date
+  )));
+  return counts.reduce((a, b) => a + b, 0);
 }
 
 // =============================================================================

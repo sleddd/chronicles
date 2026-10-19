@@ -47,8 +47,8 @@ import {
   getDoseRecords,
   upsertDoseRecord,
   deleteDoseRecord,
-  getLegacyDoseLogs,
-  deleteLegacyDoseLogs,
+  resealDoseRecords,
+  reserveTaxonomyIds,
 } from '../db/tenantQueries.js';
 
 const SCHEMA = 'usr_1_abc123';
@@ -159,24 +159,33 @@ describe('Taxonomy queries', () => {
   });
 
   describe('createTaxonomy', () => {
-    it('stores only the encrypted payload and colour, with the next sort order', async () => {
+    it('stores only the encrypted payload and colour under its reserved id, with the next sort order', async () => {
       mockQueryRawUnsafe
         .mockResolvedValueOnce([{ max_order: 2 }])
         .mockResolvedValueOnce([row()]);
 
-      const result = await createTaxonomy(SCHEMA, { payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64'), color: '#333' });
+      const result = await createTaxonomy(SCHEMA, { id: 1, payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64'), color: '#333' });
 
-      const [sql, color, order, payload] = mockQueryRawUnsafe.mock.calls[1];
-      expect(sql).toContain('INSERT INTO usr_1_abc123.taxonomies (color, sort_order, payload_encrypted, payload_iv)');
-      expect([color, order]).toEqual(['#333', 3]);
+      const [sql, id, color, order, payload] = mockQueryRawUnsafe.mock.calls[1];
+      expect(sql).toContain('INSERT INTO usr_1_abc123.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)');
+      expect(sql).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.taxonomies_id_seq)');
+      expect([id, color, order]).toEqual([1, '#333', 3]);
       expect(Buffer.isBuffer(payload)).toBe(true);
       expect(result).toEqual({ id: 1, name: null, icon: null, color: '#333', sort_order: 3, payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64') });
     });
 
-    it('starts sort_order at 0 when no taxonomies exist', async () => {
-      mockQueryRawUnsafe.mockResolvedValueOnce([{ max_order: null }]).mockResolvedValueOnce([row({ sort_order: 0n })]);
-      await createTaxonomy(SCHEMA, { payload: 'cA==', iv: 'aQ==' });
-      expect(mockQueryRawUnsafe.mock.calls[1][2]).toBe(0);
+    it('starts sort_order at 0 when no taxonomies exist, and returns null for an id never reserved', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ max_order: null }]).mockResolvedValueOnce([]);
+      expect(await createTaxonomy(SCHEMA, { id: 5000, payload: 'cA==', iv: 'aQ==' })).toBeNull();
+      expect(mockQueryRawUnsafe.mock.calls[1][3]).toBe(0);
+    });
+  });
+
+  describe('reserveTaxonomyIds', () => {
+    it('hands out ids from the taxonomies sequence', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([{ id: 8 }]);
+      expect(await reserveTaxonomyIds(SCHEMA, 1)).toEqual([8]);
+      expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain("nextval('usr_1_abc123.taxonomies_id_seq')");
     });
   });
 
@@ -529,11 +538,13 @@ describe('Dose record queries', () => {
     expect(await deleteDoseRecord(SCHEMA, 'a')).toBe(true);
   });
 
-  it('legacy reads and deletes are no-ops once the old table is gone', async () => {
-    mockQueryRawUnsafe.mockResolvedValue([{ exists: false }]);
-    expect(await getLegacyDoseLogs(SCHEMA)).toEqual([]);
-    expect(await deleteLegacyDoseLogs(SCHEMA)).toBe(0);
-    expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+  it('re-seals records on the same day only, leaving updated_at alone', async () => {
+    mockExecuteRawUnsafe.mockResolvedValue(1);
+    mockTransaction.mockImplementation(async (ops: Promise<number>[]) => Promise.all(ops));
+    expect(await resealDoseRecords(SCHEMA, [{ id: 'a', date: '2026-01-02', payload: Buffer.from('p'), iv: Buffer.from('i') }])).toBe(1);
+    const sql = mockExecuteRawUnsafe.mock.calls[0][0] as string;
+    expect(sql).toContain('WHERE id = $3 AND date = $4::date');
+    expect(sql).not.toContain('updated_at');
   });
 });
 
@@ -545,7 +556,7 @@ describe('Schema validation in tenant queries', () => {
     await expect(getAllSettings(invalidSchema)).rejects.toThrow();
     await expect(upsertSetting(invalidSchema, 'key', 'val')).rejects.toThrow();
     await expect(deleteSetting(invalidSchema, 'key')).rejects.toThrow();
-    await expect(createTaxonomy(invalidSchema, 'name')).rejects.toThrow();
+    await expect(createTaxonomy(invalidSchema, { id: 1, payload: 'x', iv: 'y' })).rejects.toThrow();
     await expect(getTaxonomy(invalidSchema, 1)).rejects.toThrow();
     await expect(getAllTaxonomies(invalidSchema)).rejects.toThrow();
     await expect(updateTaxonomy(invalidSchema, 1, { name: 'x' })).rejects.toThrow();

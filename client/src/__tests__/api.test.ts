@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { auth, entries, topics, settings, sessions, doses, shares, ApiError, legacyDoseId } from '../services/api.js';
+import { auth, entries, topics, settings, sessions, doses, shares, ApiError, clearSealMarkers } from '../services/api.js';
 import { setRecordCipherForTests } from '../services/recordCipher.js';
 import { DEFAULT_TOPICS } from '../utils/defaultTopics.js';
 
 /* A stand-in cipher: "encrypts" to base64 JSON bound to kind + id, so a
    payload opened with the wrong kind or id fails like real AES-GCM would. */
 const fakeCipher = {
+  encryptBytes: async (data: ArrayBuffer) => ({ ciphertext: data, iv: 'aXY=' }),
   encrypt: async (kind: string, id: string, record: unknown) =>
     ({ payload: btoa(JSON.stringify({ kind, id, record })), iv: 'iv' }),
   decrypt: async <T,>(kind: string, id: string, payload: string): Promise<T> => {
@@ -48,6 +49,13 @@ let fetchSpy: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fetchSpy = mockFetchResponse({});
   vi.stubGlobal('fetch', fetchSpy);
+  clearSealMarkers();
+});
+
+/** GET /api/settings answering with the given seal markers present */
+const markers = (...keys: string[]) => ({
+  'GET /api/settings': () => keys.map(key => ({ key, value: { ciphertext: 'x', iv: 'y', v: 2 }, updatedAt: '' })),
+  'PUT /api/settings': (b: { key: string; value: unknown }) => ({ key: b.key, value: b.value, updatedAt: '' }),
 });
 
 afterEach(() => {
@@ -311,31 +319,36 @@ describe('entries', () => {
 
 describe('topics', () => {
   it('getAll fetches /topics', async () => {
-    fetchSpy = mockFetchResponse([]);
+    setRecordCipherForTests(fakeCipher);
+    fetchSpy = routeFetch({ ...markers('topicsSealV2'), 'GET /api/topics': () => DEFAULT_TOPICS.map((t, i) => ({ id: i + 1, name: null, icon: null, color: null, payload: seal('topic', String(i + 1), t), iv: 'iv' })) });
     vi.stubGlobal('fetch', fetchSpy);
     await topics.getAll();
-    expect(fetchSpy.mock.calls[0][0]).toBe('/api/topics');
+    expect(fetchSpy.mock.calls.map(c => c[0])).toContain('/api/topics');
   });
 
-  it('create sends only an encrypted payload — never the name', async () => {
+  it('create reserves an id and sends only a payload bound to it — never the name', async () => {
     setRecordCipherForTests(fakeCipher);
-    fetchSpy = routeFetch({ 'POST /api/topics': () => ({ id: 1, name: null, icon: null, color: '#112233', payload: 'x', iv: 'iv' }) });
+    fetchSpy = routeFetch({
+      'POST /api/topics/ids': () => ({ ids: [41] }),
+      'POST /api/topics': () => ({ id: 41, name: null, icon: null, color: '#112233', payload: 'x', iv: 'iv' }),
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     const t = await topics.create({ name: 'Work', icon: 'briefcase', color: '#112233' });
 
-    const sent = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const sent = JSON.parse(fetchSpy.mock.calls.find(c => c[0] === '/api/topics')![1].body);
     expect(sent).not.toHaveProperty('name');
     expect(sent).not.toHaveProperty('icon');
-    expect(sent.color).toBe('#112233');
-    expect(await fakeCipher.decrypt('topic', 'v1', sent.payload)).toEqual({ name: 'Work', icon: 'briefcase' });
-    expect(t).toMatchObject({ id: 1, name: 'Work', icon: 'briefcase' });
+    expect(sent).toMatchObject({ id: 41, format: 2, color: '#112233' });
+    expect(await fakeCipher.decrypt('topic', '41', sent.payload)).toEqual({ name: 'Work', icon: 'briefcase' });
+    expect(t).toMatchObject({ id: 41, name: 'Work', icon: 'briefcase' });
   });
 
-  it('update re-seals name and icon together, filling in the one not given', async () => {
+  it('update re-seals name and icon together, bound to the topic, filling in the one not given', async () => {
     setRecordCipherForTests(fakeCipher);
     fetchSpy = routeFetch({
-      'GET /api/topics/2': () => ({ id: 2, name: null, icon: null, color: null, payload: seal('topic', 'v1', { name: 'Old', icon: 'star' }), iv: 'iv' }),
+      ...markers('topicsSealV2'),
+      'GET /api/topics/2': () => ({ id: 2, name: null, icon: null, color: null, payload: seal('topic', '2', { name: 'Old', icon: 'star' }), iv: 'iv' }),
       'PUT /api/topics/2': body => ({ id: 2, name: null, icon: null, color: null, payload: body.payload, iv: 'iv' }),
     });
     vi.stubGlobal('fetch', fetchSpy);
@@ -344,33 +357,56 @@ describe('topics', () => {
 
     const put = fetchSpy.mock.calls.find(c => c[1]?.method === 'PUT')!;
     expect(put[0]).toBe('/api/topics/2');
-    expect(await fakeCipher.decrypt('topic', 'v1', JSON.parse(put[1].body).payload)).toEqual({ name: 'Updated', icon: 'star' });
+    expect(JSON.parse(put[1].body).format).toBe(2);
+    expect(await fakeCipher.decrypt('topic', '2', JSON.parse(put[1].body).payload)).toEqual({ name: 'Updated', icon: 'star' });
     expect(t).toMatchObject({ name: 'Updated', icon: 'star' });
   });
 
-  it('getAll decrypts topics, seals legacy plaintext rows, and seeds missing defaults once', async () => {
+  it('getAll re-seals older (unbound) topics bound to their id, writes the marker, and seeds missing defaults once', async () => {
     setRecordCipherForTests(fakeCipher);
-    const rows: any[] = [
-      { id: 1, name: 'Journal', icon: 'book', color: null, payload: null, iv: null },
-      ...DEFAULT_TOPICS.slice(1).map((t, i) => ({ id: 10 + i, name: null, icon: null, color: t.color, payload: seal('topic', 'v1', { name: t.name, icon: t.icon }), iv: 'iv' })),
-    ];
+    const rows: any[] = DEFAULT_TOPICS.slice(1).map((t, i) => ({ id: 10 + i, name: null, icon: null, color: t.color, payload: seal('topic', 'v1', { name: t.name, icon: t.icon }), iv: 'iv' }));
     let created = 0;
+    let markerWritten = false;
     fetchSpy = routeFetch({
+      'GET /api/settings': () => (markerWritten ? [{ key: 'topicsSealV2', value: { ciphertext: 'x', iv: 'y', v: 2 } }] : []),
+      'PUT /api/settings': b => { if (b.key === 'topicsSealV2') markerWritten = true; return b; },
       'GET /api/topics': () => rows,
-      'PUT /api/topics/1': body => { rows[0] = { ...rows[0], name: null, icon: null, payload: body.payload, iv: 'iv' }; return rows[0]; },
+      ...Object.fromEntries(rows.map(r => [`PUT /api/topics/${r.id}`, (body: any) => { Object.assign(r, { payload: body.payload }); return r; }])),
+      'POST /api/topics/ids': () => ({ ids: [99] }),
       'POST /api/topics': body => { created++; const r = { id: 99, name: null, icon: null, color: body.color, payload: body.payload, iv: 'iv' }; rows.push(r); return r; },
     });
     vi.stubGlobal('fetch', fetchSpy);
 
     const [a, b] = await Promise.all([topics.getAll(), topics.getAll()]);
 
-    // The legacy "Journal" row was sealed (its plaintext cleared)
-    expect(rows[0].name).toBeNull();
-    // Only the one missing default ("Task") was created — once, despite two loads
+    for (const r of rows.slice(0, -1)) expect(JSON.parse(atob(r.payload)).id).toBe(String(r.id));
+    expect(markerWritten).toBe(true);
+    // Only the one missing default was created — once, despite two loads
     expect(created).toBe(1);
-    expect(a.map(t => t.name)).toContain('Task');
-    expect(b.map(t => t.name)).toContain('Journal');
+    expect(a.map(t => t.name)).toContain(DEFAULT_TOPICS[0].name);
+    expect(b.map(t => t.name)).toContain(DEFAULT_TOPICS[1].name);
   });
+
+  it('after the marker, an older (unbound) payload or a plaintext name is never shown', async () => {
+    setRecordCipherForTests(fakeCipher);
+    fetchSpy = routeFetch({
+      ...markers('topicsSealV2'),
+      'GET /api/topics': () => [
+        { id: 3, name: null, icon: null, color: null, payload: seal('topic', 'v1', { name: 'Replayed', icon: null }), iv: 'iv' },
+        { id: 4, name: 'Planted', icon: null, color: null, payload: null, iv: null },
+        { id: 5, name: null, icon: null, color: null, payload: seal('topic', '6', { name: 'Moved', icon: null }), iv: 'iv' },
+        ...DEFAULT_TOPICS.map((t, i) => ({ id: 20 + i, name: null, icon: null, color: null, payload: seal('topic', String(20 + i), t), iv: 'iv' })),
+      ],
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const list = await topics.getAll();
+    const names = list.map(t => t.name);
+    expect(names).not.toContain('Replayed');
+    expect(names).not.toContain('Planted');
+    expect(names).not.toContain('Moved');
+  });
+
   it('delete sends DELETE to /topics/:id', async () => {
     fetchSpy = mockFetchResponse({ success: true });
     vi.stubGlobal('fetch', fetchSpy);
@@ -460,27 +496,32 @@ describe('sessions', () => {
 
 describe('doses', () => {
   const dose = { medicationPostId: 1, scheduledTime: '08:00', status: 'taken', takenAt: '8:05 AM' };
+  const bound = (id: string, date: string, p: unknown) => seal('dose', `${id}|${date}`, p);
 
-  it('getByDate asks for the day and decrypts each record', async () => {
+  it('getByDate asks for the day and decrypts each record bound to its day', async () => {
     setRecordCipherForTests(fakeCipher);
     fetchSpy = routeFetch({
-      'GET /api/doses': () => ({ records: [{ id: 'a', date: '2026-04-03', payload: seal('dose', 'a', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
+      ...markers('dosesSealV2'),
+      'GET /api/doses': () => ({ records: [{ id: 'a', date: '2026-04-03', payload: bound('a', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
     });
     vi.stubGlobal('fetch', fetchSpy);
 
     const { logs } = await doses.getByDate('2026-04-03');
 
-    expect(fetchSpy.mock.calls[0][0]).toContain('date=2026-04-03');
+    expect(fetchSpy.mock.calls.find(c => String(c[0]).startsWith('/api/doses'))![0]).toContain('date=2026-04-03');
     expect(logs).toEqual([{ id: 'a', date: '2026-04-03', createdAt: 'c', ...dose }]);
   });
 
-  it('keeps the newest when two devices saved the same dose, and skips unreadable ones', async () => {
+  it('keeps the newest when two devices saved the same dose, and drops one moved to another day or record', async () => {
     setRecordCipherForTests(fakeCipher);
     fetchSpy = routeFetch({
+      ...markers('dosesSealV2'),
       'GET /api/doses/all': () => ({ records: [
-        { id: 'old', date: '2026-04-03', payload: seal('dose', 'old', { ...dose, status: 'pending', takenAt: null }), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T08:00:00Z' },
-        { id: 'new', date: '2026-04-03', payload: seal('dose', 'new', dose), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T09:00:00Z' },
-        { id: 'swapped', date: '2026-04-03', payload: seal('dose', 'someone-else', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: 'old', date: '2026-04-03', payload: bound('old', '2026-04-03', { ...dose, status: 'pending', takenAt: null }), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T08:00:00Z' },
+        { id: 'new', date: '2026-04-03', payload: bound('new', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T09:00:00Z' },
+        { id: 'moved', date: '2026-04-04', payload: bound('moved', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: 'swapped', date: '2026-04-03', payload: bound('someone-else', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: 'unbound', date: '2026-04-05', payload: seal('dose', 'unbound', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
       ] }),
     });
     vi.stubGlobal('fetch', fetchSpy);
@@ -489,11 +530,13 @@ describe('doses', () => {
     expect(logs.map(l => l.id)).toEqual(['new']);
   });
 
-  it('log updates the existing record for that dose, encrypted, with only the date readable', async () => {
+  it('log updates the existing record for that dose, sealed to its day, with only the date readable', async () => {
     setRecordCipherForTests(fakeCipher);
+    const id = '11111111-1111-4111-8111-111111111111';
     fetchSpy = routeFetch({
-      'GET /api/doses': () => ({ records: [{ id: '11111111-1111-4111-8111-111111111111', date: '2026-04-03', payload: seal('dose', '11111111-1111-4111-8111-111111111111', { ...dose, status: 'pending', takenAt: null }), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
-      'PUT /api/doses/11111111-1111-4111-8111-111111111111': () => ({ record: { createdAt: 'c' } }),
+      ...markers('dosesSealV2'),
+      'GET /api/doses': () => ({ records: [{ id, date: '2026-04-03', payload: bound(id, '2026-04-03', { ...dose, status: 'pending', takenAt: null }), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
+      [`PUT /api/doses/${id}`]: () => ({ record: { createdAt: 'c' } }),
     });
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -501,26 +544,39 @@ describe('doses', () => {
 
     const put = fetchSpy.mock.calls.find(c => c[1]?.method === 'PUT')!;
     const body = JSON.parse(put[1].body);
-    expect(Object.keys(body).sort()).toEqual(['date', 'iv', 'payload']);
-    expect(await fakeCipher.decrypt('dose', '11111111-1111-4111-8111-111111111111', body.payload)).toEqual(dose);
+    expect(Object.keys(body).sort()).toEqual(['date', 'format', 'iv', 'payload']);
+    expect(body.format).toBe(2);
+    expect(await fakeCipher.decrypt('dose', `${id}|2026-04-03`, body.payload)).toEqual(dose);
     expect(log.status).toBe('taken');
   });
 
-  it('migrates the legacy plaintext log with stable ids, then deletes it', async () => {
+  it('resealOlder moves records sealed before the day was bound, then writes the marker', async () => {
     setRecordCipherForTests(fakeCipher);
-    const puts: string[] = [];
+    const resealed: any[] = [];
+    let markerWritten = false;
     fetchSpy = routeFetch({
-      'GET /api/doses/legacy': () => ({ logs: [{ id: 7, medicationPostId: 3, scheduledTime: '21:00', takenAt: null, date: '2026-01-02', status: 'skipped' }] }),
-      [`PUT /api/doses/${await legacyDoseId(7)}`]: (_b, url) => { puts.push(url); return { record: { createdAt: 'c' } }; },
-      'DELETE /api/doses/legacy': () => ({ deleted: 1 }),
+      'GET /api/settings': () => [],
+      'PUT /api/settings': b => { if (b.key === 'dosesSealV2') markerWritten = true; return b; },
+      'GET /api/doses/all': () => ({ records: [
+        { id: 'o1', date: '2026-01-02', payload: seal('dose', 'o1', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: 'b1', date: '2026-01-03', payload: bound('b1', '2026-01-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+      ] }),
+      'PUT /api/doses/reseal': b => { resealed.push(...b.records); return { resealed: b.records.length }; },
     });
     vi.stubGlobal('fetch', fetchSpy);
 
-    expect(await doses.migrateLegacy()).toBe(1);
-    expect(puts).toHaveLength(1);
-    expect(await legacyDoseId(7)).toBe(await legacyDoseId(7));
-    expect(await legacyDoseId(7)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(fetchSpy.mock.calls.at(-1)![1].method).toBe('DELETE');
+    expect(await doses.resealOlder()).toBe(1);
+    expect(resealed.map(r => r.id)).toEqual(['o1']);
+    expect(await fakeCipher.decrypt('dose', 'o1|2026-01-02', resealed[0].payload)).toEqual(dose);
+    expect(markerWritten).toBe(true);
+  });
+
+  it('resealOlder does nothing once the marker exists', async () => {
+    setRecordCipherForTests(fakeCipher);
+    fetchSpy = routeFetch({ ...markers('dosesSealV2') });
+    vi.stubGlobal('fetch', fetchSpy);
+    expect(await doses.resealOlder()).toBe(0);
+    expect(fetchSpy.mock.calls.map(c => c[0])).toEqual(['/api/settings']);
   });
 });
 

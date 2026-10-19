@@ -212,17 +212,26 @@ export const putFinanceRecordSchema = z.object({
 
 // Topics: the name and icon are encrypted in the browser ({ name, icon } as one
 // payload); only the colour stays readable. Plaintext names are refused.
+// `format: 2` = the payload is bound to the topic's id. A topic is created
+// under an id reserved first (POST /api/topics/ids)
+const TOPIC_FORMAT_V2 = z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save topics' }) });
+
 export const createTaxonomySchema = z.object({
+  id: z.number().int().positive(),
+  format: TOPIC_FORMAT_V2,
   payload: z.string().min(1).max(20_000),
   iv: IV_FIELD,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid hex color').optional(),
 }).strict();
 
 export const updateTaxonomySchema = z.object({
+  format: TOPIC_FORMAT_V2.optional(),
   payload: z.string().min(1).max(20_000).optional(),
   iv: IV_FIELD.optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-}).strict().refine(d => (d.payload === undefined) === (d.iv === undefined), { message: 'payload and iv go together' });
+}).strict()
+  .refine(d => (d.payload === undefined) === (d.iv === undefined), { message: 'payload and iv go together' })
+  .refine(d => d.payload === undefined || d.format === 2, { message: 'Update Chronicles to save topics', path: ['format'] });
 
 /** A request still sending a plaintext topic name or icon (an out-of-date app). */
 export function isPlaintextTopicWrite(body: unknown): boolean {
@@ -231,11 +240,24 @@ export function isPlaintextTopicWrite(body: unknown): boolean {
 
 // Encrypted dose records: { date } readable, everything else in the payload
 export const doseRecordIdSchema = z.string().uuid('Invalid dose id');
+// `format: 2` = sealed bound to the record's id and its day, so the server
+// can't move a dose to another day; an older client is told to update
 export const putDoseRecordSchema = z.object({
+  format: z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save doses' }) }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
   payload: z.string().min(1).max(10_000),
   iv: IV_FIELD,
 }).strict();
+
+// The one-time move of older dose records to the day-bound seal
+export const resealDoseRecordsSchema = z.object({
+  records: z.array(z.object({
+    id: z.string().uuid(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    payload: z.string().min(1).max(10_000),
+    iv: IV_FIELD,
+  })).min(1).max(200),
+});
 
 // Entry images — client-side validation of the user's R2 credentials before
 // they are encrypted with the master key and stored as a setting. The server

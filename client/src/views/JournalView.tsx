@@ -478,8 +478,8 @@ export function JournalView() {
         const [rawEntries, topicsData, settingsData] = await Promise.all([
           entriesApi.getAll(), topicsApi.getAll(), settingsApi.getAll(),
         ]);
-        // The old plaintext dose log is re-saved encrypted, once per session
-        void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
+        // Dose records sealed before they were bound to their day are re-saved, once
+        void dosesApi.resealOlder().catch(() => { /* tried again next session */ });
         // Apply saved theme settings
         // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
         const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);

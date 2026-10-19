@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns } from '../db/tenantQueries.js';
-import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite } from '@chronicles/shared';
+import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, reserveTaxonomyIds } from '../db/tenantQueries.js';
+import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite, reservePostIdsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 
-/* Topic names and icons are encrypted in the browser; the server stores the
-   payload and never sees them. Default topics are seeded by the browser,
-   encrypted. Legacy rows still carrying a plaintext name are encrypted by the
-   browser on its next unlock (a payload write clears name and icon). */
+/* Topic names and icons are encrypted in the browser, bound to the topic's id;
+   the server stores the payload and never sees them. Default topics are
+   seeded by the browser, encrypted. A new topic is created under an id
+   reserved first (/ids), since its payload is bound to it. */
 
 const OUTDATED = { error: 'Update Chronicles to continue — topic names are now encrypted. Reload the page.' };
 
@@ -48,6 +48,22 @@ router.post('/reorder', async (req, res) => {
   }
 });
 
+// POST /api/topics/ids — reserve ids for new topics
+router.post('/ids', async (req, res) => {
+  try {
+    const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
+    res.json({ ids: await reserveTaxonomyIds(req.auth!.tenantSchemaName, parsed.data.count) });
+  } catch (err) {
+    console.error('Reserve topic ids error:', err);
+    res.status(500).json({ error: 'Failed to reserve topic ids' });
+  }
+});
+
 // POST /api/topics
 router.post('/', async (req, res) => {
   try {
@@ -58,7 +74,12 @@ router.post('/', async (req, res) => {
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
-    const taxonomy = await createTaxonomy(req.auth!.tenantSchemaName, parsed.data);
+    const { format: _v2, ...data } = parsed.data;
+    const taxonomy = await createTaxonomy(req.auth!.tenantSchemaName, data);
+    if (!taxonomy) {
+      res.status(409).json({ error: 'That topic id was not reserved or is taken' });
+      return;
+    }
     res.status(201).json(taxonomy);
   } catch (err) {
     console.error('Create topic error:', err);
@@ -95,7 +116,8 @@ router.put('/:id', async (req, res) => {
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
-    const taxonomy = await updateTaxonomy(req.auth!.tenantSchemaName, id, parsed.data);
+    const { format: _v2, ...updates } = parsed.data;
+    const taxonomy = await updateTaxonomy(req.auth!.tenantSchemaName, id, updates);
     res.json(taxonomy);
   } catch (err) {
     console.error('Update topic error:', err);

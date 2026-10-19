@@ -10,14 +10,17 @@ type EncryptionService = typeof encryptionService;
 export interface RecordCipher {
   encrypt: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
   decrypt: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
+  /** For sealing a setting (the API layer's seal markers) */
+  encryptBytes: (data: ArrayBuffer, aad?: string) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
 }
 
 let cipher: RecordCipher | null = null;
 
-export function installRecordCipher(service: Pick<EncryptionService, 'encryptRecord' | 'decryptRecord'>, key: CryptoKey): void {
+export function installRecordCipher(service: Pick<EncryptionService, 'encryptRecord' | 'decryptRecord' | 'encryptFile'>, key: CryptoKey): void {
   cipher = {
     encrypt: (kind, id, record) => service.encryptRecord(key, kind, id, record),
     decrypt: (kind, id, payload, iv) => service.decryptRecord(key, kind, id, payload, iv),
+    encryptBytes: (data, aad) => service.encryptFile(key, data, aad),
   };
 }
 

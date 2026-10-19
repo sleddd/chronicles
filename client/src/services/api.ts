@@ -5,6 +5,7 @@
 
 import type { CrisisRating, RiskKind } from '@shared/validation/schemas.js';
 import { recordCipher } from './recordCipher.js';
+import { sealSetting } from './settingCipher.js';
 import { missingDefaultTopics } from '../utils/defaultTopics.js';
 
 const BASE_URL = '/api';
@@ -260,9 +261,40 @@ export const entries = {
 // Topics
 // =============================================================================
 
+// =============================================================================
+// Seal markers — sealed settings recording that an account has moved a kind of
+// record to its bound format (topics, doses). Until the marker exists the
+// older form still opens (and is re-saved); after, it's refused, so an old
+// ciphertext the server kept can't be replayed. Checked once per unlock.
+// =============================================================================
+
+const sealMarkers = new Map<string, Promise<boolean>>();
+
+function sealMarkerPresent(key: string): Promise<boolean> {
+  let p = sealMarkers.get(key);
+  if (!p) {
+    p = settings.getAll().then(rows => rows.some(r => r.key === key && r.value !== null && r.value !== undefined));
+    p.catch(() => sealMarkers.delete(key));
+    sealMarkers.set(key, p);
+  }
+  return p;
+}
+
+async function writeSealMarker(key: string): Promise<void> {
+  await settings.upsert(key, await sealSetting(key, true, recordCipher().encryptBytes));
+  sealMarkers.set(key, Promise.resolve(true));
+}
+
+/** On lock: the next unlock (maybe another account) checks again. */
+export function clearSealMarkers(): void {
+  sealMarkers.clear();
+}
+
 // Topic names and icons are encrypted here (one { name, icon } payload, kind
-// 'topic'); the server stores only the payload and the colour. Rows from before
-// still carry a plaintext name — they're sealed the first time they're loaded.
+// 'topic', AAD bound to the topic's id); the server stores only the payload
+// and the colour. A new topic reserves its id first. Topics sealed before the
+// id binding (AAD 'v1') open once and are re-sealed; then the marker
+// TOPICS_SEAL_MARKER is written and that form is refused.
 // Missing default topics are seeded here too, encrypted.
 
 export interface TopicRecord { id: number; name: string; icon: string | null; color: string | null; sort_order?: number }
@@ -272,34 +304,52 @@ interface TopicWire {
 }
 
 const TOPIC_KIND = 'topic';
-const TOPIC_AAD_ID = 'v1';
+const TOPIC_OLDER_AAD_ID = 'v1';
+const TOPICS_SEAL_MARKER = 'topicsSealV2';
 
-async function sealTopic(name: string, icon: string | null | undefined) {
-  return recordCipher().encrypt(TOPIC_KIND, TOPIC_AAD_ID, { name, icon: icon ?? null });
+async function sealTopic(id: number, name: string, icon: string | null | undefined) {
+  return { ...(await recordCipher().encrypt(TOPIC_KIND, String(id), { name, icon: icon ?? null })), format: 2 as const };
 }
 
-async function openTopic(w: TopicWire): Promise<{ topic: TopicRecord; legacy: boolean }> {
+async function openTopic(w: TopicWire, allowOlder: boolean): Promise<{ topic: TopicRecord; older: boolean }> {
   const base = { id: w.id, color: w.color, sort_order: w.sort_order };
   if (w.payload && w.iv) {
+    const open = (aadId: string) => recordCipher().decrypt<{ name: string; icon: string | null }>(TOPIC_KIND, aadId, w.payload!, w.iv!);
     try {
-      const p = await recordCipher().decrypt<{ name: string; icon: string | null }>(TOPIC_KIND, TOPIC_AAD_ID, w.payload, w.iv);
-      return { topic: { ...base, name: p.name, icon: p.icon ?? null }, legacy: false };
+      const p = await open(String(w.id));
+      return { topic: { ...base, name: p.name, icon: p.icon ?? null }, older: false };
     } catch {
-      return { topic: { ...base, name: 'Unreadable topic', icon: null }, legacy: false };
+      if (allowOlder) {
+        try {
+          const p = await open(TOPIC_OLDER_AAD_ID);
+          return { topic: { ...base, name: p.name, icon: p.icon ?? null }, older: true };
+        } catch { /* unreadable */ }
+      }
     }
+    return { topic: { ...base, name: 'Unreadable topic', icon: null }, older: false };
   }
-  return { topic: { ...base, name: w.name ?? 'Untitled topic', icon: w.icon }, legacy: !!w.name };
+  // A plaintext name is never trusted: every topic is sealed in the browser
+  return { topic: { ...base, name: 'Untitled topic', icon: null }, older: false };
 }
 
 let seedingDefaults: Promise<void> | null = null;
+/** A fresh id for a new topic (its payload is bound to it). */
+async function reserveTopicId(): Promise<number> {
+  const { ids } = await request<{ ids: number[] }>('/topics/ids', { method: 'POST', body: { count: 1 } });
+  return ids[0];
+}
 
 async function loadTopics(seed: boolean): Promise<TopicRecord[]> {
-  const opened = await Promise.all((await request<TopicWire[]>('/topics')).map(openTopic));
-  // Seal any topic still stored with a plaintext name (it clears name + icon)
-  await Promise.all(opened.filter(o => o.legacy).map(async o => {
-    try { await request(`/topics/${o.topic.id}`, { method: 'PUT', body: await sealTopic(o.topic.name, o.topic.icon) }); }
-    catch { /* tried again next load */ }
-  }));
+  const [wires, migrated] = await Promise.all([request<TopicWire[]>('/topics'), sealMarkerPresent(TOPICS_SEAL_MARKER)]);
+  const opened = await Promise.all(wires.map(w => openTopic(w, !migrated)));
+  if (!migrated) {
+    // Re-seal topics still in the older form, then mark the account done
+    const results = await Promise.all(opened.filter(o => o.older).map(async o => {
+      try { await request(`/topics/${o.topic.id}`, { method: 'PUT', body: await sealTopic(o.topic.id, o.topic.name, o.topic.icon) }); return true; }
+      catch { return false; }
+    }));
+    if (results.every(Boolean)) await writeSealMarker(TOPICS_SEAL_MARKER).catch(() => { /* next load */ });
+  }
   const list = opened.map(o => o.topic);
   const missing = seed ? missingDefaultTopics(list) : [];
   if (!missing.length) return list;
@@ -315,8 +365,9 @@ export const topics = {
   getAll: () => loadTopics(true),
 
   create: async (data: { name: string; icon?: string | null; color?: string }): Promise<TopicRecord> => {
-    const sealed = await sealTopic(data.name, data.icon);
-    const w = await request<TopicWire>('/topics', { method: 'POST', body: { ...sealed, ...(data.color ? { color: data.color } : {}) } });
+    const id = await reserveTopicId();
+    const sealed = await sealTopic(id, data.name, data.icon);
+    const w = await request<TopicWire>('/topics', { method: 'POST', body: { id, ...sealed, ...(data.color ? { color: data.color } : {}) } });
     return { id: w.id, name: data.name, icon: data.icon ?? null, color: w.color, sort_order: w.sort_order };
   },
 
@@ -327,14 +378,15 @@ export const topics = {
     if (name !== undefined || icon !== undefined) {
       // The payload holds both, so fill in whichever wasn't given
       if (name === undefined || icon === undefined) {
-        const current = (await openTopic(await request<TopicWire>(`/topics/${id}`))).topic;
+        const migrated = await sealMarkerPresent(TOPICS_SEAL_MARKER);
+        const current = (await openTopic(await request<TopicWire>(`/topics/${id}`), !migrated)).topic;
         name ??= current.name;
         if (icon === undefined) icon = current.icon;
       }
-      body = { ...body, ...(await sealTopic(name, icon)) };
+      body = { ...body, ...(await sealTopic(id, name, icon)) };
     }
     const w = await request<TopicWire>(`/topics/${id}`, { method: 'PUT', body });
-    return (await openTopic(w)).topic;
+    return (await openTopic(w, !(await sealMarkerPresent(TOPICS_SEAL_MARKER)))).topic;
   },
 
   delete: (id: number) =>
@@ -440,8 +492,10 @@ export const sessions = {
 // =============================================================================
 
 // Medication dose records are encrypted here (kind 'dose', AAD bound to the
-// record's UUID); only the day is readable on the server. The old plaintext
-// log is re-saved encrypted once (doses.migrateLegacy) and then deleted.
+// record's UUID and its day, so the server can't move a dose to another day);
+// only the day is readable on the server. Records sealed before the day was
+// bound (AAD = the UUID alone) open once and are re-saved (doses.resealOlder);
+// then the marker DOSES_SEAL_MARKER is written and that form is refused.
 
 export interface DoseLogRecord {
   id: string;
@@ -454,16 +508,27 @@ export interface DoseLogRecord {
 }
 interface DoseWire { id: string; date: string; payload: string; iv: string; createdAt: string; updatedAt: string }
 interface DosePayload { medicationPostId: number; scheduledTime: string; status: string; takenAt: string | null }
-interface LegacyDoseLog { id: number; medicationPostId: number; scheduledTime: string; takenAt: string | null; date: string; status: string }
 
 const DOSE_KIND = 'dose';
+const DOSES_SEAL_MARKER = 'dosesSealV2';
+const doseAadId = (id: string, date: string) => `${id}|${date}`;
+
+/** Open one record: bound to its day, or (before the marker) the older UUID-only form. */
+async function openDose(w: DoseWire, allowOlder: boolean): Promise<{ payload: DosePayload; older: boolean } | null> {
+  try {
+    return { payload: await recordCipher().decrypt<DosePayload>(DOSE_KIND, doseAadId(w.id, w.date), w.payload, w.iv), older: false };
+  } catch {
+    if (!allowOlder) return null;
+    try { return { payload: await recordCipher().decrypt<DosePayload>(DOSE_KIND, w.id, w.payload, w.iv), older: true }; }
+    catch { return null; }
+  }
+}
 
 async function openDoses(wire: DoseWire[]): Promise<DoseLogRecord[]> {
+  const allowOlder = !(await sealMarkerPresent(DOSES_SEAL_MARKER));
   const opened = await Promise.all(wire.map(async w => {
-    try {
-      const p = await recordCipher().decrypt<DosePayload>(DOSE_KIND, w.id, w.payload, w.iv);
-      return { log: { id: w.id, date: w.date, createdAt: w.createdAt, ...p }, updatedAt: w.updatedAt };
-    } catch { return null; }
+    const o = await openDose(w, allowOlder);
+    return o ? { log: { id: w.id, date: w.date, createdAt: w.createdAt, ...o.payload }, updatedAt: w.updatedAt } : null;
   }));
   // Two devices can each save the same dose: keep the newest per medication + time + day
   const newest = new Map<string, { log: DoseLogRecord; updatedAt: string }>();
@@ -481,21 +546,15 @@ function nowTakenAt(): string {
   return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-/** A stable UUID for a migrated legacy row, so a retried migration overwrites instead of duplicating. */
-export async function legacyDoseId(legacyId: number): Promise<string> {
-  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`chronicles:legacy-dose:${legacyId}`)));
-  h[6] = (h[6] & 0x0f) | 0x50; // version 5 (name-based)
-  h[8] = (h[8] & 0x3f) | 0x80; // RFC 4122 variant
-  const x = [...h.slice(0, 16)].map(b => b.toString(16).padStart(2, '0')).join('');
-  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}`;
+async function sealDose(id: string, date: string, p: DosePayload) {
+  return recordCipher().encrypt(DOSE_KIND, doseAadId(id, date), p);
 }
 
 async function putDose(id: string, date: string, p: DosePayload) {
-  const sealed = await recordCipher().encrypt(DOSE_KIND, id, p);
-  return request<{ record: DoseWire }>(`/doses/${id}`, { method: 'PUT', body: { date, ...sealed } });
+  return request<{ record: DoseWire }>(`/doses/${id}`, { method: 'PUT', body: { format: 2, date, ...(await sealDose(id, date, p)) } });
 }
 
-let migratingDoses: Promise<number> | null = null;
+let resealingDoses: Promise<number> | null = null;
 
 export const doses = {
   getByDate: async (date: string) =>
@@ -525,20 +584,28 @@ export const doses = {
     return { log: { id, date: data.date, createdAt: record.createdAt, ...payload } as DoseLogRecord };
   },
 
-  /** Re-save the old plaintext dose log encrypted, then delete it (once per session). Returns how many moved. */
-  migrateLegacy: (): Promise<number> => {
-    migratingDoses ??= (async () => {
-      const { logs } = await request<{ logs: LegacyDoseLog[] }>('/doses/legacy');
-      if (!logs.length) return 0;
-      for (const l of logs) {
-        await putDose(await legacyDoseId(l.id), l.date, {
-          medicationPostId: l.medicationPostId, scheduledTime: l.scheduledTime, status: l.status, takenAt: l.takenAt,
-        });
+  /**
+   * Once per account: re-save records sealed before the day was bound (200 at
+   * a time), then write the marker. Any failure leaves the marker unwritten,
+   * so the next session tries again. Returns how many moved.
+   */
+  resealOlder: (): Promise<number> => {
+    resealingDoses ??= (async () => {
+      if (await sealMarkerPresent(DOSES_SEAL_MARKER)) return 0;
+      const { records } = await request<{ records: DoseWire[] }>('/doses/all');
+      const older: { id: string; date: string; payload: string; iv: string }[] = [];
+      for (const w of records) {
+        const o = await openDose(w, true);
+        if (o?.older) older.push({ id: w.id, date: w.date, ...(await sealDose(w.id, w.date, o.payload)) });
       }
-      await request('/doses/legacy', { method: 'DELETE' });
-      return logs.length;
-    })().catch(err => { migratingDoses = null; throw err; });
-    return migratingDoses;
+      let moved = 0;
+      for (let i = 0; i < older.length; i += 200) {
+        moved += (await request<{ resealed: number }>('/doses/reseal', { method: 'PUT', body: { records: older.slice(i, i + 200) } })).resealed;
+      }
+      if (moved === older.length) await writeSealMarker(DOSES_SEAL_MARKER);
+      return moved;
+    })().finally(() => { resealingDoses = null; });
+    return resealingDoses;
   },
 };
 
