@@ -240,8 +240,8 @@ describe('loginSchema', () => {
     expect(loginSchema.safeParse({ email: 'notanemail', authSecret: secret }).success).toBe(false);
   });
 
-  it('accepts the one-time legacy password alongside the secret', () => {
-    expect(loginSchema.safeParse({ email: 'user@example.com', authSecret: secret, legacyPassword: 'x' }).success).toBe(true);
+  it('refuses a password sent alongside the secret', () => {
+    expect(loginSchema.safeParse({ email: 'user@example.com', authSecret: secret, legacyPassword: 'x' }).success).toBe(false);
   });
 });
 

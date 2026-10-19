@@ -132,20 +132,17 @@ describe('AuthProvider – login', () => {
     expect(JSON.stringify(sent)).not.toContain('password');
   });
 
-  it('sends the password once, as legacyPassword, only when the server asks', async () => {
+  it('never resends with the password, whatever the server answers', async () => {
     const { ApiError } = await import('../services/api.js');
-    mockLogin
-      .mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', undefined, { legacyAuth: true }))
-      .mockResolvedValueOnce({ user: { email: 'a@b.com', username: 'alice' }, encryption: {} });
+    mockLogin.mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', undefined, { legacyAuth: true }));
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    await act(async () => { await result.current.login('a@b.com', 'password'); });
+    await act(async () => { await expect(result.current.login('a@b.com', 'password')).rejects.toThrow(); });
 
-    expect(mockLogin).toHaveBeenCalledTimes(2);
-    expect(mockLogin.mock.calls[0][0].legacyPassword).toBeUndefined();
-    expect(mockLogin.mock.calls[1][0].legacyPassword).toBe('password');
-    expect(result.current.isAuthenticated).toBe(true);
+    expect(mockLogin).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockLogin.mock.calls[0][0])).not.toContain('password');
+    expect(result.current.isAuthenticated).toBe(false);
   });
 });
 

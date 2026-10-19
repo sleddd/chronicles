@@ -120,9 +120,8 @@ export const auth = {
     recoveryKeySalt: string;
   }) => request<{ user: { email: string; username: string } }>('/auth/register', { method: 'POST', body: data }),
 
-  // authSecret comes from deriveAuthSecret — the password itself is only ever
-  // sent as legacyPassword, once, when the server answers `legacyAuth`
-  login: (data: { email: string; authSecret: string; legacyPassword?: string }) =>
+  // authSecret comes from deriveAuthSecret — the password itself is never sent
+  login: (data: { email: string; authSecret: string }) =>
     request<
       | {
           requires2FA: true;

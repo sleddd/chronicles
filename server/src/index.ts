@@ -7,7 +7,7 @@ import { securityHeaders } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import authRoutes, { upgradeStoredCredentials } from './routes/auth.js';
+import authRoutes, { checkStoredCredentials } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
@@ -134,9 +134,12 @@ initConsentTable().catch(err => console.error('Failed to init consent table:', e
 initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err));
 initKeyWrapTable().catch(err => console.error('Failed to init key-wrap table:', err));
 initBetaTable().catch(err => console.error('Failed to init beta table:', err));
-upgradeStoredCredentials().then(({ recoverySealed, sessionsRevoked }) => {
-  if (recoverySealed || sessionsRevoked) console.log(`Credential upgrade: ${recoverySealed} recovery check(s) sealed, ${sessionsRevoked} legacy session(s) signed out`);
-}).catch(err => console.error('Credential upgrade failed:', err instanceof Error ? err.message : err));
+checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) => {
+  if (recoverySealed) console.log(`Credential check: ${recoverySealed} recovery check(s) sealed`);
+  if (outdated.length) {
+    console.warn(`Credential check: ${outdated.length} account(s) still on a pre-upgrade password hash (ids ${outdated.join(', ')}) can only sign in by recovery; ${sessionsRevoked} session(s) signed out`);
+  }
+}).catch(err => console.error('Credential check failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});

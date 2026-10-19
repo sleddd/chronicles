@@ -34,13 +34,12 @@ export const registerSchema = z.object({
   recoveryKeySalt: recoverySaltSchema,
 });
 
+// Strict: the password itself is never part of a sign-in, so a body carrying
+// anything beyond these two fields (e.g. an old client's legacyPassword) is refused
 export const loginSchema = z.object({
   email: emailSchema,
   authSecret: authSecretSchema,
-  // Sent once, only when the server answers `legacyAuth`: accounts created
-  // before derived secrets still hold a hash of the password itself
-  legacyPassword: z.string().min(1).max(1024).optional(),
-});
+}).strict();
 
 export const changePasswordSchema = z.object({
   currentAuthSecret: authSecretSchema,
