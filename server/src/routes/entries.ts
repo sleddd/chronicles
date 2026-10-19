@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { createPost, getPost, getAllPosts, updatePost, deletePost } from '../db/tenantQueries.js';
+import { createPost, getPost, getAllPosts, updatePost, deletePost, postStorageBytes } from '../db/tenantQueries.js';
+import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, updatePostSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
@@ -59,6 +60,12 @@ router.post('/', async (req, res) => {
       input.createdAt = new Date(createdAt);
     }
 
+    const size = (input.contentEncrypted as Buffer).length + (input.metadataEncrypted as Buffer).length;
+    if (await postStorageBytes(req.auth!.tenantSchemaName) + size > ENTRY_STORAGE_LIMIT_BYTES) {
+      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+      return;
+    }
+
     const post = await createPost(req.auth!.tenantSchemaName, input as Parameters<typeof createPost>[1]);
 
     res.status(201).json(serializePost(post as unknown as Record<string, unknown>));
@@ -105,7 +112,19 @@ router.put('/:id', async (req, res) => {
     if (updates.metadataEncrypted !== undefined) input.metadataEncrypted = Buffer.from(updates.metadataEncrypted, 'base64');
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
+    if (input.contentEncrypted && input.metadataEncrypted) {
+      const size = (input.contentEncrypted as Buffer).length + (input.metadataEncrypted as Buffer).length;
+      if (await postStorageBytes(req.auth!.tenantSchemaName, id) + size > ENTRY_STORAGE_LIMIT_BYTES) {
+        res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+        return;
+      }
+    }
+
     const post = await updatePost(req.auth!.tenantSchemaName, id, input as Parameters<typeof updatePost>[2]);
+    if (!post) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {

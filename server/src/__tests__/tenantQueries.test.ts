@@ -30,6 +30,8 @@ import {
   updateTaxonomy,
   deleteTaxonomy,
   reorderTaxonomies,
+  postStorageBytes,
+  financeStorageBytes,
   createPost,
   getPost,
   getAllPosts,
@@ -221,6 +223,26 @@ describe('Taxonomy queries', () => {
       expect(sql).toContain('DELETE FROM usr_1_abc123.taxonomies');
       expect(sql).toContain('WHERE id = $1');
       expect(mockExecuteRawUnsafe.mock.calls[0][1]).toBe(5);
+    });
+  });
+
+  describe('storage totals', () => {
+    it('sums encrypted entry bytes, leaving out the entry being replaced', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([{ n: BigInt(1234) }]);
+      expect(await postStorageBytes(SCHEMA, 9)).toBe(1234);
+      const [sql, exclude] = mockQueryRawUnsafe.mock.calls[0];
+      expect(sql).toContain('octet_length(content_encrypted)');
+      expect(sql).toContain('FROM usr_1_abc123.posts WHERE $1::int IS NULL OR id <> $1');
+      expect(exclude).toBe(9);
+    });
+
+    it('sums every finance table, leaving out the row being replaced', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([{ n: 50 }]);
+      expect(await financeStorageBytes(SCHEMA, { kind: 'bills', id: 'abc' })).toBe(50);
+      const [sql, id] = mockQueryRawUnsafe.mock.calls[0];
+      expect(sql.match(/UNION ALL/g)).toHaveLength(5);
+      expect(sql).toContain('FROM usr_1_abc123.finance_bills WHERE id <> $1');
+      expect(id).toBe('abc');
     });
   });
 

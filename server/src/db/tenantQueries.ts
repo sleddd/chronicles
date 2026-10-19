@@ -325,6 +325,17 @@ export async function updatePost(
   return result[0];
 }
 
+/** Bytes of encrypted content + metadata over all entries (optionally leaving one out). */
+export async function postStorageBytes(schemaName: string, excludeId?: number): Promise<number> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+    `SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)), 0) AS n
+     FROM ${s}.posts WHERE $1::int IS NULL OR id <> $1`,
+    excludeId ?? null
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function deletePost(schemaName: string, id: number): Promise<void> {
   const s = escapeSchema(schemaName);
   await prisma.$executeRawUnsafe(`DELETE FROM ${s}.posts WHERE id = $1`, id);
@@ -405,6 +416,19 @@ export async function upsertFinanceRecord(
     id, payload, iv
   );
   return rows[0];
+}
+
+/** Bytes of encrypted payloads over every finance table (optionally leaving one row out). */
+export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }): Promise<number> {
+  const s = escapeSchema(schemaName);
+  const parts = (Object.keys(FINANCE_TABLES) as FinanceTableKind[]).map(kind =>
+    `SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]}`
+    + (exclude?.kind === kind ? ' WHERE id <> $1' : ''));
+  const rows = await prisma.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+    `SELECT COALESCE(SUM(n), 0) AS n FROM (${parts.join(' UNION ALL ')}) t`,
+    ...(exclude ? [exclude.id] : [])
+  );
+  return Number(rows[0]?.n ?? 0);
 }
 
 /** Returns true when a row was deleted. */

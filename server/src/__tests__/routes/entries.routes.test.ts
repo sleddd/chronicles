@@ -12,6 +12,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   setPostTaxonomies: vi.fn(),
   getPostTaxonomies: vi.fn(),
   getAllTaxonomies: vi.fn(),
+  postStorageBytes: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('../../db/shareQueries.js', () => ({ deleteSharesForEntry: vi.fn().mockResolvedValue(0) }));
@@ -28,7 +29,8 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getAllPosts, getPost, createPost, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies } from '../../db/tenantQueries.js';
+import { getAllPosts, getPost, createPost, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes } from '../../db/tenantQueries.js';
+import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
 const app = createTestApp('/api/entries', entriesRouter);
@@ -105,6 +107,31 @@ describe('Entry Routes', () => {
       metadataEncrypted: Buffer.from('metaenc').toString('base64'),
       metadataIv: Buffer.from('metaiv123456').toString('base64'),
     };
+
+    it('refuses an entry once the account is at its storage cap', async () => {
+      (postStorageBytes as any).mockResolvedValueOnce(ENTRY_STORAGE_LIMIT_BYTES - 4);
+      const res = await request(app).post('/api/entries').send({
+        isEncrypted: true,
+        contentEncrypted: Buffer.from('encrypted').toString('base64'),
+        contentIv: Buffer.from('iv12345678ab').toString('base64'),
+        metadataEncrypted: Buffer.from('metaenc').toString('base64'),
+        metadataIv: Buffer.from('metaiv123456').toString('base64'),
+      });
+      expect(res.status).toBe(413);
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    it('counts an update without the old copy of the same entry, and 404s a missing one', async () => {
+      (updatePost as any).mockResolvedValueOnce(undefined);
+      const res = await request(app).put('/api/entries/7').send({
+        contentEncrypted: Buffer.from('encrypted').toString('base64'),
+        contentIv: Buffer.from('iv12345678ab').toString('base64'),
+        metadataEncrypted: Buffer.from('metaenc').toString('base64'),
+        metadataIv: Buffer.from('metaiv123456').toString('base64'),
+      });
+      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7);
+      expect(res.status).toBe(404);
+    });
 
     it('creates an encrypted entry', async () => {
       const newPost = { ...mockPost, id: 2 };
