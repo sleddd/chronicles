@@ -179,6 +179,10 @@ export const auth = {
     newKekWrapIv: string;
   }) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
 
+  /** Save the master key re-wrapped in the current (AAD) format — same password; sessions stay */
+  keyWrap: (data: { currentAuthSecret: string; encryptedMasterKey: string; kekSalt: string; kekWrapIv: string; kekIterations: number }) =>
+    request<{ success: boolean }>('/auth/key-wrap', { method: 'POST', body: data }),
+
   changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
 

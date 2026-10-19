@@ -57,6 +57,8 @@ vi.mock('../../utils/securityLogger.js', () => ({
   logSecurityEvent: vi.fn(),
 }));
 
+vi.mock('../../db/keyWrapQueries.js', () => ({ markKeyWrapCurrent: vi.fn().mockResolvedValue(undefined) }));
+
 // Mock bcryptjs
 vi.mock('bcryptjs', () => ({
   default: {
@@ -70,6 +72,7 @@ import * as authMw from '../../middleware/auth.js';
 import bcryptMock from 'bcryptjs';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
+import { markKeyWrapCurrent } from '../../db/keyWrapQueries.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
@@ -923,6 +926,36 @@ describe('Auth Routes', () => {
       const unknown = await request(app).post('/api/auth/login').send(body);
       expect(unknown.body).toEqual({ error: 'Invalid credentials' });
       await setLegacyCount(1);
+    });
+  });
+
+  describe('POST /api/auth/key-wrap', () => {
+    const body = { currentAuthSecret: 'a'.repeat(64), encryptedMasterKey: Buffer.alloc(60, 1).toString('base64'), kekSalt: Buffer.alloc(16, 2).toString('base64'), kekWrapIv: Buffer.alloc(12, 3).toString('base64'), kekIterations: 600000 };
+
+    it('saves the re-wrapped key and marks the account, without touching sessions', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: 'auth1$hash' });
+      (bcryptMock.compare as any).mockResolvedValue(true);
+      (prisma.account.update as any).mockResolvedValue({});
+      const res = await request(app).post('/api/auth/key-wrap').send(body);
+      expect(res.status).toBe(200);
+      const data = (prisma.account.update as any).mock.calls[0][0].data;
+      expect(Object.keys(data).sort()).toEqual(['encryptedMasterKey', 'kekIterations', 'kekSalt', 'kekWrapIv']);
+      expect(data.kekIterations).toBe(600000);
+      expect(markKeyWrapCurrent).toHaveBeenCalledWith(1);
+      expect(prisma.session.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('needs the current password', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: 'auth1$hash' });
+      (bcryptMock.compare as any).mockResolvedValue(false);
+      const res = await request(app).post('/api/auth/key-wrap').send(body);
+      expect(res.status).toBe(401);
+      expect(prisma.account.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses fewer iterations than the minimum and extra fields', async () => {
+      expect((await request(app).post('/api/auth/key-wrap').send({ ...body, kekIterations: 1000 })).status).toBe(400);
+      expect((await request(app).post('/api/auth/key-wrap').send({ ...body, passwordHash: 'x' })).status).toBe(400);
     });
   });
 });

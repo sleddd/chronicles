@@ -127,8 +127,23 @@ export async function unwrapKey(
   extractable: boolean = false,
   purpose: WrapPurpose = 'kek-wrap'
 ): Promise<CryptoKey> {
+  return (await unwrapKeyDetailed(wrappedKey, wrappingKey, iv, extractable, purpose)).key;
+}
+
+/**
+ * unwrapKey, also saying whether the key was in the old no-AAD format
+ * (`legacy`), so a password unlock can re-wrap it with AAD and the fallback
+ * can eventually be removed.
+ */
+export async function unwrapKeyDetailed(
+  wrappedKey: ArrayBuffer,
+  wrappingKey: CryptoKey,
+  iv: Uint8Array,
+  extractable: boolean = false,
+  purpose: WrapPurpose = 'kek-wrap'
+): Promise<{ key: CryptoKey; legacy: boolean }> {
   try {
-    return await crypto.subtle.unwrapKey(
+    const key = await crypto.subtle.unwrapKey(
       'raw',
       wrappedKey,
       wrappingKey,
@@ -137,9 +152,10 @@ export async function unwrapKey(
       extractable,
       ['encrypt', 'decrypt']
     );
+    return { key, legacy: false };
   } catch {
     // Legacy fallback: key was wrapped without AAD before security hardening
-    return crypto.subtle.unwrapKey(
+    const key = await crypto.subtle.unwrapKey(
       'raw',
       wrappedKey,
       wrappingKey,
@@ -148,6 +164,7 @@ export async function unwrapKey(
       extractable,
       ['encrypt', 'decrypt']
     );
+    return { key, legacy: true };
   }
 }
 

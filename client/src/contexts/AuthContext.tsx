@@ -32,6 +32,8 @@ interface AuthContextValue {
   submitTotpCode: (code: string) => Promise<EncryptionData>;
   /** Leave the 2FA code screen and go back to the sign-in form */
   cancel2FA: () => void;
+  /** Replace the cached key data (after the master key was re-wrapped) */
+  updateEncryptionData: (patch: Partial<EncryptionData>) => void;
   register: (data: {
     email: string;
     username: string;
@@ -54,6 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [encryptionData, setEncryptionData] = useState<EncryptionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pending2FA, setPending2FA] = useState<Pending2FA | null>(null);
+
+  const updateEncryptionData = useCallback((patch: Partial<EncryptionData>) => {
+    setEncryptionData(prev => (prev ? { ...prev, ...patch } : prev));
+  }, []);
 
   // Check if we have a valid session on mount
   useEffect(() => {
@@ -184,12 +190,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       submitTotpCode,
       cancel2FA,
+      updateEncryptionData,
       register,
       logout,
     }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+/** useAuth, or null outside an AuthProvider (the encryption provider uses it when present). */
+export function useOptionalAuth(): AuthContextValue | null {
+  return useContext(AuthContext);
 }
 
 export function useAuth(): AuthContextValue {

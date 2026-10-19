@@ -50,6 +50,15 @@ export const changePasswordSchema = z.object({
   newKekWrapIv: saltOrIvSchema,
 });
 
+/** Re-wrap the master key in the current (AAD) format — same password, new salt and IV. */
+export const keyWrapSchema = z.object({
+  currentAuthSecret: authSecretSchema,
+  encryptedMasterKey: wrappedKeySchema,
+  kekSalt: saltOrIvSchema,
+  kekWrapIv: saltOrIvSchema,
+  kekIterations: z.number().int().min(600_000).max(10_000_000),
+}).strict();
+
 export const recoverSchema = z.object({
   email: emailSchema,
   recoveryProof: recoveryProofSchema,
