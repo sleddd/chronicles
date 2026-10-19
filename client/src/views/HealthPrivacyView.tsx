@@ -52,9 +52,9 @@ export function HealthPrivacyView() {
         <li>Your email address and username, so you can sign in.</li>
         <li>Session details (IP address, browser, device type and last active time), so we can protect your account and let you sign out other devices.</li>
         <li>Your consent record: when you agreed, which versions of this policy and our terms, and how you want security notices sent. If you choose mailed notices, your postal address, used only for that.</li>
-        <li>Your Apple Calendar feed, if you turn it on. The titles, times, locations and descriptions of your event and meeting entries are stored readable so your calendar app can fetch them through your private link.</li>
+        <li>Your Apple Calendar feed, if you turn it on. The titles, times and locations of your event and meeting entries are stored readable so your calendar app can fetch them through your private link. Descriptions are included only if you turn on Include event details.</li>
         <li>Entries you choose to share. A shared entry is stored readable so anyone with the link can open it, until it expires or you revoke it. Photos and drawings are never included.</li>
-        <li>Medication dose times with their taken or skipped status, and the names and icons of your topics. We are moving these inside your encryption.</li>
+        <li>If you haven’t opened Chronicles since our October 2026 update: medication dose times with their taken or skipped status, and the names and icons of your topics. They move inside your encryption the next time you open the app.</li>
         <li>Whether you turned on the In-App AI chat and confirmed you are 18 or older, with the date.</li>
       </ul>
       <p>

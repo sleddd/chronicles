@@ -585,6 +585,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - **Export All** (Settings → Data): entries, topics, every dose log (`GET /api/doses/all`), settings opened in the browser and finance as one JSON (`utils/fullExport.ts`); AI/R2/AWS credentials are left out (`redactSecrets`)
 - **Notice banner**: `npm run notice -- --set "…" [--link https://…]` / `--clear` (server, `public.app_notice`) shows a dismissible banner on signed-in pages (`NoticeBanner`, `GET /api/notice`) — used with emailed breach notices
 - **Seed buttons** (Seed Test Data / Seed Finance Data) show only in development builds (`import.meta.env.DEV`)
+- **Phase 2 status**: `npm run migrate:phase2-status` (server) counts, per account and without printing data, what each user's next unlock still has to seal (plaintext topic names, legacy dose logs, unsealed switches, unconfirmed key wraps); `--drop` removes emptied legacy dose tables. The `taxonomies.name`/`icon` columns stay (always NULL after migration) because the topic queries still select them
 
 ### Planned
 - Recurring calendar events

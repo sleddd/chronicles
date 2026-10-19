@@ -31,8 +31,8 @@ should read the policy, the Terms and part 4 before they go live.
 | Hosts: Render (server), Prisma Postgres (database) | Done | Policy → Who receives it |
 | Retention: Prisma daily snapshots (days with changes) kept 7 days on Starter/Pro, 30 on Business — the policy says "within 30 days"; security logs only in Render's rolling log stream; AI-safety counts kept permanently (no account) | Done | Policy → When you delete / How long we keep it. Update `backupDays` if the plan or provider changes |
 | Backup and log retention set at the host | **To do** | Part 2 |
-| Encrypt dose logs and topic names (Phase 2) | **To do** | Part 3 — then remove the line in the policy's readable items |
-| Settings audit, retire legacy unwrap, ICS description opt-in (Phase 2) | **To do** | Part 3 |
+| Encrypt dose logs and topic names (Phase 2) | Done — migrates on each user's next unlock | Part 3. Run `npm run migrate:phase2-status` (server); when it reads 0, remove the "not opened since the update" line from the policy |
+| Settings audit, legacy key-wrap upgrade, ICS description opt-in (Phase 2) | Done (the no-AAD fallback is removed once the status script shows 0 key wraps) | Part 3 |
 | Google verification | Done | Part 5 |
 | Processor agreements | Render DPA in place (https://render.com/dpa); **Prisma DPA: download from the Compliance section of the Prisma Console and keep a copy** (https://www.prisma.io/legal/dpa) | Part 6 |
 | Attorney review | **To do** | Policy, Terms, part 4 |
@@ -67,8 +67,8 @@ Use the strictest rule across Washington, Nevada and Connecticut, so one process
    for nothing more than that.
 3. **Act on it:**
    - *Access:* point them to Settings → Data → Export All, and send the readable items the server holds: email,
-     username, session list, consent record, Apple Calendar feed contents, and dose logs and topic names until
-     Phase 2 ships. Include the recipient table from the policy.
+     username, session list, consent record, Apple Calendar feed contents, and — only for an account not opened
+     since the October 2026 update — its legacy dose logs and topic names. Include the recipient table from the policy.
    - *Deletion, signed in:* walk them to Settings → Account → Delete account.
    - *Deletion, locked out:* after verifying the email, run `npm run account:delete -- <email>` (dry run), then
      with `--yes`. It revokes the Google token first. Their encrypted data is unreadable without their password anyway.
@@ -94,27 +94,30 @@ Keep each record for at least 24 months.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 |  |  |  |  |  |  |  |  |
 
-## 3. Encryption at rest (Phase 2)
+## 3. Encryption at rest (Phase 2 — done)
 
 The cipher setup needs no change (AES-256-GCM with random IVs, PBKDF2-SHA256 at 600,000 iterations, a separate
-sign-in secret, purpose-bound wrapping, non-extractable keys). The work is the places health details sit outside it.
+sign-in secret, purpose-bound wrapping, non-extractable keys). Phase 2 closed the places health details sat outside it.
 The FTC rule only reaches health data that is not encrypted, so data inside the encryption can't trigger a breach notice.
 
-| Where | What a database reader can see | Fix |
+| Where | Was readable | Now |
 | --- | --- | --- |
-| `medication_dose_logs` | Dose counts per medication, times, days, taken or skipped. The foreign key also marks which posts are medications. | Move `medication_post_id`, `scheduled_time`, `taken_at` and `status` into one encrypted payload per row, like finance records. Keep `date` readable for the day query. Replace the unique index with an HMAC of post, time and date computed in the browser. |
-| `taxonomies` | Topic names and icons (a custom name or an icon like `medication` says a lot). | Encrypt `name` and `icon` together; `color` and `sort_order` can stay readable. |
-| `settings` | Any setting saved as plain JSON. | Audit every key; anything health related moves into an encrypted value. |
-| Apple Calendar feed | Titles, times, locations, descriptions — readable by design. | Keep and disclose (the policy does). Consider leaving descriptions out by default with an opt-in. |
+| Dose logs | Dose counts per medication, times, days, taken or skipped; the foreign key marked which posts are medications | `medication_dose_records`: one encrypted payload per dose (AAD bound to its UUID), only the date readable, no foreign key. The old table is re-saved encrypted and emptied on each user's next unlock |
+| Topics | Names and icons | `{ name, icon }` in one encrypted payload; colour and order stay readable. Legacy rows sealed on next unlock; default topics seeded by the browser |
+| Settings | Feature switches and Cycle Tracking in plain JSON (they show which health features someone uses) | Master-key encrypted private settings, sealed on next load. Plain only: theme, accent, calendar sync ids/tokens, topic hide-text map (ids), images on/off |
+| Apple Calendar feed | Titles, times, locations, descriptions | Descriptions only when the user turns on Include event details (off by default) |
+| Master key wrap | Older accounts wrapped without purpose AAD | Re-wrapped with AAD after the next password unlock (`POST /api/auth/key-wrap`); tracked in `public.key_wrap_status` |
 
-Shared entries are readable on the server by design (disclosed). They never carry images or drawings now.
-`Account.isMigrating` can drive the move: on each user's next unlock the browser reads the old rows, encrypts
-them, writes the new ones, and the server then drops the old columns.
+Shared entries are readable on the server by design (disclosed), and never carry images or drawings.
+Progress: `npm run migrate:phase2-status` (server) counts what's left per account, without printing any data;
+`--drop` removes the emptied legacy dose tables. When it reads 0: remove the policy's "not opened since the update"
+line and the no-AAD fallback in `unwrapKeyDetailed` (`shared/src/crypto/primitives.ts`). Accounts nobody opens again
+keep their legacy rows until they're opened or deleted.
 
 ### Hardening
 
 - [x] **Passwords:** 12 characters minimum with upper, lower and a number (`passwordSchema`). Argon2id via WASM is the stronger long-term option; `kekIterations` already allows raising the PBKDF2 cost.
-- [ ] **Retire the legacy unwrap:** re-wrap with AAD at each sign-in, track who is done, remove the no-AAD fallback once everyone is.
+- [x] **Retire the legacy unwrap:** keys are re-wrapped with AAD on the next password unlock and tracked. [ ] Remove the no-AAD fallback once the status script shows 0 key wraps.
 - [ ] **`SECRETS_ENCRYPTION_KEY`:** only in the host's secret store; write down how to rotate it.
 - [ ] **Backups:** confirm with the host that backups are encrypted at rest; note the retention window.
 - [ ] **The code browsers run:** hardware key or strong 2FA on GitHub and the host, protected main branch, lean dependencies, `npm audit` before each deploy. The CSP (`script-src 'self'`) already blocks most exfiltration.
@@ -140,8 +143,9 @@ were ready sooner as unreasonable delay. Missing a notice can cost up to $53,088
 Any time someone gets health data without the user's permission: a hack, a mistaken disclosure, or data sent
 somewhere the user didn't authorize. If someone accessed the database, the FTC presumes they took the data unless you
 can show otherwise. Encrypted data doesn't count, so the first question is always what was readable: account emails,
-session details, consent records (including postal addresses), Apple Calendar feeds, shared entries, and the dose logs
-and topic names until Phase 2 ships.
+session details, consent records (including postal addresses), Apple Calendar feeds (descriptions only if turned on),
+shared entries, and — for accounts not opened since the October 2026 update — their legacy dose logs and topic names
+(check with `npm run migrate:phase2-status`).
 
 ### Steps
 

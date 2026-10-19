@@ -20,7 +20,8 @@
     "report:ai-safety": "tsx src/db/aiSafetyReport.ts",
     "ai:block": "tsx src/db/aiChatBlock.ts",
     "account:delete": "tsx src/db/deleteAccount.ts",
-    "notice": "tsx src/db/appNotice.ts"
+    "notice": "tsx src/db/appNotice.ts",
+    "migrate:phase2-status": "tsx src/db/phase2Status.ts"
   },
   "dependencies": {
     "@chronicles/shared": "*",
