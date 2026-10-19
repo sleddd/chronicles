@@ -24,7 +24,7 @@ import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
-import { entries as entriesApi, topics as topicsApi, settings as settingsApi, retryDelayMs } from '../services/api.js';
+import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi, retryDelayMs } from '../services/api.js';
 import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
@@ -471,6 +471,8 @@ export function JournalView() {
         const [rawEntries, topicsData, settingsData] = await Promise.all([
           entriesApi.getAll(), topicsApi.getAll(), settingsApi.getAll(),
         ]);
+        // The old plaintext dose log is re-saved encrypted, once per session
+        void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
         // Apply saved theme settings
         const settingsMap: Record<string, unknown> = {};
         for (const s of settingsData) settingsMap[s.key] = s.value;

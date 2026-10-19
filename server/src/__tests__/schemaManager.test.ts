@@ -63,9 +63,13 @@ describe('schemaManager', () => {
     it('creates every table inside the tenant schema', () => {
       const sql = generateTenantSchemaStatements('usr_3_abcdef').join('\n');
       expect(sql).toContain('CREATE SCHEMA usr_3_abcdef');
-      for (const table of ['_migrations', 'settings', 'taxonomies', 'posts', 'post_taxonomies', 'medication_dose_logs']) {
+      for (const table of ['_migrations', 'settings', 'taxonomies', 'posts', 'post_taxonomies']) {
         expect(sql).toContain(`CREATE TABLE usr_3_abcdef.${table}`);
       }
+      expect(sql).toContain('CREATE TABLE IF NOT EXISTS usr_3_abcdef.medication_dose_records');
+      // No plaintext dose log or default topic names for new accounts (the browser seeds topics, encrypted)
+      expect(sql).not.toContain('medication_dose_logs');
+      expect(sql).not.toContain('INSERT INTO usr_3_abcdef.taxonomies');
       expect(sql).toContain('usr_3_abcdef.finance_');
     });
 

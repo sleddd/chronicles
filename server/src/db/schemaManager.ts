@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
-import { financeTableStatements } from './tenantQueries.js';
+import { financeTableStatements, doseRecordStatements } from './tenantQueries.js';
 
 // =============================================================================
 // Tenant Schema Manager
@@ -44,12 +44,16 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
     )`,
 
     // Taxonomies table
+    // Topic name and icon live only in the encrypted payload (the browser
+    // seeds the default topics, encrypted); name/icon are legacy columns
     `CREATE TABLE ${s}.taxonomies (
       id SERIAL PRIMARY KEY,
-      name TEXT UNIQUE NOT NULL,
+      name TEXT,
       icon TEXT,
       color VARCHAR(7),
-      sort_order INTEGER DEFAULT 0
+      sort_order INTEGER DEFAULT 0,
+      payload_encrypted BYTEA,
+      payload_iv BYTEA
     )`,
 
     // Posts table (supports both plaintext and encrypted)
@@ -73,19 +77,8 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
       PRIMARY KEY (post_id, tax_id)
     )`,
 
-    // Medication dose logs
-    `CREATE TABLE ${s}.medication_dose_logs (
-      id SERIAL PRIMARY KEY,
-      medication_post_id INTEGER NOT NULL REFERENCES ${s}.posts(id) ON DELETE CASCADE,
-      scheduled_time TIME NOT NULL,
-      taken_at TEXT,
-      date DATE NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE INDEX idx_${s}_dose_logs_date ON ${s}.medication_dose_logs (date)`,
-    `CREATE INDEX idx_${s}_dose_logs_med_date ON ${s}.medication_dose_logs (medication_post_id, date)`,
-    `CREATE UNIQUE INDEX idx_${s}_dose_logs_unique ON ${s}.medication_dose_logs (medication_post_id, scheduled_time, date)`,
+    // Medication dose records (encrypted payload per dose; only the day is readable)
+    ...doseRecordStatements(s),
 
     // Finance records (encrypted payload per row)
     ...financeTableStatements(s),
@@ -97,23 +90,6 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
     // Record initial schema version
     `INSERT INTO ${s}._migrations (version, name) VALUES (1, 'initial_schema')`,
 
-    // Seed default topics
-    `INSERT INTO ${s}.taxonomies (name, icon, color) VALUES
-      ('Task', 'circle-check', '#3B82F6'),
-      ('Goal', 'bullseye', '#8B5CF6'),
-      ('Milestone', 'flag', '#6366F1'),
-      ('Idea', 'lightbulb', '#F59E0B'),
-      ('Research', 'magnifying-glass', '#10B981'),
-      ('Event', 'calendar', '#F59E0B'),
-      ('Meeting', 'users', '#EC4899'),
-      ('Meals', 'utensils', '#F97316'),
-      ('Exercise', 'dumbbell', '#EF4444'),
-      ('Medication', 'pills', '#14B8A6'),
-      ('Symptom', 'flask', '#EF4444'),
-      ('Music', 'music', '#EC4899'),
-      ('Books', 'book', '#8B5CF6'),
-      ('TV/Movies', 'film', '#F59E0B'),
-      ('Quote', 'quote-left', '#6366F1')`,
   ];
 }
 

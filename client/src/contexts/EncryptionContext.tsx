@@ -5,6 +5,7 @@ import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import type { EncryptedPostData, DecryptedPost, EncryptedPost, SetupEncryptionResult } from '@shared/crypto/types.js';
 import { clearImageCache, rederiveImageStorageConfig } from '../services/imageStorage.js';
 import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
+import { clearRecordCipher, installRecordCipher } from '../services/recordCipher.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
@@ -67,6 +68,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // master-key-encrypted blob so image display/cleanup keeps working
     void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
     void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    // Topic names and dose records are sealed by the API layer itself
+    installRecordCipher(encryptionService, key);
     setIsUnlocked(true);
   }, []);
 
@@ -122,6 +125,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearImageCache();
     // Drop the decrypted AI provider credentials too
     clearAiConfig();
+    clearRecordCipher();
     // And the decrypted Finance records
     clearFinanceCache();
     setIsUnlocked(false);
@@ -197,6 +201,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     encryptionParamsRef.current = null; // Recovery path — no stored params
     void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
     void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    // Topic names and dose records are sealed by the API layer itself
+    installRecordCipher(encryptionService, key);
     setIsUnlocked(true);
   }, []);
 

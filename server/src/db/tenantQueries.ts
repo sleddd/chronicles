@@ -17,10 +17,14 @@ export interface TenantSetting {
 
 export interface TenantTaxonomy {
   id: number;
-  name: string;
+  /** Legacy plaintext (null once the browser has encrypted the topic) */
+  name: string | null;
   icon: string | null;
   color: string | null;
   sort_order: number;
+  /** Encrypted { name, icon } (base64), or null for a legacy row */
+  payload: string | null;
+  iv: string | null;
 }
 
 export interface TenantPost {
@@ -78,10 +82,39 @@ export async function deleteSetting(schemaName: string, key: string): Promise<vo
 // Taxonomies
 // =============================================================================
 
+const TAXONOMY_COLUMNS = 'id, name, icon, color, sort_order, payload_encrypted, payload_iv';
+
+type TaxonomyRow = Omit<TenantTaxonomy, 'payload' | 'iv'> & { payload_encrypted: Buffer | null; payload_iv: Buffer | null };
+
+function toTaxonomy(r: TaxonomyRow): TenantTaxonomy {
+  return {
+    id: Number(r.id),
+    name: r.name,
+    icon: r.icon,
+    color: r.color,
+    sort_order: Number(r.sort_order ?? 0),
+    payload: r.payload_encrypted ? Buffer.from(r.payload_encrypted).toString('base64') : null,
+    iv: r.payload_iv ? Buffer.from(r.payload_iv).toString('base64') : null,
+  };
+}
+
+const topicColumnsReady = new Set<string>();
+
+/** JIT migration: encrypted payload columns, and a name that may be empty and repeat (it lives in the payload). */
+export async function ensureTopicEncryptionColumns(schemaName: string): Promise<void> {
+  const s = escapeSchema(schemaName);
+  if (topicColumnsReady.has(s)) return;
+  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_encrypted BYTEA`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_iv BYTEA`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ALTER COLUMN name DROP NOT NULL`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies DROP CONSTRAINT IF EXISTS taxonomies_name_key`);
+  topicColumnsReady.add(s);
+}
+
 export async function createTaxonomy(
   schemaName: string,
-  name: string,
-  options?: { icon?: string; color?: string }
+  data: { payload: string; iv: string; color?: string }
 ): Promise<TenantTaxonomy> {
   const s = escapeSchema(schemaName);
   // Auto-assign sort_order as max + 1
@@ -89,48 +122,46 @@ export async function createTaxonomy(
     `SELECT MAX(sort_order) as max_order FROM ${s}.taxonomies`
   );
   const nextOrder = (maxResult[0]?.max_order ?? -1) + 1;
-
-  const result = await prisma.$queryRawUnsafe<TenantTaxonomy[]>(
-    `INSERT INTO ${s}.taxonomies (name, icon, color, sort_order)
+  const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(
+    `INSERT INTO ${s}.taxonomies (color, sort_order, payload_encrypted, payload_iv)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, name, icon, color, sort_order`,
-    name,
-    options?.icon ?? null,
-    options?.color ?? null,
-    nextOrder
+     RETURNING ${TAXONOMY_COLUMNS}`,
+    data.color ?? null,
+    nextOrder,
+    Buffer.from(data.payload, 'base64'),
+    Buffer.from(data.iv, 'base64'),
   );
-  return { ...result[0], id: Number(result[0].id), sort_order: Number(result[0].sort_order) };
+  return toTaxonomy(result[0]);
 }
 
 export async function getTaxonomy(schemaName: string, id: number): Promise<TenantTaxonomy | null> {
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TenantTaxonomy[]>(
-    `SELECT id, name, icon, color, sort_order FROM ${s}.taxonomies WHERE id = $1`,
-    id
-  );
-  return result[0] || null;
+  const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(`SELECT ${TAXONOMY_COLUMNS} FROM ${s}.taxonomies WHERE id = $1`, id);
+  return result[0] ? toTaxonomy(result[0]) : null;
 }
 
 export async function getAllTaxonomies(schemaName: string): Promise<TenantTaxonomy[]> {
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<TenantTaxonomy[]>(
-    `SELECT id, name, icon, color, sort_order FROM ${s}.taxonomies ORDER BY sort_order, name`
-  );
-  return rows.map(r => ({ ...r, id: Number(r.id), sort_order: Number(r.sort_order ?? 0) }));
+  const rows = await prisma.$queryRawUnsafe<TaxonomyRow[]>(`SELECT ${TAXONOMY_COLUMNS} FROM ${s}.taxonomies ORDER BY sort_order, id`);
+  return rows.map(toTaxonomy);
 }
 
+/** Update a topic. Writing the encrypted payload clears any legacy plaintext name and icon. */
 export async function updateTaxonomy(
   schemaName: string,
   id: number,
-  updates: { name?: string; icon?: string; color?: string }
+  updates: { payload?: string; iv?: string; color?: string }
 ): Promise<TenantTaxonomy> {
   const s = escapeSchema(schemaName);
   const setClauses: string[] = [];
   const values: unknown[] = [];
   let paramIndex = 1;
 
-  if (updates.name !== undefined) { setClauses.push(`name = $${paramIndex++}`); values.push(updates.name); }
-  if (updates.icon !== undefined) { setClauses.push(`icon = $${paramIndex++}`); values.push(updates.icon); }
+  if (updates.payload !== undefined && updates.iv !== undefined) {
+    setClauses.push(`payload_encrypted = $${paramIndex++}`); values.push(Buffer.from(updates.payload, 'base64'));
+    setClauses.push(`payload_iv = $${paramIndex++}`); values.push(Buffer.from(updates.iv, 'base64'));
+    setClauses.push('name = NULL', 'icon = NULL');
+  }
   if (updates.color !== undefined) { setClauses.push(`color = $${paramIndex++}`); values.push(updates.color); }
 
   if (setClauses.length === 0) {
@@ -140,11 +171,11 @@ export async function updateTaxonomy(
   }
 
   values.push(id);
-  const result = await prisma.$queryRawUnsafe<TenantTaxonomy[]>(
-    `UPDATE ${s}.taxonomies SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING id, name, icon, color, sort_order`,
+  const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(
+    `UPDATE ${s}.taxonomies SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING ${TAXONOMY_COLUMNS}`,
     ...values
   );
-  return result[0];
+  return toTaxonomy(result[0]);
 }
 
 export async function deleteTaxonomy(schemaName: string, id: number): Promise<void> {
@@ -374,7 +405,96 @@ export async function deleteFinanceRecord(schemaName: string, kind: FinanceTable
 }
 
 // =============================================================================
-// Medication Dose Logs
+// Medication dose records (encrypted, one payload per dose)
+// =============================================================================
+// The payload (medication, scheduled time, status, taken at) is encrypted in the
+// browser with AAD bound to the row id; only the day stays readable, for the
+// "today's doses" query. No foreign key, so nothing marks which posts are
+// medications. Replaces medication_dose_logs (legacy, plaintext), which the
+// browser migrates on unlock (GET/DELETE /api/doses/legacy).
+
+export interface DoseRecordRow {
+  id: string;
+  date: string;
+  payloadEncrypted: Buffer;
+  payloadIv: Buffer;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export function doseRecordStatements(s: string): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS ${s}.medication_dose_records (
+      id TEXT PRIMARY KEY,
+      date DATE NOT NULL,
+      payload_encrypted BYTEA NOT NULL,
+      payload_iv BYTEA NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_${s}_dose_records_date ON ${s}.medication_dose_records (date)`,
+  ];
+}
+
+const doseRecordsReady = new Set<string>();
+
+export async function ensureDoseRecordsTable(schemaName: string): Promise<void> {
+  const s = escapeSchema(schemaName);
+  if (doseRecordsReady.has(s)) return;
+  for (const stmt of doseRecordStatements(s)) await prisma.$executeRawUnsafe(stmt);
+  doseRecordsReady.add(s);
+}
+
+const DOSE_RECORD_COLUMNS = `id, TO_CHAR(date, 'YYYY-MM-DD') as "date", payload_encrypted as "payloadEncrypted",
+  payload_iv as "payloadIv", created_at as "createdAt", updated_at as "updatedAt"`;
+
+export async function getDoseRecords(schemaName: string, date?: string): Promise<DoseRecordRow[]> {
+  const s = escapeSchema(schemaName);
+  return date
+    ? prisma.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records WHERE date = $1::date ORDER BY created_at ASC`, date)
+    : prisma.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records ORDER BY date ASC, created_at ASC`);
+}
+
+export async function upsertDoseRecord(schemaName: string, id: string, date: string, payload: Buffer, iv: Buffer): Promise<DoseRecordRow> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<DoseRecordRow[]>(
+    `INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
+     VALUES ($1, $2::date, $3, $4)
+     ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date, payload_encrypted = EXCLUDED.payload_encrypted,
+       payload_iv = EXCLUDED.payload_iv, updated_at = NOW()
+     RETURNING ${DOSE_RECORD_COLUMNS}`,
+    id, date, payload, iv
+  );
+  return rows[0];
+}
+
+export async function deleteDoseRecord(schemaName: string, id: string): Promise<boolean> {
+  const s = escapeSchema(schemaName);
+  return (await prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_records WHERE id = $1`, id)) > 0;
+}
+
+async function legacyDoseTableExists(s: string): Promise<boolean> {
+  const r = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'medication_dose_logs') as exists`, s);
+  return !!r[0]?.exists;
+}
+
+/** Legacy plaintext dose logs still waiting for the browser to migrate them ([] once gone). */
+export async function getLegacyDoseLogs(schemaName: string): Promise<DoseLog[]> {
+  const s = escapeSchema(schemaName);
+  if (!(await legacyDoseTableExists(s))) return [];
+  return getAllDoseLogs(schemaName);
+}
+
+/** Delete the legacy plaintext dose logs (after the browser has migrated them). */
+export async function deleteLegacyDoseLogs(schemaName: string): Promise<number> {
+  const s = escapeSchema(schemaName);
+  if (!(await legacyDoseTableExists(s))) return 0;
+  return prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_logs`);
+}
+
+// =============================================================================
+// Medication Dose Logs (legacy, plaintext — read only for migration)
 // =============================================================================
 
 export interface DoseLog {
@@ -385,54 +505,6 @@ export interface DoseLog {
   date: string;
   status: string;
   createdAt: Date;
-}
-
-/** JIT migration: create medication_dose_logs table if missing. */
-export async function ensureDoseLogsTable(schemaName: string): Promise<void> {
-  const s = escapeSchema(schemaName);
-  const idxPrefix = `idx_${s}`;
-
-  const result = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.tables
-       WHERE table_schema = $1 AND table_name = 'medication_dose_logs'
-     ) as exists`,
-    s
-  );
-  if (!result[0]?.exists) {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE ${s}.medication_dose_logs (
-        id SERIAL PRIMARY KEY,
-        medication_post_id INTEGER NOT NULL REFERENCES ${s}.posts(id) ON DELETE CASCADE,
-        scheduled_time TIME NOT NULL,
-        taken_at TEXT,
-        date DATE NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-  }
-
-  // Always ensure indexes exist (handles tables created before indexes were added)
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ${idxPrefix}_dose_logs_date ON ${s}.medication_dose_logs (date)`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ${idxPrefix}_dose_logs_med_date ON ${s}.medication_dose_logs (medication_post_id, date)`);
-  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS ${idxPrefix}_dose_logs_unique ON ${s}.medication_dose_logs (medication_post_id, scheduled_time, date)`);
-}
-
-export async function getDoseLogsByDate(schemaName: string, date: string): Promise<DoseLog[]> {
-  const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<DoseLog[]>(
-    `SELECT id, medication_post_id as "medicationPostId",
-            TO_CHAR(scheduled_time, 'HH24:MI') as "scheduledTime",
-            taken_at as "takenAt",
-            TO_CHAR(date, 'YYYY-MM-DD') as "date",
-            status, created_at as "createdAt"
-     FROM ${s}.medication_dose_logs
-     WHERE date = $1::date
-     ORDER BY scheduled_time ASC`,
-    date
-  );
-  return rows.map(r => ({ ...r, id: Number(r.id), medicationPostId: Number(r.medicationPostId) }));
 }
 
 /** Every dose log, oldest first (Settings → Data → Export All). */
@@ -448,36 +520,6 @@ export async function getAllDoseLogs(schemaName: string): Promise<DoseLog[]> {
      ORDER BY date ASC, scheduled_time ASC`
   );
   return rows.map(r => ({ ...r, id: Number(r.id), medicationPostId: Number(r.medicationPostId) }));
-}
-
-export async function upsertDoseLog(
-  schemaName: string,
-  medicationPostId: number,
-  scheduledTime: string,
-  date: string,
-  status: string,
-  takenAt: string | null
-): Promise<DoseLog> {
-  const s = escapeSchema(schemaName);
-
-  // Use INSERT ... ON CONFLICT to avoid race conditions between check-and-insert
-  const result = await prisma.$queryRawUnsafe<DoseLog[]>(
-    `INSERT INTO ${s}.medication_dose_logs (medication_post_id, scheduled_time, date, status, taken_at)
-     VALUES ($1, $2::time, $3::date, $4, $5)
-     ON CONFLICT (medication_post_id, scheduled_time, date)
-     DO UPDATE SET status = EXCLUDED.status, taken_at = EXCLUDED.taken_at
-     RETURNING id, medication_post_id as "medicationPostId",
-               TO_CHAR(scheduled_time, 'HH24:MI') as "scheduledTime",
-               taken_at as "takenAt",
-               TO_CHAR(date, 'YYYY-MM-DD') as "date",
-               status, created_at as "createdAt"`,
-    medicationPostId,
-    scheduledTime,
-    date,
-    status,
-    takenAt
-  );
-  return { ...result[0], id: Number(result[0].id), medicationPostId: Number(result[0].medicationPostId) };
 }
 
 // =============================================================================

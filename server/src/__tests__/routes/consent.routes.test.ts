@@ -9,16 +9,10 @@ vi.mock('../../db/consentQueries.js', () => ({
   saveBreachNotice: vi.fn().mockResolvedValue(1),
 }));
 vi.mock('../../db/appNoticeQueries.js', () => ({ getActiveNotice: vi.fn().mockResolvedValue({ message: 'Hi', linkUrl: null, updatedAt: 'x' }) }));
-vi.mock('../../db/tenantQueries.js', () => ({
-  ensureDoseLogsTable: vi.fn(), getAllDoseLogs: vi.fn().mockResolvedValue([{ id: 1 }]),
-  getDoseLogsByDate: vi.fn(), upsertDoseLog: vi.fn(), getPost: vi.fn(),
-}));
 
 import consentRouter from '../../routes/consent.js';
 import noticeRouter from '../../routes/notice.js';
-import dosesRouter from '../../routes/doses.js';
 import { saveConsent, saveBreachNotice } from '../../db/consentQueries.js';
-import { getAllDoseLogs } from '../../db/tenantQueries.js';
 
 const app = createTestApp('/api/consent', consentRouter);
 const full = {
@@ -62,15 +56,9 @@ describe('consent routes', () => {
   });
 });
 
-describe('notice and dose export routes', () => {
+describe('notice route', () => {
   it('returns the active notice', async () => {
     const res = await request(createTestApp('/api/notice', noticeRouter)).get('/api/notice');
     expect(res.body.notice.message).toBe('Hi');
-  });
-  it('lists every dose log for the export', async () => {
-    const res = await request(createTestApp('/api/doses', dosesRouter)).get('/api/doses/all');
-    expect(res.status).toBe(200);
-    expect(res.body.logs).toEqual([{ id: 1 }]);
-    expect(getAllDoseLogs).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
   });
 });

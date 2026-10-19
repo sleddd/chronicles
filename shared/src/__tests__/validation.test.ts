@@ -16,8 +16,7 @@ import {
   createTaxonomySchema,
   updateTaxonomySchema,
   upsertSettingSchema,
-  createShareSchema,
-} from '../validation/schemas.js';
+  createShareSchema, isPlaintextTopicWrite, putDoseRecordSchema } from '../validation/schemas.js';
 
 // ============================================================================
 // emailSchema
@@ -419,99 +418,44 @@ describe('updatePostSchema', () => {
 // createTaxonomySchema
 // ============================================================================
 describe('createTaxonomySchema', () => {
-  it('accepts valid taxonomy with name only', () => {
-    expect(createTaxonomySchema.safeParse({ name: 'Work' }).success).toBe(true);
+  it('accepts an encrypted payload with an optional colour', () => {
+    expect(createTaxonomySchema.safeParse({ payload: 'c2VhbGVk', iv: 'aXY=' }).success).toBe(true);
+    expect(createTaxonomySchema.safeParse({ payload: 'c2VhbGVk', iv: 'aXY=', color: '#AbCdEf' }).success).toBe(true);
   });
-
-  it('accepts taxonomy with all fields', () => {
-    expect(createTaxonomySchema.safeParse({ name: 'Work', icon: 'briefcase', color: '#ff0000' }).success).toBe(true);
+  it('refuses a plaintext name or icon, a missing iv and a bad colour', () => {
+    expect(createTaxonomySchema.safeParse({ name: 'Work' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ payload: 'x', iv: 'y', icon: 'pills' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ payload: 'x' }).success).toBe(false);
+    const bad = createTaxonomySchema.safeParse({ payload: 'x', iv: 'y', color: 'red' });
+    expect(bad.success).toBe(false);
+    if (!bad.success) expect(bad.error.errors[0].message).toBe('Invalid hex color');
   });
-
-  it('rejects empty name', () => {
-    const result = createTaxonomySchema.safeParse({ name: '' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe('Name is required');
-    }
-  });
-
-  it('rejects name exceeding 100 characters', () => {
-    expect(createTaxonomySchema.safeParse({ name: 'a'.repeat(101) }).success).toBe(false);
-  });
-
-  it('accepts name at exactly 100 characters', () => {
-    expect(createTaxonomySchema.safeParse({ name: 'a'.repeat(100) }).success).toBe(true);
-  });
-
-  it('accepts name at exactly 1 character', () => {
-    expect(createTaxonomySchema.safeParse({ name: 'A' }).success).toBe(true);
-  });
-
-  it('rejects invalid hex color formats', () => {
-    const invalidColors = ['red', '#fff', '#gggggg', '123456', '#12345', '#1234567', 'rgb(0,0,0)'];
-    for (const color of invalidColors) {
-      expect(
-        createTaxonomySchema.safeParse({ name: 'Test', color }).success,
-        `Color "${color}" should be rejected`
-      ).toBe(false);
-    }
-  });
-
-  it('accepts valid hex colors', () => {
-    const validColors = ['#000000', '#ffffff', '#ABCDEF', '#abcdef', '#a1B2c3'];
-    for (const color of validColors) {
-      expect(
-        createTaxonomySchema.safeParse({ name: 'Test', color }).success,
-        `Color "${color}" should be accepted`
-      ).toBe(true);
-    }
-  });
-
-  it('provides correct error message for invalid color', () => {
-    const result = createTaxonomySchema.safeParse({ name: 'Test', color: 'red' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe('Invalid hex color');
-    }
+  it('isPlaintextTopicWrite spots an out-of-date app', () => {
+    expect(isPlaintextTopicWrite({ name: 'Work' })).toBe(true);
+    expect(isPlaintextTopicWrite({ icon: 'pills' })).toBe(true);
+    expect(isPlaintextTopicWrite({ payload: 'x', iv: 'y' })).toBe(false);
   });
 });
 
-// ============================================================================
-// updateTaxonomySchema
-// ============================================================================
 describe('updateTaxonomySchema', () => {
-  it('accepts partial update with name only', () => {
-    expect(updateTaxonomySchema.safeParse({ name: 'Updated' }).success).toBe(true);
+  it('accepts a payload with its iv, or just a colour', () => {
+    expect(updateTaxonomySchema.safeParse({ payload: 'x', iv: 'y' }).success).toBe(true);
+    expect(updateTaxonomySchema.safeParse({ color: '#123456' }).success).toBe(true);
   });
-
-  it('accepts partial update with icon only', () => {
-    expect(updateTaxonomySchema.safeParse({ icon: 'star' }).success).toBe(true);
-  });
-
-  it('accepts partial update with color only', () => {
-    expect(updateTaxonomySchema.safeParse({ color: '#abcdef' }).success).toBe(true);
-  });
-
-  it('accepts empty object (all optional)', () => {
-    expect(updateTaxonomySchema.safeParse({}).success).toBe(true);
-  });
-
-  it('rejects invalid color in update', () => {
-    expect(updateTaxonomySchema.safeParse({ color: 'notacolor' }).success).toBe(false);
-  });
-
-  it('rejects name exceeding 100 characters in update', () => {
-    expect(updateTaxonomySchema.safeParse({ name: 'a'.repeat(101) }).success).toBe(false);
-  });
-
-  it('rejects empty name when provided', () => {
-    expect(updateTaxonomySchema.safeParse({ name: '' }).success).toBe(false);
+  it('needs payload and iv together, and refuses plaintext', () => {
+    expect(updateTaxonomySchema.safeParse({ payload: 'x' }).success).toBe(false);
+    expect(updateTaxonomySchema.safeParse({ name: 'Work' }).success).toBe(false);
   });
 });
 
-// ============================================================================
-// upsertSettingSchema
-// ============================================================================
+describe('putDoseRecordSchema', () => {
+  it('takes only the date, payload and iv', () => {
+    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: 'x', iv: 'y' }).success).toBe(true);
+    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: 'x', iv: 'y', status: 'taken' }).success).toBe(false);
+    expect(putDoseRecordSchema.safeParse({ date: 'April 3', payload: 'x', iv: 'y' }).success).toBe(false);
+  });
+});
+
 describe('upsertSettingSchema', () => {
   it('accepts valid key-value pair', () => {
     expect(upsertSettingSchema.safeParse({ key: 'headerColor', value: '#ff0000' }).success).toBe(true);

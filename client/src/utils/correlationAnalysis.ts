@@ -31,7 +31,7 @@ export interface DecryptedFood {
 }
 
 export interface DecryptedMedicationLog {
-  id: number;
+  id: string;
   medicationPostId: number;
   medicationName: string;
   takenAt: string;

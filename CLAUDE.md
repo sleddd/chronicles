@@ -209,7 +209,7 @@ chronicles-rebuild/
 │           ├── topics.ts              # CRUD for topics/taxonomies
 │           ├── settings.ts            # Key-value settings
 │           ├── sessions.ts            # List, revoke, revoke-all sessions
-│           └── doses.ts               # Medication dose log CRUD
+│           └── doses.ts               # Encrypted medication dose records (+ legacy migration)
 │
 ├── client/              # React 19 SPA (Vite)
 │   └── src/
@@ -242,7 +242,7 @@ PostgreSQL Database
 ├── usr_1_a1b2c3 (user 1's isolated schema)
 │   ├── _migrations - schema version tracking for JIT migrations
 │   ├── settings - key-value store (JSONB)
-│   ├── taxonomies - topics with icon and color
+│   ├── taxonomies - topics: name + icon in an encrypted payload, colour and order readable
 │   ├── posts - encrypted content + metadata (BYTEA)
 │   └── post_taxonomies - many-to-many relationships
 │
@@ -438,7 +438,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 
 **Health Tracking**
 - Medications with dosage, frequency, scheduled times
-- Dose logging with timestamps (`medication_dose_logs` table, JIT migration); real-time sync via `visibilitychange`
+- Dose logging, encrypted: `medication_dose_records` (one AES-GCM payload per dose — medication, scheduled time, status, taken at — AAD bound to its UUID; only the `date` is readable; no medication foreign key). `doses` in `services/api.ts` encrypts and decrypts (`getByDate`, `getAll`, `log` finds the existing record for that dose, else a new UUID; duplicates from two devices collapse to the newest). The old plaintext `medication_dose_logs` is re-saved encrypted once per session (`doses.migrateLegacy`, stable UUIDs from `legacyDoseId`) and deleted; the plaintext `POST /api/doses` answers 409 "Update Chronicles". Real-time sync via `visibilitychange`
 - Meals tracking with meal types, ingredients, calories and micronutrients (iron, vitamin D, B12, vitamin C) — see **Meals log** below
 - Symptom tracking with severity scale
 - Exercise tracking with type, duration, intensity, distance
@@ -574,6 +574,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - AI: `estimateFoodNutrition` asks for only the missing nutrients in one request; `nutrientSource` (`'ai' | 'manual'` per nutrient) + `nutritionBasis` mean typed values are never overwritten and AI values refresh when the description/meal type changes. New rows are AI-filled in the background after adding; the Logged table has "Fill N missing with AI" and a per-row "Estimate". Every food save path (Health dashboard quick log, New entry, journal Save) fills blank nutrients via `autoNutritionOnSave`; `FoodFields` shows the nutrient inputs
 
 **Health data compliance** (internal records and status: `docs/compliance/HEALTH_DATA_COMPLIANCE.md`)
+- **Topic names and icons are encrypted** (`{ name, icon }` as one payload, kind `topic`; colour and order stay readable). `topics` in `services/api.ts` seals on create/update (an update fills in whichever of name/icon wasn't given) and opens on load, seals any legacy row still carrying a plaintext name (a payload write nulls `name`/`icon`), and **seeds missing default topics in the browser** (`utils/defaultTopics.ts`, one seeding at a time per tab) — the server no longer seeds or creates default rows for new accounts. Plaintext topic writes get 409 "Update Chronicles". The API layer encrypts through `services/recordCipher.ts`, installed by `EncryptionContext` on unlock and cleared on lock
 - **Public pages** `/health-privacy` (`HealthPrivacyView`) and `/terms` (`TermsView`, with the risk notice and image rules), in `LegalTemplate`, readable without signing in; linked under every sign-in screen (`AuthTemplate`), from the consent card and from Settings → Account. Placeholders (business name, address, host, backup/log days, abuse email, effective date) are `LEGAL_DETAILS` in `shared/src/legal/index.ts`; `LEGAL_VERSIONS` there versions each text — **update the policy before a feature changes how data moves, and bump the version when a change matters** (everyone is asked again). The chat stays off these pages
 - **Consent**: sign-up shows `ConsentCard` (three separate, never pre-checked boxes — 18+, Terms, health-data consent — plus email / mailed-letter breach notices with a postal address); **Create account** stays disabled until they're ticked, and the consent is posted right after registering. `ConsentGate` (inside `ProtectedRoute`) checks `GET /api/consent` before any signed-in page: no record → the full card once; a bumped version → only the changed items. If the check can't load, the app opens and asks next time. Stored in `public.account_consent` (`server/src/db/consentQueries.ts`; `POST /api/consent` only accepts the current versions; `PUT /api/consent/breach-notice` from Settings → Account → **Security notices**); the postal address is kept only for mailed notices
 - **Shares carry no images**: the client strips photos, drawings, SVG and embedded media (`stripMediaForShare`, `utils/shareContent.ts`) and `createShareSchema` rejects anything still carrying one (`shareContentHasMedia`, shared). **Uploads** are only JPG, PNG, WebP or AVIF (`ALLOWED_IMAGE_TYPES` in `utils/processImage.ts`, also the picker's `accept`) — never SVG or GIF; every image is re-encoded to a fresh JPEG anyway

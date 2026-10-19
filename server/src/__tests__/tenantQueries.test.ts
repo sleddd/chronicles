@@ -39,9 +39,12 @@ import {
   getPostTaxonomies,
   addTaxonomyToPost,
   removeTaxonomyFromPost,
-  ensureDoseLogsTable,
-  getDoseLogsByDate,
-  upsertDoseLog,
+  ensureDoseRecordsTable,
+  getDoseRecords,
+  upsertDoseRecord,
+  deleteDoseRecord,
+  getLegacyDoseLogs,
+  deleteLegacyDoseLogs,
 } from '../db/tenantQueries.js';
 
 const SCHEMA = 'usr_1_abc123';
@@ -146,144 +149,65 @@ describe('Settings queries', () => {
 // Taxonomies
 // =============================================================================
 describe('Taxonomy queries', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 1n, name: null, icon: null, color: '#333', sort_order: 3n,
+    payload_encrypted: Buffer.from('sealed'), payload_iv: Buffer.from('iv'), ...over,
+  });
+
   describe('createTaxonomy', () => {
-    it('creates a taxonomy with auto-incremented sort order', async () => {
+    it('stores only the encrypted payload and colour, with the next sort order', async () => {
       mockQueryRawUnsafe
-        .mockResolvedValueOnce([{ max_order: 2 }]) // MAX query
-        .mockResolvedValueOnce([{ id: 1n, name: 'Work', icon: 'briefcase', color: '#333', sort_order: 3n }]);
+        .mockResolvedValueOnce([{ max_order: 2 }])
+        .mockResolvedValueOnce([row()]);
 
-      const result = await createTaxonomy(SCHEMA, 'Work', { icon: 'briefcase', color: '#333' });
+      const result = await createTaxonomy(SCHEMA, { payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64'), color: '#333' });
 
-      expect(result.id).toBe(1);
-      expect(result.sort_order).toBe(3);
-      expect(result.name).toBe('Work');
-
-      // First call: MAX query
-      const maxSql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(maxSql).toContain('MAX(sort_order)');
-      expect(maxSql).toContain('usr_1_abc123.taxonomies');
-
-      // Second call: INSERT
-      const insertSql = mockQueryRawUnsafe.mock.calls[1][0] as string;
-      expect(insertSql).toContain('INSERT INTO usr_1_abc123.taxonomies');
-      expect(mockQueryRawUnsafe.mock.calls[1][1]).toBe('Work');
-      expect(mockQueryRawUnsafe.mock.calls[1][2]).toBe('briefcase');
-      expect(mockQueryRawUnsafe.mock.calls[1][3]).toBe('#333');
-      expect(mockQueryRawUnsafe.mock.calls[1][4]).toBe(3); // max_order (2) + 1
+      const [sql, color, order, payload] = mockQueryRawUnsafe.mock.calls[1];
+      expect(sql).toContain('INSERT INTO usr_1_abc123.taxonomies (color, sort_order, payload_encrypted, payload_iv)');
+      expect([color, order]).toEqual(['#333', 3]);
+      expect(Buffer.isBuffer(payload)).toBe(true);
+      expect(result).toEqual({ id: 1, name: null, icon: null, color: '#333', sort_order: 3, payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64') });
     });
 
     it('starts sort_order at 0 when no taxonomies exist', async () => {
-      mockQueryRawUnsafe
-        .mockResolvedValueOnce([{ max_order: null }])
-        .mockResolvedValueOnce([{ id: 1n, name: 'Test', icon: null, color: null, sort_order: 0n }]);
-
-      const result = await createTaxonomy(SCHEMA, 'Test');
-
-      expect(mockQueryRawUnsafe.mock.calls[1][4]).toBe(0);
-      expect(result.sort_order).toBe(0);
-    });
-
-    it('uses null for icon and color when not provided', async () => {
-      mockQueryRawUnsafe
-        .mockResolvedValueOnce([{ max_order: null }])
-        .mockResolvedValueOnce([{ id: 1n, name: 'Test', icon: null, color: null, sort_order: 0n }]);
-
-      await createTaxonomy(SCHEMA, 'Test');
-
-      expect(mockQueryRawUnsafe.mock.calls[1][2]).toBeNull();
-      expect(mockQueryRawUnsafe.mock.calls[1][3]).toBeNull();
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ max_order: null }]).mockResolvedValueOnce([row({ sort_order: 0n })]);
+      await createTaxonomy(SCHEMA, { payload: 'cA==', iv: 'aQ==' });
+      expect(mockQueryRawUnsafe.mock.calls[1][2]).toBe(0);
     });
   });
 
-  describe('getTaxonomy', () => {
-    it('returns taxonomy when found', async () => {
-      const tax = { id: 5, name: 'Work', icon: 'briefcase', color: '#333', sort_order: 0 };
-      mockQueryRawUnsafe.mockResolvedValue([tax]);
-
-      const result = await getTaxonomy(SCHEMA, 5);
-
-      expect(result).toEqual(tax);
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('usr_1_abc123.taxonomies');
-      expect(sql).toContain('WHERE id = $1');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(5);
+  describe('getTaxonomy / getAllTaxonomies', () => {
+    it('returns the payload as base64 and legacy plaintext as-is', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([row(), row({ id: 2n, name: 'Legacy', icon: 'book', payload_encrypted: null, payload_iv: null })]);
+      const all = await getAllTaxonomies(SCHEMA);
+      expect(all[0]).toMatchObject({ id: 1, name: null, payload: Buffer.from('sealed').toString('base64') });
+      expect(all[1]).toMatchObject({ id: 2, name: 'Legacy', icon: 'book', payload: null, iv: null });
     });
 
-    it('returns null when taxonomy not found', async () => {
+    it('returns null when a taxonomy is not found', async () => {
       mockQueryRawUnsafe.mockResolvedValue([]);
-      const result = await getTaxonomy(SCHEMA, 999);
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('getAllTaxonomies', () => {
-    it('returns all taxonomies with BigInt ids converted to numbers', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([
-        { id: 1n, name: 'A', icon: null, color: null, sort_order: 0n },
-        { id: 2n, name: 'B', icon: 'star', color: '#fff', sort_order: 1n },
-      ]);
-
-      const result = await getAllTaxonomies(SCHEMA);
-
-      expect(result).toHaveLength(2);
-      expect(result[0].id).toBe(1);
-      expect(result[0].sort_order).toBe(0);
-      expect(result[1].id).toBe(2);
-      expect(result[1].sort_order).toBe(1);
-
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('ORDER BY sort_order, name');
-    });
-
-    it('defaults sort_order to 0 when null', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([
-        { id: 1n, name: 'Test', icon: null, color: null, sort_order: null },
-      ]);
-
-      const result = await getAllTaxonomies(SCHEMA);
-      expect(result[0].sort_order).toBe(0);
+      expect(await getTaxonomy(SCHEMA, 999)).toBeNull();
     });
   });
 
   describe('updateTaxonomy', () => {
-    it('updates name only', async () => {
-      const updated = { id: 1, name: 'NewName', icon: null, color: null, sort_order: 0 };
-      mockQueryRawUnsafe.mockResolvedValue([updated]);
-
-      await updateTaxonomy(SCHEMA, 1, { name: 'NewName' });
-
+    it('writing the payload clears any legacy plaintext name and icon', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([row()]);
+      await updateTaxonomy(SCHEMA, 5, { payload: 'cA==', iv: 'aQ==' });
       const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('UPDATE usr_1_abc123.taxonomies SET name = $1');
-      expect(sql).toContain('WHERE id = $2');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('NewName');
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(1);
+      expect(sql).toContain('payload_encrypted = $1');
+      expect(sql).toContain('payload_iv = $2');
+      expect(sql).toContain('name = NULL');
+      expect(sql).toContain('icon = NULL');
+      expect(sql).toContain('WHERE id = $3');
     });
 
-    it('updates multiple fields with correct parameter indexing', async () => {
-      const updated = { id: 1, name: 'New', icon: 'star', color: '#fff', sort_order: 0 };
-      mockQueryRawUnsafe.mockResolvedValue([updated]);
-
-      await updateTaxonomy(SCHEMA, 1, { name: 'New', icon: 'star', color: '#fff' });
-
+    it('can change just the colour', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([row()]);
+      await updateTaxonomy(SCHEMA, 5, { color: '#abcdef' });
       const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('name = $1');
-      expect(sql).toContain('icon = $2');
-      expect(sql).toContain('color = $3');
-      expect(sql).toContain('WHERE id = $4');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('New');
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe('star');
-      expect(mockQueryRawUnsafe.mock.calls[0][3]).toBe('#fff');
-      expect(mockQueryRawUnsafe.mock.calls[0][4]).toBe(1);
-    });
-
-    it('updates icon only', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{ id: 1, name: 'X', icon: 'star', color: null, sort_order: 0 }]);
-
-      await updateTaxonomy(SCHEMA, 1, { icon: 'star' });
-
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('icon = $1');
-      expect(sql).toContain('WHERE id = $2');
+      expect(sql).toContain('SET color = $1');
+      expect(sql).not.toContain('name = NULL');
     });
   });
 
@@ -629,109 +553,42 @@ describe('Post-Taxonomy relationship queries', () => {
 // =============================================================================
 // Medication Dose Logs
 // =============================================================================
-describe('Dose Log queries', () => {
-  describe('ensureDoseLogsTable', () => {
-    it('creates table and indexes when table does not exist', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{ exists: false }]);
-      mockExecuteRawUnsafe.mockResolvedValue(0);
-
-      await ensureDoseLogsTable(SCHEMA);
-
-      // First call: check existence
-      expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('information_schema.tables');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('usr_1_abc123');
-
-      // Should create table + 3 indexes
-      expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(4);
-      const createSql = mockExecuteRawUnsafe.mock.calls[0][0] as string;
-      expect(createSql).toContain('CREATE TABLE usr_1_abc123.medication_dose_logs');
-
-      const idx1 = mockExecuteRawUnsafe.mock.calls[1][0] as string;
-      expect(idx1).toContain('idx_usr_1_abc123_dose_logs_date');
-
-      const idx2 = mockExecuteRawUnsafe.mock.calls[2][0] as string;
-      expect(idx2).toContain('idx_usr_1_abc123_dose_logs_med_date');
-
-      const idx3 = mockExecuteRawUnsafe.mock.calls[3][0] as string;
-      expect(idx3).toContain('idx_usr_1_abc123_dose_logs_unique');
-    });
-
-    it('skips table creation when it already exists but still ensures indexes', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{ exists: true }]);
-
-      await ensureDoseLogsTable(SCHEMA);
-
-      const statements = mockExecuteRawUnsafe.mock.calls.map(c => c[0] as string);
-      expect(statements.some(sql => sql.includes('CREATE TABLE'))).toBe(false);
-      expect(statements).toHaveLength(3);
-      expect(statements.every(sql => sql.includes('CREATE') && sql.includes('INDEX IF NOT EXISTS'))).toBe(true);
-    });
+describe('Dose record queries', () => {
+  it('creates the encrypted table with only the date readable', async () => {
+    mockExecuteRawUnsafe.mockResolvedValue(0);
+    await ensureDoseRecordsTable('usr_9_abcdef');
+    const ddl = mockExecuteRawUnsafe.mock.calls.map(c => c[0]).join('\n');
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS usr_9_abcdef.medication_dose_records');
+    expect(ddl).toContain('payload_encrypted BYTEA NOT NULL');
+    expect(ddl).not.toContain('medication_post_id');
+    expect(ddl).not.toContain('REFERENCES');
   });
 
-  describe('getDoseLogsByDate', () => {
-    it('returns dose logs for a given date with BigInt conversion', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([
-        { id: 1n, medicationPostId: 10n, scheduledTime: '08:00', takenAt: '08:05', date: '2024-01-15', status: 'taken', createdAt: new Date() },
-      ]);
-
-      const result = await getDoseLogsByDate(SCHEMA, '2024-01-15');
-
-      expect(result[0].id).toBe(1);
-      expect(result[0].medicationPostId).toBe(10);
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('usr_1_abc123.medication_dose_logs');
-      expect(sql).toContain('WHERE date = $1::date');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('2024-01-15');
-    });
-
-    it('returns empty array when no logs exist', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([]);
-      const result = await getDoseLogsByDate(SCHEMA, '2024-01-15');
-      expect(result).toEqual([]);
-    });
+  it('reads one day or everything', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([]);
+    await getDoseRecords(SCHEMA, '2026-04-03');
+    expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('WHERE date = $1::date');
+    expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('2026-04-03');
+    await getDoseRecords(SCHEMA);
+    expect(mockQueryRawUnsafe.mock.calls[1][0]).not.toContain('WHERE');
   });
 
-  describe('upsertDoseLog', () => {
-    it('inserts or updates a dose log with correct parameters', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 1n, medicationPostId: 10n, scheduledTime: '08:00',
-        takenAt: '08:05', date: '2024-01-15', status: 'taken', createdAt: new Date(),
-      }]);
+  it('upserts by id and deletes by id', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ id: 'a' }]);
+    await upsertDoseRecord(SCHEMA, 'a', '2026-04-03', Buffer.from('p'), Buffer.from('i'));
+    expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('ON CONFLICT (id) DO UPDATE');
+    mockExecuteRawUnsafe.mockResolvedValue(1);
+    expect(await deleteDoseRecord(SCHEMA, 'a')).toBe(true);
+  });
 
-      const result = await upsertDoseLog(SCHEMA, 10, '08:00', '2024-01-15', 'taken', '08:05');
-
-      expect(result.id).toBe(1);
-      expect(result.medicationPostId).toBe(10);
-
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('INSERT INTO usr_1_abc123.medication_dose_logs');
-      expect(sql).toContain('ON CONFLICT (medication_post_id, scheduled_time, date)');
-      expect(sql).toContain('DO UPDATE SET status = EXCLUDED.status');
-
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(10);
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe('08:00');
-      expect(mockQueryRawUnsafe.mock.calls[0][3]).toBe('2024-01-15');
-      expect(mockQueryRawUnsafe.mock.calls[0][4]).toBe('taken');
-      expect(mockQueryRawUnsafe.mock.calls[0][5]).toBe('08:05');
-    });
-
-    it('passes null takenAt for pending status', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 2n, medicationPostId: 10n, scheduledTime: '12:00',
-        takenAt: null, date: '2024-01-15', status: 'pending', createdAt: new Date(),
-      }]);
-
-      const result = await upsertDoseLog(SCHEMA, 10, '12:00', '2024-01-15', 'pending', null);
-
-      expect(result.id).toBe(2);
-      expect(mockQueryRawUnsafe.mock.calls[0][5]).toBeNull();
-    });
+  it('legacy reads and deletes are no-ops once the old table is gone', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ exists: false }]);
+    expect(await getLegacyDoseLogs(SCHEMA)).toEqual([]);
+    expect(await deleteLegacyDoseLogs(SCHEMA)).toBe(0);
+    expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
   });
 });
 
-// =============================================================================
-// Schema validation propagation
-// =============================================================================
 describe('Schema validation in tenant queries', () => {
   it('all query functions reject invalid schema names', async () => {
     const invalidSchema = 'DROP TABLE';
@@ -752,9 +609,9 @@ describe('Schema validation in tenant queries', () => {
     await expect(deletePost(invalidSchema, 1)).rejects.toThrow();
     await expect(getPostTaxonomies(invalidSchema, 1)).rejects.toThrow();
     await expect(setPostTaxonomies(invalidSchema, 1, [])).rejects.toThrow();
-    await expect(ensureDoseLogsTable(invalidSchema)).rejects.toThrow();
-    await expect(getDoseLogsByDate(invalidSchema, '2024-01-01')).rejects.toThrow();
-    await expect(upsertDoseLog(invalidSchema, 1, '08:00', '2024-01-01', 'pending', null)).rejects.toThrow();
+    await expect(ensureDoseRecordsTable(invalidSchema)).rejects.toThrow();
+    await expect(getDoseRecords(invalidSchema, '2024-01-01')).rejects.toThrow();
+    await expect(upsertDoseRecord(invalidSchema, 'a', '2024-01-01', Buffer.from('p'), Buffer.from('i'))).rejects.toThrow();
 
     // Prisma should never have been called with an invalid schema
     expect(mockQueryRawUnsafe).not.toHaveBeenCalled();

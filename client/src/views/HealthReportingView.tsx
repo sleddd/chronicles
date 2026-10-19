@@ -248,30 +248,19 @@ export function HealthReportingView() {
     const nameMap = new Map<number, string>();
     for (const e of medEntries) nameMap.set(e.id, stripHtml(e.content).slice(0, 120) || 'Unknown');
 
+    // One request for every dose record, filtered to the range here (each is decrypted in the browser)
     const fetchLogs = async () => {
-      const logs: DecryptedMedicationLog[] = [];
-      const start = new Date(startDate + 'T00:00:00');
-      const end = new Date(endDate + 'T23:59:59');
-      const day = new Date(start);
-
-      while (day <= end) {
-        const dateStr = day.toISOString().split('T')[0];
-        try {
-          const data = await dosesApi.getByDate(dateStr);
-          for (const log of data.logs) {
-            if (log.status === 'taken' && log.takenAt) {
-              logs.push({
-                id: log.id,
-                medicationPostId: log.medicationPostId,
-                medicationName: nameMap.get(log.medicationPostId) || 'Unknown',
-                takenAt: `${dateStr}T${log.scheduledTime.substring(0, 5)}:00`,
-              });
-            }
-          }
-        } catch { /* skip */ }
-        day.setDate(day.getDate() + 1);
-      }
-      setMedLogs(logs);
+      try {
+        const { logs: all } = await dosesApi.getAll();
+        setMedLogs(all
+          .filter(log => log.date >= startDate && log.date <= endDate && log.status === 'taken' && log.takenAt)
+          .map(log => ({
+            id: log.id,
+            medicationPostId: log.medicationPostId,
+            medicationName: nameMap.get(log.medicationPostId) || 'Unknown',
+            takenAt: `${log.date}T${log.scheduledTime.substring(0, 5)}:00`,
+          })));
+      } catch { setMedLogs([]); }
     };
 
     fetchLogs();

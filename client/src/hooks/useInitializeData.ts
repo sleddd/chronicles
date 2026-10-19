@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
-import { entries as entriesApi, topics as topicsApi, settings as settingsApi, retryDelayMs } from '../services/api.js';
+import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi, retryDelayMs } from '../services/api.js';
 import { loadImageStorageConfig } from '../services/imageStorage.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
@@ -54,6 +54,8 @@ export function useInitializeData() {
         const [rawEntries, topicsData, settingsData] = await Promise.all([
           entriesApi.getAll(), topicsApi.getAll(), settingsApi.getAll(),
         ]);
+        // The old plaintext dose log is re-saved encrypted, once per session
+        void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
 
         // Apply theme settings
         const settingsMap: Record<string, unknown> = {};

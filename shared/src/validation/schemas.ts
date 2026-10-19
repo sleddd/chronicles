@@ -174,18 +174,32 @@ export const putFinanceRecordSchema = z.object({
   iv: IV_FIELD,
 });
 
-// Taxonomy validation
+// Topics: the name and icon are encrypted in the browser ({ name, icon } as one
+// payload); only the colour stays readable. Plaintext names are refused.
 export const createTaxonomySchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  icon: z.string().max(64).optional(),
+  payload: z.string().min(1).max(20_000),
+  iv: IV_FIELD,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid hex color').optional(),
-});
+}).strict();
 
 export const updateTaxonomySchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  icon: z.string().max(64).optional(),
+  payload: z.string().min(1).max(20_000).optional(),
+  iv: IV_FIELD.optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-});
+}).strict().refine(d => (d.payload === undefined) === (d.iv === undefined), { message: 'payload and iv go together' });
+
+/** A request still sending a plaintext topic name or icon (an out-of-date app). */
+export function isPlaintextTopicWrite(body: unknown): boolean {
+  return !!body && typeof body === 'object' && ('name' in body || 'icon' in body);
+}
+
+// Encrypted dose records: { date } readable, everything else in the payload
+export const doseRecordIdSchema = z.string().uuid('Invalid dose id');
+export const putDoseRecordSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
+  payload: z.string().min(1).max(10_000),
+  iv: IV_FIELD,
+}).strict();
 
 // Entry images — client-side validation of the user's R2 credentials before
 // they are encrypted with the master key and stored as a setting. The server

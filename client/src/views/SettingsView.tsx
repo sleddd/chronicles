@@ -476,7 +476,7 @@ export function SettingsView() {
   const handleSeedTopics = async () => {
     setSeeding(true); setSeedResult('');
     try {
-      const freshTopics = await topicsApi.getAll(); // triggers auto-seed on server
+      const freshTopics = await topicsApi.getAll(); // seeds any missing default topics, encrypted
       setTopics(freshTopics as typeof allTopics);
       setSeedResult('Default topics created');
     } catch { setSeedResult('Failed'); }

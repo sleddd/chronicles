@@ -1,68 +1,21 @@
 import { Router } from 'express';
-import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies } from '../db/tenantQueries.js';
-import { createTaxonomySchema, updateTaxonomySchema } from '@chronicles/shared';
-import { prisma } from '../db/prisma.js';
+import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns } from '../db/tenantQueries.js';
+import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
-import { escapeSchema } from '../db/escapeSchema.js';
 
-/** JIT migration: add sort_order column if missing (for schemas created before this feature). */
-async function ensureSortOrderColumn(schemaName: string): Promise<void> {
-  const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.columns
-       WHERE table_schema = $1 AND table_name = 'taxonomies' AND column_name = 'sort_order'
-     ) as exists`,
-    s
-  );
-  if (!result[0]?.exists) {
-    await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN sort_order INTEGER DEFAULT 0`);
-  }
-}
+/* Topic names and icons are encrypted in the browser; the server stores the
+   payload and never sees them. Default topics are seeded by the browser,
+   encrypted. Legacy rows still carrying a plaintext name are encrypted by the
+   browser on its next unlock (a payload write clears name and icon). */
+
+const OUTDATED = { error: 'Update Chronicles to continue — topic names are now encrypted. Reload the page.' };
 
 const router = Router();
-
-const DEFAULT_TOPICS = [
-  { name: 'Task', icon: 'circle-check', color: '#3B82F6' },
-  { name: 'Goal', icon: 'bullseye', color: '#8B5CF6' },
-  { name: 'Milestone', icon: 'flag', color: '#6366F1' },
-  { name: 'Idea', icon: 'lightbulb', color: '#F59E0B' },
-  { name: 'Research', icon: 'magnifying-glass', color: '#10B981' },
-  { name: 'Event', icon: 'calendar', color: '#F59E0B' },
-  { name: 'Meeting', icon: 'users', color: '#EC4899' },
-  { name: 'Meals', icon: 'utensils', color: '#F97316' },
-  { name: 'Exercise', icon: 'dumbbell', color: '#EF4444' },
-  { name: 'Medication', icon: 'pills', color: '#14B8A6' },
-  { name: 'Symptom', icon: 'flask', color: '#EF4444' },
-  { name: 'Music', icon: 'music', color: '#EC4899' },
-  { name: 'Books', icon: 'book', color: '#8B5CF6' },
-  { name: 'TV/Movies', icon: 'film', color: '#F59E0B' },
-  { name: 'Quote', icon: 'quote-left', color: '#6366F1' },
-  { name: 'Allergy', icon: 'triangle-exclamation', color: '#F97316' },
-  { name: 'Shopping List', icon: 'cart-shopping', color: '#22C55E' },
-  { name: 'Recipe', icon: 'bowl-food', color: '#F97316' },
-  { name: 'Menu Plan', icon: 'calendar-week', color: '#8B5CF6' },
-];
-
-async function ensureDefaultTopics(schemaName: string): Promise<void> {
-  const existing = await getAllTaxonomies(schemaName);
-  // Singular/plural tolerant — a user-created "Recipes" topic counts as "Recipe"
-  const norm = (n: string) => n.toLowerCase().replace(/s$/, '');
-  const existingNames = new Set(existing.map(t => norm(t.name)));
-  const missing = DEFAULT_TOPICS.filter(t => !existingNames.has(norm(t.name)));
-
-  if (missing.length === 0) return;
-
-  for (const topic of missing) {
-    await createTaxonomy(schemaName, topic.name, { icon: topic.icon, color: topic.color });
-  }
-}
 
 // GET /api/topics
 router.get('/', async (req, res) => {
   try {
-    await ensureSortOrderColumn(req.auth!.tenantSchemaName);
-    await ensureDefaultTopics(req.auth!.tenantSchemaName);
+    await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
     const taxonomies = await getAllTaxonomies(req.auth!.tenantSchemaName);
     res.json(taxonomies);
   } catch (err) {
@@ -97,13 +50,14 @@ router.post('/reorder', async (req, res) => {
 // POST /api/topics
 router.post('/', async (req, res) => {
   try {
+    if (isPlaintextTopicWrite(req.body)) { res.status(409).json(OUTDATED); return; }
     const parsed = createTaxonomySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.errors[0].message });
       return;
     }
-    const { name, icon, color } = parsed.data;
-    const taxonomy = await createTaxonomy(req.auth!.tenantSchemaName, name, { icon, color });
+    await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
+    const taxonomy = await createTaxonomy(req.auth!.tenantSchemaName, parsed.data);
     res.status(201).json(taxonomy);
   } catch (err) {
     console.error('Create topic error:', err);
@@ -133,11 +87,13 @@ router.put('/:id', async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid topic ID' }); return; }
+    if (isPlaintextTopicWrite(req.body)) { res.status(409).json(OUTDATED); return; }
     const parsed = updateTaxonomySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.errors[0].message });
       return;
     }
+    await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
     const taxonomy = await updateTaxonomy(req.auth!.tenantSchemaName, id, parsed.data);
     res.json(taxonomy);
   } catch (err) {

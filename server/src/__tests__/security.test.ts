@@ -292,17 +292,15 @@ describe('Database SSL enforcement', () => {
 // 11. Index names use validated schema names
 // ============================================================================
 describe('Index name escaping in tenantQueries', () => {
-  it('dose logs index names use escaped schema name prefix', async () => {
+  it('dose record table and index names use the escaped schema name', async () => {
     const fs = await import('fs');
     const content = fs.readFileSync(
       new URL('../db/tenantQueries.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    // Should use a validated prefix variable, not raw interpolation
-    expect(content).toContain('const idxPrefix = `idx_${s}`');
-    expect(content).toContain('${idxPrefix}_dose_logs_date');
-    expect(content).toContain('${idxPrefix}_dose_logs_med_date');
-    expect(content).toContain('${idxPrefix}_dose_logs_unique');
+    expect(content).toContain('idx_${s}_dose_records_date');
+    // ensureDoseRecordsTable escapes before building any statement
+    expect(content).toMatch(/export async function ensureDoseRecordsTable[\s\S]{0,120}const s = escapeSchema\(schemaName\)/);
   });
 });
 
@@ -310,32 +308,36 @@ describe('Index name escaping in tenantQueries', () => {
 // 12. Topics route uses escapeSchema (not inline regex)
 // ============================================================================
 describe('Topics route uses escapeSchema', () => {
-  it('ensureSortOrderColumn uses escapeSchema import', async () => {
+  it('topic schema changes escape the schema name, and the route builds no SQL', async () => {
     const fs = await import('fs');
-    const content = fs.readFileSync(
+    const route = fs.readFileSync(
       new URL('../routes/topics.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    expect(content).toContain("import { escapeSchema } from '../db/escapeSchema.js'");
-    expect(content).toContain('const s = escapeSchema(schemaName)');
-    // Should NOT have inline regex escaping
-    expect(content).not.toContain("schemaName.replace(/[^a-z0-9_]/gi, '')");
+    expect(route).not.toMatch(/\$(execute|query)Raw/);
+    const queries = fs.readFileSync(
+      new URL('../db/tenantQueries.ts', import.meta.url).pathname.replace('/__tests__', ''),
+      'utf8'
+    );
+    expect(queries).toMatch(/export async function ensureTopicEncryptionColumns[\s\S]{0,120}const s = escapeSchema\(schemaName\)/);
+    expect(queries).not.toContain("schemaName.replace(/[^a-z0-9_]/gi, '')");
   });
 });
 
 // ============================================================================
 // 13. Dose route validates medication post ownership
 // ============================================================================
-describe('Dose route post ownership validation', () => {
-  it('POST /doses validates medicationPostId belongs to tenant', async () => {
+describe('Dose route takes only encrypted records', () => {
+  it('the doses route takes no plaintext dose fields and refuses the old plaintext write', async () => {
     const fs = await import('fs');
     const content = fs.readFileSync(
       new URL('../routes/doses.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    expect(content).toMatch(/import \{[^}]*\bgetPost\b[^}]*\} from '\.\.\/db\/tenantQueries\.js'/);
-    expect(content).toContain('getPost(req.auth!.tenantSchemaName, medicationPostId)');
-    expect(content).toContain("'Medication post not found'");
+    // Only the encrypted record shape is parsed (date + payload + iv)
+    expect(content).toContain('putDoseRecordSchema.safeParse(req.body)');
+    expect(content).not.toMatch(/medicationPostId|scheduledTime|takenAt/);
+    expect(content).toMatch(/router\.post\('\/', \(_req, res\) => \{\s*res\.status\(409\)/);
   });
 });
 
