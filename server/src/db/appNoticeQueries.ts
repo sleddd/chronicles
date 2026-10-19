@@ -1,4 +1,5 @@
 import { prisma } from './prisma.js';
+import { safeLink } from '../utils/safeLink.js';
 
 /* One app-wide notice the server can switch on (e.g. a security incident
    notice, which must accompany emailed breach notices). Set with
@@ -23,10 +24,11 @@ export async function getActiveNotice(): Promise<AppNotice | null> {
     SELECT message, link_url, updated_at FROM public.app_notice WHERE id = 1 AND active
   `;
   const r = rows[0];
-  return r ? { message: r.message, linkUrl: r.link_url, updatedAt: r.updated_at.toISOString() } : null;
+  return r ? { message: r.message, linkUrl: safeLink(r.link_url), updatedAt: r.updated_at.toISOString() } : null;
 }
 
 export async function setNotice(message: string, linkUrl: string | null): Promise<void> {
+  if (linkUrl !== null && safeLink(linkUrl) === null) throw new Error('The notice link must be an https:// URL');
   await prisma.$executeRaw`
     INSERT INTO public.app_notice (id, message, link_url, active, updated_at) VALUES (1, ${message}, ${linkUrl}, TRUE, NOW())
     ON CONFLICT (id) DO UPDATE SET message = ${message}, link_url = ${linkUrl}, active = TRUE, updated_at = NOW()

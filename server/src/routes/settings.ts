@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { getAllSettings, upsertSetting } from '../db/tenantQueries.js';
-import { upsertSettingSchema } from '@chronicles/shared';
+import { getAllSettings, upsertSetting, countSettings, settingExists } from '../db/tenantQueries.js';
+import { upsertSettingSchema, SEALED_SETTING_KEYS, isBoundSealedValue } from '@chronicles/shared';
+
+const SEALED = new Set(SEALED_SETTING_KEYS);
 
 const router = Router();
 
@@ -28,12 +30,18 @@ router.put('/', async (req, res) => {
       return;
     }
     const { key, value } = parsed.data;
-    const existing = await getAllSettings(req.auth!.tenantSchemaName);
-    if (existing.length >= MAX_SETTING_KEYS && !existing.some(st => st.key === key)) {
+    // Private settings are only ever stored sealed and bound to their key; an
+    // old client writing one readable is told to update instead
+    if (SEALED.has(key) && !isBoundSealedValue(value)) {
+      res.status(409).json({ error: 'Update Chronicles to save this setting' });
+      return;
+    }
+    const schema = req.auth!.tenantSchemaName;
+    if (!(await settingExists(schema, key)) && (await countSettings(schema)) >= MAX_SETTING_KEYS) {
       res.status(400).json({ error: 'Too many settings' });
       return;
     }
-    const setting = await upsertSetting(req.auth!.tenantSchemaName, key, value);
+    const setting = await upsertSetting(schema, key, value);
     res.json(setting);
   } catch (err) {
     console.error('Update setting error:', err);

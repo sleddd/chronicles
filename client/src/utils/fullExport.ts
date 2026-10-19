@@ -1,4 +1,4 @@
-import { isSealed, openValue, type SealedValue } from '../services/privateSettings.js';
+import { isSealed, openForExport, SEAL_MARKER_KEY } from '../services/privateSettings.js';
 
 /* Settings → Data → Export All: everything the account holds, decrypted here in
    the browser, as one JSON file — entries, topics, the medication dose log,
@@ -20,7 +20,7 @@ export function redactSecrets(value: unknown): unknown {
     .map(([k, v]) => [k, redactSecrets(v)]));
 }
 
-type DecryptBytes = (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+type DecryptBytes = (ciphertext: ArrayBuffer, iv: string, aad?: string) => Promise<ArrayBuffer>;
 
 /** Every setting, sealed ones opened; a value that won't open is noted, not dropped silently. */
 export async function openAllSettings(
@@ -30,8 +30,9 @@ export async function openAllSettings(
   const settings: Record<string, unknown> = {};
   const unreadable: string[] = [];
   for (const { key, value } of rows) {
+    if (key === SEAL_MARKER_KEY) continue;
     if (isSealed(value)) {
-      try { settings[key] = redactSecrets(await openValue(value as SealedValue, decryptBytes)); }
+      try { settings[key] = redactSecrets(await openForExport(key, value, decryptBytes)); }
       catch { unreadable.push(key); }
     } else {
       settings[key] = redactSecrets(value);

@@ -6,6 +6,7 @@ import { entries as entriesApi } from '../services/api.js';
 import type { useEntriesStore } from '../stores/entriesStore.js';
 
 type EncryptPost = (content: string, metadata: Record<string, unknown>) => Promise<{
+  id: number;
   contentEncrypted: string;
   contentIv: string;
   metadataEncrypted: string;
@@ -45,6 +46,7 @@ async function createEntry(
 
   const encrypted = await encryptPost(`<p>${content}</p>`, metadata);
   const result = await entriesApi.create({
+    id: encrypted.id,
     contentEncrypted: encrypted.contentEncrypted,
     contentIv: encrypted.contentIv,
     metadataEncrypted: encrypted.metadataEncrypted,

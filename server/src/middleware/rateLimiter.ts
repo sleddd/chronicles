@@ -22,7 +22,10 @@ export const strictLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => `${ipKeyGenerator(req.ip || 'unknown')}:${req.method} ${req.baseUrl}${req.path}`,
+  // Keyed by the matched route, not the raw path: Express matches routes
+  // case-insensitively and ignores a trailing slash, so /Change-Password/
+  // must share /change-password's bucket
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip || 'unknown')}:${req.method} ${(req.baseUrl + (req.route?.path ?? req.path)).toLowerCase().replace(/\/+$/, '')}`,
   message: { error: 'Too many requests, please try again later' },
 });
 

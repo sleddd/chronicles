@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { createPost, getPost, getAllPosts, updatePost, deletePost } from '../db/tenantQueries.js';
-import { createPostSchema, updatePostSchema } from '@chronicles/shared';
+import { createPost, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts } from '../db/tenantQueries.js';
+import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
+import { createPostSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
 
@@ -36,7 +37,56 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/entries — Create entry
+// POST /api/entries/ids — Reserve ids for new entries (each entry's ciphertext
+// is bound to its id, so the client needs the id before encrypting)
+router.post('/ids', async (req, res) => {
+  try {
+    const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    res.json({ ids: await reservePostIds(req.auth!.tenantSchemaName, parsed.data.count) });
+  } catch (err) {
+    console.error('Reserve entry ids error:', err);
+    res.status(500).json({ error: 'Failed to reserve entry ids' });
+  }
+});
+
+// PUT /api/entries/reseal — Re-save older entries in the id-bound format
+// (content unchanged, so updated_at stays)
+router.put('/reseal', async (req, res) => {
+  try {
+    const parsed = resealPostsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    const entries = parsed.data.entries.map(e => ({
+      id: e.id,
+      updatedAt: new Date(e.updatedAt),
+      contentEncrypted: Buffer.from(e.contentEncrypted, 'base64'),
+      contentIv: Buffer.from(e.contentIv, 'base64'),
+      metadataEncrypted: Buffer.from(e.metadataEncrypted, 'base64'),
+      metadataIv: Buffer.from(e.metadataIv, 'base64'),
+    }));
+    if (new Set(entries.map(e => e.id)).size !== entries.length) {
+      res.status(400).json({ error: 'Each entry once' });
+      return;
+    }
+    const size = entries.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length, 0);
+    if (await postStorageBytes(req.auth!.tenantSchemaName, entries.map(e => e.id)) + size > ENTRY_STORAGE_LIMIT_BYTES) {
+      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+      return;
+    }
+    res.json({ resealed: await resealPosts(req.auth!.tenantSchemaName, entries) });
+  } catch (err) {
+    console.error('Reseal entries error:', err);
+    res.status(500).json({ error: 'Failed to re-save entries' });
+  }
+});
+
+// POST /api/entries — Create entry (under a reserved id)
 router.post('/', async (req, res) => {
   try {
     const parsed = createPostSchema.safeParse(req.body);
@@ -46,20 +96,27 @@ router.post('/', async (req, res) => {
     }
 
     // The schema only admits encrypted posts — the server never stores plaintext
-    const { taxonomyIds: _ignored, createdAt, ...postData } = parsed.data;
-    const input: Record<string, unknown> = {
-      isEncrypted: true,
+    const { taxonomyIds: _ignored, createdAt, id, format: _v3, ...postData } = parsed.data;
+    const input = {
+      id,
       contentEncrypted: Buffer.from(postData.contentEncrypted, 'base64'),
       contentIv: Buffer.from(postData.contentIv, 'base64'),
       metadataEncrypted: Buffer.from(postData.metadataEncrypted, 'base64'),
       metadataIv: Buffer.from(postData.metadataIv, 'base64'),
+      ...(createdAt && { createdAt: new Date(createdAt) }),
     };
 
-    if (createdAt) {
-      input.createdAt = new Date(createdAt);
+    const size = input.contentEncrypted.length + input.metadataEncrypted.length;
+    if (await postStorageBytes(req.auth!.tenantSchemaName) + size > ENTRY_STORAGE_LIMIT_BYTES) {
+      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+      return;
     }
 
-    const post = await createPost(req.auth!.tenantSchemaName, input as Parameters<typeof createPost>[1]);
+    const post = await createPost(req.auth!.tenantSchemaName, input);
+    if (!post) {
+      res.status(409).json({ error: 'That entry id was not reserved or is taken' });
+      return;
+    }
 
     res.status(201).json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
@@ -97,15 +154,27 @@ router.put('/:id', async (req, res) => {
       return;
     }
 
-    const { taxonomyIds: _ignored, ...updates } = parsed.data;
-    const input: Record<string, unknown> = {};
+    const { taxonomyIds: _ignored, format: _v3, ...updates } = parsed.data;
+    const input: Partial<Record<'contentEncrypted' | 'contentIv' | 'metadataEncrypted' | 'metadataIv', Buffer>> = {};
 
     if (updates.contentEncrypted !== undefined) input.contentEncrypted = Buffer.from(updates.contentEncrypted, 'base64');
     if (updates.contentIv !== undefined) input.contentIv = Buffer.from(updates.contentIv, 'base64');
     if (updates.metadataEncrypted !== undefined) input.metadataEncrypted = Buffer.from(updates.metadataEncrypted, 'base64');
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
-    const post = await updatePost(req.auth!.tenantSchemaName, id, input as Parameters<typeof updatePost>[2]);
+    if (input.contentEncrypted && input.metadataEncrypted) {
+      const size = input.contentEncrypted.length + input.metadataEncrypted.length;
+      if (await postStorageBytes(req.auth!.tenantSchemaName, id) + size > ENTRY_STORAGE_LIMIT_BYTES) {
+        res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+        return;
+      }
+    }
+
+    const post = await updatePost(req.auth!.tenantSchemaName, id, input);
+    if (!post) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {

@@ -30,17 +30,24 @@ describe('toNonExtractable — key material cleanup', () => {
     ).rejects.toThrow();
   });
 
-  it('uses multi-pass zeroing in source code', async () => {
+  it('never exports the raw key into JavaScript (wraps it through a throwaway key instead)', async () => {
     const fs = await import('fs');
     const content = fs.readFileSync(
       new URL('../crypto/primitives.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    // Should zero, randomize, then zero again
-    expect(content).toContain('rawArray.fill(0)');
-    expect(content).toContain('crypto.getRandomValues(rawArray)');
-    // Should be in a finally block
-    expect(content).toContain('finally');
+    const fn = content.slice(content.indexOf('export async function toNonExtractable'), content.indexOf('Encrypt plaintext with AES-GCM'));
+    expect(fn).not.toContain('exportKey');
+    expect(fn).toContain('wrapKey');
+  });
+
+  it('gives a non-extractable key that still decrypts what the original encrypted', async () => {
+    const { generateMasterKey, toNonExtractable, encrypt, decrypt } = await import('../crypto/primitives.js');
+    const key = await generateMasterKey();
+    const ne = await toNonExtractable(key);
+    expect(ne.extractable).toBe(false);
+    const { ciphertext, iv } = await encrypt(key, 'same key');
+    expect(await decrypt(ne, ciphertext, iv)).toBe('same key');
   });
 });
 
@@ -121,7 +128,7 @@ describe('setupEncryption — key lifecycle', () => {
     const { encryptionService } = await import('../crypto/encryptionService.js');
     const result = await encryptionService.setupEncryption('TestPassword123!');
 
-    const encrypted = await encryptionService.encryptPost(result.masterKey, 'Hello', { test: true });
+    const encrypted = await encryptionService.encryptPost(result.masterKey, 1, 'Hello', { test: true });
     expect(encrypted.contentEncrypted).toBeTruthy();
     expect(encrypted.contentIv).toBeTruthy();
   });
@@ -160,7 +167,7 @@ describe('AES-GCM IV generation', () => {
 
     const results = await Promise.all(
       Array.from({ length: 50 }, () =>
-        encryptionService.encryptPost(setup.masterKey, 'test', {})
+        encryptionService.encryptPost(setup.masterKey, 1, 'test', {})
       )
     );
 
@@ -230,7 +237,7 @@ describe('Encrypt/Decrypt round-trip', () => {
     const content = '<p>Hello <strong>World</strong></p>';
     const metadata = { title: 'Test Entry', tags: ['audit', 'security'] };
 
-    const encrypted = await encryptionService.encryptPost(setup.masterKey, content, metadata);
+    const encrypted = await encryptionService.encryptPost(setup.masterKey, 1, content, metadata);
     const decrypted = await encryptionService.decryptPost(setup.masterKey, {
       id: 1,
       content: null,
@@ -254,7 +261,7 @@ describe('Encrypt/Decrypt round-trip', () => {
     const setup1 = await encryptionService.setupEncryption('Password1_abc!');
     const setup2 = await encryptionService.setupEncryption('Password2_def!');
 
-    const encrypted = await encryptionService.encryptPost(setup1.masterKey, 'secret', {});
+    const encrypted = await encryptionService.encryptPost(setup1.masterKey, 1, 'secret', {});
 
     await expect(
       encryptionService.decryptPost(setup2.masterKey, {
@@ -296,7 +303,7 @@ describe('Validation schema security', () => {
       username: 'testuser',
       authSecret: 'a'.repeat(64),
       encryptedMasterKey: 'abc',
-      kekSalt: 'abc',
+      kekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
       kekWrapIv: 'abc',
       recoveryWrappedMK: 'abc',
       recoveryWrapIv: 'abc',
@@ -315,7 +322,7 @@ describe('Validation schema security', () => {
       username: 'testuser',
       authSecret: 'a'.repeat(64),
       encryptedMasterKey: 'abc',
-      kekSalt: 'abc',
+      kekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
       kekWrapIv: 'abc',
       recoveryWrappedMK: 'abc',
       recoveryWrapIv: 'abc',

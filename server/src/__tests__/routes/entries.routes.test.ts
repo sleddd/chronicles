@@ -12,6 +12,9 @@ vi.mock('../../db/tenantQueries.js', () => ({
   setPostTaxonomies: vi.fn(),
   getPostTaxonomies: vi.fn(),
   getAllTaxonomies: vi.fn(),
+  postStorageBytes: vi.fn().mockResolvedValue(0),
+  reservePostIds: vi.fn(),
+  resealPosts: vi.fn(),
 }));
 
 vi.mock('../../db/shareQueries.js', () => ({ deleteSharesForEntry: vi.fn().mockResolvedValue(0) }));
@@ -28,7 +31,8 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getAllPosts, getPost, createPost, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies } from '../../db/tenantQueries.js';
+import { getAllPosts, getPost, createPost, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts } from '../../db/tenantQueries.js';
+import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
 const app = createTestApp('/api/entries', entriesRouter);
@@ -99,12 +103,55 @@ describe('Entry Routes', () => {
   // =========================================================================
   describe('POST /api/entries', () => {
     const ENCRYPTED_BODY = {
+      id: 2,
+      format: 3,
       isEncrypted: true,
       contentEncrypted: Buffer.from('encrypted').toString('base64'),
       contentIv: Buffer.from('iv12345678ab').toString('base64'),
       metadataEncrypted: Buffer.from('metaenc').toString('base64'),
       metadataIv: Buffer.from('metaiv123456').toString('base64'),
     };
+
+    it('refuses an entry once the account is at its storage cap', async () => {
+      (postStorageBytes as any).mockResolvedValueOnce(ENTRY_STORAGE_LIMIT_BYTES - 4);
+      const res = await request(app).post('/api/entries').send(ENCRYPTED_BODY);
+      expect(res.status).toBe(413);
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    it('counts an update without the old copy of the same entry, and 404s a missing one', async () => {
+      (updatePost as any).mockResolvedValueOnce(undefined);
+      const res = await request(app).put('/api/entries/7').send({
+        format: 3,
+        contentEncrypted: Buffer.from('encrypted').toString('base64'),
+        contentIv: Buffer.from('iv12345678ab').toString('base64'),
+        metadataEncrypted: Buffer.from('metaenc').toString('base64'),
+        metadataIv: Buffer.from('metaiv123456').toString('base64'),
+      });
+      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7);
+      expect(res.status).toBe(404);
+    });
+
+    it('reserves ids for new entries', async () => {
+      (reservePostIds as any).mockResolvedValue([10, 11]);
+      const res = await request(app).post('/api/entries/ids').send({ count: 2 });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ids: [10, 11] });
+      expect((await request(app).post('/api/entries/ids').send({ count: 500 })).status).toBe(400);
+    });
+
+    it('re-seals older entries in batches, each once, within the storage cap', async () => {
+      (resealPosts as any).mockResolvedValue(2);
+      const row = (id: number) => ({ id, format: 3, updatedAt: '2026-10-01T10:00:00.123Z', contentEncrypted: 'YQ==', contentIv: 'Yg==', metadataEncrypted: 'Yw==', metadataIv: 'ZA==' });
+      const ok = await request(app).put('/api/entries/reseal').send({ entries: [row(1), row(2)] });
+      expect(ok.status).toBe(200);
+      expect(ok.body).toEqual({ resealed: 2 });
+      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, [1, 2]);
+      expect((await request(app).put('/api/entries/reseal').send({ entries: [row(1), row(1)] })).status).toBe(400);
+      expect((await request(app).put('/api/entries/reseal').send({ entries: Array.from({ length: 101 }, (_, i) => row(i + 1)) })).status).toBe(400);
+      (postStorageBytes as any).mockResolvedValueOnce(ENTRY_STORAGE_LIMIT_BYTES);
+      expect((await request(app).put('/api/entries/reseal').send({ entries: [row(3)] })).status).toBe(413);
+    });
 
     it('creates an encrypted entry', async () => {
       const newPost = { ...mockPost, id: 2 };
@@ -113,18 +160,36 @@ describe('Entry Routes', () => {
 
       const res = await request(app)
         .post('/api/entries')
-        .send({
-          isEncrypted: true,
-          contentEncrypted: Buffer.from('encrypted').toString('base64'),
-          contentIv: Buffer.from('iv12345678ab').toString('base64'),
-          metadataEncrypted: Buffer.from('metaenc').toString('base64'),
-          metadataIv: Buffer.from('metaiv123456').toString('base64'),
-        });
+        .send(ENCRYPTED_BODY);
 
       expect(res.status).toBe(201);
-      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({
-        isEncrypted: true,
-      }));
+      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ id: 2 }));
+    });
+
+    it('needs the reserved id the entry was encrypted for', async () => {
+      const { id: _id, ...noId } = ENCRYPTED_BODY;
+      expect((await request(app).post('/api/entries').send(noId)).status).toBe(400);
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    it('refuses an older client (no format 3) instead of saving an entry that would stop opening', async () => {
+      const { format: _f, ...old } = ENCRYPTED_BODY;
+      const res = await request(app).post('/api/entries').send(old);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Update Chronicles to save entries');
+      const upd = await request(app).put('/api/entries/2').send({ contentEncrypted: 'YQ==', contentIv: 'Yg==', metadataEncrypted: 'Yw==', metadataIv: 'ZA==' });
+      expect(upd.status).toBe(400);
+    });
+
+    it('answers 409 for an id that was never reserved or is taken', async () => {
+      (createPost as any).mockResolvedValue(null);
+      const res = await request(app).post('/api/entries').send(ENCRYPTED_BODY);
+      expect(res.status).toBe(409);
+    });
+
+    it('rejects a createdAt that is not a date', async () => {
+      const res = await request(app).post('/api/entries').send({ ...ENCRYPTED_BODY, createdAt: 'yesterday' });
+      expect(res.status).toBe(400);
     });
 
     it('rejects a plaintext entry', async () => {

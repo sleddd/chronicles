@@ -15,7 +15,6 @@ import {
   importRawKey,
   wrapKey,
   unwrapKey,
-  unwrapKeyDetailed,
   toNonExtractable,
   encrypt,
   decrypt,
@@ -89,19 +88,6 @@ class EncryptionService {
     return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
   }
 
-  /** unwrapMasterKey, also saying whether the stored wrap is the old no-AAD format (re-wrap it then). */
-  async unwrapMasterKeyDetailed(
-    password: string,
-    saltBase64: string,
-    wrappedMKBase64: string,
-    wrapIvBase64: string,
-    iterations: number
-  ): Promise<{ masterKey: CryptoKey; legacyWrap: boolean }> {
-    const kek = await deriveKEK(password, base64ToUint8Array(saltBase64), iterations);
-    const r = await unwrapKeyDetailed(base64ToUint8Array(wrappedMKBase64).buffer as ArrayBuffer, kek, base64ToUint8Array(wrapIvBase64), false, 'kek-wrap');
-    return { masterKey: r.key, legacyWrap: r.legacy };
-  }
-
   /**
    * Password unlock that also produces a "remember me" blob: the master key
    * wrapped (AES-GCM, purpose AAD 'device-wrap') under a key imported from a
@@ -116,12 +102,12 @@ class EncryptionService {
     wrapIvBase64: string,
     iterations: number,
     deviceSecret: Uint8Array
-  ): Promise<{ masterKey: CryptoKey; deviceWrapped: string; deviceIv: string; legacyWrap: boolean }> {
+  ): Promise<{ masterKey: CryptoKey; deviceWrapped: string; deviceIv: string }> {
     const salt = base64ToUint8Array(saltBase64);
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
     const kek = await deriveKEK(password, salt, iterations);
-    const { key: masterKey, legacy: legacyWrap } = await unwrapKeyDetailed(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
+    const masterKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
     const extractable = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
     const deviceKey = await importDeviceWrapKey(deviceSecret);
     const deviceIv = generateIv();
@@ -130,7 +116,6 @@ class EncryptionService {
       masterKey,
       deviceWrapped: uint8ArrayToBase64(new Uint8Array(deviceWrapped)),
       deviceIv: uint8ArrayToBase64(deviceIv),
-      legacyWrap,
     };
   }
 
@@ -251,23 +236,27 @@ class EncryptionService {
   }
 
   /**
-   * Encrypt post content and metadata as a bound pair: each half's AAD names
-   * the other half's IV, so a server can't splice one entry's content onto
-   * another entry's metadata (or swap the two fields) without decryption
-   * failing. Content and metadata must therefore always be saved together.
+   * Encrypt post content and metadata as a bound pair, bound to the entry's
+   * id: each half's AAD names the entry id and the other half's IV, so a
+   * server can't splice one entry's content onto another entry's metadata,
+   * swap the two fields, or serve one entry's ciphertext as another entry,
+   * without decryption failing. Content and metadata are always saved together.
+   * A new entry reserves its id first (POST /api/entries/ids).
    */
   async encryptPost(
     masterKey: CryptoKey,
+    id: number,
     content: string,
     metadata: Record<string, unknown>
   ): Promise<EncryptedPostData> {
+    if (!Number.isInteger(id) || id < 1) throw new Error('Entry id required to encrypt');
     const contentIv = generateIv();
     const metadataIv = generateIv();
     const contentIvB64 = uint8ArrayToBase64(contentIv);
     const metadataIvB64 = uint8ArrayToBase64(metadataIv);
     const [contentResult, metadataResult] = await Promise.all([
-      encrypt(masterKey, content, { iv: contentIv, aad: postAad('content', metadataIvB64) }),
-      encrypt(masterKey, JSON.stringify(metadata), { iv: metadataIv, aad: postAad('metadata', contentIvB64) }),
+      encrypt(masterKey, content, { iv: contentIv, aad: postAad('content', id, metadataIvB64) }),
+      encrypt(masterKey, JSON.stringify(metadata), { iv: metadataIv, aad: postAad('metadata', id, contentIvB64) }),
     ]);
 
     return {
@@ -282,10 +271,17 @@ class EncryptionService {
    * Decrypt a single post. Plaintext posts are refused: every entry is
    * encrypted client-side, so a plaintext one can only have been planted by
    * whoever controls the server or database.
+   *
+   * Entries are bound to their id (v3). `allowOlder` also opens the formats
+   * from before — v2 (pair-bound, no id) and the no-AAD pair — and marks them
+   * `needsReseal`; the client allows that only until every entry of the account
+   * has been re-sealed (the `entriesSealV3` marker), so an old ciphertext the
+   * server kept can't be replayed afterwards.
    */
   async decryptPost(
     masterKey: CryptoKey,
-    post: EncryptedPost
+    post: EncryptedPost,
+    options: { allowOlder?: boolean } = {}
   ): Promise<DecryptedPost> {
     if (!post.isEncrypted) {
       throw new Error('Refusing unencrypted post');
@@ -298,18 +294,28 @@ class EncryptionService {
 
     let content: string;
     let metadataStr: string;
+    let needsReseal = false;
     try {
       [content, metadataStr] = await Promise.all([
-        decrypt(masterKey, contentEncrypted, contentIv, postAad('content', metadataIv)),
-        decrypt(masterKey, metadataEncrypted, metadataIv, postAad('metadata', contentIv)),
+        decrypt(masterKey, contentEncrypted, contentIv, postAad('content', post.id, metadataIv)),
+        decrypt(masterKey, metadataEncrypted, metadataIv, postAad('metadata', post.id, contentIv)),
       ]);
-    } catch {
-      // Entries saved before AAD binding: both halves must be legacy — a bound
-      // half never decrypts without its AAD, so this can't be used to unpair one
-      [content, metadataStr] = await Promise.all([
-        decrypt(masterKey, contentEncrypted, contentIv),
-        decrypt(masterKey, metadataEncrypted, metadataIv),
-      ]);
+    } catch (err) {
+      if (!options.allowOlder) throw err;
+      needsReseal = true;
+      try {
+        [content, metadataStr] = await Promise.all([
+          decrypt(masterKey, contentEncrypted, contentIv, postAadV2('content', metadataIv)),
+          decrypt(masterKey, metadataEncrypted, metadataIv, postAadV2('metadata', contentIv)),
+        ]);
+      } catch {
+        // Entries saved before AAD binding: both halves must be legacy — a bound
+        // half never decrypts without its AAD, so this can't be used to unpair one
+        [content, metadataStr] = await Promise.all([
+          decrypt(masterKey, contentEncrypted, contentIv),
+          decrypt(masterKey, metadataEncrypted, metadataIv),
+        ]);
+      }
     }
 
     let metadata: Record<string, unknown>;
@@ -332,6 +338,7 @@ class EncryptionService {
       isEncrypted: true,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
+      ...(needsReseal && { needsReseal: true }),
     };
   }
 
@@ -340,9 +347,10 @@ class EncryptionService {
    */
   async encryptFile(
     masterKey: CryptoKey,
-    data: ArrayBuffer
+    data: ArrayBuffer,
+    aad?: string
   ): Promise<{ ciphertext: ArrayBuffer; iv: string }> {
-    return encryptBytes(masterKey, data);
+    return encryptBytes(masterKey, data, aad);
   }
 
   /**
@@ -351,9 +359,10 @@ class EncryptionService {
   async decryptFile(
     masterKey: CryptoKey,
     ciphertext: ArrayBuffer,
-    ivBase64: string
+    ivBase64: string,
+    aad?: string
   ): Promise<ArrayBuffer> {
-    return decryptBytes(masterKey, ciphertext, ivBase64);
+    return decryptBytes(masterKey, ciphertext, ivBase64, aad);
   }
 
   /**
@@ -387,14 +396,20 @@ class EncryptionService {
    */
   async decryptPosts(
     masterKey: CryptoKey,
-    posts: EncryptedPost[]
+    posts: EncryptedPost[],
+    options: { allowOlder?: boolean } = {}
   ): Promise<DecryptedPost[]> {
-    return Promise.all(posts.map((post) => this.decryptPost(masterKey, post)));
+    return Promise.all(posts.map((post) => this.decryptPost(masterKey, post, options)));
   }
 }
 
-/** AAD for one half of an encrypted post, naming the other half's IV. */
-function postAad(part: 'content' | 'metadata', otherIv: string): string {
+/** AAD for one half of an encrypted post: the entry's id and the other half's IV. */
+function postAad(part: 'content' | 'metadata', id: number, otherIv: string): string {
+  return `chronicles:post:v3:${part}:${id}:${otherIv}`;
+}
+
+/** The v2 AAD (pair-bound, not id-bound) — read only until an account is re-sealed. */
+function postAadV2(part: 'content' | 'metadata', otherIv: string): string {
   return `chronicles:post:v2:${part}:${otherIv}`;
 }
 

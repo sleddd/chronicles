@@ -14,7 +14,7 @@ import { TopicIcon } from '../components/molecules/IconPicker.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { topics as topicsApi } from '../services/api.js';
 import { usePrivateSettings } from '../services/privateSettings.js';
 import type { Topic } from '../types/topics.js';
 import type { UserFieldDef } from '../types/userFields.js';
@@ -185,9 +185,9 @@ export function TopicsView() {
 
   const handleHideTextChange = useCallback((topicId: number, hide: boolean) => {
     useUIStore.getState().updateTopicHideText(topicId, hide);
-    settingsApi.upsert('topicHideText', useUIStore.getState().topicHideText)
+    savePrivateSetting('topicHideText', useUIStore.getState().topicHideText)
       .catch(err => console.error('Failed to save topic option:', err));
-  }, []);
+  }, [savePrivateSetting]);
 
   const handleEditSave = useCallback(async () => {
     if (editingId === null || !editName.trim()) return;

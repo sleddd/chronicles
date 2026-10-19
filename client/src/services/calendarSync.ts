@@ -38,7 +38,8 @@ const PENDING_DELETES_KEY = 'chronicles.calendarSync.pendingDeletes';
 const STATUS_TTL_MS = 10 * 60 * 1000;
 
 export interface SyncRuntimeDeps {
-  encryptPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
+  encryptPost: (id: number, content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
+  encryptNewPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData & { id: number }>;
 }
 
 interface SyncCandidate {
@@ -250,7 +251,7 @@ async function persistEntryMetadata(
   newFields: Record<string, unknown>,
 ): Promise<void> {
   const newMetadata = { ...entry.metadata, _customFields: newFields };
-  const encrypted = await deps.encryptPost(entry.content, newMetadata);
+  const encrypted = await deps.encryptPost(entry.id, entry.content, newMetadata);
   const resp = await entriesApi.update(entry.id, { ...encrypted, isEncrypted: true });
   useEntriesStore.getState().updateDecryptedEntry(entry.id, {
     metadata: newMetadata,
@@ -370,7 +371,7 @@ async function importForeignEvent(
   const fields: Record<string, unknown> = { ...remoteFields, calendarTitle: summary, _sync: sync };
   const metadata: Record<string, unknown> = { _taxonomyId: eventTopicId, _customFields: fields };
 
-  const encrypted = await deps.encryptPost(content, metadata);
+  const encrypted = await deps.encryptNewPost(content, metadata);
   const resp = await entriesApi.create({ ...encrypted, isEncrypted: true, taxonomyIds: [eventTopicId] });
 
   useEntriesStore.getState().addDecryptedEntry({
@@ -564,7 +565,8 @@ export async function runCalendarSync(deps: SyncRuntimeDeps): Promise<void> {
       await pushPhase(deps, ui.googleCalendarId);
     }
 
-    if (status.icsEnabled) {
+    // Both: the feed as this account switched it on (sealed) and as the server has it
+    if (status.icsEnabled && ui.icsFeedEnabled) {
       await icsPhase();
     }
 

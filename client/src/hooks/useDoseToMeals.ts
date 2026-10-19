@@ -30,11 +30,11 @@ function escapeHtml(s: string): string {
  * Medications with no nutrients (e.g. antihistamines) add nothing.
  */
 export function useDoseToMeals() {
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
 
   const saveEntry = useCallback(async (e: DecryptedPost, metadata: Record<string, unknown>) => {
     const tid = metadata._taxonomyId as number | undefined;
-    const enc = await encryptPost(e.content, metadata);
+    const enc = await encryptPost(e.id, e.content, metadata);
     await entriesApi.update(e.id, {
       contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
       metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
@@ -114,8 +114,8 @@ export function useDoseToMeals() {
     const tid = await mealsTopicId();
     const content = `<p>${escapeHtml(name)}</p>`;
     const metadata = { _taxonomyId: tid, _doseLink: key, _customFields: cf };
-    const enc = await encryptPost(content, metadata);
-    const res = await entriesApi.create({
+    const enc = await encryptNewPost(content, metadata);
+    const res = await entriesApi.create({ id: enc.id,
       contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
       metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
       isEncrypted: true, taxonomyIds: [tid],
@@ -126,7 +126,7 @@ export function useDoseToMeals() {
       createdAt: new Date(res.createdAt as string),
       updatedAt: new Date((res.updatedAt || res.createdAt) as string),
     });
-  }, [encryptPost, mealsTopicId, nutrientsFor]);
+  }, [encryptNewPost, mealsTopicId, nutrientsFor]);
 
   /** A dose was un-marked — remove the Meals row it added. */
   const onUntaken = useCallback(async (medicationPostId: number, date: string, time: string) => {

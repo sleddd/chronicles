@@ -25,12 +25,12 @@ const CFG: R2Config = {
 };
 
 /** Fake "encryption": ciphertext is just the plaintext bytes, base64'd. */
-const identityDecrypt = vi.fn(async (ciphertext: ArrayBuffer) => ciphertext);
-const identityEncrypt = vi.fn(async (data: ArrayBuffer) => ({ ciphertext: data, iv: 'aXY=' }));
+const identityDecrypt = vi.fn(async (ciphertext: ArrayBuffer, _iv?: string, _aad?: string) => ciphertext);
+const identityEncrypt = vi.fn(async (data: ArrayBuffer, _aad?: string) => ({ ciphertext: data, iv: 'aXY=' }));
 
 function encryptedValueOf(cfg: R2Config) {
   const bytes = new TextEncoder().encode(JSON.stringify(cfg));
-  return { ciphertext: arrayBufferToBase64(bytes.buffer as ArrayBuffer), iv: 'aXY=' };
+  return { ciphertext: arrayBufferToBase64(bytes.buffer as ArrayBuffer), iv: 'aXY=', v: 2 as const };
 }
 
 const img = (n: number) => ({
@@ -91,6 +91,14 @@ describe('config lifecycle', () => {
     expect(await loadImageStorageConfig(undefined, identityDecrypt)).toBe(false);
     expect(await loadImageStorageConfig({ nope: true }, identityDecrypt)).toBe(false);
     expect(isImageStorageConfigured()).toBe(false);
+  });
+
+  it('refuses a config blob not bound to its setting (pre-v2 or moved from another key)', async () => {
+    const { v: _v, ...unbound } = encryptedValueOf(CFG);
+    expect(await loadImageStorageConfig(unbound, identityDecrypt)).toBe(false);
+    const decrypt = vi.fn(async (ct: ArrayBuffer, _iv?: string, _aad?: string) => ct);
+    await loadImageStorageConfig(encryptedValueOf(CFG), decrypt);
+    expect(decrypt.mock.calls[0][2]).toBe('chronicles:setting:v2:imageStorageConfig');
   });
 
   it('reports unconfigured when decryption fails (wrong key)', async () => {
@@ -167,6 +175,14 @@ describe('bestEffortDeleteImages', () => {
   });
 });
 
+describe('the unsaved Settings draft', () => {
+  it('survives a lock, but never with its secret key', () => {
+    setImageStorageDraft({ ...CFG });
+    clearImageCache();
+    expect(getImageStorageConfigValue()).toEqual({ ...CFG, secretAccessKey: '' });
+  });
+});
+
 describe('getImageObjectUrl', () => {
   it('fetches a signed GET, decrypts, and caches per key', async () => {
     setImageStorageConfig(CFG, encryptedValueOf(CFG));
@@ -186,6 +202,17 @@ describe('getImageObjectUrl', () => {
     const fetchedUrl = fetchMock.mock.calls[0][0] as string;
     expect(fetchedUrl).toContain(`${'a'.repeat(32)}.r2.cloudflarestorage.com/my-images/img/k1?`);
     expect(fetchedUrl).toContain('X-Amz-Signature=');
+  });
+
+  it('opens an image with its key binding first, and an older unbound one after', async () => {
+    setImageStorageConfig(CFG, encryptedValueOf(CFG));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(16)) }));
+    const decryptBytes = vi.fn()
+      .mockRejectedValueOnce(new Error('tag mismatch'))
+      .mockResolvedValueOnce(new ArrayBuffer(8));
+    await getImageObjectUrl('img/k9', 'aXY=', 'image/jpeg', decryptBytes);
+    expect(decryptBytes.mock.calls[0][2]).toBe('chronicles:image:v1:img/k9');
+    expect(decryptBytes.mock.calls[1][2]).toBeUndefined();
   });
 
   it('throws when the journal is locked / unconfigured', async () => {

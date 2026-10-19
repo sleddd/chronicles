@@ -32,7 +32,7 @@ should read the policy, the Terms and part 4 before they go live.
 | Retention: Prisma daily snapshots (days with changes) kept 7 days on Starter/Pro, 30 on Business — the policy says "within 30 days"; security logs only in Render's rolling log stream; AI-safety counts kept permanently (no account) | Done | Policy → When you delete / How long we keep it. Update `backupDays` if the plan or provider changes |
 | Backup and log retention set at the host | **To do** | Part 2 |
 | Encrypt dose logs and topic names (Phase 2) | Done — migrates on each user's next unlock | Part 3. Run `npm run migrate:phase2-status` (server); when it reads 0, remove the "not opened since the update" line from the policy |
-| Settings audit, legacy key-wrap upgrade, ICS description opt-in (Phase 2) | Done (the no-AAD fallback is removed once the status script shows 0 key wraps) | Part 3 |
+| Settings audit, legacy key-wrap upgrade, ICS description opt-in (Phase 2) | Done — the no-AAD key-wrap fallback, the plaintext-password sign-in and the plaintext dose-log migration are removed (October 2026 security audit) | Part 3 |
 | Google verification | Done | Part 5 |
 | Processor agreements | Render DPA in place (https://render.com/dpa); **Prisma DPA: download from the Compliance section of the Prisma Console and keep a copy** (https://www.prisma.io/legal/dpa) | Part 6 |
 | Attorney review | **To do** | Policy, Terms, part 4 |
@@ -106,18 +106,19 @@ The FTC rule only reaches health data that is not encrypted, so data inside the 
 | Topics | Names and icons | `{ name, icon }` in one encrypted payload; colour and order stay readable. Legacy rows sealed on next unlock; default topics seeded by the browser |
 | Settings | Feature switches and Cycle Tracking in plain JSON (they show which health features someone uses) | Master-key encrypted private settings, sealed on next load. Plain only: theme, accent, calendar sync ids/tokens, topic hide-text map (ids), images on/off |
 | Apple Calendar feed | Titles, times, locations, descriptions | Descriptions only when the user turns on Include event details (off by default) |
-| Master key wrap | Older accounts wrapped without purpose AAD | Re-wrapped with AAD after the next password unlock (`POST /api/auth/key-wrap`); tracked in `public.key_wrap_status` |
+| Master key wrap | Older accounts wrapped without purpose AAD | No longer opened: the no-AAD fallback is removed. `public.key_wrap_status` still records which accounts were confirmed current |
 
 Shared entries are readable on the server by design (disclosed), and never carry images or drawings.
 Progress: `npm run migrate:phase2-status` (server) counts what's left per account, without printing any data;
-`--drop` removes the emptied legacy dose tables. When it reads 0: remove the policy's "not opened since the update"
-line and the no-AAD fallback in `unwrapKeyDetailed` (`shared/src/crypto/primitives.ts`). Accounts nobody opens again
-keep their legacy rows until they're opened or deleted.
+`--drop` removes the emptied legacy dose tables. The app no longer reads any of these legacy forms, so the script is the
+pre-deploy check: anything above 0 is data that account can no longer open. Entries, topics, dose records and settings
+also move once to their bound formats (bound to their id, day or key) on each account's next unlock; a sealed marker per
+kind (`entriesSealV3`, `topicsSealV2`, `dosesSealV2`, `settingsSealV2`) records it, after which the older forms are refused.
 
 ### Hardening
 
 - [x] **Passwords:** 12 characters minimum with upper, lower and a number (`passwordSchema`). Argon2id via WASM is the stronger long-term option; `kekIterations` already allows raising the PBKDF2 cost.
-- [x] **Retire the legacy unwrap:** keys are re-wrapped with AAD on the next password unlock and tracked. [ ] Remove the no-AAD fallback once the status script shows 0 key wraps.
+- [x] **Retire the legacy unwrap:** the no-AAD fallback for password key wraps is removed (recovery wraps keep theirs — they can't be re-wrapped without the recovery key).
 - [ ] **`SECRETS_ENCRYPTION_KEY`:** only in the host's secret store; write down how to rotate it.
 - [ ] **Backups:** confirm with the host that backups are encrypted at rest; note the retention window.
 - [ ] **The code browsers run:** hardware key or strong 2FA on GitHub and the host, protected main branch, lean dependencies, `npm audit` before each deploy. The CSP (`script-src 'self'`) already blocks most exfiltration.

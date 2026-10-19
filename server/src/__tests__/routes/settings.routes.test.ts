@@ -6,10 +6,12 @@ import { createTestApp, TEST_AUTH } from './testHelper.js';
 vi.mock('../../db/tenantQueries.js', () => ({
   getAllSettings: vi.fn(),
   upsertSetting: vi.fn(),
+  countSettings: vi.fn(),
+  settingExists: vi.fn(),
 }));
 
 import settingsRouter from '../../routes/settings.js';
-import { getAllSettings, upsertSetting } from '../../db/tenantQueries.js';
+import { getAllSettings, upsertSetting, countSettings, settingExists } from '../../db/tenantQueries.js';
 
 const app = createTestApp('/api/settings', settingsRouter);
 
@@ -21,6 +23,8 @@ const mockSettings = [
 describe('Settings Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (countSettings as any).mockResolvedValue(2);
+    (settingExists as any).mockResolvedValue(false);
   });
 
   // =========================================================================
@@ -66,7 +70,7 @@ describe('Settings Routes', () => {
     });
 
     it('refuses a new key once the account has 500 settings', async () => {
-      (getAllSettings as any).mockResolvedValue(Array.from({ length: 500 }, (_, i) => ({ key: `k${i}`, value: i })));
+      (countSettings as any).mockResolvedValue(500);
 
       const res = await request(app)
         .put('/api/settings')
@@ -77,7 +81,8 @@ describe('Settings Routes', () => {
     });
 
     it('still updates an existing key at the cap', async () => {
-      (getAllSettings as any).mockResolvedValue(Array.from({ length: 500 }, (_, i) => ({ key: `k${i}`, value: i })));
+      (countSettings as any).mockResolvedValue(500);
+      (settingExists as any).mockResolvedValue(true);
       (upsertSetting as any).mockResolvedValue({ key: 'k3', value: 9, updatedAt: new Date() });
 
       const res = await request(app)
@@ -122,6 +127,31 @@ describe('Settings Routes', () => {
         .send({ key: 'preferences', value: complexValue });
 
       expect(res.status).toBe(200);
+    });
+
+    it('counts keys without loading every value', async () => {
+      (upsertSetting as any).mockResolvedValue({ key: 'headerColor', value: '#000', updatedAt: new Date() });
+      await request(app).put('/api/settings').send({ key: 'headerColor', value: '#000' });
+      expect(getAllSettings).not.toHaveBeenCalled();
+    });
+
+    it('refuses a private setting sent readable, or sealed without its key binding', async () => {
+      for (const value of [true, 'Alex', { ciphertext: 'x', iv: 'y' }, { ciphertext: 'x', iv: 'y', v: 1 }]) {
+        const res = await request(app).put('/api/settings').send({ key: 'icsIncludeDetails', value });
+        expect(res.status).toBe(409);
+      }
+      for (const key of ['displayName', 'financeEnabled', 'calendarSyncEnabled', 'nutritionGoals', 'aiConfig', 'settingsSealV2']) {
+        expect((await request(app).put('/api/settings').send({ key, value: false })).status).toBe(409);
+      }
+      expect(upsertSetting).not.toHaveBeenCalled();
+    });
+
+    it('stores a private setting sealed and bound', async () => {
+      const value = { ciphertext: 'abc', iv: 'def', v: 2 };
+      (upsertSetting as any).mockResolvedValue({ key: 'displayName', value, updatedAt: new Date() });
+      const res = await request(app).put('/api/settings').send({ key: 'displayName', value });
+      expect(res.status).toBe(200);
+      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'displayName', value);
     });
 
     it('returns 400 when key is missing', async () => {

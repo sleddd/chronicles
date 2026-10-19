@@ -8,18 +8,23 @@ import { prisma } from '../db/prisma.js';
 import { isApproved } from '../db/betaQueries.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
-import { markKeyWrapCurrent } from '../db/keyWrapQueries.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, normalizeEmail } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
 
 // In-memory map for pending 2FA sessions (single-instance safe for Render).
-// upgradedHash: a legacy account's new sign-in hash, saved once 2FA passes.
-const pendingTwoFA = new Map<string, { accountId: number; expiresAt: Date; upgradedHash?: string }>();
+const pendingTwoFA = new Map<string, { accountId: number; expiresAt: Date }>();
+
+/** Drop an account's pending 2FA sign-ins (after a password change, recovery or 2FA change). */
+function cancelPendingTwoFA(accountId: number): void {
+  for (const [token, entry] of pendingTwoFA) {
+    if (entry.accountId === accountId) pendingTwoFA.delete(token);
+  }
+}
 
 function cleanExpiredPending() {
   const now = new Date();
@@ -32,7 +37,8 @@ const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keyl
 
 // Backup codes are salted + scrypt-hashed (48 bits of entropy is too little for
 // a bare SHA-256 to survive a database leak). Older codes stored as plain
-// SHA-256 hex still verify until they're used or replaced.
+// SHA-256 hex still verify until they're used or replaced — they can't be
+// re-hashed without the codes themselves.
 async function hashBackupCode(code: string): Promise<string> {
   const salt = crypto.randomBytes(16);
   const hash = await scrypt(code, salt, 32);
@@ -84,11 +90,18 @@ function twoFALocked(accountId: number): boolean {
   return f.count >= TWO_FA_MAX_FAILURES;
 }
 
-function recordTwoFAFailure(accountId: number): void {
+/**
+ * Count a second-factor attempt before it's checked, so parallel requests
+ * can't all pass the lock while the first is still being verified. Returns
+ * false when the account is locked. A correct code clears the count.
+ */
+function claimTwoFAAttempt(accountId: number): boolean {
   const now = Date.now();
   const f = twoFAFailures.get(accountId);
-  if (!f || f.resetAt <= now) twoFAFailures.set(accountId, { count: 1, resetAt: now + TWO_FA_LOCK_MS });
-  else f.count++;
+  if (!f || f.resetAt <= now) { twoFAFailures.set(accountId, { count: 1, resetAt: now + TWO_FA_LOCK_MS }); return true; }
+  if (f.count >= TWO_FA_MAX_FAILURES) return false;
+  f.count++;
+  return true;
 }
 
 // Per-email cap on wrong passwords, on top of the per-IP limit, so guesses
@@ -106,24 +119,41 @@ export function resetAuthStateForTests(): void {
   lastTotpStep.clear();
   twoFAFailures.clear();
   loginFailures.clear();
-  legacyHashesRemain = true;
+  confirmFailures.clear();
 }
 
-function loginLocked(email: string): boolean {
-  const f = loginFailures.get(email);
-  if (!f) return false;
-  if (f.resetAt <= Date.now()) { loginFailures.delete(email); return false; }
-  return f.count >= LOGIN_MAX_FAILURES;
-}
-
-function recordLoginFailure(email: string): void {
+/**
+ * Count a sign-in attempt before the password is checked (bcrypt takes a
+ * while, and parallel requests mustn't all pass the lock in that time).
+ * Returns false when this bucket is locked. A correct password clears it.
+ */
+function claimLoginAttempt(key: string): boolean {
   const now = Date.now();
   if (loginFailures.size > 50_000) {
     for (const [k, v] of loginFailures) if (v.resetAt <= now) loginFailures.delete(k);
   }
-  const f = loginFailures.get(email);
-  if (!f || f.resetAt <= now) loginFailures.set(email, { count: 1, resetAt: now + LOGIN_LOCK_MS });
-  else f.count++;
+  const f = loginFailures.get(key);
+  if (!f || f.resetAt <= now) { loginFailures.set(key, { count: 1, resetAt: now + LOGIN_LOCK_MS }); return true; }
+  if (f.count >= LOGIN_MAX_FAILURES) return false;
+  f.count++;
+  return true;
+}
+
+// Per-account cap on wrong passwords at the password-confirmed actions (change
+// password or email, recovery key, key wrap, 2FA, delete account), on top of
+// the per-IP limit, so a stolen session can't be used to guess the password
+// from many IPs. Counted before the check, like sign-in.
+const CONFIRM_MAX_FAILURES = 10;
+const CONFIRM_LOCK_MS = 15 * 60 * 1000;
+const confirmFailures = new Map<number, { count: number; resetAt: number }>();
+
+function claimConfirmAttempt(accountId: number): boolean {
+  const now = Date.now();
+  const f = confirmFailures.get(accountId);
+  if (!f || f.resetAt <= now) { confirmFailures.set(accountId, { count: 1, resetAt: now + CONFIRM_LOCK_MS }); return true; }
+  if (f.count >= CONFIRM_MAX_FAILURES) return false;
+  f.count++;
+  return true;
 }
 
 /**
@@ -134,6 +164,8 @@ async function verifySecondFactor(
   account: { id: number; totpSecret: string; totpBackupCodes: string[] },
   code: string,
 ): Promise<'totp' | 'backup' | null> {
+  // Counted before any await, so concurrent guesses can't slip past the cap
+  if (!claimTwoFAAttempt(account.id)) return null;
   if (/^\d{6}$/.test(code)) {
     try {
       const last = lastTotpStep.get(account.id);
@@ -154,20 +186,14 @@ async function verifySecondFactor(
   }
 
   const matchIndex = await findBackupCode(code.trim(), account.totpBackupCodes);
-  if (matchIndex === -1) {
-    recordTwoFAFailure(account.id);
-    return null;
-  }
+  if (matchIndex === -1) return null;
   // Consume atomically: only the request that actually removes the code wins,
   // so two concurrent requests can't both spend the same backup code
   const used = account.totpBackupCodes[matchIndex];
   const consumed = await prisma.$executeRaw`
     UPDATE "accounts" SET totp_backup_codes = array_remove(totp_backup_codes, ${used})
     WHERE id = ${account.id} AND ${used} = ANY(totp_backup_codes)`;
-  if (consumed === 0) {
-    recordTwoFAFailure(account.id);
-    return null;
-  }
+  if (consumed === 0) return null;
   twoFAFailures.delete(account.id);
   return 'backup';
 }
@@ -274,64 +300,66 @@ function longDecoyBytes(email: string, label: string, length: number): string {
 // The client sends authSecret = PBKDF2(password, email salt), never the
 // password: the master key is wrapped under PBKDF2(password, kekSalt), so a
 // server that saw the password could unwrap it (shared/src/crypto/authSecret.ts).
-// Sign-in hashes are bcrypt(authSecret) marked with AUTH_PREFIX. A bare bcrypt
-// hash ($2…) is a legacy hash of the password itself; /login upgrades it.
+// Sign-in hashes are bcrypt(authSecret) marked with AUTH_PREFIX. Hashes of
+// the password itself (from before derived secrets) are no longer accepted:
+// accepting them meant asking the client for the password, which any server
+// reply could trigger.
 export const AUTH_PREFIX = 'auth1$';
-
-export const isLegacyAuthHash = (stored: string) => !stored.startsWith(AUTH_PREFIX);
-
-// Whether any account still has a legacy hash. While one does, an unknown email
-// must answer like a legacy account (`legacyAuth`) so the two can't be told
-// apart. Once none are left, an unknown email answers like an upgraded account
-// instead — otherwise `legacyAuth` would mark every unknown email, and a
-// mistyped email would make the client send the password itself. Starts true
-// (the safe answer for legacy accounts) until the startup count says otherwise.
-let legacyHashesRemain = true;
-
-async function countLegacyHashes(): Promise<void> {
-  const n = await prisma.account.count({ where: { NOT: { passwordHash: { startsWith: AUTH_PREFIX } } } });
-  legacyHashesRemain = n > 0;
-}
 
 async function hashAuthSecret(authSecret: string): Promise<string> {
   return AUTH_PREFIX + await bcrypt.hash(authSecret, BCRYPT_ROUNDS);
 }
 
-/** Check a derived sign-in secret. Legacy hashes never match (their sessions are revoked at startup). */
+/** Check a derived sign-in secret. Anything but an auth1$ hash never matches. */
 async function checkAuthSecret(stored: string, authSecret: string): Promise<boolean> {
-  if (isLegacyAuthHash(stored)) return false;
+  if (!stored.startsWith(AUTH_PREFIX)) return false;
   return bcrypt.compare(authSecret, stored.slice(AUTH_PREFIX.length));
 }
 
-/** Replace a legacy password hash — only if it's still the one that was checked. */
-async function upgradeAuthHash(accountId: number, checkedHash: string, upgradedHash: string): Promise<void> {
-  if (!isLegacyAuthHash(checkedHash)) return;
-  await prisma.account.updateMany({ where: { id: accountId, passwordHash: checkedHash }, data: { passwordHash: upgradedHash } });
-  logSecurityEvent('auth_hash_upgraded', { accountId });
-  await countLegacyHashes().catch(() => { /* keep the safe answer */ });
+function confirmLocked(accountId: number): boolean {
+  const f = confirmFailures.get(accountId);
+  if (!f) return false;
+  if (f.resetAt <= Date.now()) { confirmFailures.delete(accountId); return false; }
+  return f.count >= CONFIRM_MAX_FAILURES;
+}
+
+/** Route guard for the password-confirmed actions: 429 once the account is locked. */
+function confirmGate(req: Request, res: Response, next: () => void): void {
+  if (req.auth && confirmLocked(req.auth.accountId)) {
+    res.status(429).json({ error: 'Too many incorrect passwords. Try again in 15 minutes.' });
+    return;
+  }
+  next();
+}
+
+/** Check the current password at a password-confirmed action (counted per account). */
+async function checkConfirmSecret(account: { id: number; passwordHash: string }, authSecret: string): Promise<boolean> {
+  if (!claimConfirmAttempt(account.id)) return false;
+  const ok = await checkAuthSecret(account.passwordHash, authSecret);
+  if (ok) confirmFailures.delete(account.id);
+  return ok;
 }
 
 // The recovery check stores SHA-256 of the client's proof (PBKDF2 of the
-// recovery key), so a leaked row can't be replayed as the proof. Rows from
-// before hold the proof itself; upgradeStoredCredentials() rewrites them.
+// recovery key), so a leaked row can't be replayed as the proof.
 const RECOVERY_PREFIX = 'v2$';
 const sha256Hex = (v: string) => crypto.createHash('sha256').update(v).digest('hex');
 const sealRecoveryProof = (proof: string) => RECOVERY_PREFIX + sha256Hex(proof);
 
 function recoveryProofMatches(stored: string, proof: string): boolean {
-  const sealed = stored.startsWith(RECOVERY_PREFIX);
-  const a = Buffer.from(sealed ? sha256Hex(proof) : proof);
-  const b = Buffer.from(sealed ? stored.slice(RECOVERY_PREFIX.length) : stored);
+  if (!stored.startsWith(RECOVERY_PREFIX)) return false;
+  const a = Buffer.from(sha256Hex(proof));
+  const b = Buffer.from(stored.slice(RECOVERY_PREFIX.length));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 /**
- * Startup: seal old recovery checks, and sign out every account that still
- * has a legacy password hash — its next sign-in replaces the hash, and the
- * password-confirmed actions (change password, 2FA, delete…) only accept
- * derived secrets.
+ * Startup: seal any recovery check still holding the bare proof (sealing needs
+ * nothing from the user), and sign out every account whose password hash is
+ * from before derived secrets. Those can no longer sign in with a password —
+ * they recover with their recovery key — so their ids are returned for the log.
  */
-export async function upgradeStoredCredentials(): Promise<{ recoverySealed: number; sessionsRevoked: number }> {
+export async function checkStoredCredentials(): Promise<{ recoverySealed: number; outdated: number[]; sessionsRevoked: number }> {
   const unsealed = await prisma.account.findMany({
     where: { recoveryKeyHash: { not: null }, NOT: { recoveryKeyHash: { startsWith: RECOVERY_PREFIX } } },
     select: { id: true, recoveryKeyHash: true },
@@ -343,12 +371,17 @@ export async function upgradeStoredCredentials(): Promise<{ recoverySealed: numb
       data: { recoveryKeyHash: sealRecoveryProof(a.recoveryKeyHash!) },
     });
   }
-  const revoked = await prisma.session.updateMany({
-    where: { revokedAt: null, account: { NOT: { passwordHash: { startsWith: AUTH_PREFIX } } } },
-    data: { revokedAt: new Date(), revokedReason: 'auth_upgrade' },
-  });
-  await countLegacyHashes();
-  return { recoverySealed: unsealed.length, sessionsRevoked: revoked.count };
+  const outdated = (await prisma.account.findMany({
+    where: { NOT: { passwordHash: { startsWith: AUTH_PREFIX } } },
+    select: { id: true },
+  })).map(a => a.id);
+  const revoked = outdated.length
+    ? await prisma.session.updateMany({
+      where: { revokedAt: null, accountId: { in: outdated } },
+      data: { revokedAt: new Date(), revokedReason: 'auth_upgrade' },
+    })
+    : { count: 0 };
+  return { recoverySealed: unsealed.length, outdated, sessionsRevoked: revoked.count };
 }
 
 /** Enforce a constant-time floor on endpoint response time to prevent timing-based enumeration */
@@ -423,8 +456,6 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     logSecurityEvent('register_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, email);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
-    // New accounts are wrapped in the current (AAD) format from the start
-    try { await markKeyWrapCurrent(account.id); } catch { /* marked on a later unlock */ }
     res.status(201).json({
       user: { email: account.email, username: account.username },
     });
@@ -482,31 +513,20 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    const { email, authSecret, legacyPassword } = parsed.data;
+    const { email, authSecret } = parsed.data;
 
     const normalizedEmail = normalizeEmail(email);
     const failureKey = loginFailureKey(req, normalizedEmail);
-    if (loginLocked(failureKey)) {
+    // Counted before any await: parallel guesses can't all pass the lock
+    if (!claimLoginAttempt(failureKey)) {
       logSecurityEvent('login_locked', { ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(429).json({ error: 'Too many failed sign-in attempts. Try again in 15 minutes.' });
       return;
     }
     const account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
-    const legacy = account ? isLegacyAuthHash(account.passwordHash) : legacyHashesRemain;
-    if (legacy && !legacyPassword) {
-      // A legacy account can only be checked against the password, so ask the
-      // client for it once. Nothing was checked, so nothing counts as a
-      // failure. While legacy accounts exist, an unknown email answers exactly
-      // like one; after that it falls through to the plain "no account" reply.
-      await bcrypt.hash('dummy', BCRYPT_ROUNDS);
-      await constantTimeDelay(startTime);
-      res.status(401).json({ error: 'Invalid credentials', legacyAuth: true });
-      return;
-    }
     if (!account) {
       logSecurityEvent('login_failed_no_account', { ip: req.ip });
-      recordLoginFailure(failureKey);
       // Constant-time delay to prevent timing-based email enumeration
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
@@ -514,11 +534,7 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    const valid = legacy
-      ? await bcrypt.compare(legacyPassword!, account.passwordHash)
-      : await checkAuthSecret(account.passwordHash, authSecret);
-    if (!valid) {
-      recordLoginFailure(failureKey);
+    if (!(await checkAuthSecret(account.passwordHash, authSecret))) {
       logSecurityEvent('login_failed_bad_password', { accountId: account.id, ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials' });
@@ -527,23 +543,16 @@ router.post('/login', authLimiter, async (req, res) => {
 
     loginFailures.delete(failureKey);
 
-    // A legacy account swaps its password hash for one of the derived secret.
-    // With 2FA on this waits until the code checks out, so someone holding
-    // only the password can't swap in a secret and lock the owner out.
-    const upgradedHash = legacy ? await hashAuthSecret(authSecret) : undefined;
-
     // 2FA check — if enabled, return a pending token instead of a session
     if (account.totpEnabled) {
       cleanExpiredPending();
       const pendingToken = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-      pendingTwoFA.set(pendingToken, { accountId: account.id, expiresAt, upgradedHash });
+      pendingTwoFA.set(pendingToken, { accountId: account.id, expiresAt });
       logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip });
       res.json({ requires2FA: true, pendingToken });
       return;
     }
-
-    if (upgradedHash) await upgradeAuthHash(account.id, account.passwordHash, upgradedHash);
 
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
@@ -588,7 +597,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
 // =============================================================================
 // POST /api/auth/change-password
 // =============================================================================
-router.post('/change-password', strictLimiter, authMiddleware, async (req, res) => {
+router.post('/change-password', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = changePasswordSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -603,7 +612,7 @@ router.post('/change-password', strictLimiter, authMiddleware, async (req, res) 
       return;
     }
 
-    const valid = await checkAuthSecret(account.passwordHash, currentAuthSecret);
+    const valid = await checkConfirmSecret(account, currentAuthSecret);
     if (!valid) {
       logSecurityEvent('password_change_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
@@ -633,6 +642,7 @@ router.post('/change-password', strictLimiter, authMiddleware, async (req, res) 
     ]);
 
     revokeGrantsForAccount(account.id);
+    cancelPendingTwoFA(account.id);
 
     // Create a fresh session after revoking all old ones (prevents race condition)
     const token = await createSession(account.id, account.tenantSchemaName, {
@@ -652,7 +662,7 @@ router.post('/change-password', strictLimiter, authMiddleware, async (req, res) 
 // =============================================================================
 // POST /api/auth/change-email — Change email address
 // =============================================================================
-router.post('/change-email', strictLimiter, authMiddleware, async (req, res) => {
+router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = changeEmailSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -670,9 +680,9 @@ router.post('/change-email', strictLimiter, authMiddleware, async (req, res) => 
     // The email is the login identifier — changing it needs the password
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { passwordHash: true },
+      select: { id: true, passwordHash: true },
     });
-    if (!account || !(await checkAuthSecret(account.passwordHash, parsed.data.currentAuthSecret))) {
+    if (!account || !(await checkConfirmSecret(account, parsed.data.currentAuthSecret))) {
       logSecurityEvent('email_change_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -723,7 +733,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
     }
 
     if (!account.recoveryKeyHash || !account.recoveryKeySalt) {
-      // Legacy accounts without recoveryKeyHash or accounts that already used recovery
+      // No recovery key saved for this account
       logSecurityEvent('recovery_failed', { accountId: account.id, ip: req.ip, details: { reason: 'no_recovery_hash' } });
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Recovery failed' });
@@ -806,6 +816,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
     }
 
     revokeGrantsForAccount(account.id);
+    cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, email);
 
@@ -902,7 +913,6 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     if (factor === 'backup') {
       logSecurityEvent('login_2fa_backup_code_used', { accountId: account.id, ip: req.ip });
     }
-    if (pending.upgradedHash) await upgradeAuthHash(account.id, account.passwordHash, pending.upgradedHash);
 
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
@@ -949,7 +959,7 @@ router.post('/2fa/setup', authLimiter, authMiddleware, async (req, res) => {
 // =============================================================================
 // POST /api/auth/2fa/enable — Confirm TOTP code and save secret + backup codes
 // =============================================================================
-router.post('/2fa/enable', strictLimiter, authMiddleware, async (req, res) => {
+router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = enable2FASchema.safeParse(req.body);
     if (!parsed.success) {
@@ -961,9 +971,9 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, async (req, res) => {
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { passwordHash: true, totpEnabled: true },
+      select: { id: true, passwordHash: true, totpEnabled: true },
     });
-    if (!account || !(await checkAuthSecret(account.passwordHash, currentAuthSecret))) {
+    if (!account || !(await checkConfirmSecret(account, currentAuthSecret))) {
       logSecurityEvent('2fa_enable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -1013,7 +1023,7 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, async (req, res) => {
 // =============================================================================
 // DELETE /api/auth/2fa — Disable 2FA (requires password confirmation)
 // =============================================================================
-router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
+router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = disable2FASchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1030,7 +1040,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
       return;
     }
 
-    const valid = await checkAuthSecret(account.passwordHash, parsed.data.authSecret);
+    const valid = await checkConfirmSecret(account, parsed.data.authSecret);
     if (!valid) {
       logSecurityEvent('2fa_disable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
@@ -1056,6 +1066,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
     });
     lastTotpStep.delete(req.auth!.accountId);
     twoFAFailures.delete(req.auth!.accountId);
+    cancelPendingTwoFA(req.auth!.accountId);
 
     logSecurityEvent('2fa_disabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
@@ -1068,7 +1079,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, async (req, res) => {
 // =============================================================================
 // DELETE /api/auth/account — permanently delete the account and all its data
 // =============================================================================
-router.delete('/account', strictLimiter, authMiddleware, async (req, res) => {
+router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = deleteAccountSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1084,7 +1095,7 @@ router.delete('/account', strictLimiter, authMiddleware, async (req, res) => {
       res.status(404).json({ error: 'Account not found' });
       return;
     }
-    if (!(await checkAuthSecret(account.passwordHash, parsed.data.authSecret))) {
+    if (!(await checkConfirmSecret(account, parsed.data.authSecret))) {
       logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
       return;
@@ -1120,50 +1131,6 @@ router.delete('/account', strictLimiter, authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Account delete error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Account deletion failed' });
-  }
-});
-
-// =============================================================================
-// POST /api/auth/key-wrap — save the master key re-wrapped in the current
-// (AAD) format after a password unlock found the old no-AAD wrap. Same
-// password, new salt and IV; needs the password (as currentAuthSecret).
-// Unlike change-password it keeps every session.
-// =============================================================================
-router.post('/key-wrap', strictLimiter, authMiddleware, async (req, res) => {
-  try {
-    const parsed = keyWrapSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid request' });
-      return;
-    }
-    const account = await prisma.account.findUnique({
-      where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true },
-    });
-    if (!account) {
-      res.status(404).json({ error: 'Account not found' });
-      return;
-    }
-    if (!(await checkAuthSecret(account.passwordHash, parsed.data.currentAuthSecret))) {
-      logSecurityEvent('key_wrap_failed', { accountId: account.id, ip: req.ip });
-      res.status(401).json({ error: 'Incorrect password' });
-      return;
-    }
-    await prisma.account.update({
-      where: { id: account.id },
-      data: {
-        encryptedMasterKey: new Uint8Array(Buffer.from(parsed.data.encryptedMasterKey, 'base64')),
-        kekSalt: new Uint8Array(Buffer.from(parsed.data.kekSalt, 'base64')),
-        kekWrapIv: new Uint8Array(Buffer.from(parsed.data.kekWrapIv, 'base64')),
-        kekIterations: parsed.data.kekIterations,
-      },
-    });
-    await markKeyWrapCurrent(account.id);
-    logSecurityEvent('key_wrap_upgraded', { accountId: account.id });
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Key wrap error:', err instanceof Error ? err.message : 'Unknown error');
-    res.status(500).json({ error: 'Failed to update the key' });
   }
 });
 
@@ -1223,7 +1190,7 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
 // =============================================================================
 // POST /api/auth/recovery-key — Generate / regenerate recovery key (authenticated)
 // =============================================================================
-router.post('/recovery-key', strictLimiter, authMiddleware, async (req, res) => {
+router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = saveRecoveryKeySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1236,9 +1203,9 @@ router.post('/recovery-key', strictLimiter, authMiddleware, async (req, res) => 
     // a signed-in session alone must not be enough to replace it
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { passwordHash: true },
+      select: { id: true, passwordHash: true },
     });
-    if (!account || !(await checkAuthSecret(account.passwordHash, currentAuthSecret))) {
+    if (!account || !(await checkConfirmSecret(account, currentAuthSecret))) {
       logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;

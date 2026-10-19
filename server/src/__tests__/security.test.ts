@@ -496,7 +496,7 @@ describe('Recovery PBKDF2 iterations', () => {
 // 23. The server never receives the password
 // ============================================================================
 describe('Password never sent to the server', () => {
-  it('auth routes read derived secrets, and the password only as the one-time legacyPassword', async () => {
+  it('auth routes read only derived secrets, never a password', async () => {
     const fs = await import('fs');
     const authContent = fs.readFileSync(
       new URL('../routes/auth.ts', import.meta.url).pathname.replace('/__tests__', ''),
@@ -506,9 +506,9 @@ describe('Password never sent to the server', () => {
       expect(authContent).not.toMatch(new RegExp(`parsed\\.data\\.${field}\\b`));
       expect(authContent).not.toMatch(new RegExp(`[{,]\\s*${field}\\s*[,}][^\\n]*= parsed\\.data`));
     }
-    // The only bcrypt.compare on a raw password is the legacy-upgrade path
-    expect(authContent.match(/bcrypt\.compare\(/g)).toHaveLength(2);
-    expect(authContent).toContain('bcrypt.compare(legacyPassword!, account.passwordHash)');
+    // One bcrypt.compare, inside checkAuthSecret — no password path at all
+    expect(authContent.match(/bcrypt\.compare\(/g)).toHaveLength(1);
+    expect(authContent).not.toContain('legacyPassword');
   });
 });
 

@@ -15,10 +15,12 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getFinanceRecords: vi.fn(),
   upsertFinanceRecord: vi.fn(),
   deleteFinanceRecord: vi.fn(),
+  financeStorageBytes: vi.fn().mockResolvedValue(0),
 }));
 
 import financeRouter from '../../routes/finance.js';
-import { ensureFinanceTables, getFinanceRecords, upsertFinanceRecord, deleteFinanceRecord } from '../../db/tenantQueries.js';
+import { ensureFinanceTables, getFinanceRecords, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes } from '../../db/tenantQueries.js';
+import { FINANCE_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 
 const app = createTestApp('/api/finance', financeRouter);
 
@@ -85,6 +87,15 @@ describe('Finance Routes', () => {
       expect(args[2]).toBe(ID);
       expect(Buffer.isBuffer(args[3])).toBe(true);
       expect(args[3].toString()).toBe('cipher');
+    });
+
+    it('refuses a record once finance storage is full (the row being replaced not counted)', async () => {
+      (financeStorageBytes as any).mockResolvedValueOnce(FINANCE_STORAGE_LIMIT_BYTES);
+      const res = await request(app).put(`/api/finance/goals/${ID}`)
+        .send({ payload: Buffer.from('cipher').toString('base64'), iv: Buffer.from('iv-bytes').toString('base64') });
+      expect(res.status).toBe(413);
+      expect(financeStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { kind: 'goals', id: ID });
+      expect(upsertFinanceRecord).not.toHaveBeenCalled();
     });
 
     it('rejects a non-UUID id', async () => {

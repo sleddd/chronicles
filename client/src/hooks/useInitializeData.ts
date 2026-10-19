@@ -8,9 +8,10 @@ import { loadImageStorageConfig } from '../services/imageStorage.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
-import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesAllowed } from '../services/entryReseal.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -19,7 +20,7 @@ import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
  */
 export function useInitializeData() {
   const { encryptionData } = useAuth();
-  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptBytes, decryptBytes } = useEncryption();
+  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
   const {
     setDecryptedEntries, setRawEntries, setTopics, setFeatureFlags,
     isInitialized, setLoading, isLoading,
@@ -54,15 +55,12 @@ export function useInitializeData() {
         const [rawEntries, topicsData, settingsData] = await Promise.all([
           entriesApi.getAll(), topicsApi.getAll(), settingsApi.getAll(),
         ]);
-        // The old plaintext dose log is re-saved encrypted, once per session
-        void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
+        // Dose records sealed before they were bound to their day are re-saved, once
+        void dosesApi.resealOlder().catch(() => { /* tried again next session */ });
 
         // Apply theme settings
-        const settingsMap: Record<string, unknown> = {};
-        for (const s of settingsData) settingsMap[s.key] = s.value;
-        // Personal settings are master-key encrypted; old plaintext ones get sealed now
-        const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
-        if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
+        // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
+        const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         // No saved accent → Teal (never the previous account's colour)
         const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
         setAccentColor(accent);
@@ -77,14 +75,15 @@ export function useInitializeData() {
         }
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
         useUIStore.getState().setIcsIncludeDetails(settingsMap.icsIncludeDetails === true);
+        useUIStore.getState().setIcsFeedEnabled(settingsMap.icsFeedEnabled === true);
         // Entry images are opt-in — defaults false, deliberately NOT in the default-true flag bag
         if (typeof settingsMap.imagesEnabled === 'boolean') setImagesEnabled(settingsMap.imagesEnabled);
         // R2 credentials live in a master-key-encrypted setting; decrypt client-side
-        loadImageStorageConfig(settingsMap.imageStorageConfig, decryptBytes)
+        loadImageStorageConfig(sealed('imageStorageConfig'), decryptBytes)
           .then(setImagesConfigured)
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
-        void loadAiConfig(settingsMap.aiConfig, decryptBytes);
+        void loadAiConfig(sealed('aiConfig'), decryptBytes);
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.googleCalendarId === 'string') setGoogleCalendarId(settingsMap.googleCalendarId);
         if (typeof settingsMap.googleSyncToken === 'string') setGoogleSyncToken(settingsMap.googleSyncToken);
@@ -108,6 +107,8 @@ export function useInitializeData() {
         }));
         setRawEntries(encrypted);
 
+        // Older entry formats open only until this account is past the move to v3
+        setOlderEntriesAllowed(sealed(ENTRIES_SEAL_MARKER) === undefined);
         // Decrypt entries individually — skip ones that fail
         const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
         for (const entry of encrypted) {
@@ -127,6 +128,11 @@ export function useInitializeData() {
           }
         }
         setDecryptedEntries(decrypted);
+        // Once per account: re-save older entries bound to their id, then mark it done
+        if (olderEntriesAllowed()) {
+          void resealOlderEntries(decrypted, encryptPost, encryptBytes)
+            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err));
+        }
         setLoading(false);
       } catch (err) {
         // Transient failure (rate limit, server restart, network) — keep the

@@ -397,7 +397,7 @@ export function MenuView() {
   const allTopics            = useEntriesStore(s => s.allTopics);
   const addDecryptedEntry    = useEntriesStore(s => s.addDecryptedEntry);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const navigate = useNavigate();
 
   const [weekStart, setWeekStart]   = useState(() => getMonday(new Date()));
@@ -539,15 +539,15 @@ export function MenuView() {
 
       if (menuPlanEntry) {
         updateDecryptedEntry(menuPlanEntry.id, { metadata });
-        const encrypted = await encryptPost(content, metadata);
+        const encrypted = await encryptPost(menuPlanEntry.id, content, metadata);
         await entriesApi.update(menuPlanEntry.id, {
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           taxonomyIds: [menuPlanTopicId],
         });
       } else {
-        const encrypted = await encryptPost(content, metadata);
-        const result = await entriesApi.create({
+        const encrypted = await encryptNewPost(content, metadata);
+        const result = await entriesApi.create({ id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: [menuPlanTopicId],
@@ -566,7 +566,7 @@ export function MenuView() {
     } finally {
       setIsSaving(false);
     }
-  }, [menuPlanTopicId, weekStart, weekStartStr, meals, encryptPost, updateDecryptedEntry, addDecryptedEntry]);
+  }, [menuPlanTopicId, weekStart, weekStartStr, meals, encryptPost, encryptNewPost, updateDecryptedEntry, addDecryptedEntry]);
   handleSaveRef.current = handleSave;
 
   const handleGenerateShoppingList = useCallback(async () => {
@@ -605,8 +605,8 @@ export function MenuView() {
       const content = `<p>Shopping List: ${fmtShort(weekStart)} – ${fmtShort(weekEnd)}</p>`;
       const customFields = { items, notes: '', linkedRecipeIds };
       const metadata: Record<string, unknown> = { _taxonomyId: shoppingListTopicId, _customFields: customFields };
-      const encrypted = await encryptPost(content, metadata);
-      const result = await entriesApi.create({
+      const encrypted = await encryptNewPost(content, metadata);
+      const result = await entriesApi.create({ id: encrypted.id,
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
         isEncrypted: true, taxonomyIds: [shoppingListTopicId],
@@ -623,7 +623,7 @@ export function MenuView() {
     } finally {
       setIsGenerating(false);
     }
-  }, [meals, entries, weekStart, shoppingListTopicId, encryptPost, addDecryptedEntry]);
+  }, [meals, entries, weekStart, shoppingListTopicId, encryptNewPost, addDecryptedEntry]);
 
   /* ── Render helpers ── */
 

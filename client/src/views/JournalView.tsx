@@ -25,7 +25,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi, retryDelayMs } from '../services/api.js';
-import { openPrivateSettings, migratePrivateSettings } from '../services/privateSettings.js';
+import { openStartupSettings } from '../services/privateSettings.js';
 import { loadAiConfig } from '../services/aiAssistant.js';
 import { uploadEntryImage, bestEffortDeleteImages, collectImageKeys, loadImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { filterDeletableImageKeys } from '../utils/entryActions.js';
@@ -38,6 +38,7 @@ import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
+import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesAllowed } from '../services/entryReseal.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -156,7 +157,7 @@ const imagesSig = (imgs: EntryImage[], featured: string | null) =>
 
 export function JournalView() {
   const { encryptionData } = useAuth();
-  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
+  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptNewPost, encryptBytes, decryptBytes } = useEncryption();
   const {
     decryptedEntries, setDecryptedEntries, setRawEntries,
     topics, setTopics, setFeatureFlags, isInitialized, setLoading, isLoading,
@@ -325,7 +326,9 @@ export function JournalView() {
       finalContent = `<p>${parts.join(' · ') || 'Wellness check-in'}</p>`;
     }
     try {
-      const encrypted = await encryptPost(finalContent, metadata);
+      const encrypted = selectedEntryId
+        ? { ...(await encryptPost(selectedEntryId, finalContent, metadata)), id: selectedEntryId }
+        : await encryptNewPost(finalContent, metadata);
       if (selectedEntryId) {
         await entriesApi.update(selectedEntryId, {
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
@@ -335,6 +338,7 @@ export function JournalView() {
         updateDecryptedEntry(selectedEntryId, { content: finalContent, metadata });
       } else {
         const result = await entriesApi.create({
+          id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: [editorTopicId],
@@ -392,7 +396,9 @@ export function JournalView() {
       if (featuredKey) metadata._featuredKey = featuredKey;
     }
     try {
-      const encrypted = await encryptPost(contentToSave, metadata);
+      const encrypted = selectedEntryId
+        ? { ...(await encryptPost(selectedEntryId, contentToSave, metadata)), id: selectedEntryId }
+        : await encryptNewPost(contentToSave, metadata);
       if (selectedEntryId) {
         await entriesApi.update(selectedEntryId, {
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
@@ -402,6 +408,7 @@ export function JournalView() {
         updateDecryptedEntry(selectedEntryId, { content: contentToSave, metadata });
       } else {
         const result = await entriesApi.create({
+          id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: effectiveTopicId ? [effectiveTopicId] : [],
@@ -471,13 +478,11 @@ export function JournalView() {
         const [rawEntries, topicsData, settingsData] = await Promise.all([
           entriesApi.getAll(), topicsApi.getAll(), settingsApi.getAll(),
         ]);
-        // The old plaintext dose log is re-saved encrypted, once per session
-        void dosesApi.migrateLegacy().catch(() => { /* tried again next session */ });
+        // Dose records sealed before they were bound to their day are re-saved, once
+        void dosesApi.resealOlder().catch(() => { /* tried again next session */ });
         // Apply saved theme settings
-        const settingsMap: Record<string, unknown> = {};
-        for (const s of settingsData) settingsMap[s.key] = s.value;
-        const legacyPrivate = await openPrivateSettings(settingsMap, decryptBytes);
-        if (legacyPrivate.length) void migratePrivateSettings(settingsMap, legacyPrivate, encryptBytes);
+        // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
+        const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') setAccentColor(settingsMap.accentColor);
         { const pref = parseThemePreference(settingsMap.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
@@ -491,15 +496,16 @@ export function JournalView() {
         // app initializes via /journal
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') useUIStore.getState().setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
         useUIStore.getState().setIcsIncludeDetails(settingsMap.icsIncludeDetails === true);
+        useUIStore.getState().setIcsFeedEnabled(settingsMap.icsFeedEnabled === true);
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') useUIStore.getState().setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.displayName === 'string') useUIStore.getState().setDisplayName(settingsMap.displayName);
         // Entry images are opt-in (default false); credentials are a master-key-encrypted setting
         if (typeof settingsMap.imagesEnabled === 'boolean') setImagesEnabled(settingsMap.imagesEnabled);
-        loadImageStorageConfig(settingsMap.imageStorageConfig, decryptBytes)
+        loadImageStorageConfig(sealed('imageStorageConfig'), decryptBytes)
           .then(setImagesConfigured)
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
-        void loadAiConfig(settingsMap.aiConfig, decryptBytes);
+        void loadAiConfig(sealed('aiConfig'), decryptBytes);
         // Feature flags (must be set before setTopics so filtering works);
         // never-saved flags default to enabled, same as useInitializeData
         setFeatureFlags(featureFlagsFrom(settingsMap));
@@ -518,6 +524,8 @@ export function JournalView() {
         }));
         setRawEntries(encrypted);
 
+        // Older entry formats open only until this account is past the move to v3
+        setOlderEntriesAllowed(sealed(ENTRIES_SEAL_MARKER) === undefined);
         // Decrypt entries individually — skip ones that fail
         const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
         for (const entry of encrypted) {
@@ -538,6 +546,11 @@ export function JournalView() {
           }
         }
         setDecryptedEntries(decrypted);
+        // Once per account: re-save older entries bound to their id, then mark it done
+        if (olderEntriesAllowed()) {
+          void resealOlderEntries(decrypted, encryptPost, encryptBytes)
+            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err));
+        }
         setLoading(false);
       } catch (err) {
         // Transient failure (rate limit, server restart, network): keep the
@@ -625,7 +638,9 @@ export function JournalView() {
         metadata._images = entryImages;
         if (featuredKey) metadata._featuredKey = featuredKey;
       }
-      const encrypted = await encryptPost(finalContent, metadata);
+      const encrypted = selectedEntryId
+        ? { ...(await encryptPost(selectedEntryId, finalContent, metadata)), id: selectedEntryId }
+        : await encryptNewPost(finalContent, metadata);
 
       // Save the entry (it closes once saved — see below)
       if (selectedEntryId) {
@@ -637,6 +652,7 @@ export function JournalView() {
         updateDecryptedEntry(selectedEntryId, { content: finalContent, metadata });
       } else {
         const result = await entriesApi.create({
+          id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: effectiveTopicId ? [effectiveTopicId] : [],
@@ -658,7 +674,7 @@ export function JournalView() {
       if (originPath) navigate(originPath);
     } catch (err) { console.error('Save failed:', err); setSaveStatus('Save failed'); }
     finally { setIsSaving(false); }
-  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate]);
+  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, encryptNewPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate]);
 
   /** Persist the image set into an existing entry's encrypted metadata.
    *  Rebuilds from the store entry (mirrors handleBookmark) so it is safe to
@@ -676,7 +692,7 @@ export function JournalView() {
       delete meta._featuredKey;
     }
     try {
-      const encrypted = await encryptPost(entry.content, meta);
+      const encrypted = await encryptPost(entryId, entry.content, meta);
       await entriesApi.update(entryId, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
@@ -871,7 +887,7 @@ export function JournalView() {
 
     // Persist to server
     try {
-      const encrypted = await encryptPost(editorContent, updatedMeta);
+      const encrypted = await encryptPost(selectedEntryId, editorContent, updatedMeta);
       await entriesApi.update(selectedEntryId, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
@@ -892,7 +908,7 @@ export function JournalView() {
 
     // Persist to server
     try {
-      const encrypted = await encryptPost(entry.content, updatedMeta);
+      const encrypted = await encryptPost(entryId, entry.content, updatedMeta);
       await entriesApi.update(entryId, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,

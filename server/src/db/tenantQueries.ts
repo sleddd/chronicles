@@ -60,6 +60,18 @@ export async function getAllSettings(schemaName: string): Promise<TenantSetting[
   );
 }
 
+export async function countSettings(schemaName: string): Promise<number> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT COUNT(*) AS n FROM ${s}.settings`);
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function settingExists(schemaName: string, key: string): Promise<boolean> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ e: boolean }[]>(`SELECT EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) AS e`, key);
+  return !!rows[0]?.e;
+}
+
 export async function upsertSetting(schemaName: string, key: string, value: unknown): Promise<TenantSetting> {
   const s = escapeSchema(schemaName);
   const result = await prisma.$queryRawUnsafe<TenantSetting[]>(
@@ -112,10 +124,21 @@ export async function ensureTopicEncryptionColumns(schemaName: string): Promise<
   topicColumnsReady.add(s);
 }
 
+/** Reserve ids for new topics (a topic's payload is bound to its id, so it's needed first). */
+export async function reserveTaxonomyIds(schemaName: string, count: number): Promise<number[]> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT nextval('${s}.taxonomies_id_seq')::int AS id FROM generate_series(1, $1)`,
+    count
+  );
+  return rows.map(r => r.id);
+}
+
+/** Create a topic under a reserved id. Null when the id was never handed out or is taken. */
 export async function createTaxonomy(
   schemaName: string,
-  data: { payload: string; iv: string; color?: string }
-): Promise<TenantTaxonomy> {
+  data: { id: number; payload: string; iv: string; color?: string }
+): Promise<TenantTaxonomy | null> {
   const s = escapeSchema(schemaName);
   // Auto-assign sort_order as max + 1
   const maxResult = await prisma.$queryRawUnsafe<{ max_order: number | null }[]>(
@@ -123,15 +146,18 @@ export async function createTaxonomy(
   );
   const nextOrder = (maxResult[0]?.max_order ?? -1) + 1;
   const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(
-    `INSERT INTO ${s}.taxonomies (color, sort_order, payload_encrypted, payload_iv)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO ${s}.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)
+     SELECT $1, $2, $3, $4, $5
+     WHERE $1 <= (SELECT last_value FROM ${s}.taxonomies_id_seq)
+     ON CONFLICT (id) DO NOTHING
      RETURNING ${TAXONOMY_COLUMNS}`,
+    data.id,
     data.color ?? null,
     nextOrder,
     Buffer.from(data.payload, 'base64'),
     Buffer.from(data.iv, 'base64'),
   );
-  return toTaxonomy(result[0]);
+  return result[0] ? toTaxonomy(result[0]) : null;
 }
 
 export async function getTaxonomy(schemaName: string, id: number): Promise<TenantTaxonomy | null> {
@@ -185,30 +211,35 @@ export async function deleteTaxonomy(schemaName: string, id: number): Promise<vo
 
 export async function reorderTaxonomies(schemaName: string, orderedIds: number[]): Promise<void> {
   const s = escapeSchema(schemaName);
-  await prisma.$transaction(async (tx) => {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await tx.$executeRawUnsafe(
-        `UPDATE ${s}.taxonomies SET sort_order = $1 WHERE id = $2`,
-        i,
-        orderedIds[i]
-      );
-    }
-  });
+  // One statement: each id's position in the list becomes its sort order
+  await prisma.$executeRawUnsafe(
+    `UPDATE ${s}.taxonomies t SET sort_order = o.pos - 1
+     FROM unnest($1::int[]) WITH ORDINALITY AS o(id, pos)
+     WHERE t.id = o.id`,
+    orderedIds
+  );
 }
 
 // =============================================================================
 // Posts
 // =============================================================================
 
+/** A new encrypted entry under an id reserved by reservePostIds (its ciphertext is bound to it). */
 export interface CreatePostInput {
-  content?: string;
-  metadata?: Record<string, unknown>;
-  contentEncrypted?: Buffer;
-  contentIv?: Buffer;
-  metadataEncrypted?: Buffer;
-  metadataIv?: Buffer;
-  isEncrypted?: boolean;
+  id: number;
+  contentEncrypted: Buffer;
+  contentIv: Buffer;
+  metadataEncrypted: Buffer;
+  metadataIv: Buffer;
   createdAt?: Date;
+}
+
+/** The four encrypted fields an update replaces together. */
+export interface EncryptedPostFields {
+  contentEncrypted: Buffer;
+  contentIv: Buffer;
+  metadataEncrypted: Buffer;
+  metadataIv: Buffer;
 }
 
 const POST_SELECT = `id, content, metadata,
@@ -216,55 +247,57 @@ const POST_SELECT = `id, content, metadata,
   metadata_encrypted as "metadataEncrypted", metadata_iv as "metadataIv",
   is_encrypted as "isEncrypted", created_at as "createdAt", updated_at as "updatedAt"`;
 
-export async function createPost(schemaName: string, input: CreatePostInput): Promise<TenantPost> {
+/**
+ * Reserve ids for new entries. The client encrypts an entry bound to its id
+ * (the id is in the AAD), so it needs the id before the entry exists.
+ */
+export async function reservePostIds(schemaName: string, count: number): Promise<number[]> {
   const s = escapeSchema(schemaName);
-
-  if (input.isEncrypted) {
-    if (input.createdAt) {
-      const result = await prisma.$queryRawUnsafe<TenantPost[]>(
-        `INSERT INTO ${s}.posts (content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, TRUE, $5, $5)
-         RETURNING ${POST_SELECT}`,
-        input.contentEncrypted,
-        input.contentIv,
-        input.metadataEncrypted,
-        input.metadataIv,
-        input.createdAt
-      );
-      return result[0];
-    }
-    const result = await prisma.$queryRawUnsafe<TenantPost[]>(
-      `INSERT INTO ${s}.posts (content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted)
-       VALUES ($1, $2, $3, $4, TRUE)
-       RETURNING ${POST_SELECT}`,
-      input.contentEncrypted,
-      input.contentIv,
-      input.metadataEncrypted,
-      input.metadataIv
-    );
-    return result[0];
-  }
-
-  if (input.createdAt) {
-    const result = await prisma.$queryRawUnsafe<TenantPost[]>(
-      `INSERT INTO ${s}.posts (content, metadata, is_encrypted, created_at, updated_at)
-       VALUES ($1, $2::jsonb, FALSE, $3, $3)
-       RETURNING ${POST_SELECT}`,
-      input.content ?? '',
-      JSON.stringify(input.metadata ?? {}),
-      input.createdAt
-    );
-    return result[0];
-  }
-
-  const result = await prisma.$queryRawUnsafe<TenantPost[]>(
-    `INSERT INTO ${s}.posts (content, metadata, is_encrypted)
-     VALUES ($1, $2::jsonb, FALSE)
-     RETURNING ${POST_SELECT}`,
-    input.content ?? '',
-    JSON.stringify(input.metadata ?? {})
+  const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT nextval('${s}.posts_id_seq')::int AS id FROM generate_series(1, $1)`,
+    count
   );
-  return result[0];
+  return rows.map(r => r.id);
+}
+
+/**
+ * Create an encrypted entry under a reserved id. Returns null when the id was
+ * never handed out (beyond the sequence) or is taken. Server and client both
+ * refuse plaintext posts, so there is no plaintext path.
+ */
+export async function createPost(schemaName: string, input: CreatePostInput): Promise<TenantPost | null> {
+  const s = escapeSchema(schemaName);
+  const result = await prisma.$queryRawUnsafe<TenantPost[]>(
+    `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+     SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
+     WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
+     ON CONFLICT (id) DO NOTHING
+     RETURNING ${POST_SELECT}`,
+    input.id,
+    input.contentEncrypted,
+    input.contentIv,
+    input.metadataEncrypted,
+    input.metadataIv,
+    input.createdAt ?? null
+  );
+  return result[0] ?? null;
+}
+
+/**
+ * Replace the encrypted fields of several entries at once, keeping their
+ * updated_at (a re-seal changes the format, not the entry). Returns how many
+ * were re-sealed.
+ */
+export async function resealPosts(schemaName: string, posts: (EncryptedPostFields & { id: number; updatedAt: Date })[]): Promise<number> {
+  const s = escapeSchema(schemaName);
+  // Only while the entry is unchanged since the client loaded it: an edit in
+  // between was saved id-bound already and must not be overwritten
+  const counts = await prisma.$transaction(posts.map(p => prisma.$executeRawUnsafe(
+    `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4
+     WHERE id = $5 AND is_encrypted = TRUE AND date_trunc('milliseconds', updated_at) = $6`,
+    p.contentEncrypted, p.contentIv, p.metadataEncrypted, p.metadataIv, p.id, p.updatedAt
+  )));
+  return counts.reduce((a, b) => a + b, 0);
 }
 
 export async function getPost(schemaName: string, id: number): Promise<TenantPost | null> {
@@ -291,15 +324,13 @@ export async function getAllPosts(
 export async function updatePost(
   schemaName: string,
   id: number,
-  updates: Partial<CreatePostInput>
-): Promise<TenantPost> {
+  updates: Partial<EncryptedPostFields>
+): Promise<TenantPost | undefined> {
   const s = escapeSchema(schemaName);
   const setClauses: string[] = [];
   const values: unknown[] = [];
   let paramIndex = 1;
 
-  if (updates.content !== undefined) { setClauses.push(`content = $${paramIndex++}`); values.push(updates.content); }
-  if (updates.metadata !== undefined) { setClauses.push(`metadata = $${paramIndex}::jsonb`); paramIndex++; values.push(JSON.stringify(updates.metadata)); }
   if (updates.contentEncrypted !== undefined) { setClauses.push(`content_encrypted = $${paramIndex++}`); values.push(updates.contentEncrypted); }
   if (updates.contentIv !== undefined) { setClauses.push(`content_iv = $${paramIndex++}`); values.push(updates.contentIv); }
   if (updates.metadataEncrypted !== undefined) { setClauses.push(`metadata_encrypted = $${paramIndex++}`); values.push(updates.metadataEncrypted); }
@@ -313,6 +344,17 @@ export async function updatePost(
     ...values
   );
   return result[0];
+}
+
+/** Bytes of encrypted content + metadata over all entries (leaving out the ones being replaced). */
+export async function postStorageBytes(schemaName: string, exclude: number | number[] = []): Promise<number> {
+  const s = escapeSchema(schemaName);
+  const rows = await prisma.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+    `SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)), 0) AS n
+     FROM ${s}.posts WHERE NOT (id = ANY($1::int[]))`,
+    Array.isArray(exclude) ? exclude : [exclude]
+  );
+  return Number(rows[0]?.n ?? 0);
 }
 
 export async function deletePost(schemaName: string, id: number): Promise<void> {
@@ -397,6 +439,19 @@ export async function upsertFinanceRecord(
   return rows[0];
 }
 
+/** Bytes of encrypted payloads over every finance table (optionally leaving one row out). */
+export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }): Promise<number> {
+  const s = escapeSchema(schemaName);
+  const parts = (Object.keys(FINANCE_TABLES) as FinanceTableKind[]).map(kind =>
+    `SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]}`
+    + (exclude?.kind === kind ? ' WHERE id <> $1' : ''));
+  const rows = await prisma.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+    `SELECT COALESCE(SUM(n), 0) AS n FROM (${parts.join(' UNION ALL ')}) t`,
+    ...(exclude ? [exclude.id] : [])
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 /** Returns true when a row was deleted. */
 export async function deleteFinanceRecord(schemaName: string, kind: FinanceTableKind, id: string): Promise<boolean> {
   const s = escapeSchema(schemaName);
@@ -473,53 +528,18 @@ export async function deleteDoseRecord(schemaName: string, id: string): Promise<
   return (await prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_records WHERE id = $1`, id)) > 0;
 }
 
-async function legacyDoseTableExists(s: string): Promise<boolean> {
-  const r = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
-    `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'medication_dose_logs') as exists`, s);
-  return !!r[0]?.exists;
-}
-
-/** Legacy plaintext dose logs still waiting for the browser to migrate them ([] once gone). */
-export async function getLegacyDoseLogs(schemaName: string): Promise<DoseLog[]> {
+/**
+ * Re-save dose records sealed the newer way (bound to their day as well as
+ * their id). Only rows that exist, on the same day, are touched; updated_at
+ * stays. Returns how many were re-sealed.
+ */
+export async function resealDoseRecords(schemaName: string, records: { id: string; date: string; payload: Buffer; iv: Buffer }[]): Promise<number> {
   const s = escapeSchema(schemaName);
-  if (!(await legacyDoseTableExists(s))) return [];
-  return getAllDoseLogs(schemaName);
-}
-
-/** Delete the legacy plaintext dose logs (after the browser has migrated them). */
-export async function deleteLegacyDoseLogs(schemaName: string): Promise<number> {
-  const s = escapeSchema(schemaName);
-  if (!(await legacyDoseTableExists(s))) return 0;
-  return prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_logs`);
-}
-
-// =============================================================================
-// Medication Dose Logs (legacy, plaintext — read only for migration)
-// =============================================================================
-
-export interface DoseLog {
-  id: number;
-  medicationPostId: number;
-  scheduledTime: string;
-  takenAt: string | null;
-  date: string;
-  status: string;
-  createdAt: Date;
-}
-
-/** Every dose log, oldest first (Settings → Data → Export All). */
-export async function getAllDoseLogs(schemaName: string): Promise<DoseLog[]> {
-  const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<DoseLog[]>(
-    `SELECT id, medication_post_id as "medicationPostId",
-            TO_CHAR(scheduled_time, 'HH24:MI') as "scheduledTime",
-            taken_at as "takenAt",
-            TO_CHAR(date, 'YYYY-MM-DD') as "date",
-            status, created_at as "createdAt"
-     FROM ${s}.medication_dose_logs
-     ORDER BY date ASC, scheduled_time ASC`
-  );
-  return rows.map(r => ({ ...r, id: Number(r.id), medicationPostId: Number(r.medicationPostId) }));
+  const counts = await prisma.$transaction(records.map(r => prisma.$executeRawUnsafe(
+    `UPDATE ${s}.medication_dose_records SET payload_encrypted = $1, payload_iv = $2 WHERE id = $3 AND date = $4::date`,
+    r.payload, r.iv, r.id, r.date
+  )));
+  return counts.reduce((a, b) => a + b, 0);
 }
 
 // =============================================================================

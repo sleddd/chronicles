@@ -8,12 +8,6 @@ import { EncryptionProvider, useEncryption } from '../contexts/EncryptionContext
 // ---------------------------------------------------------------------------
 
 const mockUnwrapMasterKey = vi.fn();
-const legacyState = vi.hoisted(() => ({ legacy: false }));
-const authState = vi.hoisted(() => ({ value: null as null | { user: { email: string }; updateEncryptionData: (p: unknown) => void } }));
-const mockKeyWrap = vi.hoisted(() => vi.fn().mockResolvedValue({ success: true }));
-vi.mock('../contexts/AuthContext.js', () => ({ useOptionalAuth: () => authState.value }));
-vi.mock('../services/api.js', () => ({ auth: { keyWrap: (...a: unknown[]) => mockKeyWrap(...a) } }));
-vi.mock('@shared/crypto/authSecret.js', () => ({ deriveAuthSecret: async () => 'a'.repeat(64) }));
 const mockSetupEncryption = vi.fn();
 const mockEncryptPost = vi.fn();
 const mockDecryptPost = vi.fn();
@@ -25,7 +19,6 @@ const mockRewrapFromParams = vi.fn();
 vi.mock('@shared/crypto/encryptionService.js', () => ({
   encryptionService: {
     unwrapMasterKey: (...args: unknown[]) => mockUnwrapMasterKey(...args),
-    unwrapMasterKeyDetailed: async (...args: unknown[]) => ({ masterKey: await mockUnwrapMasterKey(...args), legacyWrap: legacyState.legacy }),
     setupEncryption: (...args: unknown[]) => mockSetupEncryption(...args),
     encryptPost: (...args: unknown[]) => mockEncryptPost(...args),
     decryptPost: (...args: unknown[]) => mockDecryptPost(...args),
@@ -91,37 +84,6 @@ describe('EncryptionProvider – unlock', () => {
     expect(mockUnwrapMasterKey).toHaveBeenCalledWith('password', 'salt', 'emk', 'iv', 600000);
   });
 
-  it('re-wraps a key stored in the old no-AAD format and saves it, keeping the same password', async () => {
-    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
-    mockRewrapFromParams.mockResolvedValue({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
-    legacyState.legacy = true;
-    const updateEncryptionData = vi.fn();
-    authState.value = { user: { email: 'a@b.co' }, updateEncryptionData };
-    try {
-      const { result } = renderHook(() => useEncryption(), { wrapper });
-      await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
-      await vi.waitFor(() => expect(mockKeyWrap).toHaveBeenCalled());
-      expect(mockRewrapFromParams).toHaveBeenCalledWith('password', 'salt', 'emk', 'iv', 600000, 'password');
-      expect(mockKeyWrap).toHaveBeenCalledWith({ currentAuthSecret: 'a'.repeat(64), encryptedMasterKey: 'nwmk', kekSalt: 'ns', kekWrapIv: 'nwiv', kekIterations: 600000 });
-      expect(updateEncryptionData).toHaveBeenCalledWith({ kekSalt: 'ns', encryptedMasterKey: 'nwmk', kekWrapIv: 'nwiv', kekIterations: 600000 });
-    } finally {
-      legacyState.legacy = false;
-      authState.value = null;
-    }
-  });
-
-  it('leaves a current-format key alone', async () => {
-    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
-    authState.value = { user: { email: 'a@b.co' }, updateEncryptionData: vi.fn() };
-    try {
-      const { result } = renderHook(() => useEncryption(), { wrapper });
-      await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
-      expect(mockKeyWrap).not.toHaveBeenCalled();
-    } finally {
-      authState.value = null;
-    }
-  });
-
   it('rejects iterations below PBKDF2_ITERATIONS minimum', async () => {
     const { result } = renderHook(() => useEncryption(), { wrapper });
 
@@ -152,6 +114,23 @@ describe('EncryptionProvider – lock', () => {
 
     expect(result.current.isUnlocked).toBe(false);
   });
+
+  it('drops decrypted entries, topics and private settings from the stores', async () => {
+    const { useEntriesStore } = await import('../stores/entriesStore.js');
+    const { useUIStore } = await import('../stores/uiStore.js');
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    useEntriesStore.setState({ decryptedEntries: [{ id: 1, content: 'secret' }] as never, isInitialized: true });
+    useUIStore.setState({ displayName: 'Alex', topicCustomFields: { 1: [] } });
+
+    act(() => { result.current.lock(); });
+
+    expect(useEntriesStore.getState().decryptedEntries).toEqual([]);
+    expect(useEntriesStore.getState().isInitialized).toBe(false);
+    expect(useUIStore.getState().displayName).toBe('');
+    expect(useUIStore.getState().topicCustomFields).toEqual({});
+  });
 });
 
 describe('EncryptionProvider – setupEncryption', () => {
@@ -166,6 +145,8 @@ describe('EncryptionProvider – setupEncryption', () => {
       masterKey: fakeCryptoKey,
     };
     mockSetupEncryption.mockResolvedValue(setupResult);
+    // No cipher left over from an earlier test
+    (await import('../services/recordCipher.js')).clearRecordCipher();
 
     const { result } = renderHook(() => useEncryption(), { wrapper });
 
@@ -177,6 +158,9 @@ describe('EncryptionProvider – setupEncryption', () => {
     expect(result.current.isUnlocked).toBe(true);
     expect(returned).toEqual(setupResult);
     expect(mockSetupEncryption).toHaveBeenCalledWith('password');
+    // The record cipher is installed too, so a new account can seal its topics right away
+    const { recordCipher } = await import('../services/recordCipher.js');
+    expect(() => recordCipher()).not.toThrow();
   });
 });
 
@@ -194,11 +178,11 @@ describe('EncryptionProvider – encryptPost', () => {
 
     let encrypted: unknown;
     await act(async () => {
-      encrypted = await result.current.encryptPost('content', { topic: 'Journal' });
+      encrypted = await result.current.encryptPost(7, 'content', { topic: 'Journal' });
     });
 
     expect(encrypted).toEqual(encResult);
-    expect(mockEncryptPost).toHaveBeenCalled();
+    expect(mockEncryptPost).toHaveBeenCalledWith(expect.anything(), 7, 'content', { topic: 'Journal' });
   });
 
   it('throws when not unlocked', async () => {
@@ -206,7 +190,7 @@ describe('EncryptionProvider – encryptPost', () => {
 
     await expect(
       act(async () => {
-        await result.current.encryptPost('content', {});
+        await result.current.encryptPost(1, 'content', {});
       })
     ).rejects.toThrow('Encryption not unlocked');
   });

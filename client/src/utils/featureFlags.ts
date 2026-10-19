@@ -1,11 +1,7 @@
-/** Feature flags the app knows about — each defaults to enabled when never saved. */
-export const KNOWN_FEATURE_FLAGS = [
-  'foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled',
-  'exerciseEnabled', 'allergiesEnabled', 'entertainmentEnabled', 'inspirationEnabled',
-] as const;
+import { KNOWN_FEATURE_FLAGS, OPT_IN_FEATURE_FLAGS } from '@shared/validation/sealedSettings.js';
 
-/** Opt-in features — off until the user turns them on in Settings. */
-export const OPT_IN_FEATURE_FLAGS = ['financeEnabled', 'reconcileEnabled'] as const;
+// Known (default on) and opt-in (default off) flags — one list, shared with the server
+export { KNOWN_FEATURE_FLAGS, OPT_IN_FEATURE_FLAGS };
 
 /** Feature flags from loaded settings: saved booleans win; known flags default to true, opt-in flags to false. */
 export function featureFlagsFrom(settingsMap: Record<string, unknown>): Record<string, boolean> {

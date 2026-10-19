@@ -72,7 +72,7 @@ describe('authMiddleware', () => {
 
   it('requires CSRF header for cookie-based auth', async () => {
     const req = createMockReq({
-      cookies: { chronicle_session: 'a'.repeat(44) },
+      cookies: { '__Host-chronicle_session': 'a'.repeat(44) },
       headers: {},
     });
     const res = createMockRes();
@@ -82,6 +82,15 @@ describe('authMiddleware', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith({ error: 'Missing CSRF header' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('ignores a plain-named session cookie outside development (a sibling subdomain could plant one)', async () => {
+    const req = createMockReq({ cookies: { chronicle_session: 'a'.repeat(44) }, headers: { 'x-requested-with': 'XMLHttpRequest' } });
+    const res = createMockRes();
+    const next = vi.fn();
+    await authMiddleware(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -233,7 +242,7 @@ describe('authMiddleware', () => {
     });
 
     const req = createMockReq({
-      cookies: { chronicle_session: `${selector}${verifier}` },
+      cookies: { '__Host-chronicle_session': `${selector}${verifier}` },
       headers: { 'x-requested-with': 'XMLHttpRequest' },
     });
     const res = createMockRes();

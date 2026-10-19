@@ -20,13 +20,16 @@ const recoverySaltSchema = z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery 
 // Base64 key material: a wrapped 32-byte key is ~64 chars, salts and IVs ~24
 const wrappedKeySchema = z.string().min(1).max(1024);
 const saltOrIvSchema = z.string().min(1).max(64);
+// KEK salts are exactly 16 random bytes (24 base64 chars); the client refuses
+// any other length at unlock, so the server never stores one it couldn't use
+const kekSaltSchema = z.string().regex(/^[A-Za-z0-9+/]{22}==$/, 'Invalid key salt');
 
 export const registerSchema = z.object({
   email: emailSchema,
   username: usernameSchema,
   authSecret: authSecretSchema,
   encryptedMasterKey: wrappedKeySchema,
-  kekSalt: saltOrIvSchema,
+  kekSalt: kekSaltSchema,
   kekWrapIv: saltOrIvSchema,
   recoveryWrappedMK: wrappedKeySchema,
   recoveryWrapIv: saltOrIvSchema,
@@ -34,37 +37,27 @@ export const registerSchema = z.object({
   recoveryKeySalt: recoverySaltSchema,
 });
 
+// Strict: the password itself is never part of a sign-in, so a body carrying
+// anything beyond these two fields (e.g. an old client's legacyPassword) is refused
 export const loginSchema = z.object({
   email: emailSchema,
   authSecret: authSecretSchema,
-  // Sent once, only when the server answers `legacyAuth`: accounts created
-  // before derived secrets still hold a hash of the password itself
-  legacyPassword: z.string().min(1).max(1024).optional(),
-});
+}).strict();
 
 export const changePasswordSchema = z.object({
   currentAuthSecret: authSecretSchema,
   newAuthSecret: authSecretSchema,
   newEncryptedMasterKey: wrappedKeySchema,
-  newKekSalt: saltOrIvSchema,
+  newKekSalt: kekSaltSchema,
   newKekWrapIv: saltOrIvSchema,
 });
-
-/** Re-wrap the master key in the current (AAD) format — same password, new salt and IV. */
-export const keyWrapSchema = z.object({
-  currentAuthSecret: authSecretSchema,
-  encryptedMasterKey: wrappedKeySchema,
-  kekSalt: saltOrIvSchema,
-  kekWrapIv: saltOrIvSchema,
-  kekIterations: z.number().int().min(600_000).max(10_000_000),
-}).strict();
 
 export const recoverSchema = z.object({
   email: emailSchema,
   recoveryProof: recoveryProofSchema,
   newAuthSecret: authSecretSchema,
   newEncryptedMasterKey: wrappedKeySchema,
-  newKekSalt: saltOrIvSchema,
+  newKekSalt: kekSaltSchema,
   newKekWrapIv: saltOrIvSchema,
   newRecoveryWrappedMK: wrappedKeySchema,
   newRecoveryWrapIv: saltOrIvSchema,
@@ -145,19 +138,50 @@ const IV_FIELD = z.string().min(1).max(64);
 // could be created that no later edit was allowed to save
 const METADATA_FIELD = z.string().min(1).max(200_000, 'Metadata too large');
 
+// An entry's ciphertext is bound to its id, so a new entry is created under
+// an id reserved first (POST /api/entries/ids)
+const ENTRY_ID = z.number().int().positive();
+
+// `format: 3` = encrypted bound to the entry id. An older client (pair-bound
+// v2 ciphertext) is refused rather than saving an entry that would stop
+// opening once the account is past the move to v3
+const FORMAT_V3 = z.literal(3, { errorMap: () => ({ message: 'Update Chronicles to save entries' }) });
+
 export const createPostSchema = z.object({
+  id: ENTRY_ID,
+  format: FORMAT_V3,
   contentEncrypted: ENCRYPTED_FIELD,
   contentIv: IV_FIELD,
   metadataEncrypted: METADATA_FIELD,
   metadataIv: IV_FIELD,
   isEncrypted: z.literal(true, { errorMap: () => ({ message: 'Entries must be encrypted' }) }),
   taxonomyIds: z.array(z.number()).optional(),
-  createdAt: z.string().optional(),
+  createdAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export const reservePostIdsSchema = z.object({
+  count: z.number().int().min(1).max(50).default(1),
+});
+
+// The one-time move of older entries to the id-bound format: up to 100 at a time
+export const resealPostsSchema = z.object({
+  entries: z.array(z.object({
+    id: ENTRY_ID,
+    format: FORMAT_V3,
+    // The entry's updated_at as loaded: if it was edited since, the edit
+    // (already id-bound) wins and this re-seal is skipped
+    updatedAt: z.string().datetime({ offset: true }),
+    contentEncrypted: ENCRYPTED_FIELD,
+    contentIv: IV_FIELD,
+    metadataEncrypted: METADATA_FIELD,
+    metadataIv: IV_FIELD,
+  })).min(1).max(100),
 });
 
 // Content and metadata are encrypted as a bound pair (each one's AAD names the
 // other's IV), so an update replaces all four fields together or none of them
 export const updatePostSchema = z.object({
+  format: FORMAT_V3.optional(),
   contentEncrypted: ENCRYPTED_FIELD.optional(),
   contentIv: IV_FIELD.optional(),
   metadataEncrypted: METADATA_FIELD.optional(),
@@ -169,6 +193,9 @@ export const updatePostSchema = z.object({
     return n === 0 || n === 4;
   },
   { message: 'Encrypted updates must include contentEncrypted, contentIv, metadataEncrypted, and metadataIv' }
+).refine(
+  (d) => d.contentEncrypted === undefined || d.format === 3,
+  { message: 'Update Chronicles to save entries', path: ['format'] }
 );
 
 // Finance records: one encrypted JSON payload per row, keyed by a client UUID
@@ -185,17 +212,26 @@ export const putFinanceRecordSchema = z.object({
 
 // Topics: the name and icon are encrypted in the browser ({ name, icon } as one
 // payload); only the colour stays readable. Plaintext names are refused.
+// `format: 2` = the payload is bound to the topic's id. A topic is created
+// under an id reserved first (POST /api/topics/ids)
+const TOPIC_FORMAT_V2 = z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save topics' }) });
+
 export const createTaxonomySchema = z.object({
+  id: z.number().int().positive(),
+  format: TOPIC_FORMAT_V2,
   payload: z.string().min(1).max(20_000),
   iv: IV_FIELD,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid hex color').optional(),
 }).strict();
 
 export const updateTaxonomySchema = z.object({
+  format: TOPIC_FORMAT_V2.optional(),
   payload: z.string().min(1).max(20_000).optional(),
   iv: IV_FIELD.optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-}).strict().refine(d => (d.payload === undefined) === (d.iv === undefined), { message: 'payload and iv go together' });
+}).strict()
+  .refine(d => (d.payload === undefined) === (d.iv === undefined), { message: 'payload and iv go together' })
+  .refine(d => d.payload === undefined || d.format === 2, { message: 'Update Chronicles to save topics', path: ['format'] });
 
 /** A request still sending a plaintext topic name or icon (an out-of-date app). */
 export function isPlaintextTopicWrite(body: unknown): boolean {
@@ -204,11 +240,24 @@ export function isPlaintextTopicWrite(body: unknown): boolean {
 
 // Encrypted dose records: { date } readable, everything else in the payload
 export const doseRecordIdSchema = z.string().uuid('Invalid dose id');
+// `format: 2` = sealed bound to the record's id and its day, so the server
+// can't move a dose to another day; an older client is told to update
 export const putDoseRecordSchema = z.object({
+  format: z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save doses' }) }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
   payload: z.string().min(1).max(10_000),
   iv: IV_FIELD,
 }).strict();
+
+// The one-time move of older dose records to the day-bound seal
+export const resealDoseRecordsSchema = z.object({
+  records: z.array(z.object({
+    id: z.string().uuid(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    payload: z.string().min(1).max(10_000),
+    iv: IV_FIELD,
+  })).min(1).max(200),
+});
 
 // Entry images — client-side validation of the user's R2 credentials before
 // they are encrypted with the master key and stored as a setting. The server

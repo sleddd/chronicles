@@ -277,7 +277,7 @@ export function GoalCard({ goal, milestones, accentColor, isEditing, onSelect, o
     try {
       const cf = { ...goal.customFields, ...editFields };
       const metadata: Record<string, unknown> = { _taxonomyId: goal.taxonomyId, _customFields: cf };
-      const encrypted = await encryptPost(editContent, metadata);
+      const encrypted = await encryptPost(goal.id, editContent, metadata);
       await entriesApi.update(goal.id, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,

@@ -14,7 +14,6 @@ import { SidebarToggle } from '../atoms/SidebarToggle.js';
 import type { Topic } from '../../types/topics.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
-import { settings as settingsApi } from '../../services/api.js';
 import { usePrivateSettings } from '../../services/privateSettings.js';
 import type { UserFieldDef } from '../../types/userFields.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
@@ -293,9 +292,9 @@ export function TopicSidebarPanel({
 
   const handleHideTextChange = useCallback((topicId: number, hide: boolean) => {
     useUIStore.getState().updateTopicHideText(topicId, hide);
-    settingsApi.upsert('topicHideText', useUIStore.getState().topicHideText)
+    savePrivateSetting('topicHideText', useUIStore.getState().topicHideText)
       .catch(err => console.error('Failed to save topic option:', err));
-  }, []);
+  }, [savePrivateSetting]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),

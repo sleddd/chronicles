@@ -54,6 +54,12 @@ export async function deriveKEK(
   salt: Uint8Array,
   iterations: number
 ): Promise<CryptoKey> {
+  // The salt comes from the server. Every KEK salt is 16 random bytes; refusing
+  // anything else keeps a server from sending the sign-in secret's salt
+  // ("chronicles:auth:v1:" + email), which would make this KEK equal to the
+  // authSecret the client sends at every sign-in — and let the server wrap a
+  // master key of its own choosing that the client would then accept.
+  if (salt.byteLength !== PBKDF2_SALT_LENGTH) throw new Error('Invalid key salt');
   const passwordKey = await crypto.subtle.importKey(
     'raw',
     stringToArrayBuffer(password),
@@ -118,7 +124,9 @@ export async function wrapKey(
  * Unwrap (decrypt) the master key with a wrapping key.
  * By default returns a non-extractable key for encrypt/decrypt operations.
  * Pass extractable=true when the key needs to be re-wrapped (e.g., password change, recovery).
- * Tries with AAD first; falls back to no-AAD for keys wrapped before AAD was introduced.
+ * The purpose AAD must match. Only recovery wraps may still be in the old
+ * no-AAD format: they can't be re-wrapped without the recovery key, which is
+ * never available at unlock (and a server can't forge one without it).
  */
 export async function unwrapKey(
   wrappedKey: ArrayBuffer,
@@ -127,23 +135,8 @@ export async function unwrapKey(
   extractable: boolean = false,
   purpose: WrapPurpose = 'kek-wrap'
 ): Promise<CryptoKey> {
-  return (await unwrapKeyDetailed(wrappedKey, wrappingKey, iv, extractable, purpose)).key;
-}
-
-/**
- * unwrapKey, also saying whether the key was in the old no-AAD format
- * (`legacy`), so a password unlock can re-wrap it with AAD and the fallback
- * can eventually be removed.
- */
-export async function unwrapKeyDetailed(
-  wrappedKey: ArrayBuffer,
-  wrappingKey: CryptoKey,
-  iv: Uint8Array,
-  extractable: boolean = false,
-  purpose: WrapPurpose = 'kek-wrap'
-): Promise<{ key: CryptoKey; legacy: boolean }> {
   try {
-    const key = await crypto.subtle.unwrapKey(
+    return await crypto.subtle.unwrapKey(
       'raw',
       wrappedKey,
       wrappingKey,
@@ -152,10 +145,9 @@ export async function unwrapKeyDetailed(
       extractable,
       ['encrypt', 'decrypt']
     );
-    return { key, legacy: false };
-  } catch {
-    // Legacy fallback: key was wrapped without AAD before security hardening
-    const key = await crypto.subtle.unwrapKey(
+  } catch (err) {
+    if (purpose !== 'recovery-wrap') throw err;
+    return crypto.subtle.unwrapKey(
       'raw',
       wrappedKey,
       wrappingKey,
@@ -164,7 +156,6 @@ export async function unwrapKeyDetailed(
       extractable,
       ['encrypt', 'decrypt']
     );
-    return { key, legacy: true };
   }
 }
 
@@ -202,25 +193,15 @@ export async function unwrapDeviceKey(wrappedKey: ArrayBuffer, wrappingKey: Cryp
 /**
  * Convert an extractable CryptoKey to non-extractable.
  * Used after wrapping operations to ensure the in-memory key cannot be exported.
+ * The key passes through a wrap/unwrap with a throwaway non-extractable key,
+ * so its raw bytes never reach JavaScript.
  */
 export async function toNonExtractable(key: CryptoKey): Promise<CryptoKey> {
-  const raw = await crypto.subtle.exportKey('raw', key);
-  const rawArray = new Uint8Array(raw);
-  try {
-    const nonExtractable = await crypto.subtle.importKey(
-      'raw',
-      raw,
-      { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
-      false,
-      ['encrypt', 'decrypt']
-    );
-    return nonExtractable;
-  } finally {
-    // Multi-pass zeroing of exported key material
-    rawArray.fill(0);
-    crypto.getRandomValues(rawArray);
-    rawArray.fill(0);
-  }
+  const transit = await crypto.subtle.generateKey({ name: AES_ALGORITHM, length: AES_KEY_LENGTH }, false, ['wrapKey', 'unwrapKey']);
+  const iv = generateIv();
+  const params = { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer };
+  const wrapped = await crypto.subtle.wrapKey('raw', key, transit, params);
+  return crypto.subtle.unwrapKey('raw', wrapped, transit, params, { name: AES_ALGORITHM, length: AES_KEY_LENGTH }, false, ['encrypt', 'decrypt']);
 }
 
 /**
@@ -255,11 +236,12 @@ export async function encrypt(
  */
 export async function encryptBytes(
   masterKey: CryptoKey,
-  data: ArrayBuffer
+  data: ArrayBuffer,
+  aad?: string
 ): Promise<{ ciphertext: ArrayBuffer; iv: string }> {
   const iv = generateIv();
   const ciphertext = await crypto.subtle.encrypt(
-    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, ...(aad !== undefined && { additionalData: stringToArrayBuffer(aad) }) },
     masterKey,
     data
   );
@@ -267,16 +249,17 @@ export async function encryptBytes(
 }
 
 /**
- * Decrypt binary data with AES-GCM
+ * Decrypt binary data with AES-GCM (with the AAD it was encrypted with, if any)
  */
 export async function decryptBytes(
   masterKey: CryptoKey,
   ciphertext: ArrayBuffer,
-  ivBase64: string
+  ivBase64: string,
+  aad?: string
 ): Promise<ArrayBuffer> {
   const iv = base64ToUint8Array(ivBase64);
   return crypto.subtle.decrypt(
-    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, ...(aad !== undefined && { additionalData: stringToArrayBuffer(aad) }) },
     masterKey,
     ciphertext
   );

@@ -510,7 +510,7 @@ function time12(hhmm: string): string {
 
 /** Save an entry's custom fields (optimistic; rolled back on failure). */
 function useSaveFields() {
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
   return async (entry: DecryptedPost, cf: Record<string, unknown>, content = entry.content) => {
     const prev = { content: entry.content, metadata: entry.metadata };
@@ -518,7 +518,7 @@ function useSaveFields() {
     updateDecryptedEntry(entry.id, { content, metadata });
     try {
       const tid = metadata._taxonomyId as number | undefined;
-      const enc = await encryptPost(content, metadata);
+      const enc = await encryptPost(entry.id, content, metadata);
       await entriesApi.update(entry.id, {
         contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
         metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
@@ -817,7 +817,7 @@ function usePriorities() {
 function Priorities() {
   const setTopics = useEntriesStore(s => s.setTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const save = useSaveFields();
   const [draft, setDraft] = useState('');
   const { entry, items, tid } = usePriorities();
@@ -841,8 +841,8 @@ function Priorities() {
     }
     const metadata = { _taxonomyId: topicId, _customFields: { priorities: next } };
     const content = textOf();
-    const enc = await encryptPost(content, metadata);
-    const res = await entriesApi.create({
+    const enc = await encryptNewPost(content, metadata);
+    const res = await entriesApi.create({ id: enc.id,
       contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
       metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
       isEncrypted: true, taxonomyIds: [topicId],
@@ -1059,7 +1059,7 @@ function Shopping() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const save = useSaveFields();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
@@ -1080,8 +1080,8 @@ function Shopping() {
       const topicId = await getOrCreateTopic('Shopping List', 'cart-shopping');
       const content = `<p>${defaultShoppingListTitle()}</p>`;
       const metadata = { _taxonomyId: topicId, _customFields: { items: [item], notes: '', linkedRecipeIds: [] } };
-      const enc = await encryptPost(content, metadata);
-      const res = await entriesApi.create({
+      const enc = await encryptNewPost(content, metadata);
+      const res = await entriesApi.create({ id: enc.id,
         contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
         metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
         isEncrypted: true, taxonomyIds: [topicId],

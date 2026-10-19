@@ -9,13 +9,15 @@ import type { CrisisRating, RiskKind } from '@chronicles/shared';
 export async function initAnalyticsTable(): Promise<void> {
   await prisma.$executeRaw`
     CREATE TABLE IF NOT EXISTS public.app_analytics (
-      id         SERIAL PRIMARY KEY,
       day        DATE NOT NULL DEFAULT CURRENT_DATE,
       event      TEXT NOT NULL,
       rating     TEXT CHECK (rating IN ('concern', 'elevated', 'urgent')),
       risk_kind  TEXT CHECK (risk_kind IN ('suicide', 'self_harm', 'eating_disorder'))
     )
   `;
+  // No row id: a sequential one kept the order rows were written in, which
+  // with request logs could tie a row back to a person
+  await prisma.$executeRaw`ALTER TABLE public.app_analytics DROP COLUMN IF EXISTS id`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS app_analytics_day_idx ON public.app_analytics (day)`;
   // The allowed events, (re)applied so tables made before an event was added accept it
   await prisma.$executeRaw`ALTER TABLE public.app_analytics DROP CONSTRAINT IF EXISTS app_analytics_event_check`;

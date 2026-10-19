@@ -7,12 +7,11 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getDoseRecords: vi.fn(),
   upsertDoseRecord: vi.fn(),
   deleteDoseRecord: vi.fn(),
-  getLegacyDoseLogs: vi.fn(),
-  deleteLegacyDoseLogs: vi.fn(),
+  resealDoseRecords: vi.fn(),
 }));
 
 import dosesRouter from '../../routes/doses.js';
-import { getDoseRecords, upsertDoseRecord, deleteDoseRecord, getLegacyDoseLogs, deleteLegacyDoseLogs } from '../../db/tenantQueries.js';
+import { getDoseRecords, upsertDoseRecord, deleteDoseRecord, resealDoseRecords } from '../../db/tenantQueries.js';
 
 const app = createTestApp('/api/doses', dosesRouter);
 const ID = '0b6c6f1e-2f4a-4c1e-9a52-3f1d2b7c8e90';
@@ -44,7 +43,7 @@ describe('Dose routes (encrypted records)', () => {
 
   it('upserts an encrypted record by UUID', async () => {
     (upsertDoseRecord as any).mockResolvedValue(row);
-    const res = await request(app).put(`/api/doses/${ID}`).send({ date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
+    const res = await request(app).put(`/api/doses/${ID}`).send({ format: 2, date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
     expect(res.status).toBe(200);
     const [, id, date, payload] = (upsertDoseRecord as any).mock.calls[0];
     expect([id, date]).toEqual([ID, '2025-06-15']);
@@ -70,10 +69,23 @@ describe('Dose routes (encrypted records)', () => {
     expect(res.body).toEqual({ deleted: true });
   });
 
-  it('hands out and then deletes the legacy plaintext log for migration', async () => {
-    (getLegacyDoseLogs as any).mockResolvedValue([{ id: 7 }]);
-    (deleteLegacyDoseLogs as any).mockResolvedValue(1);
-    expect((await request(app).get('/api/doses/legacy')).body).toEqual({ logs: [{ id: 7 }] });
-    expect((await request(app).delete('/api/doses/legacy')).body).toEqual({ deleted: 1 });
+  it('refuses a dose from an older client (not sealed to its day)', async () => {
+    const res = await request(app).put(`/api/doses/${ID}`).send({ date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
+    expect(res.status).toBe(400);
+    expect(upsertDoseRecord).not.toHaveBeenCalled();
+  });
+
+  it('re-seals older records in batches, each once', async () => {
+    (resealDoseRecords as any).mockResolvedValue(2);
+    const rec = (id: string) => ({ id, date: '2025-06-15', payload: 'cA==', iv: 'aQ==' });
+    const A = '11111111-1111-4111-8111-111111111111';
+    const B = '22222222-2222-4222-8222-222222222222';
+    const ok = await request(app).put('/api/doses/reseal').send({ records: [rec(A), rec(B)] });
+    expect(ok.body).toEqual({ resealed: 2 });
+    expect((await request(app).put('/api/doses/reseal').send({ records: [rec(A), rec(A)] })).status).toBe(400);
+  });
+
+  it('no longer serves the old plaintext log', async () => {
+    expect((await request(app).get('/api/doses/legacy')).status).toBe(404);
   });
 });

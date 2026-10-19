@@ -13,6 +13,7 @@
 import { presignR2, type R2Config } from './r2Signer.js';
 import { processImage } from '../utils/processImage.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
+import { isSealed, openSetting, sealSetting } from './settingCipher.js';
 
 export type { R2Config };
 
@@ -28,13 +29,14 @@ export interface EntryImage {
   height?: number;
 }
 
-type EncryptBytesFn = (data: ArrayBuffer) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
-type DecryptBytesFn = (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+type EncryptBytesFn = (data: ArrayBuffer, aad?: string) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
+type DecryptBytesFn = (ciphertext: ArrayBuffer, iv: string, aad?: string) => Promise<ArrayBuffer>;
 
 /** Value shape of the `imageStorageConfig` setting: master-key ciphertext. */
 export interface EncryptedConfigValue {
   ciphertext: string; // base64
   iv: string;         // base64
+  v?: 2;              // bound to the setting's key (settingCipher.ts)
 }
 
 // ── In-memory credential state ───────────────────────────────────────────────
@@ -91,12 +93,10 @@ export async function loadImageStorageConfig(value: unknown, decryptBytes: Decry
   encryptedConfig = null;
   try {
     if (!value || typeof value !== 'object') return false;
-    const { ciphertext, iv } = value as Partial<EncryptedConfigValue>;
-    if (typeof ciphertext !== 'string' || typeof iv !== 'string') return false;
-    encryptedConfig = { ciphertext, iv };
+    if (!isSealed(value)) return false;
+    encryptedConfig = value;
     try {
-      const plaintext = await decryptBytes(base64ToArrayBuffer(ciphertext), iv);
-      const parsed = JSON.parse(new TextDecoder().decode(plaintext));
+      const parsed = await openSetting('imageStorageConfig', value, decryptBytes) as Record<string, unknown> | null;
       if (isValidConfig(parsed)) {
         r2Config = parsed;
         return isCompleteConfig(parsed);
@@ -130,9 +130,7 @@ export function setImageStorageDraft(cfg: R2Config | null): void {
 
 /** Encrypt a config for storage in the `imageStorageConfig` setting. */
 export async function encryptImageStorageConfig(cfg: R2Config, encryptBytes: EncryptBytesFn): Promise<EncryptedConfigValue> {
-  const data = new TextEncoder().encode(JSON.stringify(cfg));
-  const { ciphertext, iv } = await encryptBytes(data.buffer as ArrayBuffer);
-  return { ciphertext: arrayBufferToBase64(ciphertext), iv };
+  return sealSetting('imageStorageConfig', cfg, encryptBytes) as Promise<EncryptedConfigValue>;
 }
 
 export function isImageStorageConfigured(): boolean {
@@ -167,6 +165,9 @@ async function putToR2(url: string, body: Blob): Promise<void> {
   }
 }
 
+/** AAD binding an encrypted image object to its R2 key. */
+export const imageAad = (objectKey: string) => `chronicles:image:v1:${objectKey}`;
+
 /**
  * Process, encrypt, and upload one image (full + thumbnail).
  * Keys are client-generated random UUIDs — no user information.
@@ -176,14 +177,15 @@ export async function uploadEntryImage(file: File, encryptBytes: EncryptBytesFn)
   const cfg = requireConfig();
   const processed = await processImage(file);
 
-  const [fullEnc, thumbEnc] = await Promise.all([
-    processed.full.arrayBuffer().then(encryptBytes),
-    processed.thumb.arrayBuffer().then(encryptBytes),
-  ]);
-
   const uuid = crypto.randomUUID();
   const key = `img/${uuid}`;
   const thumbKey = `img/${uuid}-t`;
+
+  // Each object is bound to its own key, so one can't be served in another's place
+  const [fullEnc, thumbEnc] = await Promise.all([
+    processed.full.arrayBuffer().then(b => encryptBytes(b, imageAad(key))),
+    processed.thumb.arrayBuffer().then(b => encryptBytes(b, imageAad(thumbKey))),
+  ]);
 
   const [putUrl, thumbPutUrl] = await Promise.all([
     presignR2(cfg, 'PUT', key),
@@ -229,7 +231,11 @@ export async function getImageObjectUrl(
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Image download failed (${res.status})`);
     const ciphertext = await res.arrayBuffer();
-    const plaintext = await decryptBytes(ciphertext, iv);
+    // Images uploaded before key binding have no AAD. Opening those is safe:
+    // the IV comes from the entry's authenticated metadata, so a ciphertext
+    // from any other object can't decrypt under it either way
+    const plaintext = await decryptBytes(ciphertext, iv, imageAad(key))
+      .catch(() => decryptBytes(ciphertext, iv));
     const objectUrl = URL.createObjectURL(new Blob([plaintext], { type: mimeType }));
     objectUrlCache.set(key, objectUrl);
     return objectUrl;
@@ -255,8 +261,10 @@ export function clearImageCache(): void {
   objectUrlCache.clear();
   inflight.clear();
   r2Config = null;
-  // draftConfig is intentionally kept — unsaved form input must survive the
-  // tab-away auto-lock, or entering credentials in stages becomes impossible
+  // The draft is kept — unsaved form input must survive the tab-away
+  // auto-lock, or entering credentials in stages becomes impossible — but
+  // never its secret key, which would otherwise outlive the lock in memory
+  if (draftConfig) draftConfig = { ...draftConfig, secretAccessKey: '' };
   notifyConfigListeners();
 }
 

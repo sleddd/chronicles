@@ -66,7 +66,7 @@ const hashNonce = (nonce: string) => crypto.createHash('sha256').update(nonce).d
 
 function signTestState(selector: string, expOffsetMs = 10 * 60 * 1000, nonce = TEST_NONCE): string {
   const payload = Buffer.from(JSON.stringify({ selector, nonce: hashNonce(nonce), exp: Date.now() + expOffsetMs })).toString('base64url');
-  const sig = crypto.createHmac('sha256', TEST_ENV.GOOGLE_CLIENT_SECRET).update(payload).digest('base64url');
+  const sig = crypto.createHmac('sha256', crypto.createHmac('sha256', TEST_ENV.GOOGLE_CLIENT_SECRET).update('chronicles:oauth-state').digest()).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
@@ -102,7 +102,7 @@ describe('Calendar Routes', () => {
       // State is payload.signature, HMAC-signed with the client secret
       const state = url.searchParams.get('state')!;
       const [payload, sig] = [state.slice(0, state.lastIndexOf('.')), state.slice(state.lastIndexOf('.') + 1)];
-      const expected = crypto.createHmac('sha256', TEST_ENV.GOOGLE_CLIENT_SECRET).update(payload).digest('base64url');
+      const expected = crypto.createHmac('sha256', crypto.createHmac('sha256', TEST_ENV.GOOGLE_CLIENT_SECRET).update('chronicles:oauth-state').digest()).update(payload).digest('base64url');
       expect(sig).toBe(expected);
       const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
       expect(decoded.selector).toBe('aabbccddee11');

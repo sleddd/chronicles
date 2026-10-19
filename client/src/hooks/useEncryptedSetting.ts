@@ -1,19 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../services/api.js';
-import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
-
-interface EncryptedValue { ciphertext: string; iv: string }
-
-function isEncryptedValue(v: unknown): v is EncryptedValue {
-  return !!v && typeof v === 'object'
-    && typeof (v as EncryptedValue).ciphertext === 'string'
-    && typeof (v as EncryptedValue).iv === 'string';
-}
+import { openSettingsMap, sealSetting } from '../services/privateSettings.js';
 
 /**
  * A JSON setting encrypted with the master key (the server stores ciphertext
- * only) — for personal data such as nutrition goals or saved foods.
+ * only, bound to its key — see services/privateSettings.ts) — for personal
+ * data such as nutrition goals or saved foods.
  * Returns [value, save, loaded]; `save` updates state at once and persists.
  *
  * It loads only once the master key is unlocked. A fresh launch (e.g. the
@@ -34,13 +27,12 @@ export function useEncryptedSetting<T>(key: string, fallback: T): [T, (next: T) 
     let cancelled = false;
     (async () => {
       try {
-        const all = await settingsApi.getAll();
-        const stored = all.find(s => s.key === key)?.value;
-        if (isEncryptedValue(stored)) {
-          const plain = await decryptBytes(base64ToArrayBuffer(stored.ciphertext), stored.iv);
-          const parsed = JSON.parse(new TextDecoder().decode(plain)) as T;
-          if (!cancelled) setValue(parsed);
-        }
+        // The whole map, so the same trust rules apply as at startup (the
+        // seal marker decides whether a pre-v2 value may still be opened)
+        const map: Record<string, unknown> = {};
+        for (const row of await settingsApi.getAll()) map[row.key] = row.value;
+        await openSettingsMap(map, decryptBytes);
+        if (map[key] !== undefined && map[key] !== null && !cancelled) setValue(map[key] as T);
       } catch (err) {
         console.warn(`Setting "${key}" could not be loaded:`, err);
         if (!cancelled) setValue(fallbackRef.current);
@@ -55,9 +47,7 @@ export function useEncryptedSetting<T>(key: string, fallback: T): [T, (next: T) 
     // Never write before the stored value was read — it would replace it
     if (!loadedRef.current) throw new Error(`Setting "${key}" isn't loaded yet`);
     setValue(next);
-    const data = new TextEncoder().encode(JSON.stringify(next));
-    const { ciphertext, iv } = await encryptBytes(data.buffer as ArrayBuffer);
-    await settingsApi.upsert(key, { ciphertext: arrayBufferToBase64(ciphertext), iv });
+    await settingsApi.upsert(key, await sealSetting(key, next, encryptBytes));
   }, [key, encryptBytes]);
 
   return [value, save, loaded];

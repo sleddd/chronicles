@@ -3,12 +3,14 @@ import {
   ensureFinanceTables,
   getFinanceRecords,
   upsertFinanceRecord,
+  financeStorageBytes,
   deleteFinanceRecord,
   FINANCE_TABLES,
   type FinanceTableKind,
   type FinanceRecordRow,
 } from '../db/tenantQueries.js';
 import { financeRecordIdSchema, putFinanceRecordSchema } from '@chronicles/shared';
+import { FINANCE_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
 
 // Finance records are opaque to the server: each row is one AES-GCM payload
 // the client encrypted (AAD bound to kind + id). The server only stores it.
@@ -64,11 +66,16 @@ router.put('/:kind/:id', async (req, res) => {
   }
   try {
     await ensureFinanceTables(req.auth!.tenantSchemaName);
+    const payload = Buffer.from(body.data.payload, 'base64');
+    if (await financeStorageBytes(req.auth!.tenantSchemaName, { kind, id: id.data }) + payload.length > FINANCE_STORAGE_LIMIT_BYTES) {
+      res.status(413).json({ error: 'Finance storage is full — delete some old records to make room' });
+      return;
+    }
     const row = await upsertFinanceRecord(
       req.auth!.tenantSchemaName,
       kind,
       id.data,
-      Buffer.from(body.data.payload, 'base64'),
+      payload,
       Buffer.from(body.data.iv, 'base64'),
     );
     res.json({ record: serialize(row) });

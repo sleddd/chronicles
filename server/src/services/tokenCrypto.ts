@@ -44,7 +44,9 @@ export function decryptToken(stored: string): string {
     throw new Error('Invalid encrypted token format');
   }
   const [iv, ciphertext, tag] = parts.map(p => Buffer.from(p, 'base64'));
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  // A full 16-byte tag only: a truncated one would be accepted otherwise
+  if (tag.length !== 16) throw new Error('Invalid encrypted token format');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }

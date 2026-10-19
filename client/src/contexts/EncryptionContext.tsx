@@ -7,9 +7,10 @@ import { clearImageCache, rederiveImageStorageConfig } from '../services/imageSt
 import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
 import { clearRecordCipher, installRecordCipher } from '../services/recordCipher.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
-import { auth as authApi } from '../services/api.js';
-import { deriveAuthSecret } from '@shared/crypto/authSecret.js';
-import { useOptionalAuth } from './AuthContext.js';
+import { useEntriesStore } from '../stores/entriesStore.js';
+import { olderEntriesAllowed, reserveEntryId, clearReservedEntryIds } from '../services/entryReseal.js';
+import { clearSealMarkers } from '../services/api.js';
+import { useUIStore } from '../stores/uiStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
   hasRememberedUnlock, lastActivity, markActivity, startRemembering, storeRemembered,
@@ -33,11 +34,15 @@ interface EncryptionContextValue {
   /** Stop remembering this browser but stay unlocked in this tab. */
   forgetBrowser: () => void;
   setupEncryption: (password: string) => Promise<SetupEncryptionResult>;
-  encryptPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
+  /** Encrypt an existing entry, bound to its id */
+  encryptPost: (id: number, content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
+  /** Encrypt a new entry: reserves its id first; pass `id` to entries.create */
+  encryptNewPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData & { id: number }>;
   decryptPost: (post: EncryptedPost) => Promise<DecryptedPost>;
   decryptPosts: (posts: EncryptedPost[]) => Promise<DecryptedPost[]>;
-  encryptBytes: (data: ArrayBuffer) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
-  decryptBytes: (ciphertext: ArrayBuffer, iv: string) => Promise<ArrayBuffer>;
+  /** Optional `aad` binds the ciphertext to what it is (a setting's key, an image's object key) */
+  encryptBytes: (data: ArrayBuffer, aad?: string) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;
+  decryptBytes: (ciphertext: ArrayBuffer, iv: string, aad?: string) => Promise<ArrayBuffer>;
   /** Encrypt one Finance record (AAD bound to kind + id). */
   encryptRecord: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
   decryptRecord: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
@@ -63,37 +68,13 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   const masterKeyRef = useRef<CryptoKey | null>(null);
   // Stored encryption params for re-derivation during password change
   const encryptionParamsRef = useRef<EncryptionParams | null>(null);
-  // The signed-in email and the cached key data's setter (for the key-wrap upgrade)
-  const auth = useOptionalAuth();
-  const authRef = useRef(auth);
-  authRef.current = auth;
-
-  /** The stored wrap was the old no-AAD format: re-wrap it with AAD (same password,
-   *  new salt) and save it. Background and best-effort — tried again next unlock. */
-  const upgradeLegacyWrap = useCallback(async (password: string, params: EncryptionParams) => {
-    const email = authRef.current?.user?.email;
-    if (!email) return;
-    try {
-      const r = await encryptionService.rewrapFromParams(
-        password, params.kekSalt, params.encryptedMasterKey, params.kekWrapIv, params.kekIterations, password,
-      );
-      const currentAuthSecret = await deriveAuthSecret(password, email);
-      await authApi.keyWrap({ currentAuthSecret, encryptedMasterKey: r.wrappedMK, kekSalt: r.salt, kekWrapIv: r.wrapIv, kekIterations: PBKDF2_ITERATIONS });
-      const next = { kekSalt: r.salt, encryptedMasterKey: r.wrappedMK, kekWrapIv: r.wrapIv, kekIterations: PBKDF2_ITERATIONS };
-      encryptionParamsRef.current = next;
-      authRef.current?.updateEncryptionData(next);
-    } catch (err) {
-      console.warn('Key format upgrade will be retried at the next unlock:', err instanceof Error ? err.message : err);
-    }
-  }, []);
-
   /** Install an unlocked master key and restore the in-memory secrets that depend on it. */
   const install = useCallback((key: CryptoKey) => {
     masterKeyRef.current = key;
     // Restore the in-memory R2 credentials (cleared on lock) from their
     // master-key-encrypted blob so image display/cleanup keeps working
-    void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
-    void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
+    void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
     // Topic names and dose records are sealed by the API layer itself
     installRecordCipher(encryptionService, key);
     setIsUnlocked(true);
@@ -112,7 +93,6 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       throw new Error(`PBKDF2 iterations ${kekIterations} below minimum ${PBKDF2_ITERATIONS}`);
     }
     let key: CryptoKey | null = null;
-    let legacyWrap = false;
     if (remember) {
       // Opt-in: also keep a wrapped copy this browser can reopen until it closes.
       // If the server can't start a grant, fall back to a normal unlock.
@@ -125,7 +105,6 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
           );
           storeRemembered(r.deviceWrapped, r.deviceIv, grant.expiresAt);
           key = r.masterKey;
-          legacyWrap = r.legacyWrap;
         } finally {
           grant.secret.fill(0);
         }
@@ -134,16 +113,13 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     if (!key) {
       // Not remembering — make sure no earlier remembered copy lingers
       forgetRemembered();
-      const r = await encryptionService.unwrapMasterKeyDetailed(password, kekSalt, encryptedMasterKey, kekWrapIv, kekIterations);
-      key = r.masterKey;
-      legacyWrap = r.legacyWrap;
+      key = await encryptionService.unwrapMasterKey(password, kekSalt, encryptedMasterKey, kekWrapIv, kekIterations);
     }
     rememberedRef.current = remember && hasRememberedUnlock();
     setIsRemembered(rememberedRef.current);
     encryptionParamsRef.current = { kekSalt, encryptedMasterKey, kekWrapIv, kekIterations };
     install(key);
-    if (legacyWrap) void upgradeLegacyWrap(password, { kekSalt, encryptedMasterKey, kekWrapIv, kekIterations });
-  }, [install, upgradeLegacyWrap]);
+  }, [install]);
 
   /** Clear all in-memory key material and decrypted secrets (this tab only). */
   const lockLocal = useCallback(() => {
@@ -159,6 +135,12 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearRecordCipher();
     // And the decrypted Finance records
     clearFinanceCache();
+    // And every decrypted entry, topic and private setting held in the stores:
+    // after an auto-lock nothing readable stays in memory; unlocking reloads
+    useEntriesStore.getState().clearAll();
+    useUIStore.getState().clearPrivateState();
+    clearReservedEntryIds();
+    clearSealMarkers();
     setIsUnlocked(false);
   }, []);
 
@@ -176,34 +158,43 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
 
   const setupEncryption = useCallback(async (password: string): Promise<SetupEncryptionResult> => {
     const result = await encryptionService.setupEncryption(password);
-    masterKeyRef.current = result.masterKey;
-    setIsUnlocked(true);
+    // A full install, like an unlock: without the record cipher a new account
+    // couldn't seal (or seed) its topics until the next unlock
+    install(result.masterKey);
     return result;
-  }, []);
+  }, [install]);
 
   const getKey = () => {
     if (!masterKeyRef.current) throw new Error('Encryption not unlocked');
     return masterKeyRef.current;
   };
 
-  const encryptPost = useCallback(async (content: string, metadata: Record<string, unknown>) => {
-    return encryptionService.encryptPost(getKey(), content, metadata);
+  const encryptPost = useCallback(async (id: number, content: string, metadata: Record<string, unknown>) => {
+    return encryptionService.encryptPost(getKey(), id, content, metadata);
   }, []);
 
+  const encryptNewPost = useCallback(async (content: string, metadata: Record<string, unknown>) => {
+    const key = getKey();
+    const id = await reserveEntryId();
+    return { ...(await encryptionService.encryptPost(key, id, content, metadata)), id };
+  }, []);
+
+  // Older entry formats open only until the account is past the move to v3
+  // (see services/entryReseal.ts)
   const decryptPost = useCallback(async (post: EncryptedPost) => {
-    return encryptionService.decryptPost(getKey(), post);
+    return encryptionService.decryptPost(getKey(), post, { allowOlder: olderEntriesAllowed() });
   }, []);
 
   const decryptPosts = useCallback(async (posts: EncryptedPost[]) => {
-    return encryptionService.decryptPosts(getKey(), posts);
+    return encryptionService.decryptPosts(getKey(), posts, { allowOlder: olderEntriesAllowed() });
   }, []);
 
-  const encryptBytes = useCallback(async (data: ArrayBuffer) => {
-    return encryptionService.encryptFile(getKey(), data);
+  const encryptBytes = useCallback(async (data: ArrayBuffer, aad?: string) => {
+    return encryptionService.encryptFile(getKey(), data, aad);
   }, []);
 
-  const decryptBytes = useCallback(async (ciphertext: ArrayBuffer, iv: string) => {
-    return encryptionService.decryptFile(getKey(), ciphertext, iv);
+  const decryptBytes = useCallback(async (ciphertext: ArrayBuffer, iv: string, aad?: string) => {
+    return encryptionService.decryptFile(getKey(), ciphertext, iv, aad);
   }, []);
 
   const encryptRecord = useCallback(async (kind: string, id: string, record: unknown) => {
@@ -230,8 +221,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const key = await toNonExtractable(extractableKey);
     masterKeyRef.current = key;
     encryptionParamsRef.current = null; // Recovery path — no stored params
-    void rederiveImageStorageConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
-    void rederiveAiConfig((ct, iv) => encryptionService.decryptFile(key, ct, iv));
+    void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
+    void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
     // Topic names and dose records are sealed by the API layer itself
     installRecordCipher(encryptionService, key);
     setIsUnlocked(true);
@@ -413,6 +404,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       forgetBrowser,
       setupEncryption,
       encryptPost,
+      encryptNewPost,
       decryptPost,
       decryptPosts,
       encryptBytes,

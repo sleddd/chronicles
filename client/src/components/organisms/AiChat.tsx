@@ -362,7 +362,7 @@ export function AiChat() {
   const aiReady = useAiReady();
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const { encryptPost, lock } = useEncryption();
+  const { encryptNewPost, lock } = useEncryption();
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
   const location = useLocation();
@@ -543,8 +543,8 @@ export function AiChat() {
         const topicId = await getOrCreateTopic(SAVED_CHATS_TOPIC, 'comments');
         const content = chatTranscriptHtml(turns);
         const metadata: Record<string, unknown> = { _taxonomyId: topicId, _widgetType: 'saved-chat' };
-        const encrypted = await encryptPost(content, metadata);
-        const result = await entriesApi.create({
+        const encrypted = await encryptNewPost(content, metadata);
+        const result = await entriesApi.create({ id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: [topicId],
@@ -597,8 +597,8 @@ export function AiChat() {
         }
         metadata._customFields = cf;
       }
-      const encrypted = await encryptPost(content, metadata);
-      const result = await entriesApi.create({
+      const encrypted = await encryptNewPost(content, metadata);
+      const result = await entriesApi.create({ id: encrypted.id,
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
         isEncrypted: true, taxonomyIds: [topicId],

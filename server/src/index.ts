@@ -7,7 +7,7 @@ import { securityHeaders } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import authRoutes, { upgradeStoredCredentials } from './routes/auth.js';
+import authRoutes, { checkStoredCredentials } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
@@ -25,7 +25,6 @@ import betaRoutes from './routes/beta.js';
 import { initConsentTable } from './db/consentQueries.js';
 import { initBetaTable } from './db/betaQueries.js';
 import { initAppNoticeTable } from './db/appNoticeQueries.js';
-import { initKeyWrapTable } from './db/keyWrapQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
@@ -75,6 +74,12 @@ if (process.env.NODE_ENV === 'production' && !process.env.REGISTRATION_WHITELIST
 // spoofed X-Forwarded-For header is ignored locally).
 const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? '1' : '');
 if (trustProxy && !['0', 'false'].includes(trustProxy)) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+// The default (1 hop) is only right behind exactly one proxy: with none, any
+// client can set X-Forwarded-For and dodge every per-IP limit; with more, all
+// clients share one bucket. Say so when it wasn't set on purpose.
+if (process.env.NODE_ENV === 'production' && process.env.TRUST_PROXY === undefined) {
+  console.warn('TRUST_PROXY is not set: assuming exactly one proxy in front (Render). Set it to the real number of proxy hops (0 for none).');
+}
 
 // Middleware
 app.use(cors({
@@ -111,6 +116,9 @@ app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 
+// An unknown /api path is a 404, never the SPA's index.html
+app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found' }); });
+
 app.use(errorHandler);
 
 // Serve client static files in production
@@ -132,11 +140,13 @@ initAnalyticsTable().catch(err => console.error('Failed to init analytics table:
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err));
 initConsentTable().catch(err => console.error('Failed to init consent table:', err));
 initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err));
-initKeyWrapTable().catch(err => console.error('Failed to init key-wrap table:', err));
 initBetaTable().catch(err => console.error('Failed to init beta table:', err));
-upgradeStoredCredentials().then(({ recoverySealed, sessionsRevoked }) => {
-  if (recoverySealed || sessionsRevoked) console.log(`Credential upgrade: ${recoverySealed} recovery check(s) sealed, ${sessionsRevoked} legacy session(s) signed out`);
-}).catch(err => console.error('Credential upgrade failed:', err instanceof Error ? err.message : err));
+checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) => {
+  if (recoverySealed) console.log(`Credential check: ${recoverySealed} recovery check(s) sealed`);
+  if (outdated.length) {
+    console.warn(`Credential check: ${outdated.length} account(s) still on a pre-upgrade password hash (ids ${outdated.join(', ')}) can only sign in by recovery; ${sessionsRevoked} session(s) signed out`);
+  }
+}).catch(err => console.error('Credential check failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});

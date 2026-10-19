@@ -18,7 +18,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { singular } from '../utils/singular.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
-import { topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { topics as topicsApi } from '../services/api.js';
 import { usePrivateSettings } from '../services/privateSettings.js';
 import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
 import { TopicIcon } from '../components/molecules/IconPicker.js';
@@ -259,7 +259,7 @@ export function TopicDetailView() {
   const changeHideText = (hide: boolean) => {
     if (!topic) return;
     useUIStore.getState().updateTopicHideText(topic.id, hide);
-    settingsApi.upsert('topicHideText', useUIStore.getState().topicHideText)
+    savePrivateSetting('topicHideText', useUIStore.getState().topicHideText)
       .catch(err => console.error('Failed to save topic option:', err));
   };
 

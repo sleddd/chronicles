@@ -279,7 +279,7 @@ describe('2FA hardening', () => {
       recoveryProof,
       newAuthSecret: 'b'.repeat(64),
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
-      newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
+      newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
       newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
       newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
@@ -399,7 +399,7 @@ describe('2FA hardening', () => {
   describe('per-email sign-in limit', () => {
     it('locks an email after 10 wrong passwords, whether or not the account exists', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
-      const attempt = { email: 'ghost@example.com', authSecret: SECRET, legacyPassword: 'x' };
+      const attempt = { email: 'ghost@example.com', authSecret: SECRET };
       for (let i = 0; i < 10; i++) {
         const r = await request(app).post('/api/auth/login').send(attempt);
         expect(r.status).toBe(401);
@@ -450,39 +450,45 @@ describe('2FA hardening', () => {
       expect(res.status).toBe(429);
     }, 30000);
 
-    it('does not count the legacy check, where nothing was verified', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue(null);
-      for (let i = 0; i < 11; i++) {
-        const r = await request(app).post('/api/auth/login').send({ email: 'probe@example.com', authSecret: SECRET });
-        expect(r.body.legacyAuth).toBe(true);
-      }
+  });
+
+  describe('second-factor cap under parallel guesses', () => {
+    it('lets at most 5 codes be checked even when they arrive at once', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      const login = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      expect(login.body.requires2FA).toBe(true);
+
+      const results = await Promise.all(Array.from({ length: 12 }, () =>
+        request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: '000000' })));
+
+      expect(results.filter(r => r.status === 401).length).toBeLessThanOrEqual(5);
+      expect(results.filter(r => r.status === 429).length).toBeGreaterThanOrEqual(7);
+      // Even the right code is refused now
+      const right = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: generateSync({ secret }) });
+      expect(right.status).not.toBe(200);
     }, 30000);
   });
 
-  describe('legacy account with 2FA', () => {
-    it('keeps the old password hash until the second factor passes', async () => {
+  describe('pending sign-ins after a password change', () => {
+    it('are cancelled, so the old password can no longer finish signing in', async () => {
       const secret = generateSecret();
-      const account = { ...twoFAAccount(secret), passwordHash: '$2a$12$legacy' };
+      const account = twoFAAccount(secret);
       (prisma.account.findUnique as any).mockResolvedValue(account);
-
-      const login = await request(app).post('/api/auth/login')
-        .send({ email: account.email, authSecret: SECRET, legacyPassword: 'OldPassword1!xyz' });
+      const login = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
       expect(login.body.requires2FA).toBe(true);
-      expect(prisma.account.updateMany).not.toHaveBeenCalled();
 
-      const wrong = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: '000000' });
-      expect(wrong.status).toBe(401);
-      expect(prisma.account.updateMany).not.toHaveBeenCalled();
-
-      const again = await request(app).post('/api/auth/login')
-        .send({ email: account.email, authSecret: SECRET, legacyPassword: 'OldPassword1!xyz' });
-      const ok = await request(app).post('/api/auth/login/2fa')
-        .send({ pendingToken: again.body.pendingToken, code: generateSync({ secret }) });
-      expect(ok.status).toBe(200);
-      expect(prisma.account.updateMany).toHaveBeenCalledWith({
-        where: { id: account.id, passwordHash: '$2a$12$legacy' },
-        data: { passwordHash: AUTH_HASH },
+      (prisma.$transaction as any).mockResolvedValue([]);
+      const changed = await request(app).post('/api/auth/change-password').send({
+        currentAuthSecret: SECRET, newAuthSecret: 'b'.repeat(64),
+        newEncryptedMasterKey: Buffer.alloc(40, 1).toString('base64'),
+        newKekSalt: Buffer.alloc(16, 2).toString('base64'), newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
       });
-    });
+      expect(changed.status).toBe(200);
+
+      const finish = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: generateSync({ secret }) });
+      expect(finish.status).toBe(401);
+    }, 30000);
   });
 });

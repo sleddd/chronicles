@@ -27,4 +27,11 @@ describe('NoticeBanner', () => {
     render(<NoticeBanner />);
     expect(await screen.findByText('Update: fixed.')).toBeInTheDocument();
   });
+
+  it('never renders a link that is not https://', async () => {
+    state.notice = { message: 'Heads up.', linkUrl: 'javascript:alert(1)', updatedAt: '2026-10-20T00:00:00Z' };
+    render(<NoticeBanner />);
+    expect(await screen.findByText('Heads up.')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
 });

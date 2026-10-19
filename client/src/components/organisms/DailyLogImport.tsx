@@ -40,7 +40,7 @@ function importedKeys(): Set<string> {
  * into Symptom, notes into Journal — plus its daily nutrient goals.
  */
 export function DailyLogImport() {
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const [, saveGoals] = useEncryptedSetting<NutrientGoals>('nutritionGoals', DEFAULT_NUTRIENT_GOALS);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,8 +73,8 @@ export function DailyLogImport() {
         const tid = ids.get(item.topic)!;
         const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: item.importKey };
         if (Object.keys(item.customFields).length) metadata._customFields = item.customFields;
-        const encrypted = await encryptPost(item.content, metadata);
-        const res = await entriesApi.create({
+        const encrypted = await encryptNewPost(item.content, metadata);
+        const res = await entriesApi.create({ id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: [tid], createdAt: item.createdAt,

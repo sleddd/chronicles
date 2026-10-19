@@ -57,7 +57,6 @@ vi.mock('../../utils/securityLogger.js', () => ({
   logSecurityEvent: vi.fn(),
 }));
 
-vi.mock('../../db/keyWrapQueries.js', () => ({ markKeyWrapCurrent: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../../db/betaQueries.js', () => ({ isApproved: vi.fn().mockResolvedValue(false) }));
 
 // Mock bcryptjs
@@ -68,13 +67,12 @@ vi.mock('bcryptjs', () => ({
   },
 }));
 
-import authRouter, { upgradeStoredCredentials, resetAuthStateForTests } from '../../routes/auth.js';
+import authRouter, { checkStoredCredentials, resetAuthStateForTests } from '../../routes/auth.js';
 import * as authMw from '../../middleware/auth.js';
 import bcryptMock from 'bcryptjs';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { isApproved } from '../../db/betaQueries.js';
-import { markKeyWrapCurrent } from '../../db/keyWrapQueries.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
@@ -308,74 +306,57 @@ describe('Auth Routes', () => {
       expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
     });
 
-    it('answers an unknown email exactly like a legacy account', async () => {
+    it('answers an unknown email exactly like a wrong password, never asking for the password', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
       const unknown = await request(app).post('/api/auth/login').send(validLoginBody);
 
-      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
-      const legacy = await request(app).post('/api/auth/login').send(validLoginBody);
+      (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+      (bcrypt.compare as any).mockResolvedValue(false);
+      const wrong = await request(app).post('/api/auth/login').send(validLoginBody);
 
       expect(unknown.status).toBe(401);
-      expect(unknown.body).toEqual({ error: 'Invalid credentials', legacyAuth: true });
-      expect(legacy.status).toBe(401);
-      expect(legacy.body).toEqual(unknown.body);
+      expect(unknown.body).toEqual({ error: 'Invalid credentials' });
+      expect(wrong.body).toEqual(unknown.body);
+      expect(createSession).not.toHaveBeenCalled();
+    });
+
+    it('refuses a pre-upgrade password hash and never asks for the password', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
+      (bcrypt.compare as any).mockResolvedValue(true);
+
+      const res = await request(app).post('/api/auth/login').send(validLoginBody);
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid credentials' });
       expect(bcrypt.compare).not.toHaveBeenCalled();
       expect(createSession).not.toHaveBeenCalled();
     });
 
-    it('returns 401 when the unknown email retries with a password', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue(null);
-
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ ...validLoginBody, legacyPassword: 'Whatever1!xyz' });
-
-      expect(res.status).toBe(401);
-      expect(res.body).toEqual({ error: 'Invalid credentials' });
-    });
-
-    it('upgrades a legacy account on its one password sign-in', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH, totpEnabled: false });
-      (bcrypt.compare as any).mockResolvedValue(true);
+    it('rejects a body carrying the password', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
 
       const res = await request(app)
         .post('/api/auth/login')
         .send({ ...validLoginBody, legacyPassword: 'OldPassword1!xyz' });
 
-      expect(res.status).toBe(200);
-      expect(bcrypt.compare).toHaveBeenCalledWith('OldPassword1!xyz', LEGACY_HASH);
-      expect(bcrypt.hash).toHaveBeenCalledWith(SECRET, 12);
-      // Conditional on the hash it checked, so a concurrent change wins
-      expect(prisma.account.updateMany).toHaveBeenCalledWith({
-        where: { id: 1, passwordHash: LEGACY_HASH },
-        data: { passwordHash: 'auth1$$2a$12$hashedpassword' },
-      });
+      expect(res.status).toBe(400);
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
     });
 
-    it('does not upgrade a legacy account when the password is wrong', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ ...mockAccount, passwordHash: LEGACY_HASH });
-      (bcrypt.compare as any).mockResolvedValue(false);
-
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ ...validLoginBody, legacyPassword: 'Wrong1!xyzabc' });
-
-      expect(res.status).toBe(401);
-      expect(prisma.account.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('ignores a password sent for an upgraded account', async () => {
+    it('counts parallel wrong passwords before checking them, so a burst cannot pass the cap', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
-      (bcrypt.compare as any).mockResolvedValue(true);
+      (bcrypt.compare as any).mockImplementation(() => new Promise(r => setTimeout(() => r(false), 20)));
 
-      await request(app).post('/api/auth/login').send({ ...validLoginBody, legacyPassword: 'OldPassword1!xyz' });
+      const results = await Promise.all(
+        Array.from({ length: 15 }, () => request(app).post('/api/auth/login').send(validLoginBody)),
+      );
 
-      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
-      expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
-      expect(prisma.account.updateMany).not.toHaveBeenCalled();
+      const checked = (bcrypt.compare as any).mock.calls.length;
+      expect(checked).toBeLessThanOrEqual(10);
+      expect(results.filter(r => r.status === 429).length).toBeGreaterThanOrEqual(5);
     });
 
-    it('returns 401 without legacyAuth when the secret is wrong', async () => {
+    it('returns 401 when the secret is wrong', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
       (bcrypt.compare as any).mockResolvedValue(false);
 
@@ -490,7 +471,7 @@ describe('Auth Routes', () => {
       });
     });
 
-    it('refuses a legacy password hash (those sessions are signed out to upgrade)', async () => {
+    it('refuses a pre-upgrade password hash', async () => {
       (prisma.account.findUnique as any).mockResolvedValueOnce({ passwordHash: LEGACY_HASH });
 
       const res = await request(app).post('/api/auth/change-email').send(body);
@@ -589,7 +570,7 @@ describe('Auth Routes', () => {
       currentAuthSecret: SECRET,
       newAuthSecret: NEW_SECRET,
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
-      newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
+      newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
     };
 
@@ -668,7 +649,7 @@ describe('Auth Routes', () => {
       recoveryProof: PROOF,
       newAuthSecret: NEW_SECRET,
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
-      newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
+      newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
       // Recovery rotates in a fresh recovery key so it can be used again
       newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
@@ -748,7 +729,7 @@ describe('Auth Routes', () => {
       expect(res.body.error).toBe('Recovery failed');
     });
 
-    it('still accepts a not-yet-sealed recovery check', async () => {
+    it('refuses a recovery check stored as the bare proof (sealed at startup instead)', async () => {
       (prisma.account.findUnique as any).mockResolvedValue({
         id: 1, email: 'test@example.com', username: 'testuser', recoveryKeyHash: PROOF, recoveryKeySalt: 'd'.repeat(32),
         tenantSchemaName: 'usr_1_a1b2c3', encryptionEnabled: true, kekIterations: 600000,
@@ -762,7 +743,8 @@ describe('Auth Routes', () => {
 
       const res = await request(app).post('/api/auth/recover').send(recoverBody);
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(401);
+      expect(tx.account.update).not.toHaveBeenCalled();
     });
 
     it('returns user data on successful recovery', async () => {
@@ -898,97 +880,33 @@ describe('Auth Routes', () => {
     });
   });
   // =========================================================================
-  // Unknown emails once every legacy hash is gone
+  // Startup credential check
   // =========================================================================
-  describe('legacy-hash tracking', () => {
-    // The flag is module state — count with legacy hashes left again afterwards
-    // Its own email, so the per-email failure count from earlier tests can't lock it
-    const body = { email: 'tracking@example.com', authSecret: SECRET };
-    const mockLoginAccount = () => ({
-      id: 1, email: 'tracking@example.com', username: 'testuser', passwordHash: AUTH_HASH,
-      tenantSchemaName: 'usr_1_a1b2c3', encryptionEnabled: true, kekSalt: Buffer.from('salt'),
-      encryptedMasterKey: Buffer.from('key'), kekWrapIv: Buffer.from('iv'), kekIterations: 600000,
-      recoveryWrappedMK: Buffer.from('rmk'), recoveryWrapIv: Buffer.from('riv'),
+  describe('checkStoredCredentials', () => {
+    it('seals bare recovery proofs and signs out pre-upgrade password hashes', async () => {
+      (prisma.account.findMany as any)
+        .mockResolvedValueOnce([{ id: 4, recoveryKeyHash: 'b'.repeat(64) }])
+        .mockResolvedValueOnce([{ id: 7 }]);
+      (prisma.account.updateMany as any).mockResolvedValue({ count: 1 });
+      (prisma.session.updateMany as any).mockResolvedValue({ count: 2 });
+
+      const r = await checkStoredCredentials();
+
+      expect(r).toEqual({ recoverySealed: 1, outdated: [7], sessionsRevoked: 2 });
+      expect((prisma.account.updateMany as any).mock.calls[0][0].data.recoveryKeyHash).toMatch(/^v2\$[0-9a-f]{64}$/);
+      expect((prisma.session.updateMany as any).mock.calls[0][0].where).toEqual({ revokedAt: null, accountId: { in: [7] } });
     });
 
-    async function setLegacyCount(n: number) {
+    it('touches no sessions when every account is current', async () => {
       (prisma.account.findMany as any).mockResolvedValue([]);
-      (prisma.session.updateMany as any).mockResolvedValue({ count: 0 });
-      (prisma.account.count as any).mockResolvedValue(n);
-      await upgradeStoredCredentials();
-    }
-
-    it('counts legacy hashes at startup', async () => {
-      await setLegacyCount(0);
-      expect(prisma.account.count).toHaveBeenCalledWith({ where: { NOT: { passwordHash: { startsWith: 'auth1$' } } } });
-      await setLegacyCount(1);
-    });
-
-    it('answers an unknown email like an upgraded account when no legacy hashes remain', async () => {
-      await setLegacyCount(0);
-      (prisma.account.findUnique as any).mockResolvedValue(null);
-      const unknown = await request(app).post('/api/auth/login').send(body);
-
-      (prisma.account.findUnique as any).mockResolvedValue(mockLoginAccount());
-      (bcrypt.compare as any).mockResolvedValue(false);
-      const wrong = await request(app).post('/api/auth/login').send(body);
-
-      // Same reply, and no legacyAuth — so the client never sends the password
-      expect(unknown.status).toBe(401);
-      expect(unknown.body).toEqual({ error: 'Invalid credentials' });
-      expect(wrong.body).toEqual(unknown.body);
-      await setLegacyCount(1);
-    });
-
-    it('still asks a remaining legacy account for its password', async () => {
-      await setLegacyCount(0);
-      (prisma.account.findUnique as any).mockResolvedValue({ ...mockLoginAccount(), passwordHash: LEGACY_HASH });
-      const res = await request(app).post('/api/auth/login').send(body);
-      expect(res.body).toEqual({ error: 'Invalid credentials', legacyAuth: true });
-      await setLegacyCount(1);
-    });
-
-    it('recounts after a legacy account upgrades', async () => {
-      await setLegacyCount(1);
-      (prisma.account.findUnique as any).mockResolvedValue({ ...mockLoginAccount(), passwordHash: LEGACY_HASH, totpEnabled: false });
-      (bcrypt.compare as any).mockResolvedValue(true);
-      (prisma.account.count as any).mockResolvedValue(0);
-      await request(app).post('/api/auth/login').send({ ...body, legacyPassword: 'OldPassword1!xyz' });
-
-      (prisma.account.findUnique as any).mockResolvedValue(null);
-      const unknown = await request(app).post('/api/auth/login').send(body);
-      expect(unknown.body).toEqual({ error: 'Invalid credentials' });
-      await setLegacyCount(1);
+      const r = await checkStoredCredentials();
+      expect(r).toEqual({ recoverySealed: 0, outdated: [], sessionsRevoked: 0 });
+      expect(prisma.session.updateMany).not.toHaveBeenCalled();
     });
   });
 
-  describe('POST /api/auth/key-wrap', () => {
-    const body = { currentAuthSecret: 'a'.repeat(64), encryptedMasterKey: Buffer.alloc(60, 1).toString('base64'), kekSalt: Buffer.alloc(16, 2).toString('base64'), kekWrapIv: Buffer.alloc(12, 3).toString('base64'), kekIterations: 600000 };
-
-    it('saves the re-wrapped key and marks the account, without touching sessions', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: 'auth1$hash' });
-      (bcryptMock.compare as any).mockResolvedValue(true);
-      (prisma.account.update as any).mockResolvedValue({});
-      const res = await request(app).post('/api/auth/key-wrap').send(body);
-      expect(res.status).toBe(200);
-      const data = (prisma.account.update as any).mock.calls[0][0].data;
-      expect(Object.keys(data).sort()).toEqual(['encryptedMasterKey', 'kekIterations', 'kekSalt', 'kekWrapIv']);
-      expect(data.kekIterations).toBe(600000);
-      expect(markKeyWrapCurrent).toHaveBeenCalledWith(1);
-      expect(prisma.session.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('needs the current password', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: 'auth1$hash' });
-      (bcryptMock.compare as any).mockResolvedValue(false);
-      const res = await request(app).post('/api/auth/key-wrap').send(body);
-      expect(res.status).toBe(401);
-      expect(prisma.account.update).not.toHaveBeenCalled();
-    });
-
-    it('refuses fewer iterations than the minimum and extra fields', async () => {
-      expect((await request(app).post('/api/auth/key-wrap').send({ ...body, kekIterations: 1000 })).status).toBe(400);
-      expect((await request(app).post('/api/auth/key-wrap').send({ ...body, passwordHash: 'x' })).status).toBe(400);
-    });
+  it('no longer serves the key-wrap upgrade endpoint', async () => {
+    const res = await request(app).post('/api/auth/key-wrap').send({});
+    expect(res.status).toBe(404);
   });
 });

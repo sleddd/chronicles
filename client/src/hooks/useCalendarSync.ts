@@ -50,13 +50,13 @@ function buildFingerprint(entries: DecryptedPost[]): string {
  * local deletions of synced entries so their Google events get removed.
  */
 export function useCalendarSync(): void {
-  const { encryptPost, isUnlocked } = useEncryption();
+  const { encryptPost, encryptNewPost, isUnlocked } = useEncryption();
   const calendarSyncEnabled = useUIStore(s => s.calendarSyncEnabled);
   const googleCalendarId = useUIStore(s => s.googleCalendarId);
   const isInitialized = useEntriesStore(s => s.isInitialized);
 
-  const depsRef = useRef<SyncRuntimeDeps>({ encryptPost });
-  depsRef.current = { encryptPost };
+  const depsRef = useRef<SyncRuntimeDeps>({ encryptPost, encryptNewPost });
+  depsRef.current = { encryptPost, encryptNewPost };
 
   useEffect(() => {
     if (!calendarSyncEnabled || !isUnlocked || !isInitialized) return;
