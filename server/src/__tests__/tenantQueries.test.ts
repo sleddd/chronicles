@@ -45,6 +45,7 @@ import {
   addTaxonomyToPost,
   removeTaxonomyFromPost,
   ensureDoseRecordsTable,
+  ensureTopicEncryptionColumns,
   getDoseRecords,
   upsertDoseRecord,
   deleteDoseRecord,
@@ -316,6 +317,25 @@ describe('Post queries', () => {
     it('returns null for an id never reserved or already taken', async () => {
       mockQueryRawUnsafe.mockResolvedValue([]);
       expect(await createPost(SCHEMA, { id: 999999, ...fields })).toBeNull();
+    });
+  });
+
+  describe('ensureTopicEncryptionColumns', () => {
+    it('only reads the catalog when the schema is already migrated (no exclusive locks)', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: true }]);
+      await ensureTopicEncryptionColumns('usr_7_aaaaaa');
+      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('usr_7_aaaaaa');
+      expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+      await ensureTopicEncryptionColumns('usr_7_aaaaaa'); // remembered: no second read
+      expect(mockQueryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs the ALTERs when something is missing', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: false }]);
+      mockExecuteRawUnsafe.mockResolvedValue(0);
+      await ensureTopicEncryptionColumns('usr_8_bbbbbb');
+      expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(5);
+      expect(mockExecuteRawUnsafe.mock.calls[0][0]).toContain('ALTER TABLE usr_8_bbbbbb.taxonomies');
     });
   });
 

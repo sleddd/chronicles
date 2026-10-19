@@ -112,10 +112,28 @@ function toTaxonomy(r: TaxonomyRow): TenantTaxonomy {
 
 const topicColumnsReady = new Set<string>();
 
+/** Whether a schema's taxonomies table already has everything ensureTopicEncryptionColumns adds. */
+async function topicColumnsMigrated(s: string): Promise<boolean> {
+  const rows = await prisma.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT (SELECT count(*) FROM pg_attribute a
+              WHERE a.attrelid = t.oid AND NOT a.attisdropped
+                AND a.attname IN ('sort_order', 'payload_encrypted', 'payload_iv')) = 3
+        AND (SELECT NOT a.attnotnull FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = 'name')
+        AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conrelid = t.oid AND c.conname = 'taxonomies_name_key') AS ready
+     FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = $1 AND t.relname = 'taxonomies'`,
+    s
+  );
+  return rows[0]?.ready === true;
+}
+
 /** JIT migration: encrypted payload columns, and a name that may be empty and repeat (it lives in the payload). */
 export async function ensureTopicEncryptionColumns(schemaName: string): Promise<void> {
   const s = escapeSchema(schemaName);
   if (topicColumnsReady.has(s)) return;
+  // A read first: each ALTER below takes an exclusive lock even when there's
+  // nothing to change, and every restart used to run all five per user
+  if (await topicColumnsMigrated(s)) { topicColumnsReady.add(s); return; }
   await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0`);
   await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_encrypted BYTEA`);
   await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_iv BYTEA`);
