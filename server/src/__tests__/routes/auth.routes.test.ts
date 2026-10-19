@@ -139,6 +139,8 @@ describe('Auth Routes', () => {
     applyMockDefaults();
     // No sign-in state (failure counters, pending 2FA) carries over between tests
     resetAuthStateForTests();
+    // Sign-up is closed by default; most tests here aren't about who may register
+    process.env.REGISTRATION_OPEN = 'true';
     app = buildApp();
   });
 
@@ -162,11 +164,40 @@ describe('Auth Routes', () => {
       expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.any(Object));
     });
 
-    describe('with REGISTRATION_WHITELIST set', () => {
+    describe('who may sign up', () => {
       const ok = () => (registerTenant as any).mockResolvedValue({
         account: { id: 1, email: 'test@example.com', username: 'testuser' }, schemaName: 'usr_1_a1b2c3',
       });
+      beforeEach(() => { delete process.env.REGISTRATION_OPEN; });
       afterEach(() => { delete process.env.REGISTRATION_WHITELIST; });
+
+      it('is closed by default: no list, not approved → refused', async () => {
+        (isApproved as any).mockResolvedValue(false);
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(403);
+        expect(registerTenant).not.toHaveBeenCalled();
+      });
+
+      it('lets in an approved email with no REGISTRATION_WHITELIST at all', async () => {
+        (isApproved as any).mockResolvedValue(true);
+        ok();
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(201);
+      });
+
+      it('stays closed if the approval check fails', async () => {
+        (isApproved as any).mockRejectedValue(new Error('db down'));
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(403);
+      });
+
+      it('lets anyone in only with REGISTRATION_OPEN=true', async () => {
+        process.env.REGISTRATION_OPEN = 'true';
+        (isApproved as any).mockResolvedValue(false);
+        ok();
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(201);
+      });
 
       it('refuses an email that is neither listed nor approved', async () => {
         process.env.REGISTRATION_WHITELIST = 'owner@example.com';

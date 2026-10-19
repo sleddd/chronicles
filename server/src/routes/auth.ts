@@ -392,12 +392,12 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
     const email = normalizeEmail(rawEmail);
 
-    // Whitelist check — if REGISTRATION_WHITELIST is set, only listed emails, or
-    // ones approved on the beta list (`npm run beta -- --approve`, no restart), may sign up
-    const whitelist = process.env.REGISTRATION_WHITELIST;
-    if (whitelist) {
-      const allowed = whitelist.split(',').map(e => e.trim().toLowerCase());
-      if (!allowed.includes(email) && !(await isApproved(email).catch(() => false))) {
+    // Who may sign up: closed unless REGISTRATION_OPEN=true. Emails approved on
+    // the beta list (`npm run beta -- --approve`, no restart) or listed in the
+    // optional REGISTRATION_WHITELIST may; anyone else is refused
+    if (process.env.REGISTRATION_OPEN !== 'true') {
+      const listed = (process.env.REGISTRATION_WHITELIST ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (!listed.includes(email) && !(await isApproved(email).catch(() => false))) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
         res.status(403).json({ error: 'Registration is currently restricted.' });
         return;

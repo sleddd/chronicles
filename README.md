@@ -197,8 +197,9 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
    Optional: to enable Google Calendar sync, add Google OAuth credentials and a
    `CALENDAR_TOKEN_KEY` (see comments in `.env.example`). Entry images need **no**
    server configuration — each user connects their own R2 bucket from Settings.
-   For a personal deployment, set `REGISTRATION_WHITELIST` to the emails allowed to
-   sign up; without it anyone can create an account on your server.
+   Sign-up is closed by default: approve each email with
+   `npm run beta -- --approve <email>` (or list them in `REGISTRATION_WHITELIST`).
+   `REGISTRATION_OPEN=true` lets anyone create an account on your server.
 
 4. Set up the database:
    ```bash

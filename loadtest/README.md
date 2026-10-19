@@ -16,7 +16,7 @@ cd server && DATABASE_URL=postgresql://postgres@127.0.0.1:5432/chronicles npx pr
 # The server, with TRUST_PROXY=1 so each virtual user can look like its own IP
 # (otherwise the per-IP sign-in limits stop the test, not the server)
 DATABASE_URL=postgresql://postgres@127.0.0.1:5432/chronicles NODE_ENV=development \
-  TRUST_PROXY=1 SECRETS_ENCRYPTION_KEY=$(openssl rand -hex 32) node --import tsx server/src/index.ts
+  TRUST_PROXY=1 REGISTRATION_OPEN=true SECRETS_ENCRYPTION_KEY=$(openssl rand -base64 32) node --import tsx server/src/index.ts
 ```
 
 ## Scripts

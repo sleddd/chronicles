@@ -65,10 +65,10 @@ if (process.env.CLIENT_URL) {
   }
 }
 
-// Every sign-up creates a whole Postgres schema; a personal deployment should
-// list who may register
-if (process.env.NODE_ENV === 'production' && !process.env.REGISTRATION_WHITELIST) {
-  console.warn('WARNING: REGISTRATION_WHITELIST is not set — anyone can create an account on this server');
+// Sign-up is closed to everyone not approved on the beta list (or in
+// REGISTRATION_WHITELIST) unless REGISTRATION_OPEN=true
+if (process.env.NODE_ENV === 'production' && process.env.REGISTRATION_OPEN === 'true') {
+  console.warn('WARNING: REGISTRATION_OPEN=true — anyone can create an account on this server');
 }
 
 // Behind a hosting proxy (Render etc.) every request arrives from the proxy's
