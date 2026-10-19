@@ -96,6 +96,17 @@ const LOGIN_MAX_FAILURES = 10;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const loginFailures = new Map<string, { count: number; resetAt: number }>();
 
+/** Tests only: clear every in-memory sign-in record (pending 2FA sign-ins, used
+ *  authenticator steps, 2FA and password failure counters) so one test's state
+ *  can never leak into the next. Never called by the app. */
+export function resetAuthStateForTests(): void {
+  pendingTwoFA.clear();
+  lastTotpStep.clear();
+  twoFAFailures.clear();
+  loginFailures.clear();
+  legacyHashesRemain = true;
+}
+
 function loginLocked(email: string): boolean {
   const f = loginFailures.get(email);
   if (!f) return false;

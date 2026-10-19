@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -50,7 +50,9 @@ vi.mock('bcryptjs', () => ({
   },
 }));
 
-import authRouter from '../../routes/auth.js';
+import authRouter, { resetAuthStateForTests } from '../../routes/auth.js';
+import * as authMw from '../../middleware/auth.js';
+import bcryptMock from 'bcryptjs';
 import { prisma } from '../../db/prisma.js';
 import { decryptToken } from '../../services/tokenCrypto.js';
 import { deleteAccountById } from '../../db/schemaManager.js';
@@ -98,13 +100,41 @@ async function pendingTokenFor(app: express.Express, account: ReturnType<typeof 
   return res.body.pendingToken;
 }
 
+
+/** Every mock starts each test fresh: reset implementations too (clearAllMocks
+ *  keeps the last test's results), then put back the defaults the file relies on. */
+function applyMockDefaults() {
+  vi.resetAllMocks();
+  (authMw.authMiddleware as any).mockImplementation((req: any, _res: any, next: any) => {
+    req.auth = { accountId: 1, tenantSchemaName: 'usr_1_a1b2c3', sessionId: 42, selector: 'aabbccddee11' };
+    next();
+  });
+  (authMw.createSession as any).mockResolvedValue('aabbccddee11' + 'verifier1234567890123456789012');
+  (authMw.revokeSession as any).mockResolvedValue(undefined);
+  (authMw.revokeAllSessions as any).mockResolvedValue(undefined);
+  (bcryptMock.hash as any).mockResolvedValue('$2a$12$hashedpassword');
+  (bcryptMock.compare as any).mockResolvedValue(true);
+  (prisma.$executeRaw as any).mockResolvedValue(1);
+  (revokeGoogleAccess as any).mockResolvedValue(true);
+}
+
 describe('2FA hardening', () => {
   let app: express.Express;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    applyMockDefaults();
+    resetAuthStateForTests();
+    // Freeze the clock (Date only — timers stay real) in the middle of a
+    // 30-second authenticator window, so a code made here can never roll over
+    // to the next window before the server checks it
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T12:00:15Z'));
     (bcrypt.compare as any).mockResolvedValue(true);
     app = buildApp();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('POST /api/auth/2fa/enable', () => {

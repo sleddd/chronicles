@@ -65,7 +65,9 @@ vi.mock('bcryptjs', () => ({
   },
 }));
 
-import authRouter, { upgradeStoredCredentials } from '../../routes/auth.js';
+import authRouter, { upgradeStoredCredentials, resetAuthStateForTests } from '../../routes/auth.js';
+import * as authMw from '../../middleware/auth.js';
+import bcryptMock from 'bcryptjs';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
@@ -110,11 +112,29 @@ const validLoginBody = {
   authSecret: SECRET,
 };
 
+
+/** Every mock starts each test fresh: reset implementations too (clearAllMocks
+ *  keeps the last test's results), then put back the defaults the file relies on. */
+function applyMockDefaults() {
+  vi.resetAllMocks();
+  (authMw.authMiddleware as any).mockImplementation((req: any, _res: any, next: any) => {
+    req.auth = { accountId: 1, tenantSchemaName: 'usr_1_a1b2c3', sessionId: 42, selector: 'aabbccddee11' };
+    next();
+  });
+  (authMw.createSession as any).mockResolvedValue('aabbccddee11' + 'verifier1234567890123456789012');
+  (authMw.revokeSession as any).mockResolvedValue(undefined);
+  (authMw.revokeAllSessions as any).mockResolvedValue(undefined);
+  (bcryptMock.hash as any).mockResolvedValue('$2a$12$hashedpassword');
+  (bcryptMock.compare as any).mockResolvedValue(true);
+}
+
 describe('Auth Routes', () => {
   let app: express.Express;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    applyMockDefaults();
+    // No sign-in state (failure counters, pending 2FA) carries over between tests
+    resetAuthStateForTests();
     app = buildApp();
   });
 
