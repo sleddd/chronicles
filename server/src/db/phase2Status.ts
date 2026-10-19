@@ -14,6 +14,7 @@
  * The taxonomies name/icon columns stay (always NULL) — the topic queries
  * still select them.
  */
+import './scriptEnv.js';
 import type { PrismaClient } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { tenantDb, disconnectShards } from './shards.js';

@@ -9,6 +9,7 @@
  *
  * Take a database backup first.
  */
+import './scriptEnv.js';
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
 import { tenantDb, disconnectShards } from './shards.js';

@@ -11,6 +11,7 @@
  * REGISTRATION_WHITELIST set (your own email is enough): with it unset, anyone
  * can sign up. Send approved testers the /sign-up link yourself.
  */
+import './scriptEnv.js';
 import { BETA_DETAILS } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 import { approve, initBetaTable, listSignups, removeSignup, unapprove, type BetaSignup } from './betaQueries.js';

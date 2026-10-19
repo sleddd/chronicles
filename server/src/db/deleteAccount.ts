@@ -8,6 +8,7 @@
  *   npm run account:delete -- person@example.com          # dry run
  *   npm run account:delete -- person@example.com --yes    # deletes (irreversible)
  */
+import './scriptEnv.js';
 import { normalizeEmail } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 import { deleteAccountById } from './schemaManager.js';

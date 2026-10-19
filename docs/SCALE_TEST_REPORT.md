@@ -55,7 +55,7 @@ Follow-up work (same branch), each verified locally:
 
 1. **Set `SECRETS_ENCRYPTION_KEY`** (32 random bytes, base64: `openssl rand -base64 32`) if it isn't set already. Remember me only works across instances with it.
 2. Deploy. On startup the server adds `accounts.shard_id`, the sync trigger function and the two state tables by itself; it waits for that before listening.
-3. Right after deploying, run **`npm run migrate:entry-sync`** (server, with the same environment) to set up change tracking for every existing account at once (about 11 seconds per 1,000 accounts locally). Skipping it is safe; each account is then set up on its first request, but hundreds at once under load are slow.
+3. Right after deploying, run **`npm run migrate:entry-sync`** (from the repo root; it reads `server/.env`, so point that at the production database) to set up change tracking for every existing account at once (about 11 seconds per 1,000 accounts locally). Skipping it is safe; each account is then set up on its first request, but hundreds at once under load are slow.
 4. Nothing else changes until you add a shard (`docs/SHARDING.md`) or a second instance.
 
 Where it stands now: sign-in bursts no longer freeze the server, and no data is lost from view. Backups are safe as long as you act on the server's warning (or use physical backups). Postgres memory now tracks users *active in the last 30 minutes*, not everyone ever served. At ~50 KB per user per connection over 5 connections, a 1 GB database holds a few thousand users active within any half hour. That supports a much larger registered base. The next real ceiling is schema-per-user itself (finding 4), somewhere around 5,000–10,000 registered users.

@@ -5,6 +5,7 @@
  *
  *   npm run report:ai-safety -- --from 2026-01-01 --to 2026-12-31
  */
+import './scriptEnv.js';
 import { prisma } from './prisma.js';
 import { countCrisisCards, countMinorDetected } from './analyticsQueries.js';
 

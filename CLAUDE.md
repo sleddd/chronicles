@@ -171,13 +171,30 @@ npm run test             # Vitest (node environment)
 npx prisma generate      # Regenerate Prisma client after schema changes
 npx prisma db push       # Push schema to database
 npx prisma migrate dev   # Create and apply migration
-npm run migrate:tenants  # Run tenant schema migrations
+npm run migrate:tenants  # Every per-account migration for every account (see Maintenance commands)
 
 # Shared only
 cd shared
 npm run build            # tsc compile
 npm run test             # Vitest
 ```
+
+**Maintenance commands** run from the repo root (each passes through to `server/` and reads `server/.env` itself via `src/db/scriptEnv.ts`; variables set in the shell win; add `-- <args>` for arguments):
+
+```bash
+npm run migrate:tenants          # every per-account migration, for every account (or one: -- topic-columns | finance | dose-records | entry-sync)
+npm run migrate:entry-sync       # just entry-sync change tracking (run once after deploying it)
+npm run migrate:phase2-status    # what's still in an old format, per account (-- --drop)
+npm run check:backups            # will pg_dump work? (max_locks_per_transaction, per database)
+npm run clear:topic-links        # dry run; -- --apply deletes
+npm run account:delete -- <email> [--yes]
+npm run beta                     # beta list; -- --csv | --approve <email> | --unapprove <email> | --remove <email>
+npm run notice -- --set "…" [--link https://…]   # or -- --clear
+npm run ai:block -- <email> [--unblock]
+npm run report:ai-safety -- --from YYYY-MM-DD --to YYYY-MM-DD
+```
+
+A new maintenance script imports `./scriptEnv.js` first and gets a root passthrough script.
 
 ## Architecture
 
