@@ -227,6 +227,9 @@ function withoutTopicLink(data: Record<string, unknown>): Record<string, unknown
 }
 
 const ENTRY_PAGE = 5000;
+// Batch creates: the server takes up to 100 entries and a 5 MB body
+const BATCH_ENTRIES = 50;
+const BATCH_BYTES = 3_500_000;
 
 export const entries = {
   // Every entry, newest first. The server sends at most ENTRY_PAGE a request,
@@ -257,6 +260,32 @@ export const entries = {
   // under the id it was encrypted for (`encryptNewPost` reserves it).
   create: (data: Record<string, unknown> & { id: number }) =>
     request<Record<string, unknown>>('/entries', { method: 'POST', body: { ...withoutTopicLink(data), format: 3 } }),
+
+  /**
+   * Create many entries (imports) in as few requests as possible: one per 50
+   * entries or ~3.5 MB, so a big import stays well under the per-account
+   * request limit and the 5 MB body cap. Returns the created entries in order.
+   */
+  createMany: async (list: (Record<string, unknown> & { id: number })[]): Promise<Record<string, unknown>[]> => {
+    const made: Record<string, unknown>[] = [];
+    let chunk: Record<string, unknown>[] = [];
+    let bytes = 0;
+    const send = async () => {
+      if (!chunk.length) return;
+      made.push(...await request<Record<string, unknown>[]>('/entries/batch', { method: 'POST', body: { entries: chunk } }));
+      chunk = [];
+      bytes = 0;
+    };
+    for (const data of list) {
+      const body: Record<string, unknown> = { ...withoutTopicLink(data), format: 3 };
+      const size = String(body.contentEncrypted ?? '').length + String(body.metadataEncrypted ?? '').length;
+      if (chunk.length && (chunk.length >= BATCH_ENTRIES || bytes + size > BATCH_BYTES)) await send();
+      chunk.push(body);
+      bytes += size;
+    }
+    await send();
+    return made;
+  },
 
   update: (id: number, data: Record<string, unknown>) =>
     request<Record<string, unknown>>(`/entries/${id}`, {

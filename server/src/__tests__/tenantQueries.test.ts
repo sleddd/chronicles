@@ -37,6 +37,7 @@ import {
   createPost,
   getPost,
   getAllPosts,
+  createPosts,
   updatePost,
   deletePost,
   setPostTaxonomies,
@@ -315,6 +316,30 @@ describe('Post queries', () => {
     it('returns null for an id never reserved or already taken', async () => {
       mockQueryRawUnsafe.mockResolvedValue([]);
       expect(await createPost(SCHEMA, { id: 999999, ...fields })).toBeNull();
+    });
+  });
+
+  describe('createPosts', () => {
+    const fields = {
+      contentEncrypted: Buffer.from('c'), contentIv: Buffer.from('i'),
+      metadataEncrypted: Buffer.from('m'), metadataIv: Buffer.from('j'),
+    };
+    // A transaction whose tx runs the same raw-query mock
+    const runTx = () => mockTransaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({ $queryRawUnsafe: mockQueryRawUnsafe }));
+
+    it('creates every entry in one transaction', async () => {
+      runTx();
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ id: 1 }]).mockResolvedValueOnce([{ id: 2 }]);
+      const made = await createPosts(SCHEMA, [{ id: 1, ...fields }, { id: 2, ...fields }]);
+      expect(made?.map(p => p.id)).toEqual([1, 2]);
+      expect(mockTransaction).toHaveBeenCalledTimes(1);
+      expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.posts_id_seq)');
+    });
+
+    it('returns null (rolled back) when any id was not reserved or is taken', async () => {
+      runTx();
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ id: 1 }]).mockResolvedValueOnce([]);
+      expect(await createPosts(SCHEMA, [{ id: 1, ...fields }, { id: 2, ...fields }])).toBeNull();
     });
   });
 

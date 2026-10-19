@@ -260,6 +260,18 @@ export async function reservePostIds(schemaName: string, count: number): Promise
   return rows.map(r => r.id);
 }
 
+function insertPostSql(s: string): string {
+  return `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+     SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
+     WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
+     ON CONFLICT (id) DO NOTHING
+     RETURNING ${POST_SELECT}`;
+}
+
+const insertPostArgs = (input: CreatePostInput) => [
+  input.id, input.contentEncrypted, input.contentIv, input.metadataEncrypted, input.metadataIv, input.createdAt ?? null,
+];
+
 /**
  * Create an encrypted entry under a reserved id. Returns null when the id was
  * never handed out (beyond the sequence) or is taken. Server and client both
@@ -267,21 +279,34 @@ export async function reservePostIds(schemaName: string, count: number): Promise
  */
 export async function createPost(schemaName: string, input: CreatePostInput): Promise<TenantPost | null> {
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TenantPost[]>(
-    `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
-     SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
-     WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
-     ON CONFLICT (id) DO NOTHING
-     RETURNING ${POST_SELECT}`,
-    input.id,
-    input.contentEncrypted,
-    input.contentIv,
-    input.metadataEncrypted,
-    input.metadataIv,
-    input.createdAt ?? null
-  );
+  const result = await prisma.$queryRawUnsafe<TenantPost[]>(insertPostSql(s), ...insertPostArgs(input));
   return result[0] ?? null;
 }
+
+/**
+ * Create several entries at once, all or none: null (and nothing saved) when
+ * any id was never reserved or is taken.
+ */
+export async function createPosts(schemaName: string, inputs: CreatePostInput[]): Promise<TenantPost[] | null> {
+  const s = escapeSchema(schemaName);
+  const sql = insertPostSql(s);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const made: TenantPost[] = [];
+      for (const input of inputs) {
+        const rows = await tx.$queryRawUnsafe<TenantPost[]>(sql, ...insertPostArgs(input));
+        if (!rows[0]) throw new BatchConflict();
+        made.push(rows[0]);
+      }
+      return made;
+    });
+  } catch (err) {
+    if (err instanceof BatchConflict) return null;
+    throw err;
+  }
+}
+
+class BatchConflict extends Error {}
 
 /**
  * Replace the encrypted fields of several entries at once, keeping their

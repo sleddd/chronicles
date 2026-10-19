@@ -159,6 +159,12 @@ export const createPostSchema = z.object({
   createdAt: z.string().datetime({ offset: true }).optional(),
 });
 
+// Imports create many entries at once: up to 100 a request, so a big import
+// doesn't run into the per-account request limit
+export const createPostsBatchSchema = z.object({
+  entries: z.array(createPostSchema).min(1).max(100),
+});
+
 export const reservePostIdsSchema = z.object({
   count: z.number().int().min(1).max(50).default(1),
 });

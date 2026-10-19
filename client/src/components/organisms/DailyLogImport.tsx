@@ -12,6 +12,7 @@ import { planDailyLogImport, type ImportPlan, type PlannedEntry } from '../../ut
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../../types/nutrition.js';
 
 const TOPIC_ICONS: Record<PlannedEntry['topic'], string> = { Meals: 'utensils', Symptom: 'stethoscope', Journal: 'book' };
+const IMPORT_BATCH = 50;
 
 async function topicIdFor(name: PlannedEntry['topic']): Promise<number> {
   if (name === 'Journal') return getOrCreateJournalTopic();
@@ -68,25 +69,37 @@ export function DailyLogImport() {
     let made = 0;
     try {
       const ids = new Map<PlannedEntry['topic'], number>();
+      // Saved IMPORT_BATCH at a time (one request each), so a big log doesn't
+      // run into the per-account request limit
+      let pending: { payload: Parameters<typeof entriesApi.createMany>[0][number]; item: PlannedEntry; metadata: Record<string, unknown> }[] = [];
+      const flush = async () => {
+        const created = await entriesApi.createMany(pending.map(p => p.payload));
+        created.forEach((res, k) => {
+          const { item, metadata } = pending[k];
+          addDecryptedEntry({
+            id: res.id as number, content: item.content, metadata, isEncrypted: true,
+            createdAt: new Date(res.createdAt as string),
+            updatedAt: new Date((res.updatedAt || res.createdAt) as string),
+          });
+        });
+        made += created.length;
+        pending = [];
+        setResult(`Importing… ${made} of ${plan.fresh.length}`);
+      };
       for (const item of plan.fresh) {
         if (!ids.has(item.topic)) ids.set(item.topic, await topicIdFor(item.topic));
         const tid = ids.get(item.topic)!;
         const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: item.importKey };
         if (Object.keys(item.customFields).length) metadata._customFields = item.customFields;
         const encrypted = await encryptNewPost(item.content, metadata);
-        const res = await entriesApi.create({ id: encrypted.id,
+        pending.push({ item, metadata, payload: { id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
           isEncrypted: true, taxonomyIds: [tid], createdAt: item.createdAt,
-        });
-        addDecryptedEntry({
-          id: res.id as number, content: item.content, metadata, isEncrypted: true,
-          createdAt: new Date(res.createdAt as string),
-          updatedAt: new Date((res.updatedAt || res.createdAt) as string),
-        });
-        made++;
-        setResult(`Importing… ${made} of ${plan.fresh.length}`);
+        } });
+        if (pending.length >= IMPORT_BATCH) await flush();
       }
+      await flush();
       if (plan.goals) await saveGoals(plan.goals);
       const skipped = plan.entries.length - plan.fresh.length;
       setResult(`Imported ${made} item${made === 1 ? '' : 's'} from ${plan.days} day${plan.days === 1 ? '' : 's'}`

@@ -141,6 +141,8 @@ const FinanceDisclaimer = styled.p`
 `;
 
 const SETTINGS_CARDS_KEY = 'settings-collapsed-v1';
+// CSV import saves this many entries per request
+const IMPORT_BATCH = 50;
 
 /* All sections start collapsed; each card remembers being opened */
 function Section(props: { id: string; title: string; children: ReactNode }) {
@@ -668,6 +670,26 @@ export function SettingsView() {
       let skipped = 0;
       const total = lines.length - 1;
 
+      // Entries are saved IMPORT_BATCH at a time (one request each), so a big
+      // file doesn't run into the per-account request limit
+      let pending: { payload: Parameters<typeof entriesApi.createMany>[0][number]; content: string; metadata: Record<string, unknown> }[] = [];
+      const flush = async () => {
+        const created = await entriesApi.createMany(pending.map(p => p.payload));
+        created.forEach((result, k) => {
+          addDecryptedEntry({
+            id: result.id as number,
+            content: pending[k].content,
+            metadata: pending[k].metadata,
+            isEncrypted: true,
+            createdAt: new Date(result.createdAt as string),
+            updatedAt: new Date((result.updatedAt || result.createdAt) as string),
+          });
+        });
+        imported += created.length;
+        pending = [];
+        setImportResult(`Importing ${imported} of ${total}...`);
+      };
+
       for (let i = 1; i < lines.length; i++) {
         const fields = parseCsvRow(lines[i]);
         const content = fields[contentIdx]?.trim();
@@ -713,9 +735,9 @@ export function SettingsView() {
         // Parse date
         const createdAt = new Date(dateStr).toISOString();
 
-        // Create entry via API
+        // Queue for the next batch create
         const taxonomyIds = metadata._taxonomyId ? [metadata._taxonomyId as number] : [];
-        const result = await entriesApi.create({
+        pending.push({ content: htmlContent, metadata, payload: {
           id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted,
           contentIv: encrypted.contentIv,
@@ -724,21 +746,10 @@ export function SettingsView() {
           isEncrypted: true,
           taxonomyIds,
           createdAt,
-        });
-
-        // Add to local store
-        addDecryptedEntry({
-          id: result.id as number,
-          content: htmlContent,
-          metadata,
-          isEncrypted: true,
-          createdAt: new Date(result.createdAt as string),
-          updatedAt: new Date((result.updatedAt || result.createdAt) as string),
-        });
-
-        imported++;
-        setImportResult(`Importing ${imported} of ${total}...`);
+        } });
+        if (pending.length >= IMPORT_BATCH) await flush();
       }
+      await flush();
 
       setImportResult(`Imported ${imported} entries${skipped > 0 ? `, ${skipped} skipped` : ''}`);
     } catch (err) {

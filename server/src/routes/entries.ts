@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { createPost, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts } from '../db/tenantQueries.js';
+import { createPost, createPosts, type CreatePostInput, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
-import { createPostSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
+import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
 
@@ -88,6 +88,21 @@ router.put('/reseal', async (req, res) => {
   }
 });
 
+// The schema only admits encrypted posts — the server never stores plaintext
+type CreatePostBody = NonNullable<ReturnType<typeof createPostSchema.safeParse>['data']>;
+
+function toCreateInput(data: CreatePostBody): CreatePostInput {
+  const { taxonomyIds: _ignored, createdAt, id, format: _v3, ...postData } = data;
+  return {
+    id,
+    contentEncrypted: Buffer.from(postData.contentEncrypted, 'base64'),
+    contentIv: Buffer.from(postData.contentIv, 'base64'),
+    metadataEncrypted: Buffer.from(postData.metadataEncrypted, 'base64'),
+    metadataIv: Buffer.from(postData.metadataIv, 'base64'),
+    ...(createdAt && { createdAt: new Date(createdAt) }),
+  };
+}
+
 // POST /api/entries — Create entry (under a reserved id)
 router.post('/', async (req, res) => {
   try {
@@ -97,17 +112,7 @@ router.post('/', async (req, res) => {
       return;
     }
 
-    // The schema only admits encrypted posts — the server never stores plaintext
-    const { taxonomyIds: _ignored, createdAt, id, format: _v3, ...postData } = parsed.data;
-    const input = {
-      id,
-      contentEncrypted: Buffer.from(postData.contentEncrypted, 'base64'),
-      contentIv: Buffer.from(postData.contentIv, 'base64'),
-      metadataEncrypted: Buffer.from(postData.metadataEncrypted, 'base64'),
-      metadataIv: Buffer.from(postData.metadataIv, 'base64'),
-      ...(createdAt && { createdAt: new Date(createdAt) }),
-    };
-
+    const input = toCreateInput(parsed.data);
     const size = input.contentEncrypted.length + input.metadataEncrypted.length;
     if (await postStorageBytes(req.auth!.tenantSchemaName) + size > ENTRY_STORAGE_LIMIT_BYTES) {
       res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
@@ -124,6 +129,39 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('Create entry error:', err);
     res.status(500).json({ error: 'Failed to create entry' });
+  }
+});
+
+// POST /api/entries/batch — Create up to 100 entries (imports), all or none
+router.post('/batch', async (req, res) => {
+  try {
+    const parsed = createPostsBatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    const inputs = parsed.data.entries.map(toCreateInput);
+    if (new Set(inputs.map(e => e.id)).size !== inputs.length) {
+      res.status(400).json({ error: 'Each entry once' });
+      return;
+    }
+
+    const size = inputs.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length, 0);
+    if (await postStorageBytes(req.auth!.tenantSchemaName) + size > ENTRY_STORAGE_LIMIT_BYTES) {
+      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+      return;
+    }
+
+    const posts = await createPosts(req.auth!.tenantSchemaName, inputs);
+    if (!posts) {
+      res.status(409).json({ error: 'An entry id was not reserved or is taken' });
+      return;
+    }
+
+    res.status(201).json(posts.map(p => serializePost(p as unknown as Record<string, unknown>)));
+  } catch (err) {
+    console.error('Create entries error:', err);
+    res.status(500).json({ error: 'Failed to create entries' });
   }
 });
 

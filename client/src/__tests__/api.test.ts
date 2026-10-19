@@ -288,6 +288,32 @@ describe('entries', () => {
     expect(new Set(all.map(e => e.id)).size).toBe(12000);
   });
 
+  it('createMany sends entries 50 to a request (and splits big ones by size), returning them in order', async () => {
+    const sent: { id: number; format: number; taxonomyIds?: unknown }[][] = [];
+    fetchSpy = vi.fn(async (_url: string, init: { body: string }) => {
+      const { entries: batch } = JSON.parse(init.body);
+      sent.push(batch);
+      return { ok: true, status: 201, headers: { get: () => 'application/json' }, json: async () => batch.map((e: { id: number }) => ({ id: e.id })) };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const entry = (id: number, size = 10) => ({ id, contentEncrypted: 'x'.repeat(size), contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'j', isEncrypted: true, taxonomyIds: [3] });
+
+    const made = await entries.createMany(Array.from({ length: 120 }, (_, k) => entry(k + 1)));
+    expect(fetchSpy.mock.calls.every(c => c[0] === '/api/entries/batch')).toBe(true);
+    expect(sent.map(b => b.length)).toEqual([50, 50, 20]);
+    expect(made.map(e => e.id)).toEqual(Array.from({ length: 120 }, (_, k) => k + 1));
+    expect(sent[0][0].format).toBe(3);
+    expect(sent[0][0].taxonomyIds).toBeUndefined(); // no plaintext topic link
+
+    sent.length = 0;
+    await entries.createMany([entry(1, 2_000_000), entry(2, 2_000_000), entry(3)]);
+    expect(sent.map(b => b.length)).toEqual([1, 2]);
+
+    sent.length = 0;
+    expect(await entries.createMany([])).toEqual([]);
+    expect(sent).toHaveLength(0);
+  });
+
   it('get fetches /entries/:id', async () => {
     fetchSpy = mockFetchResponse({ id: 5 });
     vi.stubGlobal('fetch', fetchSpy);
