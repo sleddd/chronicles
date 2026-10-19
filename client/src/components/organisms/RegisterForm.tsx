@@ -5,11 +5,16 @@ import { PasswordInput } from '../atoms/PasswordInput.js';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { FormField } from '../molecules/FormField.js';
+import { authFields } from '../atoms/AuthForm.js';
 
+/* Fields closer together than the app's forms */
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing.md}px;
+  gap: 6px;
+  ${authFields}
+  /* Each field row: less padding, label closer to its box */
+  & > div:has(> label[for]) { padding: 4px 0; gap: 8px; }
 `;
 
 const ErrorBanner = styled.div`

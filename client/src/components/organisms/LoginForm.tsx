@@ -3,43 +3,35 @@ import styled from 'styled-components';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { RememberMe } from '../molecules/RememberMe.js';
+import { authFields } from '../atoms/AuthForm.js';
 
 const Form = styled.form`
   display: flex;
   flex-direction: column;
   gap: 16px;
+  ${authFields}
 `;
 
 const Field = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 `;
 
-const FieldLabel = styled.label`
-  font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-tertiary);
-`;
+const FieldLabel = styled.label``;
 
 const InputWrap = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  border: 1px solid var(--border-default);
-  border-radius: var(--r-md);
-  background: var(--bg-sunken);
-  &:focus-within { border-color: var(--color-accent); }
+  /* The input itself carries the outline (authFields); Show sits inside it */
+  input { padding-right: 64px !important; }
 `;
 
 const StyledInput = styled.input`
   flex: 1;
-  height: 42px;
-  padding: 0 14px;
-  font-size: 15px;
+  height: 48px;
+  font-size: 16px;
   color: var(--text-primary);
   background: transparent;
   border: none;
@@ -48,7 +40,9 @@ const StyledInput = styled.input`
 `;
 
 const ShowBtn = styled.button`
-  padding: 0 12px;
+  position: absolute;
+  right: 6px;
+  padding: 0 10px;
   font-size: 12px;
   color: var(--text-tertiary);
   background: none;
