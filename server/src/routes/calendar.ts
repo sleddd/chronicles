@@ -40,15 +40,19 @@ function clientUrl(): string {
   return (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
 }
 
+// The state is signed with a key of its own, derived from the client secret
+// (the secret itself is for Google)
+const stateKey = (clientSecret: string) => crypto.createHmac('sha256', clientSecret).update('chronicles:oauth-state').digest();
+
 // State token: base64url payload + HMAC signature, binds the OAuth round-trip
 // to a session and (via the nonce hash) to the browser that started it
-function signState(selector: string, nonceHash: string, secret: string): string {
+function signState(selector: string, nonceHash: string, secret: Buffer): string {
   const payload = Buffer.from(JSON.stringify({ selector, nonce: nonceHash, exp: Date.now() + STATE_TTL_MS })).toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
-function verifyState(state: string, secret: string): { selector: string; nonce: string } | null {
+function verifyState(state: string, secret: Buffer): { selector: string; nonce: string } | null {
   const dot = state.lastIndexOf('.');
   if (dot === -1) return null;
   const payload = state.slice(0, dot);
@@ -86,7 +90,7 @@ router.get('/google/auth-url', authMiddleware, apiLimiter, (req, res) => {
     access_type: 'offline',
     prompt: 'consent',
     scope: GOOGLE_SCOPES,
-    state: signState(req.auth!.selector, hashNonce(nonce), env.clientSecret),
+    state: signState(req.auth!.selector, hashNonce(nonce), stateKey(env.clientSecret)),
   });
   res.cookie(OAUTH_NONCE_COOKIE, nonce, { ...OAUTH_NONCE_COOKIE_OPTIONS, maxAge: STATE_TTL_MS });
   res.json({ url: `${GOOGLE_AUTH_URL}?${params.toString()}` });
@@ -108,7 +112,7 @@ router.get('/google/callback', async (req, res) => {
       return;
     }
 
-    const verified = verifyState(state, env.clientSecret);
+    const verified = verifyState(state, stateKey(env.clientSecret));
     if (!verified) {
       fail();
       return;

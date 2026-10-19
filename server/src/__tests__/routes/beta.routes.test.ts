@@ -22,13 +22,21 @@ describe('beta routes', () => {
   it('never publishes how many seats are left', async () => {
     expect((await request(app).get('/api/beta')).status).toBe(404);
     const res = await request(app).post('/api/beta/apply').set(xhr).send(application);
-    expect(res.body).toEqual({ status: 'seat' });
+    expect(res.body).toEqual({ ok: true });
+  });
+
+  it('answers the same for a seat, the waitlist and the honeypot', async () => {
+    (applyForBeta as any).mockResolvedValueOnce('waitlist');
+    const wait = await request(app).post('/api/beta/apply').set(xhr).send(application);
+    const trap = await request(app).post('/api/beta/apply').set(xhr).send({ ...application, website: 'http://spam' });
+    expect(wait.body).toEqual({ ok: true });
+    expect(trap.body).toEqual({ ok: true });
+    expect(applyForBeta).toHaveBeenCalledTimes(1);
   });
 
   it('saves an application with a normalised email', async () => {
     const res = await request(app).post('/api/beta/apply').set(xhr).send(application);
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('seat');
     expect(applyForBeta).toHaveBeenCalledWith({ email: 'sam@example.com', name: 'Sam', trackFirst: 'journal', device: 'ios' });
   });
 

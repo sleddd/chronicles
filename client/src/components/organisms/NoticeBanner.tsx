@@ -54,6 +54,12 @@ function dismissedId(): string | null {
   try { return localStorage.getItem(DISMISS_KEY); } catch { return null; }
 }
 
+/** Only an https:// link is ever rendered (the banner shows on every signed-in page). */
+function isHttpsUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try { return new URL(url).protocol === 'https:'; } catch { return false; }
+}
+
 export function NoticeBanner() {
   const [current, setCurrent] = useState<AppNotice | null>(null);
   const [hidden, setHidden] = useState<string | null>(dismissedId);
@@ -83,7 +89,7 @@ export function NoticeBanner() {
       <MaterialIcon $size={20} aria-hidden="true">warning</MaterialIcon>
       <Text>
         {current.message}
-        {current.linkUrl && <a href={current.linkUrl} target="_blank" rel="noopener noreferrer">Learn more</a>}
+        {isHttpsUrl(current.linkUrl) && <a href={current.linkUrl!} target="_blank" rel="noopener noreferrer">Learn more</a>}
       </Text>
       <Close type="button" aria-label="Dismiss notice" onClick={dismiss}>
         <Icon name="x" size={16} strokeWidth={2} aria-hidden="true" />

@@ -261,8 +261,10 @@ export function clearImageCache(): void {
   objectUrlCache.clear();
   inflight.clear();
   r2Config = null;
-  // draftConfig is intentionally kept — unsaved form input must survive the
-  // tab-away auto-lock, or entering credentials in stages becomes impossible
+  // The draft is kept — unsaved form input must survive the tab-away
+  // auto-lock, or entering credentials in stages becomes impossible — but
+  // never its secret key, which would otherwise outlive the lock in memory
+  if (draftConfig) draftConfig = { ...draftConfig, secretAccessKey: '' };
   notifyConfigListeners();
 }
 

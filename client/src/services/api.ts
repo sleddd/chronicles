@@ -456,7 +456,7 @@ export interface BetaApplication {
 }
 export const beta = {
   apply: (a: BetaApplication) =>
-    request<{ status: 'seat' | 'waitlist' }>('/beta/apply', { method: 'POST', body: { ...a, ageConfirmed: true, riskAccepted: true } }),
+    request<{ ok: true }>('/beta/apply', { method: 'POST', body: { ...a, ageConfirmed: true, riskAccepted: true } }),
 };
 
 export const analytics = {

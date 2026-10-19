@@ -24,6 +24,14 @@ const ACTIVITY_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
  * Supports both cookie (web) and Bearer (mobile) authentication
  * Cookie path enforces CSRF protection via X-Requested-With header
  */
+// The session cookie. Outside development only the __Host- name counts: a
+// plain-named cookie could be planted by a sibling subdomain (session fixation)
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+function sessionCookie(req: Request): string | undefined {
+  const c = req.cookies ?? {};
+  return c['__Host-chronicle_session'] || (IS_DEVELOPMENT ? c.chronicle_session : undefined);
+}
+
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;
 
@@ -31,13 +39,13 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   if (req.headers.authorization?.startsWith('Bearer ')) {
     // MOBILE PATH: Token from secure storage, no CSRF risk
     token = req.headers.authorization.slice(7);
-  } else if (req.cookies?.['__Host-chronicle_session'] || req.cookies?.chronicle_session) {
+  } else if (sessionCookie(req)) {
     // WEB PATH: Cookie sent automatically — enforce CSRF header
     if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
       res.status(403).json({ error: 'Missing CSRF header' });
       return;
     }
-    token = req.cookies['__Host-chronicle_session'] || req.cookies.chronicle_session;
+    token = sessionCookie(req);
   }
 
   if (!token || token.length < 44) {

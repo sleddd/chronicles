@@ -43,6 +43,11 @@ describe('presignR2', () => {
     secretAccessKey: 'secret',
   };
 
+  it('refuses an account id or bucket that is not its real shape (it becomes the host and path)', async () => {
+    expect(() => presignR2({ ...cfg, accountId: 'evil.example.com/x' }, 'GET', 'img/k')).toThrow('Invalid R2 account ID');
+    expect(() => presignR2({ ...cfg, bucket: '../other' }, 'GET', 'img/k')).toThrow('Invalid R2 bucket name');
+  });
+
   it('targets the account R2 endpoint with a path-style bucket/key', async () => {
     const url = await presignR2(cfg, 'GET', 'img/12345678-1234-1234-1234-123456789abc');
     const parsed = new URL(url);

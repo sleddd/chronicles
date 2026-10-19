@@ -70,3 +70,19 @@ describe('strictLimiter counts each route separately', () => {
     expect((await request(app).post('/api/auth/2fa/enable')).status).toBe(200);
   });
 });
+
+describe('strictLimiter buckets', () => {
+  it('a change in case or a trailing slash shares the route\'s bucket', async () => {
+    const express = (await import('express')).default;
+    const request = (await import('supertest')).default;
+    const app = express();
+    // A route of its own, so the other tests' counts don't carry over
+    app.post('/api/test/case-route', strictLimiter, (_req, res) => { res.json({ ok: true }); });
+    const paths = ['/api/test/case-route', '/api/test/Case-Route', '/api/test/case-route/', '/API/TEST/CASE-ROUTE', '/api/test/case-route'];
+    const statuses: number[] = [];
+    for (const p of paths) statuses.push((await request(app).post(p)).status);
+    statuses.push((await request(app).post('/api/test/CASE-route/')).status);
+    // 5 per window: the sixth variant is refused
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+  });
+});

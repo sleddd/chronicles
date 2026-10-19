@@ -30,17 +30,24 @@ describe('toNonExtractable — key material cleanup', () => {
     ).rejects.toThrow();
   });
 
-  it('uses multi-pass zeroing in source code', async () => {
+  it('never exports the raw key into JavaScript (wraps it through a throwaway key instead)', async () => {
     const fs = await import('fs');
     const content = fs.readFileSync(
       new URL('../crypto/primitives.ts', import.meta.url).pathname.replace('/__tests__', ''),
       'utf8'
     );
-    // Should zero, randomize, then zero again
-    expect(content).toContain('rawArray.fill(0)');
-    expect(content).toContain('crypto.getRandomValues(rawArray)');
-    // Should be in a finally block
-    expect(content).toContain('finally');
+    const fn = content.slice(content.indexOf('export async function toNonExtractable'), content.indexOf('Encrypt plaintext with AES-GCM'));
+    expect(fn).not.toContain('exportKey');
+    expect(fn).toContain('wrapKey');
+  });
+
+  it('gives a non-extractable key that still decrypts what the original encrypted', async () => {
+    const { generateMasterKey, toNonExtractable, encrypt, decrypt } = await import('../crypto/primitives.js');
+    const key = await generateMasterKey();
+    const ne = await toNonExtractable(key);
+    expect(ne.extractable).toBe(false);
+    const { ciphertext, iv } = await encrypt(key, 'same key');
+    expect(await decrypt(ne, ciphertext, iv)).toBe('same key');
   });
 });
 

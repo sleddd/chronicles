@@ -175,6 +175,14 @@ describe('bestEffortDeleteImages', () => {
   });
 });
 
+describe('the unsaved Settings draft', () => {
+  it('survives a lock, but never with its secret key', () => {
+    setImageStorageDraft({ ...CFG });
+    clearImageCache();
+    expect(getImageStorageConfigValue()).toEqual({ ...CFG, secretAccessKey: '' });
+  });
+});
+
 describe('getImageObjectUrl', () => {
   it('fetches a signed GET, decrypts, and caches per key', async () => {
     setImageStorageConfig(CFG, encryptedValueOf(CFG));

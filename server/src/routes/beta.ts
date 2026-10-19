@@ -28,10 +28,10 @@ router.post('/apply', requireXhr, betaLimiter, async (req, res) => {
   }
   const d = parsed.data;
   try {
-    const status = d.website
-      ? 'waitlist'
-      : await applyForBeta({ email: d.email, name: d.name, trackFirst: d.trackFirst, device: d.device });
-    res.json({ status });
+    // The same answer whatever happened — seat, waitlist, already applied or
+    // caught by the honeypot — so the reply says nothing about seats or who applied
+    if (!d.website) await applyForBeta({ email: d.email, name: d.name, trackFirst: d.trackFirst, device: d.device });
+    res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Could not send your application. Please try again.' });
   }

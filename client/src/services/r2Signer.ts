@@ -110,6 +110,10 @@ export function presignR2(
   key: string,
   expiresSeconds = PRESIGN_EXPIRY_SECONDS
 ): Promise<string> {
+  // The account id becomes the host name and the bucket the first path part:
+  // anything but their real shapes could point a signed request elsewhere
+  if (!/^[0-9a-f]{32}$/.test(cfg.accountId)) throw new Error('Invalid R2 account ID');
+  if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(cfg.bucket)) throw new Error('Invalid R2 bucket name');
   return presignUrl({
     method,
     host: `${cfg.accountId}.r2.cloudflarestorage.com`,

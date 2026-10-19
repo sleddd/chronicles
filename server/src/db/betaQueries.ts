@@ -88,7 +88,13 @@ export async function applyForBeta(a: { email: string; name: string; trackFirst:
       INSERT INTO public.beta_signups (email, status, name, track_first, device, applied_at)
       VALUES (${a.email}, ${status}, ${a.name}, ${a.trackFirst}, ${a.device}, NOW())
       ON CONFLICT (email) DO UPDATE SET
-        status = ${status}, name = ${a.name}, track_first = ${a.trackFirst}, device = ${a.device}, applied_at = NOW()
+        status = ${status},
+        -- The first application's details stay: anyone can post any email,
+        -- so a later one may only fill in a row that never applied (invited)
+        name = CASE WHEN public.beta_signups.applied_at IS NULL THEN ${a.name} ELSE public.beta_signups.name END,
+        track_first = CASE WHEN public.beta_signups.applied_at IS NULL THEN ${a.trackFirst} ELSE public.beta_signups.track_first END,
+        device = CASE WHEN public.beta_signups.applied_at IS NULL THEN ${a.device} ELSE public.beta_signups.device END,
+        applied_at = COALESCE(public.beta_signups.applied_at, NOW())
     `;
     return status;
   });

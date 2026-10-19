@@ -193,25 +193,15 @@ export async function unwrapDeviceKey(wrappedKey: ArrayBuffer, wrappingKey: Cryp
 /**
  * Convert an extractable CryptoKey to non-extractable.
  * Used after wrapping operations to ensure the in-memory key cannot be exported.
+ * The key passes through a wrap/unwrap with a throwaway non-extractable key,
+ * so its raw bytes never reach JavaScript.
  */
 export async function toNonExtractable(key: CryptoKey): Promise<CryptoKey> {
-  const raw = await crypto.subtle.exportKey('raw', key);
-  const rawArray = new Uint8Array(raw);
-  try {
-    const nonExtractable = await crypto.subtle.importKey(
-      'raw',
-      raw,
-      { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
-      false,
-      ['encrypt', 'decrypt']
-    );
-    return nonExtractable;
-  } finally {
-    // Multi-pass zeroing of exported key material
-    rawArray.fill(0);
-    crypto.getRandomValues(rawArray);
-    rawArray.fill(0);
-  }
+  const transit = await crypto.subtle.generateKey({ name: AES_ALGORITHM, length: AES_KEY_LENGTH }, false, ['wrapKey', 'unwrapKey']);
+  const iv = generateIv();
+  const params = { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer };
+  const wrapped = await crypto.subtle.wrapKey('raw', key, transit, params);
+  return crypto.subtle.unwrapKey('raw', wrapped, transit, params, { name: AES_ALGORITHM, length: AES_KEY_LENGTH }, false, ['encrypt', 'decrypt']);
 }
 
 /**

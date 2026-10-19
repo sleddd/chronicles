@@ -74,6 +74,12 @@ if (process.env.NODE_ENV === 'production' && !process.env.REGISTRATION_WHITELIST
 // spoofed X-Forwarded-For header is ignored locally).
 const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? '1' : '');
 if (trustProxy && !['0', 'false'].includes(trustProxy)) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+// The default (1 hop) is only right behind exactly one proxy: with none, any
+// client can set X-Forwarded-For and dodge every per-IP limit; with more, all
+// clients share one bucket. Say so when it wasn't set on purpose.
+if (process.env.NODE_ENV === 'production' && process.env.TRUST_PROXY === undefined) {
+  console.warn('TRUST_PROXY is not set: assuming exactly one proxy in front (Render). Set it to the real number of proxy hops (0 for none).');
+}
 
 // Middleware
 app.use(cors({
@@ -109,6 +115,9 @@ app.use('/api/analytics', authMiddleware, apiLimiter, analyticsRoutes); // never
 app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
+
+// An unknown /api path is a 404, never the SPA's index.html
+app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found' }); });
 
 app.use(errorHandler);
 
