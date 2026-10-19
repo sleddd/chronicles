@@ -27,7 +27,7 @@ import { ShoppingListFields, type ShoppingListFieldValues } from '../molecules/f
 import { RecipeFields, type RecipeFieldValues } from '../molecules/fields/RecipeFields.js';
 import { PrioritiesFields, type PrioritiesFieldValues } from '../molecules/fields/PrioritiesFields.js';
 import { WellnessFields, type WellnessFieldValues } from '../molecules/fields/WellnessFields.js';
-import { UserFieldsForm } from '../molecules/fields/UserFieldsForm.js';
+import { UserFieldsForm, titleFieldOf } from '../molecules/fields/UserFieldsForm.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { EntryHeroBanner, EntryImageStrip, EntryLightbox } from './EntryImageGallery.js';
 import type { EntryImage } from '../../services/imageStorage.js';
@@ -803,6 +803,26 @@ export function EntryForm({
       onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [quoteDef.id]: contentText } });
     }
   }, [entryId, isQuoteTopic, quoteDef?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching topic after typing (Quick entry, a new journal entry): a topic
+  // with no text area of its own — a name field (Meals, Medication, Task…), a
+  // Quote field, or its own Title / Name field — takes the words typed so far,
+  // so they don't vanish behind it.
+  const customTitle = titleFieldOf(userFieldDefs);
+  const carriedTopicRef = useRef(topicId);
+  useEffect(() => {
+    if (carriedTopicRef.current === topicId) return;
+    carriedTopicRef.current = topicId;
+    if (!contentText || contentIsSummary) return;
+    if (nameKey && !nameValue) {
+      onCustomFieldsChange({ ...customFields, [nameKey]: contentText });
+    } else if (isQuoteTopic && quoteDef && !quoteValue) {
+      onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [quoteDef.id]: contentText } });
+    } else if (customTitle && !String(userFieldValues[customTitle.id] ?? '').trim()
+      && (hideByTopicOption || fieldLedTopic || summaryLedTopic)) {
+      // A topic whose title is one of its own fields and that hides the text area
+      onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [customTitle.id]: contentText } });
+    }
+  }, [topicId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leaving a summary-led topic (e.g. Exercise → Journal) takes its generated
   // line with it, so "Running · 30 min" never lingers as another topic's text
   const prevTopicRef = useRef(topicId);

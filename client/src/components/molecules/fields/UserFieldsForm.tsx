@@ -12,6 +12,12 @@ import { FormWrap, Section, SectionHead, SectionLabel, TitleInput, BoxInput, Box
    are a row with a switch. Props only. */
 
 const TITLE_LABEL = /^(title|name|book|song|track|album|artist name)$/i;
+
+/** A topic's own title field: its first field, when that's a text field naming the entry */
+export function titleFieldOf<T extends { type: string; label: string }>(defs: T[]): T | undefined {
+  const f = defs[0];
+  return f && f.type === 'text' && TITLE_LABEL.test(f.label.trim()) ? f : undefined;
+}
 const LONG_LABEL = /quote|note|review|description|thought|lyric|summary|comment|excerpt/i;
 
 /* Outlined box with a muted prefix ("https://") before a bare input */
@@ -88,7 +94,7 @@ export function UserFieldsForm({ fieldDefs, values, onChange }: UserFieldsFormPr
         const label = f.label.charAt(0).toUpperCase() + f.label.slice(1);
 
         // The first field, when it names the entry, is the big title
-        if (i === 0 && f.type === 'text' && TITLE_LABEL.test(f.label.trim())) {
+        if (i === 0 && titleFieldOf(fieldDefs) === f) {
           return (
             <TitleInput key={f.id} value={str(val)} placeholder={label} aria-label={label}
               onChange={e => set(f.id, e.target.value)} style={{ marginBottom: 24 }} />

@@ -286,6 +286,38 @@ describe('EntryForm', () => {
       expect(onContentChange).toHaveBeenCalledWith('<p>Tree nuts</p>');
     });
 
+    it('switching a new entry to a name-led topic carries the typed text into its name (Quick entry bug)', () => {
+      const onCustomFieldsChange = vi.fn();
+      const onContentChange = vi.fn();
+      const topics = [{ id: 1, name: 'Journal', icon: null, color: null }, { id: 8, name: 'Meals', icon: null, color: null }];
+      const props = { ...defaultProps, topics, content: '<p>Oatmeal with berries</p>', onCustomFieldsChange, onContentChange };
+      const { rerender } = renderWithTheme(<EntryForm {...props} topicId={1} customFields={{}} />);
+      expect(onCustomFieldsChange).not.toHaveBeenCalled();
+      rerender(<ThemeProvider theme={lightTheme}><EntryForm {...props} topicId={8} customFields={{}} /></ThemeProvider>);
+      expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ mealDescription: 'Oatmeal with berries' }));
+      expect(onContentChange).not.toHaveBeenCalledWith('');
+    });
+
+    it('switching to a topic whose title is its own custom field carries the typed text into that title', () => {
+      const onCustomFieldsChange = vi.fn();
+      const topics = [{ id: 1, name: 'Journal', icon: null, color: null }, { id: 11, name: 'Books', icon: null, color: null }];
+      const props = { ...defaultProps, topics, content: '<p>The Left Hand of Darkness</p>', onCustomFieldsChange };
+      const { rerender } = renderWithTheme(<EntryForm {...props} topicId={1} customFields={{}} />);
+      rerender(<ThemeProvider theme={lightTheme}><EntryForm {...props} topicId={11} customFields={{}} /></ThemeProvider>);
+      expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({
+        _userFields: expect.objectContaining({ title: 'The Left Hand of Darkness' }),
+      }));
+    });
+
+    it('switching topic never overwrites a name that is already filled', () => {
+      const onCustomFieldsChange = vi.fn();
+      const topics = [{ id: 1, name: 'Journal', icon: null, color: null }, { id: 8, name: 'Meals', icon: null, color: null }];
+      const props = { ...defaultProps, topics, content: '<p>Some notes</p>', onCustomFieldsChange };
+      const { rerender } = renderWithTheme(<EntryForm {...props} topicId={1} customFields={{ mealDescription: 'Lentil soup' }} />);
+      rerender(<ThemeProvider theme={lightTheme}><EntryForm {...props} topicId={8} customFields={{ mealDescription: 'Lentil soup' }} /></ThemeProvider>);
+      expect(onCustomFieldsChange).not.toHaveBeenCalledWith(expect.objectContaining({ mealDescription: 'Some notes' }));
+    });
+
     it('copies an old meal name from the text into Meal Description', () => {
       const onCustomFieldsChange = vi.fn();
       renderWithTheme(

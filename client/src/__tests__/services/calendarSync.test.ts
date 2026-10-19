@@ -471,6 +471,42 @@ describe('calendarSync guards', () => {
     expect(calendarApi.uploadIcs).toHaveBeenCalledTimes(1);
   });
 
+  it('sends only events and meetings — never tasks, todos, goals or other entries — to Google and the feed', async () => {
+    (calendarApi.getStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      googleConnected: true, googleEmail: 'u@g.com', icsEnabled: true, icsToken: 'a'.repeat(64),
+    });
+    const onTopic = (id: number, topicId: number, fields: Record<string, unknown>) =>
+      ({ ...makeEntry(id, fields), metadata: { _taxonomyId: topicId, _customFields: fields } });
+    setupStores([
+      onTopic(10, 1, { ...eventFields }),                                              // Event → syncs
+      onTopic(11, 2, { ...eventFields, startTime: '14:00', endTime: '15:00' }),        // Meeting → syncs
+      onTopic(12, 3, { ...eventFields, deadline: '2026-07-20', taskDescription: 'Pay the rent' }), // Task
+      onTopic(13, 4, { ...eventFields, targetDate: '2026-07-20' }),                    // Goal
+      onTopic(14, 5, { ...eventFields }),                                              // Journal
+    ]);
+    useEntriesStore.setState({
+      allTopics: [
+        { id: 1, name: 'Event', icon: null, color: null },
+        { id: 2, name: 'Meeting', icon: null, color: null },
+        { id: 3, name: 'Task', icon: null, color: null },
+        { id: 4, name: 'Goal', icon: null, color: null },
+        { id: 5, name: 'Journal', icon: null, color: null },
+      ] as never,
+    });
+    stubGoogleFetch([]);
+
+    await runCalendarSync(deps);
+
+    const ics = (calendarApi.uploadIcs as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(ics).toContain('UID:chronicles-10@chronicles');
+    expect(ics).toContain('UID:chronicles-11@chronicles');
+    for (const id of [12, 13, 14]) expect(ics).not.toContain(`UID:chronicles-${id}@chronicles`);
+
+    const inserted = fetchCalls.filter(c => c.method === 'POST')
+      .map(c => (c.body as { extendedProperties?: { private?: { chroniclesId?: string } } }).extendedProperties?.private?.chroniclesId);
+    expect(inserted.sort()).toEqual(['10', '11']);
+  });
+
   it('leaves event descriptions out of the feed unless details are turned on', async () => {
     (calendarApi.getStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
       googleConnected: false, googleEmail: null, icsEnabled: true, icsToken: 'a'.repeat(64),

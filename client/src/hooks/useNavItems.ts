@@ -28,10 +28,10 @@ export function useNavItems(): NavItem[] {
     { key: 'journal', label: 'Journal', icon: 'book', path: '/journal', active: at('/journal') },
     { key: 'topics', label: 'Topics', icon: 'sell', path: '/topics', active: at('/topics') },
     !!hasHealth && { key: 'health', label: 'Health', icon: 'health_cross', path: '/health', active: under('/health') },
-    { key: 'planning', label: 'Planning', icon: 'target', path: '/goals', active: under('/goals') },
     { key: 'calendar', label: 'Calendar', icon: 'event', path: '/calendar', active: at('/calendar') },
-    ff.financeEnabled === true && { key: 'finance', label: 'Finance', icon: 'attach_money', path: '/finance', active: under('/finance') },
+    { key: 'planning', label: 'Planning', icon: 'target', path: '/goals', active: under('/goals') },
     { key: 'kitchen', label: 'Kitchen', icon: 'fork_spoon', path: '/kitchen', active: at('/kitchen') || under('/menu') || at('/shopping') },
+    ff.financeEnabled === true && { key: 'finance', label: 'Finance', icon: 'attach_money', path: '/finance', active: under('/finance') },
     { key: 'settings', label: 'Settings', icon: 'settings', path: '/settings', active: at('/settings') },
   ];
   return items.filter((i): i is NavItem => !!i);

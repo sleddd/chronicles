@@ -17,23 +17,23 @@ import { BETA_DETAILS } from '@shared/legal/index.js';
 
 const STEPS = [
   { title: 'Pick a topic', body: 'Start with the defaults or make your own with specialized custom fields.' },
-  { title: 'Write one line', body: 'A meal, a dose, a bill, a thought. Enter as it happens in less than 15s.' },
-  { title: 'Views sort it', body: 'One line shows up everywhere you need it — Finance, Health, Planning, and more.' },
+  { title: 'Write one line', body: 'A meal, a dose, a bill, a thought. Enter it as it happens in less than 15s.' },
+  { title: 'Views sort it', body: 'Your entry shows up everywhere you need it automatically.' },
 ];
 
 /** Stagger for revealed items: each later one starts a beat after */
 const delay = (i: number) => ({ '--reveal-delay': `${i * 0.1}s` }) as CSSProperties;
 
-const FEATURES: { name: string; tag?: string; body: string; shot: string; alt: string }[] = [
+const FEATURES: { name: string; tag?: string; body: string; shot: string | string[]; alt: string | string[] }[] = [
   { name: 'Dashboard', body: 'Your day at a glance: weather, priorities, medication doses, the day’s menu, your shopping list and what’s ahead.', shot: 'dashboard', alt: 'The dashboard with a greeting, quick entry, the daily quote and the wellness check-in' },
   { name: 'Journal', body: 'Search by keyword, topic or date, bookmark what matters, add photos, dictate by voice, or write and draw with Apple Pencil.', shot: 'journal', alt: 'The journal with entries by topic and date and a meal entry open' },
   { name: 'Topics', body: 'Tasks, goals, meals, medication, recipes, books, quotes, or your own. Add, reorder and give them icons and fields of their own.', shot: 'topics', alt: 'The Topics list with an icon and entry count for each topic' },
-  { name: 'Health', body: 'Nutrition against your goals, a medication schedule with doses to check off, symptoms and allergies, and reports on how water, sleep, food and mood relate. Lists print for appointments.', shot: 'health', alt: 'Today’s medications with morning doses checked off' },
+  { name: 'Health', body: 'Nutrition against your goals, a medication schedule with doses to check off, symptoms and allergies, and reports on how water, sleep, food and mood relate. Lists print for appointments.', shot: ['health', 'health-dashboard', 'health-ai'], alt: ['Today’s medications with morning doses checked off', 'The health dashboard with the wellness check-in, quick log and medications', 'The meals log with the day’s calories, iron and vitamins against goals'] },
   { name: 'Planning', body: 'Goals, milestones and tasks on boards or lists. Tasks roll up into milestones, and milestones into goals.', shot: 'planning', alt: 'The goals board with columns from New to Achieved' },
   { name: 'Calendar', body: 'Day, week and month views of events, deadlines, goal dates and bills due. Syncs both ways with Google Calendar, with a private feed for Apple Calendar.', shot: 'calendar', alt: 'The month calendar with bills, tasks and events on their days' },
   { name: 'From the Kitchen', body: 'A weekly menu, recipes with checkable ingredients, and a shopping list you can take with you to the store, made from the week’s menu in one tap.', shot: 'kitchen', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
   { name: 'Finance', tag: 'Optional, off by default', body: 'A manual budget, bills and subscriptions, savings funds, money goals and reports. Nothing connects to your bank.', shot: 'finance', alt: 'The budget with planned, bills, spending and what’s left by category' },
-  { name: 'AI assistant', tag: 'Optional, your own key', body: 'Estimates calories and nutrients for meals and exercise and helps with the app. Works with your key from Anthropic, OpenAI or Amazon Bedrock.', shot: 'ai', alt: 'The meals log with daily nutrient totals and a button to fill missing values with AI' },
+  { name: 'AI assistant', tag: 'Optional, your own key', body: 'Estimates calories and nutrients for meals and exercise and helps with the app. Works with your key from Anthropic, OpenAI or Amazon Bedrock.', shot: 'ai', alt: 'The In-App AI chat offering to estimate a meal’s calories and save it' },
 ];
 
 const PRIVACY = [
@@ -449,8 +449,8 @@ export function LandingView() {
           <Hero>
             <H1 id="hero-title">A journal for people <em>too busy to journal.</em></H1>
             <HeroText>
-              Pick a topic and write one line. Chronicles sorts it into your health, planning, calendar, kitchen and money,
-              and every entry is encrypted on your device before it leaves the browser.
+              Chronicles is a zero-knowledge encrypted journal and digital day planner. Capture the key moments of your day
+              quickly, organize with topics to track health, goals, and more.
             </HeroText>
             <BigPill as="a" href="#beta">Sign Up for Beta</BigPill>
           </Hero>
@@ -467,7 +467,7 @@ export function LandingView() {
           <HowTitle id="how-title">How it works</HowTitle>
           <WideLede>
             Chronicles is inspired by bullet journaling, without the notebook. Every entry carries a topic, whether
-            it’s a task, a meal or an event, and the views do the sorting for you. All it takes is one line a day.
+            it’s a task, a meal, or an event, and the views do the sorting for you. All it takes is one line a day.
           </WideLede>
           </div>
           <Steps>
@@ -486,8 +486,8 @@ export function LandingView() {
         <Container>
           <FeaturesTitle id="features-title">Your data at a glance</FeaturesTitle>
           <Lede>
-            You enter your data in one place and custom views help sort and structure it to make it more meaningful for
-            tracking, planning, and organizing. All your data becomes available by topic at a glance.
+            Enter your data in one place and custom views make it easier to track, plan, and organize your day by
+            automatically sorting your entries. All your data becomes available at a glance.
           </Lede>
           <FeatureRows>
             {FEATURES.map(({ name, tag, body, shot, alt }) => (

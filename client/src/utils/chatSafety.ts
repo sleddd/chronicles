@@ -64,8 +64,11 @@ const USER_PATTERNS: { rating: RiskRating; kind: RiskKind; re: RegExp }[] = [
   { rating: 'elevated', kind: 'eating_disorder', re: /\bstarv(e|ing) myself\b|\b(haven'?t|have not|didn'?t) eaten (in|for) (\d+|two|three|four|five|six|several|a few) days\b/ },
   { rating: 'elevated', kind: 'eating_disorder', re: /\blaxatives? (to|so i can|so i) (lose|lose weight|not gain)\b/ },
   // Eating disorders — concern: worry about eating or body weight (SCOFF-style)
-  { rating: 'concern', kind: 'eating_disorder', re: /\b(scared|afraid|terrified) (of|to) (eat|eating|gain(ing)? weight)\b|\bfood (controls|rules|dominates) my life\b/ },
-  { rating: 'concern', kind: 'eating_disorder', re: /\b(feel|felt) (so )?(guilty|disgusting|disgusted with myself) (after|for|about) eating\b|\bi hate myself for eating\b/ },
+  // Fear about weight only: being scared to eat is often about allergies, an
+  // intolerance or feeling ill, which is not an eating disorder
+  { rating: 'concern', kind: 'eating_disorder', re: /\b(scared|afraid|terrified) (of|to) gain(ing)? (any )?weight\b|\b(scared|afraid|terrified) to eat (because|in case) i('ll| will| might) (get fat|gain)\b|\bfood (controls|rules|dominates) my life\b/ },
+  // (No pattern for guilt or regret after eating: "I felt so guilty after that
+  // pizza" is usually an ordinary bad food day. The classifier judges it in context.)
 ];
 
 /** Layer 1 — the local pattern check on a user message. */
@@ -130,9 +133,10 @@ export function riskClassifierPrompt(): string {
     'Rate risk of suicide, self-harm or an eating disorder, using these criteria:',
     'Suicide (Columbia Suicide Severity Rating Scale): passive wish to be dead or not wake up → "concern"; active thoughts of killing oneself → "elevated"; a method, a plan, intent to act, preparatory steps or a recent attempt → "urgent".',
     'Self-harm: past mention or general worry → "concern"; active urges or recent self-harm → "elevated"; a method with intent, or a serious injury → "urgent".',
-    'Eating disorders (SCOFF): worry about eating, losing control over food, guilt after eating or body weight preoccupation → "concern"; purging, laxative misuse or severe restriction → "elevated"; medical danger such as fainting, days without food or heart symptoms → "urgent".',
+    'Eating disorders (SCOFF): everyday food talk is "none" — a bad food day, eating badly or too much, junk food, stress or comfort eating, feeling bloated or sluggish, regret or guilt about a meal, a diet slip, wanting to eat healthier, or a hard day that involved food. This app tracks meals, so people talk about food often. Fear of eating for a medical or safety reason — food allergies, intolerances, celiac disease, nausea, illness, recovering from surgery, a diet from their doctor — is also "none". Rate "concern" only for an ongoing pattern that sounds distressing and out of their control: fear of eating because of weight or body shape, fear of gaining weight, food or weight rules running their life, repeatedly losing control over eating, or making up for eating by skipping meals, fasting or over-exercising. Purging, laxative misuse or severe restriction → "elevated"; medical danger such as fainting, days without food or heart symptoms → "urgent".',
+    'A hard or bad day, stress, sadness, frustration or venting with no sign of wanting to die or to hurt themselves is "none".',
     'A suicide attempt or self-harm act in the past three months, or one happening now, is "urgent".',
-    'When unsure between two ratings, choose the higher one.',
+    'When a message shows a real sign of risk and you are unsure between two ratings, choose the higher one. Everyday venting and food talk are not borderline: rate them "none".',
     'Jokes, figures of speech ("this traffic is killing me"), fiction, news and questions about other people with no sign of personal risk are "none".',
     'Separately, set "minor" to true if the person says they are under 18, or what they write strongly suggests a child (school grades, homeroom, recess, asking a parent\'s permission). Judge only from what they write, not from the topic alone — an adult talking about their kids or students is not a minor.',
     'Reply with only JSON: {"rating": "none" | "concern" | "elevated" | "urgent", "kind": "suicide" | "self_harm" | "eating_disorder" | null, "minor": true | false}.',

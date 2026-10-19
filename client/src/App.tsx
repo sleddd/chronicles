@@ -9,6 +9,7 @@ import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
 import { LandingView } from './views/LandingView.js';
 import { BugReportView } from './views/BugReportView.js';
+import { NotFoundView } from './views/NotFoundView.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
@@ -558,6 +559,8 @@ export function App() {
               {/* Inspiration */}
               <Route path="/inspiration/research" element={<R><TopicEntriesView title="Research" topicNames={['Research']} showDateFilter={false} /></R>} />
               <Route path="/inspiration/quotes" element={<R><TopicEntriesView title="Quotes" topicNames={['Quote']} showDateFilter={false} /></R>} />
+              {/* Anything else: sign-in when signed out, else a 404 page */}
+              <Route path="*" element={<NotFoundView />} />
             </Routes>
             <ChatGate />
             <NoticeGate />

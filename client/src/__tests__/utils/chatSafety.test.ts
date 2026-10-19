@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   minorPattern, replyNeedsReview, patternScreen, replyPatternScreen, parseClassification, parseReplyClassification, maxRisk,
-  classifierTranscript, NO_RISK,
+  classifierTranscript, NO_RISK, riskClassifierPrompt,
 } from '@/utils/chatSafety';
 import { chatSystemPrompt, stripMinorTag, MINOR_TAG } from '@/utils/chatSave';
 
@@ -20,7 +20,8 @@ describe('patternScreen', () => {
     ['how deep should i cut', 'urgent', 'self_harm'],
     ['I made myself throw up after dinner', 'elevated', 'eating_disorder'],
     ['I haven’t eaten in three days', 'elevated', 'eating_disorder'],
-    ['I’m scared to eat anything', 'concern', 'eating_disorder'],
+    ['I’m terrified of gaining weight', 'concern', 'eating_disorder'],
+    ['I’m scared to eat because I’ll get fat', 'concern', 'eating_disorder'],
   ];
   it.each(cases)('%s → %s', (text, rating, kind) => {
     expect(patternScreen(text)).toEqual({ rating, kind });
@@ -33,6 +34,17 @@ describe('patternScreen', () => {
     'I’m dying to see that show',
     'What should I eat for dinner?',
     'I read a book about suicide prevention',
+    // A bad food day or a hard day is not a risk sign
+    'Bad food day, I ate so much junk',
+    'I felt so guilty after eating that whole pizza',
+    'I hate myself for eating all those cookies lol',
+    'Ugh, I feel disgusting after eating so much at the party',
+    'Today was a really hard day',
+    'I had a terrible day and stress ate everything',
+    // Fear of eating for allergy or medical reasons is not an eating disorder
+    'I’m scared to eat anything',
+    'I’m afraid to eat out with my peanut allergy',
+    'Since the surgery I’m scared to eat solid food',
   ])('no risk: %s', text => {
     expect(patternScreen(text)).toEqual(NO_RISK);
   });
@@ -149,5 +161,17 @@ describe('minor flag and tag', () => {
     expect(p).toContain('Chronicles is for adults 18 and older');
     expect(p).toContain('The one exception is someone under 18');
     expect(p).toContain('Childhelp at 1-800-422-4453');
+  });
+});
+
+describe('riskClassifierPrompt', () => {
+  it('tells the classifier that everyday food talk and hard days are not risk signs', () => {
+    const p = riskClassifierPrompt();
+    expect(p).toMatch(/bad food day/);
+    expect(p).toMatch(/food allergies, intolerances/);
+    expect(p).toMatch(/regret or guilt about a meal/);
+    expect(p).toMatch(/A hard or bad day[^.]*is "none"/);
+    expect(p).toMatch(/Everyday venting and food talk are not borderline/);
+    expect(p).not.toMatch(/guilt after eating or body weight preoccupation → "concern"/);
   });
 });

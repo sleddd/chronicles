@@ -6,7 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
    (shown whether the AI is on or off), with the chat consent status under it.
    Props only. Change the date and the change log whenever the text changes. */
 
-export const PROTOCOL_DATE = 'Oct 18, 2026';
+export const PROTOCOL_DATE = 'Oct 19, 2026';
 
 const Wrap = styled.div`
   padding: 16px 0 4px;
@@ -195,7 +195,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
             <tbody>
               <tr>
                 <td>Concern</td>
-                <td>Passive thoughts, like wishing to not wake up, or worry about eating or body weight</td>
+                <td>Passive thoughts, like wishing to not wake up, or an ongoing, distressing pattern around eating or body weight. A bad food day or a hard day on its own is not a risk sign.</td>
                 <td>Shows the support notice under the AI’s reply. The AI answers under the safe conversation rules below.</td>
               </tr>
               <tr>
@@ -251,7 +251,10 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <p>When this protocol changes, the date at the top changes with it, and a note is added below.</p>
           <table>
             <thead><tr><th>Date</th><th>Change</th></tr></thead>
-            <tbody><tr><td>October 2026</td><td>First version published.</td></tr></tbody>
+            <tbody>
+              <tr><td>October 19, 2026</td><td>Screening no longer treats a bad food day, regret about a meal, venting about a hard day, or fear of eating because of a food allergy or a medical reason as a risk sign. Eating concerns are flagged only for an ongoing, distressing pattern.</td></tr>
+              <tr><td>October 2026</td><td>First version published.</td></tr>
+            </tbody>
           </table>
         </Body>
       )}
