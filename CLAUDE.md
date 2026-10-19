@@ -209,7 +209,7 @@ chronicles-rebuild/
 │           ├── topics.ts              # CRUD for topics/taxonomies
 │           ├── settings.ts            # Key-value settings
 │           ├── sessions.ts            # List, revoke, revoke-all sessions
-│           └── doses.ts               # Encrypted medication dose records (+ legacy migration)
+│           └── doses.ts               # Encrypted medication dose records (day-bound; one-time reseal)
 │
 ├── client/              # React 19 SPA (Vite)
 │   └── src/
@@ -259,11 +259,11 @@ PostgreSQL Database
 
 Password changes only re-wrap the master key (instant). Data is never re-encrypted on password change.
 
-**Old key wraps are upgraded on unlock.** Master keys wrapped before purpose AAD still open through a no-AAD fallback (`unwrapKeyDetailed` in `shared/src/crypto/primitives.ts` reports `legacy`). After a password unlock that used it, `EncryptionContext` re-wraps the key with AAD — same password, new salt and IV (`rewrapFromParams`) — and saves it with `POST /api/auth/key-wrap` (needs `currentAuthSecret`; keeps sessions; also saves `kekIterations`), then refreshes the cached key data (`updateEncryptionData`). `public.key_wrap_status` marks accounts on the current format (new accounts at registration); once every account is marked, delete the fallback. The recovery-key unwrap keeps its fallback (the recovery key isn't available at unlock)
+**Key wraps are bound to their purpose.** The password (KEK) wrap must open with its purpose AAD (`kek-wrap`) — the old no-AAD fallback and the `POST /api/auth/key-wrap` upgrade are gone. Only the recovery-key unwrap keeps a no-AAD fallback (those wraps can't be re-wrapped without the recovery key, and a server can't forge one). `deriveKEK` refuses any salt that isn't 16 bytes (the server schemas too): a server could otherwise send the sign-in secret's salt, making the KEK equal to the `authSecret` the client sends, and slip in a master key of its own
 
 **The server never receives the password or the recovery key** (`shared/src/crypto/authSecret.ts`). Either one would let it unwrap the master key it stores. Instead:
 - `authSecret = PBKDF2(password, "chronicles:auth:v1:" + normalizedEmail, 600k)` (`deriveAuthSecret`) is what `/register`, `/login` and every password-confirmed action (change password/email, recovery key, 2FA enable/disable, delete account) send — `authSecret`, `currentAuthSecret`, `newAuthSecret`. It uses a different salt from the KEK, so it doesn't give the KEK. Its salt is the email, so `/change-email` sends a new secret too. Password rules (`passwordSchema`) are checked **on the client**; the server only checks the 64-hex shape
-- Stored as `auth1$` + bcrypt(authSecret). A bare bcrypt hash (`$2…`) is a pre-upgrade hash of the password itself: `/login` answers `{ legacyAuth: true }` (an unknown email answers the same), the client retries once with `legacyPassword`, and the hash is replaced — after the 2FA code when 2FA is on. Confirm endpoints never accept legacy hashes; `upgradeStoredCredentials()` signs out legacy accounts' sessions at startup
+- Stored as `auth1$` + bcrypt(authSecret). Nothing else is accepted: the client never sends the password, whatever the server answers (`loginSchema` is strict, so a body carrying one is refused), and a pre-upgrade bare bcrypt hash can't sign in — `checkStoredCredentials()` signs out any such account at startup and logs its id (it recovers with its recovery key)
 - Recovery sends `recoveryProof = PBKDF2(recoveryKey, recoveryKeySalt, 600k)` (`deriveRecoveryProof`; the salt comes from `/recovery-params`, with a stable decoy for unknown emails). The server stores `v2$` + SHA-256(proof), so a leaked row can't be replayed; older rows are sealed at startup
 
 ### TOTP Two-Factor Authentication
@@ -318,9 +318,18 @@ Key Derivation: PBKDF2-SHA256, 600,000 iterations (OWASP 2024)
 Salt: 16 bytes random per user
 Master Key: Non-extractable CryptoKey (cannot be exported from Web Crypto)
 Content: Encrypted client-side, stored as BYTEA in PostgreSQL. Content and metadata
-         are a bound pair: each half's AAD is `chronicles:post:v2:<part>:<other half's IV>`
-         (pre-AAD entries still decrypt, but only as a fully-legacy pair), so they are
-         always saved together. Server and client both refuse plaintext posts
+         are a bound pair, bound to the entry: each half's AAD is
+         `chronicles:post:v3:<part>:<entry id>:<other half's IV>`, so they are always
+         saved together and one entry can't be served as another. A new entry
+         reserves its id first (`POST /api/entries/ids`, `encryptNewPost`; the server
+         creates it only under an id it handed out) and every write says `format: 3`.
+         v2 (pair-bound) and pre-AAD entries open only until the account's one-time
+         move (`services/entryReseal.ts`, `PUT /api/entries/reseal` — 100 at a time,
+         updated_at kept, skipped if the entry changed since loading) writes the sealed
+         marker `entriesSealV3`; after that they're refused. Server and client both
+         refuse plaintext posts
+Storage: per account, encrypted entries are capped at ENTRY_STORAGE_LIMIT_MB (200)
+         and finance payloads at FINANCE_STORAGE_LIMIT_MB (50) — 413 over the cap
 Topics: an entry's topic lives only in its encrypted metadata (`_taxonomyId`). The client's
          entries API strips `taxonomyIds` and the server ignores it, so no plaintext
          entry→topic link is written; old `post_taxonomies` rows can be removed with
@@ -429,7 +438,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Fields defined by editing a topic in the Topics view (`TopicEditForm`); stored as `topicCustomFields` setting (JSONB, `Record<number, UserFieldDef[]>`)
 - Field definitions loaded into `uiStore.topicCustomFields` on init via `useInitializeData`
 - Field values stored in entries at `metadata._customFields._userFields` (`EntryForm`)
-- **Private settings** (`client/src/services/privateSettings.ts`): `displayName`, `timezone`, `plannerFilters`, `topicCustomFields`, `planningViews`, **every feature switch** (`KNOWN_FEATURE_FLAGS` + `OPT_IN_FEATURE_FLAGS` — on their own they say which health features someone uses), `cycleTrackingEnabled` and `icsIncludeDetails` are stored master-key encrypted (`{ ciphertext, iv }`, same shape as `useEncryptedSetting`). Write them only with `savePrivateSetting` from `usePrivateSettings()`; the init paths (`useInitializeData`, `JournalView`) decrypt them with `openPrivateSettings` and re-save any legacy plaintext value sealed (`migratePrivateSettings`)
+- **Sealed settings** (`client/src/services/privateSettings.ts`, cipher in `settingCipher.ts`): every sealed setting is `{ ciphertext, iv, v: 2 }`, AES-GCM with the AAD `chronicles:setting:v2:<key>`, so a ciphertext only opens as the setting it was written for. **Private** (`PRIVATE_SETTING_KEYS`, in `shared/src/validation/sealedSettings.ts`): `displayName`, `timezone`, `plannerFilters`, `topicCustomFields`, `planningViews`, **every feature switch** (`KNOWN_FEATURE_FLAGS` + `OPT_IN_FEATURE_FLAGS`), `cycleTrackingEnabled`, `icsIncludeDetails`, and — since v2 — `calendarSyncEnabled`, `googleCalendarId`, `calendarImportMode`, `icsFeedEnabled`, `imagesEnabled`, `topicHideText`. Write them only with `savePrivateSetting`; `useEncryptedSetting`, the AI and R2 configs use the same cipher. The init paths open them with `openStartupSettings`, whose one-time step re-seals pre-v2 values and writes the marker `settingsSealV2`; after it, unbound values and plaintext private values are refused. The server stores `SEALED_SETTING_KEYS` only in the bound shape (409 otherwise). The Apple Calendar feed uploads only while the sealed `icsFeedEnabled` is on — the server saying the feed is enabled is never enough
 - When saving with no text content but non-empty field values, a plain-text summary (`Label: value · …`) is auto-generated as entry content — see `summarizeUserFields` in `client/src/utils/stripHtml.ts`
 - `UserFieldDef` and `TopicCustomFields` types are in `client/src/types/userFields.ts`
 
@@ -443,7 +452,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 
 **Health Tracking**
 - Medications with dosage, frequency, scheduled times
-- Dose logging, encrypted: `medication_dose_records` (one AES-GCM payload per dose — medication, scheduled time, status, taken at — AAD bound to its UUID; only the `date` is readable; no medication foreign key). `doses` in `services/api.ts` encrypts and decrypts (`getByDate`, `getAll`, `log` finds the existing record for that dose, else a new UUID; duplicates from two devices collapse to the newest). The old plaintext `medication_dose_logs` is re-saved encrypted once per session (`doses.migrateLegacy`, stable UUIDs from `legacyDoseId`) and deleted; the plaintext `POST /api/doses` answers 409 "Update Chronicles". Real-time sync via `visibilitychange`
+- Dose logging, encrypted: `medication_dose_records` (one AES-GCM payload per dose — medication, scheduled time, status, taken at — AAD bound to its UUID **and its day** (`<uuid>|<date>`), so a dose can't be moved to another day; only the `date` is readable; no medication foreign key). `doses` in `services/api.ts` encrypts and decrypts (`getByDate`, `getAll`, `log` finds the existing record for that dose, else a new UUID; duplicates from two devices collapse to the newest); writes say `format: 2`. Records sealed before the day was bound are re-saved once (`doses.resealOlder`, `PUT /api/doses/reseal`), then the marker `dosesSealV2` is written and that form is refused. The old plaintext `medication_dose_logs` is no longer read; the plaintext `POST /api/doses` answers 409 "Update Chronicles". Real-time sync via `visibilitychange`
 - Meals tracking with meal types, ingredients, calories and micronutrients (iron, vitamin D, B12, vitamin C) — see **Meals log** below
 - Symptom tracking with severity scale
 - Exercise tracking with type, duration, intensity, distance
@@ -584,7 +593,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - AI: `estimateFoodNutrition` asks for only the missing nutrients in one request; `nutrientSource` (`'ai' | 'manual'` per nutrient) + `nutritionBasis` mean typed values are never overwritten and AI values refresh when the description/meal type changes. New rows are AI-filled in the background after adding; the Logged table has "Fill N missing with AI" and a per-row "Estimate". Every food save path (Health dashboard quick log, New entry, journal Save) fills blank nutrients via `autoNutritionOnSave`; `FoodFields` shows the nutrient inputs
 
 **Health data compliance** (internal records and status: `docs/compliance/HEALTH_DATA_COMPLIANCE.md`)
-- **Topic names and icons are encrypted** (`{ name, icon }` as one payload, kind `topic`; colour and order stay readable). `topics` in `services/api.ts` seals on create/update (an update fills in whichever of name/icon wasn't given) and opens on load, seals any legacy row still carrying a plaintext name (a payload write nulls `name`/`icon`), and **seeds missing default topics in the browser** (`utils/defaultTopics.ts`, one seeding at a time per tab) — the server no longer seeds or creates default rows for new accounts. Plaintext topic writes get 409 "Update Chronicles". The API layer encrypts through `services/recordCipher.ts`, installed by `EncryptionContext` on unlock and cleared on lock
+- **Topic names and icons are encrypted** (`{ name, icon }` as one payload, kind `topic`, AAD bound to the topic's id; colour and order stay readable). `topics` in `services/api.ts` seals on create/update (a new topic reserves its id first, `POST /api/topics/ids`; an update fills in whichever of name/icon wasn't given; writes say `format: 2`) and opens on load. Topics sealed to the old fixed id (`'v1'`) open once and are re-sealed, then the marker `topicsSealV2` is written; a plaintext name is never shown. It also **seeds missing default topics in the browser** (`utils/defaultTopics.ts`, one seeding at a time per tab) — the server no longer seeds or creates default rows for new accounts. Plaintext topic writes get 409 "Update Chronicles". The API layer encrypts through `services/recordCipher.ts`, installed by `EncryptionContext` on unlock and cleared on lock (with the seal-marker cache)
 - **Public pages** `/health-privacy` (`HealthPrivacyView`) and `/terms` (`TermsView`, with the risk notice and image rules), in `LegalTemplate`, readable without signing in; linked under every sign-in screen (`AuthTemplate`), from the consent card and from Settings → Account. Placeholders (business name, address, host, backup/log days, abuse email, effective date) are `LEGAL_DETAILS` in `shared/src/legal/index.ts`; `LEGAL_VERSIONS` there versions each text — **update the policy before a feature changes how data moves, and bump the version when a change matters** (everyone is asked again). The chat stays off these pages
 - **Consent**: sign-up shows `ConsentCard` (three separate, never pre-checked boxes — 18+, Terms, health-data consent — plus email / mailed-letter breach notices with a postal address); **Create account** stays disabled until they're ticked, and the consent is posted right after registering. `ConsentGate` (inside `ProtectedRoute`) checks `GET /api/consent` before any signed-in page: no record → the full card once; a bumped version → only the changed items. If the check can't load, the app opens and asks next time. Stored in `public.account_consent` (`server/src/db/consentQueries.ts`; `POST /api/consent` only accepts the current versions; `PUT /api/consent/breach-notice` from Settings → Account → **Security notices**); the postal address is kept only for mailed notices
 - **Shares carry no images**: the client strips photos, drawings, SVG and embedded media (`stripMediaForShare`, `utils/shareContent.ts`) and `createShareSchema` rejects anything still carrying one (`shareContentHasMedia`, shared). **Uploads** are only JPG, PNG, WebP or AVIF (`ALLOWED_IMAGE_TYPES` in `utils/processImage.ts`, also the picker's `accept`) — never SVG or GIF; every image is re-encoded to a fresh JPEG anyway
@@ -592,7 +601,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - **Export All** (Settings → Data): entries, topics, every dose log (`GET /api/doses/all`), settings opened in the browser and finance as one JSON (`utils/fullExport.ts`); AI/R2/AWS credentials are left out (`redactSecrets`)
 - **Notice banner**: `npm run notice -- --set "…" [--link https://…]` / `--clear` (server, `public.app_notice`) shows a dismissible banner on signed-in pages (`NoticeBanner`, `GET /api/notice`) — used with emailed breach notices
 - **Seed buttons** (Seed Test Data / Seed Finance Data) show only in development builds (`import.meta.env.DEV`)
-- **Phase 2 status**: `npm run migrate:phase2-status` (server) counts, per account and without printing data, what each user's next unlock still has to seal (plaintext topic names, legacy dose logs, unsealed switches, unconfirmed key wraps); `--drop` removes emptied legacy dose tables. The `taxonomies.name`/`icon` columns stay (always NULL after migration) because the topic queries still select them
+- **Phase 2 status**: `npm run migrate:phase2-status` (server) counts, per account and without printing data, anything still in a form the app no longer reads (plaintext topic names, legacy dose logs, unsealed switches, unconfirmed key wraps) — **run it before deploying**: anything above 0 is data that account can no longer open; `--drop` removes emptied legacy dose tables. The `taxonomies.name`/`icon` columns stay (always NULL after migration) because the topic queries still select them
 
 ### Planned
 - Recurring calendar events
@@ -633,6 +642,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - Changing the email (`/change-email`), the recovery key (`/recovery-key`) or turning on 2FA (`/2fa/enable`) requires the **current password**, like change-password and 2FA disable — a signed-in session alone must not be able to lock the owner out
 - Google OAuth: the signed `state` also carries the hash of a nonce kept in an HttpOnly `SameSite=Lax` cookie (`__Host-chronicle_oauth`), so the callback only succeeds in the browser that started the flow
 - `trust proxy` is on in production (`TRUST_PROXY`, default 1 hop) so per-IP rate limits see the real client IP behind Render's proxy
+- Lockout counters (sign-in per email, second factor per account, and the password-confirmed actions per account — 10 wrong passwords / 15 min) count an attempt **before** the slow check, so a parallel burst can't pass the cap; pending 2FA sign-ins are cancelled on password change, recovery and 2FA disable
 - Sign-in has a per-email cap on top of the per-IP limit: 10 wrong passwords lock that email for 15 minutes (in memory, keyed by the normalized email whether or not an account exists, so a lockout reveals nothing). A browser that has signed in to that email carries a signed HttpOnly **known-device** cookie (`__Host-chronicle_device`, 90 days, HMAC of email + nonce) and counts its failures in its own bucket, so a stranger's guesses can't lock the owner out of their own browser — the password and 2FA are still checked
 - Public share links hold plaintext: revoking one **deletes** the row, deleting an entry deletes its shares (`deleteSharesForEntry`), and revoked/expired rows are purged at startup and every 6 hours (`purgeDeadShares`)
 - `DELETE /api/auth/account` deletes the account (tenant schema dropped, then the account row; sessions, shares and the calendar integration cascade). Needs the password, plus a 2FA code when 2FA is on. Settings → Account → Delete account (inline confirmation). Images in the user's R2 bucket and events already pushed to Google Calendar are not touched
@@ -640,7 +650,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - Account enumeration: `/recovery-params` answers an unknown email with **stable** decoy params (HMAC of the email, same sizes as real ones) — never random-per-request. Sign-up must say an email is taken (no email verification), so `/register` has its own `registerLimiter` (10/hour per IP)
 
 ### Rate limiting
-- `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters; `strictLimiter` — 5 / 15 min — counts each route separately, so typos on one action don't block another). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out
+- `apiLimiter` (`server/src/middleware/rateLimiter.ts`): 1500 requests / 15 min **per account** on data routes (auth routes have their own stricter limiters; `strictLimiter` — 5 / 15 min — counts each route separately, keyed by the matched route so case or a trailing slash can't open a new bucket, so typos on one action don't block another). It must stay well above normal SPA use plus bulk actions (imports, bulk edits, dose → Meals sync) — 300 locked real users out
 - Client: identical in-flight GETs share one request (`request` in `services/api.ts`; followers get a `structuredClone`). A 429's `Retry-After` is carried on `ApiError.retryAfterSec`; initial loads (`useInitializeData`, `JournalView`) retry with `retryDelayMs` — Retry-After on 429 (5s–15min), else 10s→60s backoff — and never fall back to an empty journal
 
 ### CSRF Protection
@@ -667,7 +677,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - Master key is a **non-extractable CryptoKey** — cannot be exported to JWK or raw bytes
 - Key lives in React ref (memory only) — lost on page refresh
 - On refresh: user re-enters password to re-derive key — unless they opted into **Remember me**
-- Key is cleared on: logout, inactivity timeout, tab hidden (not when remembered), tab close
+- Key is cleared on: logout, inactivity timeout, tab hidden (not when remembered), tab close — and with it every decrypted entry, topic and private setting in the stores (`lockLocal`); unlocking reloads them
 
 ### Remember me (stay unlocked until the browser closes)
 Opt-in checkbox on sign-in and on the lock screen (`RememberMe` molecule). Off by default; shows a shared-computer warning.
