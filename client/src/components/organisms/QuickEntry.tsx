@@ -16,7 +16,7 @@ export function QuickEntry() {
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const [content, setContent] = useState('');
   const [topicId, setTopicId] = useState<number | null>(null);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
@@ -35,8 +35,8 @@ export function QuickEntry() {
       const prepared = await prepareEntryForSave(content, customFields, topicName, userFieldDefs);
       const metadata: Record<string, unknown> = { _taxonomyId: effectiveTopicId };
       if (Object.keys(prepared.customFields).length > 0) metadata._customFields = prepared.customFields;
-      const enc = await encryptPost(prepared.content, metadata);
-      const res = await entriesApi.create({
+      const enc = await encryptNewPost(prepared.content, metadata);
+      const res = await entriesApi.create({ id: enc.id,
         contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
         metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
         isEncrypted: true, taxonomyIds: [effectiveTopicId],
@@ -50,7 +50,7 @@ export function QuickEntry() {
     } finally {
       setIsSaving(false);
     }
-  }, [content, topicId, customFields, topicCustomFields, isSaving, encryptPost, addDecryptedEntry]);
+  }, [content, topicId, customFields, topicCustomFields, isSaving, encryptNewPost, addDecryptedEntry]);
 
   return (
     <EntryForm

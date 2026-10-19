@@ -82,7 +82,7 @@ function escapeHtml(s: string): string {
 
 /** Create, update, delete and AI-fill food entries, keeping the store in sync. */
 export function useFoodLogActions(topicName: string) {
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
   const [pending, setPending] = useState<Set<number>>(new Set());
@@ -104,7 +104,7 @@ export function useFoodLogActions(topicName: string) {
     if (!entry) return;
     const meta: Record<string, unknown> = { ...((entry.metadata as Record<string, unknown>) ?? {}), _customFields: cf };
     const tid = meta._taxonomyId as number | undefined;
-    const encrypted = await encryptPost(content, meta);
+    const encrypted = await encryptPost(id, content, meta);
     await entriesApi.update(id, {
       contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
       metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
@@ -135,9 +135,9 @@ export function useFoodLogActions(topicName: string) {
     const tid = await topicId();
     const content = `<p>${escapeHtml(item)}</p>`;
     const metadata = { _taxonomyId: tid, _customFields: cf };
-    const encrypted = await encryptPost(content, metadata);
+    const encrypted = await encryptNewPost(content, metadata);
     const isToday = day === toDateStr(new Date());
-    const result = await entriesApi.create({
+    const result = await entriesApi.create({ id: encrypted.id,
       contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
       metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
       isEncrypted: true, taxonomyIds: [tid],
@@ -150,7 +150,7 @@ export function useFoodLogActions(topicName: string) {
       updatedAt: new Date((result.updatedAt || result.createdAt) as string),
     });
     return id;
-  }, [topicId, encryptPost, addDecryptedEntry]);
+  }, [topicId, encryptNewPost, addDecryptedEntry]);
 
   const remove = useCallback((id: number) => deleteEntryWithImages(id), []);
 

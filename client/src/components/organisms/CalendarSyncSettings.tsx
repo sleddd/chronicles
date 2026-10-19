@@ -31,7 +31,7 @@ interface CalendarOption {
 export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
 
   const calendarSyncEnabled = useUIStore(s => s.calendarSyncEnabled);
   const setCalendarSyncEnabled = useUIStore(s => s.setCalendarSyncEnabled);
@@ -104,8 +104,8 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
   }, [status?.googleConnected, calendarSyncEnabled, calendars]);
 
   const kickSync = useCallback(() => {
-    void runCalendarSync({ encryptPost });
-  }, [encryptPost]);
+    void runCalendarSync({ encryptPost, encryptNewPost });
+  }, [encryptPost, encryptNewPost]);
 
   const handleSyncToggle = async (enabled: boolean) => {
     setCalendarSyncEnabled(enabled);

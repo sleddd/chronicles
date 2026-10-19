@@ -11,6 +11,7 @@ import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesAllowed } from '../services/entryReseal.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -19,7 +20,7 @@ import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
  */
 export function useInitializeData() {
   const { encryptionData } = useAuth();
-  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptBytes, decryptBytes } = useEncryption();
+  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
   const {
     setDecryptedEntries, setRawEntries, setTopics, setFeatureFlags,
     isInitialized, setLoading, isLoading,
@@ -106,6 +107,8 @@ export function useInitializeData() {
         }));
         setRawEntries(encrypted);
 
+        // Older entry formats open only until this account is past the move to v3
+        setOlderEntriesAllowed(sealed(ENTRIES_SEAL_MARKER) === undefined);
         // Decrypt entries individually — skip ones that fail
         const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
         for (const entry of encrypted) {
@@ -125,6 +128,11 @@ export function useInitializeData() {
           }
         }
         setDecryptedEntries(decrypted);
+        // Once per account: re-save older entries bound to their id, then mark it done
+        if (olderEntriesAllowed()) {
+          void resealOlderEntries(decrypted, encryptPost, encryptBytes)
+            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err));
+        }
         setLoading(false);
       } catch (err) {
         // Transient failure (rate limit, server restart, network) — keep the

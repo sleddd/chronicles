@@ -269,8 +269,8 @@ describe('entries', () => {
     expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries/5');
   });
 
-  it('create sends POST with encrypted data', async () => {
-    const data = { contentEncrypted: 'abc', contentIv: 'iv' };
+  it('create sends POST with the reserved id and format 3', async () => {
+    const data = { id: 12, contentEncrypted: 'abc', contentIv: 'iv' };
     fetchSpy = mockFetchResponse(data);
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -279,7 +279,7 @@ describe('entries', () => {
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/api/entries');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual(data);
+    expect(JSON.parse(init.body)).toEqual({ ...data, format: 3 });
   });
 
   it('update sends PUT to /entries/:id', async () => {

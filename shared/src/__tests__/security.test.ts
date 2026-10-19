@@ -121,7 +121,7 @@ describe('setupEncryption — key lifecycle', () => {
     const { encryptionService } = await import('../crypto/encryptionService.js');
     const result = await encryptionService.setupEncryption('TestPassword123!');
 
-    const encrypted = await encryptionService.encryptPost(result.masterKey, 'Hello', { test: true });
+    const encrypted = await encryptionService.encryptPost(result.masterKey, 1, 'Hello', { test: true });
     expect(encrypted.contentEncrypted).toBeTruthy();
     expect(encrypted.contentIv).toBeTruthy();
   });
@@ -160,7 +160,7 @@ describe('AES-GCM IV generation', () => {
 
     const results = await Promise.all(
       Array.from({ length: 50 }, () =>
-        encryptionService.encryptPost(setup.masterKey, 'test', {})
+        encryptionService.encryptPost(setup.masterKey, 1, 'test', {})
       )
     );
 
@@ -230,7 +230,7 @@ describe('Encrypt/Decrypt round-trip', () => {
     const content = '<p>Hello <strong>World</strong></p>';
     const metadata = { title: 'Test Entry', tags: ['audit', 'security'] };
 
-    const encrypted = await encryptionService.encryptPost(setup.masterKey, content, metadata);
+    const encrypted = await encryptionService.encryptPost(setup.masterKey, 1, content, metadata);
     const decrypted = await encryptionService.decryptPost(setup.masterKey, {
       id: 1,
       content: null,
@@ -254,7 +254,7 @@ describe('Encrypt/Decrypt round-trip', () => {
     const setup1 = await encryptionService.setupEncryption('Password1_abc!');
     const setup2 = await encryptionService.setupEncryption('Password2_def!');
 
-    const encrypted = await encryptionService.encryptPost(setup1.masterKey, 'secret', {});
+    const encrypted = await encryptionService.encryptPost(setup1.masterKey, 1, 'secret', {});
 
     await expect(
       encryptionService.decryptPost(setup2.masterKey, {

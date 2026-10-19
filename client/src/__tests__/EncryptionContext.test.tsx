@@ -173,11 +173,11 @@ describe('EncryptionProvider – encryptPost', () => {
 
     let encrypted: unknown;
     await act(async () => {
-      encrypted = await result.current.encryptPost('content', { topic: 'Journal' });
+      encrypted = await result.current.encryptPost(7, 'content', { topic: 'Journal' });
     });
 
     expect(encrypted).toEqual(encResult);
-    expect(mockEncryptPost).toHaveBeenCalled();
+    expect(mockEncryptPost).toHaveBeenCalledWith(expect.anything(), 7, 'content', { topic: 'Journal' });
   });
 
   it('throws when not unlocked', async () => {
@@ -185,7 +185,7 @@ describe('EncryptionProvider – encryptPost', () => {
 
     await expect(
       act(async () => {
-        await result.current.encryptPost('content', {});
+        await result.current.encryptPost(1, 'content', {});
       })
     ).rejects.toThrow('Encryption not unlocked');
   });

@@ -263,7 +263,7 @@ export function MilestoneCard({ milestone, tasks, goalTitle, goalOptions, accent
     try {
       const cf = { ...milestone.customFields, ...editFields };
       const metadata: Record<string, unknown> = { _taxonomyId: milestone.taxonomyId, _customFields: cf };
-      const encrypted = await encryptPost(editContent, metadata);
+      const encrypted = await encryptPost(milestone.id, editContent, metadata);
       await entriesApi.update(milestone.id, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,

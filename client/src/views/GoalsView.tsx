@@ -439,7 +439,7 @@ export function GoalsView() {
   const persistEntry = useCallback(async (id: number, content: string, taxonomyId: number, customFields: Record<string, unknown>) => {
     const metadata: Record<string, unknown> = { _taxonomyId: taxonomyId, _customFields: customFields };
     updateDecryptedEntry(id, { metadata });
-    const encrypted = await encryptPost(content, metadata);
+    const encrypted = await encryptPost(id, content, metadata);
     await entriesApi.update(id, {
       contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
       metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,

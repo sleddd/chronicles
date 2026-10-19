@@ -27,7 +27,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
  * ways.
  */
 export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: boolean; bare?: boolean } = {}) {
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const setTopics = useEntriesStore(s => s.setTopics);
@@ -110,16 +110,20 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
     };
     if (topicId) metadata._taxonomyId = topicId;
     try {
-      const encrypted = await encryptPost('', metadata);
+      const existingId = entryIdRef.current;
+      const encrypted = existingId
+        ? { ...(await encryptPost(existingId, '', metadata)), id: existingId }
+        : await encryptNewPost('', metadata);
       const payload = {
+        id: encrypted.id,
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
         isEncrypted: true as const,
         taxonomyIds: topicId ? [topicId] : [] as number[],
       };
-      if (entryIdRef.current) {
-        await entriesApi.update(entryIdRef.current, payload);
-        updateDecryptedEntry(entryIdRef.current, { content: '', metadata });
+      if (existingId) {
+        await entriesApi.update(existingId, payload);
+        updateDecryptedEntry(existingId, { content: '', metadata });
       } else {
         const result = await entriesApi.create(payload);
         const id = result.id as number;

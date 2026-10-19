@@ -245,6 +245,7 @@ describe('JournalView (edit view — opened from another view)', () => {
   const unlocked = () => (useEncryption as any).mockReturnValue({
     isUnlocked: true, unlock: vi.fn(), decryptPosts: vi.fn().mockResolvedValue([]),
     encryptPost: vi.fn().mockResolvedValue({ contentEncrypted: 'c', contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' }),
+    encryptNewPost: vi.fn().mockResolvedValue({ id: 77, contentEncrypted: 'c', contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' }),
   });
 
   it('opens the editor full width when arriving from another view', () => {

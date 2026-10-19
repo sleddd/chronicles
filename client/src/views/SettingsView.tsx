@@ -184,7 +184,7 @@ const GuideBody = styled.div`
 
 export function SettingsView() {
   const { user, logout, encryptionData } = useAuth();
-  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
+  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptNewPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
@@ -559,7 +559,7 @@ export function SettingsView() {
       // Refresh topics first to make sure all defaults exist
       const freshTopics = await topicsApi.getAll();
       const result = await seedTestData({
-        encryptPost,
+        encryptPost: encryptNewPost,
         topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
         addDecryptedEntry,
         onProgress: (msg) => setSeedEntriesResult(msg),
@@ -708,7 +708,7 @@ export function SettingsView() {
         const htmlContent = content.split('\n').map(line => `<p>${line || '<br>'}</p>`).join('');
 
         // Encrypt
-        const encrypted = await encryptPost(htmlContent, metadata);
+        const encrypted = await encryptNewPost(htmlContent, metadata);
 
         // Parse date
         const createdAt = new Date(dateStr).toISOString();
@@ -716,6 +716,7 @@ export function SettingsView() {
         // Create entry via API
         const taxonomyIds = metadata._taxonomyId ? [metadata._taxonomyId as number] : [];
         const result = await entriesApi.create({
+          id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted,
           contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted,

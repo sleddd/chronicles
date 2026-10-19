@@ -305,7 +305,7 @@ function ShoppingChecklist({ list }: { list: ReturnType<typeof useOpenShoppingLi
     setError('');
     try {
       const tid = meta._taxonomyId as number | undefined;
-      const encrypted = await encryptPost(list.content, metadata);
+      const encrypted = await encryptPost(list.id, list.content, metadata);
       await entriesApi.update(list.id, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
         metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,

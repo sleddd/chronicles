@@ -58,6 +58,9 @@ const deps = {
   encryptPost: vi.fn().mockResolvedValue({
     contentEncrypted: 'enc', contentIv: 'iv', metadataEncrypted: 'enc', metadataIv: 'iv',
   }),
+  encryptNewPost: vi.fn().mockResolvedValue({
+    id: 900, contentEncrypted: 'enc', contentIv: 'iv', metadataEncrypted: 'enc', metadataIv: 'iv',
+  }),
 };
 
 const eventFields: MappedFields = {
@@ -312,7 +315,9 @@ describe('calendarSync pull', () => {
 
     // Atomic import: _sync is part of the single create — no follow-up update
     // that could be interrupted and leave an unlinked (re-importable) entry
-    const encryptedMetadata = deps.encryptPost.mock.calls[0][1] as Record<string, unknown>;
+    const encryptedMetadata = deps.encryptNewPost.mock.calls[0][1] as Record<string, unknown>;
+    // created under the id it was encrypted for
+    expect(entriesApi.create).toHaveBeenCalledWith(expect.objectContaining({ id: 900 }));
     const sync = (encryptedMetadata._customFields as Record<string, unknown>)._sync as Record<string, unknown>;
     expect(sync.googleEventId).toBe('g-foreign');
     expect(sync.imported).toBe(true);

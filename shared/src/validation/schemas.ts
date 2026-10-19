@@ -138,19 +138,50 @@ const IV_FIELD = z.string().min(1).max(64);
 // could be created that no later edit was allowed to save
 const METADATA_FIELD = z.string().min(1).max(200_000, 'Metadata too large');
 
+// An entry's ciphertext is bound to its id, so a new entry is created under
+// an id reserved first (POST /api/entries/ids)
+const ENTRY_ID = z.number().int().positive();
+
+// `format: 3` = encrypted bound to the entry id. An older client (pair-bound
+// v2 ciphertext) is refused rather than saving an entry that would stop
+// opening once the account is past the move to v3
+const FORMAT_V3 = z.literal(3, { errorMap: () => ({ message: 'Update Chronicles to save entries' }) });
+
 export const createPostSchema = z.object({
+  id: ENTRY_ID,
+  format: FORMAT_V3,
   contentEncrypted: ENCRYPTED_FIELD,
   contentIv: IV_FIELD,
   metadataEncrypted: METADATA_FIELD,
   metadataIv: IV_FIELD,
   isEncrypted: z.literal(true, { errorMap: () => ({ message: 'Entries must be encrypted' }) }),
   taxonomyIds: z.array(z.number()).optional(),
-  createdAt: z.string().optional(),
+  createdAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export const reservePostIdsSchema = z.object({
+  count: z.number().int().min(1).max(50).default(1),
+});
+
+// The one-time move of older entries to the id-bound format: up to 100 at a time
+export const resealPostsSchema = z.object({
+  entries: z.array(z.object({
+    id: ENTRY_ID,
+    format: FORMAT_V3,
+    // The entry's updated_at as loaded: if it was edited since, the edit
+    // (already id-bound) wins and this re-seal is skipped
+    updatedAt: z.string().datetime({ offset: true }),
+    contentEncrypted: ENCRYPTED_FIELD,
+    contentIv: IV_FIELD,
+    metadataEncrypted: METADATA_FIELD,
+    metadataIv: IV_FIELD,
+  })).min(1).max(100),
 });
 
 // Content and metadata are encrypted as a bound pair (each one's AAD names the
 // other's IV), so an update replaces all four fields together or none of them
 export const updatePostSchema = z.object({
+  format: FORMAT_V3.optional(),
   contentEncrypted: ENCRYPTED_FIELD.optional(),
   contentIv: IV_FIELD.optional(),
   metadataEncrypted: METADATA_FIELD.optional(),
@@ -162,6 +193,9 @@ export const updatePostSchema = z.object({
     return n === 0 || n === 4;
   },
   { message: 'Encrypted updates must include contentEncrypted, contentIv, metadataEncrypted, and metadataIv' }
+).refine(
+  (d) => d.contentEncrypted === undefined || d.format === 3,
+  { message: 'Update Chronicles to save entries', path: ['format'] }
 );
 
 // Finance records: one encrypted JSON payload per row, keyed by a client UUID

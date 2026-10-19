@@ -25,7 +25,7 @@ const TEST_ITERATIONS = 1000;
 
 /** Decrypt an encryptPost() result's content (the halves are AAD-bound, so go through decryptPost). */
 async function decryptContent(key: CryptoKey, enc: { contentEncrypted: string; contentIv: string; metadataEncrypted: string; metadataIv: string }): Promise<string> {
-  const post = await encryptionService.decryptPost(key, { id: 0, ...enc, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() });
+  const post = await encryptionService.decryptPost(key, { id: 1, ...enc, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() });
   return post.content;
 }
 
@@ -139,6 +139,7 @@ describe('unwrapMasterKey', () => {
     // Encrypt with setup master key
     const encrypted = await encryptionService.encryptPost(
       setup.masterKey,
+      1,
       'secret content',
       { title: 'test' }
     );
@@ -192,6 +193,7 @@ describe('unwrapWithRecoveryKey', () => {
 
     const encrypted = await encryptionService.encryptPost(
       setup.masterKey,
+      1,
       'recovery test',
       { note: 'important' }
     );
@@ -278,6 +280,7 @@ describe('rewrapFromParams', () => {
     // Encrypt some data first
     const encrypted = await encryptionService.encryptPost(
       setup.masterKey,
+      1,
       'important journal entry',
       { mood: 'happy' }
     );
@@ -332,6 +335,7 @@ describe('encryptPost', () => {
 
     const result = await encryptionService.encryptPost(
       nonExtKey,
+      1,
       '<p>Hello world</p>',
       { title: 'My Entry', mood: 'happy' }
     );
@@ -355,6 +359,7 @@ describe('encryptPost', () => {
 
     const result = await encryptionService.encryptPost(
       nonExtKey,
+      1,
       'content',
       { key: 'value' }
     );
@@ -366,7 +371,7 @@ describe('encryptPost', () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
-    const result = await encryptionService.encryptPost(nonExtKey, '', {});
+    const result = await encryptionService.encryptPost(nonExtKey, 1, '', {});
     expect(result.contentEncrypted).toBeDefined();
     expect(result.metadataEncrypted).toBeDefined();
   });
@@ -375,8 +380,8 @@ describe('encryptPost', () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
-    const r1 = await encryptionService.encryptPost(nonExtKey, 'same', { a: 1 });
-    const r2 = await encryptionService.encryptPost(nonExtKey, 'same', { a: 1 });
+    const r1 = await encryptionService.encryptPost(nonExtKey, 1, 'same', { a: 1 });
+    const r2 = await encryptionService.encryptPost(nonExtKey, 1, 'same', { a: 1 });
 
     expect(r1.contentEncrypted).not.toBe(r2.contentEncrypted);
   });
@@ -393,7 +398,7 @@ describe('decryptPost', () => {
     const content = '<p>My secret journal entry</p>';
     const metadata = { title: 'Day 1', mood: 'reflective', tags: ['personal'] };
 
-    const encrypted = await encryptionService.encryptPost(nonExtKey, content, metadata);
+    const encrypted = await encryptionService.encryptPost(nonExtKey, 42, content, metadata);
 
     const encryptedPost: EncryptedPost = {
       id: 42,
@@ -438,8 +443,8 @@ describe('decryptPost', () => {
 
   it('rejects content spliced onto another entry\'s metadata', async () => {
     const key = await toNonExtractable(await generateMasterKey());
-    const a = await encryptionService.encryptPost(key, 'entry A', { title: 'A' });
-    const b = await encryptionService.encryptPost(key, 'entry B', { title: 'B' });
+    const a = await encryptionService.encryptPost(key, 1, 'entry A', { title: 'A' });
+    const b = await encryptionService.encryptPost(key, 1, 'entry B', { title: 'B' });
 
     const spliced: EncryptedPost = {
       id: 1,
@@ -457,7 +462,7 @@ describe('decryptPost', () => {
 
   it('rejects content and metadata swapped with each other', async () => {
     const key = await toNonExtractable(await generateMasterKey());
-    const enc = await encryptionService.encryptPost(key, '{"title":"x"}', { title: 'x' });
+    const enc = await encryptionService.encryptPost(key, 1, '{"title":"x"}', { title: 'x' });
 
     const swapped: EncryptedPost = {
       id: 1,
@@ -475,18 +480,17 @@ describe('decryptPost', () => {
 
   it('bound halves do not decrypt without their AAD', async () => {
     const key = await toNonExtractable(await generateMasterKey());
-    const enc = await encryptionService.encryptPost(key, 'secret', { t: 1 });
+    const enc = await encryptionService.encryptPost(key, 1, 'secret', { t: 1 });
     await expect(decrypt(key, enc.contentEncrypted, enc.contentIv)).rejects.toThrow();
     await expect(decrypt(key, enc.metadataEncrypted, enc.metadataIv)).rejects.toThrow();
   });
 
-  it('still decrypts entries saved before AAD binding', async () => {
+  it('opens entries saved before AAD binding only when older formats are allowed, marked for re-sealing', async () => {
     const key = await toNonExtractable(await generateMasterKey());
     const { encrypt } = await import('../crypto/primitives.js');
     const content = await encrypt(key, '<p>old entry</p>');
     const meta = await encrypt(key, JSON.stringify({ title: 'Old' }));
-
-    const decrypted = await encryptionService.decryptPost(key, {
+    const post = {
       id: 9,
       contentEncrypted: content.ciphertext,
       contentIv: content.iv,
@@ -495,16 +499,52 @@ describe('decryptPost', () => {
       isEncrypted: true,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    };
+
+    await expect(encryptionService.decryptPost(key, post)).rejects.toThrow();
+    const decrypted = await encryptionService.decryptPost(key, post, { allowOlder: true });
     expect(decrypted.content).toBe('<p>old entry</p>');
     expect(decrypted.metadata).toEqual({ title: 'Old' });
+    expect(decrypted.needsReseal).toBe(true);
+  });
+
+  it('opens a v2 (pair-bound) entry only when older formats are allowed', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const { encrypt } = await import('../crypto/primitives.js');
+    const { generateIv } = await import('../crypto/primitives.js');
+    const { uint8ArrayToBase64 } = await import('../crypto/encoding.js');
+    const cIv = generateIv(); const mIv = generateIv();
+    const c = await encrypt(key, 'v2 text', { iv: cIv, aad: `chronicles:post:v2:content:${uint8ArrayToBase64(mIv)}` });
+    const m = await encrypt(key, '{"t":2}', { iv: mIv, aad: `chronicles:post:v2:metadata:${uint8ArrayToBase64(cIv)}` });
+    const post = { id: 3, contentEncrypted: c.ciphertext, contentIv: c.iv, metadataEncrypted: m.ciphertext, metadataIv: m.iv, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() };
+
+    await expect(encryptionService.decryptPost(key, post)).rejects.toThrow();
+    const d = await encryptionService.decryptPost(key, post, { allowOlder: true });
+    expect(d.content).toBe('v2 text');
+    expect(d.needsReseal).toBe(true);
+  });
+
+  it("won't open one entry's ciphertext served as another entry", async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    const enc = await encryptionService.encryptPost(key, 5, 'entry five', { t: 5 });
+    const asSix = { id: 6, ...enc, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() };
+    await expect(encryptionService.decryptPost(key, asSix)).rejects.toThrow();
+    await expect(encryptionService.decryptPost(key, asSix, { allowOlder: true })).rejects.toThrow();
+    const asFive = await encryptionService.decryptPost(key, { ...asSix, id: 5 });
+    expect(asFive.content).toBe('entry five');
+    expect(asFive.needsReseal).toBeUndefined();
+  });
+
+  it('needs an entry id to encrypt', async () => {
+    const key = await toNonExtractable(await generateMasterKey());
+    await expect(encryptionService.encryptPost(key, 0, 'x', {})).rejects.toThrow('Entry id required');
   });
 
   it('rejects a legacy half paired with a bound half', async () => {
     const key = await toNonExtractable(await generateMasterKey());
     const { encrypt } = await import('../crypto/primitives.js');
     const legacyMeta = await encrypt(key, JSON.stringify({ title: 'Old' }));
-    const bound = await encryptionService.encryptPost(key, 'new', { title: 'New' });
+    const bound = await encryptionService.encryptPost(key, 1, 'new', { title: 'New' });
 
     await expect(encryptionService.decryptPost(key, {
       id: 10,
@@ -562,7 +602,7 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post);
+    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
     expect(decrypted.metadata).toEqual({});
   });
 
@@ -587,7 +627,7 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post);
+    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
     expect(decrypted.metadata).toEqual({});
   });
 
@@ -612,7 +652,7 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post);
+    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
     expect(decrypted.metadata).toEqual({});
   });
 
@@ -637,7 +677,7 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post);
+    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
     expect(decrypted.metadata).toEqual({});
   });
 });
@@ -650,8 +690,8 @@ describe('decryptPosts', () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
-    const enc1 = await encryptionService.encryptPost(nonExtKey, 'Entry 1', { title: 'First' });
-    const enc2 = await encryptionService.encryptPost(nonExtKey, 'Entry 2', { title: 'Second' });
+    const enc1 = await encryptionService.encryptPost(nonExtKey, 1, 'Entry 1', { title: 'First' });
+    const enc2 = await encryptionService.encryptPost(nonExtKey, 2, 'Entry 2', { title: 'Second' });
 
     const posts: EncryptedPost[] = [
       {
@@ -688,7 +728,7 @@ describe('decryptPosts', () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
-    const enc = await encryptionService.encryptPost(nonExtKey, 'Encrypted', { x: 1 });
+    const enc = await encryptionService.encryptPost(nonExtKey, 1, 'Encrypted', { x: 1 });
 
     const posts: EncryptedPost[] = [
       {

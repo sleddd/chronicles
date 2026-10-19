@@ -18,7 +18,7 @@ describe('remember-me device wrap', async () => {
     expect(restored.extractable).toBe(false);
     expect(restored.usages.sort()).toEqual(['decrypt', 'encrypt']);
 
-    const enc = await encryptionService.encryptPost(masterKey, 'hello', { a: 1 });
+    const enc = await encryptionService.encryptPost(masterKey, 1, 'hello', { a: 1 });
     const dec = await encryptionService.decryptPost(restored, { id: 1, ...enc, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() } as never);
     expect(dec.content).toBe('hello');
   });

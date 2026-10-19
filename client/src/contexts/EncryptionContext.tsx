@@ -8,6 +8,7 @@ import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
 import { clearRecordCipher, installRecordCipher } from '../services/recordCipher.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { olderEntriesAllowed, reserveEntryId, clearReservedEntryIds } from '../services/entryReseal.js';
 import { useUIStore } from '../stores/uiStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
@@ -32,7 +33,10 @@ interface EncryptionContextValue {
   /** Stop remembering this browser but stay unlocked in this tab. */
   forgetBrowser: () => void;
   setupEncryption: (password: string) => Promise<SetupEncryptionResult>;
-  encryptPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
+  /** Encrypt an existing entry, bound to its id */
+  encryptPost: (id: number, content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
+  /** Encrypt a new entry: reserves its id first; pass `id` to entries.create */
+  encryptNewPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData & { id: number }>;
   decryptPost: (post: EncryptedPost) => Promise<DecryptedPost>;
   decryptPosts: (posts: EncryptedPost[]) => Promise<DecryptedPost[]>;
   /** Optional `aad` binds the ciphertext to what it is (a setting's key, an image's object key) */
@@ -134,6 +138,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // after an auto-lock nothing readable stays in memory; unlocking reloads
     useEntriesStore.getState().clearAll();
     useUIStore.getState().clearPrivateState();
+    clearReservedEntryIds();
     setIsUnlocked(false);
   }, []);
 
@@ -161,16 +166,24 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     return masterKeyRef.current;
   };
 
-  const encryptPost = useCallback(async (content: string, metadata: Record<string, unknown>) => {
-    return encryptionService.encryptPost(getKey(), content, metadata);
+  const encryptPost = useCallback(async (id: number, content: string, metadata: Record<string, unknown>) => {
+    return encryptionService.encryptPost(getKey(), id, content, metadata);
   }, []);
 
+  const encryptNewPost = useCallback(async (content: string, metadata: Record<string, unknown>) => {
+    const key = getKey();
+    const id = await reserveEntryId();
+    return { ...(await encryptionService.encryptPost(key, id, content, metadata)), id };
+  }, []);
+
+  // Older entry formats open only until the account is past the move to v3
+  // (see services/entryReseal.ts)
   const decryptPost = useCallback(async (post: EncryptedPost) => {
-    return encryptionService.decryptPost(getKey(), post);
+    return encryptionService.decryptPost(getKey(), post, { allowOlder: olderEntriesAllowed() });
   }, []);
 
   const decryptPosts = useCallback(async (posts: EncryptedPost[]) => {
-    return encryptionService.decryptPosts(getKey(), posts);
+    return encryptionService.decryptPosts(getKey(), posts, { allowOlder: olderEntriesAllowed() });
   }, []);
 
   const encryptBytes = useCallback(async (data: ArrayBuffer, aad?: string) => {
@@ -388,6 +401,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       forgetBrowser,
       setupEncryption,
       encryptPost,
+      encryptNewPost,
       decryptPost,
       decryptPosts,
       encryptBytes,

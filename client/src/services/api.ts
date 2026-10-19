@@ -232,12 +232,25 @@ export const entries = {
 
   // An entry's topic lives only in its encrypted metadata (`_taxonomyId`);
   // the plaintext topic link is never sent, so the server can't tell which
-  // entries are, say, Medication or Symptom
-  create: (data: Record<string, unknown>) =>
-    request<Record<string, unknown>>('/entries', { method: 'POST', body: withoutTopicLink(data) }),
+  // entries are, say, Medication or Symptom.
+  // Entries are encrypted bound to their id (format 3): a new entry is created
+  // under the id it was encrypted for (`encryptNewPost` reserves it).
+  create: (data: Record<string, unknown> & { id: number }) =>
+    request<Record<string, unknown>>('/entries', { method: 'POST', body: { ...withoutTopicLink(data), format: 3 } }),
 
   update: (id: number, data: Record<string, unknown>) =>
-    request<Record<string, unknown>>(`/entries/${id}`, { method: 'PUT', body: withoutTopicLink(data) }),
+    request<Record<string, unknown>>(`/entries/${id}`, {
+      method: 'PUT',
+      body: { ...withoutTopicLink(data), ...(data.contentEncrypted !== undefined && { format: 3 }) },
+    }),
+
+  /** Reserve ids for new entries (each is encrypted bound to its id before it's created). */
+  reserveIds: (count = 1) =>
+    request<{ ids: number[] }>('/entries/ids', { method: 'POST', body: { count } }),
+
+  /** Re-save older entries in the id-bound format (up to 100 at a time; keeps updated_at). */
+  reseal: (entries: { id: number; updatedAt: string; contentEncrypted: string; contentIv: string; metadataEncrypted: string; metadataIv: string }[]) =>
+    request<{ resealed: number }>('/entries/reseal', { method: 'PUT', body: { entries: entries.map(e => ({ ...e, format: 3 })) } }),
 
   delete: (id: number) =>
     request<{ success: boolean }>(`/entries/${id}`, { method: 'DELETE' }),

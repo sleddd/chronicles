@@ -146,12 +146,12 @@ async function getOrCreateTopicId(name: string, icon: string): Promise<number> {
 
 /** Encrypt + create an entry tagged with the topic, and add it to the store. */
 function useCreateEntry() {
-  const { encryptPost } = useEncryption();
+  const { encryptPost, encryptNewPost } = useEncryption();
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   return async (topicId: number, content: string, customFields: Record<string, unknown>) => {
     const metadata: Record<string, unknown> = { _taxonomyId: topicId, _customFields: customFields };
-    const encrypted = await encryptPost(content, metadata);
-    const result = await entriesApi.create({
+    const encrypted = await encryptNewPost(content, metadata);
+    const result = await entriesApi.create({ id: encrypted.id,
       contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
       metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
       isEncrypted: true, taxonomyIds: [topicId],

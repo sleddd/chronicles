@@ -52,6 +52,8 @@ export interface DecryptedPost {
   isEncrypted: boolean;
   createdAt: Date;
   updatedAt: Date;
+  /** Opened from a format from before id binding: re-seal it (client only, never sent) */
+  needsReseal?: true;
 }
 
 // Encryption parameters stored in Account (returned on login)

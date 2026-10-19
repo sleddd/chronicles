@@ -32,6 +32,8 @@ import {
   reorderTaxonomies,
   postStorageBytes,
   financeStorageBytes,
+  reservePostIds,
+  resealPosts,
   createPost,
   getPost,
   getAllPosts,
@@ -232,8 +234,8 @@ describe('Taxonomy queries', () => {
       expect(await postStorageBytes(SCHEMA, 9)).toBe(1234);
       const [sql, exclude] = mockQueryRawUnsafe.mock.calls[0];
       expect(sql).toContain('octet_length(content_encrypted)');
-      expect(sql).toContain('FROM usr_1_abc123.posts WHERE $1::int IS NULL OR id <> $1');
-      expect(exclude).toBe(9);
+      expect(sql).toContain('FROM usr_1_abc123.posts WHERE NOT (id = ANY($1::int[]))');
+      expect(exclude).toEqual([9]);
     });
 
     it('sums every finance table, leaving out the row being replaced', async () => {
@@ -271,82 +273,54 @@ describe('Taxonomy queries', () => {
 // Posts
 // =============================================================================
 describe('Post queries', () => {
-  describe('createPost — encrypted', () => {
-    it('creates an encrypted post with binary data', async () => {
-      const contentEnc = Buffer.from('encrypted-content');
-      const contentIv = Buffer.from('iv-12-bytes!');
-      const metaEnc = Buffer.from('encrypted-meta');
-      const metaIv = Buffer.from('meta-iv-12b!');
-
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 1,
-        content: null,
-        metadata: null,
-        contentEncrypted: contentEnc,
-        contentIv,
-        metadataEncrypted: metaEnc,
-        metadataIv: metaIv,
-        isEncrypted: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }]);
-
-      const result = await createPost(SCHEMA, {
-        contentEncrypted: contentEnc,
-        contentIv,
-        metadataEncrypted: metaEnc,
-        metadataIv: metaIv,
-        isEncrypted: true,
-      });
-
-      expect(result.isEncrypted).toBe(true);
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('INSERT INTO usr_1_abc123.posts');
-      expect(sql).toContain('content_encrypted');
-      expect(sql).toContain('TRUE');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(contentEnc);
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(contentIv);
-      expect(mockQueryRawUnsafe.mock.calls[0][3]).toBe(metaEnc);
-      expect(mockQueryRawUnsafe.mock.calls[0][4]).toBe(metaIv);
+  describe('reservePostIds', () => {
+    it('hands out ids from the posts sequence', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([{ id: 41 }, { id: 42 }]);
+      expect(await reservePostIds(SCHEMA, 2)).toEqual([41, 42]);
+      const [sql, n] = mockQueryRawUnsafe.mock.calls[0];
+      expect(sql).toContain("nextval('usr_1_abc123.posts_id_seq')");
+      expect(n).toBe(2);
     });
   });
 
-  describe('createPost — unencrypted', () => {
-    it('creates a plaintext post', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 1,
-        content: 'Hello',
-        metadata: {},
-        contentEncrypted: null,
-        contentIv: null,
-        metadataEncrypted: null,
-        metadataIv: null,
-        isEncrypted: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }]);
+  describe('createPost', () => {
+    const fields = {
+      contentEncrypted: Buffer.from('encrypted-content'),
+      contentIv: Buffer.from('iv-12-bytes!'),
+      metadataEncrypted: Buffer.from('encrypted-meta'),
+      metadataIv: Buffer.from('meta-iv-12b!'),
+    };
 
-      const result = await createPost(SCHEMA, { content: 'Hello', metadata: { mood: 'happy' } });
-
-      expect(result.isEncrypted).toBe(false);
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('INSERT INTO usr_1_abc123.posts');
-      expect(sql).toContain('FALSE');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('Hello');
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(JSON.stringify({ mood: 'happy' }));
+    it('inserts an encrypted post under its reserved id, only if that id was handed out', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([{ id: 7, isEncrypted: true }]);
+      const result = await createPost(SCHEMA, { id: 7, ...fields });
+      expect(result?.id).toBe(7);
+      const [sql, id, ce, ci, me, mi, created] = mockQueryRawUnsafe.mock.calls[0];
+      expect(sql).toContain('INSERT INTO usr_1_abc123.posts (id, content_encrypted');
+      expect(sql).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.posts_id_seq)');
+      expect(sql).toContain('ON CONFLICT (id) DO NOTHING');
+      expect(sql).not.toMatch(/\bcontent, metadata, is_encrypted\)/);
+      expect([id, ce, ci, me, mi, created]).toEqual([7, fields.contentEncrypted, fields.contentIv, fields.metadataEncrypted, fields.metadataIv, null]);
     });
 
-    it('defaults content to empty string and metadata to empty object', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 1, content: '', metadata: {}, contentEncrypted: null, contentIv: null,
-        metadataEncrypted: null, metadataIv: null, isEncrypted: false,
-        createdAt: new Date(), updatedAt: new Date(),
-      }]);
+    it('returns null for an id never reserved or already taken', async () => {
+      mockQueryRawUnsafe.mockResolvedValue([]);
+      expect(await createPost(SCHEMA, { id: 999999, ...fields })).toBeNull();
+    });
+  });
 
-      await createPost(SCHEMA, {});
-
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('');
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe('{}');
+  describe('resealPosts', () => {
+    it('replaces the encrypted fields of each entry without touching updated_at', async () => {
+      mockExecuteRawUnsafe.mockResolvedValue(1);
+      mockTransaction.mockImplementation(async (ops: Promise<number>[]) => Promise.all(ops));
+      const p = { contentEncrypted: Buffer.from('a'), contentIv: Buffer.from('b'), metadataEncrypted: Buffer.from('c'), metadataIv: Buffer.from('d') };
+      const at = new Date('2026-10-01T10:00:00.123Z');
+      expect(await resealPosts(SCHEMA, [{ id: 1, updatedAt: at, ...p }, { id: 2, updatedAt: at, ...p }])).toBe(2);
+      const sql = mockExecuteRawUnsafe.mock.calls[0][0] as string;
+      expect(sql).toContain('UPDATE usr_1_abc123.posts SET content_encrypted = $1');
+      expect(sql).not.toContain('updated_at =');
+      expect(sql).toContain("date_trunc('milliseconds', updated_at) = $6");
+      expect(mockExecuteRawUnsafe.mock.calls[0][6]).toBe(at);
     });
   });
 
@@ -400,37 +374,6 @@ describe('Post queries', () => {
   });
 
   describe('updatePost', () => {
-    it('updates content field', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 1, content: 'Updated', metadata: {}, contentEncrypted: null, contentIv: null,
-        metadataEncrypted: null, metadataIv: null, isEncrypted: false,
-        createdAt: new Date(), updatedAt: new Date(),
-      }]);
-
-      await updatePost(SCHEMA, 1, { content: 'Updated' });
-
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('UPDATE usr_1_abc123.posts SET content = $1');
-      expect(sql).toContain('updated_at = NOW()');
-      expect(sql).toContain('WHERE id = $2');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('Updated');
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(1);
-    });
-
-    it('updates metadata with JSON serialization', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([{
-        id: 1, content: '', metadata: { x: 1 }, contentEncrypted: null, contentIv: null,
-        metadataEncrypted: null, metadataIv: null, isEncrypted: false,
-        createdAt: new Date(), updatedAt: new Date(),
-      }]);
-
-      await updatePost(SCHEMA, 1, { metadata: { x: 1 } });
-
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('metadata = $1::jsonb');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(JSON.stringify({ x: 1 }));
-    });
-
     it('updates encrypted fields with correct parameter indexing', async () => {
       const contentEnc = Buffer.from('new-enc');
       const contentIv = Buffer.from('new-iv');

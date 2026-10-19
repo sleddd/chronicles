@@ -326,6 +326,8 @@ describe('recoverSchema', () => {
 // ============================================================================
 describe('createPostSchema', () => {
   const encrypted = {
+    id: 5,
+    format: 3,
     isEncrypted: true,
     contentEncrypted: 'enc-content',
     contentIv: 'iv1',
@@ -352,6 +354,14 @@ describe('createPostSchema', () => {
     }
   });
 
+  it('needs the reserved id and format 3 (an older client is refused)', () => {
+    const { id: _i, ...noId } = encrypted;
+    const { format: _f, ...noFormat } = encrypted;
+    expect(createPostSchema.safeParse(noId).success).toBe(false);
+    expect(createPostSchema.safeParse(noFormat).success).toBe(false);
+    expect(createPostSchema.safeParse({ ...encrypted, id: 0 }).success).toBe(false);
+  });
+
   it('rejects encrypted post missing required encrypted fields', () => {
     expect(createPostSchema.safeParse({ isEncrypted: true, contentEncrypted: 'enc-content' }).success).toBe(false);
   });
@@ -372,6 +382,7 @@ describe('createPostSchema', () => {
 
 describe('updatePostSchema', () => {
   const fields = {
+    format: 3,
     contentEncrypted: 'enc',
     contentIv: 'iv',
     metadataEncrypted: 'meta-enc',
@@ -384,6 +395,11 @@ describe('updatePostSchema', () => {
 
   it('accepts all four encrypted fields together', () => {
     expect(updatePostSchema.safeParse(fields).success).toBe(true);
+  });
+
+  it('refuses new ciphertext without format 3 (an older client)', () => {
+    const { format: _f, ...old } = fields;
+    expect(updatePostSchema.safeParse(old).success).toBe(false);
   });
 
   it('rejects a partial encrypted update (content and metadata are a bound pair)', () => {
