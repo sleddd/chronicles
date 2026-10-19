@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
+import { isApproved } from '../db/betaQueries.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { markKeyWrapCurrent } from '../db/keyWrapQueries.js';
@@ -372,11 +373,12 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
     const email = normalizeEmail(rawEmail);
 
-    // Whitelist check — if REGISTRATION_WHITELIST is set, only allow listed emails
+    // Whitelist check — if REGISTRATION_WHITELIST is set, only listed emails, or
+    // ones approved on the beta list (`npm run beta -- --approve`, no restart), may sign up
     const whitelist = process.env.REGISTRATION_WHITELIST;
     if (whitelist) {
       const allowed = whitelist.split(',').map(e => e.trim().toLowerCase());
-      if (!allowed.includes(email)) {
+      if (!allowed.includes(email) && !(await isApproved(email).catch(() => false))) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
         res.status(403).json({ error: 'Registration is currently restricted.' });
         return;

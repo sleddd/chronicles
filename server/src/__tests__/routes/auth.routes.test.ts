@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -58,6 +58,7 @@ vi.mock('../../utils/securityLogger.js', () => ({
 }));
 
 vi.mock('../../db/keyWrapQueries.js', () => ({ markKeyWrapCurrent: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../db/betaQueries.js', () => ({ isApproved: vi.fn().mockResolvedValue(false) }));
 
 // Mock bcryptjs
 vi.mock('bcryptjs', () => ({
@@ -72,6 +73,7 @@ import * as authMw from '../../middleware/auth.js';
 import bcryptMock from 'bcryptjs';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
+import { isApproved } from '../../db/betaQueries.js';
 import { markKeyWrapCurrent } from '../../db/keyWrapQueries.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
 import bcrypt from 'bcryptjs';
@@ -159,6 +161,37 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(201);
       expect(res.body.user).toEqual({ email: 'test@example.com', username: 'testuser' });
       expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.any(Object));
+    });
+
+    describe('with REGISTRATION_WHITELIST set', () => {
+      const ok = () => (registerTenant as any).mockResolvedValue({
+        account: { id: 1, email: 'test@example.com', username: 'testuser' }, schemaName: 'usr_1_a1b2c3',
+      });
+      afterEach(() => { delete process.env.REGISTRATION_WHITELIST; });
+
+      it('refuses an email that is neither listed nor approved', async () => {
+        process.env.REGISTRATION_WHITELIST = 'owner@example.com';
+        (isApproved as any).mockResolvedValue(false);
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(403);
+        expect(registerTenant).not.toHaveBeenCalled();
+      });
+
+      it('lets in an email approved on the beta list, without a restart', async () => {
+        process.env.REGISTRATION_WHITELIST = 'owner@example.com';
+        (isApproved as any).mockResolvedValue(true);
+        ok();
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(201);
+        expect(isApproved).toHaveBeenCalledWith('test@example.com');
+      });
+
+      it('still lets in an email on the list', async () => {
+        process.env.REGISTRATION_WHITELIST = 'Test@Example.com, owner@example.com';
+        ok();
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(201);
+      });
     });
 
     it('stores a hash of the derived secret and a sealed recovery check', async () => {

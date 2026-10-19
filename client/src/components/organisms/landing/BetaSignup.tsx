@@ -5,8 +5,8 @@ import { beta } from '../../../services/api.js';
 
 /* The landing page's "Sign up to try" form in a white card. An
    application takes a beta seat while one is open (the server decides, in
-   arrival order) and otherwise goes on the waitlist automatically. The page
-   never shows how many seats are left. A hidden honeypot field catches bots. */
+   arrival order) and otherwise goes on the waitlist automatically. Everyone
+   sees the same thank-you, so the page never shows whether seats are left. A hidden honeypot field catches bots. */
 
 export const TRACK_OPTIONS = [
   { value: 'journal', label: 'Daily journal' },
@@ -166,7 +166,7 @@ export function BetaSignup() {
   const [trap, setTrap] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ status: 'seat' | 'waitlist'; email: string } | null>(null);
+  const [done, setDone] = useState(false);
 
 
   const apply = async (e: FormEvent) => {
@@ -175,8 +175,8 @@ export function BetaSignup() {
     setSending(true);
     setError('');
     try {
-      const res = await beta.apply({ name: name.trim(), email: email.trim(), trackFirst, device, ...(trap ? { website: trap } : {}) });
-      setResult({ status: res.status, email: email.trim() });
+      await beta.apply({ name: name.trim(), email: email.trim(), trackFirst, device, ...(trap ? { website: trap } : {}) });
+      setDone(true);
     } catch (err) {
       setError(messageOf(err));
     } finally {
@@ -189,19 +189,10 @@ export function BetaSignup() {
       <BetaCard id="apply">
 
 
-        {result ? (
+        {done ? (
           <Done role="status">
-            {result.status === 'seat' ? (
-              <>
-                <h4>You have a beta seat</h4>
-                <p>We’ll write to {result.email} when your account is ready to set up.</p>
-              </>
-            ) : (
-              <>
-                <h4>You’re on the waitlist</h4>
-                <p>The beta seats are taken, so your application is on the waitlist. We’ll write to {result.email} once when Chronicles opens to everyone.</p>
-              </>
-            )}
+            <h4>Thank you for signing up to test Chronicles.</h4>
+            <p>We can’t wait to hear what you think, and we’ll reach out by email.</p>
           </Done>
         ) : (
           <form onSubmit={apply}>
