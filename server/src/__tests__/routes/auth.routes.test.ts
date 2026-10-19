@@ -57,7 +57,6 @@ vi.mock('../../utils/securityLogger.js', () => ({
   logSecurityEvent: vi.fn(),
 }));
 
-vi.mock('../../db/keyWrapQueries.js', () => ({ markKeyWrapCurrent: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../../db/betaQueries.js', () => ({ isApproved: vi.fn().mockResolvedValue(false) }));
 
 // Mock bcryptjs
@@ -74,7 +73,6 @@ import bcryptMock from 'bcryptjs';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { isApproved } from '../../db/betaQueries.js';
-import { markKeyWrapCurrent } from '../../db/keyWrapQueries.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
@@ -572,7 +570,7 @@ describe('Auth Routes', () => {
       currentAuthSecret: SECRET,
       newAuthSecret: NEW_SECRET,
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
-      newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
+      newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
     };
 
@@ -651,7 +649,7 @@ describe('Auth Routes', () => {
       recoveryProof: PROOF,
       newAuthSecret: NEW_SECRET,
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
-      newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
+      newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
       // Recovery rotates in a fresh recovery key so it can be used again
       newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
@@ -907,33 +905,8 @@ describe('Auth Routes', () => {
     });
   });
 
-  describe('POST /api/auth/key-wrap', () => {
-    const body = { currentAuthSecret: 'a'.repeat(64), encryptedMasterKey: Buffer.alloc(60, 1).toString('base64'), kekSalt: Buffer.alloc(16, 2).toString('base64'), kekWrapIv: Buffer.alloc(12, 3).toString('base64'), kekIterations: 600000 };
-
-    it('saves the re-wrapped key and marks the account, without touching sessions', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: 'auth1$hash' });
-      (bcryptMock.compare as any).mockResolvedValue(true);
-      (prisma.account.update as any).mockResolvedValue({});
-      const res = await request(app).post('/api/auth/key-wrap').send(body);
-      expect(res.status).toBe(200);
-      const data = (prisma.account.update as any).mock.calls[0][0].data;
-      expect(Object.keys(data).sort()).toEqual(['encryptedMasterKey', 'kekIterations', 'kekSalt', 'kekWrapIv']);
-      expect(data.kekIterations).toBe(600000);
-      expect(markKeyWrapCurrent).toHaveBeenCalledWith(1);
-      expect(prisma.session.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('needs the current password', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: 'auth1$hash' });
-      (bcryptMock.compare as any).mockResolvedValue(false);
-      const res = await request(app).post('/api/auth/key-wrap').send(body);
-      expect(res.status).toBe(401);
-      expect(prisma.account.update).not.toHaveBeenCalled();
-    });
-
-    it('refuses fewer iterations than the minimum and extra fields', async () => {
-      expect((await request(app).post('/api/auth/key-wrap').send({ ...body, kekIterations: 1000 })).status).toBe(400);
-      expect((await request(app).post('/api/auth/key-wrap').send({ ...body, passwordHash: 'x' })).status).toBe(400);
-    });
+  it('no longer serves the key-wrap upgrade endpoint', async () => {
+    const res = await request(app).post('/api/auth/key-wrap').send({});
+    expect(res.status).toBe(404);
   });
 });

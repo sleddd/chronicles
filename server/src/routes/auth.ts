@@ -8,12 +8,11 @@ import { prisma } from '../db/prisma.js';
 import { isApproved } from '../db/betaQueries.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
-import { markKeyWrapCurrent } from '../db/keyWrapQueries.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, normalizeEmail } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
 
@@ -457,8 +456,6 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     logSecurityEvent('register_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, email);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
-    // New accounts are wrapped in the current (AAD) format from the start
-    try { await markKeyWrapCurrent(account.id); } catch { /* marked on a later unlock */ }
     res.status(201).json({
       user: { email: account.email, username: account.username },
     });
@@ -1134,50 +1131,6 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
   } catch (err) {
     console.error('Account delete error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Account deletion failed' });
-  }
-});
-
-// =============================================================================
-// POST /api/auth/key-wrap — save the master key re-wrapped in the current
-// (AAD) format after a password unlock found the old no-AAD wrap. Same
-// password, new salt and IV; needs the password (as currentAuthSecret).
-// Unlike change-password it keeps every session.
-// =============================================================================
-router.post('/key-wrap', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
-  try {
-    const parsed = keyWrapSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid request' });
-      return;
-    }
-    const account = await prisma.account.findUnique({
-      where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true },
-    });
-    if (!account) {
-      res.status(404).json({ error: 'Account not found' });
-      return;
-    }
-    if (!(await checkConfirmSecret(account, parsed.data.currentAuthSecret))) {
-      logSecurityEvent('key_wrap_failed', { accountId: account.id, ip: req.ip });
-      res.status(401).json({ error: 'Incorrect password' });
-      return;
-    }
-    await prisma.account.update({
-      where: { id: account.id },
-      data: {
-        encryptedMasterKey: new Uint8Array(Buffer.from(parsed.data.encryptedMasterKey, 'base64')),
-        kekSalt: new Uint8Array(Buffer.from(parsed.data.kekSalt, 'base64')),
-        kekWrapIv: new Uint8Array(Buffer.from(parsed.data.kekWrapIv, 'base64')),
-        kekIterations: parsed.data.kekIterations,
-      },
-    });
-    await markKeyWrapCurrent(account.id);
-    logSecurityEvent('key_wrap_upgraded', { accountId: account.id });
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Key wrap error:', err instanceof Error ? err.message : 'Unknown error');
-    res.status(500).json({ error: 'Failed to update the key' });
   }
 });
 

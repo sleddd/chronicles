@@ -8,12 +8,6 @@ import { EncryptionProvider, useEncryption } from '../contexts/EncryptionContext
 // ---------------------------------------------------------------------------
 
 const mockUnwrapMasterKey = vi.fn();
-const legacyState = vi.hoisted(() => ({ legacy: false }));
-const authState = vi.hoisted(() => ({ value: null as null | { user: { email: string }; updateEncryptionData: (p: unknown) => void } }));
-const mockKeyWrap = vi.hoisted(() => vi.fn().mockResolvedValue({ success: true }));
-vi.mock('../contexts/AuthContext.js', () => ({ useOptionalAuth: () => authState.value }));
-vi.mock('../services/api.js', () => ({ auth: { keyWrap: (...a: unknown[]) => mockKeyWrap(...a) } }));
-vi.mock('@shared/crypto/authSecret.js', () => ({ deriveAuthSecret: async () => 'a'.repeat(64) }));
 const mockSetupEncryption = vi.fn();
 const mockEncryptPost = vi.fn();
 const mockDecryptPost = vi.fn();
@@ -25,7 +19,6 @@ const mockRewrapFromParams = vi.fn();
 vi.mock('@shared/crypto/encryptionService.js', () => ({
   encryptionService: {
     unwrapMasterKey: (...args: unknown[]) => mockUnwrapMasterKey(...args),
-    unwrapMasterKeyDetailed: async (...args: unknown[]) => ({ masterKey: await mockUnwrapMasterKey(...args), legacyWrap: legacyState.legacy }),
     setupEncryption: (...args: unknown[]) => mockSetupEncryption(...args),
     encryptPost: (...args: unknown[]) => mockEncryptPost(...args),
     decryptPost: (...args: unknown[]) => mockDecryptPost(...args),
@@ -89,37 +82,6 @@ describe('EncryptionProvider – unlock', () => {
 
     expect(result.current.isUnlocked).toBe(true);
     expect(mockUnwrapMasterKey).toHaveBeenCalledWith('password', 'salt', 'emk', 'iv', 600000);
-  });
-
-  it('re-wraps a key stored in the old no-AAD format and saves it, keeping the same password', async () => {
-    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
-    mockRewrapFromParams.mockResolvedValue({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
-    legacyState.legacy = true;
-    const updateEncryptionData = vi.fn();
-    authState.value = { user: { email: 'a@b.co' }, updateEncryptionData };
-    try {
-      const { result } = renderHook(() => useEncryption(), { wrapper });
-      await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
-      await vi.waitFor(() => expect(mockKeyWrap).toHaveBeenCalled());
-      expect(mockRewrapFromParams).toHaveBeenCalledWith('password', 'salt', 'emk', 'iv', 600000, 'password');
-      expect(mockKeyWrap).toHaveBeenCalledWith({ currentAuthSecret: 'a'.repeat(64), encryptedMasterKey: 'nwmk', kekSalt: 'ns', kekWrapIv: 'nwiv', kekIterations: 600000 });
-      expect(updateEncryptionData).toHaveBeenCalledWith({ kekSalt: 'ns', encryptedMasterKey: 'nwmk', kekWrapIv: 'nwiv', kekIterations: 600000 });
-    } finally {
-      legacyState.legacy = false;
-      authState.value = null;
-    }
-  });
-
-  it('leaves a current-format key alone', async () => {
-    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
-    authState.value = { user: { email: 'a@b.co' }, updateEncryptionData: vi.fn() };
-    try {
-      const { result } = renderHook(() => useEncryption(), { wrapper });
-      await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
-      expect(mockKeyWrap).not.toHaveBeenCalled();
-    } finally {
-      authState.value = null;
-    }
   });
 
   it('rejects iterations below PBKDF2_ITERATIONS minimum', async () => {

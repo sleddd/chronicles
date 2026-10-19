@@ -11,7 +11,6 @@ import {
   importRawKey,
   wrapKey,
   unwrapKey,
-  unwrapKeyDetailed,
   toNonExtractable,
   encrypt,
   decrypt,
@@ -366,21 +365,34 @@ describe('encrypt / decrypt', () => {
   });
 });
 
-describe('unwrapKeyDetailed', () => {
-  it('says whether the key was wrapped in the old no-AAD format', async () => {
+describe('unwrapKey — AAD fallback', () => {
+  it('refuses a password (kek) wrap without its purpose AAD', async () => {
     const masterKey = await generateMasterKey();
     const kek = await deriveKEK('correct horse battery staple', generateSalt(), 1000);
     const iv = generateIv();
-
-    const modern = await wrapKey(masterKey, kek, iv, 'kek-wrap');
-    expect((await unwrapKeyDetailed(modern, kek, iv, false, 'kek-wrap')).legacy).toBe(false);
-
-    // An old wrap: AES-GCM with no additional data
     const old = await crypto.subtle.wrapKey('raw', masterKey, kek, { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer });
-    const r = await unwrapKeyDetailed(old, kek, iv, false, 'kek-wrap');
-    expect(r.legacy).toBe(true);
-    // Still the same key: it decrypts what the original encrypted
-    const { ciphertext, iv: dataIv } = await encrypt(masterKey, 'same key');
-    expect(await decrypt(r.key, ciphertext, dataIv)).toBe('same key');
+    await expect(unwrapKey(old, kek, iv, false, 'kek-wrap')).rejects.toThrow();
+  });
+
+  it('still opens an old no-AAD recovery wrap (it cannot be re-wrapped without the recovery key)', async () => {
+    const masterKey = await generateMasterKey();
+    const recoveryKey = await importRawKey(crypto.getRandomValues(new Uint8Array(32)));
+    const iv = generateIv();
+    const old = await crypto.subtle.wrapKey('raw', masterKey, recoveryKey, { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer });
+    const key = await unwrapKey(old, recoveryKey, iv, false, 'recovery-wrap');
+    const { ciphertext, iv: dataIv } = await encrypt(masterKey, 'hello');
+    expect(await decrypt(key, ciphertext, dataIv)).toBe('hello');
+  });
+});
+
+describe('deriveKEK — salt from the server', () => {
+  it('refuses any salt that is not 16 bytes', async () => {
+    await expect(deriveKEK('pw', new Uint8Array(15), 1000)).rejects.toThrow('Invalid key salt');
+    await expect(deriveKEK('pw', new Uint8Array(17), 1000)).rejects.toThrow('Invalid key salt');
+  });
+
+  it("refuses the sign-in secret's salt, so a server can't turn authSecret into the KEK", async () => {
+    const authSalt = new TextEncoder().encode('chronicles:auth:v1:user@example.com');
+    await expect(deriveKEK('pw', authSalt, 600_000)).rejects.toThrow('Invalid key salt');
   });
 });

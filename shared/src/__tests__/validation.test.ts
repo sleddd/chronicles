@@ -155,7 +155,7 @@ describe('registerSchema', () => {
     username: 'testuser',
     authSecret: 'a'.repeat(64),
     encryptedMasterKey: 'abc123',
-    kekSalt: 'salt123',
+    kekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
     kekWrapIv: 'iv123',
     recoveryWrappedMK: 'recovmk',
     recoveryWrapIv: 'recoviv',
@@ -253,7 +253,7 @@ describe('changePasswordSchema', () => {
     currentAuthSecret: 'a'.repeat(64),
     newAuthSecret: 'b'.repeat(64),
     newEncryptedMasterKey: 'enc123',
-    newKekSalt: 'salt123',
+    newKekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
     newKekWrapIv: 'iv123',
   };
 
@@ -286,7 +286,7 @@ describe('recoverSchema', () => {
     recoveryProof: 'a'.repeat(64),
     newAuthSecret: 'b'.repeat(64),
     newEncryptedMasterKey: 'enc123',
-    newKekSalt: 'salt123',
+    newKekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
     newKekWrapIv: 'iv123',
     newRecoveryWrappedMK: 'rwmk123',
     newRecoveryWrapIv: 'riv123',

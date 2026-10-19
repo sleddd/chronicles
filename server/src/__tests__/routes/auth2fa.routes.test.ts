@@ -279,7 +279,7 @@ describe('2FA hardening', () => {
       recoveryProof,
       newAuthSecret: 'b'.repeat(64),
       newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
-      newKekSalt: Buffer.from('newsalt1234567890').toString('base64'),
+      newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
       newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
       newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
       newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),

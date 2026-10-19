@@ -8,14 +8,14 @@
  *   npm run migrate:phase2-status           # report
  *   npm run migrate:phase2-status -- --drop # drop emptied legacy dose tables
  *
- * When everything reads 0: remove the "not opened since the update" line from
- * the privacy policy's readable items, and the no-AAD fallback in
- * shared/src/crypto/primitives.ts (unwrapKeyDetailed). The taxonomies name/icon
- * columns stay (always NULL) — the topic queries still select them.
+ * The app no longer reads any of these legacy forms (plaintext topic names,
+ * plaintext dose logs, unsealed switches, no-AAD key wraps), so run this
+ * before deploying: anything above 0 is data that account can no longer open.
+ * The taxonomies name/icon columns stay (always NULL) — the topic queries
+ * still select them.
  */
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
-import { initKeyWrapTable } from './keyWrapQueries.js';
 
 const PRIVATE_FLAG_KEYS = [
   'foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled', 'exerciseEnabled', 'allergiesEnabled',
@@ -38,9 +38,12 @@ async function count(sql: string, ...params: unknown[]): Promise<number> {
 
 async function main(): Promise<void> {
   const drop = process.argv.includes('--drop');
-  await initKeyWrapTable();
   const accounts = await prisma.account.findMany({ select: { id: true, tenantSchemaName: true }, orderBy: { id: 'asc' } });
-  const marked = new Set((await prisma.$queryRaw<{ account_id: number }[]>`SELECT account_id FROM public.key_wrap_status`).map(r => r.account_id));
+  // Accounts confirmed on the AAD key wrap (marked at registration or by the
+  // old upgrade step); the table stays in the database as that record
+  const marked = (await exists('public', 'key_wrap_status'))
+    ? new Set((await prisma.$queryRaw<{ account_id: number }[]>`SELECT account_id FROM public.key_wrap_status`).map(r => r.account_id))
+    : new Set<number>();
   const totals = { topics: 0, doses: 0, flags: 0, keyWraps: 0 };
 
   for (const { id, tenantSchemaName } of accounts) {
@@ -62,7 +65,7 @@ async function main(): Promise<void> {
 
   console.log(`\n${accounts.length} account(s). Still to migrate: ${totals.topics} topic name(s), ${totals.doses} dose log(s), ${totals.flags} switch(es), ${totals.keyWraps} key wrap(s).`);
   if (!totals.topics && !totals.doses && !totals.flags && !totals.keyWraps) {
-    console.log('All done: remove the policy\'s "not opened since the update" line and the no-AAD unwrap fallback.');
+    console.log('All done: every account is on the current formats.');
   }
 }
 

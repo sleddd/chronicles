@@ -25,7 +25,6 @@ import betaRoutes from './routes/beta.js';
 import { initConsentTable } from './db/consentQueries.js';
 import { initBetaTable } from './db/betaQueries.js';
 import { initAppNoticeTable } from './db/appNoticeQueries.js';
-import { initKeyWrapTable } from './db/keyWrapQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
@@ -132,7 +131,6 @@ initAnalyticsTable().catch(err => console.error('Failed to init analytics table:
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err));
 initConsentTable().catch(err => console.error('Failed to init consent table:', err));
 initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err));
-initKeyWrapTable().catch(err => console.error('Failed to init key-wrap table:', err));
 initBetaTable().catch(err => console.error('Failed to init beta table:', err));
 checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) => {
   if (recoverySealed) console.log(`Credential check: ${recoverySealed} recovery check(s) sealed`);

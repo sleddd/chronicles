@@ -15,7 +15,6 @@ import {
   importRawKey,
   wrapKey,
   unwrapKey,
-  unwrapKeyDetailed,
   toNonExtractable,
   encrypt,
   decrypt,
@@ -89,19 +88,6 @@ class EncryptionService {
     return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
   }
 
-  /** unwrapMasterKey, also saying whether the stored wrap is the old no-AAD format (re-wrap it then). */
-  async unwrapMasterKeyDetailed(
-    password: string,
-    saltBase64: string,
-    wrappedMKBase64: string,
-    wrapIvBase64: string,
-    iterations: number
-  ): Promise<{ masterKey: CryptoKey; legacyWrap: boolean }> {
-    const kek = await deriveKEK(password, base64ToUint8Array(saltBase64), iterations);
-    const r = await unwrapKeyDetailed(base64ToUint8Array(wrappedMKBase64).buffer as ArrayBuffer, kek, base64ToUint8Array(wrapIvBase64), false, 'kek-wrap');
-    return { masterKey: r.key, legacyWrap: r.legacy };
-  }
-
   /**
    * Password unlock that also produces a "remember me" blob: the master key
    * wrapped (AES-GCM, purpose AAD 'device-wrap') under a key imported from a
@@ -116,12 +102,12 @@ class EncryptionService {
     wrapIvBase64: string,
     iterations: number,
     deviceSecret: Uint8Array
-  ): Promise<{ masterKey: CryptoKey; deviceWrapped: string; deviceIv: string; legacyWrap: boolean }> {
+  ): Promise<{ masterKey: CryptoKey; deviceWrapped: string; deviceIv: string }> {
     const salt = base64ToUint8Array(saltBase64);
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
     const kek = await deriveKEK(password, salt, iterations);
-    const { key: masterKey, legacy: legacyWrap } = await unwrapKeyDetailed(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
+    const masterKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
     const extractable = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
     const deviceKey = await importDeviceWrapKey(deviceSecret);
     const deviceIv = generateIv();
@@ -130,7 +116,6 @@ class EncryptionService {
       masterKey,
       deviceWrapped: uint8ArrayToBase64(new Uint8Array(deviceWrapped)),
       deviceIv: uint8ArrayToBase64(deviceIv),
-      legacyWrap,
     };
   }
 

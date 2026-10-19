@@ -20,13 +20,16 @@ const recoverySaltSchema = z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery 
 // Base64 key material: a wrapped 32-byte key is ~64 chars, salts and IVs ~24
 const wrappedKeySchema = z.string().min(1).max(1024);
 const saltOrIvSchema = z.string().min(1).max(64);
+// KEK salts are exactly 16 random bytes (24 base64 chars); the client refuses
+// any other length at unlock, so the server never stores one it couldn't use
+const kekSaltSchema = z.string().regex(/^[A-Za-z0-9+/]{22}==$/, 'Invalid key salt');
 
 export const registerSchema = z.object({
   email: emailSchema,
   username: usernameSchema,
   authSecret: authSecretSchema,
   encryptedMasterKey: wrappedKeySchema,
-  kekSalt: saltOrIvSchema,
+  kekSalt: kekSaltSchema,
   kekWrapIv: saltOrIvSchema,
   recoveryWrappedMK: wrappedKeySchema,
   recoveryWrapIv: saltOrIvSchema,
@@ -45,25 +48,16 @@ export const changePasswordSchema = z.object({
   currentAuthSecret: authSecretSchema,
   newAuthSecret: authSecretSchema,
   newEncryptedMasterKey: wrappedKeySchema,
-  newKekSalt: saltOrIvSchema,
+  newKekSalt: kekSaltSchema,
   newKekWrapIv: saltOrIvSchema,
 });
-
-/** Re-wrap the master key in the current (AAD) format — same password, new salt and IV. */
-export const keyWrapSchema = z.object({
-  currentAuthSecret: authSecretSchema,
-  encryptedMasterKey: wrappedKeySchema,
-  kekSalt: saltOrIvSchema,
-  kekWrapIv: saltOrIvSchema,
-  kekIterations: z.number().int().min(600_000).max(10_000_000),
-}).strict();
 
 export const recoverSchema = z.object({
   email: emailSchema,
   recoveryProof: recoveryProofSchema,
   newAuthSecret: authSecretSchema,
   newEncryptedMasterKey: wrappedKeySchema,
-  newKekSalt: saltOrIvSchema,
+  newKekSalt: kekSaltSchema,
   newKekWrapIv: saltOrIvSchema,
   newRecoveryWrappedMK: wrappedKeySchema,
   newRecoveryWrapIv: saltOrIvSchema,
