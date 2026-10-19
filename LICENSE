@@ -10,7 +10,8 @@ and to use under the terms below. It is NOT open source.
 1. Permitted use
 
    You may download, install and run an unmodified copy of the Software for
-   your own personal, non-commercial use.
+   your own personal, non-commercial use. Personal use means use by you, for
+   yourself; it does not include running the Software for other people.
 
 2. Restrictions
 
@@ -19,11 +20,13 @@ and to use under the terms below. It is NOT open source.
    a. use the Software for any commercial purpose, including offering it,
       or any service built on it, to others for a fee, for advertising
       revenue, or as part of a business;
-   b. modify, adapt, translate or create derivative works of the Software;
+   b. modify, adapt, translate or create derivative works of the Software,
+      except to prepare a contribution as allowed in Section 4;
    c. copy, publish, distribute, sublicense, sell, rent, lease or lend the
       Software, or make it available to others (including as a hosted
       service), except that you may link to the Owner's own repository or
-      website;
+      website, and may fork the repository on GitHub as allowed in
+      Section 4;
    d. remove or alter any copyright, license or attribution notice; or
    e. use the Software, its source code or its designs to train or build a
       competing product.
@@ -41,17 +44,44 @@ and to use under the terms below. It is NOT open source.
    nothing here restricts your rights to those components under their own
    licenses.
 
-4. Ownership and feedback
+4. Contributions: pull requests and issues
+
+   a. Pull requests. You may fork the repository on GitHub and change your
+      fork only to prepare a pull request to the Owner's repository, and run
+      your changed copy only to test that change. You may not use, publish
+      or distribute a changed version for any other purpose. The Owner may
+      accept, change, decline or close any pull request without giving a
+      reason.
+
+   b. Issues. You may report bugs and suggest features through the
+      repository's issue tracker, or through the "Report a bug" form in the
+      Software. Issues are public: do not include passwords, recovery keys,
+      health information or other personal data. Report security problems
+      privately to support@mydailychronicles.com, not in an issue.
+
+   c. Rights in contributions. By submitting a pull request, issue,
+      suggestion or other contribution, you confirm that it is your own work
+      (or that you have the right to submit it) and you grant the Owner a
+      perpetual, worldwide, irrevocable, royalty-free license to use, copy,
+      modify, distribute, sublicense and relicense it, as part of the
+      Software or otherwise, without payment or obligation to you. A merged
+      contribution becomes part of the Software under this license.
+
+   Contributing does not give you any further right to use the Software:
+   use stays limited to Section 1.
+
+5. Ownership and feedback
 
    The Owner keeps all rights not expressly granted here. If you send
-   suggestions or feedback, the Owner may use them without obligation to you.
+   suggestions or other feedback, the Owner may use them without obligation
+   or payment to you.
 
-5. Termination
+6. Termination
 
    This license ends automatically if you break any of its terms. When it
    ends you must stop using the Software and delete all copies you have.
 
-6. No warranty and limitation of liability
+7. No warranty and limitation of liability
 
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

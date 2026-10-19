@@ -253,4 +253,6 @@ npm run test:coverage    # Run tests with coverage
 
 © 2025–2026 Claudette Raynor. All rights reserved.
 
-You may download and use this application for personal use only. Commercial use, redistribution, and modification of any kind are strictly prohibited.
+You may download and use this application for personal use only. Commercial use, redistribution, and modification of any kind are strictly prohibited. See [LICENSE](LICENSE) for the full terms.
+
+**Contributions.** Pull requests and bug reports through GitHub issues are welcome. Contributions don't change the license: the app stays personal-use only, and anything you contribute can be used in Chronicles (see LICENSE, Section 4). Please keep personal or health information out of issues, and report security problems privately to support@mydailychronicles.com. You can also report a bug in the app (Settings → Report a Bug).
