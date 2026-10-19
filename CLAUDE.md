@@ -197,7 +197,7 @@ chronicles-rebuild/
 │   │   └── schema.prisma  # Auth schema (Account, Session, SchemaCounter)
 │   └── src/
 │       ├── db/
-│       │   ├── prisma.ts              # Prisma client singleton
+│       │   ├── prisma.ts              # Prisma client (capped pool, recycled every 30 min)
 │       │   ├── schemaManager.ts       # Tenant schema creation/deletion
 │       │   └── tenantQueries.ts       # Typed CRUD queries for tenant tables
 │       ├── middleware/
@@ -254,7 +254,7 @@ PostgreSQL Database
 
 ### Two-Layer Security Model
 
-1. **Authentication Layer (Server)**: bcrypt hash (12 rounds) of a **derived sign-in secret**, split-token database sessions with immediate revocation, optional TOTP 2FA
+1. **Authentication Layer (Server)**: bcrypt hash (12 rounds, run in worker threads by `services/passwordHasher.ts` — never on the main thread) of a **derived sign-in secret**, split-token database sessions with immediate revocation, optional TOTP 2FA
 2. **Encryption Layer (Client)**: AES-256-GCM with auto-generated master key wrapped by password-derived KEK (PBKDF2-SHA256, 600k iterations)
 
 Password changes only re-wrap the master key (instant). Data is never re-encrypted on password change.
@@ -392,7 +392,7 @@ Views     → Route logic + top-level data orchestration
 - `client/src/stores/entriesStore.ts` — Encrypted entries cache, topics, feature flags, CRUD operations
 
 **Client Services:**
-- `client/src/services/api.ts` — Single API client with `X-Requested-With` CSRF header; fetches up to 5,000 entries on init; includes 2FA endpoints (`login2fa`, `setup2fa`, `enable2fa`, `disable2fa`)
+- `client/src/services/api.ts` — Single API client with `X-Requested-With` CSRF header; `entries.getAll` pages through every entry (5,000 a request); `entries.createMany` batches imports; includes 2FA endpoints (`login2fa`, `setup2fa`, `enable2fa`, `disable2fa`)
 
 **Journal View:**
 - `client/src/views/JournalView.tsx` — Two-panel layout (entry list + editor); preserves `_widgetType` through saves so wellness check-in entries remain linked; date filter bar shown when `viewMode === 'date'` with active date label and Clear button; topic filter bar shown when a topic is active
@@ -611,7 +611,16 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 ## Important Implementation Notes
 
 ### Entry Pagination
-`entriesApi.getAll()` requests `?limit=5000`. Server allows up to 10,000. Do not reduce this — personal journals can easily exceed 100 entries and topic filtering relies on all entries being in the client store.
+`entriesApi.getAll()` pages `?limit=5000&offset=…` (server orders by `created_at DESC, id DESC`, offset uncapped) until a short page comes back, skipping ids repeated across pages — one request for journals under 5,000. Never go back to a single capped request: topic filtering, search, reports and Export All rely on every entry being in the client store, and entries past the cap silently vanished.
+
+### Imports
+Bulk creates go through `POST /api/entries/batch` (up to 100 entries, one transaction, all or none) via `entries.createMany` (50 a request, under ~3.5 MB). One request per entry hit the per-account limit at ~1,430 entries.
+
+### Server capacity (see `docs/SCALE_TEST_REPORT.md`, harness in `loadtest/`)
+- **Never hash on the main thread**: `bcryptjs` blocked the event loop ~400 ms per hash and stalled every request. Use `services/passwordHasher.ts` (`BCRYPT_WORKERS`, `BCRYPT_MAX_QUEUE`; a full queue answers 503 + Retry-After)
+- **Database pool**: `DB_POOL_SIZE` (default 5, unless `DATABASE_URL` sets `connection_limit`) and `DB_POOL_RECYCLE_MINUTES` (default 30). Each connection caches every user schema it touches (~50 KB per user), so connections are swapped for fresh ones; import `prisma` from `db/prisma.ts` (a proxy to the current client), never construct another `PrismaClient`
+- **Backups**: `checkBackupLockCapacity` (`db/backupCheck.ts`) warns at startup / every 6 h when tables outgrow `max_locks_per_transaction` — pg_dump locks every table and failed at ~1,000 users on defaults
+- **JIT migrations read before they ALTER**: an `ALTER TABLE … IF NOT EXISTS` still takes an exclusive lock; check the catalog first (`topicColumnsMigrated`)
 
 ### Navigation breakpoint
 Phones **and tablets** use the mobile top bar + a **drop-down menu sheet** (`MobileChrome`: under the 56px bar, full width, `--bg-app` with 20px bottom corners and `--shadow-xl` over a dimmed page; while open the bar's hairline goes and ☰ becomes × in a faint accent-tinted 44px square. One 48px row per destination — Material icon in the accent + 16px name in `--text-primary`; the current page on the grey `--bg-active` (10px corners), its name 600 in the standard colour (no accent tint or accent text); a hairline, then Settings, Lock and Sign out in `--text-muted`; Escape, a row or a tap outside closes it). The rail and the menu share one list (`useNavItems`). Nothing slides sideways; the side rail shows only on wider, non-touch screens. The query is `NAV_COMPACT` in `client/src/styles/breakpoints.ts` (≤1024px, or touch-first `(hover: none) and (pointer: coarse)` up to 1366px) and is used by `Sidebar`, `MobileChrome` and the templates' layout rules. Page layouts keep their own 768px breakpoints. **Phone gutters:** content sits ~24px from the screen edge on phones (≤768px) — `ContentTemplate`'s `Main` adds 8px a side on top of each page's own 16px, and the journal header and calendar month/day panel use 24px directly.

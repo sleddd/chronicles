@@ -19,7 +19,7 @@ the rest light (150). Entries are incompressible random bytes the size of real
 ciphertext. For the growth tests, 9,000 more empty user schemas were cloned from a
 real one, for 10,001 users in all.
 
-## Summary: what breaks, and at how many users
+## Summary: what broke, and at how many users (before the fixes below)
 
 | Users | What happens | Severity |
 |---|---|---|
@@ -31,10 +31,21 @@ real one, for 10,001 users in all.
 | Per user: ~1,450 entries in 15 minutes | Large imports fail partway with 429s | Medium |
 | More than one server instance | Running a second instance breaks 2FA sign-in, Remember me and the rate limits | Blocks scaling out |
 
-For the 30-seat beta, nothing here will bite except a sign-in burst. That could
-happen if a launch email gets many people signing up within the same minute or two.
-The wall at around 1,000 users is backups. That needs fixing before you open up past
-the beta.
+## Fixes made (same harness, same data)
+
+| Finding | Fix | Before | After |
+|---|---|---|---|
+| 1. Sign-ins freeze the server | bcrypt in a worker-thread pool (`services/passwordHasher.ts`); 503 + Retry-After when the queue is full | Health check p99 during 16 simultaneous sign-ins: **4,848 ms**; 2.6 sign-ins/s | **6.5 ms**; 8–11 sign-ins/s (scales with cores) |
+| | | Mixed traffic, 2% sign-ins, 100 concurrent: 144 req/s, p95 1,688 ms | **447 req/s, p95 155 ms** |
+| 2. pg_dump fails | Startup / 6-hourly check that logs the `max_locks_per_transaction` to set (`db/backupCheck.ts`) | ~2,500 users: dump fails, no warning | Warning names 640; with it a full dump (1.1 GB) completes |
+| 3. Postgres memory per connection | Pool capped at 5 (`DB_POOL_SIZE`), connections replaced every 30 min (`DB_POOL_RECYCLE_MINUTES`) | 9 connections, caches grow forever | 5 connections, caches reset every 30 min; 0 errors in 213k requests while recycling every minute; throughput unchanged |
+| 5. Entries past 5,000 vanish | Client pages through all entries; server orders by `created_at, id`, offset uncapped | 12,021-entry journal: app sees 5,000 | **All 12,021**, no duplicates |
+| 6. Imports hit the rate limit | `POST /api/entries/batch` (100 per request, all or none); both importers use it | 3,000-entry import stops at 1,428 with 429 | **All 3,000 in 120 requests, 3 s** |
+| 8. Cold start after deploy | One catalog read before the ALTERs | App-open p99 after restart 1,448 ms | **647 ms** (warm: 456 ms) |
+
+Still open, because each is a design decision rather than a bug fix: findings 4 (schema-per-user), 5's download size (incremental sync would mean keeping ciphertext in the browser between sessions), and 7 (Remember me's secret is deliberately memory-only, so a second instance needs sticky sessions). Since sign-in hashing now uses every core, a bigger single instance is the way to scale for now.
+
+Where it stands now: sign-in bursts no longer freeze the server, and no data is lost from view. Backups are safe as long as you act on the server's warning (or use physical backups). Postgres memory now tracks users *active in the last 30 minutes*, not everyone ever served. At ~50 KB per user per connection over 5 connections, a 1 GB database holds a few thousand users active within any half hour. That supports a much larger registered base. The next real ceiling is schema-per-user itself (finding 4), somewhere around 5,000–10,000 registered users.
 
 ## Findings
 
