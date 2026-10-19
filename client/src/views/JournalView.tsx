@@ -490,6 +490,7 @@ export function JournalView() {
         // too or wellness period/flow and calendar-sync fields vanish when the
         // app initializes via /journal
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') useUIStore.getState().setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
+        useUIStore.getState().setIcsIncludeDetails(settingsMap.icsIncludeDetails === true);
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') useUIStore.getState().setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.displayName === 'string') useUIStore.getState().setDisplayName(settingsMap.displayName);
         // Entry images are opt-in (default false); credentials are a master-key-encrypted setting

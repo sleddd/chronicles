@@ -4,7 +4,8 @@ const upsert = vi.fn().mockResolvedValue({});
 vi.mock('../../services/api.js', () => ({ settings: { upsert: (...a: unknown[]) => upsert(...a), getAll: vi.fn() } }));
 vi.mock('../../contexts/EncryptionContext.js', () => ({ useEncryption: () => ({}) }));
 
-import { sealValue, openPrivateSettings, migratePrivateSettings, isSealed } from '../../services/privateSettings.js';
+import { sealValue, openPrivateSettings, migratePrivateSettings, isSealed, PRIVATE_SETTING_KEYS } from '../../services/privateSettings.js';
+import { featureFlagsFrom } from '../../utils/featureFlags.js';
 
 // Stand-in cipher: reverses the bytes, so ciphertext never equals plaintext
 const encryptBytes = async (data: ArrayBuffer) => ({ ciphertext: new Uint8Array(data).slice().reverse().buffer, iv: 'iv' });
@@ -38,5 +39,20 @@ describe('private settings', () => {
     const map: Record<string, unknown> = { timezone: { ciphertext: 'AAAA', iv: 'x' } };
     await openPrivateSettings(map, async () => { throw new Error('bad'); });
     expect(map).toEqual({});
+  });
+
+  it('treats every feature switch, Cycle Tracking and feed details as private', async () => {
+    for (const key of ['medicationEnabled', 'foodEnabled', 'allergiesEnabled', 'financeEnabled', 'cycleTrackingEnabled', 'icsIncludeDetails']) {
+      expect(PRIVATE_SETTING_KEYS).toContain(key);
+    }
+    // Plaintext switches from before are reported for sealing; sealed ones open to booleans the flag reader understands
+    const map: Record<string, unknown> = {
+      medicationEnabled: false,
+      cycleTrackingEnabled: await sealValue(true, encryptBytes),
+      themeMode: 'dark',
+    };
+    expect(await openPrivateSettings(map, decryptBytes)).toEqual(['medicationEnabled']);
+    expect(map.cycleTrackingEnabled).toBe(true);
+    expect(featureFlagsFrom(map).medicationEnabled).toBe(false);
   });
 });

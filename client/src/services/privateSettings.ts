@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { settings as settingsApi } from './api.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
+import { KNOWN_FEATURE_FLAGS, OPT_IN_FEATURE_FLAGS } from '../utils/featureFlags.js';
 
 /**
  * Settings that say something personal (your name, where you live, what you
@@ -9,8 +10,13 @@ import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encodin
  * in the same `{ ciphertext, iv }` shape as `useEncryptedSetting`. Values saved
  * before this was introduced are still plaintext on the server: `openPrivateSettings`
  * reads them as-is and `migratePrivateSettings` re-saves them sealed.
+ * Feature switches and Cycle Tracking are private too: on their own they say
+ * which health features (medication, meals, cycle…) someone uses.
  */
-export const PRIVATE_SETTING_KEYS = ['displayName', 'weatherCity', 'timezone', 'plannerFilters', 'topicCustomFields', 'planningViews'] as const;
+export const PRIVATE_SETTING_KEYS = [
+  'displayName', 'weatherCity', 'timezone', 'plannerFilters', 'topicCustomFields', 'planningViews',
+  ...KNOWN_FEATURE_FLAGS, ...OPT_IN_FEATURE_FLAGS, 'cycleTrackingEnabled', 'icsIncludeDetails',
+] as const;
 export type PrivateSettingKey = typeof PRIVATE_SETTING_KEYS[number];
 
 export interface SealedValue { ciphertext: string; iv: string }

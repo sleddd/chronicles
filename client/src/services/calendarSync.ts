@@ -518,6 +518,9 @@ async function pushPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
 
 async function icsPhase(): Promise<void> {
   const events: IcsEventInput[] = [];
+  // The feed is stored readable on the server: descriptions (notes, attendees)
+  // only when the user turned them on — title, time and place otherwise
+  const includeDetails = useUIStore.getState().icsIncludeDetails;
   for (const { entry, topicType, fields } of getSyncCandidates()) {
     if (fields.noCalendarSync) continue;
     const payload = toGooglePayload(fields, entry.content, topicType, entry.id);
@@ -525,7 +528,7 @@ async function icsPhase(): Promise<void> {
     events.push({
       uid: `chronicles-${entry.id}@chronicles`,
       summary: payload.summary,
-      description: payload.description,
+      description: includeDetails ? payload.description : undefined,
       location: payload.location,
       startDate: fields.startDate,
       startTime: fields.startTime || '',

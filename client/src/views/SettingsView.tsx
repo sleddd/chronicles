@@ -32,7 +32,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useNavigate } from 'react-router-dom';
-import { usePrivateSettings } from '../services/privateSettings.js';
+import { usePrivateSettings, type PrivateSettingKey } from '../services/privateSettings.js';
 import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, finance as financeApi, doses as dosesApi, ApiError } from '../services/api.js';
 import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
 import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
@@ -227,7 +227,7 @@ export function SettingsView() {
   const setCycleTrackingEnabled = useUIStore(s => s.setCycleTrackingEnabled);
   const handleCycleTrackingToggle = async (enabled: boolean) => {
     setCycleTrackingEnabled(enabled);
-    await settingsApi.upsert('cycleTrackingEnabled', enabled).catch(() => {});
+    await savePrivateSetting('cycleTrackingEnabled', enabled).catch(() => {});
   };
 
   // Password
@@ -364,7 +364,8 @@ export function SettingsView() {
     const updated = { ...features, [key]: value };
     setFeatures(updated);
     setFeatureFlags(updated);
-    await settingsApi.upsert(key, value).catch(() => {});
+    // Encrypted: the switches alone say which health features someone uses
+    await savePrivateSetting(key as PrivateSettingKey, value).catch(() => {});
   };
 
   const handleChangePassword = async () => {

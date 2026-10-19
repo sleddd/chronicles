@@ -76,6 +76,7 @@ export function useInitializeData() {
           setTopicHideText(settingsMap.topicHideText as Record<number, boolean>);
         }
         if (typeof settingsMap.cycleTrackingEnabled === 'boolean') setCycleTrackingEnabled(settingsMap.cycleTrackingEnabled);
+        useUIStore.getState().setIcsIncludeDetails(settingsMap.icsIncludeDetails === true);
         // Entry images are opt-in — defaults false, deliberately NOT in the default-true flag bag
         if (typeof settingsMap.imagesEnabled === 'boolean') setImagesEnabled(settingsMap.imagesEnabled);
         // R2 credentials live in a master-key-encrypted setting; decrypt client-side

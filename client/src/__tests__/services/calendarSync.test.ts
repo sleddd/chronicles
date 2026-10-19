@@ -452,4 +452,23 @@ describe('calendarSync guards', () => {
     await runCalendarSync(deps);
     expect(calendarApi.uploadIcs).toHaveBeenCalledTimes(1);
   });
+
+  it('leaves event descriptions out of the feed unless details are turned on', async () => {
+    (calendarApi.getStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      googleConnected: false, googleEmail: null, icsEnabled: true, icsToken: 'a'.repeat(64),
+    });
+    setupStores([makeEntry(10, { ...eventFields, notes: 'Bring the biopsy results' })], { icsIncludeDetails: false });
+    stubGoogleFetch([]);
+
+    await runCalendarSync(deps);
+    const plain = (calendarApi.uploadIcs as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(plain).not.toContain('DESCRIPTION');
+    expect(plain).not.toContain('biopsy');
+    expect(plain).toContain('LOCATION:Cafe');
+
+    useUIStore.setState({ icsIncludeDetails: true });
+    await runCalendarSync(deps);
+    const detailed = (calendarApi.uploadIcs as ReturnType<typeof vi.fn>).mock.calls[1][0] as string;
+    expect(detailed).toContain('biopsy');
+  });
 });

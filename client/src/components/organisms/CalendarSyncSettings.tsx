@@ -8,6 +8,7 @@ import { Spinner } from '../atoms/Spinner.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi, calendar as calendarApi, ApiError, type CalendarStatus } from '../../services/api.js';
+import { usePrivateSettings } from '../../services/privateSettings.js';
 import {
   runCalendarSync,
   listWritableCalendars,
@@ -59,6 +60,9 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
   const currentYear = String(new Date().getFullYear());
 
   const toggleColor = themeMode === 'dark' ? '#2D2C2A' : '#ecebe7';
+  const icsIncludeDetails = useUIStore(s => s.icsIncludeDetails);
+  const setIcsIncludeDetails = useUIStore(s => s.setIcsIncludeDetails);
+  const { savePrivateSetting } = usePrivateSettings();
 
   const refreshStatus = useCallback(() => {
     calendarApi.getStatus()
@@ -349,6 +353,26 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
                 </div>
                 <div>
                   <ActionButton onClick={handleIcsRegenerate} disabled={icsBusy}>Regenerate URL</ActionButton>
+                </div>
+                {/* Descriptions are off unless turned on — the feed is stored readable */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginTop: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Include event details</div>
+                    <div style={noteStyle}>
+                      Adds each event's description (notes, attendees) to the feed. Like the rest of the feed, it's stored
+                      unencrypted on the Chronicles server. Off: only the title, time and place.
+                    </div>
+                  </div>
+                  <Toggle
+                    checked={icsIncludeDetails}
+                    aria-label="Include event details in the Apple Calendar feed"
+                    activeColor={toggleColor}
+                    onChange={v => {
+                      setIcsIncludeDetails(v);
+                      void savePrivateSetting('icsIncludeDetails', v).catch(() => {});
+                      kickSync();
+                    }}
+                  />
                 </div>
               </div>
             )}

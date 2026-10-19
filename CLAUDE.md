@@ -424,7 +424,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Fields defined by editing a topic in the Topics view (`TopicEditForm`); stored as `topicCustomFields` setting (JSONB, `Record<number, UserFieldDef[]>`)
 - Field definitions loaded into `uiStore.topicCustomFields` on init via `useInitializeData`
 - Field values stored in entries at `metadata._customFields._userFields` (`EntryForm`)
-- **Private settings** (`client/src/services/privateSettings.ts`): `displayName`, `timezone`, `plannerFilters`, `topicCustomFields` and `planningViews` are stored master-key encrypted (`{ ciphertext, iv }`, same shape as `useEncryptedSetting`). Write them only with `savePrivateSetting` from `usePrivateSettings()`; the init paths (`useInitializeData`, `JournalView`) decrypt them with `openPrivateSettings` and re-save any legacy plaintext value sealed (`migratePrivateSettings`)
+- **Private settings** (`client/src/services/privateSettings.ts`): `displayName`, `timezone`, `plannerFilters`, `topicCustomFields`, `planningViews`, **every feature switch** (`KNOWN_FEATURE_FLAGS` + `OPT_IN_FEATURE_FLAGS` — on their own they say which health features someone uses), `cycleTrackingEnabled` and `icsIncludeDetails` are stored master-key encrypted (`{ ciphertext, iv }`, same shape as `useEncryptedSetting`). Write them only with `savePrivateSetting` from `usePrivateSettings()`; the init paths (`useInitializeData`, `JournalView`) decrypt them with `openPrivateSettings` and re-save any legacy plaintext value sealed (`migratePrivateSettings`)
 - When saving with no text content but non-empty field values, a plain-text summary (`Label: value · …`) is auto-generated as entry content — see `summarizeUserFields` in `client/src/utils/stripHtml.ts`
 - `UserFieldDef` and `TopicCustomFields` types are in `client/src/types/userFields.ts`
 
@@ -518,6 +518,7 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 - Security: change password (re-wraps master key, no data re-encryption); TOTP 2FA inline setup wizard
 - Sessions: view and revoke active sessions from any device
 - Features: enable/disable health tracking, planning, entertainment, and more per topic type; opt-in Finance
+- Calendar Sync: under the Apple Calendar feed, **Include event details** (`icsIncludeDetails`, private, off by default) — the feed is stored readable on the server, so without it the feed carries only title, time and place, no descriptions (`icsPhase` in `services/calendarSync.ts`)
 - Theme: header color (40+), **Light / Dark / Auto** — Auto follows the local clock (light 7 AM – 7 PM, dark otherwise; `utils/autoTheme.ts`). The saved `themeMode` setting holds the choice (`'light' | 'dark' | 'auto'`); `uiStore.themePreference` is that choice and `uiStore.themeMode` the theme in effect (everything that styles by theme reads `themeMode`). While Auto is on, `App.tsx` re-checks every minute and when the tab returns
 - Data: Export All (and per-area exports); seed test data in development builds only
 

@@ -6,7 +6,8 @@
 export interface IcsEventInput {
   uid: string;
   summary: string;
-  description: string;
+  /** Left out unless the user turned on event details for the feed */
+  description?: string;
   location: string;
   /** YYYY-MM-DD */
   startDate: string;

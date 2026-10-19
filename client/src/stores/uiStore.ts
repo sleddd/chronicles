@@ -91,10 +91,13 @@ interface UIState {
   googleCalendarId: string;
   googleSyncToken: string;
   calendarImportMode: 'chroniclesOnly' | 'all';
+  /** Apple Calendar feed: include event descriptions (stored readable on the server) — off unless turned on */
+  icsIncludeDetails: boolean;
   setCalendarSyncEnabled: (v: boolean) => void;
   setGoogleCalendarId: (id: string) => void;
   setGoogleSyncToken: (token: string) => void;
   setCalendarImportMode: (mode: 'chroniclesOnly' | 'all') => void;
+  setIcsIncludeDetails: (on: boolean) => void;
 }
 
 export { DEFAULT_ACCENT_COLOR };
@@ -169,8 +172,10 @@ export const useUIStore = create<UIState>((set) => ({
   googleCalendarId: '',
   googleSyncToken: '',
   calendarImportMode: 'chroniclesOnly',
+  icsIncludeDetails: false,
   setCalendarSyncEnabled: (v) => set({ calendarSyncEnabled: v }),
   setGoogleCalendarId: (id) => set({ googleCalendarId: id }),
   setGoogleSyncToken: (token) => set({ googleSyncToken: token }),
   setCalendarImportMode: (mode) => set({ calendarImportMode: mode }),
+  setIcsIncludeDetails: (on) => set({ icsIncludeDetails: on }),
 }));
