@@ -47,6 +47,11 @@ export function HealthPrivacyView() {
         read your encrypted data, and a stolen copy of our database would show only scrambled data, as long as your
         password is strong.
       </p>
+      <p>
+        So the app opens quickly, your browser keeps a copy of your entries between visits, still encrypted, and
+        downloads only what changed. Locking the app leaves that encrypted copy in place; signing out or deleting your
+        account erases it from the browser.
+      </p>
       <p>A few items are stored on our servers without that encryption, because the service needs to read them:</p>
       <ul>
         <li>Your email address and username, so you can sign in.</li>

@@ -4,6 +4,7 @@
  */
 
 import type { CrisisRating, RiskKind } from '@shared/validation/schemas.js';
+import { entryCacheAvailable, readCache, replaceCache, applyToCache, type WireEntry } from './entryCache.js';
 import { recordCipher } from './recordCipher.js';
 import { sealSetting } from './settingCipher.js';
 import { missingDefaultTopics } from '../utils/defaultTopics.js';
@@ -227,28 +228,64 @@ function withoutTopicLink(data: Record<string, unknown>): Record<string, unknown
 }
 
 const ENTRY_PAGE = 5000;
+
+// Every entry, newest first, a page (ENTRY_PAGE) at a time until a short page
+// comes back — one request for almost everyone. Ids seen on an earlier page
+// are skipped: an entry saved meanwhile shifts the pages by one.
+async function allEntryPages(): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = [];
+  const seen = new Set<unknown>();
+  for (let offset = 0; ; offset += ENTRY_PAGE) {
+    const page = await request<Record<string, unknown>[]>(`/entries?limit=${ENTRY_PAGE}${offset ? `&offset=${offset}` : ''}`);
+    if (!Array.isArray(page)) return page;
+    for (const e of page) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      all.push(e);
+    }
+    if (page.length < ENTRY_PAGE) return all;
+  }
+}
+
+type EntryChanges =
+  | { reset: true; scope: string }
+  | { reset: false; scope: string; cursor: string; entries: WireEntry[]; deleted: number[] };
+
+// A full download now and then anyway, so the browser copy can't drift
+const FULL_RELOAD_MS = 7 * 24 * 60 * 60 * 1000;
+
+// The server's order: newest first, then highest id
+function newestFirst(rows: WireEntry[]): WireEntry[] {
+  return rows.sort((a, b) => (Date.parse(String(b.createdAt)) - Date.parse(String(a.createdAt))) || (b.id - a.id));
+}
+
 // Batch creates: the server takes up to 100 entries and a 5 MB body
 const BATCH_ENTRIES = 50;
 const BATCH_BYTES = 3_500_000;
 
 export const entries = {
-  // Every entry, newest first. The server sends at most ENTRY_PAGE a request,
-  // so a journal past that size is read in pages until a short one comes back
-  // (one request for almost everyone). Ids seen on an earlier page are skipped:
-  // an entry saved meanwhile shifts the pages by one.
+  // Every entry, newest first. With a browser cache (IndexedDB), only what
+  // changed since the last visit is downloaded; otherwise the whole journal is.
+  // Server errors (401, 429…) reach the caller as before; a cache that can't
+  // be read or written just means a full download.
   getAll: async (): Promise<Record<string, unknown>[]> => {
-    const all: Record<string, unknown>[] = [];
-    const seen = new Set<unknown>();
-    for (let offset = 0; ; offset += ENTRY_PAGE) {
-      const page = await request<Record<string, unknown>[]>(`/entries?limit=${ENTRY_PAGE}${offset ? `&offset=${offset}` : ''}`);
-      if (!Array.isArray(page)) return page;
-      for (const e of page) {
-        if (seen.has(e.id)) continue;
-        seen.add(e.id);
-        all.push(e);
+    if (!entryCacheAvailable()) return allEntryPages();
+    const { cursor, scope } = await request<{ cursor: string; scope: string }>('/entries/cursor');
+    const cached = await readCache(scope).catch(() => null);
+    if (cached && Date.now() - cached.fullAt < FULL_RELOAD_MS) {
+      const changes = await request<EntryChanges>(`/entries/changes?since=${cached.cursor}`);
+      if (!changes.reset && changes.scope === scope) {
+        const byId = new Map(cached.rows.map(r => [r.id, r]));
+        for (const e of changes.entries) byId.set(e.id, e);
+        for (const id of changes.deleted) byId.delete(id);
+        await applyToCache(scope, changes.cursor, changes.entries, changes.deleted).catch(() => {});
+        return newestFirst([...byId.values()]);
       }
-      if (page.length < ENTRY_PAGE) return all;
     }
+    // The cursor was taken before this load, so nothing written during it is missed
+    const rows = await allEntryPages();
+    await replaceCache(scope, cursor, rows as WireEntry[]).catch(() => {});
+    return rows;
   },
 
   get: (id: number) => request<Record<string, unknown>>(`/entries/${id}`),

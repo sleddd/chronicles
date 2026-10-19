@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { auth as authApi, ApiError } from '../services/api.js';
 import { deriveAuthSecret } from '@chronicles/shared';
+import { clearEntryCache } from '../services/entryCache.js';
 
 interface User {
   email: string;
@@ -118,6 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setEncryptionData(null);
+
+    // The browser's copy of the journal (ciphertext) goes first: its open
+    // connection would otherwise block deleting the database below
+    await clearEntryCache().catch(() => {});
 
     // Clear all persisted site data in parallel
     await Promise.allSettled([

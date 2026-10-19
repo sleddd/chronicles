@@ -612,8 +612,11 @@ const posts = await getAllPosts(req.auth.tenantSchemaName);
 
 ## Important Implementation Notes
 
+### Entry sync (browser cache)
+`entriesApi.getAll()` keeps the journal **as ciphertext** in IndexedDB (`services/entryCache.ts`, database `chronicles-entries`, rows keyed by a per-account `scope` the server derives from the schema) and downloads only what changed: `GET /api/entries/cursor` (`{ cursor, scope }`), then `GET /api/entries/changes?since=` (`{ entries, deleted, cursor }` or `{ reset: true }`). Server side, a trigger (`public.chronicles_post_changed`, per database; `postSyncStatements` per schema, added on first use by `ensurePostSync`) stamps every insert/update with `change_xid` (the transaction id) and writes deletions to `deleted_posts`, so **every write path is tracked automatically — never bypass the trigger** (no `ALTER TABLE … DISABLE TRIGGER`, no `session_replication_role`). The cursor is the snapshot xmin taken before reading, so in-flight writes are re-sent, never skipped. A full download happens on first use, on `reset`, for another scope, and weekly. Lock keeps the cache (nothing decrypted is in it); `logout` (`AuthContext`) erases it with `clearEntryCache()` before deleting the other IndexedDB databases. Without IndexedDB (jsdom tests, some private modes) it's the plain paged download. `loadtest/sync-check.mjs` checks sync against a fresh full load under concurrent writes.
+
 ### Entry Pagination
-`entriesApi.getAll()` pages `?limit=5000&offset=…` (server orders by `created_at DESC, id DESC`, offset uncapped) until a short page comes back, skipping ids repeated across pages — one request for journals under 5,000. Never go back to a single capped request: topic filtering, search, reports and Export All rely on every entry being in the client store, and entries past the cap silently vanished.
+`entriesApi.getAll()` (without the cache, and for full downloads) pages `?limit=5000&offset=…` (server orders by `created_at DESC, id DESC`, offset uncapped) until a short page comes back, skipping ids repeated across pages — one request for journals under 5,000. Never go back to a single capped request: topic filtering, search, reports and Export All rely on every entry being in the client store, and entries past the cap silently vanished.
 
 ### Imports
 Bulk creates go through `POST /api/entries/batch` (up to 100 entries, one transaction, all or none) via `entries.createMany` (50 a request, under ~3.5 MB). One request per entry hit the per-account limit at ~1,430 entries.
@@ -689,7 +692,7 @@ Applied via Express middleware (`server/src/middleware/security.ts`):
 - Master key is a **non-extractable CryptoKey** — cannot be exported to JWK or raw bytes
 - Key lives in React ref (memory only) — lost on page refresh
 - On refresh: user re-enters password to re-derive key — unless they opted into **Remember me**
-- Key is cleared on: logout, inactivity timeout, tab hidden (not when remembered), tab close — and with it every decrypted entry, topic and private setting in the stores (`lockLocal`); unlocking reloads them
+- Key is cleared on: logout, inactivity timeout, tab hidden (not when remembered), tab close — and with it every decrypted entry, topic and private setting in the stores (`lockLocal`); unlocking reloads them. The IndexedDB entry cache holds ciphertext only and survives lock; sign-out erases it
 
 ### Remember me (stay unlocked until the browser closes)
 Opt-in checkbox on sign-in and on the lock screen (`RememberMe` molecule). Off by default; shows a shared-computer warning.
