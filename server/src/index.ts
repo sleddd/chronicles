@@ -30,6 +30,8 @@ import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
 import { checkBackupLockCapacity } from './db/backupCheck.js';
 import { initShards } from './db/shards.js';
+import { initSharedState, sharedState } from './services/sharedState.js';
+import { initRememberGrants } from './services/rememberGrants.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -137,8 +139,11 @@ app.get('{/*path}', (_req, res) => {
 // account query reads it, so nothing may run before it exists
 try {
   await initShards();
+  // Sign-in state and Remember me grants every instance shares
+  await initSharedState();
+  await initRememberGrants();
 } catch (err) {
-  console.error('Database shard setup failed:', err instanceof Error ? err.message : err);
+  console.error('Database setup failed:', err instanceof Error ? err.message : err);
   process.exit(1);
 }
 
@@ -167,6 +172,7 @@ setInterval(() => {
   cleanupSessions().catch(() => {});
   purgeDeadShares().catch(() => {});
   checkBackupLockCapacity().catch(() => {});
+  sharedState.sweep().catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 app.listen(typeof PORT === 'string' ? parseInt(PORT, 10) : PORT, HOST, () => {

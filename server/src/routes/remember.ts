@@ -28,8 +28,8 @@ router.use((req, res, next) => {
 });
 
 // POST /api/auth/remember — start remembering this browser for this session
-router.post('/', (req, res) => {
-  const { grantId, secret, expiresAt } = createGrant(req.auth!.accountId, req.auth!.selector);
+router.post('/', async (req, res) => {
+  const { grantId, secret, expiresAt } = await createGrant(req.auth!.accountId, req.auth!.selector);
   res.cookie(REMEMBER_COOKIE, grantId, COOKIE_OPTIONS);
   logSecurityEvent('remember_enabled', { accountId: req.auth!.accountId, ip: req.ip });
   res.json({ secret: secret.toString('base64'), expiresAt: new Date(expiresAt).toISOString() });
@@ -37,8 +37,8 @@ router.post('/', (req, res) => {
 });
 
 // POST /api/auth/remember/key — the device secret, if this browser session still holds the grant
-router.post('/key', (req, res) => {
-  const grant = readGrant(req.cookies?.[REMEMBER_COOKIE], req.auth!.accountId, req.auth!.selector);
+router.post('/key', async (req, res) => {
+  const grant = await readGrant(req.cookies?.[REMEMBER_COOKIE], req.auth!.accountId, req.auth!.selector);
   if (!grant) {
     clearRememberCookie(res);
     res.status(404).json({ error: 'Not remembered' });
@@ -49,9 +49,9 @@ router.post('/key', (req, res) => {
 });
 
 // DELETE /api/auth/remember — forget this browser (lock, sign-out)
-router.delete('/', (req, res) => {
-  revokeGrant(req.cookies?.[REMEMBER_COOKIE]);
-  revokeGrantsForSession(req.auth!.selector);
+router.delete('/', async (req, res) => {
+  await revokeGrant(req.cookies?.[REMEMBER_COOKIE]);
+  await revokeGrantsForSession(req.auth!.selector);
   clearRememberCookie(res);
   res.json({ success: true });
 });

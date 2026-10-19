@@ -43,7 +43,20 @@ real one, for 10,001 users in all.
 | 6. Imports hit the rate limit | `POST /api/entries/batch` (100 per request, all or none); both importers use it | 3,000-entry import stops at 1,428 with 429 | **All 3,000 in 120 requests, 3 s** |
 | 8. Cold start after deploy | One catalog read before the ALTERs | App-open p99 after restart 1,448 ms | **647 ms** (warm: 456 ms) |
 
-Still open, because each is a design decision rather than a bug fix: findings 4 (schema-per-user), 5's download size (incremental sync would mean keeping ciphertext in the browser between sessions), and 7 (Remember me's secret is deliberately memory-only, so a second instance needs sticky sessions). Since sign-in hashing now uses every core, a bigger single instance is the way to scale for now.
+Follow-up work (same branch), each verified locally:
+
+| Finding | Fix | Verified |
+|---|---|---|
+| 4. Schema-per-user ceiling | User schemas spread over several databases (`db/shards.ts`, runbook `docs/SHARDING.md`); today's database is shard 1 | A second database took new sign-ups; entries, topics, finance, doses, settings, deletion and the scripts all work per shard |
+| 5. Every open downloads the journal | Encrypted IndexedDB copy in the browser + `GET /api/entries/changes` (trigger-tracked) | Real Chromium, 3,000-entry user: first open 7.44 MB / 1.9 s, later opens ~0 MB / 0.2–0.3 s; a stress check (~5,000 concurrent writes) left the synced copy identical to a fresh download |
+| 7. One instance only | Sign-in state and security rate limits in Postgres (`services/sharedState.ts`); Remember me grants sealed with `SECRETS_ENCRYPTION_KEY` | Two instances behind a round-robin proxy: lockouts, per-IP limits, 2FA (split across instances, replay refused) and Remember me all pass; the same check fails 5/8 with the old in-memory state |
+
+## Deploying these changes
+
+1. **Set `SECRETS_ENCRYPTION_KEY`** (32 random bytes, base64: `openssl rand -base64 32`) if it isn't set already. Remember me only works across instances with it.
+2. Deploy. On startup the server adds `accounts.shard_id`, the sync trigger function and the two state tables by itself; it waits for that before listening.
+3. Right after deploying, run **`npm run migrate:entry-sync`** (server, with the same environment) to set up change tracking for every existing account at once (about 11 seconds per 1,000 accounts locally). Skipping it is safe; each account is then set up on its first request, but hundreds at once under load are slow.
+4. Nothing else changes until you add a shard (`docs/SHARDING.md`) or a second instance.
 
 Where it stands now: sign-in bursts no longer freeze the server, and no data is lost from view. Backups are safe as long as you act on the server's warning (or use physical backups). Postgres memory now tracks users *active in the last 30 minutes*, not everyone ever served. At ~50 KB per user per connection over 5 connections, a 1 GB database holds a few thousand users active within any half hour. That supports a much larger registered base. The next real ceiling is schema-per-user itself (finding 4), somewhere around 5,000–10,000 registered users.
 
