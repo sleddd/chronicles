@@ -28,6 +28,7 @@ import { initAppNoticeTable } from './db/appNoticeQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
+import { checkBackupLockCapacity } from './db/backupCheck.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -151,9 +152,12 @@ cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});
 
+checkBackupLockCapacity().catch(err => console.error('Backup lock check failed:', err instanceof Error ? err.message : err));
+
 setInterval(() => {
   cleanupSessions().catch(() => {});
   purgeDeadShares().catch(() => {});
+  checkBackupLockCapacity().catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 app.listen(typeof PORT === 'string' ? parseInt(PORT, 10) : PORT, HOST, () => {
