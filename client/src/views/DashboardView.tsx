@@ -1245,8 +1245,8 @@ export function DashboardView() {
   if (shown('comingUp')) left.push(<ComingUp key="c" financeOn={financeOn} />);
   if (shown('shopping')) right.push(<Shopping key="s" />);
   if (shown('menu') && kitchenOn) right.push(<Menu key="m" />);
-  if (shown('symptom')) right.push(<LogSymptom key="y" />);
   if (shown('meds') && medsOn) right.push(<Medications key="d" doses={doses} />);
+  if (shown('symptom')) right.push(<LogSymptom key="y" />);
 
   return (
     <ContentTemplate>

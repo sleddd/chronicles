@@ -68,7 +68,7 @@ export function QuickEntry() {
       isEditing={false}
       isSaving={isSaving}
       saveStatus={status}
-      placeholder="What’s on your mind? Jot a thought, a task, or a priority…"
+      placeholder="Today, in one line…"
     />
   );
 }

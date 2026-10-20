@@ -914,7 +914,7 @@ export function EntryForm({
       {recipeViewMode && (
         <RecipeEntry
           values={recipeValues}
-          hero={featuredImage ? <EntryHeroBanner image={featuredImage} /> : null}
+          hero={imagesReady && featuredImage ? <EntryHeroBanner image={featuredImage} /> : null}
           onToggleIngredient={toggleRecipeIngredient}
           onEdit={() => setRecipeEditing(true)}
         />

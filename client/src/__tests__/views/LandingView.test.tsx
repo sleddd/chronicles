@@ -23,7 +23,7 @@ describe('LandingView', () => {
 
   it('shows the headline and sign in, and never a seat count', async () => {
     await renderPage();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('A journal for people too busy to journal.');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('A day planner for people too busy to plan.');
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
     expect(screen.queryByText(/seats open|of 30/)).not.toBeInTheDocument();
   });

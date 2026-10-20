@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 
-/* The landing hero's slideshow of the real app (test account), alternating light and dark screens.
+/* The landing hero's slideshow of the real app (test account), in the light theme; a
+   dark shot only ever follows the same view's light one (dashboard, then dashboard in dark).
    Screenshots live in src/assets/landing/<key>.jpg (JPEG on purpose: the PWA
    precaches png/svg, and these shouldn't ride along to every signed-in user).
    A slide whose file is missing is skipped. Sits straight on the teal hero. Advances every 6s; pauses while
@@ -10,18 +11,18 @@ import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 
 export const SLIDES = [
   { key: 'dashboard', name: 'Dashboard', caption: 'Your day at a glance' },
+  { key: 'dashboard-dark', name: 'Dashboard', caption: 'Your day at a glance, in dark mode' },
   { key: 'journal', name: 'Journal', caption: 'Every entry, with fields for each topic' },
-  { key: 'health', name: 'Health', caption: 'Wellness check-ins, nutrition and quick logs' },
-  { key: 'meds', name: 'Medications', caption: 'Check off each dose as you take it' },
+  { key: 'health', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
   { key: 'reports', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
   { key: 'meals', name: 'Meals', caption: 'Daily nutrition against your goals' },
-  { key: 'goals', name: 'Goals', caption: 'Goals on a board, from new to achieved' },
+  { key: 'med-history', name: 'Med history', caption: 'What you took this month and how often' },
   { key: 'tasks', name: 'Tasks', caption: 'Drag tasks from to do to done' },
   { key: 'calendar', name: 'Calendar', caption: 'Events, deadlines and bills due' },
-  { key: 'kitchen', name: 'Kitchen', caption: 'The week’s menu and what to buy' },
-  { key: 'shopping', name: 'Shopping list', caption: 'A list to take to the store' },
+  { key: 'kitchen', name: 'Kitchen', caption: 'The week’s menu, linked to your recipes' },
+  { key: 'shopping', name: 'Shopping list', caption: 'Today’s meals and a list to take to the store' },
   { key: 'finance', name: 'Finance', caption: 'Budget, bills and subscriptions' },
-  { key: 'settings', name: 'Settings', caption: 'Turn views on or off' },
+  { key: 'settings', name: 'Settings', caption: 'Light or dark, and an accent of your own' },
 ] as const;
 
 const FILES = import.meta.glob<string>('../../../assets/landing/*.jpg', { eager: true, query: '?url', import: 'default' });

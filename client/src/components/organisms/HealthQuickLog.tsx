@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
-import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, type SymptomChipConfig } from '../../utils/symptomChips.js';
+import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, addSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { SeveritySection } from '../molecules/fields/SymptomFields.js';
 import styled from 'styled-components';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
@@ -54,6 +54,27 @@ const QNote = styled(FieldNote)`
 /* One date in an outlined box */
 const ChangeDate = styled(QField)`
   && { width: 100%; max-width: 240px; border: 1px solid var(--border-card); border-radius: var(--r-lg, 6px); }
+`;
+
+/* + Add: a dashed chip that becomes a small box to type a symptom of your own */
+const QAddChip = styled(QChip)`
+  border-style: dashed;
+  color: var(--color-accent-soft);
+`;
+
+const QAddBox = styled.input`
+  && {
+    height: 28px;
+    width: 150px;
+    padding: 0 13px;
+    border: 1px dashed var(--color-accent-line) !important;
+    border-radius: 999px;
+    background: transparent !important;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+    outline: none;
+  }
 `;
 
 const QChips = styled(Chips)`
@@ -342,15 +363,18 @@ function ExerciseQuick() {
 
 /* ── Symptom ── */
 
-/** The quick symptom form: the symptom(s) — typed, or tapped from the same
- *  chips as the journal's symptom form — severity and notes, logged as now.
+/** The quick symptom form: the symptom(s) tapped from the same chips as the
+ *  journal's symptom form (no title box — + Add saves a chip of your own and
+ *  picks it), severity and notes, logged as now.
  *  "More details" opens the full form in the journal. Used by the Health
  *  dashboard (QuickSymptom) and the home dashboard's Log a symptom section. */
 export function QuickSymptomForm() {
   const createEntry = useCreateEntry();
   const openNew = useNewEntryInJournal();
-  const [chipConfig] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
+  const [chipConfig, saveChips, chipsLoaded] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
   const chips = symptomChipList(chipConfig);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
   const blank = () => ({ name: '', severity: 5, notes: '' });
   const [v, setV] = useState(blank);
   const [saving, setSaving] = useState(false);
@@ -380,17 +404,39 @@ export function QuickSymptomForm() {
 
   const more = async () => openNew(await getOrCreateTopicId('Symptom', 'flask'), fields());
 
+  /* + Add: save a chip of your own and pick it */
+  const addDraft = () => {
+    const label = draft.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (label) {
+      if (chipsLoaded) void saveChips(addSymptomChip(chipConfig, label)).catch(err => console.warn('Symptom chip not saved:', err));
+      setV(prev => (hasSymptom(prev.name, label) ? prev : { ...prev, name: toggleSymptom(prev.name, label) }));
+    }
+    setDraft('');
+    setAdding(false);
+  };
+
   return (
     <>
-      <QTitle value={v.name} placeholder="What's going on?" aria-label="Symptom"
-        onChange={e => set({ name: e.target.value })}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
-      <Section style={{ marginTop: 20 }}>
-        <QChips role="group" aria-label="Common symptoms">
+      <Section>
+        <QChips role="group" aria-label="Symptoms">
           {chips.map(c => (
             <QChip key={c} type="button" aria-pressed={hasSymptom(v.name, c)} $active={hasSymptom(v.name, c)}
               onClick={() => set({ name: toggleSymptom(v.name, c) })}>{c}</QChip>
           ))}
+          {/* a picked symptom that isn't a chip (e.g. added while the list was loading) */}
+          {v.name && v.name.split(', ').filter(n => !chips.some(c => c.toLowerCase() === n.toLowerCase())).map(n => (
+            <QChip key={`own-${n}`} type="button" aria-pressed $active onClick={() => set({ name: toggleSymptom(v.name, n) })}>{n}</QChip>
+          ))}
+          {adding ? (
+            <QAddBox autoFocus value={draft} maxLength={40} placeholder="New symptom" aria-label="New symptom"
+              onChange={e => setDraft(e.target.value)} onBlur={addDraft}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); addDraft(); }
+                if (e.key === 'Escape') { setDraft(''); setAdding(false); }
+              }} />
+          ) : (
+            <QAddChip type="button" $active={false} onClick={() => setAdding(true)}>+ Add</QAddChip>
+          )}
         </QChips>
       </Section>
       <div style={{ marginTop: 24 }}>

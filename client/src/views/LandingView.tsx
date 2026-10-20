@@ -24,16 +24,19 @@ const STEPS = [
 /** Stagger for revealed items: each later one starts a beat after */
 const delay = (i: number) => ({ '--reveal-delay': `${i * 0.1}s` }) as CSSProperties;
 
+/** The home page's title (also in index.html, for crawlers) */
+export const SEO_TITLE = 'Chronicles — Zero-Knowledge Encrypted Journal & Digital Day Planner';
+
 const FEATURES: { name: string; tag?: string; body: string; shot: string | string[]; alt: string | string[] }[] = [
-  { name: 'Dashboard', body: 'Your day at a glance: weather, priorities, medication doses, the day’s menu, your shopping list and what’s ahead.', shot: 'dashboard', alt: 'The dashboard with a greeting, quick entry, the daily quote and the wellness check-in' },
-  { name: 'Journal', body: 'Search by keyword, topic or date, bookmark what matters, add photos, dictate by voice, or write and draw with Apple Pencil.', shot: 'journal', alt: 'The journal with entries by topic and date and a meal entry open' },
-  { name: 'Topics', body: 'Tasks, goals, meals, medication, recipes, books, quotes, or your own. Add, reorder and give them icons and fields of their own.', shot: 'topics', alt: 'The Topics list with an icon and entry count for each topic' },
-  { name: 'Health', body: 'Nutrition against your goals, a medication schedule with doses to check off, symptoms and allergies, and reports on how water, sleep, food and mood relate. Lists print for appointments.', shot: ['health', 'health-dashboard', 'health-ai'], alt: ['Today’s medications with morning doses checked off', 'The health dashboard with the wellness check-in, quick log and medications', 'The meals log with the day’s calories, iron and vitamins against goals'] },
-  { name: 'Planning', body: 'Goals, milestones and tasks on boards or lists. Tasks roll up into milestones, and milestones into goals.', shot: 'planning', alt: 'The goals board with columns from New to Achieved' },
-  { name: 'Calendar', body: 'Day, week and month views of events, deadlines, goal dates and bills due. Syncs both ways with Google Calendar, with a private feed for Apple Calendar.', shot: 'calendar', alt: 'The month calendar with bills, tasks and events on their days' },
-  { name: 'From the Kitchen', body: 'A weekly menu, recipes with checkable ingredients, and a shopping list you can take with you to the store, made from the week’s menu in one tap.', shot: 'kitchen', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
-  { name: 'Finance', tag: 'Optional, off by default', body: 'A manual budget, bills and subscriptions, savings funds, money goals and reports. Nothing connects to your bank.', shot: 'finance', alt: 'The budget with planned, bills, spending and what’s left by category' },
-  { name: 'AI assistant', tag: 'Optional, your own key', body: 'Estimates calories and nutrients for meals and exercise and helps with the app. Works with your key from Anthropic, OpenAI or Amazon Bedrock.', shot: 'ai', alt: 'The In-App AI chat offering to estimate a meal’s calories and save it' },
+  { name: 'Dashboard', body: 'Your day at a glance: weather, priorities, medication doses, the day’s menu, your shopping list and what’s ahead. Choose what shows with Customize view.', shot: ['dashboard', 'dashboard-2'], alt: ['The dashboard with the greeting and weather, quick entry, the daily quote, the wellness check-in and world clocks', 'Further down the dashboard, today’s priorities, what’s coming up, the shopping list, the day’s menu, a quick symptom log and medications'] },
+  { name: 'Journal', body: 'Write with rich text, photos, voice dictation, or Apple Pencil handwriting and drawing. Search by keyword, topic or date, and bookmark what matters.', shot: 'journal', alt: 'The journal with everyday entries, ideas, books, quotes and films by month, and a Sunday entry open' },
+  { name: 'Topics', body: 'Tasks, goals, meals, medication, recipes, books, quotes, or your own. Add, remove and reorder them, pick their icons, and give each its own fields — so a book entry asks for a title and author, not a paragraph.', shot: 'topics', alt: 'The Topics list with an icon and entry count for each topic' },
+  { name: 'Health, Wellness, & Symptom Tracking', body: 'Track your nutrition against your goals, log your wellness, and manage your medication schedules. Reports surface potential medical correlations and patterns you can confirm or dismiss. Allergy, symptom and medication lists print for appointments.', shot: ['health-dashboard', 'health-meals', 'health-med-history', 'health-reports', 'health-reports-symptoms'], alt: ['The health dashboard with nutrients against goals, the wellness check-in, quick logs, today’s doses, as-needed medications and a quick symptom log', 'The meals log with the day’s calories, iron and vitamins against goals, and the history', 'Medication history showing how often each medication was taken this month, with each dose', 'Health reports with water, mood and sleep over time and insights', 'Symptom reports showing how often and how severe, the most common, and which come together'] },
+  { name: 'Planning', body: 'Goals, milestones and tasks on Kanban boards or lists. Drag a card to change its status or its order. Tasks roll up into milestones, and milestones into goals.', shot: ['planning-tasks', 'planning-todos', 'planning', 'planning-milestones'], alt: ['Tasks by status with priorities, deadlines and the milestone they roll up to', 'Todos as a list, with done ones struck through', 'The goals board with columns from New to Achieved', 'Milestones on their own board, each under its goal'] },
+  { name: 'Calendar', body: 'Day, week and month views of events, deadlines, goal dates and bills due. Syncs both ways with Google Calendar, with a private feed for Apple Calendar.', shot: ['calendar', 'calendar-week', 'calendar-day'], alt: ['The month calendar with bills, tasks and events on their days', 'The week, one row per day', 'A single day with what’s due'] },
+  { name: 'From the Kitchen', body: 'A weekly menu and recipes with checkable ingredients. One tap turns the menu into a shopping list. Check it off from your phone while you shop.', shot: ['kitchen', 'kitchen-recipe', 'kitchen-shopping', 'kitchen-menu'], alt: ['The kitchen dashboard with today’s meals and the shopping list', 'A recipe with its ingredients and method', 'A shopping list by category, with items ticked off', 'The week’s menu, each meal linked to its recipe'] },
+  { name: 'Finance', body: 'Off by default. A manual budget, bills and subscriptions, savings funds, money goals and reports. Nothing connects to your bank.', shot: ['finance', 'finance-bills', 'finance-savings'], alt: ['The budget with planned, bills, spending and what’s left by category', 'Bills and subscriptions with what’s due and overdue', 'Savings funds with their targets and entries'] },
+  { name: 'AI assistant', tag: 'Optional, your own key', body: 'Estimates calories and nutrients for meals and exercise, and helps with the app. Bring your own key from Anthropic, OpenAI or Amazon Bedrock. It never sees your journal.', shot: 'ai', alt: 'The In-App AI chat offering to estimate a meal’s calories and save it' },
 ];
 
 const PRIVACY = [
@@ -435,7 +438,7 @@ export function LandingView() {
   useScrollReveal(revealRef);
 
   useEffect(() => {
-    document.title = 'Chronicles — a journal for people too busy to journal';
+    document.title = SEO_TITLE;
     return () => { document.title = 'Chronicles'; };
   }, []);
 
@@ -447,10 +450,10 @@ export function LandingView() {
       hero={(
         <section aria-labelledby="hero-title">
           <Hero>
-            <H1 id="hero-title">A journal for people <em>too busy to journal.</em></H1>
+            <H1 id="hero-title">A day planner for people <em>too busy to plan.</em></H1>
             <HeroText>
-              Chronicles is a zero-knowledge encrypted journal and digital day planner. Capture the key moments of your day
-              quickly, organize with topics to track health, goals, and more.
+              Zero-knowledge encrypted, and quick enough to actually use. One line to enter, sorted by topic, tracking events,
+              meetings, health, goals, meals and whatever else you choose.
             </HeroText>
             <BigPill as="a" href="#beta">Sign Up for Beta</BigPill>
           </Hero>

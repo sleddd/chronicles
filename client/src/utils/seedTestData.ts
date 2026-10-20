@@ -2,8 +2,8 @@
  * Seed test data for all topic types.
  * Must run in the browser with encryption unlocked.
  */
-import { entries as entriesApi } from '../services/api.js';
-import type { useEntriesStore } from '../stores/entriesStore.js';
+import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '../services/api.js';
+import { useEntriesStore } from '../stores/entriesStore.js';
 
 type EncryptPost = (content: string, metadata: Record<string, unknown>) => Promise<{
   id: number;
@@ -27,11 +27,38 @@ function findTopic(topics: TopicInfo[], name: string): number | null {
   return t ? t.id : null;
 }
 
+/** A topic the defaults don't include (Wellness, Priorities) — created if missing */
+async function ensureTopic(deps: SeedDeps, name: string, icon: string): Promise<void> {
+  if (findTopic(deps.topics, name)) return;
+  const topic = await topicsApi.create({ name, icon });
+  deps.topics.push(topic as TopicInfo);
+  const store = useEntriesStore.getState();
+  store.setTopics([...store.allTopics, topic]);
+}
+
+/** Local YYYY-MM-DD, `offset` days from today */
+function dayFromToday(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "10/19/2026" for a YYYY-MM-DD day */
+const usDate = (day: string) => { const [y, m, d] = day.split('-'); return `${m}/${d}/${y}`; };
+
+/** "1:35 PM" for HH:MM */
+const time12 = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
 async function createEntry(
   deps: SeedDeps,
   content: string,
   topicName: string | null,
   customFields?: Record<string, unknown>,
+  /** Backdate it (YYYY-MM-DD) and/or tag it as a widget's entry */
+  opts: { day?: string; widgetType?: string; html?: string } = {},
 ): Promise<number> {
   const { encryptPost, topics, addDecryptedEntry, onProgress } = deps;
   const topicId = topicName ? findTopic(topics, topicName) : null;
@@ -42,9 +69,11 @@ async function createEntry(
 
   const metadata: Record<string, unknown> = {};
   if (topicId) metadata._taxonomyId = topicId;
+  if (opts.widgetType) metadata._widgetType = opts.widgetType;
   if (customFields && Object.keys(customFields).length > 0) metadata._customFields = customFields;
 
-  const encrypted = await encryptPost(`<p>${content}</p>`, metadata);
+  const html = opts.html ?? `<p>${content}</p>`;
+  const encrypted = await encryptPost(html, metadata);
   const result = await entriesApi.create({
     id: encrypted.id,
     contentEncrypted: encrypted.contentEncrypted,
@@ -53,19 +82,20 @@ async function createEntry(
     metadataIv: encrypted.metadataIv,
     isEncrypted: true,
     taxonomyIds: topicId ? [topicId] : [],
+    ...(opts.day ? { createdAt: new Date(`${opts.day}T12:00:00`).toISOString() } : {}),
   });
 
   const id = result.id as number;
   addDecryptedEntry({
     id,
-    content: `<p>${content}</p>`,
+    content: html,
     metadata,
     isEncrypted: true,
     createdAt: new Date(result.createdAt as string),
     updatedAt: new Date((result.updatedAt || result.createdAt) as string),
   });
 
-  onProgress?.(`Created: ${content.slice(0, 50)}...`);
+  onProgress?.(`Created: ${(content || html.replace(/<[^>]+>/g, " ")).trim().slice(0, 50)}...`);
   return id;
 }
 
@@ -84,60 +114,34 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
   let count = 0;
 
   try {
-    onProgress?.('Creating goals...');
-
-    // Goals
-    const goal1 = await createEntry(deps, 'Learn TypeScript deeply — generics, conditional types, mapped types', 'Goal', {
-      goalType: 'short_term', goalStatus: 'new', targetDate: nextMonth,
-    }); count++;
-    const goal2 = await createEntry(deps, 'Ship Chronicles rebuild — complete Phase 1 with full feature parity', 'Goal', {
-      goalType: 'long_term', goalStatus: 'new', targetDate: nextMonth,
-    }); count++;
-
-    onProgress?.('Creating milestones...');
-
-    // Milestones (linked to goals)
-    const ms1 = await createEntry(deps, 'Complete Phase 1 foundation — auth, entries, topics, search, settings', 'Milestone', {
-      milestoneStatus: 'active', targetDate: nextWeek, isCompleted: false, parentGoalId: goal2,
-    }); count++;
-    const ms2 = await createEntry(deps, 'Set up CI/CD pipeline and deployment', 'Milestone', {
-      milestoneStatus: 'active', targetDate: nextMonth, isCompleted: false, parentGoalId: goal2,
-    }); count++;
-
-    onProgress?.('Creating tasks...');
-
-    // Tasks (linked to milestones)
-    await createEntry(deps, 'Write encryption unit tests for shared/crypto', 'Task', {
-      isInProgress: true, isCompleted: false, isAutoMigrating: true, parentMilestoneId: ms1,
-    }); count++;
-    await createEntry(deps, 'Port TipTap editor component with full toolbar', 'Task', {
-      isInProgress: false, isCompleted: false, isAutoMigrating: true, parentMilestoneId: ms1,
-    }); count++;
-    await createEntry(deps, 'Review PR #42 for auth routes — split token validation', 'Task', {
-      isInProgress: false, isCompleted: true, isAutoMigrating: false, parentMilestoneId: null,
-    }); count++;
+    onProgress?.('Creating goals, milestones, tasks and todos...');
+    count += await seedPlanning(deps);
 
     onProgress?.('Creating medications...');
 
     // ── Medications ──
-    await createEntry(deps, 'Lisinopril — blood pressure management', 'Medication', {
-      dosage: '10mg', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: 'Take in the morning with water. Monitor BP weekly.',
+    const lisinopril = await createEntry(deps, 'Lisinopril', 'Medication', {
+      medicationName: 'Lisinopril', dosage: '10mg', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: 'Take in the morning with water. Monitor BP weekly.',
     }); count++;
-    await createEntry(deps, 'Metformin — blood sugar control', 'Medication', {
-      dosage: '500mg', frequency: 'twice_daily', scheduleTimes: ['08:00', '20:00'], isActive: true, notes: 'Take with meals to reduce GI side effects.',
+    const metformin = await createEntry(deps, 'Metformin', 'Medication', {
+      medicationName: 'Metformin', dosage: '500mg', frequency: 'twice_daily', scheduleTimes: ['08:00', '20:00'], isActive: true, notes: 'Take with meals to reduce GI side effects.',
     }); count++;
-    await createEntry(deps, 'Vitamin D3 — supplement for deficiency', 'Medication', {
-      dosage: '2000 IU', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: 'Take with fatty food for better absorption.',
+    const vitD = await createEntry(deps, 'Vitamin D3', 'Medication', {
+      medicationName: 'Vitamin D3', dosage: '2000 IU', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: 'Take with fatty food for better absorption.',
     }); count++;
-    await createEntry(deps, 'Ibuprofen — for occasional headaches', 'Medication', {
-      dosage: '400mg', frequency: 'as_needed', scheduleTimes: [], isActive: true, notes: 'Max 3 doses per day. Take with food.',
+    const ibuprofen = await createEntry(deps, 'Ibuprofen', 'Medication', {
+      medicationName: 'Ibuprofen', dosage: '400mg', frequency: 'as_needed', scheduleTimes: [], isActive: true, notes: 'Max 3 doses per day. Take with food.',
     }); count++;
-    await createEntry(deps, 'Amoxicillin — sinus infection course', 'Medication', {
-      dosage: '500mg', frequency: 'three_times_daily', scheduleTimes: ['08:00', '14:00', '20:00'], isActive: false, notes: 'Completed 10-day course on March 15.',
+    const amoxicillin = await createEntry(deps, 'Amoxicillin', 'Medication', {
+      medicationName: 'Amoxicillin', dosage: '500mg', frequency: 'three_times_daily', scheduleTimes: ['08:00', '14:00', '20:00'], isActive: false, notes: 'Completed 10-day course on March 15.',
     }); count++;
-    await createEntry(deps, 'Melatonin — sleep aid', 'Medication', {
-      dosage: '3mg', frequency: 'once_daily', scheduleTimes: ['21:30'], isActive: true, notes: 'Take 30 min before bed. Reduce to 1mg after sleep pattern stabilizes.',
+    const melatonin = await createEntry(deps, 'Melatonin', 'Medication', {
+      medicationName: 'Melatonin', dosage: '3mg', frequency: 'once_daily', scheduleTimes: ['21:30'], isActive: true, notes: 'Take 30 min before bed. Reduce to 1mg after sleep pattern stabilizes.',
     }); count++;
+
+    onProgress?.('Logging two weeks of medication doses...');
+    count += await seedDoses({ lisinopril, metformin, vitD, melatonin, ibuprofen });
+    void amoxicillin;
 
     onProgress?.('Creating food entries...');
 
@@ -214,27 +218,46 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
     onProgress?.('Creating symptom entries...');
 
     // ── Symptoms (varied across days) ──
-    await createEntry(deps, 'Mild headache after lunch — possibly dehydration', 'Symptom', {
-      severity: 3, occurredDate: today, occurredTime: '13:30', duration: '45', notes: 'Drank more water, resolved by 2pm',
+    await createEntry(deps, 'Headache', 'Symptom', {
+      symptomName: 'Headache', severity: 3, occurredDate: today, occurredTime: '13:30', duration: '45', notes: 'Drank more water, resolved by 2pm',
     }); count++;
-    await createEntry(deps, 'Lower back stiffness after sitting all morning', 'Symptom', {
-      severity: 4, occurredDate: yesterday, occurredTime: '11:00', duration: '120', notes: 'Improved after yoga session in the evening. Need to get up more frequently.',
+    await createEntry(deps, 'Back pain', 'Symptom', {
+      symptomName: 'Back pain', severity: 4, occurredDate: yesterday, occurredTime: '11:00', duration: '120', notes: 'Improved after yoga session in the evening. Need to get up more frequently.',
     }); count++;
-    await createEntry(deps, 'Sore throat — started in the evening', 'Symptom', {
-      severity: 5, occurredDate: twoDaysAgo, occurredTime: '18:00', duration: '240', notes: 'Gargled with salt water. Drank herbal tea. Gone by morning.',
+    await createEntry(deps, 'Sore throat', 'Symptom', {
+      symptomName: 'Sore throat', severity: 5, occurredDate: twoDaysAgo, occurredTime: '18:00', duration: '240', notes: 'Gargled with salt water. Drank herbal tea. Gone by morning.',
     }); count++;
-    await createEntry(deps, 'Muscle soreness from leg day', 'Symptom', {
-      severity: 6, occurredDate: fourDaysAgo, occurredTime: '09:00', duration: '1440', notes: 'DOMS hit hard. Walking down stairs was an adventure. Foam rolled.',
+    await createEntry(deps, 'Muscle soreness', 'Symptom', {
+      symptomName: 'Muscle soreness', severity: 6, occurredDate: fourDaysAgo, occurredTime: '09:00', duration: '1440', notes: 'DOMS hit hard. Walking down stairs was an adventure. Foam rolled.',
     }); count++;
-    await createEntry(deps, 'Eye strain from prolonged screen time', 'Symptom', {
-      severity: 3, occurredDate: threeDaysAgo, occurredTime: '16:00', duration: '90', notes: 'Used eye drops and took a 20-min break. Need to follow the 20-20-20 rule.',
+    await createEntry(deps, 'Eye strain', 'Symptom', {
+      symptomName: 'Eye strain', severity: 3, occurredDate: threeDaysAgo, occurredTime: '16:00', duration: '90', notes: 'Used eye drops and took a 20-min break. Need to follow the 20-20-20 rule.',
     }); count++;
-    await createEntry(deps, 'Slight nausea after taking Metformin on empty stomach', 'Symptom', {
-      severity: 4, occurredDate: fiveDaysAgo, occurredTime: '08:30', duration: '60', notes: 'Forgot to eat before taking it. Resolved after having toast. Must take with food.',
+    await createEntry(deps, 'Nausea', 'Symptom', {
+      symptomName: 'Nausea', severity: 4, occurredDate: fiveDaysAgo, occurredTime: '08:30', duration: '60', notes: 'Forgot to eat before taking it. Resolved after having toast. Must take with food.',
     }); count++;
-    await createEntry(deps, 'Seasonal allergies — sneezing and itchy eyes', 'Symptom', {
-      severity: 5, occurredDate: sixDaysAgo, occurredTime: '10:00', duration: '360', notes: 'Pollen count was high. Took antihistamine which helped after an hour.',
+    await createEntry(deps, 'Runny nose, Congestion', 'Symptom', {
+      symptomName: 'Runny nose, Congestion', severity: 5, occurredDate: sixDaysAgo, occurredTime: '10:00', duration: '360', notes: 'Pollen count was high. Took antihistamine which helped after an hour.',
     }); count++;
+
+    // Headaches on the days ibuprofen was taken (Reports: what comes before symptoms)
+    for (const [offset, time, sev] of [[-3, '10:30', 6], [-6, '09:15', 5], [-9, '15:00', 7], [-12, '11:00', 4]] as const) {
+      await createEntry(deps, 'Headache', 'Symptom', {
+        symptomName: 'Headache', severity: sev, occurredDate: dayFromToday(offset), occurredTime: time, duration: '90', notes: '',
+      }, { day: dayFromToday(offset) }); count++;
+    }
+    // Stomach ache a couple of hours after the extra ibuprofen
+    for (const offset of [-3, -9]) {
+      await createEntry(deps, 'Stomach ache', 'Symptom', {
+        symptomName: 'Stomach ache', severity: 4, occurredDate: dayFromToday(offset), occurredTime: '16:30', duration: '60', notes: 'After the second ibuprofen',
+      }, { day: dayFromToday(offset) }); count++;
+    }
+
+    onProgress?.('Creating 30 days of wellness check-ins...');
+    count += await seedWellness(deps);
+
+    onProgress?.('Creating priorities...');
+    count += await seedPriorities(deps);
 
     onProgress?.('Creating entertainment entries...');
 
@@ -476,6 +499,9 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
     // Plain entry (no topic)
     await createEntry(deps, 'Just a regular journal entry — today was productive. Got a lot done on the rebuild, the weather was nice, and I cooked a great dinner. Sometimes the ordinary days are the best ones.', null); count++;
 
+    onProgress?.('Creating journal entries...');
+    count += await seedJournal(deps);
+
     onProgress?.('Done! All test data created.');
     return `Success — ${count} test entries created across all topic types.`;
   } catch (err) {
@@ -483,4 +509,216 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
     onProgress?.(`Error: ${msg}`);
     return `Failed: ${msg}`;
   }
+}
+
+/* ── Planning: every status on every board ── */
+
+async function seedPlanning(deps: SeedDeps): Promise<number> {
+  let n = 0;
+  const d = dayFromToday;
+  const goal = async (name: string, goalType: string, goalStatus: string, targetDate: string, notes = '') => {
+    n++;
+    return createEntry(deps, name, 'Goal', { goalObjective: name, goalType, goalStatus, targetDate, notes });
+  };
+  const milestone = async (name: string, parentGoalId: number, milestoneStatus: string, targetDate: string) => {
+    n++;
+    return createEntry(deps, name, 'Milestone', {
+      milestoneObjective: name, milestoneStatus, targetDate, isCompleted: milestoneStatus === 'completed', parentGoalId,
+    });
+  };
+  const task = async (name: string, status: 'todo' | 'in_progress' | 'done', priority: string, deadline: string,
+    parentGoalId: number | null = null, parentMilestoneId: number | null = null, notes = '') => {
+    n++;
+    return createEntry(deps, name, 'Task', {
+      taskDescription: name, isInProgress: status === 'in_progress', isCompleted: status === 'done',
+      isAutoMigrating: status !== 'done', parentGoalId, parentMilestoneId, deadline, priority, notes,
+    });
+  };
+
+  // Goals: New, Planned, In progress, Paused, Achieved
+  const ship = await goal('Ship the Chronicles rebuild', 'long_term', 'in_progress', d(60), 'Phase 1 parity, then the beta.');
+  const ts = await goal('Learn TypeScript deeply', 'short_term', 'planned', d(30), 'Generics, conditional and mapped types.');
+  const run = await goal('Run a half marathon', 'long_term', 'new', d(120));
+  const spanish = await goal('Conversational Spanish', 'long_term', 'paused', d(200), 'Paused while the beta ships.');
+  const home = await goal('Set up the home office', 'short_term', 'completed', d(-10));
+
+  // Milestones: Not started, Planned, In progress, Completed
+  const foundation = await milestone('Phase 1 foundation: auth, entries, topics, search', ship, 'completed', d(-14));
+  const beta = await milestone('Private beta with 30 testers', ship, 'in_progress', d(21));
+  const ci = await milestone('CI/CD pipeline and deploys', ship, 'planned', d(35));
+  const generics = await milestone('Finish the generics chapter', ts, 'in_progress', d(7));
+  const tenK = await milestone('Run 10K without stopping', run, 'not_started', d(45));
+  const desk = await milestone('Desk, chair and lighting', home, 'completed', d(-12));
+
+  // Tasks (linked): To do, In progress, Done — every priority
+  await task('Write encryption unit tests for shared/crypto', 'in_progress', 'high', d(2), ship, foundation);
+  await task('Port the TipTap editor with its full toolbar', 'done', 'medium', d(-15), ship, foundation);
+  await task('Review the auth routes PR', 'done', 'high', d(-16), ship, foundation);
+  await task('Invite the first ten testers', 'in_progress', 'urgent', d(0), ship, beta, 'Send the welcome email with the sign-up link.');
+  await task('Write the beta FAQ', 'todo', 'medium', d(3), ship, beta);
+  await task('Set up the feedback channel', 'todo', 'low', d(5), ship, beta);
+  await task('Fix the iPad keyboard overlap', 'todo', 'urgent', d(-1), ship, beta, 'Overdue: testers hit it on day one.');
+  await task('Add the GitHub Actions workflow', 'todo', 'high', d(10), ship, ci);
+  await task('Staging environment on Render', 'todo', 'medium', d(14), ship, ci);
+  await task('Exercises 1–20 on conditional types', 'in_progress', 'medium', d(4), ts, generics);
+  await task('Read the mapped types chapter', 'done', 'low', d(-3), ts, generics);
+  await task('Buy proper running shoes', 'todo', 'medium', d(6), run, tenK);
+  await task('Three easy 3K runs this week', 'in_progress', 'low', d(5), run, tenK);
+  await task('Assemble the desk', 'done', 'none', d(-12), home, desk);
+  await task('Book a Spanish tutor', 'todo', 'low', d(30), spanish, null);
+
+  // Todos (no goal or milestone)
+  await task('Renew car registration', 'todo', 'urgent', d(-2), null, null, 'Overdue.');
+  await task('Call the dentist to reschedule', 'todo', 'high', d(0));
+  await task('Pick up the dry cleaning', 'todo', 'low', d(1));
+  await task('Pay the electricity bill', 'done', 'high', d(-4));
+  await task('Order a birthday gift for Mum', 'in_progress', 'medium', d(3));
+  await task('Clear out the garage', 'todo', 'none', d(14));
+  await task('Back up the laptop', 'done', 'medium', d(-1));
+  await task('Return the library books', 'in_progress', 'low', d(2));
+  await task('Plan the weekend hike', 'todo', 'medium', '');
+
+  return n;
+}
+
+/* ── Medication doses: the last two weeks ── */
+
+async function seedDoses(ids: { lisinopril: number; metformin: number; vitD: number; melatonin: number; ibuprofen: number }): Promise<number> {
+  let n = 0;
+  const schedule: [number, string][] = [
+    [ids.lisinopril, '08:00'], [ids.metformin, '08:00'], [ids.metformin, '20:00'], [ids.vitD, '08:00'], [ids.melatonin, '21:30'],
+  ];
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  for (let offset = -14; offset <= 0; offset++) {
+    const date = dayFromToday(offset);
+    for (const [med, time] of schedule) {
+      const [h, m] = time.split(':').map(Number);
+      if (offset === 0 && h * 60 + m > nowMin) continue; // later today: still to take
+      // Mostly taken a few minutes late; now and then skipped or forgotten
+      const roll = (offset * 7 + med + h) % 13;
+      if (roll === 0) continue;
+      const status = roll === 5 ? 'skipped' : 'taken';
+      const late = (roll * 3) % 25;
+      const takenAt = time12(`${String(h + Math.floor((m + late) / 60)).padStart(2, '0')}:${String((m + late) % 60).padStart(2, '0')}`);
+      await dosesApi.log({ medicationPostId: med, scheduledTime: time, date, status, takenAt: status === 'taken' ? takenAt : null });
+      n++;
+    }
+  }
+  // As-needed ibuprofen: one on headache days, two on the bad ones
+  for (const [offset, times] of [[-3, ['10:45', '14:20']], [-6, ['09:30']], [-9, ['15:10', '14:15']], [-12, ['11:20']]] as const) {
+    for (const time of times) {
+      await dosesApi.logAsNeeded({ medicationPostId: ids.ibuprofen, date: dayFromToday(offset), time });
+      n++;
+    }
+  }
+  return n;
+}
+
+/* ── Wellness check-ins: about a month, a few days missed ── */
+
+export interface SeedWellness {
+  waterGlasses: number; sleepHours: number; sleepQuality: number; moodScore: number;
+}
+
+/**
+ * Check-ins that behave like real days, so Reports' insights read true:
+ * symptom days are mostly the dehydrated ones (3–4 glasses, else 6–8), exercise days
+ * sleep better, sleep hours follow sleep quality, and mood follows the night
+ * before (good sleep → 4–5, poor → 2), a point lower on a day with symptoms.
+ * `days` oldest first (YYYY-MM-DD); returns the values by day.
+ */
+export function realisticWellness(days: string[], symptomDays: Set<string>, exerciseDays: Set<string>): Map<string, SeedWellness> {
+  const prevDay = (d: string) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() - 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  const n = (d: string) => Number(d.replace(/-/g, '')) % 97; // a steady per-day number
+  const quality = (d: string) => (exerciseDays.has(d) ? 4 + (n(d) % 2) : [2, 3, 4, 2, 3][n(d) % 5]);
+  const HOURS: Record<number, number> = { 1: 4.5, 2: 5.5, 3: 6.5, 4: 7.5, 5: 8 };
+  const out = new Map<string, SeedWellness>();
+  for (const d of days) {
+    const q = quality(d);
+    const before = quality(prevDay(d));
+    let mood = before >= 4 ? 4 + (n(d) % 2) : before === 3 ? 3 : 2;
+    if (symptomDays.has(d)) mood = Math.max(1, mood - 1);
+    out.set(d, {
+      sleepQuality: q, sleepHours: HOURS[q],
+      moodScore: mood,
+      // Mostly dehydrated on symptom days; now and then not (real life is messy)
+      waterGlasses: symptomDays.has(d) ? (n(d) % 4 === 0 ? 6 : 3 + (n(d) % 2)) : 6 + (n(d) % 3),
+    });
+  }
+  return out;
+}
+
+/** The days with symptoms and with exercise, from what's in the store */
+function activityDays(topics: TopicInfo[]): { symptomDays: Set<string>; exerciseDays: Set<string> } {
+  const entries = useEntriesStore.getState().decryptedEntries;
+  const idOf = (name: string) => findTopic(topics, name);
+  const daysFor = (topicId: number | null, field: string) => new Set(entries
+    .filter(e => topicId != null && (e.metadata as Record<string, unknown>)?._taxonomyId === topicId)
+    .map(e => String(((e.metadata as Record<string, unknown>)._customFields as Record<string, unknown> | undefined)?.[field] ?? ''))
+    .filter(Boolean));
+  return { symptomDays: daysFor(idOf('Symptom'), 'occurredDate'), exerciseDays: daysFor(idOf('Exercise'), 'performedDate') };
+}
+
+async function seedWellness(deps: SeedDeps): Promise<number> {
+  await ensureTopic(deps, 'Wellness', 'heart');
+  const { symptomDays, exerciseDays } = activityDays(deps.topics);
+  const days: string[] = [];
+  for (let offset = -30; offset <= -1; offset++) if (![-27, -19, -8].includes(offset)) days.push(dayFromToday(offset)); // a few days forgotten
+  const values = realisticWellness(days, symptomDays, exerciseDays);
+  let n = 0;
+  for (const date of days) {
+    const offset = Math.round((new Date(`${date}T12:00:00`).getTime() - new Date(`${dayFromToday(0)}T12:00:00`).getTime()) / 86400000);
+    const v = values.get(date)!;
+    const periodDay = offset >= -24 && offset <= -20;
+    const flowIntensity = periodDay ? (['spotting', 'medium', 'heavy', 'medium', 'light'] as const)[offset + 24] : '';
+    const text = [`${v.waterGlasses}/8 glasses`, `Mood ${v.moodScore}/5`, `${v.sleepHours}h sleep`].join(' · ');
+    await createEntry(deps, text, 'Wellness', {
+      date, ...v, waterGoal: 8, periodToday: periodDay, flowIntensity,
+    }, { day: date, widgetType: 'wellness-checkin' });
+    n++;
+  }
+  return n;
+}
+
+/* ── Priorities: today's list plus a few past ones ── */
+
+async function seedPriorities(deps: SeedDeps): Promise<number> {
+  await ensureTopic(deps, 'Priorities', 'flag');
+  const lists: [number, [string, boolean][]][] = [
+    [-9, [['Finish the onboarding emails', true], ['Grocery run', true], ['Call Grandma', true]]],
+    [-6, [['Draft the beta FAQ', true], ['30-minute run', false], ['Tidy the inbox', true], ['Book the vet', true]]],
+    [-3, [['Fix the iPad keyboard bug', false], ['Meal prep for the week', true], ['Stretch before bed', true]]],
+    [-1, [['Invite the first testers', true], ['Pay the electricity bill', true], ['Laundry', false]]],
+    [0, [['Invite the next ten testers', false], ['Call the dentist', false], ['Walk at lunch', true], ['Read one chapter', false]]],
+  ];
+  let n = 0;
+  for (const [offset, items] of lists) {
+    const day = dayFromToday(offset);
+    await createEntry(deps, `Priorities: ${usDate(day)}`, 'Priorities', {
+      priorities: items.map(([text, done]) => ({ id: crypto.randomUUID(), text, done })),
+    }, { day });
+    n++;
+  }
+  return n;
+}
+
+/* ── Journal: everyday writing beyond health and finance ── */
+
+/** Entries for the journal itself (topic, rich text); the newest last so it tops the list */
+export const SEED_JOURNAL: { topic: string; html: string }[] = [
+  { topic: 'Research', html: '<p>Reading about sleep and screens. The blue-light story is weaker than I thought, and the bigger effect seems to be staying up later because the phone is interesting.</p><p>Trying a hard stop at 10pm for two weeks and writing down how mornings feel.</p>' },
+  { topic: 'Music', html: '<p>Nils Frahm’s <em>Says</em> has been on repeat all week. Eight minutes that build so slowly you barely notice, then it’s everywhere. Perfect for focused mornings.</p>' },
+  { topic: 'TV/Movies', html: '<p>Watched <em>Past Lives</em> with Ari. Quiet, patient and sad in the best way. We sat in the car outside for ten minutes afterwards without saying anything.</p>' },
+  { topic: 'Quote', html: '<p>“You do not rise to the level of your goals. You fall to the level of your systems.” — James Clear</p>' },
+  { topic: 'Journal', html: '<p>Gratitude, quickly. The bus driver who waited when he saw me running. Fresh sourdough from the market. A clear night and enough stars to count.</p>' },
+  { topic: 'Books', html: '<p>Finished <em>Tomorrow, and Tomorrow, and Tomorrow</em> by Gabrielle Zevin. The middle section in the hospital wrecked me. It’s really a book about friendship that happens to be about games.</p><p>Four stars, and I already want to reread the ending.</p>' },
+  { topic: 'Idea', html: '<p>A tiny <strong>done list</strong> at the end of each day. Three things I actually finished, instead of everything I didn’t. It could sit on the dashboard next to priorities.</p>' },
+  { topic: 'Journal', html: '<p>Rough afternoon. The demo crashed twice in front of the whole team and I could feel my face going red. Afterwards Sam said nobody noticed the second time. They definitely noticed.</p><p>A walk around the block helped, and so did a big glass of water and writing this down. Tomorrow I’ll add a smoke test before every demo.</p>' },
+  { topic: 'Journal', html: '<p>Slow Sunday. Coffee on the porch before anyone else was up, then a long walk along the river with Juno. The maples are finally turning.</p><p>Things I want to remember from this week.</p><ul><li><p>Maya’s laugh when the pancake flipped onto the floor</p></li><li><p>Finishing the beta FAQ a day early</p></li><li><p>Calling Grandma just to talk</p></li></ul><p>Next week, fewer late nights. The phone stays in the kitchen after ten.</p>' },
+];
+
+async function seedJournal(deps: SeedDeps): Promise<number> {
+  await ensureTopic(deps, 'Journal', 'book');
+  for (const { topic, html } of SEED_JOURNAL) await createEntry(deps, '', topic, {}, { html });
+  return SEED_JOURNAL.length;
 }

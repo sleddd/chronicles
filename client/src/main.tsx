@@ -4,6 +4,9 @@ import { registerSW } from 'virtual:pwa-register';
 import { App } from './App.js';
 import { setUpdateAvailable } from './services/appUpdate.js';
 
+// index.html carries the home page's SEO title; everywhere else the tab just says Chronicles
+if (window.location.pathname !== '/') document.title = 'Chronicles';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

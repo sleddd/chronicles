@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import styled from 'styled-components';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { BrandMark } from '../atoms/BrandMark.js';
 
 /* Public legal pages (/health-privacy, /terms): readable without signing in,
@@ -72,7 +72,20 @@ const Foot = styled.nav`
   font-size: 14px;
 `;
 
+/** Public pages point the canonical link at their own address (index.html's is the home page) */
+function useOwnCanonical() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!link) return;
+    const home = link.href;
+    link.href = `https://mydailychronicles.com${pathname}`;
+    return () => { link.href = home; };
+  }, [pathname]);
+}
+
 export function LegalTemplate({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
+  useOwnCanonical();
   return (
     <Page>
       <Column>

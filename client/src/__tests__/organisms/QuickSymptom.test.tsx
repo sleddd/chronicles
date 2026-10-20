@@ -23,8 +23,9 @@ vi.mock('@/services/api', () => ({
   entries: { create: (b: unknown) => create(b) },
   topics: { create: vi.fn() },
 }));
+const saveChips = vi.fn(async () => {});
 vi.mock('@/hooks/useEncryptedSetting', () => ({
-  useEncryptedSetting: () => [{ added: ['Hives'], hidden: ['Cough'] }, vi.fn(), true],
+  useEncryptedSetting: () => [{ added: ['Hives'], hidden: ['Cough'] }, saveChips, true],
 }));
 vi.mock('@/hooks/useOpenInJournal', () => ({ useNewEntryInJournal: () => openNew }));
 vi.mock('@/hooks/useAiReady', () => ({ useAiReady: () => false }));
@@ -43,7 +44,8 @@ describe('QuickSymptom', () => {
     expect(screen.queryByRole('button', { name: 'Cough' })).toBeNull(); // hidden built-in
     fireEvent.click(screen.getByRole('button', { name: 'Flare day' }));
     fireEvent.click(screen.getByRole('button', { name: 'Runny nose' }));
-    expect(screen.getByLabelText('Symptom')).toHaveValue('Flare day, Runny nose');
+    expect(screen.queryByLabelText('Symptom')).toBeNull(); // no title box, just chips
+    expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('radio', { name: 'Severity 7' }));
     fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'After lunch' } });
     fireEvent.click(screen.getByRole('button', { name: 'Log symptom' }));
@@ -55,7 +57,21 @@ describe('QuickSymptom', () => {
     expect(entry.metadata._customFields).toMatchObject({ symptomName: 'Flare day, Runny nose', severity: 7, notes: 'After lunch' });
     expect(entry.metadata._customFields.occurredDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(await screen.findByText('Logged Flare day, Runny nose')).toBeInTheDocument();
-    expect(screen.getByLabelText('Symptom')).toHaveValue(''); // cleared for the next one
+    expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'false'); // cleared for the next one
+  });
+
+  it('+ Add saves a chip of your own and picks it', async () => {
+    saveChips.mockClear();
+    renderWithTheme(<QuickSymptom />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    const box = screen.getByLabelText('New symptom');
+    fireEvent.change(box, { target: { value: 'Ear ache' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(saveChips).toHaveBeenCalledWith({ added: ['Hives', 'Ear ache'], hidden: ['Cough'] });
+    expect(screen.getByRole('button', { name: 'Ear ache' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Log symptom' }));
+    await waitFor(() => expect(addDecryptedEntry).toHaveBeenCalled());
+    expect(addDecryptedEntry.mock.calls[0][0].metadata._customFields.symptomName).toBe('Ear ache');
   });
 
   it('opens the full form in the journal with what is filled in', async () => {

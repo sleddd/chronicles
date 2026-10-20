@@ -28,4 +28,11 @@ describe('RecipeEntry footer', () => {
     expect(print).toHaveBeenCalled();
     vi.useRealTimers();
   });
+
+  it('shows the featured photo only when there is one — no placeholder', () => {
+    const { rerender } = renderWithTheme(<RecipeEntry values={values} onToggleIngredient={() => {}} onEdit={() => {}} />);
+    expect(screen.queryByText(/recipe photo/i)).toBeNull();
+    rerender(<RecipeEntry values={values} hero={<img alt="Tacos" />} onToggleIngredient={() => {}} onEdit={() => {}} />);
+    expect(screen.getByRole('img', { name: 'Tacos' })).toBeInTheDocument();
+  });
 });

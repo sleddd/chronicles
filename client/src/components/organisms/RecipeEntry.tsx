@@ -209,39 +209,13 @@ const HeroSlot = styled.div`
   && > * { margin-top: 0; margin-bottom: 0; }
 `;
 
-/* Hero placeholder — striped block shown when the entry has no featured image */
-const Hero = styled.div`
-  height: 300px;
-  border-radius: var(--r-lg, 2px);
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--bg-sunken),
-    var(--bg-sunken) 18px,
-    var(--bg-hover) 18px,
-    var(--bg-hover) 36px
-  );
-`;
-
-const HeroChip = styled.span`
-  font-family: var(--mono, monospace);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
-  background: var(--bg-surface);
-  padding: 6px 12px;
-  border-radius: var(--r-md, 1px);
-`;
-
 /* Two-column body — stacks on mobile */
+/* 40px under the header's stats strip (or the photo): their 20px + 20px here */
 const Columns = styled.div`
   display: grid;
   grid-template-columns: 1fr 1.9fr;
   gap: 48px;
+  margin-top: 20px;
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     gap: 36px;
@@ -362,7 +336,7 @@ const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Easy', medium: 'Medium
 
 interface RecipeEntryProps {
   values: RecipeFieldValues;
-  /** Rendered hero (e.g. the entry's featured-image banner); placeholder shown when absent */
+  /** The featured-image banner; nothing is shown without one (no image, or images off) */
   hero?: ReactNode;
   onToggleIngredient: (id: string) => void;
   onEdit: () => void;
@@ -455,13 +429,8 @@ export function RecipeEntry({
         )}
       </StatsRow>
 
-      {hero ? (
-        <HeroSlot>{hero}</HeroSlot>
-      ) : (
-        <Hero>
-          <HeroChip>recipe photo</HeroChip>
-        </Hero>
-      )}
+      {/* The featured photo, only when there is one — no placeholder */}
+      {hero && <HeroSlot>{hero}</HeroSlot>}
 
       <Columns>
         {/* Ingredients */}

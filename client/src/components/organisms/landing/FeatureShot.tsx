@@ -14,8 +14,14 @@ const FILES = import.meta.glob<string>('../../../assets/landing/features/*.jpg',
 /* Crop sizes (any unit — only the shape matters), so the page doesn't jump as
    the lazy images load. Update with the files. */
 const SIZES: Record<string, [number, number]> = {
-  dashboard: [1188, 800], journal: [1188, 800], topics: [1188, 800], health: [539, 483], 'health-dashboard': [1250, 1000], 'health-ai': [1400, 964],
-  planning: [1188, 800], calendar: [1188, 800], kitchen: [1188, 720], finance: [1188, 800], ai: [1400, 748],
+  'ai': [1400, 748], 'calendar-day': [1268, 1100], 'calendar-week': [1268, 1100], 'calendar': [1268, 1100],
+  'dashboard-2': [1268, 1300], 'dashboard': [1268, 1300],
+  'finance-bills': [1268, 1440], 'finance-savings': [1268, 1440],
+  'finance': [1268, 1440], 'health-dashboard': [1268, 1300], 'health-meals': [1268, 1300],
+  'health-med-history': [1268, 1300], 'health-reports-symptoms': [1268, 1300], 'health-reports': [1268, 1300],
+  'journal': [1268, 1000], 'kitchen-menu': [1268, 1400], 'kitchen-recipe': [1268, 1400],
+  'kitchen-shopping': [1268, 1400], 'kitchen': [1268, 1400], 'planning-milestones': [1268, 900],
+  'planning-tasks': [1268, 900], 'planning-todos': [1268, 900], 'planning': [1268, 900], 'topics': [1268, 1000],
 };
 
 const Shot = styled.img`
