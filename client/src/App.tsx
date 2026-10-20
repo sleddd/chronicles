@@ -38,6 +38,7 @@ import { MealsLogView } from './views/MealsLogView.js';
 import { KitchenDashboardView } from './views/KitchenDashboardView.js';
 import { DashboardView } from './views/DashboardView.js';
 import { AiChat } from './components/organisms/AiChat.js';
+import { FlashNotice } from './components/organisms/FlashNotice.js';
 import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
@@ -569,6 +570,7 @@ export function App() {
             <ChatGate />
             <NoticeGate />
             <UpdatePrompt />
+            <FlashNotice />
           </BrowserRouter>
         </EncryptionProvider>
       </AuthProvider>

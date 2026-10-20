@@ -52,7 +52,8 @@ export function useTodayDoses(enabled: boolean) {
     try {
       const data = await dosesApi.getByDate(today);
       const map: Record<string, DoseLogRecord> = {};
-      for (const log of data.logs) map[`${log.medicationPostId}-${log.scheduledTime.substring(0, 5)}`] = log;
+      // As-needed doses are their own records, never one of the scheduled doses
+      for (const log of data.logs) if (!log.asNeeded) map[`${log.medicationPostId}-${log.scheduledTime.substring(0, 5)}`] = log;
       setLogs(map);
     } catch (err) {
       console.error('Failed to fetch dose logs:', err);

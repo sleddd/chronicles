@@ -5,6 +5,7 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
+import { AsNeededMeds } from '../components/organisms/AsNeededMeds.js';
 import { QuickLog, QuickSymptom } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
@@ -70,7 +71,7 @@ const Pair = styled.div`
   ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
-/* The left of the pair: Quick log with Log a symptom under it */
+/* A column of the pair: Quick log over Log a symptom, Medications over As needed */
 const Column = styled.div`
   display: flex;
   flex-direction: column;
@@ -186,13 +187,17 @@ export function HealthDashboardView() {
                   <QuickLog meal={food} exercise={exercise} />
                   <QuickSymptom />
                 </Column>
-                <MedicationSchedule isReady={isReady} />
+                <Column>
+                  <MedicationSchedule isReady={isReady} />
+                  <AsNeededMeds />
+                </Column>
               </Pair>
             ) : (
               <>
                 <QuickLog meal={food} exercise={exercise} />
                 <QuickSymptom />
                 {hasMeds && ff.medicationEnabled !== false && <MedicationSchedule isReady={isReady} />}
+                {ff.medicationEnabled !== false && <AsNeededMeds />}
               </>
             )}
           </Stack>

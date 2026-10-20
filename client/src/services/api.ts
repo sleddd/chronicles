@@ -590,9 +590,11 @@ export interface DoseLogRecord {
   date: string;
   status: string;
   createdAt: string;
+  /** Taken as needed (its own record, at the time taken) — never one of the scheduled doses */
+  asNeeded?: boolean;
 }
 interface DoseWire { id: string; date: string; payload: string; iv: string; createdAt: string; updatedAt: string }
-interface DosePayload { medicationPostId: number; scheduledTime: string; status: string; takenAt: string | null }
+interface DosePayload { medicationPostId: number; scheduledTime: string; status: string; takenAt: string | null; asNeeded?: boolean }
 
 const DOSE_KIND = 'dose';
 const DOSES_SEAL_MARKER = 'dosesSealV2';
@@ -668,6 +670,32 @@ export const doses = {
     const { record } = await putDose(id, data.date, payload);
     return { log: { id, date: data.date, createdAt: record.createdAt, ...payload } as DoseLogRecord };
   },
+
+  /**
+   * Log one as-needed dose, taken now (or at `time`, HH:MM). Every take is its
+   * own record — four aspirin in a day are four records — timed to the second
+   * so two taken in the same minute stay two.
+   */
+  logAsNeeded: async (data: { medicationPostId: number; date: string; time?: string }) => {
+    const now = new Date();
+    const secs = String(now.getSeconds()).padStart(2, '0');
+    const hhmm = data.time || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const id = crypto.randomUUID();
+    const payload: DosePayload = {
+      medicationPostId: data.medicationPostId,
+      scheduledTime: `${hhmm}:${secs}`,
+      status: 'taken',
+      takenAt: data.time
+        ? new Date(`2000-01-01T${hhmm}:00`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+        : nowTakenAt(),
+      asNeeded: true,
+    };
+    const { record } = await putDose(id, data.date, payload);
+    return { log: { id, date: data.date, createdAt: record.createdAt, ...payload } as DoseLogRecord };
+  },
+
+  /** Delete one dose record (e.g. an as-needed dose logged by mistake) */
+  remove: (id: string) => request<{ deleted: boolean }>(`/doses/${id}`, { method: 'DELETE' }),
 
   /**
    * Once per account: re-save records sealed before the day was bound (200 at

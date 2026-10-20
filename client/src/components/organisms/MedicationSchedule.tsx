@@ -211,6 +211,7 @@ export function MedicationSchedule({ isReady, title = 'Medications' }: Medicatio
       const data = await dosesApi.getByDate(viewDate);
       const map: Record<string, DoseLogRecord> = {};
       for (const log of data.logs) {
+        if (log.asNeeded) continue; // as-needed doses are their own records, not scheduled ones
         const normalizedTime = log.scheduledTime.substring(0, 5);
         map[`${log.medicationPostId}-${normalizedTime}`] = log;
       }

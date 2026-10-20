@@ -201,6 +201,9 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
             </Chip>
           ))}
         </Chips>
+        {values.frequency === 'as_needed' && (
+          <FieldNote>Log each dose with Take one under As needed on the dashboards. Every dose counts in Med history and Reports.</FieldNote>
+        )}
       </Section>
 
       <Section aria-label="Reminders">

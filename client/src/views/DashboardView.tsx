@@ -1,3 +1,5 @@
+import { AsNeededList } from '../components/organisms/AsNeededMeds.js';
+import { useAsNeededDoses } from '../hooks/useAsNeededDoses.js';
 import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
@@ -714,9 +716,19 @@ function LogSymptom() {
   );
 }
 
+/* "As needed" under the scheduled doses */
+const AsNeededHead = styled.h3`
+  margin: 28px 0 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+`;
+
 function Medications({ doses }: { doses: Doses }) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState<string | null>(null);
+  const asNeeded = useAsNeededDoses();
   return (
     <section aria-label="Medications">
       <SectionHead>
@@ -737,6 +749,12 @@ function Medications({ doses }: { doses: Doses }) {
           </Row>
         );
       })}
+      {asNeeded.meds.length > 0 && (
+        <>
+          <AsNeededHead>As needed</AsNeededHead>
+          <AsNeededList state={asNeeded} />
+        </>
+      )}
     </section>
   );
 }
