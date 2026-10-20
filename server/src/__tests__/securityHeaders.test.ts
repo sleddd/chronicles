@@ -136,3 +136,25 @@ describe('securityHeaders middleware', () => {
     expect(res.setHeader).toHaveBeenCalledTimes(6);
   });
 });
+
+describe('server config helpers', () => {
+  it('CORS: CLIENT_URL when set, the Vite origin only in development, else none (fail closed)', async () => {
+    const { corsOriginFor } = await import('../middleware/security.js');
+    expect(corsOriginFor({ CLIENT_URL: 'https://app.example.com', NODE_ENV: 'production' })).toBe('https://app.example.com');
+    expect(corsOriginFor({ NODE_ENV: 'development' })).toBe('http://localhost:5173');
+    expect(corsOriginFor({ NODE_ENV: 'production' })).toBe(false);
+    expect(corsOriginFor({})).toBe(false);
+  });
+
+  it('trust proxy: one hop everywhere but development unless TRUST_PROXY says otherwise', async () => {
+    const { trustProxySetting } = await import('../middleware/security.js');
+    expect(trustProxySetting({ NODE_ENV: 'production' })).toBe(1);
+    expect(trustProxySetting({ NODE_ENV: 'staging' })).toBe(1);
+    expect(trustProxySetting({})).toBe(1);
+    expect(trustProxySetting({ NODE_ENV: 'development' })).toBeUndefined();
+    expect(trustProxySetting({ NODE_ENV: 'production', TRUST_PROXY: '0' })).toBeUndefined();
+    expect(trustProxySetting({ NODE_ENV: 'production', TRUST_PROXY: 'false' })).toBeUndefined();
+    expect(trustProxySetting({ NODE_ENV: 'development', TRUST_PROXY: '2' })).toBe(2);
+    expect(trustProxySetting({ TRUST_PROXY: 'loopback' })).toBe('loopback');
+  });
+});

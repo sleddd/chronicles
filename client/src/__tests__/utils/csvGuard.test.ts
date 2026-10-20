@@ -16,3 +16,18 @@ describe('CSV formula guard', () => {
     expect(parseCsvRow(values.map(csvCell).join(','))).toEqual(values);
   });
 });
+
+describe('CSV formula guard — evasions', () => {
+  it('guards formulas behind leading whitespace and full-width signs', () => {
+    expect(csvCell('  =1+1')).toBe("'  =1+1");
+    expect(csvCell(' @SUM(A1)')).toBe("' @SUM(A1)");
+    expect(csvCell('\t=1')).toBe("'\t=1");
+    for (const v of ['＝1+1', '＋1', '－2', '＠SUM(A1)', ' ＝1']) expect(csvCell(v)).toBe(`'${v}`);
+    expect(csvCell('a = b')).toBe('a = b');
+  });
+
+  it('round-trips the new cases, and values that already start with an apostrophe', () => {
+    const values = ['  =1+1', '＝1', ' ＠x', "'=already", "''+1", "'plain", "it's"];
+    expect(parseCsvRow(values.map(csvCell).join(','))).toEqual(values);
+  });
+});

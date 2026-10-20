@@ -14,18 +14,20 @@
 import './scriptEnv.js';
 import { BETA_DETAILS } from '@chronicles/shared';
 import { prisma } from './prisma.js';
-import { approve, initBetaTable, listSignups, removeSignup, unapprove, type BetaSignup } from './betaQueries.js';
+import { approve, initBetaTable, listSignups, printable, removeSignup, unapprove, type BetaSignup } from './betaQueries.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-// Applicants type these fields on a public form: a cell starting with a
-// formula character gets a leading ' so a spreadsheet shows it as text
+// Applicants type these fields on a public form, so everything printed goes
+// through printable(), and a cell starting with a formula character gets a
+// leading ' so a spreadsheet shows it as text
 const csvCell = (v: string | null) => {
   if (v == null) return '';
-  const safe = /^[=+\-@\t\r|]/.test(v) ? `'${v}` : v;
+  const clean = printable(v);
+  const safe = /^[=+\-@|]/.test(clean) ? `'${clean}` : clean;
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
@@ -67,12 +69,12 @@ async function main(): Promise<void> {
   const waiting = rows.filter(r => r.status === 'waitlist');
   const invited = rows.filter(r => r.status === 'invited');
   console.log(`Beta seats: ${seats.length} of ${BETA_DETAILS.seats}`);
-  seats.forEach((r, i) => console.log(`  ${i + 1}. ${r.name} <${r.email}> — ${r.trackFirst}, ${r.device}${progress(r)}`));
+  seats.forEach((r, i) => console.log(`  ${i + 1}. ${printable(r.name ?? '')} <${printable(r.email)}> — ${printable(r.trackFirst ?? '')}, ${printable(r.device ?? '')}${progress(r)}`));
   console.log(`\nWaitlist: ${waiting.length}`);
-  waiting.forEach(r => console.log(`  ${r.email}${r.name ? ` (${r.name})` : ''}${progress(r)}`));
+  waiting.forEach(r => console.log(`  ${printable(r.email)}${r.name ? ` (${printable(r.name)})` : ''}${progress(r)}`));
   if (invited.length) {
     console.log(`\nInvited (approved without applying): ${invited.length}`);
-    invited.forEach(r => console.log(`  ${r.email}${progress(r)}`));
+    invited.forEach(r => console.log(`  ${printable(r.email)}${progress(r)}`));
   }
   const pending = rows.filter(r => r.approvedAt && !r.signedUp).length;
   if (pending) console.log(`\n${pending} approved but not signed up yet — send them the /sign-up link.`);

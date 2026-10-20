@@ -9,6 +9,8 @@ import {
   IV_LENGTH,
   PBKDF2_ALGORITHM,
   PBKDF2_HASH,
+  PBKDF2_ITERATIONS,
+  PBKDF2_MAX_ITERATIONS,
   PBKDF2_SALT_LENGTH,
   RECOVERY_KEY_LENGTH,
 } from './constants.js';
@@ -19,6 +21,16 @@ import {
   stringToArrayBuffer,
   arrayBufferToString,
 } from './encoding.js';
+
+/**
+ * A KEK iteration count the server sent: never fewer than the minimum (a
+ * downgrade), never so many that deriving the key freezes the tab.
+ */
+export function checkKekIterations(iterations: number): void {
+  if (!Number.isInteger(iterations) || iterations < PBKDF2_ITERATIONS || iterations > PBKDF2_MAX_ITERATIONS) {
+    throw new Error('Invalid key iterations');
+  }
+}
 
 /**
  * Generate a new AES-256 master key

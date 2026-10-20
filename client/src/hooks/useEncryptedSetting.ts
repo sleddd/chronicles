@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../services/api.js';
-import { openSettingsMap, sealSetting } from '../services/privateSettings.js';
+import { openSettingsMap, sealSetting, isSealed } from '../services/privateSettings.js';
 
 /**
  * A JSON setting encrypted with the master key (the server stores ciphertext
@@ -31,8 +31,10 @@ export function useEncryptedSetting<T>(key: string, fallback: T): [T, (next: T) 
         // seal marker decides whether a pre-v2 value may still be opened)
         const map: Record<string, unknown> = {};
         for (const row of await settingsApi.getAll()) map[row.key] = row.value;
+        // Only ever a sealed value: plaintext from the server is never taken
+        const wasSealed = isSealed(map[key]);
         await openSettingsMap(map, decryptBytes);
-        if (map[key] !== undefined && map[key] !== null && !cancelled) setValue(map[key] as T);
+        if (wasSealed && map[key] !== undefined && map[key] !== null && !cancelled) setValue(map[key] as T);
       } catch (err) {
         console.warn(`Setting "${key}" could not be loaded:`, err);
         if (!cancelled) setValue(fallbackRef.current);

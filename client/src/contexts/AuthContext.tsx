@@ -2,6 +2,11 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { auth as authApi, ApiError } from '../services/api.js';
 import { deriveAuthSecret } from '@chronicles/shared';
 import { clearEntryCache } from '../services/entryCache.js';
+import { setEgressAccount, EGRESS_STORE } from '../services/deviceConsent.js';
+import { SEEN_MARKERS_STORE } from '../services/sealedFormats.js';
+
+/** Kept through sign-out: they hold no data, and dropping them would weaken what they guard. */
+const KEPT_ON_SIGN_OUT = [EGRESS_STORE, SEEN_MARKERS_STORE];
 
 interface User {
   email: string;
@@ -54,6 +59,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  // The off-device switches are recorded per account in this browser, under a
+  // hash of the email (deviceConsent.ts)
+  useEffect(() => {
+    const email = user?.email?.trim().toLowerCase();
+    if (!email) { setEgressAccount(null); return; }
+    let live = true;
+    void crypto.subtle.digest('SHA-256', new TextEncoder().encode(email)).then(d => {
+      if (live) setEgressAccount(Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, '0')).join(''));
+    });
+    return () => { live = false; };
+  }, [user?.email]);
   const [encryptionData, setEncryptionData] = useState<EncryptionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pending2FA, setPending2FA] = useState<Pending2FA | null>(null);
@@ -127,7 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear all persisted site data in parallel
     await Promise.allSettled([
       // Web Storage
-      (async () => { localStorage.clear(); sessionStorage.clear(); })(),
+      (async () => {
+        const kept = KEPT_ON_SIGN_OUT.map(k => [k, localStorage.getItem(k)] as const);
+        localStorage.clear();
+        sessionStorage.clear();
+        for (const [k, v] of kept) if (v !== null) localStorage.setItem(k, v);
+      })(),
 
       // Cache Storage (PWA / service worker caches)
       (async () => {

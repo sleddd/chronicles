@@ -533,7 +533,7 @@ export function LandingView() {
         <Container>
           <div data-reveal>
           <Eyebrow>Private beta</Eyebrow>
-          <CenterTitle id="beta-title">Sign up to try</CenterTitle>
+          <CenterTitle id="beta-title">Sign Up</CenterTitle>
           <CenterLede>Chronicles is in active design and development. Beta seats are limited so we can give every tester’s feedback the attention it needs.</CenterLede>
           </div>
           <div data-reveal style={delay(1.5)}><BetaSignup /></div>

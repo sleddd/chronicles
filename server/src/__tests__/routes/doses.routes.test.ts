@@ -8,10 +8,13 @@ vi.mock('../../db/tenantQueries.js', () => ({
   upsertDoseRecord: vi.fn(),
   deleteDoseRecord: vi.fn(),
   resealDoseRecords: vi.fn(),
+  doseRecordStorage: vi.fn().mockResolvedValue({ count: 0, bytes: 0 }),
+  withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 import dosesRouter from '../../routes/doses.js';
-import { getDoseRecords, upsertDoseRecord, deleteDoseRecord, resealDoseRecords } from '../../db/tenantQueries.js';
+import { getDoseRecords, upsertDoseRecord, deleteDoseRecord, resealDoseRecords, doseRecordStorage, withTenantLock } from '../../db/tenantQueries.js';
+import { DOSE_RECORD_LIMIT, DOSE_STORAGE_LIMIT_BYTES } from '../../routes/doses.js';
 
 const app = createTestApp('/api/doses', dosesRouter);
 const ID = '0b6c6f1e-2f4a-4c1e-9a52-3f1d2b7c8e90';
@@ -83,6 +86,41 @@ describe('Dose routes (encrypted records)', () => {
     const ok = await request(app).put('/api/doses/reseal').send({ records: [rec(A), rec(B)] });
     expect(ok.body).toEqual({ resealed: 2 });
     expect((await request(app).put('/api/doses/reseal').send({ records: [rec(A), rec(A)] })).status).toBe(400);
+  });
+
+  it('refuses dates that look right but are not real days (400, not a failed ::date cast)', async () => {
+    for (const d of ['2026-13-45', '2026-02-30', '2025-02-29', '0000-01-01']) {
+      expect((await request(app).get(`/api/doses?date=${d}`)).status).toBe(400);
+      expect((await request(app).put(`/api/doses/${ID}`).send({ format: 2, date: d, payload: 'c2VhbGVk', iv: 'aXY=' })).status).toBe(400);
+    }
+    const rec = { id: '11111111-1111-4111-8111-111111111111', date: '2026-13-45', payload: 'cA==', iv: 'aQ==' };
+    expect((await request(app).put('/api/doses/reseal').send({ records: [rec] })).status).toBe(400);
+    expect(getDoseRecords).not.toHaveBeenCalled();
+    expect(upsertDoseRecord).not.toHaveBeenCalled();
+    (getDoseRecords as any).mockResolvedValue([]);
+    expect((await request(app).get('/api/doses?date=2024-02-29')).status).toBe(200);
+  });
+
+  it('caps an account\'s dose records by count and bytes, checked under the account lock', async () => {
+    const put = () => request(app).put(`/api/doses/${ID}`).send({ format: 2, date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
+    (doseRecordStorage as any).mockResolvedValueOnce({ count: DOSE_RECORD_LIMIT, bytes: 0 });
+    expect((await put()).status).toBe(413);
+    (doseRecordStorage as any).mockResolvedValueOnce({ count: 0, bytes: DOSE_STORAGE_LIMIT_BYTES - 2 });
+    expect((await put()).status).toBe(413);
+    expect(upsertDoseRecord).not.toHaveBeenCalled();
+    // The record being replaced isn't counted against itself
+    (upsertDoseRecord as any).mockResolvedValue(row);
+    expect((await put()).status).toBe(200);
+    expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
+    expect(doseRecordStorage).toHaveBeenLastCalledWith(TEST_AUTH.tenantSchemaName, [ID], 'TX');
+    expect((upsertDoseRecord as any).mock.calls[0][5]).toBe('TX');
+  });
+
+  it('refuses a re-seal that would overfill dose storage', async () => {
+    (doseRecordStorage as any).mockResolvedValueOnce({ count: 1, bytes: DOSE_STORAGE_LIMIT_BYTES });
+    const rec = { id: '11111111-1111-4111-8111-111111111111', date: '2025-06-15', payload: 'cA==', iv: 'aQ==' };
+    expect((await request(app).put('/api/doses/reseal').send({ records: [rec] })).status).toBe(413);
+    expect(resealDoseRecords).not.toHaveBeenCalled();
   });
 
   it('no longer serves the old plaintext log', async () => {

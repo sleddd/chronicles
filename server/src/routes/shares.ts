@@ -1,10 +1,17 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { apiLimiter, shareLimiter } from '../middleware/rateLimiter.js';
-import { createShare, getShareByToken, revokeShare, getSharesByAccount, type Share } from '../db/shareQueries.js';
+import { createShareWithinLimit, getShareByToken, revokeShare, getSharesByAccount, type Share } from '../db/shareQueries.js';
+import { postExists } from '../db/tenantQueries.js';
 import { createShareSchema } from '@chronicles/shared';
 
 const router = Router();
+
+/** Live share links per account — each holds plaintext, so they're capped */
+export const SHARE_LIMIT = (() => {
+  const n = Number(process.env.SHARE_LIMIT);
+  return Number.isInteger(n) && n > 0 ? n : 200;
+})();
 
 // Public payload — never expose accountId or internal id to viewers
 function publicShare(share: Share) {
@@ -54,12 +61,22 @@ router.post('/', authMiddleware, apiLimiter, async (req, res) => {
 
     const { content, entryId, expiresAt } = parsed.data;
 
-    const share = await createShare({
+    // Only from an entry of the caller's own journal (deleting it deletes its links)
+    if (!(await postExists(req.auth!.tenantSchemaName, entryId))) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
+
+    const share = await createShareWithinLimit({
       accountId: req.auth!.accountId,
       entryId,
       content,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
-    });
+    }, SHARE_LIMIT);
+    if (!share) {
+      res.status(413).json({ error: `You have ${SHARE_LIMIT} active share links — revoke some to make a new one` });
+      return;
+    }
 
     res.status(201).json(ownedShare(share));
   } catch (err) {

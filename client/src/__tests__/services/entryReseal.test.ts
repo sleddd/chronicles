@@ -9,8 +9,9 @@ vi.mock('../../services/api.js', () => ({
 }));
 
 import {
-  reserveEntryId, clearReservedEntryIds, resealOlderEntries, olderEntriesAllowed, setOlderEntriesAllowed, ENTRIES_SEAL_MARKER,
+  reserveEntryId, clearReservedEntryIds, resealOlderEntries, olderEntriesAllowed, setOlderEntriesFromMarker, ENTRIES_SEAL_MARKER,
 } from '../../services/entryReseal.js';
+import { useEntriesStore } from '../../stores/entriesStore.js';
 import type { DecryptedPost } from '@shared/crypto/types.js';
 
 const encryptPost = vi.fn(async (id: number) => ({ contentEncrypted: `c${id}`, contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' }));
@@ -24,7 +25,8 @@ const entry = (id: number, older = true): DecryptedPost => ({
 beforeEach(() => {
   vi.clearAllMocks();
   clearReservedEntryIds();
-  setOlderEntriesAllowed(true);
+  localStorage.clear();
+  setOlderEntriesFromMarker(false);
 });
 
 describe('reserving ids for new entries', () => {
@@ -47,6 +49,16 @@ describe('reserving ids for new entries', () => {
     const [a, b] = await Promise.all([reserveEntryId(), reserveEntryId()]);
     expect([a, b].sort()).toEqual([1, 2]);
     expect(reserveIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an id an entry already has, or one the server handed out before', async () => {
+    useEntriesStore.getState().setRawEntries([entry(9) as never]);
+    reserveIds.mockResolvedValueOnce({ ids: [9, 10] });
+    await expect(reserveEntryId()).rejects.toThrow('already in use');
+    reserveIds.mockResolvedValueOnce({ ids: [11] }).mockResolvedValueOnce({ ids: [11] });
+    expect(await reserveEntryId()).toBe(11);
+    await expect(reserveEntryId()).rejects.toThrow('already in use');
+    useEntriesStore.getState().setRawEntries([]);
   });
 });
 

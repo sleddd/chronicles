@@ -1,18 +1,21 @@
 /* Minimal CSV reading/writing for Settings → Data → Export / Import Entries. */
 
 // Spreadsheets run a cell starting with one of these as a formula (CSV
-// injection). Exported cells get a leading apostrophe; import takes it off.
-const FORMULA_START = /^[=+\-@\t\r]/;
+// injection) — some after leading spaces, and some take the full-width forms
+// too. Exported cells get a leading apostrophe; import takes it off.
+const FORMULA_START = /^(?:[\t\r]|\s*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20])/;
 
 /** One CSV cell: formula-guarded, quoted when it holds a quote, comma or line break. */
 export function csvCell(val: string): string {
-  const guarded = FORMULA_START.test(val) ? `'${val}` : val;
+  // A value already starting ' + formula is guarded too, so import's unguard
+  // gives back exactly what was written
+  const guarded = FORMULA_START.test(val.replace(/^'+/, '')) ? `'${val}` : val;
   return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 /** Undo `csvCell`'s formula guard on a parsed field. */
 export function unguardCsvCell(val: string): string {
-  return val.startsWith("'") && FORMULA_START.test(val.slice(1)) ? val.slice(1) : val;
+  return val.startsWith("'") && FORMULA_START.test(val.slice(1).replace(/^'+/, '')) ? val.slice(1) : val;
 }
 
 /** Split one CSV record into fields (quotes, "" escapes and commas in quotes). */

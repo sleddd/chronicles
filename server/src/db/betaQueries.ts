@@ -100,6 +100,14 @@ export async function applyForBeta(a: { email: string; name: string; trackFirst:
   });
 }
 
+// Control characters (escape sequences that could rewrite the operator's
+// terminal, C1 controls) and bidi overrides (which reorder what's shown)
+// eslint-disable-next-line no-control-regex
+const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
+
+/** Applicant-typed text made safe to print in a terminal (npm run beta). */
+export const printable = (v: string): string => v.replace(UNSAFE_CHARS, '');
+
 export interface BetaSignup {
   email: string; status: BetaStatus; name: string | null; trackFirst: string | null; device: string | null;
   appliedAt: Date | null; createdAt: Date; approvedAt: Date | null; signedUp: boolean;

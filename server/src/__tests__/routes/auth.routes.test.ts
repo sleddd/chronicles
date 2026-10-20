@@ -216,6 +216,28 @@ describe('Auth Routes', () => {
         expect(isApproved).toHaveBeenCalledWith('test@example.com');
       });
 
+      it('answers a taken username the same whether or not the email is approved', async () => {
+        (prisma.account.findUnique as any).mockResolvedValue({ id: 99, username: 'testuser' });
+        (isApproved as any).mockResolvedValue(false);
+        const unapproved = await request(app).post('/api/auth/register').send(validRegisterBody);
+        (isApproved as any).mockResolvedValue(true);
+        const approved = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(unapproved.status).toBe(409);
+        expect(approved.status).toBe(409);
+        expect(unapproved.body).toEqual(approved.body);
+        expect(registerTenant).not.toHaveBeenCalled();
+      });
+
+      it('says "restricted" to an unapproved email even when it already has an account', async () => {
+        (prisma.account.findUnique as any)
+          .mockResolvedValueOnce(null) // username free
+          .mockResolvedValueOnce({ id: 99, email: 'test@example.com' });
+        (isApproved as any).mockResolvedValue(false);
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(403);
+        expect(bcrypt.hash).toHaveBeenCalled(); // pays for a hash like a sign-up
+      });
+
       it('still lets in an email on the list', async () => {
         process.env.REGISTRATION_WHITELIST = 'Test@Example.com, owner@example.com';
         ok();
@@ -248,7 +270,9 @@ describe('Auth Routes', () => {
     });
 
     it('returns 409 when the email already exists', async () => {
-      (prisma.account.findUnique as any).mockResolvedValueOnce({ id: 99, email: 'test@example.com' });
+      (prisma.account.findUnique as any)
+        .mockResolvedValueOnce(null) // username free
+        .mockResolvedValueOnce({ id: 99, email: 'test@example.com' });
 
       const res = await request(app)
         .post('/api/auth/register')
@@ -260,9 +284,7 @@ describe('Auth Routes', () => {
     });
 
     it('returns 409 when the username is taken', async () => {
-      (prisma.account.findUnique as any)
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 99, username: 'testuser' });
+      (prisma.account.findUnique as any).mockResolvedValueOnce({ id: 99, username: 'testuser' });
 
       const res = await request(app)
         .post('/api/auth/register')
@@ -372,7 +394,9 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(401);
       expect(res.body).toEqual({ error: 'Invalid credentials' });
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+      // A dummy compare (same timing), never against the old hash
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+      expect((bcrypt.compare as any).mock.calls[0][1]).not.toBe(LEGACY_HASH);
       expect(createSession).not.toHaveBeenCalled();
     });
 
@@ -500,7 +524,7 @@ describe('Auth Routes', () => {
 
     it('changes the email — and the email-salted secret — when the current secret is correct', async () => {
       (prisma.account.findUnique as any)
-        .mockResolvedValueOnce({ passwordHash: AUTH_HASH }) // secret check
+        .mockResolvedValueOnce({ id: 1, passwordHash: AUTH_HASH }) // secret check
         .mockResolvedValueOnce(null); // email not taken
       (bcrypt.compare as any).mockResolvedValueOnce(true);
 
@@ -513,6 +537,22 @@ describe('Auth Routes', () => {
         where: { id: 1 },
         data: { email: 'new@example.com', passwordHash: 'auth1$$2a$12$hashedpassword' },
       });
+      // Every other session is signed out (grants with them); this one stays
+      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(1, 'aabbccddee11', 'email_change');
+      // and this browser stays a known device under the new email
+      expect((res.headers['set-cookie'] as unknown as string[]).some(c => /chronicle_device=/.test(c))).toBe(true);
+    });
+
+    it('allows 5 tries an hour per account, wrong passwords included, before answering 429', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ id: 1, passwordHash: AUTH_HASH });
+      (bcrypt.compare as any).mockResolvedValue(false);
+      for (let i = 0; i < 5; i++) {
+        expect((await request(app).post('/api/auth/change-email').send(body)).status).toBe(401);
+      }
+      (bcrypt.compare as any).mockResolvedValue(true);
+      const res = await request(app).post('/api/auth/change-email').send(body);
+      expect(res.status).toBe(429);
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
     it('refuses a pre-upgrade password hash', async () => {
@@ -521,7 +561,7 @@ describe('Auth Routes', () => {
       const res = await request(app).post('/api/auth/change-email').send(body);
 
       expect(res.status).toBe(401);
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect((bcrypt.compare as any).mock.calls[0][1]).not.toBe(LEGACY_HASH);
       expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
@@ -544,7 +584,7 @@ describe('Auth Routes', () => {
 
     it('returns 409 when the email belongs to another account', async () => {
       (prisma.account.findUnique as any)
-        .mockResolvedValueOnce({ passwordHash: AUTH_HASH })
+        .mockResolvedValueOnce({ id: 1, passwordHash: AUTH_HASH })
         .mockResolvedValueOnce({ id: 99 });
       (bcrypt.compare as any).mockResolvedValueOnce(true);
 
@@ -552,6 +592,7 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(409);
       expect(prisma.account.update).not.toHaveBeenCalled();
+      expect(authMw.revokeAllSessions).not.toHaveBeenCalled();
     });
   });
 

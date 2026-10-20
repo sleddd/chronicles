@@ -7,6 +7,7 @@ import type { CrisisRating, RiskKind } from '@shared/validation/schemas.js';
 import { entryCacheAvailable, readCache, replaceCache, applyToCache, type WireEntry } from './entryCache.js';
 import { recordCipher } from './recordCipher.js';
 import { sealSetting } from './settingCipher.js';
+import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
 import { missingDefaultTopics } from '../utils/defaultTopics.js';
 
 const BASE_URL = '/api';
@@ -350,7 +351,8 @@ export const entries = {
 // Seal markers — sealed settings recording that an account has moved a kind of
 // record to its bound format (topics, doses). Until the marker exists the
 // older form still opens (and is re-saved); after, it's refused, so an old
-// ciphertext the server kept can't be replayed. Checked once per unlock.
+// ciphertext the server kept can't be replayed. Checked once per unlock; a
+// marker the server leaves out is backed by sealedFormats.ts.
 // =============================================================================
 
 const sealMarkers = new Map<string, Promise<boolean>>();
@@ -358,7 +360,7 @@ const sealMarkers = new Map<string, Promise<boolean>>();
 function sealMarkerPresent(key: string): Promise<boolean> {
   let p = sealMarkers.get(key);
   if (!p) {
-    p = settings.getAll().then(rows => rows.some(r => r.key === key && r.value !== null && r.value !== undefined));
+    p = settings.getAll().then(rows => sealMarkerHeld(key, rows.some(r => r.key === key && r.value !== null && r.value !== undefined)));
     p.catch(() => sealMarkers.delete(key));
     sealMarkers.set(key, p);
   }
@@ -367,6 +369,7 @@ function sealMarkerPresent(key: string): Promise<boolean> {
 
 async function writeSealMarker(key: string): Promise<void> {
   await settings.upsert(key, await sealSetting(key, true, recordCipher().encryptBytes));
+  noteSealMarker(key);
   sealMarkers.set(key, Promise.resolve(true));
 }
 

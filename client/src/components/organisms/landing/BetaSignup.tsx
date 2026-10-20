@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
 
-/* The landing page's "Sign up to try" form in a white card. An
+/* The landing page's "Sign Up" form in a white card. An
    application takes a beta seat while one is open (the server decides, in
    arrival order) and otherwise goes on the waitlist automatically. Everyone
    sees the same thank-you, so the page never shows whether seats are left. A hidden honeypot field catches bots. */

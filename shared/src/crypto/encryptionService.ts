@@ -12,6 +12,7 @@ import {
   generateSalt,
   generateIv,
   deriveKEK,
+  checkKekIterations,
   importRawKey,
   wrapKey,
   unwrapKey,
@@ -84,6 +85,7 @@ class EncryptionService {
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
 
+    checkKekIterations(iterations);
     const kek = await deriveKEK(password, salt, iterations);
     return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
   }
@@ -106,6 +108,7 @@ class EncryptionService {
     const salt = base64ToUint8Array(saltBase64);
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
+    checkKekIterations(iterations);
     const kek = await deriveKEK(password, salt, iterations);
     const masterKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
     const extractable = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
@@ -198,6 +201,7 @@ class EncryptionService {
     const salt = base64ToUint8Array(kekSaltBase64);
     const wrappedMK = base64ToUint8Array(encryptedMKBase64);
     const wrapIv = base64ToUint8Array(kekWrapIvBase64);
+    checkKekIterations(kekIterations);
     const kek = await deriveKEK(currentPassword, salt, kekIterations);
     const extractableKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
     return this.generateNewRecoveryWrapping(extractableKey);
@@ -220,6 +224,7 @@ class EncryptionService {
     const salt = base64ToUint8Array(kekSaltBase64);
     const wrappedMK = base64ToUint8Array(encryptedMKBase64);
     const wrapIv = base64ToUint8Array(kekWrapIvBase64);
+    checkKekIterations(kekIterations);
     const kek = await deriveKEK(currentPassword, salt, kekIterations);
     const extractableKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
 

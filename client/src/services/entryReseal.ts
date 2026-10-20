@@ -1,6 +1,8 @@
 import type { DecryptedPost, EncryptedPostData } from '@shared/crypto/types.js';
 import { entries as entriesApi, settings as settingsApi } from './api.js';
 import { sealSetting, type EncryptBytes } from './settingCipher.js';
+import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
+import { useEntriesStore } from '../stores/entriesStore.js';
 
 /*
  * Entries are encrypted bound to their id (v3 AAD,
@@ -21,21 +23,35 @@ export function olderEntriesAllowed(): boolean {
   return allowOlder;
 }
 
-/** Set at startup from whether the marker exists. */
-export function setOlderEntriesAllowed(on: boolean): void {
-  allowOlder = on;
+/** Set at startup from whether the server has the marker (backed by sealedFormats.ts). */
+export function setOlderEntriesFromMarker(markerOnServer: boolean): void {
+  allowOlder = !sealMarkerHeld(ENTRIES_SEAL_MARKER, markerOnServer);
 }
 
 // New entries need their id before they're encrypted. Ids are reserved a few
-// at a time so a bulk import doesn't cost two requests per entry.
+// at a time so a bulk import doesn't cost two requests per entry. The server
+// hands them out, so an id it gave before, or one an entry already has, is
+// refused: a new entry sealed under an existing id would be valid for it.
 const RESERVE_BATCH = 20;
 let reserved: number[] = [];
+let issued = new Set<number>();
 let pending: Promise<void> | null = null;
+
+function usable(id: unknown): id is number {
+  if (!Number.isSafeInteger(id) || (id as number) <= 0 || issued.has(id as number)) return false;
+  const { rawEntries, decryptedEntries } = useEntriesStore.getState();
+  return !rawEntries.some(e => e.id === id) && !decryptedEntries.some(e => e.id === id);
+}
 
 export async function reserveEntryId(): Promise<number> {
   while (reserved.length === 0) {
     pending ??= entriesApi.reserveIds(RESERVE_BATCH)
-      .then(r => { reserved.push(...r.ids); })
+      .then(r => {
+        const fresh = r.ids.filter(usable);
+        if (fresh.length !== r.ids.length || new Set(fresh).size !== fresh.length) throw new Error('The server reserved an entry id already in use');
+        for (const id of fresh) issued.add(id);
+        reserved.push(...fresh);
+      })
       .finally(() => { pending = null; });
     await pending;
   }
@@ -45,6 +61,7 @@ export async function reserveEntryId(): Promise<number> {
 /** On lock / sign-out: the next account must never get this one's ids. */
 export function clearReservedEntryIds(): void {
   reserved = [];
+  issued = new Set();
 }
 
 // A re-seal request: at most 100 entries (server limit) and well under the
@@ -87,6 +104,7 @@ export async function resealOlderEntries(
   // still in an older format is ever locked out
   if (skipped > 0) return older.length - skipped;
   await settingsApi.upsert(ENTRIES_SEAL_MARKER, await sealSetting(ENTRIES_SEAL_MARKER, true, encryptBytes));
+  noteSealMarker(ENTRIES_SEAL_MARKER);
   allowOlder = false;
   return older.length;
 }

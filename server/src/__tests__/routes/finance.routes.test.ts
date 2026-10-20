@@ -16,10 +16,11 @@ vi.mock('../../db/tenantQueries.js', () => ({
   upsertFinanceRecord: vi.fn(),
   deleteFinanceRecord: vi.fn(),
   financeStorageBytes: vi.fn().mockResolvedValue(0),
+  withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 import financeRouter from '../../routes/finance.js';
-import { ensureFinanceTables, getFinanceRecords, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes } from '../../db/tenantQueries.js';
+import { ensureFinanceTables, getFinanceRecords, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes, withTenantLock } from '../../db/tenantQueries.js';
 import { FINANCE_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 
 const app = createTestApp('/api/finance', financeRouter);
@@ -94,7 +95,8 @@ describe('Finance Routes', () => {
       const res = await request(app).put(`/api/finance/goals/${ID}`)
         .send({ payload: Buffer.from('cipher').toString('base64'), iv: Buffer.from('iv-bytes').toString('base64') });
       expect(res.status).toBe(413);
-      expect(financeStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { kind: 'goals', id: ID });
+      expect(financeStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { kind: 'goals', id: ID }, 'TX');
+      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
       expect(upsertFinanceRecord).not.toHaveBeenCalled();
     });
 

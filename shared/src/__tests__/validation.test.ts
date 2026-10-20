@@ -16,7 +16,7 @@ import {
   createTaxonomySchema,
   updateTaxonomySchema,
   upsertSettingSchema,
-  createShareSchema, isPlaintextTopicWrite, putDoseRecordSchema } from '../validation/schemas.js';
+  createShareSchema, isPlaintextTopicWrite, putDoseRecordSchema, betaApplicationSchema } from '../validation/schemas.js';
 
 // ============================================================================
 // emailSchema
@@ -566,5 +566,17 @@ describe('createShareSchema', () => {
 
   it('rejects invalid datetime for expiresAt', () => {
     expect(createShareSchema.safeParse({ ...valid, expiresAt: 'not-a-date' }).success).toBe(false);
+  });
+});
+
+describe('betaApplicationSchema — name', () => {
+  const base = { email: 'a@b.co', trackFirst: 'journal', device: 'ios', ageConfirmed: true, riskAccepted: true } as const;
+  it('accepts ordinary names', () => {
+    expect(betaApplicationSchema.safeParse({ ...base, name: 'José O’Brien-Ñúñez' }).success).toBe(true);
+  });
+  it('refuses control characters and bidi overrides', () => {
+    for (const name of ['Ann\u001b[2J', 'a\nb', 'x\u0085y', 'evil‮gnp', 'a⁦b', 'del\u007f']) {
+      expect(betaApplicationSchema.safeParse({ ...base, name }).success).toBe(false);
+    }
   });
 });
