@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import bcrypt from 'bcryptjs';
+import bcrypt, { HasherBusyError } from '../services/passwordHasher.js';
 import crypto from 'crypto';
 import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
@@ -10,27 +10,26 @@ import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
+import { sharedState, resetSharedStateForTests } from '../services/sharedState.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
 import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, normalizeEmail } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { clearRememberCookie } from './remember.js';
 
-// In-memory map for pending 2FA sessions (single-instance safe for Render).
-const pendingTwoFA = new Map<string, { accountId: number; expiresAt: Date }>();
+// Sign-in state every instance shares (services/sharedState.ts: Postgres by
+// default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
+// step each account used, and the lockout counters below
+const PENDING_2FA = 'pending_2fa';
+const PENDING_2FA_TTL_MS = 5 * 60 * 1000;
+const TOTP_STEP = 'totp_step';
+const TWO_FA_FAILURES = 'fail_2fa';
+const LOGIN_FAILURES = 'fail_login';
+const CONFIRM_FAILURES = 'fail_confirm';
 
 /** Drop an account's pending 2FA sign-ins (after a password change, recovery or 2FA change). */
-function cancelPendingTwoFA(accountId: number): void {
-  for (const [token, entry] of pendingTwoFA) {
-    if (entry.accountId === accountId) pendingTwoFA.delete(token);
-  }
-}
-
-function cleanExpiredPending() {
-  const now = new Date();
-  for (const [token, entry] of pendingTwoFA) {
-    if (entry.expiresAt <= now) pendingTwoFA.delete(token);
-  }
+async function cancelPendingTwoFA(accountId: number): Promise<void> {
+  await sharedState.deleteTokensForAccount(PENDING_2FA, accountId);
 }
 
 const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
@@ -73,21 +72,17 @@ function openTotpSecret(stored: string): string {
 }
 
 // Replay protection: a TOTP code is accepted at most once (its time step must
-// be newer than the last one used). In memory, like pendingTwoFA — a restart
-// only reopens a code's own 30-second window.
-const lastTotpStep = new Map<number, number>();
+// be newer than the last one used — raised atomically, so two instances can't
+// both accept it). A day is far longer than any code's window.
+const TOTP_STEP_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Per-account cap on wrong second-factor codes, on top of the per-IP limits,
 // so guesses spread across many IPs still run out
 const TWO_FA_MAX_FAILURES = 5;
 const TWO_FA_LOCK_MS = 15 * 60 * 1000;
-const twoFAFailures = new Map<number, { count: number; resetAt: number }>();
 
-function twoFALocked(accountId: number): boolean {
-  const f = twoFAFailures.get(accountId);
-  if (!f) return false;
-  if (f.resetAt <= Date.now()) { twoFAFailures.delete(accountId); return false; }
-  return f.count >= TWO_FA_MAX_FAILURES;
+function twoFALocked(accountId: number): Promise<boolean> {
+  return sharedState.locked(TWO_FA_FAILURES, String(accountId), TWO_FA_MAX_FAILURES);
 }
 
 /**
@@ -95,13 +90,16 @@ function twoFALocked(accountId: number): boolean {
  * can't all pass the lock while the first is still being verified. Returns
  * false when the account is locked. A correct code clears the count.
  */
-function claimTwoFAAttempt(accountId: number): boolean {
-  const now = Date.now();
-  const f = twoFAFailures.get(accountId);
-  if (!f || f.resetAt <= now) { twoFAFailures.set(accountId, { count: 1, resetAt: now + TWO_FA_LOCK_MS }); return true; }
-  if (f.count >= TWO_FA_MAX_FAILURES) return false;
-  f.count++;
-  return true;
+function claimTwoFAAttempt(accountId: number): Promise<boolean> {
+  return sharedState.claim(TWO_FA_FAILURES, String(accountId), TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
+}
+
+/** After a correct code, or when 2FA is turned on or off: a fresh count and replay guard. */
+async function clearTwoFAState(accountId: number): Promise<void> {
+  await Promise.all([
+    sharedState.clear(TWO_FA_FAILURES, String(accountId)),
+    sharedState.clear(TOTP_STEP, String(accountId)),
+  ]);
 }
 
 // Per-email cap on wrong passwords, on top of the per-IP limit, so guesses
@@ -109,17 +107,12 @@ function claimTwoFAAttempt(accountId: number): boolean {
 // or not an account exists, so a lockout never reveals which emails are real.
 const LOGIN_MAX_FAILURES = 10;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
-const loginFailures = new Map<string, { count: number; resetAt: number }>();
 
-/** Tests only: clear every in-memory sign-in record (pending 2FA sign-ins, used
+/** Tests only: clear every sign-in record (pending 2FA sign-ins, used
  *  authenticator steps, 2FA and password failure counters) so one test's state
  *  can never leak into the next. Never called by the app. */
 export function resetAuthStateForTests(): void {
-  pendingTwoFA.clear();
-  lastTotpStep.clear();
-  twoFAFailures.clear();
-  loginFailures.clear();
-  confirmFailures.clear();
+  resetSharedStateForTests();
 }
 
 /**
@@ -127,16 +120,8 @@ export function resetAuthStateForTests(): void {
  * while, and parallel requests mustn't all pass the lock in that time).
  * Returns false when this bucket is locked. A correct password clears it.
  */
-function claimLoginAttempt(key: string): boolean {
-  const now = Date.now();
-  if (loginFailures.size > 50_000) {
-    for (const [k, v] of loginFailures) if (v.resetAt <= now) loginFailures.delete(k);
-  }
-  const f = loginFailures.get(key);
-  if (!f || f.resetAt <= now) { loginFailures.set(key, { count: 1, resetAt: now + LOGIN_LOCK_MS }); return true; }
-  if (f.count >= LOGIN_MAX_FAILURES) return false;
-  f.count++;
-  return true;
+function claimLoginAttempt(key: string): Promise<boolean> {
+  return sharedState.claim(LOGIN_FAILURES, key, LOGIN_MAX_FAILURES, LOGIN_LOCK_MS);
 }
 
 // Per-account cap on wrong passwords at the password-confirmed actions (change
@@ -145,15 +130,9 @@ function claimLoginAttempt(key: string): boolean {
 // from many IPs. Counted before the check, like sign-in.
 const CONFIRM_MAX_FAILURES = 10;
 const CONFIRM_LOCK_MS = 15 * 60 * 1000;
-const confirmFailures = new Map<number, { count: number; resetAt: number }>();
 
-function claimConfirmAttempt(accountId: number): boolean {
-  const now = Date.now();
-  const f = confirmFailures.get(accountId);
-  if (!f || f.resetAt <= now) { confirmFailures.set(accountId, { count: 1, resetAt: now + CONFIRM_LOCK_MS }); return true; }
-  if (f.count >= CONFIRM_MAX_FAILURES) return false;
-  f.count++;
-  return true;
+function claimConfirmAttempt(accountId: number): Promise<boolean> {
+  return sharedState.claim(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES, CONFIRM_LOCK_MS);
 }
 
 /**
@@ -164,24 +143,23 @@ async function verifySecondFactor(
   account: { id: number; totpSecret: string; totpBackupCodes: string[] },
   code: string,
 ): Promise<'totp' | 'backup' | null> {
-  // Counted before any await, so concurrent guesses can't slip past the cap
-  if (!claimTwoFAAttempt(account.id)) return null;
+  // Counted (atomically, across instances) before the check, so concurrent
+  // guesses can't slip past the cap
+  if (!(await claimTwoFAAttempt(account.id))) return null;
   if (/^\d{6}$/.test(code)) {
+    let step: number | null = null;
     try {
-      const last = lastTotpStep.get(account.id);
-      const result = verifySync({
-        token: code,
-        secret: openTotpSecret(account.totpSecret),
-        ...(last !== undefined && { afterTimeStep: last }),
-      });
+      const result = verifySync({ token: code, secret: openTotpSecret(account.totpSecret) });
       // TOTP results carry timeStep (HOTP's don't — the union covers both)
-      if (result.valid && 'timeStep' in result) {
-        lastTotpStep.set(account.id, result.timeStep);
-        twoFAFailures.delete(account.id);
-        return 'totp';
-      }
+      if (result.valid && 'timeStep' in result) step = result.timeStep;
     } catch {
       // malformed secret/token — fall through to backup codes
+    }
+    if (step !== null) {
+      // Only the first use of a step (or a later one) wins: a replayed code fails
+      if (!(await sharedState.advance(TOTP_STEP, String(account.id), step, TOTP_STEP_TTL_MS))) return null;
+      await sharedState.clear(TWO_FA_FAILURES, String(account.id));
+      return 'totp';
     }
   }
 
@@ -194,7 +172,7 @@ async function verifySecondFactor(
     UPDATE "accounts" SET totp_backup_codes = array_remove(totp_backup_codes, ${used})
     WHERE id = ${account.id} AND ${used} = ANY(totp_backup_codes)`;
   if (consumed === 0) return null;
-  twoFAFailures.delete(account.id);
+  await sharedState.clear(TWO_FA_FAILURES, String(account.id));
   return 'backup';
 }
 
@@ -310,33 +288,41 @@ async function hashAuthSecret(authSecret: string): Promise<string> {
   return AUTH_PREFIX + await bcrypt.hash(authSecret, BCRYPT_ROUNDS);
 }
 
+/** A sign-in burst filled the hashing queue: say "try again" (503) rather than fail. */
+function sendIfHasherBusy(err: unknown, res: Response): boolean {
+  if (!(err instanceof HasherBusyError)) return false;
+  res.set('Retry-After', '5').status(503).json({ error: 'Lots of people are signing in right now. Please try again in a few seconds.' });
+  return true;
+}
+
 /** Check a derived sign-in secret. Anything but an auth1$ hash never matches. */
 async function checkAuthSecret(stored: string, authSecret: string): Promise<boolean> {
   if (!stored.startsWith(AUTH_PREFIX)) return false;
   return bcrypt.compare(authSecret, stored.slice(AUTH_PREFIX.length));
 }
 
-function confirmLocked(accountId: number): boolean {
-  const f = confirmFailures.get(accountId);
-  if (!f) return false;
-  if (f.resetAt <= Date.now()) { confirmFailures.delete(accountId); return false; }
-  return f.count >= CONFIRM_MAX_FAILURES;
+function confirmLocked(accountId: number): Promise<boolean> {
+  return sharedState.locked(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES);
 }
 
 /** Route guard for the password-confirmed actions: 429 once the account is locked. */
-function confirmGate(req: Request, res: Response, next: () => void): void {
-  if (req.auth && confirmLocked(req.auth.accountId)) {
-    res.status(429).json({ error: 'Too many incorrect passwords. Try again in 15 minutes.' });
-    return;
+async function confirmGate(req: Request, res: Response, next: (err?: unknown) => void): Promise<void> {
+  try {
+    if (req.auth && (await confirmLocked(req.auth.accountId))) {
+      res.status(429).json({ error: 'Too many incorrect passwords. Try again in 15 minutes.' });
+      return;
+    }
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 }
 
 /** Check the current password at a password-confirmed action (counted per account). */
 async function checkConfirmSecret(account: { id: number; passwordHash: string }, authSecret: string): Promise<boolean> {
-  if (!claimConfirmAttempt(account.id)) return false;
+  if (!(await claimConfirmAttempt(account.id))) return false;
   const ok = await checkAuthSecret(account.passwordHash, authSecret);
-  if (ok) confirmFailures.delete(account.id);
+  if (ok) await sharedState.clear(CONFIRM_FAILURES, String(account.id));
   return ok;
 }
 
@@ -406,12 +392,12 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
     const email = normalizeEmail(rawEmail);
 
-    // Whitelist check — if REGISTRATION_WHITELIST is set, only listed emails, or
-    // ones approved on the beta list (`npm run beta -- --approve`, no restart), may sign up
-    const whitelist = process.env.REGISTRATION_WHITELIST;
-    if (whitelist) {
-      const allowed = whitelist.split(',').map(e => e.trim().toLowerCase());
-      if (!allowed.includes(email) && !(await isApproved(email).catch(() => false))) {
+    // Who may sign up: closed unless REGISTRATION_OPEN=true. Emails approved on
+    // the beta list (`npm run beta -- --approve`, no restart) or listed in the
+    // optional REGISTRATION_WHITELIST may; anyone else is refused
+    if (process.env.REGISTRATION_OPEN !== 'true') {
+      const listed = (process.env.REGISTRATION_WHITELIST ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (!listed.includes(email) && !(await isApproved(email).catch(() => false))) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
         res.status(403).json({ error: 'Registration is currently restricted.' });
         return;
@@ -460,6 +446,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       user: { email: account.email, username: account.username },
     });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Registration error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Registration failed' });
   }
@@ -517,8 +504,9 @@ router.post('/login', authLimiter, async (req, res) => {
 
     const normalizedEmail = normalizeEmail(email);
     const failureKey = loginFailureKey(req, normalizedEmail);
-    // Counted before any await: parallel guesses can't all pass the lock
-    if (!claimLoginAttempt(failureKey)) {
+    // Counted (atomically, across instances) before the password check:
+    // parallel guesses can't all pass the lock
+    if (!(await claimLoginAttempt(failureKey))) {
       logSecurityEvent('login_locked', { ip: req.ip });
       await constantTimeDelay(startTime);
       res.status(429).json({ error: 'Too many failed sign-in attempts. Try again in 15 minutes.' });
@@ -541,14 +529,12 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    loginFailures.delete(failureKey);
+    await sharedState.clear(LOGIN_FAILURES, failureKey);
 
     // 2FA check — if enabled, return a pending token instead of a session
     if (account.totpEnabled) {
-      cleanExpiredPending();
       const pendingToken = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-      pendingTwoFA.set(pendingToken, { accountId: account.id, expiresAt });
+      await sharedState.putToken(PENDING_2FA, pendingToken, account.id, PENDING_2FA_TTL_MS);
       logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip });
       res.json({ requires2FA: true, pendingToken });
       return;
@@ -567,6 +553,7 @@ router.post('/login', authLimiter, async (req, res) => {
       encryption: buildEncryptionResponse(account),
     });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Login error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Login failed' });
   }
@@ -641,8 +628,8 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       }),
     ]);
 
-    revokeGrantsForAccount(account.id);
-    cancelPendingTwoFA(account.id);
+    await revokeGrantsForAccount(account.id);
+    await cancelPendingTwoFA(account.id);
 
     // Create a fresh session after revoking all old ones (prevents race condition)
     const token = await createSession(account.id, account.tenantSchemaName, {
@@ -654,6 +641,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Change password error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Password change failed' });
   }
@@ -704,6 +692,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true, email: normalizedEmail });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Change email error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Email change failed' });
   }
@@ -753,7 +742,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
     // With 2FA on, the recovery key alone isn't enough: also need an
     // authenticator or backup code (asked for only after the key checks out)
     if (account.totpEnabled && account.totpSecret) {
-      if (twoFALocked(account.id)) {
+      if (await twoFALocked(account.id)) {
         res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.', requires2FA: true });
         return;
       }
@@ -815,8 +804,8 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
-    revokeGrantsForAccount(account.id);
-    cancelPendingTwoFA(account.id);
+    await revokeGrantsForAccount(account.id);
+    await cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, email);
 
@@ -840,6 +829,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
       },
     });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Recovery error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Recovery failed' });
   }
@@ -858,10 +848,8 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
 
     const { pendingToken, code } = parsed.data;
 
-    cleanExpiredPending();
-    const pending = pendingTwoFA.get(pendingToken);
-    if (!pending || pending.expiresAt <= new Date()) {
-      pendingTwoFA.delete(pendingToken);
+    const pendingAccountId = await sharedState.getToken(PENDING_2FA, pendingToken);
+    if (pendingAccountId === null) {
       res.status(401).json({ error: 'Verification session expired. Please log in again.' });
       return;
     }
@@ -870,7 +858,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     // 5-wrong-codes lock, the 5-minute expiry and authLimiter bound guessing);
     // it's single-use once a code is accepted.
     const account = await prisma.account.findUnique({
-      where: { id: pending.accountId },
+      where: { id: pendingAccountId },
       select: {
         id: true,
         email: true,
@@ -891,12 +879,12 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     });
 
     if (!account || !account.totpEnabled || !account.totpSecret) {
-      pendingTwoFA.delete(pendingToken);
+      await sharedState.deleteToken(PENDING_2FA, pendingToken);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
-    if (twoFALocked(account.id)) {
+    if (await twoFALocked(account.id)) {
       logSecurityEvent('login_2fa_locked', { accountId: account.id, ip: req.ip });
       res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
       return;
@@ -909,7 +897,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
     // Accepted — the pending token is spent
-    pendingTwoFA.delete(pendingToken);
+    await sharedState.deleteToken(PENDING_2FA, pendingToken);
     if (factor === 'backup') {
       logSecurityEvent('login_2fa_backup_code_used', { accountId: account.id, ip: req.ip });
     }
@@ -1009,12 +997,12 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
       where: { id: req.auth!.accountId },
       data: { totpSecret: sealTotpSecret(secret), totpEnabled: true, totpBackupCodes: hashedCodes },
     });
-    lastTotpStep.delete(req.auth!.accountId);
-    twoFAFailures.delete(req.auth!.accountId);
+    await clearTwoFAState(req.auth!.accountId);
 
     logSecurityEvent('2fa_enabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ backupCodes });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('2FA enable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: '2FA enable failed' });
   }
@@ -1048,7 +1036,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     }
 
     if (account.totpEnabled && account.totpSecret) {
-      if (twoFALocked(account.id)) {
+      if (await twoFALocked(account.id)) {
         res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
         return;
       }
@@ -1064,13 +1052,13 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
       where: { id: req.auth!.accountId },
       data: { totpSecret: null, totpEnabled: false, totpBackupCodes: [] },
     });
-    lastTotpStep.delete(req.auth!.accountId);
-    twoFAFailures.delete(req.auth!.accountId);
-    cancelPendingTwoFA(req.auth!.accountId);
+    await clearTwoFAState(req.auth!.accountId);
+    await cancelPendingTwoFA(req.auth!.accountId);
 
     logSecurityEvent('2fa_disabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('2FA disable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: '2FA disable failed' });
   }
@@ -1101,7 +1089,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       return;
     }
     if (account.totpEnabled && account.totpSecret) {
-      if (twoFALocked(account.id)) {
+      if (await twoFALocked(account.id)) {
         res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
         return;
       }
@@ -1117,18 +1105,18 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       }
     }
 
-    revokeGrantsForAccount(account.id);
+    await revokeGrantsForAccount(account.id);
     // Revoke Google Calendar access at Google before the token row is deleted
     await revokeGoogleAccess(account.id);
     await deleteAccountById(account.id);
-    lastTotpStep.delete(account.id);
-    twoFAFailures.delete(account.id);
+    await clearTwoFAState(account.id);
 
     logSecurityEvent('account_deleted', { accountId: account.id, ip: req.ip });
     res.clearCookie(COOKIE_NAME, { path: '/', secure: IS_PRODUCTION, sameSite: 'strict' as const });
     clearRememberCookie(res);
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Account delete error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Account deletion failed' });
   }
@@ -1224,6 +1212,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
     logSecurityEvent('recovery_key_regenerated', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
   } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
     console.error('Recovery key regeneration error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save recovery key' });
   }

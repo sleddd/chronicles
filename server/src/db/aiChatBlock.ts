@@ -5,6 +5,7 @@
  *   npm run ai:block -- person@example.com
  *   npm run ai:block -- person@example.com --unblock
  */
+import './scriptEnv.js';
 import { normalizeEmail } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 import { initAiChatTable, setAiChatBlocked } from './aiChatQueries.js';

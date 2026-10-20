@@ -7,10 +7,11 @@
  *   npm run beta -- --csv                 # everything as CSV (redirect to a file)
  *   npm run beta -- --remove <email>      # delete someone (on request, or after launch)
  *
- * Sign-up accepts an approved email or one in REGISTRATION_WHITELIST. Keep
- * REGISTRATION_WHITELIST set (your own email is enough): with it unset, anyone
- * can sign up. Send approved testers the /sign-up link yourself.
+ * Sign-up is closed to everyone not approved here (or listed in the optional
+ * REGISTRATION_WHITELIST), unless the server sets REGISTRATION_OPEN=true. Send
+ * approved testers the /sign-up link yourself.
  */
+import './scriptEnv.js';
 import { BETA_DETAILS } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 import { approve, initBetaTable, listSignups, removeSignup, unapprove, type BetaSignup } from './betaQueries.js';
@@ -39,7 +40,6 @@ async function main(): Promise<void> {
     console.log(how === 'invited'
       ? `Approved ${toApprove.trim().toLowerCase()} (added as an invite — they hadn't applied). They can sign up now.`
       : `Approved ${toApprove.trim().toLowerCase()}. They can sign up now.`);
-    console.log('Approvals only restrict sign-up while REGISTRATION_WHITELIST is set on the server (your own email is enough). Without it, anyone can sign up.');
     return;
   }
   const toUnapprove = arg('unapprove');

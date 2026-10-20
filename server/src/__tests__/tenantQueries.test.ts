@@ -37,6 +37,7 @@ import {
   createPost,
   getPost,
   getAllPosts,
+  createPosts,
   updatePost,
   deletePost,
   setPostTaxonomies,
@@ -44,6 +45,7 @@ import {
   addTaxonomyToPost,
   removeTaxonomyFromPost,
   ensureDoseRecordsTable,
+  ensureTopicEncryptionColumns,
   getDoseRecords,
   upsertDoseRecord,
   deleteDoseRecord,
@@ -318,6 +320,49 @@ describe('Post queries', () => {
     });
   });
 
+  describe('ensureTopicEncryptionColumns', () => {
+    it('only reads the catalog when the schema is already migrated (no exclusive locks)', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: true }]);
+      await ensureTopicEncryptionColumns('usr_7_aaaaaa');
+      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe('usr_7_aaaaaa');
+      expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+      await ensureTopicEncryptionColumns('usr_7_aaaaaa'); // remembered: no second read
+      expect(mockQueryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs the ALTERs when something is missing', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: false }]);
+      mockExecuteRawUnsafe.mockResolvedValue(0);
+      await ensureTopicEncryptionColumns('usr_8_bbbbbb');
+      expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(5);
+      expect(mockExecuteRawUnsafe.mock.calls[0][0]).toContain('ALTER TABLE usr_8_bbbbbb.taxonomies');
+    });
+  });
+
+  describe('createPosts', () => {
+    const fields = {
+      contentEncrypted: Buffer.from('c'), contentIv: Buffer.from('i'),
+      metadataEncrypted: Buffer.from('m'), metadataIv: Buffer.from('j'),
+    };
+    // A transaction whose tx runs the same raw-query mock
+    const runTx = () => mockTransaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({ $queryRawUnsafe: mockQueryRawUnsafe }));
+
+    it('creates every entry in one transaction', async () => {
+      runTx();
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ id: 1 }]).mockResolvedValueOnce([{ id: 2 }]);
+      const made = await createPosts(SCHEMA, [{ id: 1, ...fields }, { id: 2, ...fields }]);
+      expect(made?.map(p => p.id)).toEqual([1, 2]);
+      expect(mockTransaction).toHaveBeenCalledTimes(1);
+      expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.posts_id_seq)');
+    });
+
+    it('returns null (rolled back) when any id was not reserved or is taken', async () => {
+      runTx();
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ id: 1 }]).mockResolvedValueOnce([]);
+      expect(await createPosts(SCHEMA, [{ id: 1, ...fields }, { id: 2, ...fields }])).toBeNull();
+    });
+  });
+
   describe('resealPosts', () => {
     it('replaces the encrypted fields of each entry without touching updated_at', async () => {
       mockExecuteRawUnsafe.mockResolvedValue(1);
@@ -366,7 +411,7 @@ describe('Post queries', () => {
 
       const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
       expect(sql).toContain('usr_1_abc123.posts');
-      expect(sql).toContain('ORDER BY created_at DESC');
+      expect(sql).toContain('ORDER BY created_at DESC, id DESC');
       expect(sql).toContain('LIMIT $1 OFFSET $2');
       expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(1000);
       expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(0);

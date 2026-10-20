@@ -28,6 +28,10 @@ import { initAppNoticeTable } from './db/appNoticeQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
+import { checkBackupLockCapacity } from './db/backupCheck.js';
+import { initShards } from './db/shards.js';
+import { initSharedState, sharedState } from './services/sharedState.js';
+import { initRememberGrants } from './services/rememberGrants.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -61,10 +65,10 @@ if (process.env.CLIENT_URL) {
   }
 }
 
-// Every sign-up creates a whole Postgres schema; a personal deployment should
-// list who may register
-if (process.env.NODE_ENV === 'production' && !process.env.REGISTRATION_WHITELIST) {
-  console.warn('WARNING: REGISTRATION_WHITELIST is not set — anyone can create an account on this server');
+// Sign-up is closed to everyone not approved on the beta list (or in
+// REGISTRATION_WHITELIST) unless REGISTRATION_OPEN=true
+if (process.env.NODE_ENV === 'production' && process.env.REGISTRATION_OPEN === 'true') {
+  console.warn('WARNING: REGISTRATION_OPEN=true — anyone can create an account on this server');
 }
 
 // Behind a hosting proxy (Render etc.) every request arrives from the proxy's
@@ -131,7 +135,18 @@ app.get('{/*path}', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-// Init + periodic cleanup + listen
+// Init + periodic cleanup + listen. The shard column comes first: every
+// account query reads it, so nothing may run before it exists
+try {
+  await initShards();
+  // Sign-in state and Remember me grants every instance shares
+  await initSharedState();
+  await initRememberGrants();
+} catch (err) {
+  console.error('Database setup failed:', err instanceof Error ? err.message : err);
+  process.exit(1);
+}
+
 initSharesTable()
   .then(() => purgeDeadShares())
   .then(count => { if (count > 0) console.log(`Deleted ${count} revoked/expired share(s)`); })
@@ -151,9 +166,13 @@ cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});
 
+checkBackupLockCapacity().catch(err => console.error('Backup lock check failed:', err instanceof Error ? err.message : err));
+
 setInterval(() => {
   cleanupSessions().catch(() => {});
   purgeDeadShares().catch(() => {});
+  checkBackupLockCapacity().catch(() => {});
+  sharedState.sweep().catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 app.listen(typeof PORT === 'string' ? parseInt(PORT, 10) : PORT, HOST, () => {

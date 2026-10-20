@@ -19,8 +19,16 @@
     "test": "npm run test --workspace=shared && npm run test --workspace=server && npm run test --workspace=client",
     "test:watch": "concurrently \"npm run test:watch --workspace=shared\" \"npm run test:watch --workspace=server\" \"npm run test:watch --workspace=client\"",
     "test:coverage": "npm run test:coverage --workspace=shared && npm run test:coverage --workspace=server && npm run test:coverage --workspace=client",
-    "migrate:tenants": "npm run migrate:tenants --workspace=server",
-    "beta": "npm run -s beta --workspace=server --"
+    "migrate:tenants": "npm run -s migrate:tenants --workspace=server --",
+    "beta": "npm run -s beta --workspace=server --",
+    "migrate:entry-sync": "npm run -s migrate:entry-sync --workspace=server --",
+    "migrate:phase2-status": "npm run -s migrate:phase2-status --workspace=server --",
+    "check:backups": "npm run -s check:backups --workspace=server --",
+    "clear:topic-links": "npm run -s clear:topic-links --workspace=server --",
+    "account:delete": "npm run -s account:delete --workspace=server --",
+    "notice": "npm run -s notice --workspace=server --",
+    "ai:block": "npm run -s ai:block --workspace=server --",
+    "report:ai-safety": "npm run -s report:ai-safety --workspace=server --"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.7",

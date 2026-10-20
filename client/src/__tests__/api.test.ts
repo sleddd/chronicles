@@ -258,7 +258,7 @@ describe('auth', () => {
 // ---------------------------------------------------------------------------
 
 describe('entries', () => {
-  it('getAll fetches every entry in one request', async () => {
+  it('getAll fetches a journal under 5000 entries in one request', async () => {
     fetchSpy = mockFetchResponse([]);
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -266,6 +266,52 @@ describe('entries', () => {
 
     // Topic filtering relies on the whole journal being in the store
     expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries?limit=5000');
+  });
+
+  it('getAll pages past 5000 entries and skips ids repeated across pages', async () => {
+    const page = (from: number, n: number) => Array.from({ length: n }, (_, k) => ({ id: from - k }));
+    const pages: Record<string, unknown[]> = {
+      '/api/entries?limit=5000': page(12000, 5000),
+      // an entry saved while paging shifts the next page by one: 7001 repeats
+      '/api/entries?limit=5000&offset=5000': page(7001, 5000),
+      '/api/entries?limit=5000&offset=10000': page(2001, 2001),
+    };
+    fetchSpy = vi.fn(async (url: string) => ({
+      ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => pages[url],
+    }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const all = await entries.getAll();
+
+    expect(fetchSpy.mock.calls.map(c => c[0])).toEqual(Object.keys(pages));
+    expect(all).toHaveLength(12000);
+    expect(new Set(all.map(e => e.id)).size).toBe(12000);
+  });
+
+  it('createMany sends entries 50 to a request (and splits big ones by size), returning them in order', async () => {
+    const sent: { id: number; format: number; taxonomyIds?: unknown }[][] = [];
+    fetchSpy = vi.fn(async (_url: string, init: { body: string }) => {
+      const { entries: batch } = JSON.parse(init.body);
+      sent.push(batch);
+      return { ok: true, status: 201, headers: { get: () => 'application/json' }, json: async () => batch.map((e: { id: number }) => ({ id: e.id })) };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const entry = (id: number, size = 10) => ({ id, contentEncrypted: 'x'.repeat(size), contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'j', isEncrypted: true, taxonomyIds: [3] });
+
+    const made = await entries.createMany(Array.from({ length: 120 }, (_, k) => entry(k + 1)));
+    expect(fetchSpy.mock.calls.every(c => c[0] === '/api/entries/batch')).toBe(true);
+    expect(sent.map(b => b.length)).toEqual([50, 50, 20]);
+    expect(made.map(e => e.id)).toEqual(Array.from({ length: 120 }, (_, k) => k + 1));
+    expect(sent[0][0].format).toBe(3);
+    expect(sent[0][0].taxonomyIds).toBeUndefined(); // no plaintext topic link
+
+    sent.length = 0;
+    await entries.createMany([entry(1, 2_000_000), entry(2, 2_000_000), entry(3)]);
+    expect(sent.map(b => b.length)).toEqual([1, 2]);
+
+    sent.length = 0;
+    expect(await entries.createMany([])).toEqual([]);
+    expect(sent).toHaveLength(0);
   });
 
   it('get fetches /entries/:id', async () => {

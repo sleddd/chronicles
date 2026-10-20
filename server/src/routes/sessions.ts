@@ -76,7 +76,7 @@ router.post('/:id/revoke', async (req, res) => {
 
     // Its "remember me" grant goes with it
     const revoked = await prisma.session.findUnique({ where: { id: sessionId }, select: { selector: true } });
-    if (revoked) revokeGrantsForSession(revoked.selector);
+    if (revoked) await revokeGrantsForSession(revoked.selector);
 
     res.json({ success: true });
   } catch (err) {

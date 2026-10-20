@@ -8,9 +8,11 @@
  *   npm run account:delete -- person@example.com          # dry run
  *   npm run account:delete -- person@example.com --yes    # deletes (irreversible)
  */
+import './scriptEnv.js';
 import { normalizeEmail } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 import { deleteAccountById } from './schemaManager.js';
+import { disconnectShards } from './shards.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
 
 async function main(): Promise<void> {
@@ -34,4 +36,4 @@ async function main(): Promise<void> {
 
 main()
   .catch(err => { console.error(err instanceof Error ? err.message : err); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => disconnectShards());

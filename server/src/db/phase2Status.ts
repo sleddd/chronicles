@@ -14,7 +14,10 @@
  * The taxonomies name/icon columns stay (always NULL) — the topic queries
  * still select them.
  */
+import './scriptEnv.js';
+import type { PrismaClient } from '@prisma/client';
 import { prisma } from './prisma.js';
+import { tenantDb, disconnectShards } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 
 const PRIVATE_FLAG_KEYS = [
@@ -22,17 +25,17 @@ const PRIVATE_FLAG_KEYS = [
   'entertainmentEnabled', 'inspirationEnabled', 'financeEnabled', 'reconcileEnabled', 'cycleTrackingEnabled',
 ];
 
-async function exists(schema: string, table: string, column?: string): Promise<boolean> {
+async function exists(db: PrismaClient, schema: string, table: string, column?: string): Promise<boolean> {
   const rows = column
-    ? await prisma.$queryRawUnsafe<{ e: boolean }[]>(
+    ? await db.$queryRawUnsafe<{ e: boolean }[]>(
       `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND column_name = $3) AS e`, schema, table, column)
-    : await prisma.$queryRawUnsafe<{ e: boolean }[]>(
+    : await db.$queryRawUnsafe<{ e: boolean }[]>(
       `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2) AS e`, schema, table);
   return !!rows[0]?.e;
 }
 
-async function count(sql: string, ...params: unknown[]): Promise<number> {
-  const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(sql, ...params);
+async function count(db: PrismaClient, sql: string, ...params: unknown[]): Promise<number> {
+  const rows = await db.$queryRawUnsafe<{ n: bigint }[]>(sql, ...params);
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -41,24 +44,25 @@ async function main(): Promise<void> {
   const accounts = await prisma.account.findMany({ select: { id: true, tenantSchemaName: true }, orderBy: { id: 'asc' } });
   // Accounts confirmed on the AAD key wrap (marked at registration or by the
   // old upgrade step); the table stays in the database as that record
-  const marked = (await exists('public', 'key_wrap_status'))
+  const marked = (await exists(prisma, 'public', 'key_wrap_status'))
     ? new Set((await prisma.$queryRaw<{ account_id: number }[]>`SELECT account_id FROM public.key_wrap_status`).map(r => r.account_id))
     : new Set<number>();
   const totals = { topics: 0, doses: 0, flags: 0, keyWraps: 0 };
 
   for (const { id, tenantSchemaName } of accounts) {
     const s = escapeSchema(tenantSchemaName);
-    const topics = await count(`SELECT COUNT(*) AS n FROM ${s}.taxonomies WHERE name IS NOT NULL`);
-    const legacyDoses = (await exists(s, 'medication_dose_logs')) ? await count(`SELECT COUNT(*) AS n FROM ${s}.medication_dose_logs`) : 0;
-    const flags = await count(
+    const db = await tenantDb(s);
+    const topics = await count(db, `SELECT COUNT(*) AS n FROM ${s}.taxonomies WHERE name IS NOT NULL`);
+    const legacyDoses = (await exists(db, s, 'medication_dose_logs')) ? await count(db, `SELECT COUNT(*) AS n FROM ${s}.medication_dose_logs`) : 0;
+    const flags = await count(db,
       `SELECT COUNT(*) AS n FROM ${s}.settings WHERE key = ANY($1::text[]) AND jsonb_typeof(value) = 'boolean'`, PRIVATE_FLAG_KEYS);
     const keyWrap = marked.has(id) ? 0 : 1;
     totals.topics += topics; totals.doses += legacyDoses; totals.flags += flags; totals.keyWraps += keyWrap;
     if (topics || legacyDoses || flags || keyWrap) {
       console.log(`account ${id}: ${topics} plaintext topic name(s), ${legacyDoses} legacy dose log(s), ${flags} unsealed switch(es)${keyWrap ? ', key wrap not yet confirmed current' : ''}`);
     }
-    if (drop && legacyDoses === 0 && (await exists(s, 'medication_dose_logs'))) {
-      await prisma.$executeRawUnsafe(`DROP TABLE ${s}.medication_dose_logs`);
+    if (drop && legacyDoses === 0 && (await exists(db, s, 'medication_dose_logs'))) {
+      await db.$executeRawUnsafe(`DROP TABLE ${s}.medication_dose_logs`);
       console.log(`account ${id}: dropped the emptied legacy dose table`);
     }
   }
@@ -71,4 +75,4 @@ async function main(): Promise<void> {
 
 main()
   .catch(err => { console.error(err instanceof Error ? err.message : err); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => disconnectShards());

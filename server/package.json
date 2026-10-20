@@ -22,7 +22,9 @@
     "account:delete": "tsx src/db/deleteAccount.ts",
     "notice": "tsx src/db/appNotice.ts",
     "beta": "tsx src/db/betaSignups.ts",
-    "migrate:phase2-status": "tsx src/db/phase2Status.ts"
+    "migrate:phase2-status": "tsx src/db/phase2Status.ts",
+    "migrate:entry-sync": "tsx src/db/migrationOrchestrator.ts entry-sync",
+    "check:backups": "tsx src/db/checkBackups.ts"
   },
   "dependencies": {
     "@chronicles/shared": "*",

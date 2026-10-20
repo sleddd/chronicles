@@ -7,6 +7,10 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getAllPosts: vi.fn(),
   getPost: vi.fn(),
   createPost: vi.fn(),
+  createPosts: vi.fn(),
+  ensurePostSync: vi.fn().mockResolvedValue(undefined),
+  getSyncCursor: vi.fn(),
+  getPostChanges: vi.fn(),
   updatePost: vi.fn(),
   deletePost: vi.fn(),
   setPostTaxonomies: vi.fn(),
@@ -31,7 +35,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getAllPosts, getPost, createPost, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts } from '../../db/tenantQueries.js';
+import { getAllPosts, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -88,6 +92,14 @@ describe('Entry Routes', () => {
       expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 10000, offset: 0 });
     });
 
+    it('allows offsets past 10000 so large journals can page to the end', async () => {
+      (getAllPosts as any).mockResolvedValue([]);
+
+      await request(app).get('/api/entries?limit=5000&offset=15000');
+
+      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 15000 });
+    });
+
     it('returns 500 on database error', async () => {
       (getAllPosts as any).mockRejectedValue(new Error('DB error'));
 
@@ -130,6 +142,31 @@ describe('Entry Routes', () => {
       });
       expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7);
       expect(res.status).toBe(404);
+    });
+
+    it('creates a batch of entries in one request, all or none', async () => {
+      (createPosts as any).mockResolvedValueOnce([{ id: 2 }, { id: 3 }]);
+      const ok = await request(app).post('/api/entries/batch').send({ entries: [ENCRYPTED_BODY, { ...ENCRYPTED_BODY, id: 3 }] });
+      expect(ok.status).toBe(201);
+      expect(ok.body).toEqual([{ id: 2 }, { id: 3 }]);
+      const inputs = (createPosts as any).mock.calls[0][1];
+      expect(inputs.map((e: { id: number }) => e.id)).toEqual([2, 3]);
+      expect(Buffer.isBuffer(inputs[0].contentEncrypted)).toBe(true);
+
+      (createPosts as any).mockResolvedValueOnce(null);
+      const taken = await request(app).post('/api/entries/batch').send({ entries: [ENCRYPTED_BODY] });
+      expect(taken.status).toBe(409);
+    });
+
+    it('refuses a batch that repeats an id, is too big, is plaintext or overfills storage', async () => {
+      const send = (entries: unknown[]) => request(app).post('/api/entries/batch').send({ entries });
+      expect((await send([ENCRYPTED_BODY, ENCRYPTED_BODY])).status).toBe(400);
+      expect((await send(Array.from({ length: 101 }, (_, k) => ({ ...ENCRYPTED_BODY, id: k + 1 })))).status).toBe(400);
+      expect((await send([{ ...ENCRYPTED_BODY, isEncrypted: false }])).status).toBe(400);
+      expect((await send([])).status).toBe(400);
+      (postStorageBytes as any).mockResolvedValueOnce(ENTRY_STORAGE_LIMIT_BYTES - 4);
+      expect((await send([ENCRYPTED_BODY])).status).toBe(413);
+      expect(createPosts).not.toHaveBeenCalled();
     });
 
     it('reserves ids for new entries', async () => {
@@ -247,6 +284,42 @@ describe('Entry Routes', () => {
   });
 
   // =========================================================================
+  describe('entry sync', () => {
+    it('makes sure change tracking is in place before any entries route', async () => {
+      (getAllPosts as any).mockResolvedValue([]);
+      await request(app).get('/api/entries');
+      expect(ensurePostSync).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
+    });
+
+    it('gives a cursor and a scope for this account', async () => {
+      (getSyncCursor as any).mockResolvedValue('1234');
+      const res = await request(app).get('/api/entries/cursor');
+      expect(res.status).toBe(200);
+      expect(res.body.cursor).toBe('1234');
+      expect(res.body.scope).toMatch(/^[a-f0-9]{32}$/);
+    });
+
+    it('sends changes since a cursor, entries in wire form', async () => {
+      (getPostChanges as any).mockResolvedValue({
+        reset: false, cursor: '1300',
+        entries: [{ id: 4, contentEncrypted: Buffer.from('c'), contentIv: Buffer.from('i'), metadataEncrypted: Buffer.from('m'), metadataIv: Buffer.from('j') }],
+        deleted: [2, 3],
+      });
+      const res = await request(app).get('/api/entries/changes?since=1234');
+      expect(getPostChanges).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '1234');
+      expect(res.body).toMatchObject({ reset: false, cursor: '1300', deleted: [2, 3] });
+      expect(res.body.entries[0].contentEncrypted).toBe(Buffer.from('c').toString('base64'));
+    });
+
+    it('tells the client to reload everything when asked, and refuses a bad cursor', async () => {
+      (getPostChanges as any).mockResolvedValue({ reset: true });
+      const res = await request(app).get('/api/entries/changes?since=5');
+      expect(res.body).toMatchObject({ reset: true });
+      expect((await request(app).get('/api/entries/changes?since=abc')).status).toBe(400);
+      expect((await request(app).get('/api/entries/changes')).status).toBe(400);
+    });
+  });
+
   // GET /api/entries/:id
   // =========================================================================
   describe('GET /api/entries/:id', () => {

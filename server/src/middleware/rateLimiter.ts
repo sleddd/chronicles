@@ -1,10 +1,12 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { sharedRateLimitStore } from '../services/sharedState.js';
 
 /**
  * General auth rate limiter — login, register, salt lookups
  * 20 requests per 15-minute window per IP
  */
 export const authLimiter = rateLimit({
+  store: sharedRateLimitStore('auth'),
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -18,6 +20,7 @@ export const authLimiter = rateLimit({
  * a couple of typos changing the password also blocked turning on 2FA
  */
 export const strictLimiter = rateLimit({
+  store: sharedRateLimitStore('strict'),
   windowMs: 15 * 60 * 1000,
   max: 5,
   standardHeaders: true,
@@ -36,6 +39,7 @@ export const strictLimiter = rateLimit({
  * to check lots of addresses. A real person signs up once.
  */
 export const registerLimiter = rateLimit({
+  store: sharedRateLimitStore('register'),
   windowMs: 60 * 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -44,7 +48,10 @@ export const registerLimiter = rateLimit({
 });
 
 /**
- * Authenticated API rate limiter — per-user throttling for data endpoints
+ * Authenticated API rate limiter — per-user throttling for data endpoints.
+ * Unlike the limits above it stays in each instance's memory: it runs on
+ * every request, and it's a coarse abuse cap rather than a security control,
+ * so with N instances an account can make up to N × max.
  * 1500 requests per 15-minute window per user (falls back to IP if unauthenticated).
  * Normal use of the SPA plus bulk actions (imports, bulk edits, dose → Meals
  * sync) must stay well under this; 300 was low enough to lock real users out.
@@ -68,6 +75,7 @@ export const apiLimiter = rateLimit({
  * 60 requests per 15-minute window per IP (calendar apps poll periodically)
  */
 export const icsFeedLimiter = rateLimit({
+  store: sharedRateLimitStore('ics'),
   windowMs: 15 * 60 * 1000,
   max: 60,
   standardHeaders: true,
@@ -80,6 +88,7 @@ export const icsFeedLimiter = rateLimit({
  * 30 requests per 15-minute window per IP to prevent brute-force
  */
 export const shareLimiter = rateLimit({
+  store: sharedRateLimitStore('share'),
   windowMs: 15 * 60 * 1000,
   max: 30,
   standardHeaders: true,
@@ -92,6 +101,7 @@ export const shareLimiter = rateLimit({
  * 10 per hour per IP: a person submits once or twice; this stops list stuffing.
  */
 export const betaLimiter = rateLimit({
+  store: sharedRateLimitStore('beta'),
   windowMs: 60 * 60 * 1000,
   max: 10,
   standardHeaders: true,

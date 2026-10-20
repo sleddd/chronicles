@@ -6,6 +6,7 @@
  *   npm run notice -- --clear
  *   npm run notice                  # shows the current notice
  */
+import './scriptEnv.js';
 import { prisma } from './prisma.js';
 import { clearNotice, getActiveNotice, initAppNoticeTable, setNotice } from './appNoticeQueries.js';
 

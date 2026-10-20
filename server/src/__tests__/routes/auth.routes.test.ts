@@ -59,22 +59,23 @@ vi.mock('../../utils/securityLogger.js', () => ({
 
 vi.mock('../../db/betaQueries.js', () => ({ isApproved: vi.fn().mockResolvedValue(false) }));
 
-// Mock bcryptjs
-vi.mock('bcryptjs', () => ({
+// Mock the password hasher (bcryptjs in worker threads)
+vi.mock('../../services/passwordHasher.js', () => ({
   default: {
     hash: vi.fn().mockResolvedValue('$2a$12$hashedpassword'),
     compare: vi.fn().mockResolvedValue(true),
   },
+  HasherBusyError: class HasherBusyError extends Error {},
 }));
 
 import authRouter, { checkStoredCredentials, resetAuthStateForTests } from '../../routes/auth.js';
 import * as authMw from '../../middleware/auth.js';
-import bcryptMock from 'bcryptjs';
+import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { isApproved } from '../../db/betaQueries.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
-import bcrypt from 'bcryptjs';
+import bcrypt from '../../services/passwordHasher.js';
 import { createHash } from 'crypto';
 
 // Derived secrets (64 hex) — the server never receives a password or recovery key
@@ -138,6 +139,8 @@ describe('Auth Routes', () => {
     applyMockDefaults();
     // No sign-in state (failure counters, pending 2FA) carries over between tests
     resetAuthStateForTests();
+    // Sign-up is closed by default; most tests here aren't about who may register
+    process.env.REGISTRATION_OPEN = 'true';
     app = buildApp();
   });
 
@@ -161,11 +164,40 @@ describe('Auth Routes', () => {
       expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.any(Object));
     });
 
-    describe('with REGISTRATION_WHITELIST set', () => {
+    describe('who may sign up', () => {
       const ok = () => (registerTenant as any).mockResolvedValue({
         account: { id: 1, email: 'test@example.com', username: 'testuser' }, schemaName: 'usr_1_a1b2c3',
       });
+      beforeEach(() => { delete process.env.REGISTRATION_OPEN; });
       afterEach(() => { delete process.env.REGISTRATION_WHITELIST; });
+
+      it('is closed by default: no list, not approved → refused', async () => {
+        (isApproved as any).mockResolvedValue(false);
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(403);
+        expect(registerTenant).not.toHaveBeenCalled();
+      });
+
+      it('lets in an approved email with no REGISTRATION_WHITELIST at all', async () => {
+        (isApproved as any).mockResolvedValue(true);
+        ok();
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(201);
+      });
+
+      it('stays closed if the approval check fails', async () => {
+        (isApproved as any).mockRejectedValue(new Error('db down'));
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(403);
+      });
+
+      it('lets anyone in only with REGISTRATION_OPEN=true', async () => {
+        process.env.REGISTRATION_OPEN = 'true';
+        (isApproved as any).mockResolvedValue(false);
+        ok();
+        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+        expect(res.status).toBe(201);
+      });
 
       it('refuses an email that is neither listed nor approved', async () => {
         process.env.REGISTRATION_WHITELIST = 'owner@example.com';
@@ -304,6 +336,18 @@ describe('Auth Routes', () => {
       expect(res.body.encryption.encryptionEnabled).toBe(true);
       expect(res.body.encryption.kekSalt).toBe(Buffer.from('salt').toString('base64'));
       expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
+    });
+
+    it('answers 503 with Retry-After when the hashing queue is full', async () => {
+      const { HasherBusyError } = await import('../../services/passwordHasher.js');
+      (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+      (bcrypt.compare as any).mockRejectedValueOnce(new HasherBusyError());
+
+      const res = await request(app).post('/api/auth/login').send(validLoginBody);
+
+      expect(res.status).toBe(503);
+      expect(res.headers['retry-after']).toBe('5');
+      expect(createSession).not.toHaveBeenCalled();
     });
 
     it('answers an unknown email exactly like a wrong password, never asking for the password', async () => {

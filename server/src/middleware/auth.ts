@@ -165,7 +165,7 @@ export async function createSession(
  * Revoke a session by selector
  */
 export async function revokeSession(selector: string, reason: string): Promise<void> {
-  revokeGrantsForSession(selector);
+  await revokeGrantsForSession(selector);
   await prisma.session.update({
     where: { selector },
     data: { revokedAt: new Date(), revokedReason: reason },
@@ -176,7 +176,7 @@ export async function revokeSession(selector: string, reason: string): Promise<v
  * Revoke all sessions for an account except the current one
  */
 export async function revokeAllSessions(accountId: number, exceptSelector?: string, reason = 'password_change'): Promise<void> {
-  revokeGrantsForAccount(accountId, exceptSelector);
+  await revokeGrantsForAccount(accountId, exceptSelector);
   await prisma.session.updateMany({
     where: {
       accountId,

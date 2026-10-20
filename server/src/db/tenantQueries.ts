@@ -1,4 +1,4 @@
-import { prisma } from './prisma.js';
+import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 
 // =============================================================================
@@ -45,8 +45,9 @@ export interface TenantPost {
 // =============================================================================
 
 export async function getSetting(schemaName: string, key: string): Promise<TenantSetting | null> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TenantSetting[]>(
+  const result = await db.$queryRawUnsafe<TenantSetting[]>(
     `SELECT key, value, updated_at as "updatedAt" FROM ${s}.settings WHERE key = $1`,
     key
   );
@@ -54,27 +55,31 @@ export async function getSetting(schemaName: string, key: string): Promise<Tenan
 }
 
 export async function getAllSettings(schemaName: string): Promise<TenantSetting[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return prisma.$queryRawUnsafe<TenantSetting[]>(
+  return db.$queryRawUnsafe<TenantSetting[]>(
     `SELECT key, value, updated_at as "updatedAt" FROM ${s}.settings ORDER BY key`
   );
 }
 
 export async function countSettings(schemaName: string): Promise<number> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT COUNT(*) AS n FROM ${s}.settings`);
+  const rows = await db.$queryRawUnsafe<{ n: bigint }[]>(`SELECT COUNT(*) AS n FROM ${s}.settings`);
   return Number(rows[0]?.n ?? 0);
 }
 
 export async function settingExists(schemaName: string, key: string): Promise<boolean> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<{ e: boolean }[]>(`SELECT EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) AS e`, key);
+  const rows = await db.$queryRawUnsafe<{ e: boolean }[]>(`SELECT EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) AS e`, key);
   return !!rows[0]?.e;
 }
 
 export async function upsertSetting(schemaName: string, key: string, value: unknown): Promise<TenantSetting> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TenantSetting[]>(
+  const result = await db.$queryRawUnsafe<TenantSetting[]>(
     `INSERT INTO ${s}.settings (key, value, updated_at)
      VALUES ($1, $2::jsonb, NOW())
      ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()
@@ -86,8 +91,9 @@ export async function upsertSetting(schemaName: string, key: string, value: unkn
 }
 
 export async function deleteSetting(schemaName: string, key: string): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  await prisma.$executeRawUnsafe(`DELETE FROM ${s}.settings WHERE key = $1`, key);
+  await db.$executeRawUnsafe(`DELETE FROM ${s}.settings WHERE key = $1`, key);
 }
 
 // =============================================================================
@@ -112,22 +118,43 @@ function toTaxonomy(r: TaxonomyRow): TenantTaxonomy {
 
 const topicColumnsReady = new Set<string>();
 
+/** Whether a schema's taxonomies table already has everything ensureTopicEncryptionColumns adds. */
+async function topicColumnsMigrated(s: string): Promise<boolean> {
+  const db = await tenantDb(s);
+  const rows = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT (SELECT count(*) FROM pg_attribute a
+              WHERE a.attrelid = t.oid AND NOT a.attisdropped
+                AND a.attname IN ('sort_order', 'payload_encrypted', 'payload_iv')) = 3
+        AND (SELECT NOT a.attnotnull FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = 'name')
+        AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conrelid = t.oid AND c.conname = 'taxonomies_name_key') AS ready
+     FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = $1 AND t.relname = 'taxonomies'`,
+    s
+  );
+  return rows[0]?.ready === true;
+}
+
 /** JIT migration: encrypted payload columns, and a name that may be empty and repeat (it lives in the payload). */
 export async function ensureTopicEncryptionColumns(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   if (topicColumnsReady.has(s)) return;
-  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_encrypted BYTEA`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_iv BYTEA`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ALTER COLUMN name DROP NOT NULL`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies DROP CONSTRAINT IF EXISTS taxonomies_name_key`);
+  // A read first: each ALTER below takes an exclusive lock even when there's
+  // nothing to change, and every restart used to run all five per user
+  if (await topicColumnsMigrated(s)) { topicColumnsReady.add(s); return; }
+  await db.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0`);
+  await db.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_encrypted BYTEA`);
+  await db.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ADD COLUMN IF NOT EXISTS payload_iv BYTEA`);
+  await db.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies ALTER COLUMN name DROP NOT NULL`);
+  await db.$executeRawUnsafe(`ALTER TABLE ${s}.taxonomies DROP CONSTRAINT IF EXISTS taxonomies_name_key`);
   topicColumnsReady.add(s);
 }
 
 /** Reserve ids for new topics (a topic's payload is bound to its id, so it's needed first). */
 export async function reserveTaxonomyIds(schemaName: string, count: number): Promise<number[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
+  const rows = await db.$queryRawUnsafe<{ id: number }[]>(
     `SELECT nextval('${s}.taxonomies_id_seq')::int AS id FROM generate_series(1, $1)`,
     count
   );
@@ -139,13 +166,14 @@ export async function createTaxonomy(
   schemaName: string,
   data: { id: number; payload: string; iv: string; color?: string }
 ): Promise<TenantTaxonomy | null> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   // Auto-assign sort_order as max + 1
-  const maxResult = await prisma.$queryRawUnsafe<{ max_order: number | null }[]>(
+  const maxResult = await db.$queryRawUnsafe<{ max_order: number | null }[]>(
     `SELECT MAX(sort_order) as max_order FROM ${s}.taxonomies`
   );
   const nextOrder = (maxResult[0]?.max_order ?? -1) + 1;
-  const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(
+  const result = await db.$queryRawUnsafe<TaxonomyRow[]>(
     `INSERT INTO ${s}.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)
      SELECT $1, $2, $3, $4, $5
      WHERE $1 <= (SELECT last_value FROM ${s}.taxonomies_id_seq)
@@ -161,14 +189,16 @@ export async function createTaxonomy(
 }
 
 export async function getTaxonomy(schemaName: string, id: number): Promise<TenantTaxonomy | null> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(`SELECT ${TAXONOMY_COLUMNS} FROM ${s}.taxonomies WHERE id = $1`, id);
+  const result = await db.$queryRawUnsafe<TaxonomyRow[]>(`SELECT ${TAXONOMY_COLUMNS} FROM ${s}.taxonomies WHERE id = $1`, id);
   return result[0] ? toTaxonomy(result[0]) : null;
 }
 
 export async function getAllTaxonomies(schemaName: string): Promise<TenantTaxonomy[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<TaxonomyRow[]>(`SELECT ${TAXONOMY_COLUMNS} FROM ${s}.taxonomies ORDER BY sort_order, id`);
+  const rows = await db.$queryRawUnsafe<TaxonomyRow[]>(`SELECT ${TAXONOMY_COLUMNS} FROM ${s}.taxonomies ORDER BY sort_order, id`);
   return rows.map(toTaxonomy);
 }
 
@@ -178,6 +208,7 @@ export async function updateTaxonomy(
   id: number,
   updates: { payload?: string; iv?: string; color?: string }
 ): Promise<TenantTaxonomy> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const setClauses: string[] = [];
   const values: unknown[] = [];
@@ -197,7 +228,7 @@ export async function updateTaxonomy(
   }
 
   values.push(id);
-  const result = await prisma.$queryRawUnsafe<TaxonomyRow[]>(
+  const result = await db.$queryRawUnsafe<TaxonomyRow[]>(
     `UPDATE ${s}.taxonomies SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING ${TAXONOMY_COLUMNS}`,
     ...values
   );
@@ -205,14 +236,16 @@ export async function updateTaxonomy(
 }
 
 export async function deleteTaxonomy(schemaName: string, id: number): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  await prisma.$executeRawUnsafe(`DELETE FROM ${s}.taxonomies WHERE id = $1`, id);
+  await db.$executeRawUnsafe(`DELETE FROM ${s}.taxonomies WHERE id = $1`, id);
 }
 
 export async function reorderTaxonomies(schemaName: string, orderedIds: number[]): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   // One statement: each id's position in the list becomes its sort order
-  await prisma.$executeRawUnsafe(
+  await db.$executeRawUnsafe(
     `UPDATE ${s}.taxonomies t SET sort_order = o.pos - 1
      FROM unnest($1::int[]) WITH ORDINALITY AS o(id, pos)
      WHERE t.id = o.id`,
@@ -252,13 +285,26 @@ const POST_SELECT = `id, content, metadata,
  * (the id is in the AAD), so it needs the id before the entry exists.
  */
 export async function reservePostIds(schemaName: string, count: number): Promise<number[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
+  const rows = await db.$queryRawUnsafe<{ id: number }[]>(
     `SELECT nextval('${s}.posts_id_seq')::int AS id FROM generate_series(1, $1)`,
     count
   );
   return rows.map(r => r.id);
 }
+
+function insertPostSql(s: string): string {
+  return `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+     SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
+     WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
+     ON CONFLICT (id) DO NOTHING
+     RETURNING ${POST_SELECT}`;
+}
+
+const insertPostArgs = (input: CreatePostInput) => [
+  input.id, input.contentEncrypted, input.contentIv, input.metadataEncrypted, input.metadataIv, input.createdAt ?? null,
+];
 
 /**
  * Create an encrypted entry under a reserved id. Returns null when the id was
@@ -266,22 +312,37 @@ export async function reservePostIds(schemaName: string, count: number): Promise
  * refuse plaintext posts, so there is no plaintext path.
  */
 export async function createPost(schemaName: string, input: CreatePostInput): Promise<TenantPost | null> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TenantPost[]>(
-    `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
-     SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
-     WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
-     ON CONFLICT (id) DO NOTHING
-     RETURNING ${POST_SELECT}`,
-    input.id,
-    input.contentEncrypted,
-    input.contentIv,
-    input.metadataEncrypted,
-    input.metadataIv,
-    input.createdAt ?? null
-  );
+  const result = await db.$queryRawUnsafe<TenantPost[]>(insertPostSql(s), ...insertPostArgs(input));
   return result[0] ?? null;
 }
+
+/**
+ * Create several entries at once, all or none: null (and nothing saved) when
+ * any id was never reserved or is taken.
+ */
+export async function createPosts(schemaName: string, inputs: CreatePostInput[]): Promise<TenantPost[] | null> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const sql = insertPostSql(s);
+  try {
+    return await db.$transaction(async (tx) => {
+      const made: TenantPost[] = [];
+      for (const input of inputs) {
+        const rows = await tx.$queryRawUnsafe<TenantPost[]>(sql, ...insertPostArgs(input));
+        if (!rows[0]) throw new BatchConflict();
+        made.push(rows[0]);
+      }
+      return made;
+    });
+  } catch (err) {
+    if (err instanceof BatchConflict) return null;
+    throw err;
+  }
+}
+
+class BatchConflict extends Error {}
 
 /**
  * Replace the encrypted fields of several entries at once, keeping their
@@ -289,10 +350,11 @@ export async function createPost(schemaName: string, input: CreatePostInput): Pr
  * were re-sealed.
  */
 export async function resealPosts(schemaName: string, posts: (EncryptedPostFields & { id: number; updatedAt: Date })[]): Promise<number> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   // Only while the entry is unchanged since the client loaded it: an edit in
   // between was saved id-bound already and must not be overwritten
-  const counts = await prisma.$transaction(posts.map(p => prisma.$executeRawUnsafe(
+  const counts = await db.$transaction(posts.map(p => db.$executeRawUnsafe(
     `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4
      WHERE id = $5 AND is_encrypted = TRUE AND date_trunc('milliseconds', updated_at) = $6`,
     p.contentEncrypted, p.contentIv, p.metadataEncrypted, p.metadataIv, p.id, p.updatedAt
@@ -301,8 +363,9 @@ export async function resealPosts(schemaName: string, posts: (EncryptedPostField
 }
 
 export async function getPost(schemaName: string, id: number): Promise<TenantPost | null> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const result = await prisma.$queryRawUnsafe<TenantPost[]>(
+  const result = await db.$queryRawUnsafe<TenantPost[]>(
     `SELECT ${POST_SELECT} FROM ${s}.posts WHERE id = $1`,
     id
   );
@@ -313,9 +376,11 @@ export async function getAllPosts(
   schemaName: string,
   options?: { limit?: number; offset?: number }
 ): Promise<TenantPost[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return prisma.$queryRawUnsafe<TenantPost[]>(
-    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+  return db.$queryRawUnsafe<TenantPost[]>(
+    // id breaks created_at ties so pages never overlap or skip
+    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
     options?.limit || 1000,
     options?.offset || 0
   );
@@ -326,6 +391,7 @@ export async function updatePost(
   id: number,
   updates: Partial<EncryptedPostFields>
 ): Promise<TenantPost | undefined> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const setClauses: string[] = [];
   const values: unknown[] = [];
@@ -339,7 +405,7 @@ export async function updatePost(
   setClauses.push('updated_at = NOW()');
   values.push(id);
 
-  const result = await prisma.$queryRawUnsafe<TenantPost[]>(
+  const result = await db.$queryRawUnsafe<TenantPost[]>(
     `UPDATE ${s}.posts SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING ${POST_SELECT}`,
     ...values
   );
@@ -348,8 +414,9 @@ export async function updatePost(
 
 /** Bytes of encrypted content + metadata over all entries (leaving out the ones being replaced). */
 export async function postStorageBytes(schemaName: string, exclude: number | number[] = []): Promise<number> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+  const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
     `SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)), 0) AS n
      FROM ${s}.posts WHERE NOT (id = ANY($1::int[]))`,
     Array.isArray(exclude) ? exclude : [exclude]
@@ -358,8 +425,118 @@ export async function postStorageBytes(schemaName: string, exclude: number | num
 }
 
 export async function deletePost(schemaName: string, id: number): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  await prisma.$executeRawUnsafe(`DELETE FROM ${s}.posts WHERE id = $1`, id);
+  await db.$executeRawUnsafe(`DELETE FROM ${s}.posts WHERE id = $1`, id);
+}
+
+// =============================================================================
+// Entry sync: what changed since a client last loaded
+// =============================================================================
+//
+// The browser keeps its entries (still encrypted) between visits and asks only
+// for what changed. A trigger stamps every inserted or updated post with the
+// writing transaction's id (change_xid) and records every deleted id in
+// deleted_posts, so no write path can be missed. A client's cursor is the
+// snapshot xmin taken *before* it read: every transaction below it had
+// finished, so nothing is skipped; anything at or above it may be sent twice,
+// which the client handles by id.
+
+/** The trigger function, once per database (each shard's public schema). */
+const SYNC_FUNCTION_SQL = `CREATE OR REPLACE FUNCTION public.chronicles_post_changed() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    EXECUTE format('INSERT INTO %I.deleted_posts (id, change_xid) VALUES ($1, pg_current_xact_id())', TG_TABLE_SCHEMA) USING OLD.id;
+    RETURN OLD;
+  END IF;
+  NEW.change_xid := pg_current_xact_id();
+  RETURN NEW;
+END
+$fn$`;
+
+/** Create the trigger function in a database if it isn't there yet. */
+export async function ensurePostSyncFunction(db: { $queryRawUnsafe: <T>(sql: string, ...v: unknown[]) => Promise<T>; $executeRawUnsafe: (sql: string, ...v: unknown[]) => Promise<number> }): Promise<void> {
+  const [{ present }] = await db.$queryRawUnsafe<{ present: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'public' AND p.proname = 'chronicles_post_changed') AS present`
+  );
+  if (!present) await db.$executeRawUnsafe(SYNC_FUNCTION_SQL);
+}
+
+/** Change tracking for a schema's posts (new schemas get these at creation). */
+export function postSyncStatements(s: string): string[] {
+  return [
+    // A constant default: no table rewrite; older rows sort before any cursor
+    `ALTER TABLE ${s}.posts ADD COLUMN IF NOT EXISTS change_xid xid8 NOT NULL DEFAULT '0'`,
+    `CREATE INDEX IF NOT EXISTS idx_${s}_posts_change ON ${s}.posts (change_xid)`,
+    `CREATE TABLE IF NOT EXISTS ${s}.deleted_posts (id INTEGER NOT NULL, change_xid xid8 NOT NULL)`,
+    `DROP TRIGGER IF EXISTS posts_sync_write ON ${s}.posts`,
+    `CREATE TRIGGER posts_sync_write BEFORE INSERT OR UPDATE ON ${s}.posts FOR EACH ROW EXECUTE FUNCTION public.chronicles_post_changed()`,
+    `DROP TRIGGER IF EXISTS posts_sync_delete ON ${s}.posts`,
+    `CREATE TRIGGER posts_sync_delete AFTER DELETE ON ${s}.posts FOR EACH ROW EXECUTE FUNCTION public.chronicles_post_changed()`,
+  ];
+}
+
+const postSyncReady = new Set<string>();
+
+/** JIT migration for change tracking: one catalog read once it's in place. */
+export async function ensurePostSync(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  if (postSyncReady.has(s)) return;
+  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_class t ON t.oid = a.attrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = $1 AND t.relname = 'posts' AND a.attname = 'change_xid' AND NOT a.attisdropped)
+        AND EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace WHERE n.nspname = $1 AND t.relname = 'deleted_posts')
+        AND (SELECT count(*) FROM pg_trigger g JOIN pg_class t ON t.oid = g.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+              WHERE n.nspname = $1 AND g.tgname IN ('posts_sync_write', 'posts_sync_delete')) = 2 AS ready`,
+    s
+  );
+  if (!ready) {
+    await ensurePostSyncFunction(db);
+    await db.$transaction(postSyncStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  }
+  postSyncReady.add(s);
+}
+
+/** A cursor taken before reading: every transaction below it has finished. */
+export async function getSyncCursor(schemaName: string): Promise<string> {
+  const db = await tenantDb(schemaName);
+  const [{ cursor }] = await db.$queryRawUnsafe<{ cursor: string }[]>(
+    `SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS cursor`
+  );
+  return cursor;
+}
+
+export type PostChanges =
+  | { reset: true }
+  | { reset: false; cursor: string; entries: TenantPost[]; deleted: number[] };
+
+/**
+ * Entries written and ids deleted since `since` (a cursor from this database).
+ * `reset` when the client should load everything instead: more than `limit`
+ * changes, or a cursor from the future (the database was restored).
+ */
+export async function getPostChanges(schemaName: string, since: string, limit = 5000): Promise<PostChanges> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const [{ cursor, future }] = await db.$queryRawUnsafe<{ cursor: string; future: boolean }[]>(
+    `SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS cursor,
+            $1::xid8 > pg_snapshot_xmax(pg_current_snapshot()) AS future`,
+    since
+  );
+  if (future) return { reset: true };
+  const entries = await db.$queryRawUnsafe<TenantPost[]>(
+    `SELECT ${POST_SELECT} FROM ${s}.posts WHERE change_xid >= $1::xid8 ORDER BY change_xid, id LIMIT $2`,
+    since, limit + 1
+  );
+  if (entries.length > limit) return { reset: true };
+  const deleted = await db.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT DISTINCT id FROM ${s}.deleted_posts WHERE change_xid >= $1::xid8`,
+    since
+  );
+  return { reset: false, cursor, entries, deleted: deleted.map(d => d.id) };
 }
 
 // =============================================================================
@@ -401,17 +578,19 @@ const financeReady = new Set<string>();
 
 /** JIT migration: create the finance tables if missing (once per schema per process). */
 export async function ensureFinanceTables(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   if (financeReady.has(s)) return;
   for (const stmt of financeTableStatements(s)) {
-    await prisma.$executeRawUnsafe(stmt);
+    await db.$executeRawUnsafe(stmt);
   }
   financeReady.add(s);
 }
 
 export async function getFinanceRecords(schemaName: string, kind: FinanceTableKind): Promise<FinanceRecordRow[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return prisma.$queryRawUnsafe<FinanceRecordRow[]>(
+  return db.$queryRawUnsafe<FinanceRecordRow[]>(
     `SELECT id, payload_encrypted as "payloadEncrypted", payload_iv as "payloadIv",
             created_at as "createdAt", updated_at as "updatedAt"
      FROM ${s}.${FINANCE_TABLES[kind]}
@@ -426,8 +605,9 @@ export async function upsertFinanceRecord(
   payload: Buffer,
   iv: Buffer
 ): Promise<FinanceRecordRow> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<FinanceRecordRow[]>(
+  const rows = await db.$queryRawUnsafe<FinanceRecordRow[]>(
     `INSERT INTO ${s}.${FINANCE_TABLES[kind]} (id, payload_encrypted, payload_iv)
      VALUES ($1, $2, $3)
      ON CONFLICT (id) DO UPDATE SET payload_encrypted = EXCLUDED.payload_encrypted,
@@ -441,11 +621,12 @@ export async function upsertFinanceRecord(
 
 /** Bytes of encrypted payloads over every finance table (optionally leaving one row out). */
 export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }): Promise<number> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const parts = (Object.keys(FINANCE_TABLES) as FinanceTableKind[]).map(kind =>
     `SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]}`
     + (exclude?.kind === kind ? ' WHERE id <> $1' : ''));
-  const rows = await prisma.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+  const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
     `SELECT COALESCE(SUM(n), 0) AS n FROM (${parts.join(' UNION ALL ')}) t`,
     ...(exclude ? [exclude.id] : [])
   );
@@ -454,8 +635,9 @@ export async function financeStorageBytes(schemaName: string, exclude?: { kind: 
 
 /** Returns true when a row was deleted. */
 export async function deleteFinanceRecord(schemaName: string, kind: FinanceTableKind, id: string): Promise<boolean> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const n = await prisma.$executeRawUnsafe(`DELETE FROM ${s}.${FINANCE_TABLES[kind]} WHERE id = $1`, id);
+  const n = await db.$executeRawUnsafe(`DELETE FROM ${s}.${FINANCE_TABLES[kind]} WHERE id = $1`, id);
   return n > 0;
 }
 
@@ -494,9 +676,10 @@ export function doseRecordStatements(s: string): string[] {
 const doseRecordsReady = new Set<string>();
 
 export async function ensureDoseRecordsTable(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   if (doseRecordsReady.has(s)) return;
-  for (const stmt of doseRecordStatements(s)) await prisma.$executeRawUnsafe(stmt);
+  for (const stmt of doseRecordStatements(s)) await db.$executeRawUnsafe(stmt);
   doseRecordsReady.add(s);
 }
 
@@ -504,15 +687,17 @@ const DOSE_RECORD_COLUMNS = `id, TO_CHAR(date, 'YYYY-MM-DD') as "date", payload_
   payload_iv as "payloadIv", created_at as "createdAt", updated_at as "updatedAt"`;
 
 export async function getDoseRecords(schemaName: string, date?: string): Promise<DoseRecordRow[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   return date
-    ? prisma.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records WHERE date = $1::date ORDER BY created_at ASC`, date)
-    : prisma.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records ORDER BY date ASC, created_at ASC`);
+    ? db.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records WHERE date = $1::date ORDER BY created_at ASC`, date)
+    : db.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records ORDER BY date ASC, created_at ASC`);
 }
 
 export async function upsertDoseRecord(schemaName: string, id: string, date: string, payload: Buffer, iv: Buffer): Promise<DoseRecordRow> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const rows = await prisma.$queryRawUnsafe<DoseRecordRow[]>(
+  const rows = await db.$queryRawUnsafe<DoseRecordRow[]>(
     `INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
      VALUES ($1, $2::date, $3, $4)
      ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date, payload_encrypted = EXCLUDED.payload_encrypted,
@@ -524,8 +709,9 @@ export async function upsertDoseRecord(schemaName: string, id: string, date: str
 }
 
 export async function deleteDoseRecord(schemaName: string, id: string): Promise<boolean> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return (await prisma.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_records WHERE id = $1`, id)) > 0;
+  return (await db.$executeRawUnsafe(`DELETE FROM ${s}.medication_dose_records WHERE id = $1`, id)) > 0;
 }
 
 /**
@@ -534,8 +720,9 @@ export async function deleteDoseRecord(schemaName: string, id: string): Promise<
  * stays. Returns how many were re-sealed.
  */
 export async function resealDoseRecords(schemaName: string, records: { id: string; date: string; payload: Buffer; iv: Buffer }[]): Promise<number> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  const counts = await prisma.$transaction(records.map(r => prisma.$executeRawUnsafe(
+  const counts = await db.$transaction(records.map(r => db.$executeRawUnsafe(
     `UPDATE ${s}.medication_dose_records SET payload_encrypted = $1, payload_iv = $2 WHERE id = $3 AND date = $4::date`,
     r.payload, r.iv, r.id, r.date
   )));
@@ -547,8 +734,9 @@ export async function resealDoseRecords(schemaName: string, records: { id: strin
 // =============================================================================
 
 export async function addTaxonomyToPost(schemaName: string, postId: number, taxonomyId: number): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  await prisma.$executeRawUnsafe(
+  await db.$executeRawUnsafe(
     `INSERT INTO ${s}.post_taxonomies (post_id, tax_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
     postId,
     taxonomyId
@@ -556,8 +744,9 @@ export async function addTaxonomyToPost(schemaName: string, postId: number, taxo
 }
 
 export async function removeTaxonomyFromPost(schemaName: string, postId: number, taxonomyId: number): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  await prisma.$executeRawUnsafe(
+  await db.$executeRawUnsafe(
     `DELETE FROM ${s}.post_taxonomies WHERE post_id = $1 AND tax_id = $2`,
     postId,
     taxonomyId
@@ -565,8 +754,9 @@ export async function removeTaxonomyFromPost(schemaName: string, postId: number,
 }
 
 export async function getPostTaxonomies(schemaName: string, postId: number): Promise<TenantTaxonomy[]> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return prisma.$queryRawUnsafe<TenantTaxonomy[]>(
+  return db.$queryRawUnsafe<TenantTaxonomy[]>(
     `SELECT t.id, t.name, t.icon, t.color
      FROM ${s}.taxonomies t
      JOIN ${s}.post_taxonomies pt ON t.id = pt.tax_id
@@ -577,9 +767,10 @@ export async function getPostTaxonomies(schemaName: string, postId: number): Pro
 }
 
 export async function setPostTaxonomies(schemaName: string, postId: number, taxonomyIds: number[]): Promise<void> {
+  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   // Wrap in transaction to prevent partial taxonomy state on failure
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`DELETE FROM ${s}.post_taxonomies WHERE post_id = $1`, postId);
     for (const taxId of taxonomyIds) {
       await tx.$executeRawUnsafe(
