@@ -1,3 +1,4 @@
+import { medChangesOf, describeMedChange, type MedChange } from '../utils/healthChanges.js';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -143,6 +144,13 @@ const Doses = styled.td`
   li[data-skipped] { color: var(--text-muted); text-decoration: line-through; }
 `;
 
+/* A medication's changes, above its doses */
+const Changes = styled.ol`
+  && { display: flex; flex-direction: column; gap: 4px; margin: 0 0 14px; padding: 4px 0 0 17px; list-style: none; }
+  li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
+  i { flex: none; width: 7px; height: 7px; background: var(--text-muted); transform: rotate(45deg); }
+`;
+
 const fmtDay = (day: string, withYear = false) =>
   parseDay(day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) });
 
@@ -197,6 +205,21 @@ export function MedHistoryView() {
         const name = typeof cf.medicationName === 'string' && cf.medicationName.trim() ? cf.medicationName : stripHtml(e.content);
         return { id: e.id, name: name.trim().slice(0, 120), dosage: typeof cf.dosage === 'string' ? cf.dosage.trim() : '' };
       });
+  }, [entries, allTopics]);
+
+  // Each medication's recorded changes (dose, started, stopped…), by name, newest first
+  const changesByName = useMemo(() => {
+    const topicId = allTopics.find(t => t.name.toLowerCase() === 'medication')?.id;
+    const map = new Map<string, MedChange[]>();
+    for (const e of entries) {
+      const meta = e.metadata as Record<string, unknown> | undefined;
+      if (topicId === undefined || meta?._taxonomyId !== topicId) continue;
+      const cf = (meta._customFields ?? {}) as Record<string, unknown>;
+      const name = (typeof cf.medicationName === 'string' && cf.medicationName.trim() ? cf.medicationName : stripHtml(e.content)).trim().replace(/\s+/g, ' ').toLowerCase();
+      const list = medChangesOf(cf);
+      if (list.length) map.set(name, [...(map.get(name) ?? []), ...list].sort((a, b) => b.date.localeCompare(a.date)));
+    }
+    return map;
   }, [entries, allTopics]);
 
   const foodRows = useMemo(() => {
@@ -278,6 +301,13 @@ export function MedHistoryView() {
                         {isOpen && (
                           <tr>
                             <Doses colSpan={5}>
+                              {(changesByName.get(r.key) ?? []).length > 0 && (
+                                <Changes aria-label={`${r.name} changes`}>
+                                  {changesByName.get(r.key)!.map((c, i) => (
+                                    <li key={`${c.date}-${c.kind}-${i}`}><i aria-hidden="true" />{fmtDay(c.date, true)} · {describeMedChange(c)}</li>
+                                  ))}
+                                </Changes>
+                              )}
                               <ul aria-label={`${r.name} doses`}>
                                 {r.events.map(e => (
                                   <li key={e.key} data-skipped={e.status === 'skipped' ? '' : undefined}>

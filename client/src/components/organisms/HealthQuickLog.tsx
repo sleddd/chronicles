@@ -51,6 +51,11 @@ const QNote = styled(FieldNote)`
   margin-top: 8px;
 `;
 
+/* One date in an outlined box */
+const ChangeDate = styled(QField)`
+  && { width: 100%; max-width: 240px; border: 1px solid var(--border-card); border-radius: var(--r-lg, 6px); }
+`;
+
 const QChips = styled(Chips)`
   gap: 8px;
 `;
@@ -403,6 +408,65 @@ export function QuickSymptomForm() {
         </PillButton>
       </Footer>
     </>
+  );
+}
+
+/* ── Change ── */
+
+/** Log a change — something you changed that the app can't see ("Cut out
+ *  dairy"): what changed and when (today by default), saved to the Changes
+ *  topic. Reports line these up against the data. */
+export function QuickChangeForm() {
+  const createEntry = useCreateEntry();
+  const blank = () => ({ what: '', date: today() });
+  const [v, setV] = useState(blank);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+  const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
+
+  const log = async () => {
+    const what = v.what.trim();
+    if (!what || saving) return;
+    setSaving(true); setStatus('');
+    try {
+      const topicId = await getOrCreateTopicId('Changes', 'clock');
+      await createEntry(topicId, `<p>${escapeHtml(what)}</p>`, { changeWhat: what, changeDate: v.date || today(), notes: '' });
+      setV(blank());
+      setStatus('Logged');
+      setTimeout(() => setStatus(''), 2600);
+    } catch (err) {
+      console.error('Failed to log change:', err);
+      setStatus('That didn’t save. Try again.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <>
+      <QTitle value={v.what} placeholder="What changed? e.g. Cut out dairy" aria-label="What changed?"
+        onChange={e => set({ what: e.target.value })}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+      <Section style={{ marginTop: 20 }}>
+        <ChangeDate type="date" value={v.date} aria-label="When did it change?" onChange={e => set({ date: e.target.value })} />
+        <QNote>Medication changes (dose, started, stopped) are recorded on their own when you edit the medication.</QNote>
+      </Section>
+      <Footer>
+        <span />
+        <Status role="status" aria-live="polite">{status}</Status>
+        <PillButton type="button" onClick={() => void log()} disabled={saving || !v.what.trim()}>
+          {saving ? 'Logging…' : 'Log change'}
+        </PillButton>
+      </Footer>
+    </>
+  );
+}
+
+/** Health dashboard panel around the quick change form */
+export function QuickChange() {
+  return (
+    <DashPanel aria-label="Log a change">
+      <DashPanelHead title="Log a change" />
+      <QuickChangeForm />
+    </DashPanel>
   );
 }
 

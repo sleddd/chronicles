@@ -14,6 +14,8 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { doses as dosesApi } from '../services/api.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { setTriggerReview, type TriggerReviews, type TriggerVerdict, type SymptomTrigger } from '../utils/foodSymptoms.js';
+import { collectHealthChanges } from '../utils/healthChanges.js';
+import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { splitSymptoms } from '../utils/symptomChips.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import type { PeriodType } from '../types/health.js';
@@ -211,6 +213,11 @@ export function HealthReportingView() {
       return (names.length ? names : [label]).map(name => ({ id: e.id, name, severity, occurredAt }));
     }), [filterByTopic]);
 
+  // What changed in the period (medications record their own; the Changes topic holds the rest)
+  const changes = useMemo(() =>
+    collectHealthChanges(entries, allTopics, { from: startDate, to: endDate }, stripHtml), [entries, allTopics, startDate, endDate]);
+  const openInJournal = useOpenInJournal();
+
   // Meals from two days before the range too, for the food ↔ symptom patterns
   const patternFoods: DecryptedFood[] = useMemo(() =>
     filterByTopic('meals', 2).flatMap(e => {
@@ -340,6 +347,8 @@ export function HealthReportingView() {
             symptoms={symptoms}
             foods={foods}
             patternFoods={patternFoods}
+            changes={changes}
+            onOpenChange={openInJournal}
             triggerReviews={triggerReviews}
             onReviewTrigger={reviewsLoaded ? reviewTrigger : undefined}
             medLogs={medLogs}

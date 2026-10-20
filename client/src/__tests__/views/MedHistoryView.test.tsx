@@ -14,7 +14,7 @@ vi.mock('@/hooks/useInitializeData', () => ({
 
 const topics = [{ id: 1, name: 'Medication' }, { id: 2, name: 'Meals' }];
 const entries = [
-  { id: 10, content: '<p>Vitamin D3</p>', metadata: { _taxonomyId: 1, _customFields: { medicationName: 'Vitamin D3', dosage: '2000 IU' } }, createdAt: new Date('2026-09-01T12:00:00') },
+  { id: 10, content: '<p>Vitamin D3</p>', metadata: { _taxonomyId: 1, _customFields: { medicationName: 'Vitamin D3', dosage: '2000 IU', _changes: [{ date: '2026-10-05', kind: 'dose', from: '1000 IU', to: '2000 IU' }] } }, createdAt: new Date('2026-09-01T12:00:00') },
   { id: 11, content: '<p>Metformin</p>', metadata: { _taxonomyId: 1, _customFields: { medicationName: 'Metformin', dosage: '500mg' } }, createdAt: new Date('2026-09-01T12:00:00') },
   { id: 20, content: '<p>Magnesium</p>', metadata: { _taxonomyId: 2, _customFields: { mealType: 'supplement', consumedDate: '2026-10-10', consumedTime: '21:00' } }, createdAt: new Date('2026-10-10T21:00:00') },
 ];
@@ -60,6 +60,7 @@ describe('MedHistoryView', () => {
     renderWithTheme(<MedHistoryView />);
     fireEvent.click((await screen.findByText('Vitamin D3')).closest('tr')!);
     expect(within(screen.getByRole('list', { name: 'Vitamin D3 doses' })).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByRole('list', { name: 'Vitamin D3 changes' })).toHaveTextContent('Dose 1000 IU → 2000 IU');
     fireEvent.change(screen.getByLabelText('Search medications'), { target: { value: 'metf' } });
     expect(screen.queryByText('Vitamin D3')).toBeNull();
     expect(screen.getByText('Metformin')).toBeInTheDocument();

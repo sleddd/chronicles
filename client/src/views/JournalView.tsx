@@ -22,6 +22,8 @@ import { ConfirmDialog } from '../components/molecules/ConfirmDialog.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
+import { toDateStr } from '../utils/dateUtils.js';
+import { withMedicationChanges } from '../utils/healthChanges.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi, retryDelayMs } from '../services/api.js';
@@ -355,6 +357,13 @@ export function JournalView() {
     wellnessAutoDebounceRef.current = setTimeout(() => { wellnessAutoSaveDoRef.current(); }, 600);
   }, []);
 
+  /** An entry's fields as last saved (null for a new entry) */
+  const savedFieldsOf = (id: number | null): Record<string, unknown> | null => {
+    if (id == null) return null;
+    const e = useEntriesStore.getState().decryptedEntries.find(x => x.id === id);
+    return (((e?.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) ?? {});
+  };
+
   // Auto-save: fires 3s after user stops editing, saves in place without closing the editor
   const autoSaveDoRef = useRef<() => Promise<void>>(async () => {});
   autoSaveDoRef.current = async () => {
@@ -387,10 +396,16 @@ export function JournalView() {
       contentToSave = `<p>${prioritiesTitle()}</p>`;
       setEditorContent(contentToSave);
     }
+    // A medication records what changed (dose, started / stopped…) as it saves
+    let fieldsToSave = customFields;
+    if (autoTopicName === 'medication') {
+      fieldsToSave = withMedicationChanges(savedFieldsOf(selectedEntryId), customFields, toDateStr(new Date()));
+      if (fieldsToSave !== customFields) setCustomFields(prev => ({ ...prev, _changes: fieldsToSave._changes }));
+    }
     const metadata: Record<string, unknown> = {};
     if (effectiveTopicId) metadata._taxonomyId = effectiveTopicId;
     if (widgetType) metadata._widgetType = widgetType;
-    if (Object.keys(customFields).length > 0) metadata._customFields = customFields;
+    if (Object.keys(fieldsToSave).length > 0) metadata._customFields = fieldsToSave;
     if (entryImages.length > 0) {
       metadata._images = entryImages;
       if (featuredKey) metadata._featuredKey = featuredKey;
@@ -420,7 +435,7 @@ export function JournalView() {
         setPendingEntryDate(null);
         setSelectedEntryId(newId);
       }
-      loadedStateRef.current = { content: contentToSave, customFields: currentFields, images: currentImages };
+      loadedStateRef.current = { content: contentToSave, customFields: JSON.stringify(fieldsToSave), images: currentImages };
       setLastSavedAt(new Date());
     } catch (err) { console.error('Auto-save failed:', err); }
   };
@@ -624,7 +639,7 @@ export function JournalView() {
       // blocks the save.
       // (dated shopping-list title, fields-only summary, AI calories — utils/entrySave)
       const topicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
-      const prepared = await prepareEntryForSave(editorContent, customFields, topicName, userFieldDefs);
+      const prepared = await prepareEntryForSave(editorContent, customFields, topicName, userFieldDefs, savedFieldsOf(selectedEntryId));
       const finalContent = prepared.content;
       const fieldsToSave = prepared.customFields;
       if (finalContent !== editorContent) setEditorContent(finalContent);

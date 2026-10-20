@@ -26,6 +26,7 @@ import {
   type TriggerWindow, type TriggerReviews, type TriggerVerdict, type SymptomTrigger, type TriggerReview, type ReviewedTriggers,
 } from '../../utils/foodSymptoms.js';
 import { TickMark } from '../atoms/TickMark.js';
+import type { HealthChange } from '../../utils/healthChanges.js';
 
 /* Health → Reports. Sections (Wellness, Symptoms, Meals, Exercise) are big
    thin Work Sans headings on the canvas; their content sits in --bg-panel
@@ -216,6 +217,49 @@ const BarLabel = styled.span`
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+`;
+
+/* ── Changes ── */
+
+const ChangeRow = styled.div`
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) max-content;
+  align-items: baseline;
+  gap: 18px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  &:first-of-type { border-top: none; padding-top: 0; }
+  .when { color: var(--text-muted); font-size: 14px; }
+  .what { min-width: 0; padding: 0; border: none; background: none; text-align: left; font: inherit; color: var(--text-secondary); }
+  button.what { cursor: pointer; }
+  button.what:hover { text-decoration: underline; }
+  .kind { font-size: 13px; color: var(--text-muted); }
+  @media (max-width: 480px) { grid-template-columns: 56px minmax(0, 1fr); .kind { display: none; } }
+`;
+
+/* Under a chart: which change each ◆ marks */
+const MarkerKey = styled.ul`
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  li { display: flex; align-items: center; gap: 10px; }
+  i { flex: none; width: 8px; height: 8px; background: var(--text-muted); transform: rotate(45deg); }
+`;
+
+/* A ◆ over a symptom bar whose day had a change */
+const BarChange = styled.i`
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted);
+  transform: rotate(45deg);
 `;
 
 /* ── Lists ── */
@@ -516,15 +560,19 @@ interface HealthReportProps {
   period: PeriodType;
   /** Kept for callers; the report now draws in the accent token directly */
   accentColor?: string;
+  /** Things changed in the period (medications, the Changes topic), newest first */
+  changes?: HealthChange[];
   /** The owner's verdicts on possible triggers (encrypted setting, held by the view) */
   triggerReviews?: TriggerReviews;
   /** Mark a trigger confirmed / not a trigger (null clears); omitted = no buttons */
   onReviewTrigger?: (t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => void;
+  /** Open a change's entry (the medication, or the Changes entry) */
+  onOpenChange?: (entryId: number) => void;
 }
 
 /* ── Component ── */
 
-export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, exercises, wellness, period, triggerReviews, onReviewTrigger }: HealthReportProps) {
+export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, exercises, wellness, period, triggerReviews, onReviewTrigger, changes = [], onOpenChange }: HealthReportProps) {
   // Food, medications and exercise before each symptom (What comes before symptoms)
   const [triggerWindow, setTriggerWindow] = useState<TriggerWindow>('4');
   const events = useMemo(() => triggerEvents(patternFoods, medLogs, exercises), [patternFoods, medLogs, exercises]);
@@ -551,8 +599,11 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
     return [...byKey.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .slice(-12)
-      .map(([key, sevs]) => ({ key, count: sevs.length, avg: sevs.reduce((t, v) => t + v, 0) / sevs.length }));
-  }, [symptoms, period]);
+      .map(([key, sevs]) => ({
+        key, count: sevs.length, avg: sevs.reduce((t, v) => t + v, 0) / sevs.length,
+        changes: changes.filter(c => (period === 'year' ? c.date.slice(0, 7) : c.date) === key),
+      }));
+  }, [symptoms, period, changes]);
 
   const topSymptoms = useMemo(() => {
     const counts = new Map<string, { name: string; n: number }>();
@@ -613,10 +664,19 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
       { label: 'Daily', values, color: m.color },
       { label: '7-day average', values: rollingAverage(values), ghost: true },
     ];
-    return { m, labels: wellnessTrend.map(p => dayLabel(p.date)), series };
-  }, [wellnessTrend, metric]);
+    // Each change sits on the first logged day on or after it
+    const byIndex = new Map<number, HealthChange[]>();
+    for (const c of changes) {
+      const i = wellnessTrend.findIndex(p => p.date >= c.date);
+      if (i >= 0) byIndex.set(i, [...(byIndex.get(i) ?? []), c]);
+    }
+    const markers = [...byIndex].sort((a, b) => a[0] - b[0]).map(([index, cs]) => ({
+      index, label: cs.map(c => `${dayLabel(c.date)} · ${c.text}`).join(' · '), cs,
+    }));
+    return { m, labels: wellnessTrend.map(p => dayLabel(p.date)), series, markers };
+  }, [wellnessTrend, metric, changes]);
 
-  const hasAnything = wellness.length > 0 || symptoms.length > 0 || exercises.length > 0 || foods.length > 0;
+  const hasAnything = changes.length > 0 || wellness.length > 0 || symptoms.length > 0 || exercises.length > 0 || foods.length > 0;
   const maxBar = Math.max(1, ...symptomBars.map(b => b.count));
   const maxWeek = Math.max(1, ...exerciseFrequency.map(d => d.count));
 
@@ -626,6 +686,29 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
 
   return (
     <Report>
+      {changes.length > 0 && (
+        <>
+          <SectionHeading>Changes</SectionHeading>
+          <Panel aria-label="Changes in this period">
+            <PanelHead>
+              <div>
+                <PanelTitle>Changes in this period</PanelTitle>
+                <PanelSub>What you changed, to line up against the data below. Marked ◆ on the charts.</PanelSub>
+              </div>
+            </PanelHead>
+            {changes.map((c, i) => (
+              <ChangeRow key={`${c.entryId}-${c.date}-${i}`}>
+                <span className="when">{dayLabel(c.date)}</span>
+                {onOpenChange
+                  ? <button type="button" className="what" onClick={() => onOpenChange(c.entryId)}>{c.text}</button>
+                  : <span className="what">{c.text}</span>}
+                <span className="kind">{c.source === 'medication' ? 'Medication' : 'Other'}</span>
+              </ChangeRow>
+            ))}
+          </Panel>
+        </>
+      )}
+
       {(wellnessSummary || symptoms.length > 0) && (
         <>
           <SectionHeading>Wellness</SectionHeading>
@@ -665,7 +748,15 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
                   yMax={chart.m.max}
                   formatTick={v => `${v}${chart.m.unit}`}
                   series={chart.series}
+                  markers={chart.markers}
                 />
+                {chart.markers.length > 0 && (
+                  <MarkerKey aria-label="Changes on this chart">
+                    {chart.markers.flatMap(mk => mk.cs).map((c, i) => (
+                      <li key={i}><i aria-hidden="true" />{dayLabel(c.date)} · {c.text}</li>
+                    ))}
+                  </MarkerKey>
+                )}
               </Panel>
             )}
 
@@ -714,7 +805,8 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
                 </PanelHead>
                 <Bars role="img" aria-label="Symptoms per day, coloured by average severity">
                   {symptomBars.map(b => (
-                    <BarCol key={b.key} title={`${periodLabel(b.key)}: ${b.count} · avg severity ${b.avg.toFixed(1)}`}>
+                    <BarCol key={b.key} title={`${periodLabel(b.key)}: ${b.count} · avg severity ${b.avg.toFixed(1)}${b.changes.map(c => ` · changed: ${c.text}`).join('')}`}>
+                      {b.changes.length > 0 && <BarChange aria-label={`Changed: ${b.changes.map(c => c.text).join(', ')}`} />}
                       <BarCount>{b.count}</BarCount>
                       <Bar $h={(b.count / maxBar) * 78} $color={bandColor(Math.round(b.avg))} />
                     </BarCol>

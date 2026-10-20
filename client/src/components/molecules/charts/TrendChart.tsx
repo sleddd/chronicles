@@ -4,7 +4,9 @@ import styled from 'styled-components';
    muted sentence-case tick labels, the main series in its colour with dots (the
    last one larger), and any comparison series as dashed grey "ghost" lines behind
    it. The legend is drawn by the caller (`ChartLegend`) in its card's title row.
-   Pure SVG; null values break the line. Every colour is a CSS value. */
+   Optional markers draw a dotted vertical line + a small diamond where something
+   changed, labelled on hover. Pure SVG; null values break the line. Every
+   colour is a CSS value. */
 
 export interface TrendSeries {
   label: string;
@@ -25,6 +27,8 @@ interface TrendChartProps {
   yTicks?: number[];
   formatTick?: (v: number) => string;
   ariaLabel: string;
+  /** Dotted vertical lines at points where something changed (label shows on hover) */
+  markers?: { index: number; label: string }[];
 }
 
 const W = 900;
@@ -79,7 +83,7 @@ function niceMax(v: number): number {
   return step * mag;
 }
 
-export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => String(v), ariaLabel }: TrendChartProps) {
+export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => String(v), ariaLabel, markers = [] }: TrendChartProps) {
   const n = labels.length;
   const all = series.flatMap(s => s.values).filter((v): v is number => v !== null);
   const top = yMax ?? niceMax(Math.max(0, ...all));
@@ -119,6 +123,15 @@ export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => Str
       ))}
       {labels.map((l, i) => showLabel(i) && (
         <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>{l}</text>
+      ))}
+      {markers.filter(m => m.index >= 0 && m.index < n).map((m, i) => (
+        <g key={`m${i}`} data-marker>
+          <title>{m.label}</title>
+          <line x1={x(m.index)} x2={x(m.index)} y1={PAD.t} y2={y(0)} stroke="var(--text-muted)" strokeWidth={1.25} strokeDasharray="2 4" />
+          <path d={`M${x(m.index)} ${PAD.t - 6} l5 5 l-5 5 l-5 -5 z`} fill="var(--text-muted)" />
+          {/* a wide invisible strip so the hover label is easy to reach */}
+          <rect x={x(m.index) - 8} y={PAD.t - 6} width={16} height={y(0) - PAD.t + 6} fill="transparent" />
+        </g>
       ))}
       {ghosts.map((s, gi) => (
         <path key={s.label} d={path(s.values)} fill="none" stroke="var(--text-placeholder)"

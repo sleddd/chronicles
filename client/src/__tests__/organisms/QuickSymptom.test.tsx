@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { QuickSymptom } from '@/components/organisms/HealthQuickLog';
+import { QuickSymptom, QuickChange } from '@/components/organisms/HealthQuickLog';
 import { renderWithTheme } from '../testUtils';
 
 const create = vi.fn();
@@ -14,7 +14,7 @@ vi.mock('@/contexts/EncryptionContext', () => ({
   }),
 }));
 vi.mock('@/stores/entriesStore', () => {
-  const state = { allTopics: [{ id: 3, name: 'Symptom' }], setTopics: vi.fn(), addDecryptedEntry: (e: unknown) => addDecryptedEntry(e) };
+  const state = { allTopics: [{ id: 3, name: 'Symptom' }, { id: 4, name: 'Changes' }], setTopics: vi.fn(), addDecryptedEntry: (e: unknown) => addDecryptedEntry(e) };
   const useEntriesStore = (sel: (s: typeof state) => unknown) => sel(state);
   useEntriesStore.getState = () => state;
   return { useEntriesStore };
@@ -63,5 +63,16 @@ describe('QuickSymptom', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Headache' }));
     fireEvent.click(screen.getByRole('button', { name: 'More details' }));
     await waitFor(() => expect(openNew).toHaveBeenCalledWith(3, expect.objectContaining({ symptomName: 'Headache', severity: 5 })));
+  });
+
+  it('Log a change saves what changed and when to the Changes topic', async () => {
+    renderWithTheme(<QuickChange />);
+    expect(screen.getByRole('button', { name: 'Log change' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('What changed?'), { target: { value: 'Cut out dairy' } });
+    fireEvent.change(screen.getByLabelText('When did it change?'), { target: { value: '2026-10-10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log change' }));
+    await waitFor(() => expect(addDecryptedEntry).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ taxonomyIds: [4] }));
+    expect(addDecryptedEntry.mock.calls[0][0].metadata._customFields).toEqual({ changeWhat: 'Cut out dairy', changeDate: '2026-10-10', notes: '' });
   });
 });

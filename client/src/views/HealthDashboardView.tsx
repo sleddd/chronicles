@@ -6,7 +6,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { AsNeededMeds } from '../components/organisms/AsNeededMeds.js';
-import { QuickLog, QuickSymptom } from '../components/organisms/HealthQuickLog.js';
+import { QuickLog, QuickSymptom, QuickChange } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
@@ -190,6 +190,7 @@ export function HealthDashboardView() {
                 <Column>
                   <MedicationSchedule isReady={isReady} />
                   <AsNeededMeds />
+                  <QuickChange />
                 </Column>
               </Pair>
             ) : (
@@ -198,6 +199,7 @@ export function HealthDashboardView() {
                 <QuickSymptom />
                 {hasMeds && ff.medicationEnabled !== false && <MedicationSchedule isReady={isReady} />}
                 {ff.medicationEnabled !== false && <AsNeededMeds />}
+                <QuickChange />
               </>
             )}
           </Stack>

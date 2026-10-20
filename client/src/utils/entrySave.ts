@@ -1,3 +1,5 @@
+import { withMedicationChanges } from './healthChanges.js';
+import { toDateStr } from './dateUtils.js';
 import { autoCaloriesOnSave } from '../services/aiAssistant.js';
 import { stripHtml, summarizeUserFields } from './stripHtml.js';
 import { defaultShoppingListTitle } from './kitchen.js';
@@ -31,12 +33,15 @@ export function hasEntryData(content: string, customFields: Record<string, unkno
  * - a fields-only entry gets its field summary as the text
  * - Meals / Exercise get blank (or stale AI) calories estimated; a failed
  *   estimate never blocks the save
+ * - a Medication records what changed since it was last saved (healthChanges)
  */
 export async function prepareEntryForSave(
   content: string,
   customFields: Record<string, unknown>,
   topicName: string | undefined,
   userFieldDefs: UserFieldDef[],
+  /** The entry's fields as last saved (null = a new entry) — a medication records what changed */
+  previousFields: Record<string, unknown> | null = null,
 ): Promise<{ content: string; customFields: Record<string, unknown> }> {
   const hasText = !!stripHtml(content).trim() || content.includes('data-type="drawing"');
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
@@ -52,5 +57,6 @@ export async function prepareEntryForSave(
     const estimated = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields).catch(() => null);
     if (estimated) fields = estimated;
   }
+  if (topicName === 'medication') fields = withMedicationChanges(previousFields, fields, toDateStr(new Date()));
   return { content: finalContent, customFields: fields };
 }

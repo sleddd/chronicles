@@ -22,6 +22,7 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Shopping List', icon: 'cart-shopping', color: '#22C55E' },
   { name: 'Recipe', icon: 'bowl-food', color: '#F97316' },
   { name: 'Menu Plan', icon: 'calendar-week', color: '#8B5CF6' },
+  { name: 'Changes', icon: 'clock', color: '#64748B' },
 ];
 
 const norm = (n: string) => n.trim().toLowerCase().replace(/s$/, '');

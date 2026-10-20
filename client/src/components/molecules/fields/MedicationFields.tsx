@@ -1,3 +1,4 @@
+import { medChangesOf, describeMedChange } from '../../../utils/healthChanges.js';
 import { useId, useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../../atoms/core/Icon.jsx';
@@ -14,7 +15,46 @@ export type { MedicationFieldValues } from '../../../types/fields.js';
    borderless title, then Dosage in an outlined box under its label; How often as
    outline chips; Reminders as time pills plus a dashed "+ Add time" pill;
    Nutrients per dose as an outlined strip; Notes behind "+ Add notes"; and a
-   "Currently taking" card with a switch. Props only. */
+   "Currently taking" card with a switch, then History — the changes recorded
+   as it was saved (utils/healthChanges), each with × to remove a wrong one.
+   Props only. */
+
+/* History: date | what changed | × */
+const HistoryList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-card);
+  border-radius: var(--r-lg, 6px);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  li {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 44px;
+    padding: 0 8px 0 16px;
+  }
+  li + li { border-top: 1px solid var(--border-card); }
+  .when { flex: none; width: 92px; color: var(--text-muted); }
+  .what { flex: 1; min-width: 0; color: var(--text-secondary); }
+  button {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  button:hover { color: var(--text-secondary); background: var(--bg-hover); }
+`;
+
+/* "2026-10-19" → "Oct 19, 2026" */
+const historyDate = (d: string) =>
+  new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 /* A small grey italic aside after a section label */
 const LabelNote = styled.span`
@@ -152,6 +192,9 @@ interface MedicationFieldsProps {
 export function MedicationFields({ values, onChange, entryName = '' }: MedicationFieldsProps) {
   const cf = values as unknown as Record<string, unknown>;
   const set = (patch: Partial<MedicationFieldValues>) => onChange({ ...values, ...patch });
+  // Changes recorded on save (utils/healthChanges), newest first
+  const changes = medChangesOf(values as unknown as Record<string, unknown>);
+  const history = changes.map((c, i) => ({ c, i })).sort((a, b) => b.c.date.localeCompare(a.c.date) || b.i - a.i);
   const detected = parseMedNutrients(entryName || values.medicationName || '', values.dosage ?? '');
   const [notesOpen, setNotesOpen] = useState(false);
   const showNotes = notesOpen || !!values.notes;
@@ -280,6 +323,22 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
         </div>
         <Toggle checked={values.isActive} aria-label="Currently taking" onChange={v => set({ isActive: v })} />
       </StatusCard>
+
+      {history.length > 0 && (
+        <Section aria-label="History" style={{ marginTop: 30 }}>
+          <SectionHead><SectionLabel>History</SectionLabel><LabelNote>recorded as you change it</LabelNote></SectionHead>
+          <HistoryList>
+            {history.map(({ c, i }) => (
+              <li key={`${c.date}-${c.kind}-${i}`}>
+                <span className="when">{historyDate(c.date)}</span>
+                <span className="what">{describeMedChange(c)}</span>
+                <button type="button" aria-label={`Remove ${describeMedChange(c)} on ${historyDate(c.date)}`}
+                  onClick={() => onChange({ ...values, _changes: changes.filter((_, j) => j !== i) } as MedicationFieldValues)}>✕</button>
+              </li>
+            ))}
+          </HistoryList>
+        </Section>
+      )}
     </FormWrap>
   );
 }

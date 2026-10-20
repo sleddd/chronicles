@@ -154,4 +154,27 @@ describe('HealthReport', () => {
     expect(before.getAllByRole('button', { name: /^Restore/ })).toHaveLength(7);
     expect(before.queryByRole('button', { name: /more$/ })).toBeNull();
   });
+
+  it('lists what changed, marks it on the charts and opens its entry', () => {
+    const onOpen = vi.fn();
+    const changes = [
+      { date: '2026-10-12', text: 'Aspirin dose 325 mg → 650 mg', source: 'medication' as const, entryId: 5 },
+      { date: '2026-10-11', text: 'Cut out dairy', source: 'other' as const, entryId: 6 },
+    ];
+    const wellness = ['2026-10-10', '2026-10-12', '2026-10-13'].map((date, i) => ({ id: i, date, waterGlasses: 6, waterGoal: 8, moodScore: 3, sleepHours: 7, sleepQuality: 0 }));
+    vi.mocked(analysis.calculateWellnessTrend).mockReturnValue(wellness.map(w => ({ date: w.date, waterGlasses: 6, waterGoal: 8, moodScore: 3, sleepHours: 7, sleepQuality: 0 })));
+    const { container } = renderWithTheme(<HealthReport {...defaultProps} wellness={wellness} changes={changes} onOpenChange={onOpen}
+      symptoms={[{ id: 1, name: 'Headache', severity: 5, occurredAt: '2026-10-12T10:00:00' }]} />);
+    const panel = screen.getByRole('region', { name: 'Changes in this period' });
+    expect(panel).toHaveTextContent('Aspirin dose 325 mg → 650 mg');
+    expect(panel).toHaveTextContent('Medication');
+    expect(panel).toHaveTextContent('Other');
+    fireEvent.click(screen.getByRole('button', { name: 'Cut out dairy' }));
+    expect(onOpen).toHaveBeenCalledWith(6);
+    // Both changes land on the Oct 12 point (Oct 11 wasn't logged): one marker, both in the key
+    expect(container.querySelectorAll('[data-marker]')).toHaveLength(1);
+    expect(screen.getByRole('list', { name: 'Changes on this chart' }).children).toHaveLength(2);
+    expect(screen.getByLabelText('Changed: Aspirin dose 325 mg → 650 mg')).toBeInTheDocument(); // ◆ over the Oct 12 bar
+    vi.mocked(analysis.calculateWellnessTrend).mockReturnValue([]);
+  });
 });

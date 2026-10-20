@@ -1,3 +1,4 @@
+import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/ChangeFields.js';
 import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject } from 'react';
 import { PillButton } from '../atoms/PillButton.js';
 import styled from 'styled-components';
@@ -456,13 +457,14 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   allergy: 'allergy', 'shopping list': 'shopping_list',
   recipe: 'recipe', recipes: 'recipe',
   priorities: 'priorities', wellness: 'wellness', 'menu plan': 'menu_plan',
+  changes: 'change', change: 'change',
 };
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
 const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
-  event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName',
+  event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName', change: 'changeWhat',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -952,6 +954,7 @@ export function EntryForm({
               {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
               {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
+              {customType === 'change' && <ChangeFields values={{ changeWhat: '', changeDate: '', notes: '', ...customFields } as ChangeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'symptom' && <SymptomFields values={{ symptomName: '', severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
                 chips={symptomChipList(symptomChips)} onAddChip={chipsLoaded ? l => { void saveSymptomChips(addSymptomChip(symptomChips, l)); } : undefined}
                 onRemoveChip={chipsLoaded ? l => { void saveSymptomChips(removeSymptomChip(symptomChips, l)); } : undefined} />}
