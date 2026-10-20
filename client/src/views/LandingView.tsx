@@ -33,7 +33,7 @@ const FEATURES: { name: string; tag?: string; body: string; shot: string | strin
   { name: 'Topics', body: 'Tasks, goals, meals, medication, recipes, books, quotes, or your own. Add, remove and reorder them, pick their icons, and give each its own fields — so a book entry asks for a title and author, not a paragraph.', shot: 'topics', alt: 'The Topics list with an icon and entry count for each topic' },
   { name: 'Health, Wellness, & Symptom Tracking', body: 'Track your nutrition against your goals, log your wellness, and manage your medication schedules. Reports surface potential medical correlations and patterns you can confirm or dismiss. Allergy, symptom and medication lists print for appointments.', shot: ['health-dashboard', 'health-meals', 'health-med-history', 'health-reports', 'health-reports-symptoms'], alt: ['The health dashboard with nutrients against goals, the wellness check-in, quick logs, today’s doses, as-needed medications and a quick symptom log', 'The meals log with the day’s calories, iron and vitamins against goals, and the history', 'Medication history showing how often each medication was taken this month, with each dose', 'Health reports with water, mood and sleep over time and insights', 'Symptom reports showing how often and how severe, the most common, and which come together'] },
   { name: 'Planning', body: 'Goals, milestones and tasks on Kanban boards or lists. Drag a card to change its status or its order. Tasks roll up into milestones, and milestones into goals.', shot: ['planning-tasks', 'planning-todos', 'planning', 'planning-milestones'], alt: ['Tasks by status with priorities, deadlines and the milestone they roll up to', 'Todos as a list, with done ones struck through', 'The goals board with columns from New to Achieved', 'Milestones on their own board, each under its goal'] },
-  { name: 'Calendar', body: 'Day, week and month views of events, deadlines, goal dates and bills due. Syncs both ways with Google Calendar, with a private feed for Apple Calendar.', shot: ['calendar', 'calendar-week', 'calendar-day'], alt: ['The month calendar with bills, tasks and events on their days', 'The week, one row per day', 'A single day with what’s due'] },
+  { name: 'Calendar', body: 'Day, week and month views of events, deadlines, goal dates and bills due. Syncs both ways with Google Calendar, with a private feed for Apple Calendar. Only titles, times and locations are synced, never your journal.', shot: ['calendar', 'calendar-week', 'calendar-day'], alt: ['The month calendar with bills, tasks and events on their days', 'The week, one row per day', 'A single day with what’s due'] },
   { name: 'From the Kitchen', body: 'A weekly menu and recipes with checkable ingredients. One tap turns the menu into a shopping list. Check it off from your phone while you shop.', shot: ['kitchen', 'kitchen-recipe', 'kitchen-shopping', 'kitchen-menu'], alt: ['The kitchen dashboard with today’s meals and the shopping list', 'A recipe with its ingredients and method', 'A shopping list by category, with items ticked off', 'The week’s menu, each meal linked to its recipe'] },
   { name: 'Finance', body: 'Off by default. A manual budget, bills and subscriptions, savings funds, money goals and reports. Nothing connects to your bank.', shot: ['finance', 'finance-bills', 'finance-savings'], alt: ['The budget with planned, bills, spending and what’s left by category', 'Bills and subscriptions with what’s due and overdue', 'Savings funds with their targets and entries'] },
   { name: 'AI assistant', tag: 'Optional, your own key', body: 'Estimates calories and nutrients for meals and exercise, and helps with the app. Bring your own key from Anthropic, OpenAI or Amazon Bedrock. It never sees your journal.', shot: 'ai', alt: 'The In-App AI chat offering to estimate a meal’s calories and save it' },
@@ -153,7 +153,7 @@ const CenterLede = styled(Lede)`
   text-wrap: balance;
 `;
 
-/* Your data at a glance: 52px at 300, with room under it */
+/* Enter once, see it where you need it: 52px at 300, with room under it */
 const FeaturesTitle = styled(H2)`
   margin-bottom: 24px;
   font-size: 52px;
@@ -276,7 +276,7 @@ const Marker = styled.span`
   background: radial-gradient(circle, var(--color-accent-line) 0 5px, transparent 5.5px);
 `;
 
-/* Your data at a glance: a white band of staggered rows — the words on one
+/* Enter once, see it where you need it: a white band of staggered rows — the words on one
    side, a real screenshot of that view on the other, swapping sides each row */
 const FeaturesBand = styled(Section)`
   padding: 136px 0 144px;
@@ -470,7 +470,7 @@ export function LandingView() {
           <HowTitle id="how-title">How it works</HowTitle>
           <WideLede>
             Chronicles is inspired by bullet journaling, without the notebook. Every entry carries a topic, whether
-            it’s a task, a meal, or an event, and the views do the sorting for you. All it takes is one line a day.
+            it’s a task, a meal, or an event, and the views do the sorting for you. All it takes is entering one line.
           </WideLede>
           </div>
           <Steps>
@@ -487,10 +487,9 @@ export function LandingView() {
 
       <FeaturesBand id="features" aria-labelledby="features-title">
         <Container>
-          <FeaturesTitle id="features-title">Your data at a glance</FeaturesTitle>
+          <FeaturesTitle id="features-title">Enter once, see it<br /> where you need it</FeaturesTitle>
           <Lede>
-            Enter your data in one place and custom views make it easier to track, plan, and organize your day by
-            automatically sorting your entries. All your data becomes available at a glance.
+            Custom views sort your entries, so you can track, plan and organize your day without filing a thing.
           </Lede>
           <FeatureRows>
             {FEATURES.map(({ name, tag, body, shot, alt }) => (

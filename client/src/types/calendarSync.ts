@@ -11,6 +11,8 @@ export interface EntrySyncState {
   syncedHash: string;
   /** True when the entry was created by importing a foreign Google event. */
   imported?: boolean;
+  /** Notes / attendees / phone pushed by older versions were cleared from the Google event */
+  detailsCleared?: boolean;
 }
 
 export interface GoogleEventTime {
@@ -24,7 +26,8 @@ export interface GoogleEventTime {
 /** The subset of a Google Calendar event Chronicles reads/writes. */
 export interface GoogleEventPayload {
   summary: string;
-  description: string;
+  /** Never sent by Chronicles' payloads (notes stay private); '' clears an old one */
+  description?: string;
   location: string;
   start: GoogleEventTime;
   end: GoogleEventTime;

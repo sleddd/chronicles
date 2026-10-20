@@ -144,9 +144,10 @@ export function toGooglePayload(
     end = { date: addDays(fields.endDate || fields.startDate, 1) };
   }
 
+  // Only the title, times and place go to Google — never notes, attendees or
+  // phone (the description is left out, so an update never touches it)
   return {
     summary: title || (topicType === 'meeting' ? 'Meeting' : 'Event'),
-    description: buildDescription(fields),
     location: buildLocation(fields),
     start,
     end,
@@ -154,8 +155,13 @@ export function toGooglePayload(
   };
 }
 
-/** Map a Google event back onto Chronicles custom-field values. */
-export function fromGoogleEvent(event: GoogleEvent, topicType: SyncTopicType): Partial<MappedFields> {
+/**
+ * Map a Google event back onto Chronicles custom-field values. The event's
+ * description (notes, phone, attendees) is read only when importing a new
+ * event (`withDetails`) — a linked entry's own details are never overwritten
+ * from Google, since Chronicles doesn't send them there.
+ */
+export function fromGoogleEvent(event: GoogleEvent, topicType: SyncTopicType, { withDetails = false } = {}): Partial<MappedFields> {
   const fields: Partial<MappedFields> = {};
 
   if (event.start?.date) {
@@ -180,11 +186,13 @@ export function fromGoogleEvent(event: GoogleEvent, topicType: SyncTopicType): P
   fields.location = location;
   fields.address = '';
 
-  const { notes, phone, attendees } = parseDescription(event.description || '');
-  fields.notes = notes;
-  fields.phone = phone;
+  if (withDetails) {
+    const { notes, phone, attendees } = parseDescription(event.description || '');
+    fields.notes = notes;
+    fields.phone = phone;
+    if (topicType === 'meeting') fields.attendees = attendees;
+  }
   if (topicType === 'meeting') {
-    fields.attendees = attendees;
     fields.meetingTopic = event.summary || '';
   } else {
     fields.calendarTitle = event.summary || '';
@@ -220,7 +228,7 @@ export function canonicalizePayload(payload: {
   };
   return JSON.stringify([
     payload.summary || '',
-    payload.description || '',
+    '', // description: not synced (kept as a blank slot so earlier hashes still match)
     payload.location || '',
     timeKey(payload.start),
     timeKey(payload.end),

@@ -169,7 +169,7 @@ describe('calendarSync push', () => {
 
   it('does nothing when the entry is unchanged since the last sync', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
-    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })], { googleSyncToken: 'tok-incremental' });
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([]);
 
     await runCalendarSync(deps);
@@ -181,7 +181,7 @@ describe('calendarSync push', () => {
   it('patches the Google event when local fields changed', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
     const changed = { ...eventFields, location: 'New Cafe' };
-    setupStores([makeEntry(10, { ...changed, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })], { googleSyncToken: 'tok-incremental' });
+    setupStores([makeEntry(10, { ...changed, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([]);
 
     await runCalendarSync(deps);
@@ -192,11 +192,45 @@ describe('calendarSync push', () => {
     expect((patch!.body as Record<string, unknown>).location).toBe('New Cafe');
   });
 
+  it('never sends notes, phone or attendees to Google', async () => {
+    setupStores([makeEntry(10, { ...eventFields, notes: 'Private note', phone: '555-0100' })]);
+    stubGoogleFetch([], { id: 'g-10' });
+    await runCalendarSync(deps);
+    const insert = fetchCalls.find(c => c.method === 'POST')!;
+    expect(insert.body).not.toHaveProperty('description');
+    expect(JSON.stringify(insert.body)).not.toMatch(/Private note|555-0100/);
+    const sync = ((useEntriesStore.getState().decryptedEntries[0].metadata._customFields as Record<string, unknown>)._sync) as Record<string, unknown>;
+    expect(sync.detailsCleared).toBe(true);
+  });
+
+  it('clears notes an older version pushed, once', async () => {
+    const { syncedHash } = await syncedFieldsFor(10, eventFields);
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })], { googleSyncToken: 'tok-incremental' });
+    stubGoogleFetch([]);
+    await runCalendarSync(deps);
+    const patches = fetchCalls.filter(c => c.method === 'PATCH');
+    expect(patches).toHaveLength(1);
+    expect((patches[0].body as Record<string, unknown>).description).toBe('');
+    const sync = ((useEntriesStore.getState().decryptedEntries[0].metadata._customFields as Record<string, unknown>)._sync) as Record<string, unknown>;
+    expect(sync.detailsCleared).toBe(true);
+  });
+
+  it('leaves an imported event’s own Google description alone', async () => {
+    const { syncedHash } = await syncedFieldsFor(10, eventFields);
+    const changed = { ...eventFields, location: 'New Cafe' };
+    setupStores([makeEntry(10, { ...changed, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, imported: true } })], { googleSyncToken: 'tok-incremental' });
+    stubGoogleFetch([]);
+    await runCalendarSync(deps);
+    const patches = fetchCalls.filter(c => c.method === 'PATCH');
+    expect(patches).toHaveLength(1); // the location change only
+    expect(patches[0].body).not.toHaveProperty('description');
+  });
+
   it('deletes the remote event and strips _sync when opted out', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
     setupStores([makeEntry(10, {
       ...eventFields, noCalendarSync: true,
-      _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash },
+      _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true },
     })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([]);
 
@@ -223,7 +257,7 @@ describe('calendarSync push', () => {
 describe('calendarSync pull', () => {
   it('skips the echo of our own write (remote hash equals syncedHash)', async () => {
     const { payload, syncedHash } = await syncedFieldsFor(10, eventFields);
-    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })], { googleSyncToken: 'tok-incremental' });
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([{
       id: 'g-10', status: 'confirmed', updated: '2026-07-12T00:00:00Z',
       summary: payload.summary, description: payload.description, location: payload.location,
@@ -237,7 +271,7 @@ describe('calendarSync pull', () => {
 
   it('applies a remote change when the local entry is unchanged', async () => {
     const { payload, syncedHash } = await syncedFieldsFor(10, eventFields);
-    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })], { googleSyncToken: 'tok-incremental' });
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([{
       id: 'g-10', status: 'confirmed', updated: '2026-07-12T00:00:00Z',
       summary: 'Renamed remotely', description: payload.description, location: 'Moved',
@@ -254,10 +288,24 @@ describe('calendarSync pull', () => {
     expect(fetchCalls.filter(c => c.method === 'PATCH')).toHaveLength(0);
   });
 
+  it('never overwrites local notes from a Google description', async () => {
+    const local = { ...eventFields, notes: 'My private note' };
+    const { payload, syncedHash } = await syncedFieldsFor(10, local);
+    setupStores([makeEntry(10, { ...local, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
+    stubGoogleFetch([{
+      id: 'g-10', status: 'confirmed', updated: '2026-07-12T00:00:00Z',
+      summary: 'Renamed remotely', description: '', location: 'Moved', start: payload.start, end: payload.end,
+    }]);
+    await runCalendarSync(deps);
+    const fields = useEntriesStore.getState().decryptedEntries[0].metadata._customFields as Record<string, unknown>;
+    expect(fields.location).toBe('Moved');
+    expect(fields.notes).toBe('My private note');
+  });
+
   it('keeps the local version when both changed and local is newer, then re-pushes it', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
     const localChanged = { ...eventFields, location: 'Local wins' };
-    const entry = makeEntry(10, { ...localChanged, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } });
+    const entry = makeEntry(10, { ...localChanged, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } });
     entry.updatedAt = new Date('2026-07-12T12:00:00Z'); // newer than remote
     setupStores([entry], { googleSyncToken: 'tok-incremental' });
     const { payload: remotePayload } = await syncedFieldsFor(10, { ...eventFields, location: 'Remote change' });
@@ -276,7 +324,7 @@ describe('calendarSync pull', () => {
 
   it('deletes the local entry when the remote event was cancelled', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
-    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })], { googleSyncToken: 'tok-incremental' });
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([{ id: 'g-10', status: 'cancelled' }]);
 
     await runCalendarSync(deps);
@@ -288,7 +336,7 @@ describe('calendarSync pull', () => {
   it('reconciles deletions on a full listing (tracked event missing remotely)', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
     // No sync token → full listing; the tracked event is absent, meaning it was deleted remotely
-    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash } })]);
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })]);
     stubGoogleFetch([]);
 
     await runCalendarSync(deps);

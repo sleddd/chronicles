@@ -56,6 +56,12 @@ describe('description round-trip', () => {
 });
 
 describe('toGooglePayload', () => {
+  it('sends only the title, times and place, never notes, phone or attendees', () => {
+    const payload = toGooglePayload({ ...baseFields, notes: 'Private', phone: '555-0100', attendees: 'Ana' }, '<h2>Coffee</h2>', 'meeting', 1)!;
+    expect(payload).not.toHaveProperty('description');
+    expect(JSON.stringify(payload)).not.toMatch(/Private|555-0100|Ana/);
+  });
+
   it('returns null without a start date', () => {
     expect(toGooglePayload({ ...baseFields, startDate: '' }, '<p>x</p>', 'event', 1)).toBeNull();
   });
@@ -97,7 +103,7 @@ describe('toGooglePayload', () => {
       { ...baseFields, meetingTopic: 'Q3 Planning', attendees: 'Ana' }, '<p>ignored</p>', 'meeting', 1,
     )!;
     expect(payload.summary).toBe('Q3 Planning');
-    expect(payload.description).toContain('Attendees: Ana');
+    expect(payload).not.toHaveProperty('description'); // attendees stay private
   });
 
   it('prefers calendarTitle over content for events', () => {
@@ -118,7 +124,7 @@ describe('fromGoogleEvent', () => {
       start: { dateTime: local.toISOString() },
       end: { dateTime: new Date(local.getTime() + 90 * 60000).toISOString() },
     };
-    const fields = fromGoogleEvent(event, 'event');
+    const fields = fromGoogleEvent(event, 'event', { withDetails: true });
     expect(fields.startDate).toBe('2026-07-20');
     expect(fields.startTime).toBe('10:00');
     expect(fields.endTime).toBe('11:30');
@@ -126,6 +132,13 @@ describe('fromGoogleEvent', () => {
     expect(fields.notes).toBe('Bring laptop');
     expect(fields.phone).toBe('555-0100');
     expect(fields.location).toBe('Blue Bottle, 123 Main St');
+  });
+
+  it('reads the description only when importing (withDetails)', () => {
+    const event: GoogleEvent = { id: 'g3', summary: 'Coffee', description: 'Bring laptop\nPhone: 555-0100', start: { date: '2026-07-20' }, end: { date: '2026-07-21' } };
+    const fields = fromGoogleEvent(event, 'event');
+    expect(fields).not.toHaveProperty('notes');
+    expect(fields).not.toHaveProperty('phone');
   });
 
   it('maps an all-day event with exclusive end back to inclusive dates', () => {

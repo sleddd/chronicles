@@ -18,6 +18,7 @@ import {
 } from './api.js';
 import {
   toGooglePayload,
+  buildDescription,
   fromGoogleEvent,
   computeSyncHash,
   type MappedFields,
@@ -288,7 +289,6 @@ async function listEvents(calendarId: string, syncToken: string | null): Promise
 function remotePayloadOf(event: GoogleEvent): GoogleEventPayload {
   return {
     summary: event.summary || '',
-    description: event.description || '',
     location: event.location || '',
     start: event.start || {},
     end: event.end || {},
@@ -345,7 +345,7 @@ async function importForeignEvent(
   const eventTopicId = [...topicMap.entries()].find(([, type]) => type === 'event')?.[0];
   if (!eventTopicId) return; // no Event topic to attach imports to
 
-  const remoteFields = fromGoogleEvent(event, 'event');
+  const remoteFields = fromGoogleEvent(event, 'event', { withDetails: true });
   if (!remoteFields.startDate) return;
   // Only import events from today onward — never a calendar's history. Already
   // synced past events keep updating via their _sync link; this only gates
@@ -494,7 +494,7 @@ async function pushPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
         `/calendars/${encodeURIComponent(calendarId)}/events`,
         { method: 'POST', body: JSON.stringify(payload) },
       );
-      const newSync: EntrySyncState = { googleEventId: created.id, calendarId, syncedHash: hash };
+      const newSync: EntrySyncState = { googleEventId: created.id, calendarId, syncedHash: hash, detailsCleared: true };
       await persistEntryMetadata(deps, current, { ...fields, _sync: newSync });
     } else if (sync.calendarId !== calendarId) {
       // Target calendar changed — move the event
@@ -503,14 +503,22 @@ async function pushPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
         `/calendars/${encodeURIComponent(calendarId)}/events`,
         { method: 'POST', body: JSON.stringify(payload) },
       );
-      const newSync: EntrySyncState = { ...sync, googleEventId: created.id, calendarId, syncedHash: hash };
+      const newSync: EntrySyncState = { ...sync, googleEventId: created.id, calendarId, syncedHash: hash, detailsCleared: !sync.imported || sync.detailsCleared };
       await persistEntryMetadata(deps, current, { ...fields, _sync: newSync });
-    } else if (hash !== sync.syncedHash) {
-      await gcalJson<GoogleEvent>(
-        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(sync.googleEventId)}`,
-        { method: 'PATCH', body: JSON.stringify(payload) },
-      );
-      await persistEntryMetadata(deps, current, { ...fields, _sync: { ...sync, syncedHash: hash } });
+    } else {
+      // Events Chronicles created may still carry notes / attendees / phone
+      // from older versions: clear the description once. An imported event's
+      // description is the owner's own Google text, so it's left alone.
+      const clearOld = !sync.imported && !sync.detailsCleared;
+      if (hash !== sync.syncedHash || clearOld) {
+        await gcalJson<GoogleEvent>(
+          `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(sync.googleEventId)}`,
+          { method: 'PATCH', body: JSON.stringify(clearOld ? { ...payload, description: '' } : payload) },
+        );
+        await persistEntryMetadata(deps, current, {
+          ...fields, _sync: { ...sync, syncedHash: hash, ...(clearOld ? { detailsCleared: true } : {}) },
+        });
+      }
     }
   }
 }
@@ -529,7 +537,7 @@ async function icsPhase(): Promise<void> {
     events.push({
       uid: `chronicles-${entry.id}@chronicles`,
       summary: payload.summary,
-      description: includeDetails ? payload.description : undefined,
+      description: includeDetails ? buildDescription(fields) : undefined,
       location: payload.location,
       startDate: fields.startDate,
       startTime: fields.startTime || '',
