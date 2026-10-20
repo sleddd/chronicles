@@ -12,6 +12,9 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { doses as dosesApi } from '../services/api.js';
+import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
+import { setTriggerReview, type TriggerReviews, type TriggerVerdict, type SymptomTrigger } from '../utils/foodSymptoms.js';
+import { splitSymptoms } from '../utils/symptomChips.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import type { PeriodType } from '../types/health.js';
 import type {
@@ -73,7 +76,7 @@ const Head = styled.div`
 `;
 
 /* Today / Week / Month / Year / Custom — one outlined group; the chosen one is
-   lifted onto --bg-active in the soft accent */
+   lifted onto --bg-tab-active in the standard text colour */
 const Periods = styled.div`
   display: flex;
   gap: 2px;
@@ -91,12 +94,12 @@ const PeriodBtn = styled.button<{ $active: boolean }>`
   padding: 0 14px;
   border: none;
   border-radius: 8px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: ${({ $active }) => ($active ? 'var(--bg-tab-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
   /* Phones: short labels (Day, Wk, Mo, Yr) and a calendar icon for Custom */
   .short { display: none; }
@@ -137,6 +140,19 @@ function getDateRange(period: PeriodType): { startDate: string; endDate: string 
 
 /* ── View ── */
 
+/** Today as YYYY-MM-DD (local) */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "2026-10-01", -2 → "2026-09-29" */
+function shiftDay(day: string, by: number): string {
+  const d = new Date(day + 'T12:00:00');
+  d.setDate(d.getDate() + by);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function HealthReportingView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -147,6 +163,11 @@ export function HealthReportingView() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [medLogs, setMedLogs] = useState<DecryptedMedicationLog[]>([]);
+  // Possible triggers the owner has confirmed or marked not a trigger
+  const [triggerReviews, saveTriggerReviews, reviewsLoaded] = useEncryptedSetting<TriggerReviews>('symptomTriggerReviews', {});
+  const reviewTrigger = useCallback((t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => {
+    void saveTriggerReviews(setTriggerReview(triggerReviews, t, verdict, localToday()));
+  }, [saveTriggerReviews, triggerReviews]);
 
   // Resolve topic IDs
   const topicIdMap = useMemo(() => {
@@ -162,30 +183,41 @@ export function HealthReportingView() {
   }, [period, customFrom, customTo]);
 
   // Filter entries by topic and date range
-  const filterByTopic = useCallback((topicName: string) => {
+  // padDays reaches back before the range — meals eaten just before it can still
+  // come before a symptom inside it
+  const filterByTopic = useCallback((topicName: string, padDays = 0) => {
     const tid = topicIdMap[topicName.toLowerCase()];
     if (!tid) return [];
+    const from = padDays ? shiftDay(startDate, -padDays) : startDate;
     return entries.filter(e => {
       const meta = e.metadata as Record<string, unknown> | undefined;
       if (!meta || meta._taxonomyId !== tid) return false;
       const d = (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString().split('T')[0];
-      return d >= startDate && d <= endDate;
+      return d >= from && d <= endDate;
     });
   }, [entries, topicIdMap, startDate, endDate]);
 
   // Build typed arrays from decrypted entries
   const symptoms: DecryptedSymptom[] = useMemo(() =>
-    filterByTopic('symptom').map(e => {
+    filterByTopic('symptom').flatMap(e => {
       const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
       const dateStr = (cf.occurredDate as string) || '';
       const timeStr = (cf.occurredTime as string) || '12:00';
       const occurredAt = dateStr ? `${dateStr}T${timeStr}:00` : (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString();
-      return { id: e.id, name: stripHtml(e.content).slice(0, 120), severity: (cf.severity as number) || 5, occurredAt };
+      const severity = (cf.severity as number) || 5;
+      // One entry can list several symptoms from the chips ("Flare day, Runny nose")
+      const label = ((cf.symptomName as string) || stripHtml(e.content)).slice(0, 120);
+      const names = splitSymptoms(label);
+      return (names.length ? names : [label]).map(name => ({ id: e.id, name, severity, occurredAt }));
     }), [filterByTopic]);
 
-  const foods: DecryptedFood[] = useMemo(() =>
-    filterByTopic('meals').map(e => {
-      const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
+  // Meals from two days before the range too, for the food ↔ symptom patterns
+  const patternFoods: DecryptedFood[] = useMemo(() =>
+    filterByTopic('meals', 2).flatMap(e => {
+      const meta = e.metadata as Record<string, unknown>;
+      const cf = (meta?._customFields as Record<string, unknown>) || {};
+      // A row synced from a ticked dose is already counted as that dose
+      if (meta?._doseLink) return [];
       const dateStr = (cf.consumedDate as string) || '';
       const timeStr = (cf.consumedTime as string) || '12:00';
       const consumedAt = dateStr ? `${dateStr}T${timeStr}:00` : (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString();
@@ -193,8 +225,10 @@ export function HealthReportingView() {
       const ingredients = rawIngredients ? rawIngredients.split(',').map(s => s.trim()).filter(Boolean) : [];
       const rawCal = cf.calories;
       const calories = typeof rawCal === 'number' ? rawCal : (typeof rawCal === 'string' ? parseInt(rawCal, 10) || undefined : undefined);
-      return { id: e.id, name: stripHtml(e.content).slice(0, 120), consumedAt, ingredients, calories, mealType: (cf.mealType as string) || undefined };
+      const name = ((cf.mealDescription as string) || stripHtml(e.content)).slice(0, 120);
+      return [{ id: e.id, name, consumedAt, ingredients, calories, mealType: (cf.mealType as string) || undefined }];
     }), [filterByTopic]);
+  const foods = useMemo(() => patternFoods.filter(f => f.consumedAt.slice(0, 10) >= startDate), [patternFoods, startDate]);
 
   const exercises: DecryptedExercise[] = useMemo(() =>
     filterByTopic('exercise').map(e => {
@@ -246,7 +280,10 @@ export function HealthReportingView() {
     // Build medication name map from entries
     const medEntries = entries.filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === medTopicId);
     const nameMap = new Map<number, string>();
-    for (const e of medEntries) nameMap.set(e.id, stripHtml(e.content).slice(0, 120) || 'Unknown');
+    for (const e of medEntries) {
+      const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
+      nameMap.set(e.id, ((cf.medicationName as string) || stripHtml(e.content)).trim().slice(0, 120) || 'Unknown');
+    }
 
     // One request for every dose record, filtered to the range here (each is decrypted in the browser)
     const fetchLogs = async () => {
@@ -302,6 +339,9 @@ export function HealthReportingView() {
           <HealthReport
             symptoms={symptoms}
             foods={foods}
+            patternFoods={patternFoods}
+            triggerReviews={triggerReviews}
+            onReviewTrigger={reviewsLoaded ? reviewTrigger : undefined}
             medLogs={medLogs}
             exercises={exercises}
             wellness={wellness}

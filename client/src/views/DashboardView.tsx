@@ -1,3 +1,4 @@
+import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
@@ -46,7 +47,7 @@ import type { PriorityItem } from '../components/molecules/fields/PrioritiesFiel
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'menu' | 'meds' | 'shopping';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'symptom' | 'menu' | 'meds' | 'shopping';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -56,6 +57,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quote', label: 'Quote of the day' },
   { key: 'priorities', label: "Today's priorities" },
   { key: 'comingUp', label: 'Coming up' },
+  { key: 'symptom', label: 'Log a symptom' },
   { key: 'menu', label: 'On the menu' },
   { key: 'meds', label: 'Medications' },
   { key: 'shopping', label: 'Shopping list' },
@@ -696,6 +698,22 @@ const DoseWhen = styled.span`
   color: var(--text-muted);
 `;
 
+/* Log a symptom: the Health quick symptom form (symptom chips, severity,
+   notes) as a flat section */
+const SymptomBody = styled.div`
+  margin-top: 20px;
+`;
+
+function LogSymptom() {
+  const navigate = useNavigate();
+  return (
+    <section aria-label="Log a symptom">
+      <SectionHead><h2>Log a symptom</h2><button type="button" onClick={() => navigate('/health/symptoms')}>Symptoms</button></SectionHead>
+      <SymptomBody><QuickSymptomForm /></SymptomBody>
+    </section>
+  );
+}
+
 function Medications({ doses }: { doses: Doses }) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState<string | null>(null);
@@ -928,10 +946,10 @@ function Menu() {
   );
 }
 
-/* Coming up: today's medication doses still to take, then events, meetings
-   and bills over the next two weeks. The kind is a plain label in its colour
+/* Coming up: events, meetings and bills over the next two weeks (doses live
+   in Next up and Medications, not here). The kind is a plain label in its colour
    (no fill, no outline). */
-type UpKind = 'event' | 'meeting' | 'bill' | 'meds';
+type UpKind = 'event' | 'meeting' | 'bill';
 const KindPill = styled.span<{ $kind: UpKind }>`
   flex: none;
   padding: 3px 0 3px 10px;
@@ -939,8 +957,8 @@ const KindPill = styled.span<{ $kind: UpKind }>`
   font-weight: 500;
   color: ${({ $kind }) => `color-mix(in srgb, ${KIND_COLOR[$kind]} 62%, var(--text-primary))`};
 `;
-const KIND_COLOR: Record<UpKind, string> = { event: 'var(--chart-blue)', meeting: 'var(--chart-violet)', bill: 'var(--chart-amber)', meds: 'var(--color-accent)' };
-const KIND_LABEL: Record<UpKind, string> = { event: 'Event', meeting: 'Meeting', bill: 'Bill', meds: 'Meds' };
+const KIND_COLOR: Record<UpKind, string> = { event: 'var(--chart-blue)', meeting: 'var(--chart-violet)', bill: 'var(--chart-amber)' };
+const KIND_LABEL: Record<UpKind, string> = { event: 'Event', meeting: 'Meeting', bill: 'Bill' };
 
 const UpRow = styled(Row)`
   align-items: flex-start;
@@ -962,7 +980,7 @@ function whenLabel(day: string, time: string | undefined, today: string): string
 
 function addDaysLocal(n: number): Date { const d = new Date(); d.setDate(d.getDate() + n); return d; }
 
-function ComingUp({ financeOn, doses, now }: { financeOn: boolean; doses: Doses; now: Date }) {
+function ComingUp({ financeOn }: { financeOn: boolean }) {
   const navigate = useNavigate();
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -975,12 +993,6 @@ function ComingUp({ financeOn, doses, now }: { financeOn: boolean; doses: Doses;
     const eventIds = new Set(allTopics.filter(t => ['event', 'events'].includes(t.name.toLowerCase())).map(t => t.id));
     const meetingIds = new Set(allTopics.filter(t => ['meeting', 'meetings'].includes(t.name.toLowerCase())).map(t => t.id));
     const out: { key: string; day: string; time?: string; title: string; sub?: string; kind: UpKind; open: () => void }[] = [];
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    for (const g of doses.groups) {
-      if (!g.pending.length || minutesOf(g.time) < nowMin) continue;
-      out.push({ key: `m${g.time}`, day: today, time: g.time, title: `${partOfDay(g.time)} medications`,
-        sub: `${g.pending.length} ${g.pending.length === 1 ? 'dose' : 'doses'}`, kind: 'meds', open: () => navigate('/health') });
-    }
     for (const e of entries) {
       const tid = (e.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
       const kind = tid !== undefined && eventIds.has(tid) ? 'event' : tid !== undefined && meetingIds.has(tid) ? 'meeting' : null;
@@ -998,7 +1010,7 @@ function ComingUp({ financeOn, doses, now }: { financeOn: boolean; doses: Doses;
       }
     }
     return out.sort((a, b) => a.day.localeCompare(b.day) || (a.time ?? '99').localeCompare(b.time ?? '99')).slice(0, 8);
-  }, [entries, allTopics, bills.records, financeOn, today, end, openInJournal, navigate, doses.groups, now]);
+  }, [entries, allTopics, bills.records, financeOn, today, end, openInJournal, navigate]);
 
   return (
     <section aria-label="Coming up">
@@ -1212,9 +1224,10 @@ export function DashboardView() {
   const left: ReactNode[] = [];
   const right: ReactNode[] = [];
   if (shown('priorities')) left.push(<Priorities key="p" />);
-  if (shown('comingUp')) left.push(<ComingUp key="c" financeOn={financeOn} doses={doses} now={now} />);
+  if (shown('comingUp')) left.push(<ComingUp key="c" financeOn={financeOn} />);
   if (shown('shopping')) right.push(<Shopping key="s" />);
   if (shown('menu') && kitchenOn) right.push(<Menu key="m" />);
+  if (shown('symptom')) right.push(<LogSymptom key="y" />);
   if (shown('meds') && medsOn) right.push(<Medications key="d" doses={doses} />);
 
   return (

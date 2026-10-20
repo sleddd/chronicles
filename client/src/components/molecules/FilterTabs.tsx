@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { useRef, useCallback, type KeyboardEvent } from 'react';
 
 /* Sub-sub tabs (All / Today / This week…): one outlined group; the chosen
-   option is lifted onto --bg-active in the soft accent. */
+   option is lifted onto --bg-tab-active in the standard text colour (no accent). */
 const Row = styled.div<{ $flush?: boolean; $bordered?: boolean }>`
   display: inline-flex;
   align-items: center;
@@ -29,10 +29,10 @@ const Btn = styled.button<{ $active?: boolean; $flush?: boolean }>`
   padding: 0 12px;
   border: none;
   border-radius: 7px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: ${({ $active }) => ($active ? 'var(--bg-tab-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   white-space: nowrap;
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease;

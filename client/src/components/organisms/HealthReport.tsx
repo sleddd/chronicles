@@ -12,8 +12,6 @@ import type {
   WellnessInsight,
 } from '../../utils/correlationAnalysis.js';
 import {
-  calculateCorrelations,
-  calculateExerciseCorrelations,
   calculateExerciseImpact,
   calculateExerciseFrequency,
   calculateSymptomCoOccurrences,
@@ -21,6 +19,13 @@ import {
   calculateWellnessInsights,
 } from '../../utils/correlationAnalysis.js';
 import { useMemo, useState } from 'react';
+import { FilterTabs } from '../molecules/FilterTabs.js';
+import { Chips, Chip } from '../molecules/fields/formKit.js';
+import {
+  TRIGGER_WINDOWS, TRIGGER_KIND_LABEL, triggerEvents, symptomTriggers, standsOut, beforeLabel, applyTriggerReviews, triggerKey,
+  type TriggerWindow, type TriggerReviews, type TriggerVerdict, type SymptomTrigger, type TriggerReview, type ReviewedTriggers,
+} from '../../utils/foodSymptoms.js';
+import { TickMark } from '../atoms/TickMark.js';
 
 /* Health → Reports. Sections (Wellness, Symptoms, Meals, Exercise) are big
    thin Work Sans headings on the canvas; their content sits in --bg-panel
@@ -241,6 +246,157 @@ const ListCount = styled.span`
   color: var(--text-muted);
 `;
 
+const RowText = styled.div`
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+`;
+
+const RowSub = styled.span`
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+const WindowRow = styled.div`
+  margin: -8px 0 20px;
+`;
+
+const Verdict = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-top: 8px;
+`;
+
+const ReviewBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-secondary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
+const Confirmed = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent-soft);
+`;
+
+const DismissedToggle = styled(ReviewBtn)`
+  margin-top: 16px;
+`;
+
+/* The two fact lines under a trigger */
+function TriggerFacts({ t }: { t: SymptomTrigger }) {
+  return (
+    <>
+      <RowSub>{TRIGGER_KIND_LABEL[t.kind]} · before {t.before} of {t.of} {plural(t.of, 'time')} · {beforeLabel(t.avgHours)}</RowSub>
+      <RowSub>Usually on {Math.round(t.usual * 100)}% of days{standsOut(t) ? ' · stands out' : ''}</RowSub>
+    </>
+  );
+}
+
+/* "2026-10-19" → "Oct 19" */
+const shortDate = (day: TriggerReview['at']) =>
+  new Date(day + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+const DISMISSED_PAGE = 5;
+
+/* A list of possible triggers with the owner's reviews: confirmed ones pinned
+   first, then the open ones with Confirm / Not a trigger, then the ones marked
+   not a trigger folded away (this period's first, newest first, five at a
+   time) so they never pile up. `withSymptom` titles rows "Food → Symptom"
+   (Possible triggers); without it, just the food (Before a symptom). */
+function TriggerList({ reviewed, onReview, withSymptom, openLimit, empty }: {
+  reviewed: ReviewedTriggers;
+  onReview?: (t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => void;
+  withSymptom?: boolean;
+  openLimit: number;
+  empty: string;
+}) {
+  const [shown, setShown] = useState(0);
+  const title = (t: { trigger: string; symptom: string }) => (withSymptom ? `${t.trigger} → ${t.symptom}` : t.trigger);
+  const label = (t: { trigger: string; symptom: string }) => `${t.trigger} → ${t.symptom}`;
+  const count = (t: SymptomTrigger) => (withSymptom ? `${Math.round(t.share * 100)}%` : `${t.before} of ${t.of} ${plural(t.of, 'time')}`);
+  const facts = (t: SymptomTrigger) => (withSymptom ? <TriggerFacts t={t} /> : (
+    <RowSub>{TRIGGER_KIND_LABEL[t.kind]} · usually on {Math.round(t.usual * 100)}% of days{standsOut(t) ? ' · stands out' : ''}</RowSub>
+  ));
+  const open = reviewed.open.slice(0, openLimit);
+  const dismissed = [...reviewed.dismissed].sort((a, b) =>
+    Number(!a.row) - Number(!b.row) || b.review.at.localeCompare(a.review.at));
+
+  return (
+    <>
+      {reviewed.confirmed.map(({ review, row }) => (
+        <ListRow key={triggerKey(review)}>
+          <RowText>
+            <ListName title={title(review)}>{title(review)}</ListName>
+            {row ? facts(row) : <RowSub>{TRIGGER_KIND_LABEL[review.kind]} · not seen in this period</RowSub>}
+            <Verdict>
+              <Confirmed><TickMark checked size={16} />Confirmed {shortDate(review.at)}</Confirmed>
+              {onReview && <ReviewBtn type="button" onClick={() => onReview(review, null)} aria-label={`Undo confirm ${label(review)}`}>Undo</ReviewBtn>}
+            </Verdict>
+          </RowText>
+          {row && <ListCount>{count(row)}</ListCount>}
+        </ListRow>
+      ))}
+      {open.length === 0 && reviewed.confirmed.length === 0 ? <Quiet>{empty}</Quiet> : open.map(t => (
+        <ListRow key={triggerKey(t)}>
+          <RowText>
+            <ListName title={title(t)}>{title(t)}</ListName>
+            {facts(t)}
+            {onReview && (
+              <Verdict>
+                <ReviewBtn type="button" onClick={() => onReview(t, 'confirmed')} aria-label={`Confirm ${label(t)}`}>
+                  <TickMark checked={false} size={16} />Confirm
+                </ReviewBtn>
+                <ReviewBtn type="button" onClick={() => onReview(t, 'dismissed')} aria-label={`${label(t)} is not a trigger`}>
+                  Not a trigger
+                </ReviewBtn>
+              </Verdict>
+            )}
+          </RowText>
+          <ListCount>{count(t)}</ListCount>
+        </ListRow>
+      ))}
+      {dismissed.length > 0 && (
+        <>
+          <DismissedToggle type="button" aria-expanded={shown > 0} onClick={() => setShown(n => (n ? 0 : DISMISSED_PAGE))}>
+            {dismissed.length} marked not a trigger · {shown ? 'Hide' : 'Show'}
+          </DismissedToggle>
+          {dismissed.slice(0, shown).map(({ review, row }) => (
+            <ListRow key={triggerKey(review)}>
+              <RowText>
+                <ListName style={{ color: 'var(--text-muted)' }} title={title(review)}>{title(review)}</ListName>
+                <RowSub>{TRIGGER_KIND_LABEL[review.kind]} · marked {shortDate(review.at)}{row ? '' : ' · not seen in this period'}</RowSub>
+              </RowText>
+              {onReview && <ReviewBtn type="button" onClick={() => onReview(review, null)} aria-label={`Restore ${label(review)}`}>Restore</ReviewBtn>}
+            </ListRow>
+          ))}
+          {shown > 0 && shown < dismissed.length && (
+            <DismissedToggle type="button" onClick={() => setShown(n => n + DISMISSED_PAGE)}>
+              Show {Math.min(DISMISSED_PAGE, dismissed.length - shown)} more
+            </DismissedToggle>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /* ── Exercise ── */
 
 const BigFigures = styled.div`
@@ -352,21 +508,28 @@ const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
 interface HealthReportProps {
   symptoms: DecryptedSymptom[];
   foods: DecryptedFood[];
+  /** Meals for the food ↔ symptom patterns (reaching a little before the range); defaults to foods */
+  patternFoods?: DecryptedFood[];
   medLogs: DecryptedMedicationLog[];
   exercises: DecryptedExercise[];
   wellness: DecryptedWellness[];
   period: PeriodType;
   /** Kept for callers; the report now draws in the accent token directly */
   accentColor?: string;
+  /** The owner's verdicts on possible triggers (encrypted setting, held by the view) */
+  triggerReviews?: TriggerReviews;
+  /** Mark a trigger confirmed / not a trigger (null clears); omitted = no buttons */
+  onReviewTrigger?: (t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => void;
 }
 
 /* ── Component ── */
 
-export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, period }: HealthReportProps) {
-  const correlations = useMemo(() => {
-    if (symptoms.length === 0) return [];
-    return [...calculateCorrelations(symptoms, foods, medLogs), ...calculateExerciseCorrelations(symptoms, exercises)];
-  }, [symptoms, foods, medLogs, exercises]);
+export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, exercises, wellness, period, triggerReviews, onReviewTrigger }: HealthReportProps) {
+  // Food, medications and exercise before each symptom (What comes before symptoms)
+  const [triggerWindow, setTriggerWindow] = useState<TriggerWindow>('4');
+  const events = useMemo(() => triggerEvents(patternFoods, medLogs, exercises), [patternFoods, medLogs, exercises]);
+  const reviewed = useMemo(() =>
+    applyTriggerReviews(symptomTriggers(symptoms, events, Number(triggerWindow)), triggerReviews), [symptoms, events, triggerWindow, triggerReviews]);
 
   const coOccurrences = useMemo(() =>
     symptoms.length > 0 ? calculateSymptomCoOccurrences(symptoms) : [], [symptoms]);
@@ -401,11 +564,17 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
     return [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 5);
   }, [symptoms]);
 
-  const topIngredients = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const f of foods) for (const ing of f.ingredients) { const k = ing.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [foods]);
+  const [chosenSymptom, setChosenSymptom] = useState('');
+  const beforeSymptom = topSymptoms.find(t => t.name.toLowerCase() === chosenSymptom.toLowerCase())?.name ?? topSymptoms[0]?.name ?? '';
+  // Everything before the chosen symptom, split by the reviews for that symptom
+  const before = useMemo(() => {
+    if (!beforeSymptom) return applyTriggerReviews([], {});
+    const rows = symptomTriggers(symptoms, events, Number(triggerWindow), { symptom: beforeSymptom, minTimes: 1, minShare: 0 });
+    const forSymptom = Object.fromEntries(Object.entries(triggerReviews ?? {})
+      .filter(([, r]) => r?.symptom?.trim().toLowerCase() === beforeSymptom.trim().toLowerCase()));
+    return applyTriggerReviews(rows, forSymptom);
+  }, [symptoms, events, beforeSymptom, triggerWindow, triggerReviews]);
+
 
   const exerciseTotals = useMemo(() => {
     if (exercises.length === 0) return null;
@@ -447,7 +616,7 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
     return { m, labels: wellnessTrend.map(p => dayLabel(p.date)), series };
   }, [wellnessTrend, metric]);
 
-  const hasAnything = wellness.length > 0 || symptoms.length > 0 || exercises.length > 0 || topIngredients.length > 0;
+  const hasAnything = wellness.length > 0 || symptoms.length > 0 || exercises.length > 0 || foods.length > 0;
   const maxBar = Math.max(1, ...symptomBars.map(b => b.count));
   const maxWeek = Math.max(1, ...exerciseFrequency.map(d => d.count));
 
@@ -504,7 +673,7 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
               <PanelHead>
                 <div>
                   <PanelTitle>Insights</PanelTitle>
-                  <PanelSub>Cross-correlations between sleep, water, mood, exercise, and symptoms</PanelSub>
+                  <PanelSub>Cross-correlations between sleep, water, mood, exercise and symptoms</PanelSub>
                 </div>
               </PanelHead>
               {wellnessInsights.map((insight, i) => (
@@ -523,24 +692,8 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
                   </Facts>
                 </InsightBox>
               ))}
-              {correlations.slice(0, 10).map((c, i) => (
-                <InsightBox key={`c${i}`}>
-                  <InsightHead>
-                    {c.trigger.name} → {c.symptom.name}
-                    <Pill $found>{c.correlation}% · {c.occurrences} {plural(c.occurrences, 'time')}</Pill>
-                  </InsightHead>
-                  <Facts>
-                    <dt>Seen</dt><dd>{c.occurrences} of {c.totalSymptomOccurrences} {plural(c.totalSymptomOccurrences, 'time')}</dd>
-                    {c.avgTimeToSymptom > 0 && (
-                      <><dt>Usually</dt><dd>~{c.avgTimeToSymptom < 60 ? `${c.avgTimeToSymptom} min` : `${Math.round(c.avgTimeToSymptom / 60)}h`} after</dd></>
-                    )}
-                  </Facts>
-                </InsightBox>
-              ))}
-              {wellnessInsights.length === 0 && correlations.length === 0 ? (
-                <Quiet>No patterns yet. Keep logging wellness, food, symptoms, and medications to find them.</Quiet>
-              ) : correlations.length === 0 && (
-                <Quiet>No food or medication correlations yet. Keep logging food, symptoms, and medications to find patterns.</Quiet>
+              {wellnessInsights.length === 0 && (
+                <Quiet>No patterns yet. Keep logging sleep, water, mood and symptoms to find them. Food, medications and exercise are under What comes before symptoms.</Quiet>
               )}
             </Panel>
           </Stack>
@@ -602,17 +755,51 @@ export function HealthReport({ symptoms, foods, medLogs, exercises, wellness, pe
         </>
       )}
 
-      {topIngredients.length > 0 && (
+      {symptoms.length > 0 && events.length > 0 && (
         <>
-          <SectionHeading>Meals</SectionHeading>
-          <Panel aria-label="Most eaten ingredients">
-            <PanelHead><PanelTitle>Most eaten ingredients</PanelTitle></PanelHead>
-            {topIngredients.map(([name, count]) => (
-              <ListRow key={name}><ListName>{name}</ListName><ListCount>{count}×</ListCount></ListRow>
-            ))}
-          </Panel>
+          <SectionHeading>What comes before symptoms</SectionHeading>
+          <WindowRow>
+            <FilterTabs options={[...TRIGGER_WINDOWS]} active={triggerWindow} onChange={setTriggerWindow} label="Before a symptom" />
+          </WindowRow>
+          <Grid $cols={2}>
+            <Panel aria-label="Possible triggers">
+              <PanelHead>
+                <div>
+                  <PanelTitle>Possible triggers</PanelTitle>
+                  <PanelSub>Food, medications and exercise logged before a symptom</PanelSub>
+                </div>
+              </PanelHead>
+              <TriggerList
+                reviewed={reviewed} onReview={onReviewTrigger} withSymptom openLimit={12}
+                empty="Nothing yet. Something shows up here once it has come before the same symptom at least twice."
+              />
+            </Panel>
+
+            <Panel aria-label="Before a symptom">
+              <PanelHead>
+                <div>
+                  <PanelTitle>Before a symptom</PanelTitle>
+                  <PanelSub>Everything logged before it, and how often you usually have it</PanelSub>
+                </div>
+              </PanelHead>
+              {topSymptoms.length > 1 && (
+                <Chips role="group" aria-label="Symptom" style={{ marginBottom: 12 }}>
+                  {topSymptoms.map(t => (
+                    <Chip key={t.name} type="button" $active={t.name === beforeSymptom} aria-pressed={t.name === beforeSymptom}
+                      onClick={() => setChosenSymptom(t.name)}>{t.name}</Chip>
+                  ))}
+                </Chips>
+              )}
+              <TriggerList
+                reviewed={before} onReview={onReviewTrigger} openLimit={10}
+                empty={`Nothing logged before ${beforeSymptom ? beforeSymptom.toLowerCase() : 'it'} in this window.`}
+              />
+            </Panel>
+          </Grid>
+          <Quiet>These are patterns in what you logged, not a diagnosis. Talk with your doctor before changing a medication or cutting foods out.</Quiet>
         </>
       )}
+
 
       {exerciseTotals && (
         <>

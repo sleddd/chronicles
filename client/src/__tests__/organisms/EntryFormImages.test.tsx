@@ -5,6 +5,10 @@ import { lightTheme } from '@shared/theme/tokens';
 import { EntryForm } from '@/components/organisms/EntryForm';
 import type { EntryImage } from '@/services/imageStorage';
 
+vi.mock('@/hooks/useEncryptedSetting', () => ({
+  useEncryptedSetting: (_key: string, fallback: unknown) => [fallback, vi.fn(), true],
+}));
+
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({

@@ -5,7 +5,7 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
-import { QuickLog } from '../components/organisms/HealthQuickLog.js';
+import { QuickLog, QuickSymptom } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
@@ -70,6 +70,15 @@ const Pair = styled.div`
   ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
+/* The left of the pair: Quick log with Log a symptom under it */
+const Column = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  ${NAV_COMPACT} { gap: 16px; }
+`;
+
 /* "Today" + the date, then the nutrient strip */
 const TodayHead = styled.div`
   display: flex;
@@ -128,8 +137,8 @@ function useHasScheduledMeds(): boolean {
 
 /**
  * Health dashboard — the landing tab for Health: today's nutrient strip, then
- * one column of panels: the wellness check-in, a quick meal / exercise log and
- * the day's medications.
+ * one column of panels: the wellness check-in, a quick meal / exercise log,
+ * the day's medications and a quick symptom log.
  */
 export function HealthDashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
@@ -173,12 +182,16 @@ export function HealthDashboardView() {
             <WellnessCheckIn title="Wellness check-in" quad />
             {hasMeds && ff.medicationEnabled !== false && (food || exercise) ? (
               <Pair>
-                <QuickLog meal={food} exercise={exercise} />
+                <Column>
+                  <QuickLog meal={food} exercise={exercise} />
+                  <QuickSymptom />
+                </Column>
                 <MedicationSchedule isReady={isReady} />
               </Pair>
             ) : (
               <>
                 <QuickLog meal={food} exercise={exercise} />
+                <QuickSymptom />
                 {hasMeds && ff.medicationEnabled !== false && <MedicationSchedule isReady={isReady} />}
               </>
             )}

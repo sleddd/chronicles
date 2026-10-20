@@ -586,7 +586,7 @@ export const SheetLink = styled.button`
   &:hover { text-decoration: underline; }
 `;
 
-/** One outlined group of options; the chosen one lifted onto --bg-active */
+/** One outlined group of options; the chosen one lifted onto --bg-tab-active */
 export const Seg = styled.div`
   display: flex;
   gap: 2px;
@@ -603,12 +603,12 @@ export const SegBtn = styled.button<{ $active: boolean }>`
   padding: 0 12px;
   border: none;
   border-radius: 7px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: ${({ $active }) => ($active ? 'var(--bg-tab-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 

@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
+import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, type SymptomChipConfig } from '../../utils/symptomChips.js';
+import { SeveritySection } from '../molecules/fields/SymptomFields.js';
 import styled from 'styled-components';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -65,12 +68,12 @@ const SwitchBtn = styled.button<{ $active: boolean }>`
   padding: 0 13px;
   border: none;
   border-radius: 8px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: ${({ $active }) => ($active ? 'var(--bg-tab-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 13px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
@@ -329,6 +332,87 @@ function ExerciseQuick() {
         </PillButton>
       </Footer>
     </>
+  );
+}
+
+/* ── Symptom ── */
+
+/** The quick symptom form: the symptom(s) — typed, or tapped from the same
+ *  chips as the journal's symptom form — severity and notes, logged as now.
+ *  "More details" opens the full form in the journal. Used by the Health
+ *  dashboard (QuickSymptom) and the home dashboard's Log a symptom section. */
+export function QuickSymptomForm() {
+  const createEntry = useCreateEntry();
+  const openNew = useNewEntryInJournal();
+  const [chipConfig] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
+  const chips = symptomChipList(chipConfig);
+  const blank = () => ({ name: '', severity: 5, notes: '' });
+  const [v, setV] = useState(blank);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+  const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
+
+  const fields = (): Record<string, unknown> => ({
+    symptomName: v.name.trim(), severity: v.severity,
+    occurredDate: today(), occurredTime: nowTime(), duration: '', notes: v.notes.trim(),
+  });
+
+  const log = async () => {
+    const name = v.name.trim();
+    if (!name || saving) return;
+    setSaving(true); setStatus('');
+    try {
+      const topicId = await getOrCreateTopicId('Symptom', 'flask');
+      await createEntry(topicId, `<p>${escapeHtml(name)}</p>`, fields());
+      setV(blank());
+      setStatus(`Logged ${name}`);
+      setTimeout(() => setStatus(''), 2600);
+    } catch (err) {
+      console.error('Failed to log symptom:', err);
+      setStatus('That didn’t save. Try again.');
+    } finally { setSaving(false); }
+  };
+
+  const more = async () => openNew(await getOrCreateTopicId('Symptom', 'flask'), fields());
+
+  return (
+    <>
+      <QTitle value={v.name} placeholder="What's going on?" aria-label="Symptom"
+        onChange={e => set({ name: e.target.value })}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+      <Section style={{ marginTop: 20 }}>
+        <QChips role="group" aria-label="Common symptoms">
+          {chips.map(c => (
+            <QChip key={c} type="button" aria-pressed={hasSymptom(v.name, c)} $active={hasSymptom(v.name, c)}
+              onClick={() => set({ name: toggleSymptom(v.name, c) })}>{c}</QChip>
+          ))}
+        </QChips>
+      </Section>
+      <div style={{ marginTop: 24 }}>
+        <SeveritySection value={v.severity} onChange={n => set({ severity: n })} />
+      </div>
+      <Section style={{ marginTop: 20 }}>
+        <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
+          onChange={e => set({ notes: e.target.value })} />
+      </Section>
+      <Footer>
+        <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
+        <Status role="status" aria-live="polite">{status}</Status>
+        <PillButton type="button" onClick={() => void log()} disabled={saving || !v.name.trim()}>
+          {saving ? 'Logging…' : 'Log symptom'}
+        </PillButton>
+      </Footer>
+    </>
+  );
+}
+
+/** Health dashboard panel around the quick symptom form */
+export function QuickSymptom() {
+  return (
+    <DashPanel aria-label="Log a symptom">
+      <DashPanelHead title="Log a symptom" />
+      <QuickSymptomForm />
+    </DashPanel>
   );
 }
 

@@ -34,6 +34,8 @@ import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
+import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
+import { EMPTY_SYMPTOM_CHIPS, symptomChipList, addSymptomChip, removeSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { ALLOWED_IMAGE_TYPES } from '../../utils/processImage.js';
 
 function escapeHtml(text: string): string {
@@ -460,7 +462,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
 const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
-  event: 'eventName', meeting: 'meetingName', task: 'taskDescription',
+  event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -529,6 +531,8 @@ export function EntryForm({
   const quick = variant === 'quick';
   // Phones (not tablets): Save / Discard / Delete sit in the page flow, not docked
   const phone = useMediaQuery('(max-width: 768px)');
+  // Symptom chips: the built-in list plus the owner's own (encrypted setting)
+  const [symptomChips, saveSymptomChips, chipsLoaded] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
   const ownDictationRef = useRef<DictationControls | null>(null);
   const dictRef = dictationControlRef ?? ownDictationRef;
   const [listening, setListening] = useState(false);
@@ -948,7 +952,9 @@ export function EntryForm({
               {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
               {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
-              {customType === 'symptom' && <SymptomFields values={{ severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType === 'symptom' && <SymptomFields values={{ symptomName: '', severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
+                chips={symptomChipList(symptomChips)} onAddChip={chipsLoaded ? l => { void saveSymptomChips(addSymptomChip(symptomChips, l)); } : undefined}
+                onRemoveChip={chipsLoaded ? l => { void saveSymptomChips(removeSymptomChip(symptomChips, l)); } : undefined} />}
               {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
               {customType === 'meeting' && <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as MeetingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}

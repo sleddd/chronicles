@@ -667,13 +667,13 @@ const WindowBtn = styled.button<{ $active: boolean }>`
   padding: 0 14px;
   border: none;
   border-radius: 8px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: ${({ $active }) => ($active ? 'var(--bg-tab-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   white-space: nowrap;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
   @media (max-width: 480px) { padding: 0 9px; font-size: 13px; }
 `;

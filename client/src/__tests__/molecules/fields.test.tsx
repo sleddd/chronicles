@@ -131,12 +131,38 @@ describe('FoodFields', () => {
 
 describe('SymptomFields', () => {
   const defaultValues: SymptomFieldValues = {
+    symptomName: '',
     severity: 5,
     occurredDate: '2024-06-15',
     occurredTime: '10:00',
     duration: '',
     notes: '',
   };
+
+  it('taps common symptom chips in and out of the name', () => {
+    const onChange = vi.fn();
+    const { rerender } = renderWithTheme(<SymptomFields values={{ ...defaultValues, symptomName: 'Flare day' }} onChange={onChange} chips={['Flare day', 'Runny nose']} />);
+    expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Runny nose' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ symptomName: 'Flare day, Runny nose' }));
+    rerender(<SymptomFields values={{ ...defaultValues, symptomName: 'Flare day, Runny nose' }} onChange={onChange} chips={['Flare day', 'Runny nose']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Flare day' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ symptomName: 'Runny nose' }));
+  });
+
+  it('adds a chip of your own (and picks it), and removes chips in Edit', () => {
+    const onChange = vi.fn(); const onAdd = vi.fn(); const onRemove = vi.fn();
+    renderWithTheme(<SymptomFields values={defaultValues} onChange={onChange} chips={['Cough']} onAddChip={onAdd} onRemoveChip={onRemove} />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    const box = screen.getByLabelText('New symptom');
+    fireEvent.change(box, { target: { value: 'Hives' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onAdd).toHaveBeenCalledWith('Hives');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ symptomName: 'Hives' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Cough' }));
+    expect(onRemove).toHaveBeenCalledWith('Cough');
+  });
 
   it('renders the severity scale, When (date, time, lasted) and Notes', () => {
     renderWithTheme(<SymptomFields values={defaultValues} onChange={() => {}} />);

@@ -4,6 +4,10 @@ import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
 import { EntryForm } from '@/components/organisms/EntryForm';
 
+vi.mock('@/hooks/useEncryptedSetting', () => ({
+  useEncryptedSetting: (_key: string, fallback: unknown) => [fallback, vi.fn(), true],
+}));
+
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
@@ -424,14 +428,14 @@ describe('EntryForm', () => {
       expect(screen.getByTestId('editor')).toBeVisible();
     });
 
-    it('keeps existing text content visible on structured topics', () => {
-      // (Name-led topics — events, meetings, meals, recipes… — are the exception:
-      // their text becomes the name field)
+    it('moves an older symptom entry\'s text into its name (symptoms are name-led)', () => {
+      const onCustomFieldsChange = vi.fn();
       renderWithTheme(
-        <EntryForm {...defaultProps} entryId={2} isEditing topicId={3}
-          topics={[{ id: 3, name: 'Symptom', icon: null, color: null }]} content="<p>Some notes</p>" />
+        <EntryForm {...defaultProps} entryId={2} isEditing topicId={3} onCustomFieldsChange={onCustomFieldsChange}
+          topics={[{ id: 3, name: 'Symptom', icon: null, color: null }]} content="<p>Runny nose</p>" />
       );
-      expect(screen.getByTestId('editor')).toBeVisible();
+      expect(screen.queryByTestId('editor')).not.toBeVisible();
+      expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ symptomName: 'Runny nose' }));
     });
   });
 });

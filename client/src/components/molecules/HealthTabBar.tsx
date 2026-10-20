@@ -14,7 +14,7 @@ export function HealthTabBar() {
   if (ff.foodEnabled !== false) tabs.push({ label: 'Meals', path: '/health/food' });
   if (ff.exerciseEnabled !== false) tabs.push({ label: 'Exercise', path: '/health/exercise' });
   tabs.push({ label: 'Symptoms', path: '/health/symptoms' });
-  if (ff.medicationEnabled !== false) tabs.push({ label: 'Med list', path: '/health/meds' });
+  if (ff.medicationEnabled !== false) tabs.push({ label: 'Med list', path: '/health/meds' }, { label: 'Med history', path: '/health/med-history' });
   if (ff.allergiesEnabled !== false) tabs.push({ label: 'Allergies', path: '/health/allergies' });
   tabs.push({ label: 'Reports', path: '/health/reporting' });
 

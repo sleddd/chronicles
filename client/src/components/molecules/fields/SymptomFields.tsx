@@ -1,12 +1,17 @@
-import { useId } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
 import styled from 'styled-components';
 import type { SymptomFieldValues } from '../../../types/fields.js';
 import {
-  FormWrap, Section, SectionHead, SectionLabel, DateTimeBox, DateTimeField, Unit, BoxText,
+  FormWrap, Section, SectionHead, SectionLabel, DateTimeBox, DateTimeField, Unit, BoxText, TitleInput, Chips, Chip, TextAction,
 } from './formKit.js';
+import { hasSymptom, toggleSymptom } from '../../../utils/symptomChips.js';
 export type { SymptomFieldValues } from '../../../types/fields.js';
 
-/* Symptom fields (journal editor): Severity as ten tiles filled up to the
+/* Symptom fields (journal editor): the symptom(s) as a big borderless title,
+   with common symptoms as chips under it — tap to add or take one out, several
+   allowed ("Flare day, Runny nose"); + Add saves a chip of your own and Edit
+   lets chips be removed (the list itself comes from the owner, saved
+   encrypted). Then Severity as ten tiles filled up to the
    chosen level — the accent, light at 1 and full strength at 10 — with
    the level as a big light figure + "/ 10 · Moderate" on the right and
    Mild / Moderate / Severe under the scale; When as one outlined box of
@@ -122,17 +127,98 @@ export function SeveritySection({ value, onChange }: { value: number; onChange: 
   );
 }
 
+const ChipHead = styled(SectionHead)`
+  margin-top: 26px;
+`;
+
+/* A chip in Edit mode: tapping removes it */
+const RemoveChip = styled(Chip)`
+  &::after { content: '×'; margin-left: 8px; font-size: 16px; line-height: 1; }
+`;
+
+const AddBox = styled.input`
+  && {
+    height: 32px;
+    width: 160px;
+    padding: 0 14px;
+    border: 1px dashed var(--color-accent-line) !important;
+    border-radius: 999px;
+    background: transparent !important;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+    outline: none;
+  }
+`;
+
+const AddChip = styled(Chip)`
+  border-style: dashed;
+  color: var(--color-accent-soft);
+`;
+
 interface SymptomFieldsProps {
   values: SymptomFieldValues;
   onChange: (values: SymptomFieldValues) => void;
+  /** The chips to show (built-in + the owner's own) */
+  chips?: string[];
+  /** Save a new chip; omitted = no + Add / Edit */
+  onAddChip?: (label: string) => void;
+  onRemoveChip?: (label: string) => void;
 }
 
-export function SymptomFields({ values, onChange }: SymptomFieldsProps) {
+export function SymptomFields({ values, onChange, chips = [], onAddChip, onRemoveChip }: SymptomFieldsProps) {
   const set = (patch: Partial<SymptomFieldValues>) => onChange({ ...values, ...patch });
   const notesId = useId();
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const commitDraft = () => {
+    const label = draft.trim();
+    if (label) {
+      onAddChip?.(label);
+      if (!hasSymptom(values.symptomName, label)) set({ symptomName: toggleSymptom(values.symptomName, label) });
+    }
+    setDraft('');
+    setAdding(false);
+  };
+  const onDraftKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitDraft(); }
+    if (e.key === 'Escape') { setDraft(''); setAdding(false); }
+  };
 
   return (
     <FormWrap>
+      <TitleInput
+        value={values.symptomName}
+        onChange={e => set({ symptomName: e.target.value })}
+        placeholder="What's going on?"
+        aria-label="Symptom"
+      />
+
+      <Section aria-label="Common symptoms">
+        <ChipHead>
+          <SectionLabel>Common symptoms</SectionLabel>
+          {onRemoveChip && chips.length > 0 && (
+            <TextAction type="button" onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</TextAction>
+          )}
+        </ChipHead>
+        <Chips>
+          {chips.map(c => (editing ? (
+            <RemoveChip key={c} type="button" $active={false} aria-label={`Remove ${c}`} onClick={() => onRemoveChip?.(c)}>{c}</RemoveChip>
+          ) : (
+            <Chip key={c} type="button" $active={hasSymptom(values.symptomName, c)} aria-pressed={hasSymptom(values.symptomName, c)}
+              onClick={() => set({ symptomName: toggleSymptom(values.symptomName, c) })}>{c}</Chip>
+          )))}
+          {onAddChip && !editing && (adding ? (
+            <AddBox autoFocus value={draft} maxLength={40} placeholder="New symptom" aria-label="New symptom"
+              onChange={e => setDraft(e.target.value)} onKeyDown={onDraftKey} onBlur={commitDraft} />
+          ) : (
+            <AddChip type="button" $active={false} onClick={() => setAdding(true)}>+ Add</AddChip>
+          ))}
+        </Chips>
+      </Section>
+
       <SeveritySection value={values.severity} onChange={n => set({ severity: n })} />
 
       <Section aria-label="When">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
@@ -9,6 +9,23 @@ import {
 import { useFinance } from '../hooks/useFinance.js';
 import { formatCents, formatDay, isReadyToSpend, newId, parseMoney, paydaySummary, sortPaydays, todayStr } from '../utils/finance.js';
 import type { Payday, PaydayItem } from '../types/finance.js';
+
+/* Shown while a payday other than the current one is open for review */
+const Reviewing = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  scroll-margin-top: 24px;
+`;
+
+const Top = styled.div`
+  scroll-margin-top: 24px;
+`;
 
 const Center = styled.div`
   display: flex;
@@ -143,7 +160,19 @@ function Reconcile() {
   const [starting, setStarting] = useState(false);
 
   const sorted = useMemo(() => sortPaydays(paydays.records), [paydays.records]);
-  const current = (selectedId && sorted.find(p => p.id === selectedId)) || sorted.find(p => p.status === 'open') || sorted[0];
+  // The payday you're working on: the newest open one, else the newest
+  const working = sorted.find(p => p.status === 'open') || sorted[0];
+  const current = (selectedId && sorted.find(p => p.id === selectedId)) || working;
+  const reviewing = !!current && !!working && current.id !== working.id;
+
+  // Opening a payday from Past paydays brings it into view at the top (the app
+  // scrolls inside #root, so window.scrollTo alone does nothing)
+  const topRef = useRef<HTMLDivElement>(null);
+  const [jump, setJump] = useState(0);
+  useEffect(() => {
+    if (jump) topRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [jump]);
+  const openPayday = (id: string | null) => { setSelectedId(id); setStarting(false); setJump(n => n + 1); };
   const categories = useMemo(() => [...budget.records].sort((a, b) => a.order - b.order), [budget.records]);
 
   if (paydays.status === 'idle' || paydays.status === 'loading') return <Center><Spinner size={32} /></Center>;
@@ -176,7 +205,13 @@ function Reconcile() {
       {!current || starting ? (
         <StartPayday previous={sorted[0]} onStart={(p, from) => void start(p, from)} onCancel={current ? () => setStarting(false) : undefined} />
       ) : (
-        <>
+        <Top ref={topRef}>
+          {reviewing && (
+            <Reviewing role="status">
+              <span>Reviewing the {formatDay(current.date)} payday{current.status === 'closed' ? ', closed' : ''}.</span>
+              <SheetLink type="button" onClick={() => openPayday(null)}>Back to current payday</SheetLink>
+            </Reviewing>
+          )}
           <PaydayHeader
             key={`h-${current.id}`}
             payday={current}
@@ -191,7 +226,7 @@ function Reconcile() {
             categories={categories}
             onChange={next => void paydays.save(next)}
           />
-        </>
+        </Top>
       )}
 
       {sorted.length > 0 && (
@@ -207,6 +242,7 @@ function Reconcile() {
             {sorted.map(p => {
               const s = paydaySummary(p);
               const active = !starting && current?.id === p.id;
+              const isWorking = working?.id === p.id;
               return (
                 <HistGrid
                   key={p.id}
@@ -214,10 +250,11 @@ function Reconcile() {
                   role="button"
                   tabIndex={0}
                   aria-current={active || undefined}
-                  onClick={() => { setSelectedId(p.id); setStarting(false); window.scrollTo?.({ top: 0 }); }}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(p.id); setStarting(false); } }}
+                  aria-label={`Open the ${formatDay(p.date)} payday`}
+                  onClick={() => openPayday(p.id)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPayday(p.id); } }}
                 >
-                  <span>{formatDay(p.date)}{active && <small>· current</small>}</span>
+                  <span>{formatDay(p.date)}{isWorking ? <small>· current</small> : active && <small>· viewing</small>}</span>
                   <span>{formatCents(p.startingBalanceCents)}</span>
                   <span>−{formatCents(s.payingCents)}</span>
                   <span className="left">{formatCents(s.leftoverCents)}</span>

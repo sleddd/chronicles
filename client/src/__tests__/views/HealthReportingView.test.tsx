@@ -6,6 +6,10 @@ import { useInitializeData } from '@/hooks/useInitializeData';
 
 const mockNavigate = vi.fn();
 
+vi.mock('@/hooks/useEncryptedSetting', () => ({
+  useEncryptedSetting: (_key: string, fallback: unknown) => [fallback, vi.fn(), true],
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
   useLocation: vi.fn(() => ({ pathname: '/health/reporting' })),

@@ -10,6 +10,7 @@ import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
 import { LandingView } from './views/LandingView.js';
 import { BugReportView } from './views/BugReportView.js';
 import { NotFoundView } from './views/NotFoundView.js';
+import { MedHistoryView } from './views/MedHistoryView.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
@@ -72,6 +73,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--bg-sunken':         '#dcdfe4',
   '--bg-hover':          '#eef0f3',
   '--bg-active':         '#d3d7dd',
+  '--bg-tab-active':     '#e4e7eb',  /* the chosen sub-tab / segmented option — lighter than --bg-active so its text reads */
   '--bg-inverse':        '#1b1d26',
   /* DS text */
   '--text-primary':      '#1f2128',
@@ -163,6 +165,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--bg-sunken':         '#191b21',
   '--bg-hover':          '#2b2f38',
   '--bg-active':         '#333844',
+  '--bg-tab-active':     '#333844',
   '--bg-inverse':        '#f1f2f5',
   '--text-primary':      '#f7f8fa',
   '--text-secondary':    '#e6e9ee',
@@ -544,6 +547,7 @@ export function App() {
               <Route path="/finance/savings" element={<R><FinanceSavingsView /></R>} />
               <Route path="/health" element={<R><HealthDashboardView /></R>} />
               <Route path="/health/meds" element={<R><HealthView topicNames={['Medication']} metaFields={[{ key: 'dosage', label: 'Dosage' }, { key: 'frequency', label: 'Frequency' }, { key: 'isActive', label: 'Active' }]} showDateFilter={false} printable printTitle="Medications" /></R>} />
+              <Route path="/health/med-history" element={<R><MedHistoryView /></R>} />
               <Route path="/health/schedule" element={<Navigate to="/health" replace />} />
               <Route path="/health/food" element={<R><MealsLogView /></R>} />
               <Route path="/health/symptoms" element={<R><HealthView topicNames={['Symptom']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'duration', label: 'Duration' }]} printable printTitle="Symptoms" /></R>} />

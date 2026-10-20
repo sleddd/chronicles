@@ -144,6 +144,8 @@ export interface MedicationFieldValues {
 }
 
 export interface SymptomFieldValues {
+  /** The symptom(s), the entry's name — "Flare day, Runny nose" */
+  symptomName: string;
   severity: number;
   occurredDate: string;
   occurredTime: string;
