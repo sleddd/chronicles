@@ -9,6 +9,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi, calendar as calendarApi, ApiError, type CalendarStatus } from '../../services/api.js';
 import { usePrivateSettings } from '../../services/privateSettings.js';
+import { recordEgressChoice } from '../../services/deviceConsent.js';
 import {
   runCalendarSync,
   listWritableCalendars,
@@ -61,6 +62,8 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
 
   const toggleColor = themeMode === 'dark' ? '#2D2C2A' : '#ecebe7';
   const icsIncludeDetails = useUIStore(s => s.icsIncludeDetails);
+  // On only where this browser switched it on, whatever the server reports (deviceConsent.ts)
+  const icsFeedEnabled = useUIStore(s => s.icsFeedEnabled);
   const setIcsIncludeDetails = useUIStore(s => s.setIcsIncludeDetails);
   const { savePrivateSetting } = usePrivateSettings();
 
@@ -109,6 +112,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
 
   const handleSyncToggle = async (enabled: boolean) => {
     setCalendarSyncEnabled(enabled);
+    recordEgressChoice('calendarSyncEnabled', enabled);
     await savePrivateSetting('calendarSyncEnabled', enabled).catch(() => {});
     if (enabled) kickSync();
   };
@@ -117,6 +121,8 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
     setConnecting(true);
     try {
       const { url } = await calendarApi.getAuthUrl();
+      // Only ever off to Google's sign-in page, whatever the server answers
+      if (new URL(url).origin !== 'https://accounts.google.com') throw new Error('Unexpected sign-in address');
       window.location.href = url; // full-page redirect — popups are blocked on iPad Safari
     } catch (err) {
       setConnectMessage({ text: err instanceof Error ? err.message : 'Failed to start Google sign-in', error: true });
@@ -205,6 +211,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
         await calendarApi.disableIcs();
       }
       useUIStore.getState().setIcsFeedEnabled(enabled);
+      recordEgressChoice('icsFeedEnabled', enabled);
       await savePrivateSetting('icsFeedEnabled', enabled);
       invalidateCalendarStatus();
       refreshStatus();
@@ -333,7 +340,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
             description="Subscribe to your events from Apple Calendar (one-way: changes made in Apple Calendar don't sync back). Turning this on stores your events unencrypted on the Chronicles server so Apple Calendar can fetch them; turning it off deletes that copy."
             action={icsBusy
               ? <Spinner size={14} />
-              : <Toggle checked={!!status?.icsEnabled} onChange={handleIcsToggle} activeColor={toggleColor} />}
+              : <Toggle checked={!!status?.icsEnabled && icsFeedEnabled} onChange={handleIcsToggle} activeColor={toggleColor} />}
           >
             {status?.icsEnabled && httpsUrl && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -371,6 +378,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
                     activeColor={toggleColor}
                     onChange={v => {
                       setIcsIncludeDetails(v);
+                      recordEgressChoice('icsIncludeDetails', v);
                       void savePrivateSetting('icsIncludeDetails', v).catch(() => {});
                       kickSync();
                     }}

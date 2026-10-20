@@ -19,6 +19,8 @@ vi.mock('../../db/tenantQueries.js', () => ({
   postStorageBytes: vi.fn().mockResolvedValue(0),
   reservePostIds: vi.fn(),
   resealPosts: vi.fn(),
+  // The lock's transaction client, handed to every query under it
+  withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 vi.mock('../../db/shareQueries.js', () => ({ deleteSharesForEntry: vi.fn().mockResolvedValue(0) }));
@@ -35,7 +37,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getAllPosts, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts } from '../../db/tenantQueries.js';
+import { getAllPosts, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -131,6 +133,13 @@ describe('Entry Routes', () => {
       expect(createPost).not.toHaveBeenCalled();
     });
 
+    it('checks the cap and writes in one transaction under the account lock', async () => {
+      (createPost as any).mockResolvedValue(mockPost);
+      await request(app).post('/api/entries').send(ENCRYPTED_BODY);
+      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
+      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, [], 'TX');
+    });
+
     it('counts an update without the old copy of the same entry, and 404s a missing one', async () => {
       (updatePost as any).mockResolvedValueOnce(undefined);
       const res = await request(app).put('/api/entries/7').send({
@@ -140,7 +149,7 @@ describe('Entry Routes', () => {
         metadataEncrypted: Buffer.from('metaenc').toString('base64'),
         metadataIv: Buffer.from('metaiv123456').toString('base64'),
       });
-      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7);
+      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7, 'TX');
       expect(res.status).toBe(404);
     });
 
@@ -183,7 +192,7 @@ describe('Entry Routes', () => {
       const ok = await request(app).put('/api/entries/reseal').send({ entries: [row(1), row(2)] });
       expect(ok.status).toBe(200);
       expect(ok.body).toEqual({ resealed: 2 });
-      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, [1, 2]);
+      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, [1, 2], 'TX');
       expect((await request(app).put('/api/entries/reseal').send({ entries: [row(1), row(1)] })).status).toBe(400);
       expect((await request(app).put('/api/entries/reseal').send({ entries: Array.from({ length: 101 }, (_, i) => row(i + 1)) })).status).toBe(400);
       (postStorageBytes as any).mockResolvedValueOnce(ENTRY_STORAGE_LIMIT_BYTES);
@@ -200,7 +209,7 @@ describe('Entry Routes', () => {
         .send(ENCRYPTED_BODY);
 
       expect(res.status).toBe(201);
-      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ id: 2 }));
+      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ id: 2 }), 'TX');
     });
 
     it('needs the reserved id the entry was encrypted for', async () => {
@@ -256,7 +265,7 @@ describe('Entry Routes', () => {
 
       expect(res.status).toBe(201);
       expect(setPostTaxonomies).not.toHaveBeenCalled();
-      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.not.objectContaining({ taxonomyIds: expect.anything() }));
+      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.not.objectContaining({ taxonomyIds: expect.anything() }), 'TX');
     });
 
     it('returns 400 when encrypted post is missing required fields', async () => {
@@ -316,6 +325,11 @@ describe('Entry Routes', () => {
       const res = await request(app).get('/api/entries/changes?since=5');
       expect(res.body).toMatchObject({ reset: true });
       expect((await request(app).get('/api/entries/changes?since=abc')).status).toBe(400);
+      // Digits, but past xid8's range (2^64 - 1): 400, not a failed cast
+      expect((await request(app).get('/api/entries/changes?since=18446744073709551616')).status).toBe(400);
+      expect((await request(app).get('/api/entries/changes?since=99999999999999999999')).status).toBe(400);
+      (getPostChanges as any).mockResolvedValue({ reset: true });
+      expect((await request(app).get('/api/entries/changes?since=18446744073709551615')).status).toBe(200);
       expect((await request(app).get('/api/entries/changes')).status).toBe(400);
     });
   });
@@ -371,7 +385,7 @@ describe('Entry Routes', () => {
         .send({ content: 'Updated' });
 
       expect(res.status).toBe(200);
-      expect(updatePost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, expect.any(Object));
+      expect(updatePost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, expect.any(Object), 'TX');
     });
 
     it('ignores a plaintext topic link on update', async () => {

@@ -13,6 +13,7 @@ import {
   PRIVATE_SETTING_KEYS, SEAL_MARKER_KEY,
 } from '../../services/privateSettings.js';
 import { openForExport } from '../../services/settingCipher.js';
+import { setEgressAccount, recordEgressChoice } from '../../services/deviceConsent.js';
 import { featureFlagsFrom } from '../../utils/featureFlags.js';
 import { encrypt, generateMasterKey } from '@shared/crypto/primitives.js';
 import { encryptBytes as rawEncryptBytes, decryptBytes as rawDecryptBytes } from '@shared/crypto/primitives.js';
@@ -32,6 +33,8 @@ beforeEach(async () => {
   key = await generateMasterKey();
   upsert.mockClear();
   getStatus.mockClear();
+  localStorage.clear();
+  setEgressAccount(null);
 });
 
 describe('settings sealing', () => {
@@ -62,26 +65,64 @@ describe('settings sealing', () => {
 });
 
 describe('the one-time move to v2', () => {
-  it('before the marker: opens unbound values, re-seals them bound, seeds the feed switch, then writes the marker', async () => {
+  it('before the marker: opens unbound values, re-seals them bound, starts the feed switch off, then writes the marker', async () => {
     getStatus.mockResolvedValue({ icsEnabled: true });
     const map: Record<string, unknown> = {
       nutritionGoals: await unbound({ iron: 18 }),
-      calendarSyncEnabled: true, // private since v2: its plaintext is sealed this once
+      imagesEnabled: true, // private since v2: its plaintext is sealed this once
       themeMode: 'dark',
     };
     const opened = await openSettingsMap(map, decryptBytes);
     expect(opened.migrated).toBe(false);
-    expect(opened.toReseal.sort()).toEqual(['calendarSyncEnabled', 'nutritionGoals']);
+    expect(opened.toReseal.sort()).toEqual(['imagesEnabled', 'nutritionGoals']);
     expect(map.nutritionGoals).toEqual({ iron: 18 });
 
     const resealed = await migrateSettings(map, opened, encryptBytes);
     const written = Object.fromEntries(upsert.mock.calls);
-    expect(Object.keys(written).sort()).toEqual(['calendarSyncEnabled', 'icsFeedEnabled', 'nutritionGoals', SEAL_MARKER_KEY].sort());
+    expect(Object.keys(written).sort()).toEqual(['icsFeedEnabled', 'imagesEnabled', 'nutritionGoals', SEAL_MARKER_KEY].sort());
     for (const v of Object.values(written)) expect((v as { v?: number }).v).toBe(2);
     expect(resealed.nutritionGoals).toBe(written.nutritionGoals);
-    expect(map.icsFeedEnabled).toBe(true);
+    // What the server reports about the feed never switches it on
+    expect(map.icsFeedEnabled).toBe(false);
+    expect(getStatus).not.toHaveBeenCalled();
     // The marker is written last
     expect(upsert.mock.calls.at(-1)?.[0]).toBe(SEAL_MARKER_KEY);
+  });
+
+  it('a server that leaves out the marker can\'t make the client upload the calendar (downgrade)', async () => {
+    getStatus.mockResolvedValue({ icsEnabled: true });
+    setEgressAccount('acct');
+    const { map } = await openStartupSettings([
+      { key: 'calendarSyncEnabled', value: true },
+      { key: 'icsIncludeDetails', value: await unbound(true) },
+    ], decryptBytes, encryptBytes);
+    expect(map.calendarSyncEnabled).toBeUndefined();
+    expect(map.icsIncludeDetails).toBeUndefined();
+    expect(map.icsFeedEnabled).toBe(false);
+  });
+
+  it('once this browser has seen the marker, a missing one still counts (it can\'t be dropped)', async () => {
+    await openSettingsMap({ [SEAL_MARKER_KEY]: await sealSetting(SEAL_MARKER_KEY, true, encryptBytes) }, decryptBytes);
+    const map: Record<string, unknown> = { timezone: await unbound('UTC') };
+    expect((await openSettingsMap(map, decryptBytes)).migrated).toBe(true);
+    expect(map.timezone).toBeUndefined();
+  });
+
+  it('honours an off-device switch only where this browser turned it on (no replayed true)', async () => {
+    setEgressAccount('acct');
+    const rows = async () => [
+      { key: SEAL_MARKER_KEY, value: await sealSetting(SEAL_MARKER_KEY, true, encryptBytes) },
+      { key: 'icsFeedEnabled', value: await sealSetting('icsFeedEnabled', true, encryptBytes) },
+    ];
+    expect((await openStartupSettings(await rows(), decryptBytes, encryptBytes)).map.icsFeedEnabled).toBe(false);
+    recordEgressChoice('icsFeedEnabled', true);
+    expect((await openStartupSettings(await rows(), decryptBytes, encryptBytes)).map.icsFeedEnabled).toBe(true);
+    recordEgressChoice('icsFeedEnabled', false);
+    expect((await openStartupSettings(await rows(), decryptBytes, encryptBytes)).map.icsFeedEnabled).toBe(false);
+    // Another account on this browser has its own record
+    recordEgressChoice('icsFeedEnabled', true);
+    setEgressAccount('other');
+    expect((await openStartupSettings(await rows(), decryptBytes, encryptBytes)).map.icsFeedEnabled).toBe(false);
   });
 
   it('writes no marker when a re-seal fails, so the next load tries again', async () => {

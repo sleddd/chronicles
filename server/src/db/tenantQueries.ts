@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 
@@ -38,6 +39,26 @@ export interface TenantPost {
   isEncrypted: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** What a query runs on: a shard's pool, or the transaction withTenantLock opened. */
+export type TenantClient = Prisma.TransactionClient;
+
+const clientFor = async (schemaName: string, client?: TenantClient): Promise<TenantClient> => client ?? tenantDb(schemaName);
+
+/**
+ * Run `fn` in one transaction holding the account's advisory lock. A storage
+ * cap is a read then a write: two requests at once could each see room and
+ * both write, so every capped write runs its check and its write in here,
+ * on the transaction client it's handed.
+ */
+export async function withTenantLock<T>(schemaName: string, fn: (tx: TenantClient) => Promise<T>): Promise<T> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text', s);
+    return fn(tx);
+  }, { timeout: 15_000 });
 }
 
 // =============================================================================
@@ -164,9 +185,10 @@ export async function reserveTaxonomyIds(schemaName: string, count: number): Pro
 /** Create a topic under a reserved id. Null when the id was never handed out or is taken. */
 export async function createTaxonomy(
   schemaName: string,
-  data: { id: number; payload: string; iv: string; color?: string }
+  data: { id: number; payload: string; iv: string; color?: string },
+  client?: TenantClient
 ): Promise<TenantTaxonomy | null> {
-  const db = await tenantDb(schemaName);
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   // Auto-assign sort_order as max + 1
   const maxResult = await db.$queryRawUnsafe<{ max_order: number | null }[]>(
@@ -195,6 +217,14 @@ export async function getTaxonomy(schemaName: string, id: number): Promise<Tenan
   return result[0] ? toTaxonomy(result[0]) : null;
 }
 
+/** How many topics an account has (for the per-account cap). */
+export async function taxonomyCount(schemaName: string, client?: TenantClient): Promise<number> {
+  const db = await clientFor(schemaName, client);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ n: bigint | number }[]>(`SELECT count(*) AS n FROM ${s}.taxonomies`);
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function getAllTaxonomies(schemaName: string): Promise<TenantTaxonomy[]> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
@@ -202,12 +232,12 @@ export async function getAllTaxonomies(schemaName: string): Promise<TenantTaxono
   return rows.map(toTaxonomy);
 }
 
-/** Update a topic. Writing the encrypted payload clears any legacy plaintext name and icon. */
+/** Update a topic. Writing the encrypted payload clears any legacy plaintext name and icon. Null when there's no such topic. */
 export async function updateTaxonomy(
   schemaName: string,
   id: number,
   updates: { payload?: string; iv?: string; color?: string }
-): Promise<TenantTaxonomy> {
+): Promise<TenantTaxonomy | null> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const setClauses: string[] = [];
@@ -221,18 +251,14 @@ export async function updateTaxonomy(
   }
   if (updates.color !== undefined) { setClauses.push(`color = $${paramIndex++}`); values.push(updates.color); }
 
-  if (setClauses.length === 0) {
-    const current = await getTaxonomy(schemaName, id);
-    if (!current) throw new Error('Taxonomy not found');
-    return current;
-  }
+  if (setClauses.length === 0) return getTaxonomy(schemaName, id);
 
   values.push(id);
   const result = await db.$queryRawUnsafe<TaxonomyRow[]>(
     `UPDATE ${s}.taxonomies SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING ${TAXONOMY_COLUMNS}`,
     ...values
   );
-  return toTaxonomy(result[0]);
+  return result[0] ? toTaxonomy(result[0]) : null;
 }
 
 export async function deleteTaxonomy(schemaName: string, id: number): Promise<void> {
@@ -311,8 +337,8 @@ const insertPostArgs = (input: CreatePostInput) => [
  * never handed out (beyond the sequence) or is taken. Server and client both
  * refuse plaintext posts, so there is no plaintext path.
  */
-export async function createPost(schemaName: string, input: CreatePostInput): Promise<TenantPost | null> {
-  const db = await tenantDb(schemaName);
+export async function createPost(schemaName: string, input: CreatePostInput, client?: TenantClient): Promise<TenantPost | null> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const result = await db.$queryRawUnsafe<TenantPost[]>(insertPostSql(s), ...insertPostArgs(input));
   return result[0] ?? null;
@@ -322,18 +348,30 @@ export async function createPost(schemaName: string, input: CreatePostInput): Pr
  * Create several entries at once, all or none: null (and nothing saved) when
  * any id was never reserved or is taken.
  */
-export async function createPosts(schemaName: string, inputs: CreatePostInput[]): Promise<TenantPost[] | null> {
-  const db = await tenantDb(schemaName);
+export async function createPosts(schemaName: string, inputs: CreatePostInput[], client?: TenantClient): Promise<TenantPost[] | null> {
   const s = escapeSchema(schemaName);
   const sql = insertPostSql(s);
+  const insertEach = async (tx: TenantClient): Promise<TenantPost[] | null> => {
+    const made: TenantPost[] = [];
+    for (const input of inputs) {
+      const rows = await tx.$queryRawUnsafe<TenantPost[]>(sql, ...insertPostArgs(input));
+      if (!rows[0]) return null;
+      made.push(rows[0]);
+    }
+    return made;
+  };
+  if (client) {
+    // Inside the caller's transaction: a savepoint keeps it all or none
+    await client.$executeRawUnsafe('SAVEPOINT create_posts');
+    const made = await insertEach(client);
+    await client.$executeRawUnsafe(made ? 'RELEASE SAVEPOINT create_posts' : 'ROLLBACK TO SAVEPOINT create_posts');
+    return made;
+  }
+  const db = await tenantDb(schemaName);
   try {
     return await db.$transaction(async (tx) => {
-      const made: TenantPost[] = [];
-      for (const input of inputs) {
-        const rows = await tx.$queryRawUnsafe<TenantPost[]>(sql, ...insertPostArgs(input));
-        if (!rows[0]) throw new BatchConflict();
-        made.push(rows[0]);
-      }
+      const made = await insertEach(tx);
+      if (!made) throw new BatchConflict();
       return made;
     });
   } catch (err) {
@@ -349,16 +387,21 @@ class BatchConflict extends Error {}
  * updated_at (a re-seal changes the format, not the entry). Returns how many
  * were re-sealed.
  */
-export async function resealPosts(schemaName: string, posts: (EncryptedPostFields & { id: number; updatedAt: Date })[]): Promise<number> {
-  const db = await tenantDb(schemaName);
+export async function resealPosts(schemaName: string, posts: (EncryptedPostFields & { id: number; updatedAt: Date })[], client?: TenantClient): Promise<number> {
   const s = escapeSchema(schemaName);
   // Only while the entry is unchanged since the client loaded it: an edit in
   // between was saved id-bound already and must not be overwritten
-  const counts = await db.$transaction(posts.map(p => db.$executeRawUnsafe(
-    `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4
-     WHERE id = $5 AND is_encrypted = TRUE AND date_trunc('milliseconds', updated_at) = $6`,
-    p.contentEncrypted, p.contentIv, p.metadataEncrypted, p.metadataIv, p.id, p.updatedAt
-  )));
+  const sql = `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4
+     WHERE id = $5 AND is_encrypted = TRUE AND date_trunc('milliseconds', updated_at) = $6`;
+  const args = (p: (typeof posts)[number]) => [p.contentEncrypted, p.contentIv, p.metadataEncrypted, p.metadataIv, p.id, p.updatedAt];
+  let counts: number[];
+  if (client) {
+    counts = [];
+    for (const p of posts) counts.push(await client.$executeRawUnsafe(sql, ...args(p)));
+  } else {
+    const db = await tenantDb(schemaName);
+    counts = await db.$transaction(posts.map(p => db.$executeRawUnsafe(sql, ...args(p))));
+  }
   return counts.reduce((a, b) => a + b, 0);
 }
 
@@ -370,6 +413,14 @@ export async function getPost(schemaName: string, id: number): Promise<TenantPos
     id
   );
   return result[0] || null;
+}
+
+/** Whether an entry exists (without loading its ciphertext). */
+export async function postExists(schemaName: string, id: number): Promise<boolean> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ id: number }[]>(`SELECT id FROM ${s}.posts WHERE id = $1`, id);
+  return rows.length > 0;
 }
 
 export async function getAllPosts(
@@ -389,9 +440,10 @@ export async function getAllPosts(
 export async function updatePost(
   schemaName: string,
   id: number,
-  updates: Partial<EncryptedPostFields>
+  updates: Partial<EncryptedPostFields>,
+  client?: TenantClient
 ): Promise<TenantPost | undefined> {
-  const db = await tenantDb(schemaName);
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const setClauses: string[] = [];
   const values: unknown[] = [];
@@ -413,8 +465,8 @@ export async function updatePost(
 }
 
 /** Bytes of encrypted content + metadata over all entries (leaving out the ones being replaced). */
-export async function postStorageBytes(schemaName: string, exclude: number | number[] = []): Promise<number> {
-  const db = await tenantDb(schemaName);
+export async function postStorageBytes(schemaName: string, exclude: number | number[] = [], client?: TenantClient): Promise<number> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
     `SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)), 0) AS n
@@ -464,6 +516,10 @@ export async function ensurePostSyncFunction(db: { $queryRawUnsafe: <T>(sql: str
   if (!present) await db.$executeRawUnsafe(SYNC_FUNCTION_SQL);
 }
 
+const deletedPostsIndex = (s: string) => `idx_${s}_deleted_change`;
+// /changes reads deletions by change_xid; without it every sync scans them all
+const deletedPostsIndexSql = (s: string) => `CREATE INDEX IF NOT EXISTS ${deletedPostsIndex(s)} ON ${s}.deleted_posts (change_xid)`;
+
 /** Change tracking for a schema's posts (new schemas get these at creation). */
 export function postSyncStatements(s: string): string[] {
   return [
@@ -471,6 +527,7 @@ export function postSyncStatements(s: string): string[] {
     `ALTER TABLE ${s}.posts ADD COLUMN IF NOT EXISTS change_xid xid8 NOT NULL DEFAULT '0'`,
     `CREATE INDEX IF NOT EXISTS idx_${s}_posts_change ON ${s}.posts (change_xid)`,
     `CREATE TABLE IF NOT EXISTS ${s}.deleted_posts (id INTEGER NOT NULL, change_xid xid8 NOT NULL)`,
+    deletedPostsIndexSql(s),
     `DROP TRIGGER IF EXISTS posts_sync_write ON ${s}.posts`,
     `CREATE TRIGGER posts_sync_write BEFORE INSERT OR UPDATE ON ${s}.posts FOR EACH ROW EXECUTE FUNCTION public.chronicles_post_changed()`,
     `DROP TRIGGER IF EXISTS posts_sync_delete ON ${s}.posts`,
@@ -485,17 +542,22 @@ export async function ensurePostSync(schemaName: string): Promise<void> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   if (postSyncReady.has(s)) return;
-  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+  const [{ ready, indexed }] = await db.$queryRawUnsafe<{ ready: boolean; indexed: boolean }[]>(
     `SELECT EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_class t ON t.oid = a.attrelid JOIN pg_namespace n ON n.oid = t.relnamespace
                     WHERE n.nspname = $1 AND t.relname = 'posts' AND a.attname = 'change_xid' AND NOT a.attisdropped)
         AND EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace WHERE n.nspname = $1 AND t.relname = 'deleted_posts')
         AND (SELECT count(*) FROM pg_trigger g JOIN pg_class t ON t.oid = g.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = $1 AND g.tgname IN ('posts_sync_write', 'posts_sync_delete')) = 2 AS ready`,
-    s
+              WHERE n.nspname = $1 AND g.tgname IN ('posts_sync_write', 'posts_sync_delete')) = 2 AS ready,
+            EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS indexed`,
+    s, deletedPostsIndex(s)
   );
   if (!ready) {
     await ensurePostSyncFunction(db);
     await db.$transaction(postSyncStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  } else if (!indexed) {
+    // Tracking from before the deletions index: add just that (a CREATE INDEX
+    // IF NOT EXISTS still locks the table, hence the catalog read first)
+    await db.$executeRawUnsafe(deletedPostsIndexSql(s));
   }
   postSyncReady.add(s);
 }
@@ -603,9 +665,10 @@ export async function upsertFinanceRecord(
   kind: FinanceTableKind,
   id: string,
   payload: Buffer,
-  iv: Buffer
+  iv: Buffer,
+  client?: TenantClient
 ): Promise<FinanceRecordRow> {
-  const db = await tenantDb(schemaName);
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<FinanceRecordRow[]>(
     `INSERT INTO ${s}.${FINANCE_TABLES[kind]} (id, payload_encrypted, payload_iv)
@@ -620,8 +683,8 @@ export async function upsertFinanceRecord(
 }
 
 /** Bytes of encrypted payloads over every finance table (optionally leaving one row out). */
-export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }): Promise<number> {
-  const db = await tenantDb(schemaName);
+export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }, client?: TenantClient): Promise<number> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const parts = (Object.keys(FINANCE_TABLES) as FinanceTableKind[]).map(kind =>
     `SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]}`
@@ -694,8 +757,8 @@ export async function getDoseRecords(schemaName: string, date?: string): Promise
     : db.$queryRawUnsafe<DoseRecordRow[]>(`SELECT ${DOSE_RECORD_COLUMNS} FROM ${s}.medication_dose_records ORDER BY date ASC, created_at ASC`);
 }
 
-export async function upsertDoseRecord(schemaName: string, id: string, date: string, payload: Buffer, iv: Buffer): Promise<DoseRecordRow> {
-  const db = await tenantDb(schemaName);
+export async function upsertDoseRecord(schemaName: string, id: string, date: string, payload: Buffer, iv: Buffer, client?: TenantClient): Promise<DoseRecordRow> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<DoseRecordRow[]>(
     `INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
@@ -706,6 +769,18 @@ export async function upsertDoseRecord(schemaName: string, id: string, date: str
     id, date, payload, iv
   );
   return rows[0];
+}
+
+/** Rows and payload bytes of an account's dose records (leaving out the ones being replaced). */
+export async function doseRecordStorage(schemaName: string, exclude: string[] = [], client?: TenantClient): Promise<{ count: number; bytes: number }> {
+  const db = await clientFor(schemaName, client);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ count: bigint | number; bytes: bigint | number | null }[]>(
+    `SELECT count(*) AS count, COALESCE(SUM(octet_length(payload_encrypted)), 0) AS bytes
+     FROM ${s}.medication_dose_records WHERE NOT (id = ANY($1::text[]))`,
+    exclude
+  );
+  return { count: Number(rows[0]?.count ?? 0), bytes: Number(rows[0]?.bytes ?? 0) };
 }
 
 export async function deleteDoseRecord(schemaName: string, id: string): Promise<boolean> {
@@ -719,13 +794,17 @@ export async function deleteDoseRecord(schemaName: string, id: string): Promise<
  * their id). Only rows that exist, on the same day, are touched; updated_at
  * stays. Returns how many were re-sealed.
  */
-export async function resealDoseRecords(schemaName: string, records: { id: string; date: string; payload: Buffer; iv: Buffer }[]): Promise<number> {
-  const db = await tenantDb(schemaName);
+export async function resealDoseRecords(schemaName: string, records: { id: string; date: string; payload: Buffer; iv: Buffer }[], client?: TenantClient): Promise<number> {
   const s = escapeSchema(schemaName);
-  const counts = await db.$transaction(records.map(r => db.$executeRawUnsafe(
-    `UPDATE ${s}.medication_dose_records SET payload_encrypted = $1, payload_iv = $2 WHERE id = $3 AND date = $4::date`,
-    r.payload, r.iv, r.id, r.date
-  )));
+  const sql = `UPDATE ${s}.medication_dose_records SET payload_encrypted = $1, payload_iv = $2 WHERE id = $3 AND date = $4::date`;
+  let counts: number[];
+  if (client) {
+    counts = [];
+    for (const r of records) counts.push(await client.$executeRawUnsafe(sql, r.payload, r.iv, r.id, r.date));
+  } else {
+    const db = await tenantDb(schemaName);
+    counts = await db.$transaction(records.map(r => db.$executeRawUnsafe(sql, r.payload, r.iv, r.id, r.date)));
+  }
   return counts.reduce((a, b) => a + b, 0);
 }
 

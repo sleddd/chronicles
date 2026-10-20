@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { memoryState, SHARED_STATE_IN_POSTGRES } from '../services/sharedState.js';
 
 // The Postgres store runs the same rules in SQL; loadtest/multi-instance-check.mjs
@@ -24,6 +24,34 @@ describe('shared sign-in state (memory store)', () => {
     await new Promise(r => setTimeout(r, 5));
     expect(await s.locked('fail', 'k', 1)).toBe(false);
     expect(await s.claim('fail', 'k', 1, 60_000)).toBe(true);
+  });
+
+  it('restarts the window when the lock triggers, so it lasts the full window', async () => {
+    const s = memoryState();
+    const t0 = Date.now();
+    try {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(t0);
+      expect(await s.attempt('fail', 'k', 3, 60_000)).toBe(1);
+      expect(await s.attempt('fail', 'k', 3, 60_000)).toBe(2);
+      // The locking attempt comes late in the first window…
+      vi.setSystemTime(t0 + 50_000);
+      expect(await s.attempt('fail', 'k', 3, 60_000)).toBe(3);
+      // …and the lock still holds a full window after it
+      vi.setSystemTime(t0 + 100_000);
+      expect(await s.locked('fail', 'k', 3)).toBe(true);
+      // The first refusal parks the count at max + 1 and restarts it once more
+      expect(await s.attempt('fail', 'k', 3, 60_000)).toBe(4);
+      vi.setSystemTime(t0 + 150_000);
+      expect(await s.claim('fail', 'k', 3, 60_000)).toBe(false);
+      expect(await s.attempt('fail', 'k', 3, 60_000)).toBe(4);
+      // Later refusals don't extend it
+      vi.setSystemTime(t0 + 160_001);
+      expect(await s.locked('fail', 'k', 3)).toBe(false);
+      expect(await s.claim('fail', 'k', 3, 60_000)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps tokens by hash, per account, until they expire', async () => {

@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
 import { useEncryption } from '../contexts/EncryptionContext.js';
-import { settings as settingsApi, calendar as calendarApi } from './api.js';
+import { settings as settingsApi } from './api.js';
 import { isSealed, isBound, sealSetting, openSetting, openUnbound, type SealedValue, type EncryptBytes, type DecryptBytes } from './settingCipher.js';
 import { PRIVATE_SETTING_KEYS } from '@shared/validation/sealedSettings.js';
+import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
+import { EGRESS_KEYS, egressOn, type EgressKey } from './deviceConsent.js';
 
 /**
  * Encrypted settings.
@@ -21,15 +23,19 @@ import { PRIVATE_SETTING_KEYS } from '@shared/validation/sealedSettings.js';
  * once by `migrateSettings`, which then writes the sealed marker
  * `settingsSealV2`. Once the marker exists no unbound value is accepted, so an
  * old ciphertext the server kept can't be replayed under another key.
- * Plaintext values of private keys are refused — except the few keys that
- * only became private with v2 (`NEWLY_PRIVATE`), which are sealed by that same
- * one-time migration, before the marker.
+ * Plaintext values of private keys are refused — except the few harmless
+ * keys that only became private with v2 (`NEWLY_PRIVATE`), which are sealed by
+ * that same one-time migration, before the marker. The switches that send data
+ * off the device (`EGRESS_KEYS`) open only bound, never unbound or plaintext,
+ * and count only where this browser turned them on (`deviceConsent.ts`); the
+ * marker itself is backed by `sealedFormats.ts`.
  */
 export { PRIVATE_SETTING_KEYS };
 export type PrivateSettingKey = typeof PRIVATE_SETTING_KEYS[number];
 
 const PRIVATE = new Set<string>(PRIVATE_SETTING_KEYS);
-const NEWLY_PRIVATE = new Set<string>(['calendarSyncEnabled', 'googleCalendarId', 'calendarImportMode', 'imagesEnabled', 'topicHideText']);
+const NEWLY_PRIVATE = new Set<string>(['imagesEnabled', 'topicHideText']);
+const EGRESS = new Set<string>(EGRESS_KEYS);
 
 /** Sealed marker: present once every setting of the account is on the v2 format. */
 export const SEAL_MARKER_KEY = 'settingsSealV2';
@@ -39,7 +45,8 @@ export { isSealed, sealSetting, openSetting, openForExport, settingAad, type Sea
 /** Whether the account is past the one-time migration (the marker exists and opens). */
 async function isMigrated(map: Record<string, unknown>, decryptBytes: DecryptBytes): Promise<boolean> {
   const marker = map[SEAL_MARKER_KEY];
-  if (marker === undefined || marker === null) return false;
+  if (marker === undefined || marker === null) return sealMarkerHeld(SEAL_MARKER_KEY, false);
+  noteSealMarker(SEAL_MARKER_KEY);
   // A marker that is there but doesn't open still counts: refusing unbound
   // values is the safe side, and only the server could have damaged it
   if (!isSealed(marker)) return true;
@@ -69,7 +76,7 @@ export async function openSettingsMap(map: Record<string, unknown>, decryptBytes
       if (isBound(v)) {
         try { map[key] = await openSetting(key, v, decryptBytes); }
         catch { delete map[key]; }
-      } else if (!migrated) {
+      } else if (!migrated && !EGRESS.has(key)) {
         try { map[key] = await openUnbound(v, decryptBytes); toReseal.push(key); }
         catch { delete map[key]; }
       } else {
@@ -89,10 +96,9 @@ export async function openSettingsMap(map: Record<string, unknown>, decryptBytes
  * values by key (the AI / R2 loaders take the sealed blob). If any write fails
  * it throws before the marker, and the next load tries again.
  *
- * It also records the ICS feed switch on the device side (`icsFeedEnabled`):
- * from now on the feed is only uploaded while that sealed switch is on, so the
- * server reporting the feed as enabled is never enough on its own. Accounts
- * that already had the feed keep it, read from the server this one time.
+ * The ICS feed switch (`icsFeedEnabled`) starts off: what the server reports
+ * about the feed never switches it on, so an account that had the feed turns
+ * it on again in Settings.
  */
 export async function migrateSettings(
   map: Record<string, unknown>,
@@ -106,11 +112,11 @@ export async function migrateSettings(
     await settingsApi.upsert(key, resealed[key]);
   }
   if (map.icsFeedEnabled === undefined) {
-    const status = await calendarApi.getStatus();
-    map.icsFeedEnabled = status.icsEnabled === true;
-    await settingsApi.upsert('icsFeedEnabled', await sealSetting('icsFeedEnabled', map.icsFeedEnabled, encryptBytes));
+    map.icsFeedEnabled = false;
+    await settingsApi.upsert('icsFeedEnabled', await sealSetting('icsFeedEnabled', false, encryptBytes));
   }
   await settingsApi.upsert(SEAL_MARKER_KEY, await sealSetting(SEAL_MARKER_KEY, true, encryptBytes));
+  noteSealMarker(SEAL_MARKER_KEY);
   return resealed;
 }
 
@@ -131,7 +137,15 @@ export async function openStartupSettings(
   let resealed: Record<string, SealedValue> = {};
   try { resealed = await migrateSettings(map, opened, encryptBytes); }
   catch (err) { console.warn('Settings will be re-sealed at the next load:', err instanceof Error ? err.message : err); }
+  honourEgress(map);
   return { map, sealed: key => resealed[key] ?? raw[key] };
+}
+
+/** The off-device switches as this browser honours them (see deviceConsent.ts). */
+function honourEgress(map: Record<string, unknown>): void {
+  for (const key of EGRESS_KEYS) {
+    if (key in map) map[key] = egressOn(key as EgressKey, map[key]);
+  }
 }
 
 /** Load all settings, opened. */
@@ -140,6 +154,7 @@ export async function loadSettingsMap(decryptBytes: DecryptBytes): Promise<Recor
   const map: Record<string, unknown> = {};
   for (const s of all) map[s.key] = s.value;
   await openSettingsMap(map, decryptBytes);
+  honourEgress(map);
   return map;
 }
 

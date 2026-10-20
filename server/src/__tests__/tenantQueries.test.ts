@@ -51,6 +51,12 @@ import {
   deleteDoseRecord,
   resealDoseRecords,
   reserveTaxonomyIds,
+  withTenantLock,
+  taxonomyCount,
+  doseRecordStorage,
+  postExists,
+  ensurePostSync,
+  postSyncStatements,
 } from '../db/tenantQueries.js';
 
 const SCHEMA = 'usr_1_abc123';
@@ -226,6 +232,18 @@ describe('Taxonomy queries', () => {
     });
   });
 
+  it('updateTaxonomy gives null for a topic that does not exist (no crash on an empty RETURNING)', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([]);
+    expect(await updateTaxonomy(SCHEMA, 99, { color: '#abcdef' })).toBeNull();
+    expect(await updateTaxonomy(SCHEMA, 99, {})).toBeNull();
+  });
+
+  it('taxonomyCount counts the topics', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ n: 12n }]);
+    expect(await taxonomyCount(SCHEMA)).toBe(12);
+    expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('count(*) AS n FROM usr_1_abc123.taxonomies');
+  });
+
   describe('deleteTaxonomy', () => {
     it('deletes taxonomy by id', async () => {
       mockExecuteRawUnsafe.mockResolvedValue(1);
@@ -354,6 +372,17 @@ describe('Post queries', () => {
       expect(made?.map(p => p.id)).toEqual([1, 2]);
       expect(mockTransaction).toHaveBeenCalledTimes(1);
       expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.posts_id_seq)');
+    });
+
+    it('inside a caller\'s transaction, keeps all-or-none with a savepoint', async () => {
+      const tx = { $queryRawUnsafe: vi.fn(), $executeRawUnsafe: vi.fn() };
+      tx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 1 }]).mockResolvedValueOnce([]);
+      expect(await createPosts(SCHEMA, [{ id: 1, ...fields }, { id: 2, ...fields }], tx as never)).toBeNull();
+      expect(tx.$executeRawUnsafe.mock.calls.map(c => c[0])).toEqual(['SAVEPOINT create_posts', 'ROLLBACK TO SAVEPOINT create_posts']);
+      tx.$queryRawUnsafe.mockResolvedValueOnce([{ id: 1 }]);
+      expect(await createPosts(SCHEMA, [{ id: 1, ...fields }], tx as never)).toHaveLength(1);
+      expect(tx.$executeRawUnsafe.mock.calls.at(-1)![0]).toBe('RELEASE SAVEPOINT create_posts');
+      expect(mockTransaction).not.toHaveBeenCalled();
     });
 
     it('returns null (rolled back) when any id was not reserved or is taken', async () => {
@@ -620,5 +649,74 @@ describe('Schema validation in tenant queries', () => {
     // Prisma should never have been called with an invalid schema
     expect(mockQueryRawUnsafe).not.toHaveBeenCalled();
     expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Per-account lock (storage caps) and the new cap queries
+// =============================================================================
+describe('withTenantLock', () => {
+  it('takes the account\'s advisory lock in the transaction before running the write', async () => {
+    const tx = { $queryRawUnsafe: vi.fn().mockResolvedValue([]) };
+    mockTransaction.mockImplementation(async (fn: (t: unknown) => unknown) => fn(tx));
+    const result = await withTenantLock(SCHEMA, async (t) => {
+      expect(tx.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+      return t === (tx as unknown) ? 'ran on tx' : 'wrong client';
+    });
+    expect(result).toBe('ran on tx');
+    // The schema name goes in as a parameter, never into the SQL text
+    expect(tx.$queryRawUnsafe).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1))::text', SCHEMA);
+  });
+
+  it('refuses an invalid schema name', async () => {
+    await expect(withTenantLock('bad', async () => 1)).rejects.toThrow();
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('doseRecordStorage / postExists', () => {
+  it('sums dose rows and payload bytes, leaving out the ones being replaced', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ count: 3n, bytes: 120n }]);
+    expect(await doseRecordStorage(SCHEMA, ['a'])).toEqual({ count: 3, bytes: 120 });
+    expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('usr_1_abc123.medication_dose_records WHERE NOT (id = ANY($1::text[]))');
+    expect(mockQueryRawUnsafe.mock.calls[0][1]).toEqual(['a']);
+  });
+
+  it('runs on the transaction client when given one', async () => {
+    const tx = { $queryRawUnsafe: vi.fn().mockResolvedValue([{ count: 0, bytes: null }]) };
+    expect(await doseRecordStorage(SCHEMA, [], tx as never)).toEqual({ count: 0, bytes: 0 });
+    expect(mockQueryRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it('postExists checks by id without loading ciphertext', async () => {
+    mockQueryRawUnsafe.mockResolvedValueOnce([{ id: 7 }]).mockResolvedValueOnce([]);
+    expect(await postExists(SCHEMA, 7)).toBe(true);
+    expect(await postExists(SCHEMA, 8)).toBe(false);
+    expect(mockQueryRawUnsafe.mock.calls[0][0]).toBe('SELECT id FROM usr_1_abc123.posts WHERE id = $1');
+  });
+});
+
+describe('ensurePostSync — deletions index', () => {
+  it('new schemas get an index on deleted_posts.change_xid', () => {
+    expect(postSyncStatements(SCHEMA)).toContain(
+      'CREATE INDEX IF NOT EXISTS idx_usr_1_abc123_deleted_change ON usr_1_abc123.deleted_posts (change_xid)');
+  });
+
+  it('an account already tracked but missing the index gets just the index, after a catalog read', async () => {
+    const schema = 'usr_2_abc123';
+    mockQueryRawUnsafe.mockResolvedValue([{ ready: true, indexed: false }]);
+    await ensurePostSync(schema);
+    expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('pg_indexes');
+    expect(mockQueryRawUnsafe.mock.calls[0].slice(1)).toEqual([schema, 'idx_usr_2_abc123_deleted_change']);
+    expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(1);
+    expect(mockExecuteRawUnsafe.mock.calls[0][0]).toBe('CREATE INDEX IF NOT EXISTS idx_usr_2_abc123_deleted_change ON usr_2_abc123.deleted_posts (change_xid)');
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it('touches nothing when tracking and the index are in place', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ ready: true, indexed: true }]);
+    await ensurePostSync('usr_3_abc123');
+    expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });

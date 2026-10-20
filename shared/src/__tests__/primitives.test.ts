@@ -14,12 +14,15 @@ import {
   toNonExtractable,
   encrypt,
   decrypt,
+  checkKekIterations,
 } from '../crypto/primitives.js';
 import type { WrapPurpose } from '../crypto/primitives.js';
 import {
   AES_KEY_LENGTH,
   IV_LENGTH,
   PBKDF2_SALT_LENGTH,
+  PBKDF2_ITERATIONS,
+  PBKDF2_MAX_ITERATIONS,
   RECOVERY_KEY_LENGTH,
 } from '../crypto/constants.js';
 
@@ -394,5 +397,15 @@ describe('deriveKEK — salt from the server', () => {
   it("refuses the sign-in secret's salt, so a server can't turn authSecret into the KEK", async () => {
     const authSalt = new TextEncoder().encode('chronicles:auth:v1:user@example.com');
     await expect(deriveKEK('pw', authSalt, 600_000)).rejects.toThrow('Invalid key salt');
+  });
+});
+
+describe('checkKekIterations', () => {
+  it('accepts the minimum up to the cap and refuses anything else from the server', () => {
+    expect(() => checkKekIterations(PBKDF2_ITERATIONS)).not.toThrow();
+    expect(() => checkKekIterations(PBKDF2_MAX_ITERATIONS)).not.toThrow();
+    for (const n of [PBKDF2_ITERATIONS - 1, PBKDF2_MAX_ITERATIONS + 1, 2 ** 31, 600000.5, NaN]) {
+      expect(() => checkKekIterations(n)).toThrow('Invalid key iterations');
+    }
   });
 });

@@ -5,9 +5,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Use vi.hoisted so mock fns are available when vi.mock factory runs (hoisted to top)
-const { mockQueryRaw, mockExecuteRaw } = vi.hoisted(() => ({
+const { mockQueryRaw, mockExecuteRaw, mockTransaction } = vi.hoisted(() => ({
   mockQueryRaw: vi.fn(),
   mockExecuteRaw: vi.fn(),
+  mockTransaction: vi.fn(),
 }));
 
 vi.mock('../db/prisma.js', () => ({
@@ -16,11 +17,13 @@ vi.mock('../db/prisma.js', () => ({
     $executeRaw: mockExecuteRaw,
     $executeRawUnsafe: vi.fn(),
     $queryRawUnsafe: vi.fn(),
+    $transaction: mockTransaction,
   },
 }));
 
 import {
   createShare,
+  createShareWithinLimit,
   getShareByToken,
   revokeShare,
   deleteSharesForEntry,
@@ -270,5 +273,31 @@ describe('getSharesByAccount', () => {
 
     expect(result).toEqual([]);
     expect(mockQueryRaw).toHaveBeenCalledOnce();
+  });
+});
+
+// =============================================================================
+// createShareWithinLimit
+// =============================================================================
+describe('createShareWithinLimit', () => {
+  const data = { accountId: 42, entryId: 7, content: '<p>x</p>' };
+  const sqlOf = (call: unknown[]) => (call[0] as string[]).join('?');
+  beforeEach(() => {
+    mockTransaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({ $queryRaw: mockQueryRaw }));
+  });
+
+  it('locks the account, counts its live links, then inserts', async () => {
+    mockQueryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ n: 3n }]).mockResolvedValueOnce([{ id: 1, token: 't' }]);
+    expect(await createShareWithinLimit(data, 200)).toEqual({ id: 1, token: 't' });
+    expect(sqlOf(mockQueryRaw.mock.calls[0])).toContain('pg_advisory_xact_lock(hashtext(');
+    expect(mockQueryRaw.mock.calls[0][1]).toBe('shares:42');
+    expect(sqlOf(mockQueryRaw.mock.calls[1])).toContain('count(*)');
+    expect(sqlOf(mockQueryRaw.mock.calls[2])).toContain('INSERT INTO public.shares');
+  });
+
+  it('returns null and inserts nothing at the cap', async () => {
+    mockQueryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ n: 200 }]);
+    expect(await createShareWithinLimit(data, 200)).toBeNull();
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2);
   });
 });

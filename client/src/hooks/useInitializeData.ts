@@ -11,7 +11,7 @@ import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
-import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesAllowed } from '../services/entryReseal.js';
+import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -108,7 +108,7 @@ export function useInitializeData() {
         setRawEntries(encrypted);
 
         // Older entry formats open only until this account is past the move to v3
-        setOlderEntriesAllowed(sealed(ENTRIES_SEAL_MARKER) === undefined);
+        setOlderEntriesFromMarker(sealed(ENTRIES_SEAL_MARKER) !== undefined);
         // Decrypt entries individually — skip ones that fail
         const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
         for (const entry of encrypted) {

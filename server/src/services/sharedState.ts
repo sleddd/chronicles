@@ -20,8 +20,15 @@ const db = () => (prismaClient ??= import('../db/prisma.js').then(m => m.prisma)
  */
 
 export interface SharedState {
-  /** Count an attempt unless the key is locked (count ≥ max within the window). True = go ahead. */
+  /**
+   * Count an attempt unless the key is locked (count ≥ max within the window).
+   * True = go ahead. The attempt that locks the key (count reaches max) and the
+   * first one refused (max + 1) restart the window, so a lock always lasts the
+   * full window instead of whatever was left of the first attempt's.
+   */
   claim(bucket: string, key: string, max: number, windowMs: number): Promise<boolean>;
+  /** claim, returning the count after it: ≤ max = go ahead (max = this attempt locked it), max + 1 = refused. */
+  attempt(bucket: string, key: string, max: number, windowMs: number): Promise<number>;
   /** Whether the key is locked, without counting. */
   locked(bucket: string, key: string, max: number): Promise<boolean>;
   clear(bucket: string, key: string): Promise<void>;
@@ -56,14 +63,18 @@ export function memoryState(): SharedState & { reset(): void } {
     if (r && r.expiresAt <= Date.now()) { rows.delete(k(bucket, key)); return undefined; }
     return r;
   };
+  const attempt = async (bucket: string, key: string, max: number, windowMs: number): Promise<number> => {
+    const r = live(bucket, key);
+    if (!r) { rows.set(k(bucket, key), { count: 1, expiresAt: Date.now() + windowMs }); return 1; }
+    // Past the cap the count parks at max + 1, like the Postgres store
+    if (r.count > max) return r.count;
+    r.count++;
+    if (r.count >= max) r.expiresAt = Date.now() + windowMs;
+    return r.count;
+  };
   return {
-    async claim(bucket, key, max, windowMs) {
-      const r = live(bucket, key);
-      if (!r) { rows.set(k(bucket, key), { count: 1, expiresAt: Date.now() + windowMs }); return true; }
-      if (r.count >= max) return false;
-      r.count++;
-      return true;
-    },
+    attempt,
+    async claim(bucket, key, max, windowMs) { return (await attempt(bucket, key, max, windowMs)) <= max; },
     async locked(bucket, key, max) { return (live(bucket, key)?.count ?? 0) >= max; },
     async clear(bucket, key) { rows.delete(k(bucket, key)); },
     async putToken(bucket, token, accountId, ttlMs) { rows.set(k(bucket, tokenKey(token)), { count: 0, accountId, expiresAt: Date.now() + ttlMs }); },
@@ -105,19 +116,26 @@ export const AUTH_STATE_TABLE_SQL = `CREATE UNLOGGED TABLE IF NOT EXISTS public.
 
 export function postgresState(): SharedState {
   const ms = (n: number) => `${Math.max(1, Math.round(n))} milliseconds`;
+  const attempt = async (bucket: string, key: string, max: number, windowMs: number): Promise<number> => {
+    // Past the cap the count parks at max + 1: "blocked" is then count > max.
+    // The attempt that reaches max (the lock) and the one that reaches max + 1
+    // (the first refusal) restart the window (SET sees the old row's values)
+    const [row] = await (await db()).$queryRawUnsafe<{ count: bigint }[]>(
+      `INSERT INTO public.auth_state (bucket, key, count, expires_at) VALUES ($1, $2, 1, now() + $4::interval)
+       ON CONFLICT (bucket, key) DO UPDATE SET
+         count = CASE WHEN auth_state.expires_at <= now() THEN 1 ELSE LEAST(auth_state.count + 1, $3 + 1) END,
+         expires_at = CASE
+           WHEN auth_state.expires_at <= now() THEN EXCLUDED.expires_at
+           WHEN auth_state.count BETWEEN $3 - 1 AND $3 THEN EXCLUDED.expires_at
+           ELSE auth_state.expires_at END
+       RETURNING count`,
+      bucket, key, max, ms(windowMs)
+    );
+    return Number(row.count);
+  };
   return {
-    async claim(bucket, key, max, windowMs) {
-      // Past the cap the count parks at max + 1: "blocked" is then count > max
-      const [row] = await (await db()).$queryRawUnsafe<{ count: bigint }[]>(
-        `INSERT INTO public.auth_state (bucket, key, count, expires_at) VALUES ($1, $2, 1, now() + $4::interval)
-         ON CONFLICT (bucket, key) DO UPDATE SET
-           count = CASE WHEN auth_state.expires_at <= now() THEN 1 ELSE LEAST(auth_state.count + 1, $3 + 1) END,
-           expires_at = CASE WHEN auth_state.expires_at <= now() THEN EXCLUDED.expires_at ELSE auth_state.expires_at END
-         RETURNING count`,
-        bucket, key, max, ms(windowMs)
-      );
-      return Number(row.count) <= max;
-    },
+    attempt,
+    async claim(bucket, key, max, windowMs) { return (await attempt(bucket, key, max, windowMs)) <= max; },
     async locked(bucket, key, max) {
       const rows = await (await db()).$queryRawUnsafe<{ count: bigint }[]>(
         `SELECT count FROM public.auth_state WHERE bucket = $1 AND key = $2 AND expires_at > now()`, bucket, key

@@ -24,8 +24,11 @@ const PENDING_2FA = 'pending_2fa';
 const PENDING_2FA_TTL_MS = 5 * 60 * 1000;
 const TOTP_STEP = 'totp_step';
 const TWO_FA_FAILURES = 'fail_2fa';
+const TWO_FA_STRIKES = 'strike_2fa';
+const TWO_FA_LONG_LOCK = 'lock_2fa';
 const LOGIN_FAILURES = 'fail_login';
 const CONFIRM_FAILURES = 'fail_confirm';
+const EMAIL_CHANGES = 'email_change';
 
 /** Drop an account's pending 2FA sign-ins (after a password change, recovery or 2FA change). */
 async function cancelPendingTwoFA(accountId: number): Promise<void> {
@@ -80,25 +83,44 @@ const TOTP_STEP_TTL_MS = 24 * 60 * 60 * 1000;
 // so guesses spread across many IPs still run out
 const TWO_FA_MAX_FAILURES = 5;
 const TWO_FA_LOCK_MS = 15 * 60 * 1000;
+// Repeat offenders: the third 15-minute lock within a day locks 2FA for a day,
+// so a patient guesser gets ~15 codes a day per account instead of ~480
+const TWO_FA_MAX_STRIKES = 3;
+const TWO_FA_STRIKE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const TWO_FA_LONG_LOCK_MS = 24 * 60 * 60 * 1000;
 
-function twoFALocked(accountId: number): Promise<boolean> {
-  return sharedState.locked(TWO_FA_FAILURES, String(accountId), TWO_FA_MAX_FAILURES);
+/** Which 2FA lock the account is under, if any. */
+async function twoFALock(accountId: number): Promise<'long' | 'short' | null> {
+  const id = String(accountId);
+  if (await sharedState.locked(TWO_FA_LONG_LOCK, id, 1)) return 'long';
+  if (await sharedState.locked(TWO_FA_FAILURES, id, TWO_FA_MAX_FAILURES)) return 'short';
+  return null;
 }
 
-/**
- * Count a second-factor attempt before it's checked, so parallel requests
- * can't all pass the lock while the first is still being verified. Returns
- * false when the account is locked. A correct code clears the count.
- */
-function claimTwoFAAttempt(accountId: number): Promise<boolean> {
-  return sharedState.claim(TWO_FA_FAILURES, String(accountId), TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
+const twoFALockMessage = (lock: 'long' | 'short') => lock === 'long'
+  ? 'Too many incorrect codes. Two-factor sign-in is locked for 24 hours.'
+  : 'Too many incorrect codes. Try again in 15 minutes.';
+
+/** A wrong code just locked the account: count the strike, and lock for a day on the third. */
+async function strikeTwoFALock(accountId: number): Promise<void> {
+  const id = String(accountId);
+  const { count } = await sharedState.hit(TWO_FA_STRIKES, id, TWO_FA_STRIKE_WINDOW_MS);
+  if (count >= TWO_FA_MAX_STRIKES) {
+    await sharedState.hit(TWO_FA_LONG_LOCK, id, TWO_FA_LONG_LOCK_MS);
+    logSecurityEvent('2fa_locked_long', { accountId, details: { strikes: count } });
+  } else {
+    logSecurityEvent('2fa_locked', { accountId, details: { strikes: count } });
+  }
 }
 
-/** After a correct code, or when 2FA is turned on or off: a fresh count and replay guard. */
+/** When 2FA is turned on or off, or the account is deleted: a fresh count, replay guard and locks. */
 async function clearTwoFAState(accountId: number): Promise<void> {
+  const id = String(accountId);
   await Promise.all([
-    sharedState.clear(TWO_FA_FAILURES, String(accountId)),
-    sharedState.clear(TOTP_STEP, String(accountId)),
+    sharedState.clear(TWO_FA_FAILURES, id),
+    sharedState.clear(TOTP_STEP, id),
+    sharedState.clear(TWO_FA_STRIKES, id),
+    sharedState.clear(TWO_FA_LONG_LOCK, id),
   ]);
 }
 
@@ -131,6 +153,10 @@ function claimLoginAttempt(key: string): Promise<boolean> {
 const CONFIRM_MAX_FAILURES = 10;
 const CONFIRM_LOCK_MS = 15 * 60 * 1000;
 
+// Per-account cap on email changes, counting every try
+const EMAIL_CHANGE_MAX = 5;
+const EMAIL_CHANGE_WINDOW_MS = 60 * 60 * 1000;
+
 function claimConfirmAttempt(accountId: number): Promise<boolean> {
   return sharedState.claim(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES, CONFIRM_LOCK_MS);
 }
@@ -144,8 +170,21 @@ async function verifySecondFactor(
   code: string,
 ): Promise<'totp' | 'backup' | null> {
   // Counted (atomically, across instances) before the check, so concurrent
-  // guesses can't slip past the cap
-  if (!(await claimTwoFAAttempt(account.id))) return null;
+  // guesses can't slip past the cap. Exactly one attempt sees the count reach
+  // the cap: if its code is wrong, that's the moment the lock triggered
+  if (await sharedState.locked(TWO_FA_LONG_LOCK, String(account.id), 1)) return null;
+  const attempt = await sharedState.attempt(TWO_FA_FAILURES, String(account.id), TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
+  if (attempt > TWO_FA_MAX_FAILURES) return null;
+  const factor = await checkSecondFactor(account, code);
+  if (factor) await sharedState.clear(TWO_FA_FAILURES, String(account.id));
+  else if (attempt === TWO_FA_MAX_FAILURES) await strikeTwoFALock(account.id);
+  return factor;
+}
+
+async function checkSecondFactor(
+  account: { id: number; totpSecret: string; totpBackupCodes: string[] },
+  code: string,
+): Promise<'totp' | 'backup' | null> {
   if (/^\d{6}$/.test(code)) {
     let step: number | null = null;
     try {
@@ -158,7 +197,6 @@ async function verifySecondFactor(
     if (step !== null) {
       // Only the first use of a step (or a later one) wins: a replayed code fails
       if (!(await sharedState.advance(TOTP_STEP, String(account.id), step, TOTP_STEP_TTL_MS))) return null;
-      await sharedState.clear(TWO_FA_FAILURES, String(account.id));
       return 'totp';
     }
   }
@@ -172,7 +210,6 @@ async function verifySecondFactor(
     UPDATE "accounts" SET totp_backup_codes = array_remove(totp_backup_codes, ${used})
     WHERE id = ${account.id} AND ${used} = ANY(totp_backup_codes)`;
   if (consumed === 0) return null;
-  await sharedState.clear(TWO_FA_FAILURES, String(account.id));
   return 'backup';
 }
 
@@ -230,7 +267,10 @@ const DECOY_KEY = serverKey('chronicles:recovery-decoy');
 // guessing an email's password from elsewhere can then lock out only
 // themselves, not the owner's own browser (the per-email cap was a lockout
 // anyone could trigger). The cookie only skips that shared bucket — the
-// password and 2FA are still checked as always.
+// password and 2FA are still checked as always. The MAC covers the account and
+// a hash of its current sign-in hash, which changes with the password, a
+// recovery and the email (the sign-in secret is email-salted) — so a cookie
+// stops counting as known after any of those.
 const DEVICE_KEY = serverKey('chronicles:known-device');
 const DEVICE_COOKIE = IS_PRODUCTION ? '__Host-chronicle_device' : 'chronicle_device';
 const DEVICE_COOKIE_OPTIONS = {
@@ -240,22 +280,31 @@ const DEVICE_COOKIE_OPTIONS = {
   maxAge: 90 * 24 * 60 * 60 * 1000,
   path: '/',
 };
-const deviceMac = (email: string, nonce: string) =>
-  crypto.createHmac('sha256', DEVICE_KEY).update(`${email}\n${nonce}`).digest('base64url');
+interface DeviceAccount { id: number; email: string; passwordHash: string }
 
-function rememberKnownDevice(res: Response, email: string): void {
+const deviceMac = (account: DeviceAccount, nonce: string) => {
+  const credential = crypto.createHash('sha256').update(account.passwordHash).digest('hex');
+  return crypto.createHmac('sha256', DEVICE_KEY)
+    .update(`${account.id}\n${credential}\n${account.email}\n${nonce}`).digest('base64url');
+};
+
+function rememberKnownDevice(res: Response, account: DeviceAccount): void {
   const nonce = crypto.randomBytes(16).toString('base64url');
-  res.cookie(DEVICE_COOKIE, `${nonce}.${deviceMac(email, nonce)}`, DEVICE_COOKIE_OPTIONS);
+  res.cookie(DEVICE_COOKIE, `${nonce}.${deviceMac(account, nonce)}`, DEVICE_COOKIE_OPTIONS);
 }
 
-/** The failure bucket for this attempt: the device's own when it's known for this email. */
-function loginFailureKey(req: Request, email: string): string {
+/** The failure bucket for this attempt: the device's own when it's known for this account. */
+async function loginFailureKey(req: Request, email: string): Promise<string> {
   const raw = req.cookies?.[DEVICE_COOKIE];
   if (typeof raw !== 'string' || raw.length > 128) return email;
   const [nonce, mac] = raw.split('.');
   if (!nonce || !mac) return email;
+  // Only browsers carrying a cookie pay for this lookup; without an account
+  // there's nothing to be known for
+  const account = await prisma.account.findUnique({ where: { email }, select: { id: true, email: true, passwordHash: true } });
+  if (!account) return email;
   const a = Buffer.from(mac);
-  const b = Buffer.from(deviceMac(email, nonce));
+  const b = Buffer.from(deviceMac(account, nonce));
   return a.length === b.length && crypto.timingSafeEqual(a, b) ? `${email}#${nonce}` : email;
 }
 
@@ -295,10 +344,15 @@ function sendIfHasherBusy(err: unknown, res: Response): boolean {
   return true;
 }
 
+// A 12-round bcrypt hash of nothing in use, compared against when the stored
+// hash can't match, so that answer takes as long as a real check
+const DUMMY_BCRYPT_HASH = '$2b$12$DWfEthtYC3Z4n.Oyg7YQXOXt7PGJvzZ4zeHYQ5qQQaxfiJHVjJK6a';
+
 /** Check a derived sign-in secret. Anything but an auth1$ hash never matches. */
 async function checkAuthSecret(stored: string, authSecret: string): Promise<boolean> {
-  if (!stored.startsWith(AUTH_PREFIX)) return false;
-  return bcrypt.compare(authSecret, stored.slice(AUTH_PREFIX.length));
+  const current = stored.startsWith(AUTH_PREFIX);
+  const matched = await bcrypt.compare(authSecret, current ? stored.slice(AUTH_PREFIX.length) : DUMMY_BCRYPT_HASH);
+  return current && matched;
 }
 
 function confirmLocked(accountId: number): Promise<boolean> {
@@ -392,6 +446,23 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
     const email = normalizeEmail(rawEmail);
 
+    // Order matters. The username is checked first and answered the same for
+    // everyone: checked after approval, "username taken" (409) vs "restricted"
+    // (403) told anyone whether an email was approved. Then approval, then the
+    // email — "email taken" only reaches an approved (or listed) email, and
+    // with no email verification sign-up has to say so. Every refusal pays
+    // for a hash, like a sign-up does.
+    //
+    // Squatting: without email verification or invite tokens, whoever first
+    // registers an approved email owns that account. Approval is the only gate.
+    const existingUsername = await prisma.account.findUnique({ where: { username } });
+    if (existingUsername) {
+      logSecurityEvent('register_duplicate', { ip: req.ip });
+      await bcrypt.hash('dummy', BCRYPT_ROUNDS);
+      res.status(409).json({ error: 'This username is already taken.', field: 'username' });
+      return;
+    }
+
     // Who may sign up: closed unless REGISTRATION_OPEN=true. Emails approved on
     // the beta list (`npm run beta -- --approve`, no restart) or listed in the
     // optional REGISTRATION_WHITELIST may; anyone else is refused
@@ -399,25 +470,17 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       const listed = (process.env.REGISTRATION_WHITELIST ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
       if (!listed.includes(email) && !(await isApproved(email).catch(() => false))) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
+        await bcrypt.hash('dummy', BCRYPT_ROUNDS);
         res.status(403).json({ error: 'Registration is currently restricted.' });
         return;
       }
     }
 
-    // Check for existing account — check email and username separately for clear feedback
     const existingEmail = await prisma.account.findUnique({ where: { email } });
     if (existingEmail) {
       logSecurityEvent('register_duplicate', { ip: req.ip });
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       res.status(409).json({ error: 'An account with this email already exists.', field: 'email' });
-      return;
-    }
-
-    const existingUsername = await prisma.account.findUnique({ where: { username } });
-    if (existingUsername) {
-      logSecurityEvent('register_duplicate', { ip: req.ip });
-      await bcrypt.hash('dummy', BCRYPT_ROUNDS);
-      res.status(409).json({ error: 'This username is already taken.', field: 'username' });
       return;
     }
 
@@ -440,7 +503,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('register_success', { accountId: account.id, ip: req.ip });
-    rememberKnownDevice(res, email);
+    rememberKnownDevice(res, { id: account.id, email, passwordHash });
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.status(201).json({
       user: { email: account.email, username: account.username },
@@ -503,7 +566,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const { email, authSecret } = parsed.data;
 
     const normalizedEmail = normalizeEmail(email);
-    const failureKey = loginFailureKey(req, normalizedEmail);
+    const failureKey = await loginFailureKey(req, normalizedEmail);
     // Counted (atomically, across instances) before the password check:
     // parallel guesses can't all pass the lock
     if (!(await claimLoginAttempt(failureKey))) {
@@ -546,7 +609,7 @@ router.post('/login', authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
-    rememberKnownDevice(res, account.email);
+    rememberKnownDevice(res, account);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
@@ -638,6 +701,8 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
     });
 
     logSecurityEvent('password_change', { accountId: account.id, ip: req.ip });
+    // The old known-device cookie no longer verifies; this browser stays known
+    rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash });
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({ success: true });
   } catch (err) {
@@ -665,6 +730,15 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
       return;
     }
 
+    // Every try counts (per account, across instances): the "already in use"
+    // answer below says whether an email has an account, so a session can't
+    // be used to test emails at the per-IP rate
+    if (!(await sharedState.claim(EMAIL_CHANGES, String(req.auth!.accountId), EMAIL_CHANGE_MAX, EMAIL_CHANGE_WINDOW_MS))) {
+      logSecurityEvent('email_change_limited', { accountId: req.auth!.accountId, ip: req.ip });
+      res.status(429).json({ error: 'Too many email changes. Try again in an hour.' });
+      return;
+    }
+
     // The email is the login identifier — changing it needs the password
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
@@ -683,13 +757,19 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
       return;
     }
 
+    // The sign-in secret is salted with the email, so it's replaced too
+    const passwordHash = await hashAuthSecret(parsed.data.newAuthSecret);
     await prisma.account.update({
       where: { id: req.auth!.accountId },
-      // The sign-in secret is salted with the email, so it's replaced too
-      data: { email: normalizedEmail, passwordHash: await hashAuthSecret(parsed.data.newAuthSecret) },
+      data: { email: normalizedEmail, passwordHash },
     });
+    // Like a password change: every other session (and its Remember me
+    // grant) is signed out and pending 2FA sign-ins are cancelled; this one stays
+    await revokeAllSessions(account.id, req.auth!.selector, 'email_change');
+    await cancelPendingTwoFA(account.id);
 
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
+    rememberKnownDevice(res, { id: account.id, email: normalizedEmail, passwordHash });
     res.json({ success: true, email: normalizedEmail });
   } catch (err) {
     if (sendIfHasherBusy(err, res)) return;
@@ -742,8 +822,9 @@ router.post('/recover', strictLimiter, async (req, res) => {
     // With 2FA on, the recovery key alone isn't enough: also need an
     // authenticator or backup code (asked for only after the key checks out)
     if (account.totpEnabled && account.totpSecret) {
-      if (await twoFALocked(account.id)) {
-        res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.', requires2FA: true });
+      const lock = await twoFALock(account.id);
+      if (lock) {
+        res.status(429).json({ error: twoFALockMessage(lock), requires2FA: true });
         return;
       }
       if (!code) {
@@ -807,7 +888,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
     await revokeGrantsForAccount(account.id);
     await cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
-    rememberKnownDevice(res, email);
+    rememberKnownDevice(res, { id: account.id, email, passwordHash });
 
     // Create new session after revoking all old ones
     const token = await createSession(account.id, account.tenantSchemaName, {
@@ -884,9 +965,10 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
 
-    if (await twoFALocked(account.id)) {
+    const lock = await twoFALock(account.id);
+    if (lock) {
       logSecurityEvent('login_2fa_locked', { accountId: account.id, ip: req.ip });
-      res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
+      res.status(429).json({ error: twoFALockMessage(lock) });
       return;
     }
 
@@ -908,7 +990,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
-    rememberKnownDevice(res, account.email);
+    rememberKnownDevice(res, account);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
@@ -972,13 +1054,14 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
       return;
     }
 
-    let valid = false;
+    let step: number | null = null;
     try {
-      valid = verifySync({ token: code, secret }).valid;
+      const result = verifySync({ token: code, secret });
+      if (result.valid) step = 'timeStep' in result ? result.timeStep : 0;
     } catch {
-      valid = false;
+      step = null;
     }
-    if (!valid) {
+    if (step === null) {
       res.status(400).json({ error: 'Invalid code — check your authenticator app and try again' });
       return;
     }
@@ -997,7 +1080,14 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
       where: { id: req.auth!.accountId },
       data: { totpSecret: sealTotpSecret(secret), totpEnabled: true, totpBackupCodes: hashedCodes },
     });
-    await clearTwoFAState(req.auth!.accountId);
+    // A fresh count, then the enabling code's step marked used, so that same
+    // code can't then finish a sign-in (replay)
+    await clearTwoFAState(account.id);
+    await sharedState.advance(TOTP_STEP, String(account.id), step, TOTP_STEP_TTL_MS);
+    // Like a password change: every other session (and its Remember me grant)
+    // is signed out and pending sign-ins are cancelled; this one stays
+    await revokeAllSessions(account.id, req.auth!.selector, '2fa_enabled');
+    await cancelPendingTwoFA(account.id);
 
     logSecurityEvent('2fa_enabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ backupCodes });
@@ -1036,8 +1126,9 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     }
 
     if (account.totpEnabled && account.totpSecret) {
-      if (await twoFALocked(account.id)) {
-        res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
+      const lock = await twoFALock(account.id);
+      if (lock) {
+        res.status(429).json({ error: twoFALockMessage(lock) });
         return;
       }
       const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code);
@@ -1089,8 +1180,9 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       return;
     }
     if (account.totpEnabled && account.totpSecret) {
-      if (await twoFALocked(account.id)) {
-        res.status(429).json({ error: 'Too many incorrect codes. Try again in 15 minutes.' });
+      const lock = await twoFALock(account.id);
+      if (lock) {
+        res.status(429).json({ error: twoFALockMessage(lock) });
         return;
       }
       if (!parsed.data.code) {

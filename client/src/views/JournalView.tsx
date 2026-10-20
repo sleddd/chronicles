@@ -40,7 +40,7 @@ import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
-import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesAllowed } from '../services/entryReseal.js';
+import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -540,7 +540,7 @@ export function JournalView() {
         setRawEntries(encrypted);
 
         // Older entry formats open only until this account is past the move to v3
-        setOlderEntriesAllowed(sealed(ENTRIES_SEAL_MARKER) === undefined);
+        setOlderEntriesFromMarker(sealed(ENTRIES_SEAL_MARKER) !== undefined);
         // Decrypt entries individually — skip ones that fail
         const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
         for (const entry of encrypted) {

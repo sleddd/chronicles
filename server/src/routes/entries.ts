@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts } from '../db/tenantQueries.js';
+import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
@@ -19,6 +19,12 @@ router.use(async (req, res, next) => {
     res.status(500).json({ error: 'Failed to load entries' });
   }
 });
+
+const JOURNAL_FULL = { error: 'Your journal is full — delete some entries or drawings to make room' };
+const FULL = Symbol('full');
+
+// Largest xid8 (a 64-bit unsigned integer): a bigger cursor fails the cast
+const MAX_XID8 = 2n ** 64n - 1n;
 
 // Which journal a browser cache belongs to: a cache from another account (or
 // one deleted and made again under the same email) never matches
@@ -72,7 +78,7 @@ router.get('/cursor', async (req, res) => {
 router.get('/changes', async (req, res) => {
   try {
     const since = String(req.query.since ?? '');
-    if (!/^\d{1,20}$/.test(since)) {
+    if (!/^\d{1,20}$/.test(since) || BigInt(since) > MAX_XID8) {
       res.status(400).json({ error: 'Invalid cursor' });
       return;
     }
@@ -133,11 +139,17 @@ router.put('/reseal', async (req, res) => {
       return;
     }
     const size = entries.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length, 0);
-    if (await postStorageBytes(req.auth!.tenantSchemaName, entries.map(e => e.id)) + size > ENTRY_STORAGE_LIMIT_BYTES) {
-      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+    const schema = req.auth!.tenantSchemaName;
+    // Check and write under the account's lock, so parallel writes can't both fit
+    const resealed = await withTenantLock(schema, async (tx) => {
+      if (await postStorageBytes(schema, entries.map(e => e.id), tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
+      return resealPosts(schema, entries, tx);
+    });
+    if (resealed === FULL) {
+      res.status(413).json(JOURNAL_FULL);
       return;
     }
-    res.json({ resealed: await resealPosts(req.auth!.tenantSchemaName, entries) });
+    res.json({ resealed });
   } catch (err) {
     console.error('Reseal entries error:', err);
     res.status(500).json({ error: 'Failed to re-save entries' });
@@ -170,12 +182,15 @@ router.post('/', async (req, res) => {
 
     const input = toCreateInput(parsed.data);
     const size = input.contentEncrypted.length + input.metadataEncrypted.length;
-    if (await postStorageBytes(req.auth!.tenantSchemaName) + size > ENTRY_STORAGE_LIMIT_BYTES) {
-      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+    const schema = req.auth!.tenantSchemaName;
+    const post = await withTenantLock(schema, async (tx) => {
+      if (await postStorageBytes(schema, [], tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
+      return createPost(schema, input, tx);
+    });
+    if (post === FULL) {
+      res.status(413).json(JOURNAL_FULL);
       return;
     }
-
-    const post = await createPost(req.auth!.tenantSchemaName, input);
     if (!post) {
       res.status(409).json({ error: 'That entry id was not reserved or is taken' });
       return;
@@ -203,12 +218,15 @@ router.post('/batch', async (req, res) => {
     }
 
     const size = inputs.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length, 0);
-    if (await postStorageBytes(req.auth!.tenantSchemaName) + size > ENTRY_STORAGE_LIMIT_BYTES) {
-      res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
+    const schema = req.auth!.tenantSchemaName;
+    const posts = await withTenantLock(schema, async (tx) => {
+      if (await postStorageBytes(schema, [], tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
+      return createPosts(schema, inputs, tx);
+    });
+    if (posts === FULL) {
+      res.status(413).json(JOURNAL_FULL);
       return;
     }
-
-    const posts = await createPosts(req.auth!.tenantSchemaName, inputs);
     if (!posts) {
       res.status(409).json({ error: 'An entry id was not reserved or is taken' });
       return;
@@ -258,15 +276,18 @@ router.put('/:id', async (req, res) => {
     if (updates.metadataEncrypted !== undefined) input.metadataEncrypted = Buffer.from(updates.metadataEncrypted, 'base64');
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
-    if (input.contentEncrypted && input.metadataEncrypted) {
-      const size = input.contentEncrypted.length + input.metadataEncrypted.length;
-      if (await postStorageBytes(req.auth!.tenantSchemaName, id) + size > ENTRY_STORAGE_LIMIT_BYTES) {
-        res.status(413).json({ error: 'Your journal is full — delete some entries or drawings to make room' });
-        return;
+    const schema = req.auth!.tenantSchemaName;
+    const post = await withTenantLock(schema, async (tx) => {
+      if (input.contentEncrypted && input.metadataEncrypted) {
+        const size = input.contentEncrypted.length + input.metadataEncrypted.length;
+        if (await postStorageBytes(schema, id, tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
       }
+      return updatePost(schema, id, input, tx);
+    });
+    if (post === FULL) {
+      res.status(413).json(JOURNAL_FULL);
+      return;
     }
-
-    const post = await updatePost(req.auth!.tenantSchemaName, id, input);
     if (!post) {
       res.status(404).json({ error: 'Entry not found' });
       return;

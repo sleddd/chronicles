@@ -14,6 +14,8 @@ export const IV_LENGTH = 12; // bytes
 export const PBKDF2_ALGORITHM = 'PBKDF2';
 export const PBKDF2_HASH = 'SHA-256';
 export const PBKDF2_ITERATIONS = 600000; // OWASP 2024 recommendation
+/** The most KEK iterations accepted from the server (more would only freeze the tab). */
+export const PBKDF2_MAX_ITERATIONS = 2_000_000;
 export const PBKDF2_SALT_LENGTH = 16; // bytes
 
 // Recovery key configuration

@@ -522,3 +522,15 @@ describe('X-Powered-By', () => {
     expect(content).toContain("app.disable('x-powered-by')");
   });
 });
+
+describe('Middleware order (index.ts)', () => {
+  it('sets security headers before any body parser, and reads entry bodies only after auth', async () => {
+    const fs = await import('fs');
+    const content = fs.readFileSync(new URL('../index.ts', import.meta.url).pathname.replace('/__tests__', ''), 'utf8');
+    const headers = content.indexOf('app.use(securityHeaders)');
+    expect(headers).toBeGreaterThan(-1);
+    expect(headers).toBeLessThan(content.indexOf('express.json('));
+    expect(content).toMatch(/app\.use\('\/api\/entries', authMiddleware, apiLimiter, express\.json\(\{ limit: '5mb' \}\), entriesRoutes\)/);
+    expect(content).not.toContain("'http://localhost:5173'");
+  });
+});

@@ -22,11 +22,13 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // would outlive sign-out on a shared computer. Routes may override (ICS feed).
   if (req.path?.toLowerCase().startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   // Prevent XSS from stealing in-memory key
-  // Note: style-src 'unsafe-inline' is required by styled-components (CSS-in-JS).
-  // CSP nonces can't be used here because Express is API-only — the HTML page is served
-  // separately (Vite dev server / static CDN), so nonces set on API responses wouldn't
-  // propagate to the page's style tags. The risk is mitigated by script-src 'self'
-  // (no inline JS), which prevents CSS-based exfiltration from escalating to code execution.
+  // This runs on every response, including the SPA (index.html and the built
+  // assets from client/dist, served after this middleware), so the CSP below
+  // is the page's own policy. Note: style-src 'unsafe-inline' is required by
+  // styled-components, which injects <style> tags at runtime without a nonce
+  // (index.html is served as a static file, so there's no per-request nonce to
+  // hand it either). The risk is mitigated by script-src 'self' (no inline
+  // JS), which keeps CSS-based tricks from escalating to code execution.
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
     "font-src 'self'; " +
@@ -46,4 +48,30 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // our own origin only — voice dictation in the editor needs it.
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=()');
   next();
+}
+
+type Env = Record<string, string | undefined>;
+
+/**
+ * The CORS origin: CLIENT_URL, or the Vite dev server in development only.
+ * Anywhere else an unset CLIENT_URL means no cross-origin access at all (fail
+ * closed) — the right answer when the client is served from this server, and
+ * never a stray localhost origin in production.
+ */
+export function corsOriginFor(env: Env = process.env): string | false {
+  if (env.CLIENT_URL) return env.CLIENT_URL;
+  return env.NODE_ENV === 'development' ? 'http://localhost:5173' : false;
+}
+
+/**
+ * Express's `trust proxy` setting, or undefined to leave it off. TRUST_PROXY
+ * wins when set ('0' / 'false' = none, a number = hops, else passed through);
+ * otherwise one hop everywhere but development — the same condition that
+ * marks cookies Secure, so a staging or unset NODE_ENV behind a proxy still
+ * sees real client IPs.
+ */
+export function trustProxySetting(env: Env = process.env): number | string | undefined {
+  const raw = env.TRUST_PROXY ?? (env.NODE_ENV !== 'development' ? '1' : '');
+  if (!raw || ['0', 'false'].includes(raw)) return undefined;
+  return /^\d+$/.test(raw) ? Number(raw) : raw;
 }

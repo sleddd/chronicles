@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 import crypto from 'crypto';
 
@@ -49,16 +50,41 @@ export async function initSharesTable(): Promise<void> {
   `;
 }
 
-/** Create a new share record, returns the token */
-export async function createShare(data: {
+interface NewShare {
   accountId: number;
   entryId: number;
   content: string;
   expiresAt?: Date | null;
-}): Promise<Share> {
+}
+
+/** Create a new share record, returns the token */
+export async function createShare(data: NewShare): Promise<Share> {
+  return insertShare(prisma, data);
+}
+
+/**
+ * Create a share unless the account already has `maxActive` live links (each
+ * holds plaintext, so one account mustn't be able to fill the table). Null
+ * when it's at the cap. The count and the insert run under the account's
+ * advisory lock, so parallel requests can't both slip under it.
+ */
+export async function createShareWithinLimit(data: NewShare, maxActive: number): Promise<Share | null> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`shares:${data.accountId}`}))::text`;
+    const [{ n }] = await tx.$queryRaw<{ n: bigint | number }[]>`
+      SELECT count(*) AS n FROM public.shares
+      WHERE account_id = ${data.accountId} AND is_active = TRUE
+        AND (expires_at IS NULL OR expires_at > NOW())
+    `;
+    if (Number(n) >= maxActive) return null;
+    return insertShare(tx, data);
+  });
+}
+
+async function insertShare(db: Prisma.TransactionClient, data: NewShare): Promise<Share> {
   const token = crypto.randomBytes(24).toString('base64url');
 
-  const rows = await prisma.$queryRaw<Share[]>`
+  const rows = await db.$queryRaw<Share[]>`
     INSERT INTO public.shares
       (token, account_id, entry_id, content, expires_at)
     VALUES

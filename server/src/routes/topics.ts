@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, reserveTaxonomyIds } from '../db/tenantQueries.js';
+import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, reserveTaxonomyIds, taxonomyCount, withTenantLock } from '../db/tenantQueries.js';
 import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite, reservePostIdsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 
@@ -9,6 +9,14 @@ import { parseId } from '../middleware/parseId.js';
    reserved first (/ids), since its payload is bound to it. */
 
 const OUTDATED = { error: 'Update Chronicles to continue — topic names are now encrypted. Reload the page.' };
+
+/** Per-account cap: far beyond any real list of topics, but bounded */
+export const TOPIC_LIMIT = (() => {
+  const n = Number(process.env.TOPIC_LIMIT);
+  return Number.isInteger(n) && n > 0 ? n : 1000;
+})();
+const TOPICS_FULL = { error: `You can have up to ${TOPIC_LIMIT} topics — delete some to make room` };
+const FULL = Symbol('full');
 
 const router = Router();
 
@@ -57,6 +65,11 @@ router.post('/ids', async (req, res) => {
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
+    // No ids for an account that couldn't create a topic with them anyway
+    if (await taxonomyCount(req.auth!.tenantSchemaName) >= TOPIC_LIMIT) {
+      res.status(413).json(TOPICS_FULL);
+      return;
+    }
     res.json({ ids: await reserveTaxonomyIds(req.auth!.tenantSchemaName, parsed.data.count) });
   } catch (err) {
     console.error('Reserve topic ids error:', err);
@@ -75,7 +88,16 @@ router.post('/', async (req, res) => {
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
     const { format: _v2, ...data } = parsed.data;
-    const taxonomy = await createTaxonomy(req.auth!.tenantSchemaName, data);
+    const schema = req.auth!.tenantSchemaName;
+    // Count and insert under the account's lock, so parallel creates can't pass the cap
+    const taxonomy = await withTenantLock(schema, async (tx) => {
+      if (await taxonomyCount(schema, tx) >= TOPIC_LIMIT) return FULL;
+      return createTaxonomy(schema, data, tx);
+    });
+    if (taxonomy === FULL) {
+      res.status(413).json(TOPICS_FULL);
+      return;
+    }
     if (!taxonomy) {
       res.status(409).json({ error: 'That topic id was not reserved or is taken' });
       return;
@@ -118,6 +140,10 @@ router.put('/:id', async (req, res) => {
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
     const { format: _v2, ...updates } = parsed.data;
     const taxonomy = await updateTaxonomy(req.auth!.tenantSchemaName, id, updates);
+    if (!taxonomy) {
+      res.status(404).json({ error: 'Topic not found' });
+      return;
+    }
     res.json(taxonomy);
   } catch (err) {
     console.error('Update topic error:', err);

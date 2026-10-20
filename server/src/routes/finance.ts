@@ -5,6 +5,7 @@ import {
   upsertFinanceRecord,
   financeStorageBytes,
   deleteFinanceRecord,
+  withTenantLock,
   FINANCE_TABLES,
   type FinanceTableKind,
   type FinanceRecordRow,
@@ -67,17 +68,16 @@ router.put('/:kind/:id', async (req, res) => {
   try {
     await ensureFinanceTables(req.auth!.tenantSchemaName);
     const payload = Buffer.from(body.data.payload, 'base64');
-    if (await financeStorageBytes(req.auth!.tenantSchemaName, { kind, id: id.data }) + payload.length > FINANCE_STORAGE_LIMIT_BYTES) {
+    const schema = req.auth!.tenantSchemaName;
+    // Check and write under the account's lock, so parallel saves can't both fit
+    const row = await withTenantLock(schema, async (tx) => {
+      if (await financeStorageBytes(schema, { kind, id: id.data }, tx) + payload.length > FINANCE_STORAGE_LIMIT_BYTES) return null;
+      return upsertFinanceRecord(schema, kind, id.data, payload, Buffer.from(body.data.iv, 'base64'), tx);
+    });
+    if (!row) {
       res.status(413).json({ error: 'Finance storage is full — delete some old records to make room' });
       return;
     }
-    const row = await upsertFinanceRecord(
-      req.auth!.tenantSchemaName,
-      kind,
-      id.data,
-      payload,
-      Buffer.from(body.data.iv, 'base64'),
-    );
     res.json({ record: serialize(row) });
   } catch (err) {
     console.error('Save finance record error:', err);

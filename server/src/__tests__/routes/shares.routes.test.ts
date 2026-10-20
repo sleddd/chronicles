@@ -6,10 +6,12 @@ import cookieParser from 'cookie-parser';
 // Mock shareQueries
 vi.mock('../../db/shareQueries.js', () => ({
   getShareByToken: vi.fn(),
-  createShare: vi.fn(),
+  createShareWithinLimit: vi.fn(),
   revokeShare: vi.fn(),
   getSharesByAccount: vi.fn(),
 }));
+
+vi.mock('../../db/tenantQueries.js', () => ({ postExists: vi.fn().mockResolvedValue(true) }));
 
 // Mock auth middleware
 vi.mock('../../middleware/auth.js', () => ({
@@ -31,7 +33,9 @@ vi.mock('../../middleware/rateLimiter.js', () => ({
 }));
 
 import sharesRouter from '../../routes/shares.js';
-import { getShareByToken, createShare, revokeShare, getSharesByAccount } from '../../db/shareQueries.js';
+import { getShareByToken, createShareWithinLimit, revokeShare, getSharesByAccount } from '../../db/shareQueries.js';
+import { postExists } from '../../db/tenantQueries.js';
+import { SHARE_LIMIT } from '../../routes/shares.js';
 
 // Build test app — shares has mixed auth (some routes public, some use authMiddleware inline)
 function buildApp() {
@@ -119,23 +123,23 @@ describe('Share Routes', () => {
     const validShareBody = { content: '<p>Shared entry</p>', entryId: 7 };
 
     it('creates a share and returns 201', async () => {
-      (createShare as any).mockResolvedValue(mockShare);
+      (createShareWithinLimit as any).mockResolvedValue(mockShare);
 
       const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
 
       expect(res.status).toBe(201);
       expect(res.body.token).toBe('abc123token');
       expect(res.body).not.toHaveProperty('content');
-      expect(createShare).toHaveBeenCalledWith({
+      expect(createShareWithinLimit).toHaveBeenCalledWith({
         accountId: 1,
         entryId: 7,
         content: '<p>Shared entry</p>',
         expiresAt: null,
-      });
+      }, SHARE_LIMIT);
     });
 
     it('creates a share with expiration', async () => {
-      (createShare as any).mockResolvedValue({ ...mockShare, expiresAt: new Date('2025-12-31') });
+      (createShareWithinLimit as any).mockResolvedValue({ ...mockShare, expiresAt: new Date('2025-12-31') });
 
       const res = await request(app)
         .post('/api/shares')
@@ -143,38 +147,53 @@ describe('Share Routes', () => {
         .send({ ...validShareBody, expiresAt: '2025-12-31T00:00:00.000Z' });
 
       expect(res.status).toBe(201);
-      expect(createShare).toHaveBeenCalledWith({
+      expect(createShareWithinLimit).toHaveBeenCalledWith({
         accountId: 1,
         entryId: 7,
         content: '<p>Shared entry</p>',
         expiresAt: expect.any(Date),
-      });
+      }, SHARE_LIMIT);
     });
 
     it('returns 400 when content is missing', async () => {
       const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send({ entryId: 7 });
 
       expect(res.status).toBe(400);
-      expect(createShare).not.toHaveBeenCalled();
+      expect(createShareWithinLimit).not.toHaveBeenCalled();
     });
 
     it('returns 400 when entryId is missing', async () => {
       const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send({ content: 'x' });
 
       expect(res.status).toBe(400);
-      expect(createShare).not.toHaveBeenCalled();
+      expect(createShareWithinLimit).not.toHaveBeenCalled();
     });
 
     it('ignores a client-supplied accountId', async () => {
-      (createShare as any).mockResolvedValue(mockShare);
+      (createShareWithinLimit as any).mockResolvedValue(mockShare);
 
       await request(app).post('/api/shares').set(AUTH_HEADERS).send({ ...validShareBody, accountId: 999 });
 
-      expect((createShare as any).mock.calls[0][0].accountId).toBe(1);
+      expect((createShareWithinLimit as any).mock.calls[0][0].accountId).toBe(1);
+    });
+
+    it('only shares an entry of the caller\'s own journal', async () => {
+      (postExists as any).mockResolvedValueOnce(false);
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
+      expect(res.status).toBe(404);
+      expect(postExists).toHaveBeenCalledWith('usr_1_a1b2c3', 7);
+      expect(createShareWithinLimit).not.toHaveBeenCalled();
+    });
+
+    it('refuses a new link once the account has its cap of active shares', async () => {
+      (createShareWithinLimit as any).mockResolvedValue(null);
+      const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
+      expect(res.status).toBe(413);
+      expect(res.body.error).toMatch(/active share links/);
     });
 
     it('returns 500 on database error', async () => {
-      (createShare as any).mockRejectedValue(new Error('DB error'));
+      (createShareWithinLimit as any).mockRejectedValue(new Error('DB error'));
 
       const res = await request(app).post('/api/shares').set(AUTH_HEADERS).send(validShareBody);
 
@@ -266,7 +285,7 @@ describe('Share Routes', () => {
       const res = await request(buildApp()).post('/api/shares').send({ content, entryId: 5 });
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/images or drawings/);
-      expect(createShare).not.toHaveBeenCalled();
+      expect(createShareWithinLimit).not.toHaveBeenCalled();
     });
   });
 });

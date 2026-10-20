@@ -332,7 +332,9 @@ export const BETA_TRACK_OPTIONS = ['journal', 'health', 'planning', 'calendar', 
 export const BETA_DEVICE_OPTIONS = ['ios', 'android', 'desktop', 'mixed'] as const;
 
 export const betaApplicationSchema = z.object({
-  name: z.string().trim().min(1, 'Add your name').max(100),
+  // No control characters or bidi overrides: names are printed in a terminal (npm run beta)
+  // eslint-disable-next-line no-control-regex
+  name: z.string().trim().min(1, 'Add your name').max(100).regex(/^[^\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]*$/, 'Use letters, numbers and punctuation only'),
   email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254),
   trackFirst: z.enum(BETA_TRACK_OPTIONS),
   device: z.enum(BETA_DEVICE_OPTIONS),

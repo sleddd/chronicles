@@ -50,6 +50,7 @@ beforeEach(() => {
   fetchSpy = mockFetchResponse({});
   vi.stubGlobal('fetch', fetchSpy);
   clearSealMarkers();
+  localStorage.clear();
 });
 
 /** GET /api/settings answering with the given seal markers present */

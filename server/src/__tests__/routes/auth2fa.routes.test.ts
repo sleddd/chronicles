@@ -186,6 +186,39 @@ describe('2FA hardening', () => {
       expect(data.totpBackupCodes).toHaveLength(8);
       for (const stored of data.totpBackupCodes) expect(stored).toMatch(/^scrypt\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
     });
+
+    it('signs out every other session and cancels pending sign-ins, keeping this one', async () => {
+      const secret = generateSecret();
+      const pending = twoFAAccount(generateSecret());
+      const login = await pendingTokenFor(app, pending);
+      (prisma.account.findUnique as any).mockResolvedValue({ id: pending.id, passwordHash: AUTH_HASH, totpEnabled: false });
+
+      const res = await request(app).post('/api/auth/2fa/enable')
+        .send({ secret, code: generateSync({ secret }), currentAuthSecret: SECRET });
+      expect(res.status).toBe(200);
+      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(pending.id, 'aabbccddee11', '2fa_enabled');
+
+      (prisma.account.findUnique as any).mockResolvedValue(pending);
+      const finish = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login, code: generateSync({ secret: pending.totpSecret }) });
+      expect(finish.status).toBe(401);
+      expect(finish.body.error).toMatch(/expired/);
+    });
+
+    it('marks the enabling code used, so it cannot then finish a sign-in', async () => {
+      const secret = generateSecret();
+      const id = nextAccountId++;
+      (prisma.account.findUnique as any).mockResolvedValue({ id, passwordHash: AUTH_HASH, totpEnabled: false });
+      const code = generateSync({ secret });
+
+      const enabled = await request(app).post('/api/auth/2fa/enable').send({ secret, code, currentAuthSecret: SECRET });
+      expect(enabled.status).toBe(200);
+      const stored = (prisma.account.update as any).mock.calls[0][0].data.totpSecret;
+
+      const account = { ...twoFAAccount(stored), id };
+      const replay = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code });
+      expect(replay.status).toBe(401);
+    });
   });
 
   describe('POST /api/auth/login/2fa', () => {
@@ -246,6 +279,39 @@ describe('2FA hardening', () => {
         .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
       expect(locked.status).toBe(429);
     });
+
+    it('locks 2FA for a day after the third lock in 24 hours, and logs each lock', async () => {
+      const { logSecurityEvent } = await import('../../utils/securityLogger.js');
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const wrong = () => generateSync({ secret }) === '000000' ? '111111' : '000000';
+      const start = Date.now();
+
+      for (let round = 0; round < 3; round++) {
+        vi.setSystemTime(start + round * 16 * 60 * 1000); // each 15-minute lock has run out
+        for (let i = 0; i < 5; i++) {
+          const res = await request(app).post('/api/auth/login/2fa')
+            .send({ pendingToken: await pendingTokenFor(app, account), code: wrong() });
+          expect(res.status).toBe(401);
+        }
+      }
+      const events = (logSecurityEvent as any).mock.calls.map((c: unknown[]) => c[0]);
+      expect(events.filter((e: string) => e === '2fa_locked')).toHaveLength(2);
+      expect(events).toContain('2fa_locked_long');
+
+      // Long past the 15-minute lock, even the right code is refused
+      vi.setSystemTime(start + 3 * 16 * 60 * 1000 + 60 * 60 * 1000);
+      const locked = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(locked.status).toBe(429);
+      expect(locked.body.error).toMatch(/24 hours/);
+
+      // A day later it opens again
+      vi.setSystemTime(start + 26 * 60 * 60 * 1000);
+      const open = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(open.status).toBe(200);
+    }, 30000);
 
     it('accepts and consumes a legacy SHA-256 backup code', async () => {
       const account = twoFAAccount(generateSecret(), [sha256('aaaaaa-bbbbbb'), sha256('cccccc-dddddd')]);
@@ -436,6 +502,20 @@ describe('2FA hardening', () => {
       (bcrypt.compare as any).mockResolvedValue(true);
       const owner = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: account.email, authSecret: SECRET });
       expect(owner.status).toBe(200);
+    }, 30000);
+
+    it('a known-device cookie stops counting once the password (sign-in hash) changes', async () => {
+      const account = { ...twoFAAccount(generateSecret()), email: 'owner2@example.com', totpEnabled: false, totpSecret: null };
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      const first = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const deviceCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+
+      // The password changed elsewhere (or a recovery, or an email change)
+      (prisma.account.findUnique as any).mockResolvedValue({ ...account, passwordHash: 'auth1$$2a$12$otherhash' });
+      (bcrypt.compare as any).mockResolvedValue(false);
+      for (let i = 0; i < 10; i++) await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
+      const res = await request(app).post('/api/auth/login').set('Cookie', deviceCookie).send({ email: account.email, authSecret: SECRET });
+      expect(res.status).toBe(429);
     }, 30000);
 
     it('a known-device cookie for another email does not help', async () => {

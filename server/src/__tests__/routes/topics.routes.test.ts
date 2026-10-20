@@ -11,6 +11,8 @@ vi.mock('../../db/tenantQueries.js', () => ({
   reorderTaxonomies: vi.fn(),
   ensureTopicEncryptionColumns: vi.fn().mockResolvedValue(undefined),
   reserveTaxonomyIds: vi.fn(),
+  taxonomyCount: vi.fn().mockResolvedValue(0),
+  withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 vi.mock('../../middleware/parseId.js', async () => ({
@@ -22,7 +24,8 @@ vi.mock('../../middleware/parseId.js', async () => ({
 }));
 
 import topicsRouter from '../../routes/topics.js';
-import { getAllTaxonomies, getTaxonomy, createTaxonomy, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, reserveTaxonomyIds } from '../../db/tenantQueries.js';
+import { getAllTaxonomies, getTaxonomy, createTaxonomy, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, reserveTaxonomyIds, taxonomyCount, withTenantLock } from '../../db/tenantQueries.js';
+import { TOPIC_LIMIT } from '../../routes/topics.js';
 
 const app = createTestApp('/api/topics', topicsRouter);
 const sealed = { id: 1, name: null, icon: null, color: '#3B82F6', sort_order: 0, payload: 'c2VhbGVk', iv: 'aXY=' };
@@ -42,7 +45,7 @@ describe('Topic Routes (encrypted names)', () => {
     (createTaxonomy as any).mockResolvedValue(sealed);
     const res = await request(app).post('/api/topics').send({ id: 4, format: 2, payload: 'c2VhbGVk', iv: 'aXY=', color: '#3B82F6' });
     expect(res.status).toBe(201);
-    expect(createTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { id: 4, payload: 'c2VhbGVk', iv: 'aXY=', color: '#3B82F6' });
+    expect(createTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { id: 4, payload: 'c2VhbGVk', iv: 'aXY=', color: '#3B82F6' }, 'TX');
   });
 
   it('needs a reserved id and format 2; 409 for one never reserved', async () => {
@@ -80,6 +83,24 @@ describe('Topic Routes (encrypted names)', () => {
     expect(updateTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, { payload: 'bmV3', iv: 'aXY=' });
     expect((await request(app).put('/api/topics/1').send({ payload: 'bmV3', iv: 'aXY=' })).status).toBe(400);
     expect((await request(app).put('/api/topics/1').send({ color: '#123456' })).status).toBe(200);
+  });
+
+  it('answers 404 for an update of a topic that doesn\'t exist', async () => {
+    (updateTaxonomy as any).mockResolvedValue(null);
+    const res = await request(app).put('/api/topics/99').send({ format: 2, payload: 'bmV3', iv: 'aXY=' });
+    expect(res.status).toBe(404);
+  });
+
+  it('caps topics per account — counted under the account lock, and no ids once full', async () => {
+    (taxonomyCount as any).mockResolvedValue(TOPIC_LIMIT);
+    const res = await request(app).post('/api/topics').send({ format: 2, id: 4, payload: 'c2VhbGVk', iv: 'aXY=' });
+    expect(res.status).toBe(413);
+    expect(createTaxonomy).not.toHaveBeenCalled();
+    expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
+    expect(taxonomyCount).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'TX');
+    expect((await request(app).post('/api/topics/ids').send({ count: 1 })).status).toBe(413);
+    expect(reserveTaxonomyIds).not.toHaveBeenCalled();
+    (taxonomyCount as any).mockResolvedValue(0);
   });
 
   it('gets and deletes by id, with id validation', async () => {

@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { securityHeaders } from './middleware/security.js';
+import { securityHeaders, corsOriginFor, trustProxySetting } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -74,29 +74,36 @@ if (process.env.NODE_ENV === 'production' && process.env.REGISTRATION_OPEN === '
 // Behind a hosting proxy (Render etc.) every request arrives from the proxy's
 // address; without this, per-IP rate limits would see one shared IP — one
 // visitor could exhaust the login limit for everyone. TRUST_PROXY sets the
-// number of proxy hops to trust (default 1 in production, none in dev so a
-// spoofed X-Forwarded-For header is ignored locally).
-const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? '1' : '');
-if (trustProxy && !['0', 'false'].includes(trustProxy)) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+// number of proxy hops to trust (default 1 everywhere but development — the
+// same test as Secure cookies — and none in dev so a spoofed X-Forwarded-For
+// header is ignored locally).
+const trustProxy = trustProxySetting();
+if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
 // The default (1 hop) is only right behind exactly one proxy: with none, any
 // client can set X-Forwarded-For and dodge every per-IP limit; with more, all
 // clients share one bucket. Say so when it wasn't set on purpose.
-if (process.env.NODE_ENV === 'production' && process.env.TRUST_PROXY === undefined) {
+if (process.env.NODE_ENV !== 'development' && process.env.TRUST_PROXY === undefined) {
   console.warn('TRUST_PROXY is not set: assuming exactly one proxy in front (Render). Set it to the real number of proxy hops (0 for none).');
 }
 
-// Middleware
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true,
-}));
-// Entries carry two encrypted fields of up to 2M chars each (drawings make
-// big ones), so they get a larger body limit; everything else stays at 1mb.
-// The second parser skips bodies the first already read.
-app.use('/api/entries', express.json({ limit: '5mb' }));
-app.use(express.json({ limit: '1mb' }));
-app.use(cookieParser());
+// Security headers first, so every response — body-parser errors included —
+// carries no-store and the CSP
 app.use(securityHeaders);
+
+// CLIENT_URL unset outside development: no cross-origin access (same-origin
+// serving needs none), never a fallback to the localhost dev origin
+const corsOrigin = corsOriginFor();
+if (corsOrigin === false && process.env.NODE_ENV !== 'development') {
+  console.warn('CLIENT_URL is not set: cross-origin requests are refused. Fine when the client is served by this server; set CLIENT_URL if it is hosted elsewhere.');
+}
+app.use(cors({ origin: corsOrigin, credentials: true }));
+app.use(cookieParser());
+// Entries carry two encrypted fields of up to 2M chars each (drawings make
+// big ones), so they get a larger body limit — read only after the session
+// (and the per-account limit) checks out, so no one signed out can make the
+// server buffer 5 MB bodies. Everything else stays at 1mb.
+app.use('/api/entries', authMiddleware, apiLimiter, express.json({ limit: '5mb' }), entriesRoutes);
+app.use(express.json({ limit: '1mb' }));
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -106,7 +113,6 @@ app.get('/api/health', (_req, res) => {
 // Routes
 app.use('/api/auth/remember', authMiddleware, apiLimiter, rememberRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/entries', authMiddleware, apiLimiter, entriesRoutes);
 app.use('/api/topics', authMiddleware, apiLimiter, topicsRoutes);
 app.use('/api/settings', authMiddleware, apiLimiter, settingsRoutes);
 app.use('/api/sessions', authMiddleware, apiLimiter, sessionsRoutes);

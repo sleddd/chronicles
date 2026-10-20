@@ -283,22 +283,22 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const rewrapped = await encryptionService.rewrapMasterKey(extractableKey, newPassword);
     // Generate a fresh recovery key for the new session
     const recovery = await encryptionService.generateNewRecoveryWrapping(extractableKey);
-    // Store non-extractable copy for this session
-    masterKeyRef.current = await toNonExtractable(extractableKey);
     encryptionParamsRef.current = {
       kekSalt: rewrapped.salt,
       encryptedMasterKey: rewrapped.wrappedMK,
       kekWrapIv: rewrapped.wrapIv,
       kekIterations: PBKDF2_ITERATIONS,
     };
-    setIsUnlocked(true);
+    // A non-extractable copy for this session, installed like an unlock (the
+    // record cipher seals topics and doses; R2 / AI credentials reopen)
+    install(await toNonExtractable(extractableKey));
     return {
       ...rewrapped,
       newRecoveryKey: recovery.recoveryKey,
       newRecoveryWrappedMK: recovery.recoveryWrappedMK,
       newRecoveryWrapIv: recovery.recoveryWrapIv,
     };
-  }, []);
+  }, [install]);
 
   // Clear all key material on unmount
   useEffect(() => {
