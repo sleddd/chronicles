@@ -248,8 +248,8 @@ npm run test:coverage    # Run tests with coverage
 
 © 2025–2026 Claudette Raynor. All rights reserved.
 
-You may download and use this application for personal use only. Commercial use, redistribution, and modification of any kind are strictly prohibited. See [LICENSE](LICENSE) for the full terms.
+You may download and use this application for personal use only. You may change your own copy and run your changes on your own devices for your own use. Commercial use and redistribution (changed or not) are strictly prohibited. See [LICENSE](LICENSE) for the full terms.
 
-**No distribution — not even non-commercial.** "Personal, non-commercial use" means *using* it yourself. It does not mean you may share it. You may not copy, re-host, mirror, upload, bundle or hand out Chronicles (original or changed, source or built, whole or in part) to anyone, free or paid, public or private — friends and family included. Anyone who wants it gets it from this repository. Forking on GitHub is allowed only to prepare a pull request (LICENSE, Section 4).
+**No distribution — not even non-commercial.** "Personal, non-commercial use" means *using* it yourself. It does not mean you may share it. You may not copy, re-host, mirror, upload, bundle or hand out Chronicles (original or changed, source or built, whole or in part) to anyone, free or paid, public or private — friends and family included. Anyone who wants it gets it from this repository. Your own changes stay on your own machine; the only way to share a change is a pull request to this repository (LICENSE, Section 4).
 
 **Contributions.** Pull requests and bug reports through GitHub issues are welcome. Contributions don't change the license: the app stays personal-use only, and anything you contribute can be used in Chronicles (see LICENSE, Section 4). Please keep personal or health information out of issues, and report security problems privately to support@mydailychronicles.com. You can also report a bug in the app (Settings → Report a Bug).
