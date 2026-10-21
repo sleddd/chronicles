@@ -3,7 +3,7 @@
 <img width="1439" height="639" alt="Screenshot 2026-10-20 at 7 11 07 PM" src="https://github.com/user-attachments/assets/7241bf25-198b-45ad-9ce2-2444c3c8fe39" />
 
 ## A Tour of Chronicles
-A zero-knowledge encrypted journal and digital day planner for those too busy to journal. Capture the key moments of your day, organize with topics, and track health, goals, and more. Works on phones and tablets via PWA. Chronicles is now available to sign up for beta testing at [mydailychronicles.com](https://mydailychronicles.com/#beta), with a native phone app via React Native planned.
+Chronicles is now available to sign up for beta testing at [mydailychronicles.com](https://mydailychronicles.com/#beta), with a native phone app via React Native planned.
 
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
