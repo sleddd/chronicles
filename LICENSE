@@ -9,9 +9,14 @@ and to use under the terms below. It is NOT open source.
 
 1. Permitted use
 
-   You may download, install and run an unmodified copy of the Software for
-   your own personal, non-commercial use. Personal use means use by you, for
-   yourself; it does not include running the Software for other people.
+   You may download, install and run a copy of the Software for your own
+   personal, non-commercial use. You may also change your own copy and run
+   the changed version on your own devices for that same personal use.
+   Personal use means use by you, for yourself; it does not include running
+   the Software (changed or not) for other people. A changed version stays
+   yours alone: it may not be shared or distributed (Section 2), and the
+   only way to get a change to anyone else is a pull request to the Owner's
+   repository (Section 4).
 
 2. Restrictions
 
@@ -21,7 +26,8 @@ and to use under the terms below. It is NOT open source.
       or any service built on it, to others for a fee, for advertising
       revenue, or as part of a business;
    b. modify, adapt, translate or create derivative works of the Software,
-      except to prepare a contribution as allowed in Section 4;
+      except for your own personal use as allowed in Section 1 or to prepare
+      a contribution as allowed in Section 4;
    c. copy, publish, distribute, sublicense, sell, rent, lease or lend the
       Software, or make it available to others (including as a hosted
       service), except that you may link to the Owner's own repository or
@@ -57,10 +63,12 @@ and to use under the terms below. It is NOT open source.
 
 4. Contributions: pull requests and issues
 
-   a. Pull requests. You may fork the repository on GitHub and change your
-      fork only to prepare a pull request to the Owner's repository, and run
-      your changed copy only to test that change. You may not use, publish
-      or distribute a changed version for any other purpose. The Owner may
+   a. Pull requests. You may fork the repository on GitHub to prepare a
+      pull request to the Owner's repository, and you may keep using your
+      changes on your own devices for your own personal use (Section 1).
+      You may not publish or distribute a changed version, or use it for
+      anyone but yourself: changes reach other people only through a pull
+      request that the Owner merges into the Owner's repository. The Owner may
       accept, change, decline or close any pull request without giving a
       reason.
 
