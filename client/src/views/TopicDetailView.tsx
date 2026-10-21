@@ -22,7 +22,7 @@ import { topics as topicsApi } from '../services/api.js';
 import { usePrivateSettings } from '../services/privateSettings.js';
 import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
 import { TopicIcon } from '../components/molecules/IconPicker.js';
-import { Icon } from '../components/atoms/core/Icon.jsx';
+import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { entryTitleText } from '../utils/entryTitle.js';
 import type { UserFieldDef } from '../types/userFields.js';
 import type { DecryptedPost } from '@shared/crypto/types';
@@ -129,31 +129,9 @@ const HeadMenu = styled.div`
   @media (max-width: 768px) { display: block; }
 `;
 
-/* "Search books" — a rounded outlined search box */
-const Search = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 44px;
+/* "Search books" — the shared rounded search box, 20px under the title */
+const Search = styled(RoundSearch)`
   margin-top: 20px;
-  padding: 0 20px;
-  border: 1px solid var(--border-card);
-  border-radius: 999px;
-  color: var(--text-muted);
-  &:focus-within { border-color: var(--control-border); }
-  input {
-    flex: 1;
-    min-width: 0;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 15px;
-    color: var(--text-secondary);
-  }
-  input::placeholder { color: var(--text-hint); }
-  input::-webkit-search-cancel-button { display: none; }
 `;
 
 /* ── Rows ── */
@@ -344,10 +322,7 @@ export function TopicDetailView() {
 
           <Body>
           {topicEntries.length > 0 && (
-            <Search>
-              <Icon name="search" size={16} strokeWidth={2} />
-              <input type="search" aria-label={`Search ${topic.name}`} value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${topic.name.toLowerCase()}`} />
-            </Search>
+            <Search ariaLabel={`Search ${topic.name}`} value={query} onChange={setQuery} placeholder={`Search ${topic.name.toLowerCase()}`} />
           )}
 
           {topicEntries.length === 0 ? (

@@ -8,7 +8,13 @@ import type { EntryImage } from '../../services/imageStorage.js';
 
 /* ── Hero banner (featured image) ── */
 
-const BannerWrap = styled.div`
+/** CSS object-position for an image's focus point (centre by default) */
+export function focusPosition(image: Pick<EntryImage, 'focusX' | 'focusY'>): string {
+  return `${image.focusX ?? 50}% ${image.focusY ?? 50}%`;
+}
+
+const BannerWrap = styled.div<{ $adjusting?: boolean }>`
+  position: relative;
   width: 100%;
   height: clamp(240px, 38vh, 400px);
   margin-top: 24px;
@@ -19,6 +25,10 @@ const BannerWrap = styled.div`
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
+  cursor: ${({ $adjusting }) => ($adjusting ? 'grab' : 'default')};
+  touch-action: ${({ $adjusting }) => ($adjusting ? 'none' : 'auto')};
+  &:active { cursor: ${({ $adjusting }) => ($adjusting ? 'grabbing' : 'default')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 const BannerImg = styled.img`
@@ -26,13 +36,149 @@ const BannerImg = styled.img`
   height: 100%;
   object-fit: cover;
   display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 `;
 
-export function EntryHeroBanner({ image }: { image: EntryImage }) {
+/* Controls over the photo: dark see-through pills so they read on any picture */
+const BannerBtns = styled.div<{ $show: boolean }>`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  @media (hover: hover) {
+    opacity: ${({ $show }) => ($show ? 1 : 0)};
+    transition: opacity 120ms ease;
+    ${BannerWrap}:hover &, ${BannerWrap}:focus-within & { opacity: 1; }
+  }
+`;
+
+const OverPill = styled.button`
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.62);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  &:hover { background: rgba(20, 22, 28, 0.8); }
+  &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+`;
+
+const Hint = styled.div`
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.62);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+`;
+
+const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v * 10) / 10));
+
+interface EntryHeroBannerProps {
+  image: EntryImage;
+  /** Given: the photo's crop can be adjusted (drag, or arrow keys) */
+  onFocusChange?: (x: number, y: number) => void;
+}
+
+/**
+ * The featured photo as a banner, cropped to fit around its focus point.
+ * "Adjust crop" lets you drag the photo to choose what shows — drag it toward
+ * the lower left to bring that corner into view.
+ */
+export function EntryHeroBanner({ image, onFocusChange }: EntryHeroBannerProps) {
   const { url, loading } = useDecryptedImage(image.key, image.iv, image.mimeType);
+  const [adjusting, setAdjusting] = useState(false);
+  const [focus, setFocus] = useState({ x: image.focusX ?? 50, y: image.focusY ?? 50 });
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // The drag's start and the point it has reached (read on release, not from a stale render)
+  const drag = useRef<{ px: number; py: number; fx: number; fy: number; ox: number; oy: number; x: number; y: number } | null>(null);
+
+  // Another photo, or the saved point changed elsewhere
+  useEffect(() => { setFocus({ x: image.focusX ?? 50, y: image.focusY ?? 50 }); }, [image.key, image.focusX, image.focusY]);
+  useEffect(() => { setAdjusting(false); }, [image.key]);
+  // Adjusting: the banner takes focus, so the arrow keys work straight away
+  useEffect(() => { if (adjusting) wrapRef.current?.focus(); }, [adjusting]);
+
+  /* How far the cropped photo overhangs the banner (px) — dragging that far moves the focus end to end */
+  const overhang = () => {
+    const wrap = wrapRef.current?.getBoundingClientRect();
+    const nw = imgRef.current?.naturalWidth || image.width || 0;
+    const nh = imgRef.current?.naturalHeight || image.height || 0;
+    if (!wrap || !nw || !nh) return { ox: 0, oy: 0 };
+    const scale = Math.max(wrap.width / nw, wrap.height / nh);
+    return { ox: nw * scale - wrap.width, oy: nh * scale - wrap.height };
+  };
+
+  const commit = (x: number, y: number) => { setFocus({ x, y }); onFocusChange?.(x, y); };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!adjusting) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { px: e.clientX, py: e.clientY, fx: focus.x, fy: focus.y, ...overhang(), x: focus.x, y: focus.y };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    // Dragging the photo right shows more of its left side, so the focus moves left
+    d.x = d.ox > 0 ? clamp(d.fx - ((e.clientX - d.px) / d.ox) * 100) : d.fx;
+    d.y = d.oy > 0 ? clamp(d.fy - ((e.clientY - d.py) / d.oy) * 100) : d.fy;
+    setFocus({ x: d.x, y: d.y });
+  };
+  const onPointerUp = () => {
+    const d = drag.current;
+    if (!d) return;
+    drag.current = null;
+    if (d.x !== d.fx || d.y !== d.fy) onFocusChange?.(d.x, d.y);
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!adjusting) return;
+    const step = e.shiftKey ? 1 : 5;
+    const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (moves[e.key]) {
+      e.preventDefault();
+      commit(clamp(focus.x + moves[e.key][0]), clamp(focus.y + moves[e.key][1]));
+    } else if (e.key === 'Escape' || e.key === 'Enter') {
+      e.preventDefault();
+      setAdjusting(false);
+    }
+  };
+
   return (
-    <BannerWrap>
-      {url ? <BannerImg src={url} alt="" /> : loading ? <Spinner size={24} /> : null}
+    <BannerWrap ref={wrapRef} $adjusting={adjusting}
+      tabIndex={adjusting ? 0 : undefined}
+      aria-label={adjusting ? 'Featured photo crop. Drag the photo, or use the arrow keys, to choose what shows.' : undefined}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+      onKeyDown={onKeyDown}>
+      {url
+        ? <BannerImg ref={imgRef} src={url} alt="" draggable={false} style={{ objectPosition: `${focus.x}% ${focus.y}%` }} />
+        : loading ? <Spinner size={24} /> : null}
+      {url && onFocusChange && (
+        <BannerBtns $show={adjusting} onPointerDown={e => e.stopPropagation()}>
+          {adjusting ? (
+            <>
+              <OverPill type="button" onClick={() => commit(50, 50)}>Center</OverPill>
+              <OverPill type="button" onClick={() => setAdjusting(false)}>Done</OverPill>
+            </>
+          ) : (
+            <OverPill type="button" onClick={() => setAdjusting(true)}>Adjust crop</OverPill>
+          )}
+        </BannerBtns>
+      )}
+      {adjusting && <Hint>Drag the photo to choose what shows</Hint>}
     </BannerWrap>
   );
 }

@@ -113,6 +113,19 @@ describe('TopicsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New topic' }));
     expect(screen.getByTestId('topic-edit-form')).toBeInTheDocument();
   });
+
+  it('filters the list by name as you type, and Escape clears it', () => {
+    renderWithTheme(<TopicsView />);
+    const search = screen.getByRole('searchbox', { name: 'Search topics' });
+    fireEvent.change(search, { target: { value: 'go' } });
+    expect(screen.getByText('Goal')).toBeInTheDocument();
+    expect(screen.queryByText('Journal')).toBeNull();
+    fireEvent.change(search, { target: { value: 'zzz' } });
+    expect(screen.getByText('No topics match “zzz”.')).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(search).toHaveValue('');
+    expect(screen.getByText('Journal')).toBeInTheDocument();
+  });
 });
 
 describe('TopicsView (needs unlock)', () => {

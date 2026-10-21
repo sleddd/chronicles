@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
@@ -7,9 +8,16 @@ import { useSignOut } from '../../hooks/useSignOut.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 
-const SidebarRoot = styled.aside`
-  width: 92px;
-  min-width: 92px;
+/* Collapsed: icons only (92px). Expanded: each item's name beside its icon.
+   The icons keep a 92px column either way, so they never move. */
+const RAIL = 92;
+const RAIL_OPEN = 220;
+
+const SidebarRoot = styled.aside<{ $open: boolean }>`
+  width: ${({ $open }) => ($open ? RAIL_OPEN : RAIL)}px;
+  min-width: ${({ $open }) => ($open ? RAIL_OPEN : RAIL)}px;
+  transition: width 160ms ease, min-width 160ms ease;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
   height: 100%;
   /* A toned rail (no outline) — separates from the canvas by fill alone */
   background: var(--bg-rail);
@@ -43,7 +51,7 @@ const LogoBtn = styled.button<{ $active?: boolean }>`
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
   height: 76px;
   padding: 0;
@@ -94,15 +102,15 @@ const NavScroll = styled.nav`
   }
 `;
 
-/* Icon-only rail row — no dividers; the active row is lifted onto
-   --bg-rail-active with the accent tab. Settings sits at the bottom, then
-   Lock (asks for the password again) and Sign out under it. */
-const NavIconBtn = styled.button<{ $active?: boolean; $pinned?: boolean }>`
+/* Rail row — no dividers; the active row is lifted onto --bg-rail-active
+   with the accent tab. Under the last item: expand / collapse, then ⋯, whose
+   menu holds Settings, Lock (asks for the password again) and Sign out. */
+const NavIconBtn = styled.button<{ $active?: boolean }>`
   position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
   height: 64px;
   padding: 0;
@@ -112,7 +120,6 @@ const NavIconBtn = styled.button<{ $active?: boolean; $pinned?: boolean }>`
   color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-secondary)'};
   transition: background 120ms ease, color 120ms ease;
 
-  ${({ $pinned }) => ($pinned ? 'margin-top: auto;' : '')}
 
   &:hover {
     background: var(--bg-rail-active);
@@ -122,6 +129,88 @@ const NavIconBtn = styled.button<{ $active?: boolean; $pinned?: boolean }>`
 
   ${({ $active }) => ($active ? activeTab : '')}
 `;
+
+/* The icon's fixed column, so it sits in the same place collapsed or expanded */
+const IconCell = styled.span`
+  flex: 0 0 ${RAIL}px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+/* The item's name, shown when the rail is expanded */
+const Label = styled.span`
+  min-width: 0;
+  padding-right: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  color: inherit;
+`;
+
+/* "CHRONICLES" beside the logo when expanded — pulled in close to the mark
+   (so it sits off the rail's edge), not on the names' line */
+const Wordmark = styled.span`
+  margin-left: -20px;
+  padding-right: 16px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+`;
+
+/* Expand / collapse, then ⋯ (Settings, Lock, Sign out), under the last item */
+const ToggleBtn = styled(NavIconBtn)`
+  height: 52px;
+  color: var(--text-muted);
+`;
+
+const Dots = styled.span`
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0;
+`;
+
+/* The ⋯ menu: floats beside the rail (an overlay, so it takes the shadow) */
+const Flyout = styled.div`
+  position: fixed;
+  z-index: 1200;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--bg-tile);
+  border: 1px solid var(--border-pop);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+`;
+
+const FlyoutItem = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 15px;
+  text-align: left;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')};
+  cursor: pointer;
+  &:hover { background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+const STORAGE_KEY = 'nav-expanded-v1';
+const readOpen = () => { try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; } };
+const saveOpen = (v: boolean) => { try { localStorage.setItem(STORAGE_KEY, v ? '1' : '0'); } catch { /* remembered for this visit only */ } };
 
 const SrOnly = styled.span`
   position: absolute;
@@ -160,29 +249,82 @@ export const Sidebar = memo(function Sidebar() {
   const signOut = useSignOut();
   const { lock } = useEncryption();
 
+  // Remembered per browser (a convenience, not a setting)
+  const [open, setOpen] = useState(readOpen);
+  const [menuAt, setMenuAt] = useState<{ left: number; top: number } | null>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const mainItems = items.filter(i => i.key !== 'settings');
+  const settingsItem = items.find(i => i.key === 'settings');
+
+  const openMenu = () => {
+    const r = moreRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const MENU_H = 3 * 44 + 14;
+    setMenuAt({ left: r.right + 8, top: Math.max(8, Math.min(r.top, window.innerHeight - MENU_H - 8)) });
+  };
+  const closeMenu = () => setMenuAt(null);
+  const choose = (fn: () => void) => () => { closeMenu(); fn(); };
+
+  // Close on a click outside or Escape
+  useEffect(() => {
+    if (!menuAt) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !moreRef.current?.contains(t)) closeMenu();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { closeMenu(); moreRef.current?.focus(); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [menuAt]);
+  // …and when the rail changes width, so it never floats over the wrong spot
+  useEffect(() => { closeMenu(); }, [open]);
+  const toggle = () => setOpen(v => { saveOpen(!v); return !v; });
+  /* Collapsed, the name is a tooltip and screen-reader text; expanded, it's shown */
+  const name = (label: string) => (open ? <Label>{label}</Label> : <SrOnly>{label}</SrOnly>);
+
   return (
-    <SidebarRoot>
-      {/* The logo starts a new entry in the journal, the home page (the Journal icon shows active) */}
-      <LogoBtn $active={false} onClick={() => navigate('/dashboard')} title="Chronicles" aria-label="Chronicles — open the dashboard">
-        <BrandMark size={28} gradientId="logo-rail" />
+    <SidebarRoot $open={open}>
+      {/* The logo opens the dashboard, the app's home */}
+      <LogoBtn $active={false} onClick={() => navigate('/dashboard')} title={open ? undefined : 'Chronicles'} aria-label="Chronicles — open the dashboard">
+        <IconCell><BrandMark size={28} gradientId="logo-rail" /></IconCell>
+        {open && <Wordmark aria-hidden="true">Chronicles</Wordmark>}
       </LogoBtn>
 
       <NavScroll>
-        {items.map(item => (
-          <NavIconBtn key={item.key} $active={item.active} $pinned={item.key === 'settings'} onClick={() => navigate(item.path)} title={item.label}>
-            <MaterialIcon aria-hidden="true">{item.icon}</MaterialIcon>
-            <SrOnly>{item.label}</SrOnly>
+        {mainItems.map(item => (
+          <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}>
+            <IconCell><MaterialIcon aria-hidden="true">{item.icon}</MaterialIcon></IconCell>
+            {name(item.label)}
           </NavIconBtn>
         ))}
-        <NavIconBtn onClick={lock} title="Lock — your password opens it again">
-          <MaterialIcon aria-hidden="true">lock</MaterialIcon>
-          <SrOnly>Lock</SrOnly>
-        </NavIconBtn>
-        <NavIconBtn onClick={() => { void signOut(); }} title="Sign out">
-          <MaterialIcon aria-hidden="true">logout</MaterialIcon>
-          <SrOnly>Sign out</SrOnly>
-        </NavIconBtn>
+        <ToggleBtn onClick={toggle} aria-expanded={open} title={open ? undefined : 'Show names'}>
+          <IconCell><MaterialIcon aria-hidden="true">{open ? 'chevron_left' : 'chevron_right'}</MaterialIcon></IconCell>
+          {open ? <Label>Collapse</Label> : <SrOnly>Show names</SrOnly>}
+        </ToggleBtn>
+        <ToggleBtn ref={moreRef} $active={!!settingsItem?.active} onClick={() => (menuAt ? closeMenu() : openMenu())}
+          aria-haspopup="menu" aria-expanded={!!menuAt} title={open ? undefined : 'Settings, lock and sign out'}>
+          <IconCell><Dots aria-hidden="true">⋯</Dots></IconCell>
+          {open ? <Label>More</Label> : <SrOnly>More</SrOnly>}
+        </ToggleBtn>
       </NavScroll>
+      {menuAt && createPortal(
+        <Flyout ref={menuRef} role="menu" aria-label="More" style={{ left: menuAt.left, top: menuAt.top }}>
+          {settingsItem && (
+            <FlyoutItem role="menuitem" $active={settingsItem.active} onClick={choose(() => navigate(settingsItem.path))}>
+              <MaterialIcon aria-hidden="true">settings</MaterialIcon>Settings
+            </FlyoutItem>
+          )}
+          <FlyoutItem role="menuitem" title="Your password opens it again" onClick={choose(lock)}>
+            <MaterialIcon aria-hidden="true">lock</MaterialIcon>Lock
+          </FlyoutItem>
+          <FlyoutItem role="menuitem" onClick={choose(() => { void signOut(); })}>
+            <MaterialIcon aria-hidden="true">logout</MaterialIcon>Sign out
+          </FlyoutItem>
+        </Flyout>,
+        document.body,
+      )}
     </SidebarRoot>
   );
 });

@@ -10,8 +10,8 @@ import { useAiReady } from '../../hooks/useAiReady.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { entries as entriesApi, analytics as analyticsApi } from '../../services/api.js';
 import { autoNutritionOnSave, chatReply, classifyReply, classifyRisk, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
-import { mealForNow, nowTime } from '../../utils/foodLog.js';
-import { toDateStr } from '../../utils/dateUtils.js';
+import { useUIStore } from '../../stores/uiStore.js';
+import { chatSaveEntry, chatSaveFormats } from '../../utils/chatSaveFields.js';
 import { MINOR_FALLBACK_REPLY, stripMinorTag, chatSystemPrompt, chatTranscriptHtml, parseSaveCommand, textToEntryHtml, SAVED_CHATS_TOPIC, type TopicRef } from '../../utils/chatSave.js';
 import { getOrCreateJournalTopic, getOrCreateTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
@@ -362,6 +362,7 @@ export function AiChat() {
   const aiReady = useAiReady();
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const topicCustomFields = useUIStore(s => s.topicCustomFields);
   const { encryptNewPost, lock } = useEncryption();
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
@@ -468,7 +469,8 @@ export function AiChat() {
 
   /** A reply from the model, kept to the house style (one quiet rewrite, then scrubbed). */
   const generateReply = async (history: ChatTurn[], safe: boolean): Promise<string> => {
-    const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '', safe, eatingSafeRef.current);
+    const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '', safe, eatingSafeRef.current,
+      chatSaveFormats(topicRefs, topicCustomFields));
     let reply = (await chatReply(system, history)).trim();
     const found = findBanned(reply);
     if (found.length) {
@@ -577,19 +579,19 @@ export function AiChat() {
     setBusy(true);
     try {
       const topicId = cmd.topic.id === JOURNAL_PLACEHOLDER_ID ? await getOrCreateJournalTopic() : cmd.topic.id;
-      const content = textToEntryHtml(cmd.text);
+      // Shaped like the topic's own form: a symptom's names as chips, a
+      // task's title, an exercise's stats… (plain text for plain topics)
+      const shaped = chatSaveEntry(cmd.topic.name, cmd.text, topicCustomFields[topicId] ?? []);
+      const content = shaped.customFields && shaped.content ? shaped.content : textToEntryHtml(cmd.text);
       const metadata: Record<string, unknown> = { _taxonomyId: topicId };
-      // A meal saved from chat lands in the Meals log for today, with its
-      // nutrients estimated by the AI (a failed estimate never blocks the save)
+      // A meal lands in the Meals log for today, with its nutrients estimated
+      // by the AI (a failed estimate never blocks the save)
       let estimated = false;
-      if (cmd.topic.name.toLowerCase() === 'meals') {
-        const now = new Date();
-        let cf: Record<string, unknown> = {
-          mealDescription: cmd.text, mealType: mealForNow(now), consumedDate: toDateStr(now), consumedTime: nowTime(now), notes: '',
-        };
-        if (aiReady && !eatingSafeRef.current) {
+      if (shaped.customFields) {
+        let cf = shaped.customFields;
+        if (cmd.topic.name.toLowerCase() === 'meals' && aiReady && !eatingSafeRef.current) {
           try {
-            const filled = await autoNutritionOnSave(cmd.text, cf);
+            const filled = await autoNutritionOnSave(String(cf.mealDescription ?? ''), cf);
             if (filled) { cf = filled; estimated = true; }
           } catch (err) {
             console.warn('Nutrient estimate failed:', err);

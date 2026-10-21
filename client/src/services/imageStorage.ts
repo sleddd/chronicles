@@ -27,6 +27,10 @@ export interface EntryImage {
   size: number;       // ciphertext bytes (full image)
   width?: number;
   height?: number;
+  /** What stays in view when the photo is cropped to fit (the featured banner,
+      board avatars): 0–100 across and down, 50 / 50 (the centre) by default */
+  focusX?: number;
+  focusY?: number;
 }
 
 type EncryptBytesFn = (data: ArrayBuffer, aad?: string) => Promise<{ ciphertext: ArrayBuffer; iv: string }>;

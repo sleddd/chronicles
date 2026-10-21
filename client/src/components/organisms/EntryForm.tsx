@@ -224,7 +224,11 @@ const CustomFieldsBody = styled.div`
 const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean }>`
   display: ${({ $hidden }) => ($hidden ? 'none' : 'flex')};
   flex-direction: column;
-  overflow: hidden;
+  /* clip, not hidden: hidden would make this a scroll box of its own and the
+     formatting bar would stick to it instead of the scrolling body */
+  overflow: clip;
+  /* What the sticky formatting bar paints behind itself */
+  --editor-surface: ${({ $quick }) => ($quick ? 'var(--bg-panel)' : 'var(--bg-app)')};
   margin-top: ${({ $quick }) => ($quick ? '8px' : '24px')};
   /* A real writing area even when the entry is one line */
   .tiptap { min-height: ${({ $quick }) => ($quick ? '120px' : '220px')}; }
@@ -511,6 +515,8 @@ interface EntryFormProps {
   onExistingImagesSelected?: (images: EntryImage[]) => void;
   onImageRemoved?: (key: string) => void;
   onSetFeatured?: (key: string | null) => void;
+  /** Move what stays in view when a photo is cropped (the featured banner, board avatars) */
+  onImageFocus?: (key: string, x: number, y: number) => void;
   imageUploading?: boolean;
   imageError?: string;
   imagesReady?: boolean;
@@ -526,7 +532,7 @@ export function EntryForm({
   onBookmark, onShare, onBack, expanded, onToggleExpand, onClose,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
-  images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured,
+  images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured, onImageFocus,
   imageUploading = false, imageError, imagesReady = false,
   variant = 'journal',
 }: EntryFormProps) {
@@ -557,6 +563,7 @@ export function EntryForm({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const featuredImage = featuredKey ? images.find(img => img.key === featuredKey) ?? null : null;
+  const heroFocus = featuredImage && onImageFocus ? (x: number, y: number) => onImageFocus(featuredImage.key, x, y) : undefined;
   const imagesFull = images.length >= 7;
   const [savedAgoText, setSavedAgoText] = useState('');
   useEffect(() => {
@@ -906,7 +913,7 @@ export function EntryForm({
     <>
       {/* Featured image hero — at the top, above the topic / actions row
           (recipes place it inside their own layout) */}
-      {featuredImage && !recipeViewMode && <EntryHeroBanner image={featuredImage} />}
+      {featuredImage && !recipeViewMode && <EntryHeroBanner image={featuredImage} onFocusChange={heroFocus} />}
 
       {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
 
@@ -914,7 +921,7 @@ export function EntryForm({
       {recipeViewMode && (
         <RecipeEntry
           values={recipeValues}
-          hero={imagesReady && featuredImage ? <EntryHeroBanner image={featuredImage} /> : null}
+          hero={imagesReady && featuredImage ? <EntryHeroBanner image={featuredImage} onFocusChange={heroFocus} /> : null}
           onToggleIngredient={toggleRecipeIngredient}
           onEdit={() => setRecipeEditing(true)}
         />

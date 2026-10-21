@@ -2,10 +2,11 @@ import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 
 /* The wellness check-in, one look everywhere (Health dashboard card + the
-   journal's Wellness fields): Water and Sleep as tiles — a tinted round icon,
-   a large thin Work Sans figure, −/+ round buttons and a progress rule —
-   then Mood as five Material faces (the chosen one on a tinted disc, its name
-   on the right), then Cycle as pill chips. Everything coloured uses the
+   journal's Wellness fields): Water and Sleep as tiles — a round icon (tap it
+   to add one), a large thin Work Sans figure and a progress rule you can drag
+   like a slider —
+   then Mood as five Material faces (the chosen one in the accent, no disc, its
+   name on the right), then Cycle as pill chips. Everything coloured uses the
    accent. Hairlines separate the sections. Props only. */
 
 export const WATER_GOAL = 8;
@@ -86,10 +87,18 @@ const MeterMain = styled.div`
   min-width: 0;
 `;
 
-/* Round icon tile tinted with the metric's colour */
-const Badge = styled.span<{ $color: string }>`
+/* Round icon in the metric's colour — a button: each tap adds one */
+const Badge = styled.button<{ $color: string }>`
   background: var(--bg-control, transparent);
   flex: none;
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 120ms, transform 120ms;
+  &:hover:not(:disabled) { border-color: var(--color-accent-hover, var(--color-accent-line)); }
+  &:active:not(:disabled) { transform: scale(0.94); }
+  &:disabled { cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { transition: none; &:active:not(:disabled) { transform: none; } }
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -97,8 +106,8 @@ const Badge = styled.span<{ $color: string }>`
   height: 56px;
   border-radius: 50%;
   color: ${({ $color }) => $color};
-  /* No fill — a thin circle outline */
-  border: 1px solid var(--border-pill, var(--border-card));
+  /* No fill — a thin accent circle outline */
+  border: 1px solid var(--color-accent-line, var(--color-accent));
 `;
 
 const Figure = styled.span`
@@ -127,35 +136,53 @@ const Unit = styled.span`
   text-overflow: ellipsis;
 `;
 
-const Steppers = styled.span`
-  flex: none;
-  display: flex;
-  gap: 10px;
-`;
 
-const StepBtn = styled.button`
-  display: inline-flex;
+
+/* The progress rule doubles as a slider: a range input lies invisibly over
+   it (keyboard, touch and screen readers for free) and a dot marks the end */
+const Slider = styled.div`
+  position: relative;
+  height: 24px;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--border-pill, var(--border-default));
-  background: var(--bg-control, transparent);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: border-color 120ms, color 120ms;
-  &:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text-primary); }
-  &:disabled { opacity: 0.4; cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  margin: -10px 0; /* the larger touch area doesn't add space around the rule */
+  touch-action: none; /* a sideways drag moves the value, not the page */
 `;
 
 const Track = styled.div`
+  flex: 1;
   height: 4px;
   border-radius: 2px;
   background: var(--progress-track, var(--bg-sunken));
   overflow: hidden;
+`;
+
+/* Kept inside the rule at both ends (like a native thumb) */
+const Thumb = styled.span<{ $pct: number }>`
+  --thumb: 14px;
+  position: absolute;
+  top: 50%;
+  left: calc(${({ $pct }) => $pct}% + (50 - ${({ $pct }) => $pct}) * var(--thumb) / 100);
+  width: var(--thumb);
+  height: var(--thumb);
+  margin: calc(var(--thumb) / -2) 0 0 calc(var(--thumb) / -2);
+  border-radius: 50%;
+  background: var(--color-accent-fill, var(--color-accent));
+  pointer-events: none;
+  transition: left 200ms ease, transform 120ms;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
+
+const Range = styled.input`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  &:focus-visible + ${Thumb} { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:active + ${Thumb} { transform: scale(1.25); }
 `;
 
 const Fill = styled.div<{ $pct: number; $color: string }>`
@@ -177,28 +204,31 @@ const MoodName = styled.span<{ $color: string }>`
 const Faces = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  @media (max-width: 480px) { gap: 8px 4px; justify-content: space-between; }
+  gap: 12px 22px; /* the glyphs reach a little past their boxes */
+  @media (max-width: 480px) { gap: 12px 8px; justify-content: space-between; }
 `;
 
 const FaceBtn = styled.button<{ $active: boolean; $color: string }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  /* The face's drawn circle matches the Water / Sleep icon circles: the
+     glyph's circle is 20/24 of its font size, so the glyph is 1.2× the box */
+  width: 56px;
+  height: 56px;
   padding: 0;
   border: none;
   border-radius: 50%;
+  overflow: visible;
+  & > span { font-size: 67px; }
   cursor: pointer;
   color: ${({ $active, $color }) => ($active ? $color : 'var(--text-disabled)')};
-  /* The chosen face is the accent glyph — in light on a pale accent disc
-     (--bg-selected, unset in dark: no disc there) */
-  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'transparent')};
+  /* The chosen face is just the accent glyph — never a disc behind it */
+  background: transparent;
   transition: color 120ms;
   &:hover { color: ${({ $color }) => $color}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 480px) { width: 54px; height: 54px; }
+  @media (max-width: 480px) { width: 50px; height: 50px; & > span { font-size: 60px; } }
   /* Thin faces: lightest weight at the large optical size */
   & > span { font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48; }
 `;
@@ -243,15 +273,15 @@ const CompactWrapper = styled(Wrapper)`
   && ${Meter} { gap: 0; }
   && ${Meter} > ${Label} { margin-bottom: 12px; }
   && ${MeterMain} { gap: 12px; }
-  && ${Track} { margin-top: 16px; height: 3px; }
+  && ${Slider} { margin-top: 6px; margin-bottom: -10px; }
+  && ${Track} { height: 3px; }
+  && ${Thumb} { --thumb: 12px; }
   && ${Badge} { width: 38px; height: 38px; & > span { font-size: 22px; } }
   && ${Fig} { font-size: 32px; color: var(--text-secondary); }
   && ${Unit} { font-size: 13px; color: var(--text-muted); }
   && ${MoodName} { font-size: 13px; }
-  && ${Steppers} { gap: 10px; }
-  && ${StepBtn} { width: 30px; height: 30px; border-color: var(--border-card); color: var(--text-soft); & > span { font-size: 16px; } }
-  && ${Faces} { gap: 6px 12px; }
-  && ${FaceBtn} { width: 46px; height: 46px; & > span { font-size: 40px; } }
+  && ${Faces} { gap: 10px 16px; }
+  && ${FaceBtn} { width: 38px; height: 38px; & > span { font-size: 46px; } }
   && ${Chips} { gap: 10px 6px; /* room between wrapped rows */ }
   && ${Chip} { height: 29px; padding: 0 13px; font-size: 13px; font-weight: 400; }
   && ${Note} { margin-top: 6px; font-size: 12px; }
@@ -270,8 +300,19 @@ const Grid3 = styled.div`
    five fit a quarter-width cell; no tinted fills */
 const QuadWrapper = styled(CompactWrapper)`
   display: grid;
-  && ${Faces} { gap: 6px; }
-  && ${FaceBtn} { width: 38px; height: 38px; & > span { font-size: 32px; } }
+  && ${Faces} { gap: 16px; }
+`;
+
+/* Home dashboard: the card is narrower there, so slightly smaller faces keep
+   all five on one line — 32px, shrinking with the cell if it's narrower still
+   (17% of the row each, the rest as gaps) */
+const SmallFacesQuad = styled(QuadWrapper)`
+  &&& ${Faces} { container-type: inline-size; flex-wrap: nowrap; gap: min(16px, 3.75cqi); }
+  &&& ${FaceBtn} {
+    width: min(32px, 17cqi);
+    height: min(32px, 17cqi);
+    & > span { font-size: min(38px, 20.4cqi); }
+  }
 `;
 
 const Quad = styled.div`
@@ -298,30 +339,34 @@ interface MeterProps {
   max: number;
   unit: string;
   noun: string;
+  /** One of them, for the button labels ("glass of water") */
+  one: string;
   onChange: (v: number) => void;
 }
 
-function MeterTile({ label, icon, color, value, goal, max, unit, noun, onChange }: MeterProps) {
+function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange }: MeterProps) {
   const pct = Math.min(100, (value / goal) * 100);
   return (
     <Meter>
       <Label>{label}</Label>
       <MeterMain>
-        <Badge $color={color} aria-hidden="true"><MaterialIcon $size={26}>{icon}</MaterialIcon></Badge>
+        <Badge type="button" $color={color} aria-label={`Add one ${one}`} title={`Add one ${one}`}
+          disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>
+          <MaterialIcon $size={26}>{icon}</MaterialIcon>
+        </Badge>
         <Figure>
           <Fig aria-label={`${value} ${noun}`}>{value}</Fig>
           <Unit>{unit}</Unit>
         </Figure>
-        <Steppers>
-          <StepBtn type="button" aria-label={`One less ${noun.replace(/s$/, '')}`} disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 1))}>
-            <MaterialIcon $size={22}>remove</MaterialIcon>
-          </StepBtn>
-          <StepBtn type="button" aria-label={`One more ${noun.replace(/s$/, '')}`} disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>
-            <MaterialIcon $size={22}>add</MaterialIcon>
-          </StepBtn>
-        </Steppers>
       </MeterMain>
-      <Track><Fill $pct={pct} $color={color} /></Track>
+      <Slider>
+        <Track><Fill $pct={pct} $color={color} /></Track>
+        {/* Spans 0 to the goal; past it, tap the icon */}
+        <Range type="range" min={0} max={goal} step={1} value={Math.min(value, goal)}
+          aria-label={label} aria-valuetext={`${value} ${noun}`}
+          onChange={e => onChange(Number(e.target.value))} />
+        <Thumb $pct={pct} aria-hidden="true" />
+      </Slider>
     </Meter>
   );
 }
@@ -345,22 +390,24 @@ interface WellnessPanelProps {
   compact?: boolean;
   /** Four square: Water | Sleep over Mood | Cycle in an outlined 2×2 card (home dashboard) */
   quad?: boolean;
+  /** Slightly smaller mood faces, kept on one line (the home dashboard's narrow card) */
+  smallFaces?: boolean;
 }
 
 
 export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
-  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad,
+  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces,
 }: WellnessPanelProps) {
   // One colour throughout: the accent (no per-metric blues, violets or mood hues)
   const accent = 'var(--color-accent)';
   const water$ = (
     <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
-      max={WATER_MAX} unit={`of ${waterGoal} glasses`} noun="glasses of water" onChange={onWater} />
+      max={WATER_MAX} unit={`of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} />
   );
   const sleep$ = (
     <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
-      max={SLEEP_MAX} unit="hours" noun="hours of sleep" onChange={onSleep} />
+      max={SLEEP_MAX} unit="hours" noun="hours of sleep" one="hour of sleep" onChange={onSleep} />
   );
   const mood$ = (
     <Cell>
@@ -373,7 +420,7 @@ export function WellnessPanel({
           <FaceBtn key={m.icon} type="button" $active={mood === i + 1} $color={accent}
             aria-label={`Mood: ${m.label}`} aria-pressed={mood === i + 1}
             onClick={() => onMood(mood === i + 1 ? 0 : i + 1)}>
-            <MaterialIcon $size={40}>{m.icon}</MaterialIcon>
+            <MaterialIcon>{m.icon}</MaterialIcon>
           </FaceBtn>
         ))}
       </Faces>
@@ -393,7 +440,8 @@ export function WellnessPanel({
   );
 
   if (quad) {
-    return <QuadWrapper><Quad>{water$}{sleep$}{mood$}{cycle$}</Quad></QuadWrapper>;
+    const Wrap = smallFaces ? SmallFacesQuad : QuadWrapper;
+    return <Wrap><Quad>{water$}{sleep$}{mood$}{cycle$}</Quad></Wrap>;
   }
 
   if (compact) {

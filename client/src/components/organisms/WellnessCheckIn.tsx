@@ -182,6 +182,7 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
       cycleNote={nextPeriod}
       compact={!quad}
       quad={quad}
+      smallFaces={bare}
     />
   );
   // Bare (home dashboard): no panel or heading; a grid so the card stretches

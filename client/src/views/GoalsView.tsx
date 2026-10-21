@@ -320,12 +320,13 @@ const PRIORITY_BADGE: Record<string, { label: string; color: string }> = {
 
 /** An entry's picture for a board avatar: the featured image (else the first), as its thumbnail */
 function avatarImage(meta: Record<string, unknown> | undefined): BoardItem['image'] {
-  const imgs = Array.isArray(meta?._images) ? meta._images as { key: string; iv: string; thumbKey?: string; thumbIv?: string; mimeType: string }[] : [];
+  const imgs = Array.isArray(meta?._images) ? meta._images as { key: string; iv: string; thumbKey?: string; thumbIv?: string; mimeType: string; focusX?: number; focusY?: number }[] : [];
   const img = imgs.find(i => i.key === meta?._featuredKey) ?? imgs[0];
   if (!img) return undefined;
+  const focus = { focusX: img.focusX, focusY: img.focusY };
   return img.thumbKey && img.thumbIv
-    ? { key: img.thumbKey, iv: img.thumbIv, mimeType: img.mimeType }
-    : { key: img.key, iv: img.iv, mimeType: img.mimeType };
+    ? { key: img.thumbKey, iv: img.thumbIv, mimeType: img.mimeType, ...focus }
+    : { key: img.key, iv: img.iv, mimeType: img.mimeType, ...focus };
 }
 
 /* Planning's sort and Tasks/Todos filters survive leaving the page (this tab only) */

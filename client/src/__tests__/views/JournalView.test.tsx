@@ -342,3 +342,44 @@ describe('JournalView (mobile back to list)', () => {
     }
   });
 });
+
+describe('JournalView (saving a new entry)', () => {
+  const ENC = { contentEncrypted: 'c', contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' };
+  beforeEach(() => {
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: null, key: 'k-save' } as any);
+    (useEncryption as any).mockReturnValue({
+      isUnlocked: true, unlock: vi.fn(), decryptPosts: vi.fn().mockResolvedValue([]),
+      encryptPost: vi.fn().mockResolvedValue(ENC),
+      encryptNewPost: vi.fn().mockResolvedValue({ id: 501, ...ENC }),
+    });
+    vi.mocked(entriesApi.create).mockReset();
+    vi.mocked(entriesApi.update).mockReset().mockResolvedValue({} as any);
+  });
+
+  it('Save while an autosave is creating the entry makes one entry, not two', async () => {
+    let finishCreate!: (v: unknown) => void;
+    vi.mocked(entriesApi.create).mockImplementation(() => new Promise(r => { finishCreate = r; }) as any);
+    renderWithTheme(<JournalView />);
+    fireEvent.click(screen.getByText('type'));
+    // the autosave fires after 3s and starts creating the entry…
+    await waitFor(() => expect(entriesApi.create).toHaveBeenCalledTimes(1), { timeout: 4500 });
+    // …and Save is clicked while that request is still out
+    fireEvent.click(screen.getByText('save'));
+    finishCreate({ id: 501, createdAt: '2026-10-20T10:00:00Z' });
+    // Save waits for it, then updates the entry it made
+    await waitFor(() => expect(entriesApi.update).toHaveBeenCalledWith(501, expect.anything()));
+    expect(entriesApi.create).toHaveBeenCalledTimes(1);
+  }, 8000);
+
+  it('a second click on Save does not save the entry again', async () => {
+    vi.mocked(entriesApi.create).mockResolvedValue({ id: 502, createdAt: '2026-10-20T10:00:00Z' } as any);
+    renderWithTheme(<JournalView />);
+    fireEvent.click(screen.getByText('type'));
+    fireEvent.click(screen.getByText('save'));
+    fireEvent.click(screen.getByText('save'));
+    await waitFor(() => expect(entriesApi.create).toHaveBeenCalledTimes(1));
+    await new Promise(r => setTimeout(r, 50));
+    expect(entriesApi.create).toHaveBeenCalledTimes(1);
+    expect(entriesApi.update).not.toHaveBeenCalled();
+  });
+});

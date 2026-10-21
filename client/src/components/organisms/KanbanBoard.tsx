@@ -8,6 +8,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
+import { focusPosition } from './EntryImageGallery.js';
 
 /* Planning boards (goals, milestones, tasks, todos): one column per status —
    a toned panel with its name, "N cards" and a full-width + to start a new entry
@@ -30,7 +31,7 @@ export interface BoardItem {
   progress?: { done: number; total: number };
   completed?: boolean;
   /** The entry's picture (encrypted thumbnail), shown as a small round avatar on the right */
-  image?: { key: string; iv: string; mimeType: string };
+  image?: { key: string; iv: string; mimeType: string; focusX?: number; focusY?: number };
 }
 
 export interface BoardColumn<K extends string> {
@@ -257,7 +258,7 @@ function DropColumn({ id, children }: { id: string; children: (over: boolean, re
 
 function CardAvatar({ image }: { image: NonNullable<BoardItem['image']> }) {
   const { url } = useDecryptedImage(image.key, image.iv, image.mimeType);
-  return url ? <Avatar src={url} alt="" /> : null;
+  return url ? <Avatar src={url} alt="" style={{ objectPosition: focusPosition(image) }} /> : null;
 }
 
 function BoardCard({ item, onOpen }: { item: BoardItem; onOpen: (id: number) => void }) {

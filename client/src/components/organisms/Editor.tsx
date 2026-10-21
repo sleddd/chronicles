@@ -63,6 +63,9 @@ strong { font-weight: 700; }
   }
 `;
 
+/* The formatting bar stays at the top while a long entry scrolls under it,
+   so it's still in reach at the bottom. It needs a solid background — the
+   surface it sits on (--editor-surface, set by the form; the page otherwise) */
 const ToolbarRow = styled.div<{ $collapsed: boolean }>`
   display: flex;
   align-items: center;
@@ -71,8 +74,13 @@ const ToolbarRow = styled.div<{ $collapsed: boolean }>`
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--editor-surface, var(--bg-app));
   ${({ $collapsed }) => $collapsed && `
     position: absolute;
+    background: transparent;
     top: 5px;
     right: 0;
     z-index: 2;
@@ -316,8 +324,12 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
 
   // Sync content from parent without emitting an update (prevents onChange→re-render loop).
   // Content we just emitted is already in the editor — skip re-serializing it.
+  // Anything else means the parent moved on (another entry, a cleared form):
+  // forget what was typed, or reopening an entry whose text matches it would be
+  // skipped and the editor would keep showing the previous entry
   useEffect(() => {
     if (content === lastEmittedRef.current) return;
+    lastEmittedRef.current = null;
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content, { emitUpdate: false });
     }

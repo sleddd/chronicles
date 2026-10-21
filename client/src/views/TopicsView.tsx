@@ -8,6 +8,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
+import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { TopicIcon } from '../components/molecules/IconPicker.js';
@@ -58,6 +59,11 @@ const Title = styled.h1`
 `;
 
 /* ── Topic rows ── */
+
+/* Search topics: under the title, above the list's rule */
+const TopicSearch = styled(RoundSearch)`
+  margin-bottom: 20px;
+`;
 
 /* A firmer rule under the title, then hairlines between rows */
 const List = styled.div`
@@ -136,7 +142,14 @@ export function TopicsView() {
   const allTopics = useEntriesStore(s => s.allTopics);
   const storeTopics = useEntriesStore(s => s.topics);
   // Always A–Z (case-insensitive), like the topic picker
-  const topics = useMemo(() => [...storeTopics].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), [storeTopics]);
+  const sortedTopics = useMemo(() => [...storeTopics].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), [storeTopics]);
+  // Search by name: every word typed must appear in the topic's name
+  const [query, setQuery] = useState('');
+  const topics = useMemo(() => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return sortedTopics;
+    return sortedTopics.filter(t => { const name = t.name.toLowerCase(); return words.every(w => name.includes(w)); });
+  }, [sortedTopics, query]);
   const entries = useEntriesStore(s => s.decryptedEntries);
   const setTopics = useEntriesStore(s => s.setTopics);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -255,6 +268,11 @@ export function TopicsView() {
               />
             </EditWrap>
           )}
+
+          {sortedTopics.length > 0 && (
+            <TopicSearch ariaLabel="Search topics" value={query} onChange={setQuery} placeholder="Search topics" />
+          )}
+          {query.trim() && topics.length === 0 && <EmptyState message={`No topics match “${query.trim()}”.`} />}
 
           <List>
             {topics.map(topic => {

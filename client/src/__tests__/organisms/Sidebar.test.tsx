@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
@@ -40,15 +40,18 @@ function renderAt(path = '/') {
 describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     featureFlags = { medicationEnabled: true, foodEnabled: true, exerciseEnabled: true, allergiesEnabled: true };
   });
 
   it('renders every nav destination', () => {
     renderAt();
     expect(screen.queryByTitle('Today')).not.toBeInTheDocument();
-    for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
+    for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen']) {
       expect(screen.getByTitle(title)).toBeInTheDocument();
     }
+    // Settings lives in the ⋯ menu
+    expect(screen.queryByTitle('Settings')).toBeNull();
   });
 
   it('the logo opens the dashboard (there is no dashboard item)', () => {
@@ -57,13 +60,36 @@ describe('Sidebar', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('has a Sign out button under Settings that signs out', () => {
+  it('ends with expand / collapse, then ⋯ (Settings, Lock, Sign out)', () => {
     renderAt();
-    const titles = Array.from(document.querySelectorAll('button[title]')).map(b => b.getAttribute('title'));
-    expect(titles.slice(-3)).toEqual(['Settings', 'Lock — your password opens it again', 'Sign out']);
-    fireEvent.click(screen.getByTitle('Sign out'));
+    const titles = Array.from(document.querySelectorAll('aside button[title]')).map(b => b.getAttribute('title'));
+    expect(titles.slice(-3)).toEqual(['Kitchen', 'Show names', 'Settings, lock and sign out']);
+    const more = screen.getByRole('button', { name: 'More' });
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
+    fireEvent.click(more);
+    const menu = screen.getByRole('menu', { name: 'More' });
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent?.replace(/^(settings|lock|logout)/, ''))).toEqual(['Settings', 'Lock', 'Sign out']);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Settings/ }));
+    expect(mockNavigate).toHaveBeenCalledWith('/settings');
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('signs out from the ⋯ menu', () => {
+    renderAt();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Sign out/ }));
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('closes the ⋯ menu on Escape or a click outside', () => {
+    renderAt();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('has no Report a bug button (that lives in Settings)', () => {
@@ -71,11 +97,19 @@ describe('Sidebar', () => {
     expect(screen.queryByTitle('Report a bug')).toBeNull();
   });
 
-  it('locks from the Lock button just above Sign out', () => {
+  it('locks from the ⋯ menu', () => {
     renderAt();
-    fireEvent.click(screen.getByTitle('Lock — your password opens it again'));
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Lock/ }));
     expect(mockLock).toHaveBeenCalledTimes(1);
     expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('shows ⋯ as active while in Settings', () => {
+    renderAt('/settings');
+    const more = screen.getByRole('button', { name: 'More' });
+    const kitchen = screen.getByTitle('Kitchen');
+    expect(more.className).not.toBe(kitchen.className);
   });
 
   it('navigates when a nav item is clicked', () => {
@@ -109,5 +143,21 @@ describe('Sidebar', () => {
     const active = screen.getByTitle('Calendar');
     const inactive = screen.getByTitle('Journal');
     expect(active.className).not.toBe(inactive.className);
+  });
+
+  it('expands to show each item’s name, and remembers it', () => {
+    const { unmount } = renderAt();
+    const toggle = screen.getByRole('button', { name: 'Show names' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Collapse' })).toHaveAttribute('aria-expanded', 'true');
+    // names are shown (no tooltips needed) and still name each button
+    expect(screen.getByRole('button', { name: 'Journal' })).not.toHaveAttribute('title');
+    expect(screen.getByText('Planning')).toBeVisible();
+    unmount();
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));
+    expect(screen.getByTitle('Journal')).toBeInTheDocument();
   });
 });

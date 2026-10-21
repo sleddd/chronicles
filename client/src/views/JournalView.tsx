@@ -154,7 +154,7 @@ const NewEntryPill = styled.button`
 
 /** Compact change-detection signature for the entry's image set. */
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
-  JSON.stringify([imgs.map(i => i.key), featured]);
+  JSON.stringify([imgs.map(i => [i.key, i.focusX ?? 50, i.focusY ?? 50]), featured]);
 
 
 export function JournalView() {
@@ -199,6 +199,25 @@ export function JournalView() {
   const [saveStatus, setSaveStatus] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const loadedStateRef = useRef({ content: '', customFields: '{}', images: imagesSig([], null) });
+  /* Saving a new entry safely. The entry the editor writes to is kept here and
+     set the moment a create returns, so the next save updates it instead of
+     creating a second copy. Every save (autosave, wellness autosave, Save) runs
+     through one queue, one at a time. A save queued for an entry the editor
+     has since left (closed, switched, saved) is dropped: editSessionRef moves
+     on whenever the editor shows another entry or a blank new one. */
+  const entryIdRef = useRef<number | null>(null);
+  const editSessionRef = useRef(0);
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runSave = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
+    const next = saveQueueRef.current.then(fn, fn);
+    saveQueueRef.current = next.catch(() => undefined);
+    return next;
+  }, []);
+  /* What the editor shows: 'e<id>', or 'new:<topic>:<fields>' for a blank new
+     entry. The load effect switches only when this changes — reloading on every
+     store update would overwrite what's being typed with the last saved copy. */
+  const shownRef = useRef<string | null>(null);
   const dictationControlRef = useRef<DictationControls | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -244,9 +263,7 @@ export function JournalView() {
     // The logo (home): a fresh blank entry, even when the journal is already open
     if (state?.newEntry) {
       setSelectedEntryId(null);
-      setEditorContent(''); setEditorTopicId(null); setCustomFields({}); setWidgetType(null);
-      setEntryImages([]); setFeaturedKey(null); setImageError('');
-      setLastSavedAt(null);
+      showBlankEntryRef.current();
       setPendingEntryDate(null);
       setPendingNewTopicId(null);
       setPendingNewFields(null);
@@ -310,6 +327,8 @@ export function JournalView() {
   const wellnessAutoSaveDoRef = useRef<() => Promise<void>>(async () => {});
   wellnessAutoSaveDoRef.current = async () => {
     if (!editorTopicId) return;
+    const session = editSessionRef.current;
+    const selectedEntryId = entryIdRef.current;
     const metadata: Record<string, unknown> = { _taxonomyId: editorTopicId };
     if (widgetType) metadata._widgetType = widgetType;
     if (Object.keys(customFields).length > 0) metadata._customFields = customFields;
@@ -347,15 +366,28 @@ export function JournalView() {
         });
         addDecryptedEntry({ id: result.id as number, content: finalContent, metadata, isEncrypted: true,
           createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string) });
-        setSelectedEntryId(result.id as number);
+        if (editSessionRef.current === session) adoptCreatedEntry(result.id as number);
       }
     } catch (err) { console.error('Wellness auto-save failed:', err); }
   };
 
+  /* A save just created the entry being written: keep editing it (no reload —
+     the editor already shows it, and may hold newer typing) */
+  const adoptCreatedEntry = (newId: number) => {
+    entryIdRef.current = newId;
+    shownRef.current = `e${newId}`;
+    setPendingNewTopicId(null);
+    setPendingNewFields(null);
+    setSelectedEntryId(newId);
+  };
+
   const scheduleWellnessAutoSave = useCallback(() => {
     if (wellnessAutoDebounceRef.current) clearTimeout(wellnessAutoDebounceRef.current);
-    wellnessAutoDebounceRef.current = setTimeout(() => { wellnessAutoSaveDoRef.current(); }, 600);
-  }, []);
+    const session = editSessionRef.current;
+    wellnessAutoDebounceRef.current = setTimeout(() => {
+      void runSave(async () => { if (editSessionRef.current === session) await wellnessAutoSaveDoRef.current(); });
+    }, 600);
+  }, [runSave]);
 
   /** An entry's fields as last saved (null for a new entry) */
   const savedFieldsOf = (id: number | null): Record<string, unknown> | null => {
@@ -367,6 +399,8 @@ export function JournalView() {
   // Auto-save: fires 3s after user stops editing, saves in place without closing the editor
   const autoSaveDoRef = useRef<() => Promise<void>>(async () => {});
   autoSaveDoRef.current = async () => {
+    const session = editSessionRef.current;
+    const selectedEntryId = entryIdRef.current;
     const currentContent = editorContent;
     const currentFields = JSON.stringify(customFields);
     const currentImages = imagesSig(entryImages, featuredKey);
@@ -432,18 +466,27 @@ export function JournalView() {
         const newId = result.id as number;
         addDecryptedEntry({ id: newId, content: contentToSave, metadata, isEncrypted: true,
           createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string) });
+        // The editor moved on while this was saving: the entry exists, but don't pull the editor back to it
+        if (editSessionRef.current !== session) return;
         setPendingEntryDate(null);
-        setSelectedEntryId(newId);
+        adoptCreatedEntry(newId);
       }
+      if (editSessionRef.current !== session) return;
       loadedStateRef.current = { content: contentToSave, customFields: JSON.stringify(fieldsToSave), images: currentImages };
       setLastSavedAt(new Date());
     } catch (err) { console.error('Auto-save failed:', err); }
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => { autoSaveDoRef.current(); }, 3000);
+    const session = editSessionRef.current;
+    const timer = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      // Runs after any save in progress, with the editor's state at that moment
+      void runSave(async () => { if (editSessionRef.current === session) await autoSaveDoRef.current(); });
+    }, 3000);
+    autoSaveTimerRef.current = timer;
     return () => clearTimeout(timer);
-  }, [editorContent, customFields, entryImages, featuredKey]);
+  }, [editorContent, customFields, entryImages, featuredKey, runSave]);
 
   /* × / Escape on the full-width editor: in edit view (opened from another
      page) it closes the entry and returns there, like Save; in the plain
@@ -583,10 +626,32 @@ export function JournalView() {
     };
   }, [isUnlocked, isInitialized]);
 
+  /** Show a blank new entry (optionally with a preset topic and fields) */
+  const showBlankEntry = useCallback((topicId: number | null = null, fields: Record<string, unknown> | null = null) => {
+    editSessionRef.current++;
+    entryIdRef.current = null;
+    shownRef.current = `new:${topicId}:${JSON.stringify(fields ?? {})}`;
+    setEditorContent('');
+    setEditorTopicId(topicId);
+    setCustomFields(fields ?? {});
+    setWidgetType(null);
+    setEntryImages([]);
+    setFeaturedKey(null);
+    setImageError('');
+    // A preset (board column status) isn't an edit — nothing to save yet
+    loadedStateRef.current = { content: '', customFields: JSON.stringify(fields ?? {}), images: imagesSig([], null) };
+    setLastSavedAt(null);
+  }, []);
+
   useEffect(() => {
     if (selectedEntryId) {
+      // Already showing it (opened earlier, or just created by a save): don't reload
+      if (shownRef.current === `e${selectedEntryId}`) return;
       const entry = decryptedEntries.find(e => e.id === selectedEntryId);
       if (entry) {
+        editSessionRef.current++;
+        entryIdRef.current = selectedEntryId;
+        shownRef.current = `e${selectedEntryId}`;
         const meta = entry.metadata as Record<string, unknown>;
         const cf = meta?._customFields as Record<string, unknown> ?? {};
         setEditorContent(entry.content);
@@ -607,23 +672,23 @@ export function JournalView() {
         setPendingNewFields(null);
       }
     } else {
-      setEditorContent('');
-      setEditorTopicId(pendingNewTopicId);
-      setCustomFields(pendingNewFields ?? {});
-      setWidgetType(null);
-      setEntryImages([]);
-      setFeaturedKey(null);
-      setImageError('');
-      // A preset (board column status) isn't an edit — nothing to save yet
-      loadedStateRef.current = { content: '', customFields: JSON.stringify(pendingNewFields ?? {}), images: imagesSig([], null) };
-      setLastSavedAt(null);
+      if (shownRef.current === `new:${pendingNewTopicId}:${JSON.stringify(pendingNewFields ?? {})}`) return;
+      showBlankEntry(pendingNewTopicId, pendingNewFields);
       calendarArrivalRef.current = false;
     }
-  }, [selectedEntryId, decryptedEntries, pendingNewTopicId, pendingNewFields]);
+  }, [selectedEntryId, decryptedEntries, pendingNewTopicId, pendingNewFields, showBlankEntry]);
 
   const handleSave = useCallback(async () => {
     const userFieldDefs = editorTopicId != null ? (topicCustomFields[editorTopicId] ?? []) : [];
     if (!hasEntryData(editorContent, customFields, userFieldDefs, entryImages.length)) return;
+    // This save covers the pending autosave — running both would create two entries
+    if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+    const session = editSessionRef.current;
+    // Waits for a save already running (an autosave may be creating this entry
+    // right now); skipped if the editor has moved on, e.g. a second click
+    return runSave(async () => {
+    if (editSessionRef.current !== session) return;
+    const selectedEntryId = entryIdRef.current;
     setIsSaving(true); setSaveStatus('');
 
     // Resolve effective topic — fall back to "Journal" if none selected
@@ -675,21 +740,22 @@ export function JournalView() {
         });
         addDecryptedEntry({ id: result.id as number, content: finalContent, metadata, isEncrypted: true,
           createdAt: new Date(result.createdAt as string), updatedAt: new Date((result.updatedAt || result.createdAt) as string) });
+        entryIdRef.current = result.id as number;
         setPendingEntryDate(null);
-        setSelectedEntryId(result.id as number);
       }
-      loadedStateRef.current = { content: finalContent, customFields: JSON.stringify(fieldsToSave), images: imagesSig(entryImages, featuredKey) };
       // Saving closes the entry: the editor goes back to a blank new entry
       // (phones show the list); edit view returns to the view it came from
       setPendingNewTopicId(null);
       setPendingNewFields(null);
       setSelectedEntryId(null);
+      showBlankEntry();
       setEditorExpanded(false);
       setShowMobileEditor(false);
       if (originPath) navigate(originPath);
     } catch (err) { console.error('Save failed:', err); setSaveStatus('Save failed'); }
     finally { setIsSaving(false); }
-  }, [editorContent, selectedEntryId, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, encryptNewPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate]);
+    });
+  }, [editorContent, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, encryptNewPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate, runSave, showBlankEntry]);
 
   /** Persist the image set into an existing entry's encrypted metadata.
    *  Rebuilds from the store entry (mirrors handleBookmark) so it is safe to
@@ -792,6 +858,15 @@ export function JournalView() {
     if (deletable.length > 0) void bestEffortDeleteImages(deletable);
   }, [entryImages, featuredKey, persistImages]);
 
+  /* A photo's crop focus moved (Adjust crop on the banner): kept with the
+     image in the entry's encrypted metadata */
+  const handleImageFocus = useCallback(async (key: string, x: number, y: number) => {
+    const next = entryImages.map(i => (i.key === key ? { ...i, focusX: x, focusY: y } : i));
+    setEntryImages(next);
+    const currentId = entryIdRef.current;
+    if (currentId) await persistImages(currentId, next, featuredKey);
+  }, [entryImages, featuredKey, persistImages]);
+
   const handleSetFeatured = useCallback(async (key: string | null) => {
     setFeaturedKey(key);
     const currentId = useUIStore.getState().selectedEntryId;
@@ -808,8 +883,7 @@ export function JournalView() {
       await entriesApi.delete(selectedEntryId);
       removeEntry(selectedEntryId);
       if (imageKeys.length > 0) void bestEffortDeleteImages(imageKeys);
-      setSelectedEntryId(null); setEditorContent(''); setEditorTopicId(null); setCustomFields({}); setWidgetType(null);
-      setEntryImages([]); setFeaturedKey(null); setImageError('');
+      setSelectedEntryId(null); showBlankEntry();
       setShowMobileEditor(false);
       setEditorExpanded(false);
       // Edit view (opened from another page): deleting returns there, like Save
@@ -822,11 +896,10 @@ export function JournalView() {
     if (!selectedEntryId && entryImages.length > 0) {
       void bestEffortDeleteImages(entryImages.flatMap(i => [i.key, i.thumbKey]));
     }
-    setSelectedEntryId(null); setEditorContent(''); setEditorTopicId(null); setCustomFields({}); setWidgetType(null);
-    setEntryImages([]); setFeaturedKey(null); setImageError('');
-    setLastSavedAt(null);
+    setSelectedEntryId(null); showBlankEntry();
     setPendingEntryDate(null);
     setPendingNewTopicId(null);
+    setPendingNewFields(null);
     setShowMobileEditor(false);
     setEditorExpanded(false);
     // Edit view (opened from another page): "+ New" / "Discard changes" close
@@ -842,6 +915,8 @@ export function JournalView() {
   // Keep a fresh ref to handleSave so the global keydown listener never captures a stale version
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
+  const showBlankEntryRef = useRef(showBlankEntry);
+  showBlankEntryRef.current = showBlankEntry;
 
   // Global keyboard shortcuts — read store directly to avoid stale refs
   useEffect(() => {
@@ -855,8 +930,7 @@ export function JournalView() {
       // Ctrl+N or Cmd+N → new entry
       if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        setSelectedEntryId(null); setEditorContent(''); setEditorTopicId(null); setCustomFields({}); setWidgetType(null);
-        setEntryImages([]); setFeaturedKey(null); setImageError('');
+        setSelectedEntryId(null); showBlankEntryRef.current();
         setShowMobileEditor(true);
         return;
       }
@@ -866,8 +940,7 @@ export function JournalView() {
         const editable = (e.target as HTMLElement)?.isContentEditable;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
         e.preventDefault();
-        setSelectedEntryId(null); setEditorContent(''); setEditorTopicId(null); setCustomFields({}); setWidgetType(null);
-        setEntryImages([]); setFeaturedKey(null); setImageError('');
+        setSelectedEntryId(null); showBlankEntryRef.current();
         setShowMobileEditor(true);
         return;
       }
@@ -920,6 +993,14 @@ export function JournalView() {
     const existingFields = (meta?._customFields as Record<string, unknown>) || {};
     const updatedFields = { ...existingFields, _isFavorite: isFavorite };
     const updatedMeta = { ...meta, _customFields: updatedFields };
+    // The open entry: keep the editor's copy in step, or its next save would undo this
+    if (entryId === entryIdRef.current) {
+      setCustomFields(prev => ({ ...prev, _isFavorite: isFavorite }));
+      try {
+        const loaded = JSON.parse(loadedStateRef.current.customFields) as Record<string, unknown>;
+        loadedStateRef.current = { ...loadedStateRef.current, customFields: JSON.stringify({ ...loaded, _isFavorite: isFavorite }) };
+      } catch { /* the next autosave just re-saves it */ }
+    }
 
     // Persist to server
     try {
@@ -1038,6 +1119,7 @@ export function JournalView() {
               onExistingImagesSelected={handleExistingImagesSelected}
               onImageRemoved={handleImageRemoved}
               onSetFeatured={handleSetFeatured}
+              onImageFocus={handleImageFocus}
               imageUploading={imageUploading}
               imageError={imageError}
               imagesReady={imagesReady}

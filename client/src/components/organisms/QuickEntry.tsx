@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { EntryForm } from './EntryForm.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -21,13 +21,17 @@ export function QuickEntry() {
   const [topicId, setTopicId] = useState<number | null>(null);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
+  // Set synchronously: two quick clicks (or ⌘+Enter twice) in one render would
+  // both still see isSaving false and create the entry twice
+  const savingRef = useRef(false);
   const [status, setStatus] = useState('');
 
   const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); };
 
   const handleSave = useCallback(async () => {
     const userFieldDefs = topicId != null ? (topicCustomFields[topicId] ?? []) : [];
-    if (isSaving || !hasEntryData(content, customFields, userFieldDefs)) return;
+    if (savingRef.current || !hasEntryData(content, customFields, userFieldDefs)) return;
+    savingRef.current = true;
     setIsSaving(true); setStatus('');
     try {
       const effectiveTopicId = topicId ?? await getOrCreateJournalTopic();
@@ -48,9 +52,10 @@ export function QuickEntry() {
       console.error('Quick entry save failed:', err);
       setStatus('Save failed');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
-  }, [content, topicId, customFields, topicCustomFields, isSaving, encryptNewPost, addDecryptedEntry]);
+  }, [content, topicId, customFields, topicCustomFields, encryptNewPost, addDecryptedEntry]);
 
   return (
     <EntryForm

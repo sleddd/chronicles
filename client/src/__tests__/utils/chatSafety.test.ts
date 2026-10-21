@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   minorPattern, replyNeedsReview, patternScreen, replyPatternScreen, parseClassification, parseReplyClassification, maxRisk,
-  classifierTranscript, NO_RISK, riskClassifierPrompt,
+  classifierTranscript, NO_RISK, riskClassifierPrompt, SAFE_CONVERSATION_RULES,
 } from '@/utils/chatSafety';
 import { chatSystemPrompt, stripMinorTag, MINOR_TAG } from '@/utils/chatSave';
 
@@ -41,6 +41,10 @@ describe('patternScreen', () => {
     'Ugh, I feel disgusting after eating so much at the party',
     'Today was a really hard day',
     'I had a terrible day and stress ate everything',
+    // Comfort food and eating to cope are ordinary
+    'I am eating ice cream',
+    'I have an ice cream craving and it is my coping mechanism, so I won’t give it up',
+    'Rough week, I just want chocolate and to watch TV',
     // Fear of eating for allergy or medical reasons is not an eating disorder
     'I’m scared to eat anything',
     'I’m afraid to eat out with my peanut allergy',
@@ -173,5 +177,16 @@ describe('riskClassifierPrompt', () => {
     expect(p).toMatch(/A hard or bad day[^.]*is "none"/);
     expect(p).toMatch(/Everyday venting and food talk are not borderline/);
     expect(p).not.toMatch(/guilt after eating or body weight preoccupation → "concern"/);
+    expect(p).toMatch(/cravings, treats, eating something to cope/);
+    expect(p).toMatch(/coping mechanism, or saying they won't give it up/);
+    expect(p).toMatch(/Mentioning something negative is not a risk sign/);
+  });
+
+  it('the chat itself keeps crisis lines for real risk, not an ordinary bad day', () => {
+    const p = chatSystemPrompt(['Journal']);
+    expect(p).toMatch(/do not mention hotlines, crisis lines, 988/);
+    expect(p).toMatch(/if they say a food or habit helps them cope, do not lecture them/);
+    expect(p).toMatch(/Bring up crisis help only for a real sign/);
+    expect(SAFE_CONVERSATION_RULES).toMatch(/do not repeat them in every reply/);
   });
 });

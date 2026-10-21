@@ -6,7 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
    (shown whether the AI is on or off), with the chat consent status under it.
    Props only. Change the date and the change log whenever the text changes. */
 
-export const PROTOCOL_DATE = 'Oct 19, 2026';
+export const PROTOCOL_DATE = 'Oct 20, 2026';
 
 const Wrap = styled.div`
   padding: 16px 0 4px;
@@ -221,8 +221,9 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <p>
             <strong>Safe conversation rules.</strong> Once a risk sign appears, the AI follows added instructions for the
             rest of the session. It responds with warmth and without judgment. It never gives information about methods,
-            doses, or ways to hide harm. It does not argue with your feelings. It keeps the crisis resources within reach
-            and encourages contact with them. It never ends or refuses the conversation. When eating is part of what
+            doses, or ways to hide harm. It does not argue with your feelings. The crisis resources stay shown in the chat,
+            and the AI brings them up itself when a later message shows risk again, when you ask, or when you may be in
+            danger. It never ends or refuses the conversation. When eating is part of what
             someone is struggling with, it also sets calorie numbers aside for the rest of the session, including for meals
             saved from the chat. Every later message is still screened.
           </p>
@@ -252,6 +253,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <table>
             <thead><tr><th>Date</th><th>Change</th></tr></thead>
             <tbody>
+              <tr><td>October 20, 2026</td><td>Cravings, treats, comfort food and eating to cope are no longer treated as a risk sign, and the AI no longer mentions crisis lines for an ordinary bad day. After a risk sign, the AI brings up the resources when risk shows again or you ask, instead of in every reply. The resources stay shown in the chat.</td></tr>
               <tr><td>October 19, 2026</td><td>Screening no longer treats a bad food day, regret about a meal, venting about a hard day, or fear of eating because of a food allergy or a medical reason as a risk sign. Eating concerns are flagged only for an ongoing, distressing pattern.</td></tr>
               <tr><td>October 2026</td><td>First version published.</td></tr>
             </tbody>
