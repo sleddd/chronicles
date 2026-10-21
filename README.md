@@ -1,15 +1,12 @@
-# Chronicles - In Active Design/Development
+# Chronicles - [mydailychronicles.com](https://mydailychronicles.com)
 
-A zero-knowledge encrypted journal and digital day planner for those too busy to journal. 
+<img width="1439" height="639" alt="Screenshot 2026-10-20 at 7 11 07 PM" src="https://github.com/user-attachments/assets/7241bf25-198b-45ad-9ce2-2444c3c8fe39" />
 
-Capture the key moments of your day, organize with topics, and track health, goals, and more — all encrypted on your device before it ever leaves the browser.
+A zero-knowledge encrypted journal and digital day planner for those too busy to journal. Capture the key moments of your day, organize with topics, and track health, goals, and more — all encrypted on your device before it ever leaves the browser. All it takes is opening it up, select a topic, enter one line, and save. Filters and code do the rest by sorting everything into views or you.
 
-All it takes is opening it up, select a topic, and enter one line for the day. Filters and code do the rest by sorting everything into views or you.
-
-It works on phones and tablets and installs as an app from the browser. Chronicles is in active design and development, with a native phone app via React Native planned.
+Works on phones and tablets via PWA. Chronicles is now available to sign up for beta testing at [mydailychronicles.com](https://mydailychronicles.com/#beta), with a native phone app via React Native planned.
 
 ## A Tour of Chronicles
-Screenshots are from October 2026 and may change.
 
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
