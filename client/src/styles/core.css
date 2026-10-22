@@ -113,8 +113,10 @@
 .ch-input-group .ch-input { padding-left: 2.25rem; }
 
 /* ---------- Checkbox ---------- */
-.ch-check { display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; user-select: none; }
-.ch-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+/* position: relative keeps the hidden input inside the label — without it the
+   input sits far away and focusing it (a click on the label) scrolls the page there */
+.ch-check { position: relative; display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; user-select: none; }
+.ch-check input { position: absolute; top: 0; left: 0; margin: 0; opacity: 0; width: 0; height: 0; }
 .ch-check__box {
   width: 18px; height: 18px; flex: none; border-radius: 50%;
   border: 1.5px solid var(--control-border); background: transparent;
@@ -130,8 +132,8 @@
 .ch-check__label { font-size: var(--text-base); color: var(--text-primary); }
 
 /* ---------- Switch ---------- */
-.ch-switch { display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; user-select: none; }
-.ch-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.ch-switch { position: relative; display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; user-select: none; }
+.ch-switch input { position: absolute; top: 0; left: 0; margin: 0; opacity: 0; width: 0; height: 0; }
 .ch-switch__track {
   width: 38px; height: 22px; flex: none; border-radius: var(--radius-full);
   background: var(--neutral-300); padding: 2px;
