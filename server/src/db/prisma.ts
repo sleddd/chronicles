@@ -25,6 +25,8 @@ function envInt(name: string, fallback: number): number {
 const POOL_SIZE = envInt('DB_POOL_SIZE', 5);
 const RECYCLE_MINUTES = envInt('DB_POOL_RECYCLE_MINUTES', 30);
 const DRAIN_MS = 60_000;
+// DB_KEEP_WARM_MINUTES: how often to ping the database so it never sleeps (0 = off)
+const KEEP_WARM_MINUTES = envInt('DB_KEEP_WARM_MINUTES', 4);
 
 function pooledUrl(url: string): string {
   if (/[?&]connection_limit=/.test(url)) return url;
@@ -43,12 +45,26 @@ export function createPooledClient(databaseUrl: string): PrismaClient {
 
   if (RECYCLE_MINUTES > 0) {
     setInterval(() => {
-      const old = current;
-      current = createClient();
-      setTimeout(() => {
-        old.$disconnect().catch(err => console.error('Closing old database pool failed:', err instanceof Error ? err.message : err));
-      }, DRAIN_MS).unref();
+      // Open the new pool before it takes over, so no request pays for the
+      // connection (close to a second on a hosted database)
+      const next = createClient();
+      void next.$queryRawUnsafe('SELECT 1').catch(() => undefined).then(() => {
+        const old = current;
+        current = next;
+        setTimeout(() => {
+          old.$disconnect().catch(err => console.error('Closing old database pool failed:', err instanceof Error ? err.message : err));
+        }, DRAIN_MS).unref();
+      });
     }, RECYCLE_MINUTES * 60_000).unref();
+  }
+
+  // A serverless database (Prisma Postgres) sleeps when idle and takes ~15 s
+  // to answer the first query after, long enough for saves and sign-in checks
+  // to time out. A tiny query every few minutes keeps it (and the pool) awake.
+  if (KEEP_WARM_MINUTES > 0) {
+    setInterval(() => {
+      current.$queryRawUnsafe('SELECT 1').catch(() => undefined);
+    }, KEEP_WARM_MINUTES * 60_000).unref();
   }
 
   return new Proxy({} as PrismaClient, {

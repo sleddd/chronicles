@@ -51,14 +51,44 @@ const clientFor = async (schemaName: string, client?: TenantClient): Promise<Ten
  * cap is a read then a write: two requests at once could each see room and
  * both write, so every capped write runs its check and its write in here,
  * on the transaction client it's handed.
+ *
+ * Writes for one account also queue here in the process before taking a
+ * connection: a transaction waiting on the advisory lock holds its connection
+ * the whole time, so a burst of saves from one account (check-in autosave,
+ * doses, a journal save) could fill the small pool and starve every other
+ * request, sign-in checks included. The advisory lock still covers other
+ * instances.
  */
+const tenantWriteQueues = new Map<string, Promise<unknown>>();
+
 export async function withTenantLock<T>(schemaName: string, fn: (tx: TenantClient) => Promise<T>): Promise<T> {
-  const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return db.$transaction(async (tx) => {
-    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text', s);
-    return fn(tx);
-  }, { timeout: 15_000 });
+  const run = (tenantWriteQueues.get(s) ?? Promise.resolve()).then(() => lockedWrite(schemaName, s, fn));
+  const tail = run.catch(() => undefined);
+  tenantWriteQueues.set(s, tail);
+  void tail.then(() => { if (tenantWriteQueues.get(s) === tail) tenantWriteQueues.delete(s); });
+  return run;
+}
+
+async function lockedWrite<T>(schemaName: string, s: string, fn: (tx: TenantClient) => Promise<T>): Promise<T> {
+  const db = await tenantDb(schemaName);
+  // Prisma gives a transaction only 2 s to get a connection by default (plain
+  // queries wait 10 s), so a save that came in while the pool was busy or just
+  // recycled failed and had to be sent again. Wait as long as a query does, and
+  // try once more when it failed before `fn` ran — nothing was written yet.
+  for (let attempt = 0; ; attempt++) {
+    let started = false;
+    try {
+      return await db.$transaction(async (tx) => {
+        await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text', s);
+        started = true;
+        return fn(tx);
+      }, { maxWait: 10_000, timeout: 15_000 });
+    } catch (err) {
+      if (started || attempt > 0) throw err;
+      console.warn('Tenant write could not start, retrying:', err instanceof Error ? err.message : err);
+    }
+  }
 }
 
 // =============================================================================

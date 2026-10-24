@@ -62,6 +62,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return send<T>(path, options);
 }
 
+/**
+ * Send an entry write once more after a second when it fails on the server's
+ * side, so a passing hiccup doesn't need a second click on Save. A 5xx means
+ * the write was rolled back, so a repeat is safe; a lost connection is retried
+ * only when repeating it can't make a copy (`retryNetwork`: updates, not creates).
+ */
+async function retryWrite<T>(write: () => Promise<T>, retryNetwork: boolean): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    const retryable = err instanceof ApiError ? err.status >= 500 : retryNetwork && err instanceof TypeError;
+    if (!retryable) throw err;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return write();
+  }
+}
+
 async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, params } = options;
 
@@ -297,7 +314,7 @@ export const entries = {
   // Entries are encrypted bound to their id (format 3): a new entry is created
   // under the id it was encrypted for (`encryptNewPost` reserves it).
   create: (data: Record<string, unknown> & { id: number }) =>
-    request<Record<string, unknown>>('/entries', { method: 'POST', body: { ...withoutTopicLink(data), format: 3 } }),
+    retryWrite(() => request<Record<string, unknown>>('/entries', { method: 'POST', body: { ...withoutTopicLink(data), format: 3 } }), false),
 
   /**
    * Create many entries (imports) in as few requests as possible: one per 50
@@ -326,10 +343,10 @@ export const entries = {
   },
 
   update: (id: number, data: Record<string, unknown>) =>
-    request<Record<string, unknown>>(`/entries/${id}`, {
+    retryWrite(() => request<Record<string, unknown>>(`/entries/${id}`, {
       method: 'PUT',
       body: { ...withoutTopicLink(data), ...(data.contentEncrypted !== undefined && { format: 3 }) },
-    }),
+    }), true),
 
   /** Reserve ids for new entries (each is encrypted bound to its id before it's created). */
   reserveIds: (count = 1) =>
