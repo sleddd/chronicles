@@ -16,6 +16,7 @@ vi.mock('../../db/prisma.js', () => ({
 // Mock auth helpers
 vi.mock('../../middleware/auth.js', () => ({
   revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+  SESSION_IDLE_MS: 24 * 60 * 60 * 1000,
 }));
 
 // Mock parseId (real implementation)

@@ -312,7 +312,8 @@ Instead of storing a single token, sessions use a **Selector + Verifier** patter
 - **Verifier** (32 hex chars): Only SHA-256 hash stored in DB; raw verifier sent to client
 - **Cookie path**: Enforces `X-Requested-With` header for CSRF protection
 - **Bearer path**: For React Native (no CSRF risk from secure storage)
-- **Activity debounce**: `lastActiveAt` only updated if 15+ minutes stale (fire-and-forget)
+- **Activity debounce**: `lastActiveAt` only updated if 5+ minutes stale (fire-and-forget)
+- **Idle expiry**: a session unused for 24 hours (`SESSION_IDLE_MS`, `isSessionIdle` in `middleware/auth.ts`) is revoked (`'idle'`) on its next use and answered 401 "Session expired", whatever its 7-day expiry — checked after the verifier, so a selector alone can't end it; the Sessions list leaves idle ones out
 
 ### Recovery Key System
 

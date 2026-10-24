@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, isSessionIdle } from '../middleware/auth.js';
 import { apiLimiter, icsFeedLimiter } from '../middleware/rateLimiter.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 
@@ -131,7 +131,7 @@ router.get('/google/callback', async (req, res) => {
 
     // Resolve the session that initiated the flow
     const session = await prisma.session.findUnique({ where: { selector: verified.selector } });
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    if (!session || session.revokedAt || session.expiresAt < new Date() || isSessionIdle(session)) {
       fail();
       return;
     }

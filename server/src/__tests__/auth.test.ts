@@ -319,6 +319,62 @@ describe('authMiddleware', () => {
     });
     expect(next).toHaveBeenCalled();
   });
+
+  it('ends a session unused for more than 24 hours', async () => {
+    const selector = 'a'.repeat(12);
+    const verifier = 'b'.repeat(32);
+    const verifierHash = crypto.createHash('sha256').update(verifier).digest('hex');
+
+    mockPrisma.session.update.mockResolvedValue({});
+    mockPrisma.session.findUnique.mockResolvedValue({
+      id: 1,
+      selector,
+      verifierHash,
+      accountId: 42,
+      tenantSchemaName: 'usr_1_abc123',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 3 * 86400000),
+      lastActiveAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    });
+
+    const req = createMockReq({ headers: { authorization: `Bearer ${selector}${verifier}` } });
+    const res = createMockRes();
+    const next = vi.fn();
+
+    await authMiddleware(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Session expired' });
+    expect(mockPrisma.session.update).toHaveBeenCalledWith({
+      where: { selector },
+      data: { revokedAt: expect.any(Date), revokedReason: 'idle' },
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('does not end an idle session for a wrong verifier', async () => {
+    const selector = 'a'.repeat(12);
+    const verifierHash = crypto.createHash('sha256').update('b'.repeat(32)).digest('hex');
+
+    mockPrisma.session.findUnique.mockResolvedValue({
+      id: 1,
+      selector,
+      verifierHash,
+      accountId: 42,
+      tenantSchemaName: 'usr_1_abc123',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 3 * 86400000),
+      lastActiveAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    });
+
+    const req = createMockReq({ headers: { authorization: `Bearer ${selector}${'c'.repeat(32)}` } });
+    const res = createMockRes();
+
+    await authMiddleware(req, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(mockPrisma.session.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('createSession', () => {

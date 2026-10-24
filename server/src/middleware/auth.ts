@@ -19,6 +19,14 @@ declare global {
 
 const ACTIVITY_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
 
+/** A session unused this long ends, whatever its expiry — a stolen or
+    forgotten one doesn't stay good for the full 7 days */
+export const SESSION_IDLE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+export function isSessionIdle(session: { lastActiveAt: Date }, now = Date.now()): boolean {
+  return now - session.lastActiveAt.getTime() > SESSION_IDLE_MS;
+}
+
 /**
  * Split token auth middleware
  * Supports both cookie (web) and Bearer (mobile) authentication
@@ -82,6 +90,14 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   const verifierHash = crypto.createHash('sha256').update(verifier).digest('hex');
   if (!crypto.timingSafeEqual(Buffer.from(verifierHash), Buffer.from(session.verifierHash))) {
     res.status(401).json({ error: 'Invalid session' });
+    return;
+  }
+
+  // Idle too long: end it for good (checked after the verifier, so a guessed
+  // selector alone can't revoke someone's session)
+  if (isSessionIdle(session)) {
+    await revokeSession(session.selector, 'idle').catch(() => { /* refused either way */ });
+    res.status(401).json({ error: 'Session expired' });
     return;
   }
 

@@ -30,6 +30,7 @@ vi.mock('../../middleware/auth.js', () => ({
     };
     next();
   }),
+  isSessionIdle: (session: { lastActiveAt: Date }) => Date.now() - session.lastActiveAt.getTime() > 24 * 60 * 60 * 1000,
 }));
 
 // Mock rate limiters
@@ -76,6 +77,7 @@ const validSession = {
   selector: 'aabbccddee11',
   revokedAt: null,
   expiresAt: new Date(Date.now() + 86400_000),
+  lastActiveAt: new Date(),
 };
 
 describe('Calendar Routes', () => {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma.js';
-import { revokeAllSessions } from '../middleware/auth.js';
+import { revokeAllSessions, SESSION_IDLE_MS } from '../middleware/auth.js';
 import { revokeGrantsForSession } from '../services/rememberGrants.js';
 import { parseId } from '../middleware/parseId.js';
 import type { SessionInfo } from '@chronicles/shared';
@@ -15,6 +15,7 @@ router.get('/', async (req, res) => {
         accountId: req.auth!.accountId,
         revokedAt: null,
         expiresAt: { gt: new Date() },
+        lastActiveAt: { gt: new Date(Date.now() - SESSION_IDLE_MS) },
       },
       orderBy: { lastActiveAt: 'desc' },
       select: {
