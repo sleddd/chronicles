@@ -471,7 +471,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       if (!listed.includes(email) && !(await isApproved(email).catch(() => false))) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
         await bcrypt.hash('dummy', BCRYPT_ROUNDS);
-        res.status(403).json({ error: 'Registration is currently restricted.' });
+        res.status(403).json({ error: 'Registration is currently restricted. If you joined the waitlist, check your email for your sign-up instructions. Please allow one day for processing.' });
         return;
       }
     }

@@ -198,6 +198,11 @@ const Nav = styled.nav`
   }
 `;
 
+/** Sign up in the header: the white outlined pill, a step smaller than the hero's */
+const HeaderPill = styled(ActionPill)`
+  && { min-height: 36px; padding: 6px 18px; white-space: nowrap; }
+`;
+
 /* The app's dark page colour, like the Questions band above it, a hairline between */
 const Footer = styled.footer`
   --text-primary: #f7f8fa;
@@ -272,6 +277,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <a href="#features" data-section-link>Features</a>
             <a href="#privacy" data-section-link>Privacy</a>
             {signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}
+            {!signedIn && <HeaderPill as="a" href="#beta" data-button>Sign up</HeaderPill>}
           </Nav>
         </HeaderRow>
       </Header>
