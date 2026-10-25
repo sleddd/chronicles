@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { QuickSymptom, QuickChange } from '@/components/organisms/HealthQuickLog';
-import { renderWithTheme } from '../testUtils';
+import { renderWithTheme, renderWithRouter } from '../testUtils';
 
 const create = vi.fn();
 const addDecryptedEntry = vi.fn();
@@ -82,11 +82,11 @@ describe('QuickSymptom', () => {
   });
 
   it('Log a change saves what changed and when to the Changes topic', async () => {
-    renderWithTheme(<QuickChange />);
-    expect(screen.getByRole('button', { name: 'Log change' })).toBeDisabled();
+    renderWithRouter(<QuickChange />);
+    expect(screen.getByRole('button', { name: 'Log' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('What changed?'), { target: { value: 'Cut out dairy' } });
     fireEvent.change(screen.getByLabelText('When did it change?'), { target: { value: '2026-10-10' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Log change' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     await waitFor(() => expect(addDecryptedEntry).toHaveBeenCalled());
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ taxonomyIds: [4] }));
     expect(addDecryptedEntry.mock.calls[0][0].metadata._customFields).toEqual({ changeWhat: 'Cut out dairy', changeDate: '2026-10-10', notes: '' });

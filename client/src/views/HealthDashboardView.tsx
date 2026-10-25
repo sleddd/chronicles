@@ -5,13 +5,12 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
-import { AsNeededMeds } from '../components/organisms/AsNeededMeds.js';
 import { QuickLog, QuickSymptom, QuickChange } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
-import { RoutineSchedule } from '../components/organisms/RoutineSchedule.js';
-import { activeRoutines } from '../utils/routines.js';
+import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
+import { useTodayDoses } from '../hooks/useTodayDoses.js';
+import { activeRoutines, scheduleTopicId } from '../utils/routines.js';
 import { stripHtml } from '../utils/stripHtml.js';
-import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
@@ -142,7 +141,7 @@ function useHasRoutines(): boolean {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   return useMemo(() => {
-    const id = allTopics.find(t => ['routine', 'routines'].includes(t.name.toLowerCase()))?.id;
+    const id = scheduleTopicId(allTopics);
     return id !== undefined && activeRoutines(entries, id, stripHtml).some(r => r.times.length > 0);
   }, [entries, allTopics]);
 }
@@ -159,6 +158,8 @@ export function HealthDashboardView() {
   const ff = useEntriesStore(s => s.featureFlags);
   const hasMeds = useHasScheduledMeds();
   const hasRoutines = useHasRoutines();
+  const medsOn = ff.medicationEnabled !== false;
+  const doses = useTodayDoses(isReady && medsOn);
 
   if (needsUnlock) return (
     <>
@@ -196,27 +197,25 @@ export function HealthDashboardView() {
 
           <Stack>
             <WellnessCheckIn title="Wellness check-in" quad />
-            {hasMeds && ff.medicationEnabled !== false && (food || exercise) ? (
+            {hasMeds && medsOn && (food || exercise) ? (
               <Pair>
                 <Column>
                   <QuickLog meal={food} exercise={exercise} />
-                  {routines && <RoutineSchedule />}
                   <QuickSymptom />
                 </Column>
                 <Column>
-                  <MedicationSchedule isReady={isReady} />
-                  <AsNeededMeds />
                   <QuickChange />
+                  <MedicationsToday doses={doses} panel />
+                  {routines && <ExerciseToday panel />}
                 </Column>
               </Pair>
             ) : (
               <>
                 <QuickLog meal={food} exercise={exercise} />
-                {routines && <RoutineSchedule />}
                 <QuickSymptom />
-                {hasMeds && ff.medicationEnabled !== false && <MedicationSchedule isReady={isReady} />}
-                {ff.medicationEnabled !== false && <AsNeededMeds />}
                 <QuickChange />
+                {medsOn && <MedicationsToday doses={doses} hideWhenEmpty panel />}
+                {routines && <ExerciseToday panel />}
               </>
             )}
           </Stack>

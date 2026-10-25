@@ -1,5 +1,3 @@
-import { AsNeededList } from '../components/organisms/AsNeededMeds.js';
-import { useAsNeededDoses } from '../hooks/useAsNeededDoses.js';
 import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
@@ -20,12 +18,14 @@ import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { useTodayDoses, type DoseGroup } from '../hooks/useTodayDoses.js';
+import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
+import { entryTitleText } from '../utils/entryTitle.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { addDays, billOccurrences, formatCents } from '../utils/finance.js';
 import { MENU_SLOTS, defaultShoppingListTitle, latestOpenList, menuDays } from '../utils/kitchen.js';
@@ -49,7 +49,7 @@ import type { PriorityItem } from '../components/molecules/fields/PrioritiesFiel
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'symptom' | 'menu' | 'meds' | 'shopping';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -59,9 +59,11 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quote', label: 'Quote of the day' },
   { key: 'priorities', label: "Today's priorities" },
   { key: 'comingUp', label: 'Coming up' },
+  { key: 'exercise', label: 'Exercise schedule' },
   { key: 'symptom', label: 'Log a symptom' },
   { key: 'menu', label: 'On the menu' },
   { key: 'meds', label: 'Medications' },
+  { key: 'recent', label: 'Recent entries' },
   { key: 'shopping', label: 'Shopping list' },
 ];
 
@@ -683,23 +685,6 @@ function NextUp({ doses, now }: { doses: Doses; now: Date }) {
   );
 }
 
-/* Medications: today's doses as one flat list by time — round tick, the
-   name, "Taken 1:35 PM" or the scheduled time on the right */
-const DoseName = styled.span<{ $taken: boolean }>`
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: ${({ $taken }) => ($taken ? 'var(--text-muted)' : 'var(--text-secondary)')};
-`;
-
-const DoseWhen = styled.span`
-  flex: none;
-  font-size: 14px;
-  color: var(--text-muted);
-`;
-
 /* Log a symptom: the Health quick symptom form (symptom chips, severity,
    notes) as a flat section */
 const SymptomBody = styled.div`
@@ -716,48 +701,6 @@ function LogSymptom() {
   );
 }
 
-/* "As needed" under the scheduled doses */
-const AsNeededHead = styled.h3`
-  margin: 28px 0 4px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-muted);
-`;
-
-function Medications({ doses }: { doses: Doses }) {
-  const navigate = useNavigate();
-  const [saving, setSaving] = useState<string | null>(null);
-  const asNeeded = useAsNeededDoses();
-  return (
-    <section aria-label="Medications">
-      <SectionHead>
-        <h2>Medications</h2>
-        {doses.total > 0 ? <span>{doses.taken} of {doses.total} taken</span> : <button type="button" onClick={() => navigate('/health/meds')}>Med list</button>}
-      </SectionHead>
-      {doses.total === 0 ? <Muted>No medications scheduled today.</Muted> : doses.scheduled.map((d, i) => {
-        const key = `${d.medicationPostId}-${d.time}`;
-        const taken = doses.isTaken(d);
-        const log = doses.logOf(d);
-        return (
-          <Row key={`${key}-${i}`}>
-            <Checkbox checked={taken} disabled={saving === key}
-              aria-label={taken ? `Mark ${d.medicationName} as not taken` : `Mark ${d.medicationName} as taken`}
-              onChange={async () => { setSaving(key); await doses.setTaken(d, !taken); setSaving(null); }} />
-            <DoseName $taken={taken}>{d.medicationName}{d.dosage ? ` ${d.dosage}` : ''}</DoseName>
-            <DoseWhen>{taken && log?.takenAt ? `Taken ${log.takenAt}` : time12(d.time)}</DoseWhen>
-          </Row>
-        );
-      })}
-      {asNeeded.meds.length > 0 && (
-        <>
-          <AsNeededHead>As needed</AsNeededHead>
-          <AsNeededList state={asNeeded} />
-        </>
-      )}
-    </section>
-  );
-}
 
 /* Today's priorities: numbered, a round tick to finish, "Add a priority" */
 const PNum = styled.span<{ $done?: boolean }>`
@@ -1046,6 +989,52 @@ function ComingUp({ financeOn }: { financeOn: boolean }) {
   );
 }
 
+/* Recent entries: the last five Journal entries (topic Journal, or none) —
+   the title, its date muted on the right, opening it in the journal; a
+   "View journal" link in the head */
+const RecentRow = styled(Row)`
+  cursor: pointer;
+  & > .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  & > .date { flex: none; font-size: 14px; color: var(--text-muted); }
+  &:hover > .title { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+function RecentEntries() {
+  const navigate = useNavigate();
+  const openInJournal = useOpenInJournal();
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+
+  const recent = useMemo(() => {
+    const journal = new Set(allTopics.filter(t => t.name.toLowerCase() === 'journal').map(t => t.id));
+    return entries
+      .filter(e => {
+        const tid = (e.metadata as Record<string, unknown> | undefined)?._taxonomyId as number | undefined;
+        return tid === undefined || journal.has(tid);
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+  }, [entries, allTopics]);
+
+  return (
+    <section aria-label="Recent entries">
+      <SectionHead><h2>Recent entries</h2><button type="button" onClick={() => navigate('/journal')}>View journal</button></SectionHead>
+      {recent.length === 0 ? <Muted>Nothing written yet.</Muted> : recent.map(e => {
+        const title = entryTitleText(e.content) || builtinEntryName(cfOf(e)) || 'Untitled';
+        const open = () => openInJournal(e.id);
+        return (
+          <RecentRow key={e.id} role="button" tabIndex={0} onClick={open}
+            onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } }}>
+            <span className="title">{title}</span>
+            <span className="date">{new Date(e.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </RecentRow>
+        );
+      })}
+    </section>
+  );
+}
+
 /* Shopping list: the newest open list's items as outline pills (got = struck) */
 const Pills = styled.div`
   display: flex;
@@ -1243,9 +1232,11 @@ export function DashboardView() {
   const right: ReactNode[] = [];
   if (shown('priorities')) left.push(<Priorities key="p" />);
   if (shown('comingUp')) left.push(<ComingUp key="c" financeOn={financeOn} />);
+  if (shown('exercise') && ff.exerciseEnabled !== false) left.push(<ExerciseToday key="x" />);
+  if (shown('recent')) right.push(<RecentEntries key="r" />);
   if (shown('shopping')) right.push(<Shopping key="s" />);
   if (shown('menu') && kitchenOn) right.push(<Menu key="m" />);
-  if (shown('meds') && medsOn) right.push(<Medications key="d" doses={doses} />);
+  if (shown('meds') && medsOn) right.push(<MedicationsToday key="d" doses={doses} />);
   if (shown('symptom')) right.push(<LogSymptom key="y" />);
 
   return (

@@ -8,6 +8,7 @@
 
 import type { TrainingCategory, TrainingPhase } from '../types/fields.js';
 import { toDateStr } from './dateUtils.js';
+import { exerciseTypeLabel } from './exerciseSummary.js';
 
 export interface PlanPhase extends TrainingPhase {
   /** First day, "YYYY-MM-DD" */
@@ -31,12 +32,18 @@ export interface TrainingPlan {
 export interface Session {
   id: number;
   date: string;
+  /** "HH:MM", or '' when not given */
+  time?: string;
   minutes: number;
   distance: number;
   unit: 'mi' | 'km';
   exerciseType: string;
   category: string;
   title: string;
+  /** What to call it: the schedule item's name, else the activity ("Walk", "Strength Training") */
+  name: string;
+  /** Logged by ticking the exercise schedule (metadata._routineLink) */
+  link?: string;
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v));
@@ -59,7 +66,7 @@ export function mountaineeringTemplate(newId: () => string = () => crypto.random
     { id: newId(), name: 'Aerobic', exerciseTypes: ['walking', 'running', 'cycling', 'swimming', 'cardio'] },
     { id: newId(), name: 'Leg & glute', exerciseTypes: ['strength'] },
     { id: newId(), name: 'Core stability', exerciseTypes: ['yoga'] },
-    { id: newId(), name: 'Ankle mobility & balance', exerciseTypes: [] },
+    { id: newId(), name: 'Ankle mobility & balance', exerciseTypes: ['balance'] },
     { id: newId(), name: 'Anaerobic power', exerciseTypes: [] },
   ];
   const phase1 = ['5', '2', '1.5', '1', '0.5'];
@@ -134,15 +141,21 @@ export function sessionsFrom(
     const meta = e.metadata as Record<string, unknown> | undefined;
     if (!meta || meta._taxonomyId !== exerciseTopicId) continue;
     const cf = (meta._customFields as Record<string, unknown>) ?? {};
+    const title = textOf(e.content).trim();
+    const link = typeof meta._routineLink === 'string' ? meta._routineLink : undefined;
     out.push({
       id: e.id,
+      // Schedule sessions are titled "Walk · Walking · 30 min" (utils/routines sessionTitle)
+      name: (link ? title.split(' · ')[0] : exerciseTypeLabel(cf.exerciseType)) || title || 'Exercise',
+      ...(link ? { link } : {}),
       date: str(cf.performedDate) || toDateStr(new Date(e.createdAt)),
+      time: str(cf.performedTime),
       minutes: num(cf.duration),
       distance: num(cf.distance),
       unit: cf.distanceUnit === 'km' ? 'km' : 'mi',
       exerciseType: str(cf.exerciseType),
       category: str(cf.trainingCategory),
-      title: textOf(e.content).trim(),
+      title,
     });
   }
   return out;
@@ -210,6 +223,19 @@ export function phaseWeeks(phase: PlanPhase, sessions: Session[], categories: Tr
   return weeks;
 }
 
+/** 185 → "3 h 5", 90 → "1 h 30", 60 → "1 h", 45 → "45 min" — the compact form for figures */
+export function formatShort(min: number): string {
+  const m = Math.round(min);
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r} min`;
+  return r ? `${h} h ${r}` : `${h} h`;
+}
+
+/** The phase's hours spread over its weeks, in minutes */
+export const weeklyTarget = (phase: PlanPhase, categoryId: string) =>
+  Math.round(targetHours(phase, categoryId) * 60 / phase.weekCount);
+
 /** 90 → "1 h 30 min", 60 → "1 h", 25 → "25 min", 0 → "0 min" */
 export function formatMinutes(min: number): string {
   const m = Math.round(min);
@@ -217,6 +243,44 @@ export function formatMinutes(min: number): string {
   const r = m % 60;
   if (h === 0) return `${r} min`;
   return r ? `${h} h ${r} min` : `${h} h`;
+}
+
+export interface WeekProgress {
+  phase: PlanPhase;
+  /** 1-based week of the phase today falls in */
+  weekNo: number;
+  /** The phase week holding today */
+  start: string;
+  end: string;
+  rows: { category: TrainingCategory; done: number; target: number }[];
+  done: number;
+  target: number;
+}
+
+/** This week of the phase against its hours spread evenly over its weeks
+ *  (Phase 1, 10 h over 6 weeks → 100 min a week); null outside a phase. */
+export function weekProgress(plan: TrainingPlan, sessions: Session[], today: string): WeekProgress | null {
+  const at = phaseIndexOn(plan, today);
+  const phase = plan.phases[at];
+  if (!phase || plan.categories.length === 0) return null;
+  const weekNo = Math.floor(daysBetween(phase.start, today) / 7) + 1;
+  const start = addDays(phase.start, (weekNo - 1) * 7);
+  const end = addDays(start, 7);
+  const done = minutesByCategory(sessions, plan.categories, start, end);
+  const rows = plan.categories.map(category => ({
+    category,
+    done: done[category.id] ?? 0,
+    target: Math.round(targetHours(phase, category.id) * 60 / phase.weekCount),
+  }));
+  return {
+    phase,
+    weekNo,
+    start,
+    end: addDays(end, -1),
+    rows,
+    done: rows.reduce((t, r) => t + r.done, 0),
+    target: rows.reduce((t, r) => t + r.target, 0),
+  };
 }
 
 /** Hours for the whole phase in a category (0 when unset). */

@@ -237,16 +237,9 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean }>`
   margin-top: ${({ $quick }) => ($quick ? '8px' : '24px')};
   /* A real writing area even when the entry is one line */
   .tiptap { min-height: ${({ $quick }) => ($quick ? '120px' : '220px')}; }
-  /* Quick entry: airy thin Work Sans, the prompt in italics */
+  /* Quick entry: the journal's own text (font, size, weight), the prompt in italics */
   ${({ $quick }) => ($quick ? `
-    .tiptap {
-      padding: 12px 0 20px;
-      font-family: var(--font-display);
-      font-size: 22px;
-      font-weight: 300;
-      line-height: 1.5;
-      color: var(--text-primary);
-    }
+    .tiptap { padding: 12px 0 20px; }
     .tiptap p.is-editor-empty:first-child::before { font-style: italic; color: var(--text-muted); }
   ` : '')}
 `;
@@ -407,11 +400,21 @@ const QuickCard = styled.section`
 const QuickHead = styled.div`
   display: flex;
   align-items: center;
-  /* Just the topic pill, on the right */
-  justify-content: flex-end;
+  /* "Quick entry" on the left, the topic pill on the right */
+  justify-content: space-between;
+  gap: 16px;
   /* Above the writing area, so the topic menu drops over it */
   position: relative;
   z-index: 5;
+`;
+
+/* The card's label, like the Daily quote card's: quiet grey sans at 400 */
+const QuickTitle = styled.h2`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-muted);
 `;
 
 /* The topic picker as an outlined pill ("No topic ⌄"), its menu right-aligned */
@@ -467,7 +470,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   recipe: 'recipe', recipes: 'recipe',
   priorities: 'priorities', wellness: 'wellness', 'menu plan': 'menu_plan',
   changes: 'change', change: 'change',
-  routine: 'routine', routines: 'routine',
+  routine: 'routine', routines: 'routine', 'exercise schedule': 'routine',
   'training plan': 'training_plan', 'training plans': 'training_plan',
 };
 
@@ -1029,6 +1032,7 @@ export function EntryForm({
   if (quick) return (
     <QuickCard aria-label="Quick entry">
       <QuickHead>
+        <QuickTitle>Quick entry</QuickTitle>
         <QuickTopic>
           <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon />
         </QuickTopic>

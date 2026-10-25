@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
 import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, addSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { SeveritySection } from '../molecules/fields/SymptomFields.js';
@@ -21,9 +23,9 @@ import {
 
 /* Health dashboard "Quick log": a Meal | Exercise switch, then the few fields
    you need right now — meal name + meal chips, or activity chips — a
-   date | time | kcal (or min) box, and notes, then an outlined accent
-   Log pill. "More details" opens the full
-   form in the journal with what's typed so far. Unset date/time = now. */
+   date | time | kcal (or min) box, then an outlined accent Log pill.
+   Notes live under "More details", which opens the full form in the
+   journal with what's typed so far. Unset date/time = now. */
 
 /* ── Styled ── */
 
@@ -51,10 +53,91 @@ const QNote = styled(FieldNote)`
   margin-top: 8px;
 `;
 
-/* One date in an outlined box */
-const ChangeDate = styled(QField)`
-  && { width: 100%; max-width: 240px; border: 1px solid var(--border-card); border-radius: var(--r-lg, 6px); }
+/* Log a change, one line: what changed | Today ⌄ | Log in one outlined box */
+const ChangeBox = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--bg-control, transparent);
+  &:focus-within { border-color: var(--color-accent); }
 `;
+
+const ChangeInput = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
+/* The grey buttons inside the box */
+const BoxBtn = styled.button`
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  cursor: pointer;
+  &:disabled { color: var(--text-muted); cursor: default; }
+  &:not(:disabled):hover { background: color-mix(in srgb, var(--text-muted) 22%, transparent); }
+  &:focus-within, &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+const LogBtn = styled(BoxBtn)`
+  &:not(:disabled) { color: var(--color-accent-link); font-weight: 500; }
+`;
+
+/* The real date input, invisible over "Today ⌄" — a click opens its picker */
+const HiddenDate = styled.input`
+  && {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+`;
+
+const ChangeNote = styled.p`
+  margin: 14px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  a { color: var(--color-accent-link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+`;
+
+/** "Today", "Yesterday", else "Oct 12" */
+function dayWord(date: string): string {
+  const t = today();
+  const y = new Date(t + 'T12:00:00');
+  y.setDate(y.getDate() - 1);
+  if (date === t) return 'Today';
+  if (date === toDateStr(y)) return 'Yesterday';
+  return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 /* + Add: a dashed chip that becomes a small box to type a symptom of your own */
 const QAddChip = styled(QChip)`
@@ -269,10 +352,6 @@ function MealQuick() {
         </WhenBox>
         {aiReady && <QNote>Leave calories and nutrients blank and AI will estimate them.</QNote>}
       </Section>
-      <Section style={{ marginTop: 20 }}>
-        <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
-          onChange={e => set({ notes: e.target.value })} />
-      </Section>
       <Footer>
         <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
         <Status role="status" aria-live="polite">{status}</Status>
@@ -345,10 +424,6 @@ function ExerciseQuick() {
           </Amount>
         </WhenBox>
         {aiReady && <QNote>Calories burned are calculated by AI when you log.</QNote>}
-      </Section>
-      <Section style={{ marginTop: 20 }}>
-        <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
-          onChange={e => set({ notes: e.target.value })} />
       </Section>
       <Footer>
         <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
@@ -488,20 +563,24 @@ export function QuickChangeForm() {
 
   return (
     <>
-      <QTitle value={v.what} placeholder="What changed? e.g. Cut out dairy" aria-label="What changed?"
-        onChange={e => set({ what: e.target.value })}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
-      <Section style={{ marginTop: 20 }}>
-        <ChangeDate type="date" value={v.date} aria-label="When did it change?" onChange={e => set({ date: e.target.value })} />
-        <QNote>Medication changes (dose, started, stopped) are recorded on their own when you edit the medication.</QNote>
-      </Section>
-      <Footer>
-        <span />
-        <Status role="status" aria-live="polite">{status}</Status>
-        <PillButton type="button" onClick={() => void log()} disabled={saving || !v.what.trim()}>
-          {saving ? 'Logging…' : 'Log change'}
-        </PillButton>
-      </Footer>
+      <ChangeBox>
+        <ChangeInput value={v.what} placeholder="What changed? e.g. Cut out dairy" aria-label="What changed?"
+          onChange={e => set({ what: e.target.value })}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+        <BoxBtn as="label">
+          {dayWord(v.date || today())}
+          <Icon name="chevron-down" size={13} strokeWidth={2} />
+          <HiddenDate type="date" value={v.date} max={today()} aria-label="When did it change?"
+            onChange={e => set({ date: e.target.value || today() })}
+            onClick={e => { try { e.currentTarget.showPicker?.(); } catch { /* not supported */ } }} />
+        </BoxBtn>
+        <LogBtn type="button" onClick={() => void log()} disabled={saving || !v.what.trim()}>
+          {saving ? 'Logging…' : 'Log'}
+        </LogBtn>
+      </ChangeBox>
+      <ChangeNote>
+        {status ? <span role="status">{status}</span> : <>Med changes are recorded automatically. <Link to="/health/meds">Med list</Link></>}
+      </ChangeNote>
     </>
   );
 }

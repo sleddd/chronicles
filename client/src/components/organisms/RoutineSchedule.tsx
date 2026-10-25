@@ -10,12 +10,37 @@ import { toDateStr, formatTime12h, formatDateDisplay } from '../../utils/dateUti
 import { exerciseTypeLabel } from '../../utils/exerciseSummary.js';
 import type { RoutineSlot } from '../../utils/routines.js';
 
-/* The day's exercise routines — the Medications panel for exercise: ‹ Today ›
-   across from the title, "N of M done" over a 4px rule, then routines grouped
-   by time ("7:00 AM", "1 / 2", Do all). Each row: a round tick (the whole
-   routine), its name (opens it), "Yoga · 20 min" muted, and — for a routine
-   with exercises — "2 of 5" and a chevron that opens its exercises to tick one
-   by one. Ticks log Exercise entries (hooks/useRoutineChecklist). */
+/* A day of the exercise schedule — the Medications panel for exercise. On
+   the Schedule tab: "Today" (or the day) over its date with ‹ › across; on the
+   Health dashboard: a panel heading with ‹ Today ›. Then "2 of 7 done" over a
+   4px rule, and the day by time ("7:00 AM", "2 / 3", Do all). Each row: a
+   round tick (the whole session) and its name (opens it) over "Yoga · 15 min".
+   A session with exercises opens (chevron) to tick them one by one. Ticks log Exercise entries
+   (hooks/useRoutineChecklist). */
+
+const DayHead = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 30px;
+`;
+
+const DayTitle = styled.h2`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1.1;
+  color: var(--text-primary);
+`;
+
+const DayDate = styled.p`
+  margin: 6px 0 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
+`;
 
 const DateNav = styled.div`
   display: flex;
@@ -52,14 +77,14 @@ const ProgressStats = styled.div`
   justify-content: space-between;
   margin-bottom: 10px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-muted);
 `;
 
 const ProgressTrack = styled.div`
   height: 4px;
   border-radius: 2px;
-  background: var(--progress-track, var(--border-card));
+  background: var(--progress-track, var(--bg-row-hover));
   overflow: hidden;
 `;
 
@@ -72,7 +97,7 @@ const ProgressFill = styled.div<{ $percent: number }>`
 `;
 
 const TimeGroup = styled.div`
-  margin-top: 26px;
+  margin-top: 32px;
 `;
 
 const TimeHeader = styled.div`
@@ -80,22 +105,22 @@ const TimeHeader = styled.div`
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
 `;
 
 const TimeLabel = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-tertiary);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
 `;
 
 const TimeAside = styled.span`
   display: inline-flex;
   align-items: baseline;
-  gap: 14px;
-  font-size: 13px;
+  gap: 16px;
+  font-size: 15px;
   color: var(--text-muted);
 `;
 
@@ -104,7 +129,7 @@ const TextBtn = styled.button`
   border: none;
   background: none;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-accent-link);
   cursor: pointer;
@@ -115,9 +140,10 @@ const TextBtn = styled.button`
 const Row = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  &:first-of-type { margin-top: 6px; }
+  gap: 14px;
+  min-height: 56px;
+  padding: 8px 0;
+  &:first-of-type { margin-top: 8px; }
 `;
 
 const TickBtn = styled.button`
@@ -139,22 +165,22 @@ const NameBtn = styled.button<{ $done: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 3px;
   padding: 0;
   border: none;
   background: none;
   text-align: left;
   cursor: pointer;
   font-family: var(--font-sans);
-  .name { font-size: 14px; color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')}; }
-  .meta { font-size: 12px; color: var(--text-muted); }
+  .name { font-size: 17px; color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')}; }
+  .meta { font-size: 14px; color: var(--text-muted); }
   &:hover .name { text-decoration: underline; }
 `;
 
 const Partial = styled.span`
   flex: none;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 `;
 
@@ -177,20 +203,19 @@ const Expand = styled.button<{ $open: boolean }>`
 `;
 
 const Items = styled.ul`
-  margin: 0 0 8px 34px;
+  margin: 0 0 10px 44px;
   padding: 0;
   list-style: none;
   li {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 36px;
+    gap: 14px;
+    min-height: 44px;
     font-family: var(--font-sans);
-    font-size: 14px;
   }
-  .item { flex: 1; min-width: 0; color: var(--text-secondary); }
+  .item { flex: 1; min-width: 0; font-size: 16px; color: var(--text-secondary); }
   .item[data-done='true'] { color: var(--text-muted); text-decoration: line-through; }
-  .amount { flex: none; font-size: 12px; color: var(--text-muted); }
+  .amount { flex: none; font-size: 15px; color: var(--text-muted); }
 `;
 
 const ErrorNote = styled.p`
@@ -200,16 +225,27 @@ const ErrorNote = styled.p`
   color: var(--color-danger);
 `;
 
-interface RoutineScheduleProps {
-  title?: string;
+/** "Today", "Tomorrow", "Yesterday", else the weekday */
+function dayName(date: string, today: string): string {
+  const diff = Math.round((new Date(date + 'T12:00:00').getTime() - new Date(today + 'T12:00:00').getTime()) / 86_400_000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' });
 }
 
-export function RoutineSchedule({ title = 'Routines' }: RoutineScheduleProps) {
-  const [viewDate, setViewDate] = useState(() => toDateStr(new Date()));
+interface RoutineScheduleProps {
+  /** A panel heading (Health dashboard) — without one, the day is the heading */
+  heading?: string;
+}
+
+export function RoutineSchedule({ heading }: RoutineScheduleProps) {
+  const today = toDateStr(new Date());
+  const [viewDate, setViewDate] = useState(today);
   const { slots, groups, done, total, isDone, doneItems, setDone, toggleItem, doAll, busy, error } = useRoutineChecklist(viewDate);
   const openInJournal = useOpenInJournal();
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const isToday = viewDate === toDateStr(new Date());
+  const isToday = viewDate === today;
   const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
   const navigateDate = (days: number) => {
@@ -223,6 +259,18 @@ export function RoutineSchedule({ title = 'Routines' }: RoutineScheduleProps) {
     return next;
   });
 
+  const arrows = (label?: string) => (
+    <DateNav>
+      <NavButton onClick={() => navigateDate(-1)} title="Previous day" aria-label="Previous day">
+        <Icon name="chevron-left" size={16} strokeWidth={2} />
+      </NavButton>
+      {label && <DateLabel>{label}</DateLabel>}
+      <NavButton onClick={() => navigateDate(1)} title="Next day" aria-label="Next day">
+        <Icon name="chevron-right" size={16} strokeWidth={2} />
+      </NavButton>
+    </DateNav>
+  );
+
   const renderSlot = (s: RoutineSlot) => {
     const r = s.routine;
     const ticked = isDone(s);
@@ -235,21 +283,21 @@ export function RoutineSchedule({ title = 'Routines' }: RoutineScheduleProps) {
           <TickBtn type="button" disabled={busy === s.key} aria-pressed={ticked}
             aria-label={ticked ? `Mark ${r.name} not done` : `Mark ${r.name} done`}
             onClick={() => void setDone(s, !ticked)}>
-            <TickMark checked={ticked} />
+            <TickMark checked={ticked} size={24} />
           </TickBtn>
-          <NameBtn type="button" $done={ticked} onClick={() => openInJournal(r.id)} title="Open routine">
+          <NameBtn type="button" $done={ticked} onClick={() => openInJournal(r.id)} title={`Open ${r.name}`}>
             <span className="name">{r.name}</span>
-            {meta && <span className="meta">{meta}</span>}
+            <span className="meta">
+              {meta}
+            </span>
           </NameBtn>
+          {items.length > 0 && !ticked && <Partial>{items.length} of {r.items.length}</Partial>}
           {r.items.length > 0 && (
-            <>
-              {items.length > 0 && !ticked && <Partial>{items.length} of {r.items.length}</Partial>}
-              <Expand type="button" $open={expanded} aria-expanded={expanded}
-                aria-label={expanded ? `Hide ${r.name} exercises` : `Show ${r.name} exercises`}
-                onClick={() => toggleOpen(s.key)}>
-                <Icon name="chevron-down" size={16} strokeWidth={2} />
-              </Expand>
-            </>
+            <Expand type="button" $open={expanded} aria-expanded={expanded}
+              aria-label={expanded ? `Hide ${r.name} exercises` : `Show ${r.name} exercises`}
+              onClick={() => toggleOpen(s.key)}>
+              <Icon name="chevron-down" size={16} strokeWidth={2} />
+            </Expand>
           )}
         </Row>
         {expanded && (
@@ -261,7 +309,7 @@ export function RoutineSchedule({ title = 'Routines' }: RoutineScheduleProps) {
                   <TickBtn type="button" aria-pressed={on}
                     aria-label={on ? `Mark ${item.name} not done` : `Mark ${item.name} done`}
                     onClick={() => void toggleItem(s, item.id)}>
-                    <TickMark checked={on} size={18} />
+                    <TickMark checked={on} size={20} />
                   </TickBtn>
                   <span className="item" data-done={on}>{item.name}</span>
                   {item.amount && <span className="amount">{item.amount}</span>}
@@ -275,21 +323,18 @@ export function RoutineSchedule({ title = 'Routines' }: RoutineScheduleProps) {
   };
 
   return (
-    <DashPanel aria-label={title}>
-      <DashPanelHead
-        title={title}
-        aside={(
-          <DateNav>
-            <NavButton onClick={() => navigateDate(-1)} title="Previous day" aria-label="Previous day">
-              <Icon name="chevron-left" size={16} strokeWidth={2} />
-            </NavButton>
-            <DateLabel>{isToday ? 'Today' : formatDateDisplay(viewDate)}</DateLabel>
-            <NavButton onClick={() => navigateDate(1)} title="Next day" aria-label="Next day">
-              <Icon name="chevron-right" size={16} strokeWidth={2} />
-            </NavButton>
-          </DateNav>
-        )}
-      />
+    <DashPanel aria-label={heading ?? `Exercise schedule, ${dayName(viewDate, today)}`}>
+      {heading ? (
+        <DashPanelHead title={heading} aside={arrows(isToday ? 'Today' : formatDateDisplay(viewDate))} />
+      ) : (
+        <DayHead>
+          <div>
+            <DayTitle>{dayName(viewDate, today)}</DayTitle>
+            <DayDate>{new Date(viewDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</DayDate>
+          </div>
+          {arrows()}
+        </DayHead>
+      )}
 
       {total > 0 && (
         <div>
@@ -304,8 +349,8 @@ export function RoutineSchedule({ title = 'Routines' }: RoutineScheduleProps) {
       {error && <ErrorNote role="alert">{error}</ErrorNote>}
 
       {slots.length === 0 ? (
-        <EmptyState message={isToday ? 'No routines today' : 'No routines this day'}
-          submessage="Add a routine with days and times, and mark it Currently doing." />
+        <EmptyState message={isToday ? 'Nothing scheduled today' : 'Nothing scheduled this day'}
+          submessage="Add exercise with days and times to build your schedule." />
       ) : (
         groups.map(g => {
           const groupDone = g.slots.filter(isDone).length;

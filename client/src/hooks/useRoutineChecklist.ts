@@ -6,7 +6,7 @@ import { entries as entriesApi, topics as topicsApi } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import {
-  activeRoutines, doneItemsOf, sessionFields, sessionTitle, slotsOn, type RoutineSlot,
+  activeRoutines, doneItemsOf, scheduleTopicId, sessionFields, sessionTitle, slotsOn, type RoutineSlot,
 } from '../utils/routines.js';
 
 const meta = (e: DecryptedPost) => (e.metadata as Record<string, unknown>) ?? {};
@@ -46,7 +46,7 @@ export function useRoutineChecklist(date: string = toDateStr(new Date())) {
   const queue = useRef(new Map<string, Promise<void>>());
 
   const routineTopicId = useMemo(
-    () => allTopics.find(t => ['routine', 'routines'].includes(t.name.toLowerCase()))?.id,
+    () => scheduleTopicId(allTopics),
     [allTopics],
   );
   const routines = useMemo(() => activeRoutines(entries, routineTopicId, stripHtml), [entries, routineTopicId]);

@@ -1,12 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FilterTabs } from './FilterTabs.js';
 
-/* Health → Exercise's sub-sub tabs: Log (the exercise entries), Routines (the
-   daily checklist and the routine list) and Training (training plans). */
+/* Health → Exercise's sub-sub tabs: History (what you did over a period), Schedule (the
+   daily checklist beside this week or the list) and Training (training plans). */
 
 const TABS = [
-  { value: '/health/exercise', label: 'Log' },
-  { value: '/health/exercise/routines', label: 'Routines' },
+  { value: '/health/exercise', label: 'History' },
+  { value: '/health/exercise/schedule', label: 'Schedule' },
   { value: '/health/exercise/training', label: 'Training' },
 ];
 

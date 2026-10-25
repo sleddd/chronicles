@@ -1,0 +1,158 @@
+import { useState } from 'react';
+import styled from 'styled-components';
+import { useNavigate } from 'react-router-dom';
+import { Checkbox } from '../atoms/core/Checkbox.jsx';
+import { AsNeededList } from './AsNeededMeds.js';
+import { DashPanel } from '../molecules/DashPanel.js';
+import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
+import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
+import { useTodayDoses } from '../../hooks/useTodayDoses.js';
+
+/* Today's medications and exercise schedule as flat sections — the home
+   dashboard's look, shared with the Health dashboard: a thin Work Sans title
+   over a firmer rule with "3 of 12 taken" across, then one flat list by time —
+   the standard checkmark (core Checkbox), the name, and the time or "Taken
+   1:35 PM" / "Done 7:42 AM" on the right; as-needed medications under their
+   own small heading. On the Health dashboard (`panel`) they sit in its
+   --bg-panel card like the panels around them. */
+
+const SectionHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default);
+  h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
+  span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
+  button:hover { text-decoration: underline; }
+`;
+
+const Row = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-secondary);
+`;
+
+const Muted = styled.p`
+  margin: 14px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+const ItemName = styled.span<{ $done: boolean }>`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
+  small { font-size: 16px; color: var(--text-muted); }
+`;
+
+const ItemWhen = styled.span`
+  flex: none;
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+const AsNeededHead = styled.h3`
+  margin: 28px 0 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+`;
+
+function time12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h)) return '';
+  return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+export type TodayDoses = ReturnType<typeof useTodayDoses>;
+
+interface MedicationsTodayProps {
+  doses: TodayDoses;
+  /** Render nothing when nothing is scheduled and no as-needed medication is active */
+  hideWhenEmpty?: boolean;
+  /** Inside a Health dashboard panel card */
+  panel?: boolean;
+}
+
+export function MedicationsToday({ doses, hideWhenEmpty = false, panel = false }: MedicationsTodayProps) {
+  const navigate = useNavigate();
+  const [saving, setSaving] = useState<string | null>(null);
+  const asNeeded = useAsNeededDoses();
+  if (hideWhenEmpty && doses.total === 0 && asNeeded.meds.length === 0) return null;
+  const Frame = panel ? DashPanel : 'section';
+  return (
+    <Frame aria-label="Medications">
+      <SectionHead>
+        <h2>Medications</h2>
+        {doses.total > 0 ? <span>{doses.taken} of {doses.total} taken</span> : <button type="button" onClick={() => navigate('/health/meds')}>Med list</button>}
+      </SectionHead>
+      {doses.error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{doses.error}</Muted>}
+      {doses.total === 0 ? <Muted>No medications scheduled today.</Muted> : doses.scheduled.map((d, i) => {
+        const key = `${d.medicationPostId}-${d.time}`;
+        const taken = doses.isTaken(d);
+        const log = doses.logOf(d);
+        return (
+          <Row key={`${key}-${i}`}>
+            <Checkbox checked={taken} disabled={saving === key}
+              aria-label={taken ? `Mark ${d.medicationName} as not taken` : `Mark ${d.medicationName} as taken`}
+              onChange={async () => { setSaving(key); await doses.setTaken(d, !taken); setSaving(null); }} />
+            <ItemName $done={taken}>{d.medicationName}{d.dosage ? ` ${d.dosage}` : ''}</ItemName>
+            <ItemWhen>{taken && log?.takenAt ? `Taken ${log.takenAt}` : time12(d.time)}</ItemWhen>
+          </Row>
+        );
+      })}
+      {asNeeded.meds.length > 0 && (
+        <>
+          <AsNeededHead>As needed</AsNeededHead>
+          <AsNeededList state={asNeeded} />
+        </>
+      )}
+    </Frame>
+  );
+}
+
+/** Today's exercise schedule (hooks/useRoutineChecklist) — ticking logs the session */
+export function ExerciseToday({ panel = false }: { panel?: boolean }) {
+  const navigate = useNavigate();
+  const list = useRoutineChecklist();
+  const Frame = panel ? DashPanel : 'section';
+  return (
+    <Frame aria-label="Exercise schedule">
+      <SectionHead>
+        <h2>Exercise schedule</h2>
+        {list.total > 0 ? <span>{list.done} of {list.total} done</span> : <button type="button" onClick={() => navigate('/health/exercise/schedule')}>Schedule</button>}
+      </SectionHead>
+      {list.error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{list.error}</Muted>}
+      {list.total === 0 ? <Muted>Nothing scheduled today.</Muted> : list.slots.map(s => {
+        const done = list.isDone(s);
+        const items = list.doneItems(s);
+        const at = list.doneAt(s);
+        const when = done && at
+          ? `Done ${new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+          : items.length ? `${items.length} of ${s.routine.items.length}` : time12(s.time);
+        return (
+          <Row key={s.key}>
+            <Checkbox checked={done} disabled={list.busy === s.key}
+              aria-label={done ? `Mark ${s.routine.name} not done` : `Mark ${s.routine.name} done`}
+              onChange={() => void list.setDone(s, !done)} />
+            <ItemName $done={done}>{s.routine.name}{s.routine.minutes ? <small> · {s.routine.minutes} min</small> : null}</ItemName>
+            <ItemWhen>{when}</ItemWhen>
+          </Row>
+        );
+      })}
+    </Frame>
+  );
+}

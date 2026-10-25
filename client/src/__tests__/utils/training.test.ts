@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  categoryOf, datedPhases, formatMinutes, minutesByCategory, mountaineeringTemplate,
-  phaseIndexOn, phaseWeeks, trainingPlans, type Session,
+  categoryOf, datedPhases, formatMinutes, formatShort, minutesByCategory, mountaineeringTemplate,
+  phaseIndexOn, phaseWeeks, trainingPlans, weekProgress, type Session,
 } from '@/utils/training';
 import { cellMinutes, guessExerciseType, mergeTrainingPlan, parseTrainingCsv } from '@/utils/trainingImport';
 
@@ -10,7 +10,7 @@ let n = 0;
 const id = () => `id${++n}`;
 
 const session = (date: string, minutes: number, extra: Partial<Session> = {}): Session =>
-  ({ id: 1, date, minutes, distance: 0, unit: 'mi', exerciseType: 'running', category: '', title: '', ...extra });
+  ({ id: 1, date, minutes, distance: 0, unit: 'mi', exerciseType: 'running', category: '', title: '', name: 'Running', ...extra });
 
 describe('training plans', () => {
   const { categories, phases } = mountaineeringTemplate(id);
@@ -57,7 +57,22 @@ describe('training plans', () => {
     expect(weeks[1].days[0].date).toBe('2025-08-25');
   });
 
+  it('puts this calendar week against the phase hours spread over its weeks', () => {
+    const [plan] = trainingPlans([
+      { id: 5, content: '', createdAt: '2025-08-01T10:00:00Z', metadata: { _taxonomyId: 3, _customFields: { planName: 'Mt Hood', startDate: '2025-08-18', categories, phases } } },
+    ], 3, text);
+    // Wed 2025-09-03: Phase 1 (from Mon Aug 18), week 3 = Mon Sep 1 – Sun Sep 7
+    const wk = weekProgress(plan, [session('2025-09-01', 60), session('2025-09-03', 30), session('2025-08-31', 99)], '2025-09-03')!;
+    expect(wk).toMatchObject({ weekNo: 3, start: '2025-09-01', end: '2025-09-07', done: 90, target: 100 });
+    expect(wk.rows.map(r => [r.category.name, r.done, r.target])).toEqual([
+      ['Aerobic', 90, 50], ['Leg & glute', 0, 20], ['Core stability', 0, 15], ['Ankle mobility & balance', 0, 10], ['Anaerobic power', 0, 5],
+    ]);
+    expect(weekProgress(plan, [], '2025-08-01')).toBeNull();
+  });
+
   it('formats minutes', () => {
+    expect(formatShort(185)).toBe('3 h 5');
+    expect(formatShort(45)).toBe('45 min');
     expect(formatMinutes(90)).toBe('1 h 30 min');
     expect(formatMinutes(60)).toBe('1 h');
     expect(formatMinutes(25)).toBe('25 min');

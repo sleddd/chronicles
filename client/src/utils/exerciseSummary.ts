@@ -9,6 +9,8 @@ export const EXERCISE_TYPES = [
   { value: 'swimming', label: 'Swimming' },
   { value: 'strength', label: 'Strength Training' },
   { value: 'yoga', label: 'Yoga' },
+  { value: 'balance', label: 'Balance' },
+  { value: 'breathing', label: 'Breathing' },
   { value: 'cardio', label: 'Cardio' },
   { value: 'other', label: 'Other' },
 ];

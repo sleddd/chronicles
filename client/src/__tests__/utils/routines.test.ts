@@ -13,7 +13,7 @@ const yoga: Routine = {
     { id: 'b', name: 'Pigeon', amount: '10 min' },
     { id: 'c', name: 'Twists', amount: '5 min' },
   ],
-  days: [1, 3, 5], times: ['07:00'], trainingCategory: 'Core stability',
+  days: [1, 3, 5], times: ['07:00'], trainingCategory: 'Core stability', active: true,
 };
 
 describe('routines', () => {
@@ -70,5 +70,16 @@ describe('routines', () => {
     expect(doneItemsOf(yoga, { routineItemsDone: ['b', 'gone'] })).toEqual(['b']);
     expect(doneItemsOf(yoga, { routineItemsDone: [] })).toEqual(['a', 'b', 'c']);
     expect(doneItemsOf(yoga, undefined)).toEqual([]);
+  });
+});
+
+describe('the schedule form', () => {
+  it('says what ticking it does', async () => {
+    const { scheduleNote } = await import('@/components/molecules/fields/RoutineFields');
+    const base = { scheduleTimes: ['19:00', '07:00'], days: [], exerciseType: 'walking', trainingCategory: 'Aerobic', isActive: true };
+    expect(scheduleNote(base, 30)).toBe('Shows on Today at 7:00 AM and 7:00 PM (every day). Ticking it logs a 30 min Walking entry that counts toward Aerobic.');
+    expect(scheduleNote({ ...base, scheduleTimes: ['07:00'], days: [1, 3], trainingCategory: '' }, 0))
+      .toBe('Shows on Today at 7:00 AM (Mon, Wed). Ticking it logs a Walking entry.');
+    expect(scheduleNote({ ...base, isActive: false }, 30)).toBe('Paused. It stays off your schedule.');
   });
 });

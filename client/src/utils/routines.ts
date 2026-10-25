@@ -18,6 +18,8 @@ export interface Routine {
   days: number[];
   times: string[];
   trainingCategory: string;
+  /** Currently doing (only false when read withPaused) */
+  active: boolean;
 }
 
 /** One routine at one of its times on one day */
@@ -26,6 +28,12 @@ export interface RoutineSlot {
   time: string;
   key: string;
 }
+
+/** The exercise schedule topic — "Exercise Schedule"; older accounts' "Routine" counts too */
+export const SCHEDULE_TOPIC = 'Exercise Schedule';
+const SCHEDULE_TOPIC_NAMES = ['exercise schedule', 'exercise schedules', 'routine', 'routines'];
+export const isScheduleTopic = (name: string | undefined) => !!name && SCHEDULE_TOPIC_NAMES.includes(name.trim().toLowerCase());
+export const scheduleTopicId = (topics: { id: number; name: string }[]) => topics.find(t => isScheduleTopic(t.name))?.id;
 
 /** What a new routine's form shows — and so what an untouched field means */
 export const ROUTINE_DEFAULTS = { exerciseType: 'yoga', scheduleTimes: ['07:00'] };
@@ -52,6 +60,7 @@ export function activeRoutines(
   entries: { id: number; content: string; metadata?: unknown }[],
   topicId: number | undefined,
   textOf: (html: string) => string,
+  { withPaused = false } = {},
 ): Routine[] {
   if (topicId === undefined) return [];
   const out: Routine[] = [];
@@ -59,19 +68,20 @@ export function activeRoutines(
     const meta = e.metadata as Record<string, unknown> | undefined;
     if (!meta || meta._taxonomyId !== topicId) continue;
     const cf = (meta._customFields as Record<string, unknown>) ?? {};
-    if (cf.isActive === false) continue;
+    if (cf.isActive === false && !withPaused) continue;
     const items = Array.isArray(cf.items) ? (cf.items as RoutineItem[]).filter(i => i && str(i.name)) : [];
     const typed = parseFloat(str(cf.duration));
     const summed = Math.round(items.reduce((t, i) => t + amountMinutes(str(i.amount)), 0));
     out.push({
       id: e.id,
-      name: str(cf.routineName) || textOf(e.content).trim().slice(0, 120) || 'Routine',
+      name: str(cf.routineName) || textOf(e.content).trim().slice(0, 120) || 'Exercise',
       exerciseType: str(cf.exerciseType) || ROUTINE_DEFAULTS.exerciseType,
       minutes: typed > 0 ? typed : summed,
       items,
       days: Array.isArray(cf.days) ? (cf.days as number[]) : [],
       times: Array.isArray(cf.scheduleTimes) ? (cf.scheduleTimes as string[]).filter(Boolean) : ROUTINE_DEFAULTS.scheduleTimes,
       trainingCategory: str(cf.trainingCategory),
+      active: cf.isActive !== false,
     });
   }
   return out;
