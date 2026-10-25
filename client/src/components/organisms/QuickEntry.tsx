@@ -6,6 +6,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { entries as entriesApi } from '../../services/api.js';
 import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { hasEntryData, prepareEntryForSave } from '../../utils/entrySave.js';
+import { nextPrompt } from '../../utils/journalPrompts.js';
 
 /**
  * The dashboard's Quick entry: the journal's own editor and topic fields
@@ -25,6 +26,8 @@ export function QuickEntry() {
   // both still see isSaving false and create the entry twice
   const savingRef = useRef(false);
   const [status, setStatus] = useState('');
+  // The next writing prompt each time the dashboard opens (utils/journalPrompts)
+  const [prompt] = useState(nextPrompt);
 
   const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); };
 
@@ -73,7 +76,7 @@ export function QuickEntry() {
       isEditing={false}
       isSaving={isSaving}
       saveStatus={status}
-      placeholder="Today, in one line…"
+      placeholder={prompt}
     />
   );
 }

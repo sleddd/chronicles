@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { WellnessPanel, WATER_GOAL, type FlowIntensity } from '../molecules/WellnessPanel.js';
 import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { DayInventory, type DayInventoryValues } from '../molecules/DayInventory.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
@@ -22,7 +23,9 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
 
 /**
  * Today's wellness check-in (the shared WellnessPanel) — water, sleep, mood
- * and period flow, with the next expected period. Saves the same `wellness-checkin` entry the journal edits
+ * and period flow, with the next expected period; on both dashboards,
+ * "Your day" under it (DayInventory: rested, woke in the night,
+ * ate, work day, social time, procrastinated). Saves the same `wellness-checkin` entry the journal edits
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
@@ -50,11 +53,23 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
   const [pendingMood, setPendingMood] = useState(0);
   const [pendingSleep, setPendingSleep] = useState(0);
   const [pendingFlow, setPendingFlow] = useState<Flow>('');
+  const [pendingDay, setPendingDay] = useState<Partial<DayInventoryValues>>({});
 
   const water = stored ? (Number(stored.waterGlasses) || 0) : pendingWater;
   const sleep = stored ? (Number(stored.sleepHours) || 0) : pendingSleep;
   const flow = stored ? ((stored.flowIntensity as Flow) || '') : pendingFlow;
   const mood = stored ? (Number(stored.moodScore) || 0) : pendingMood;
+  // The rest of the daily inventory ("Your day")
+  const day: DayInventoryValues = stored
+    ? {
+        sleepQuality: Number(stored.sleepQuality) || 0,
+        wokeAtNight: typeof stored.wokeAtNight === 'boolean' ? stored.wokeAtNight : null,
+        eating: (stored.eating as DayInventoryValues['eating']) || '',
+        workDay: Number(stored.workDay) || 0,
+        social: Number(stored.social) || 0,
+        procrastination: Number(stored.procrastination) || 0,
+      }
+    : { sleepQuality: 0, wokeAtNight: null, eating: '', workDay: 0, social: 0, procrastination: 0, ...pendingDay };
 
   // Next period from every logged check-in, with today's live value overlaid
   const prediction = useMemo(() => {
@@ -72,7 +87,7 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
-  const latestRef = useRef({ water: 0, sleep: 0, flow: '' as Flow, mood: 0 });
+  const latestRef = useRef({ water: 0, sleep: 0, flow: '' as Flow, mood: 0, extra: {} as Partial<DayInventoryValues> });
 
   const wellnessTopicId = useMemo(
     () => allTopics.find(t => t.name.toLowerCase() === 'wellness')?.id ?? null,
@@ -82,7 +97,9 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
   // doSaveRef — the debounce timer always calls the latest version (no stale closures)
   const doSaveRef = useRef<() => Promise<void>>(async () => {});
   doSaveRef.current = async () => {
-    const { water: w, sleep: s, flow: f, mood: m } = latestRef.current;
+    const { water: w, sleep: s, flow: f, mood: m, extra } = latestRef.current;
+    // "Your day" answers are written once; after that they live on the entry
+    latestRef.current = { ...latestRef.current, extra: {} };
     // Scan the store directly in case the effect hasn't synced the id yet (prevents duplicates)
     if (!entryIdRef.current) {
       const existing = useEntriesStore.getState().decryptedEntries
@@ -103,7 +120,7 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
     const metadata: Record<string, unknown> = {
       _widgetType: 'wellness-checkin',
       _customFields: {
-        sleepQuality: 0, ...prevCf,
+        sleepQuality: 0, ...prevCf, ...extra,
         date: today, waterGlasses: w, waterGoal: WATER_GOAL, moodScore: m, sleepHours: s,
         periodToday: f !== '', flowIntensity: f,
       },
@@ -136,8 +153,8 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
     }
   };
 
-  const scheduleSave = (next: Partial<{ water: number; sleep: number; flow: Flow; mood: number }>) => {
-    latestRef.current = { water, sleep, flow, mood, ...next };
+  const scheduleSave = (next: Partial<{ water: number; sleep: number; flow: Flow; mood: number; extra: Partial<DayInventoryValues> }>) => {
+    latestRef.current = { water, sleep, flow, mood, ...next, extra: { ...(entry ? {} : pendingDay), ...latestRef.current.extra, ...next.extra } };
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => { void doSaveRef.current(); }, 600);
   };
@@ -171,6 +188,11 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
     scheduleSave({ flow: v });
   };
 
+  const setDay = (patch: Partial<DayInventoryValues>) => {
+    if (entry) optimistic(patch); else setPendingDay(p => ({ ...p, ...patch }));
+    scheduleSave({ extra: patch });
+  };
+
   const nextPeriod = prediction
     ? `Next period est. ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
     : 'Log a period day to estimate the next';
@@ -181,13 +203,17 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
       onWater={setWater} onSleep={setSleep} onMood={setMood} onFlow={setFlow}
       cycleNote={nextPeriod}
       compact={!quad}
-      quad={quad}
+      quad={quad && (bare || !title)}
+      row={!!title && !bare}
       smallFaces={bare}
+      footer={<DayInventory values={day} onChange={setDay} inside />}
     />
   );
   // Bare (home dashboard): no panel or heading; a grid so the card stretches
   // to the height of the card beside it
-  if (bare) return <section aria-label={title ?? 'Wellness check-in'} style={{ display: 'grid' }}>{panel}</section>;
+  if (bare) return (
+    <section aria-label={title ?? 'Wellness check-in'} style={{ display: 'grid' }}>{panel}</section>
+  );
   if (!title) return panel;
   return (
     <DashPanel aria-label={title}>

@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { JoinedGroup, JoinedBtn } from './fields/formKit.js';
 
 /* The wellness check-in, one look everywhere (Health dashboard card + the
    journal's Wellness fields): Water and Sleep as tiles — a round icon (tap it
@@ -315,6 +316,66 @@ const SmallFacesQuad = styled(QuadWrapper)`
   }
 `;
 
+/* One row (journal / Quick entry Wellness, Health dashboard): Water | Sleep |
+   Mood | Cycle across one outlined box, rules between the cells; two by two
+   only under 760px, stacked on phones. Water and Sleep get a − button, Cycle
+   a joined group */
+const RowWrapper = styled(CompactWrapper)`
+  display: grid;
+  && ${Label} { font-size: 15px; color: var(--text-muted); }
+  && ${Meter} > ${Label} { margin-bottom: 14px; }
+  && ${Head} { margin-bottom: 14px; }
+  && ${Badge} { width: 42px; height: 42px; & > span { font-size: 22px; } }
+  && ${Fig} { font-size: 32px; color: var(--text-primary); }
+  && ${Unit} { font-size: 14px; }
+  && ${Slider} { margin-top: 12px; }
+  && ${Faces} { flex-wrap: nowrap; gap: 14px; }
+  && ${FaceBtn} { width: 32px; height: 32px; & > span { font-size: 38px; } }
+`;
+
+const Row4 = styled.div`
+  background: var(--bg-tracker, transparent);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2fr);
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  overflow: hidden;
+  --cell-x: 18px; /* Your day's bar lines up with the cells */
+  & > * {
+    min-width: 0;
+    padding: 22px var(--cell-x) 24px;
+    box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
+  }
+  /* Four across at any usual width; two by two only on a small screen */
+  @container (max-width: 760px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container (max-width: 480px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
+`;
+
+/* A full-width last row inside the box (Your day) — its own padding */
+const FullRow = styled.div`
+  grid-column: 1 / -1;
+  && { padding: 0; }
+`;
+
+/* "−" beside the figure (row layout): takes one away */
+const Minus = styled.button`
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); }
+  &:disabled { opacity: 0.5; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
 const Quad = styled.div`
   background: var(--bg-tracker, transparent);
   display: grid;
@@ -322,9 +383,10 @@ const Quad = styled.div`
   border: 1px solid var(--border-card);
   border-radius: 14px;
   overflow: hidden;
+  --cell-x: 26px;
   & > * {
     min-width: 0;
-    padding: 24px 26px;
+    padding: 24px var(--cell-x);
     box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
   }
   @container (max-width: 480px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
@@ -342,9 +404,11 @@ interface MeterProps {
   /** One of them, for the button labels ("glass of water") */
   one: string;
   onChange: (v: number) => void;
+  /** A − button beside the figure */
+  minus?: boolean;
 }
 
-function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange }: MeterProps) {
+function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange, minus }: MeterProps) {
   const pct = Math.min(100, (value / goal) * 100);
   return (
     <Meter>
@@ -358,6 +422,10 @@ function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onCh
           <Fig aria-label={`${value} ${noun}`}>{value}</Fig>
           <Unit>{unit}</Unit>
         </Figure>
+        {minus && (
+          <Minus type="button" aria-label={`Take away one ${one}`} title={`Take away one ${one}`}
+            disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 1))}>−</Minus>
+        )}
       </MeterMain>
       <Slider>
         <Track><Fill $pct={pct} $color={color} /></Track>
@@ -392,22 +460,26 @@ interface WellnessPanelProps {
   quad?: boolean;
   /** Slightly smaller mood faces, kept on one line (the home dashboard's narrow card) */
   smallFaces?: boolean;
+  /** One row: Water | Sleep | Mood | Cycle in one outlined box (journal, Quick entry, Health dashboard) */
+  row?: boolean;
+  /** A full-width last row inside the box (row and quad layouts) — Your day */
+  footer?: React.ReactNode;
 }
 
 
 export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
-  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces,
+  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces, row, footer,
 }: WellnessPanelProps) {
   // One colour throughout: the accent (no per-metric blues, violets or mood hues)
   const accent = 'var(--color-accent)';
   const water$ = (
     <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
-      max={WATER_MAX} unit={`of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} />
+      max={WATER_MAX} unit={row ? `/ ${waterGoal}` : `of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} minus={row} />
   );
   const sleep$ = (
     <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
-      max={SLEEP_MAX} unit="hours" noun="hours of sleep" one="hour of sleep" onChange={onSleep} />
+      max={SLEEP_MAX} unit={row ? 'h' : 'hours'} noun="hours of sleep" one="hour of sleep" onChange={onSleep} minus={row} />
   );
   const mood$ = (
     <Cell>
@@ -429,19 +501,33 @@ export function WellnessPanel({
   const cycle$ = showCycle && (
     <Cell>
       <Head><Label>Cycle</Label>{cycleNote && <CycleNote>{cycleNote}</CycleNote>}</Head>
-      <Chips role="group" aria-label="Cycle">
-        {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
-          <Chip key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
-            {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
-          </Chip>
-        ))}
-      </Chips>
+      {row ? (
+        <JoinedGroup role="group" aria-label="Cycle">
+          {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
+            <JoinedBtn key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
+              {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
+            </JoinedBtn>
+          ))}
+        </JoinedGroup>
+      ) : (
+        <Chips role="group" aria-label="Cycle">
+          {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
+            <Chip key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
+              {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
+            </Chip>
+          ))}
+        </Chips>
+      )}
     </Cell>
   );
 
+  if (row) {
+    return <RowWrapper><Row4>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Row4></RowWrapper>;
+  }
+
   if (quad) {
     const Wrap = smallFaces ? SmallFacesQuad : QuadWrapper;
-    return <Wrap><Quad>{water$}{sleep$}{mood$}{cycle$}</Quad></Wrap>;
+    return <Wrap><Quad>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Quad></Wrap>;
   }
 
   if (compact) {

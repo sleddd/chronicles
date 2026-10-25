@@ -26,6 +26,7 @@ import {
   type TriggerWindow, type TriggerReviews, type TriggerVerdict, type SymptomTrigger, type TriggerReview, type ReviewedTriggers,
 } from '../../utils/foodSymptoms.js';
 import { TickMark } from '../atoms/TickMark.js';
+import { betterDays, summarizeInventory, type InventoryDay } from '../../utils/dailyInventory.js';
 import type { HealthChange } from '../../utils/healthChanges.js';
 
 /* Health → Reports. Sections (Wellness, Symptoms, Meals, Exercise) are big
@@ -568,11 +569,13 @@ interface HealthReportProps {
   onReviewTrigger?: (t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => void;
   /** Open a change's entry (the medication, or the Changes entry) */
   onOpenChange?: (entryId: number) => void;
+  /** The daily inventory scored per day (utils/dailyInventory) — the Daily inventory section */
+  inventory?: InventoryDay[];
 }
 
 /* ── Component ── */
 
-export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, exercises, wellness, period, triggerReviews, onReviewTrigger, changes = [], onOpenChange }: HealthReportProps) {
+export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, exercises, wellness, period, triggerReviews, onReviewTrigger, changes = [], onOpenChange, inventory = [] }: HealthReportProps) {
   // Food, medications and exercise before each symptom (What comes before symptoms)
   const [triggerWindow, setTriggerWindow] = useState<TriggerWindow>('4');
   const events = useMemo(() => triggerEvents(patternFoods, medLogs, exercises), [patternFoods, medLogs, exercises]);
@@ -657,6 +660,28 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
   }, [wellness]);
 
   const [metric, setMetric] = useState<WellnessMetric>('sleep');
+  /* Daily inventory: the day scores, each question's usual answer, and what goes with better days */
+  const inv = useMemo(() => {
+    const scored = inventory.filter(d => d.score !== null);
+    if (!scored.length) return null;
+    const scores = scored.map(d => d.score!);
+    const best = scored.reduce((a, b) => (b.score! > a.score! ? b : a));
+    const worst = scored.reduce((a, b) => (b.score! < a.score! ? b : a));
+    const values = scored.map(d => d.score);
+    return {
+      days: scored.length,
+      avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+      best, worst,
+      labels: scored.map(d => dayLabel(d.date)),
+      series: [
+        { label: 'Daily score', values, color: 'var(--color-accent)' },
+        { label: '7-day average', values: rollingAverage(values), ghost: true },
+      ] as TrendSeries[],
+      questions: summarizeInventory(inventory),
+      better: betterDays(inventory),
+    };
+  }, [inventory]);
+
   const chart = useMemo(() => {
     const m = METRICS[metric];
     const values = wellnessTrend.map(p => (m.pick(p) > 0 ? m.pick(p) : null));
@@ -787,6 +812,76 @@ export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, e
                 <Quiet>No patterns yet. Keep logging sleep, water, mood and symptoms to find them. Food, medications and exercise are under What comes before symptoms.</Quiet>
               )}
             </Panel>
+          </Stack>
+        </>
+      )}
+
+      {inv && (
+        <>
+          <SectionHeading>Daily inventory</SectionHeading>
+          <Stack>
+            <StatTileRow $cols={3}>
+              <StatTile value={inv.avg} unit="/ 100" name="Daily score"
+                caption={`avg · ${inv.days} ${plural(inv.days, 'day')}`} progress={inv.avg / 100} />
+              <StatTile value={inv.best.score!} unit="/ 100" name="Best day" caption={dayLabel(inv.best.date)}
+                progress={inv.best.score! / 100} />
+              <StatTile value={inv.worst.score!} unit="/ 100" name="Hardest day" caption={dayLabel(inv.worst.date)}
+                progress={inv.worst.score! / 100} color="var(--text-muted)" />
+            </StatTileRow>
+
+            {inv.days > 1 && (
+              <Panel aria-label="Daily score over time">
+                <PanelHead>
+                  <PanelTitle>Daily score over time</PanelTitle>
+                  <ChartLegend series={inv.series} />
+                </PanelHead>
+                <TrendChart ariaLabel="Daily score by day" labels={inv.labels} yMax={100} series={inv.series} />
+              </Panel>
+            )}
+
+            <Grid $cols={2}>
+              <Panel aria-label="By question">
+                <PanelHead>
+                  <div>
+                    <PanelTitle>By question</PanelTitle>
+                    <PanelSub>Your usual answer and its score out of 100</PanelSub>
+                  </div>
+                </PanelHead>
+                {inv.questions.map(q => (
+                  <ListRow key={q.key}>
+                    <RowText>
+                      <ListName>{q.label}</ListName>
+                      <RowSub>{q.answer}</RowSub>
+                    </RowText>
+                    <ListCount>{q.score}</ListCount>
+                  </ListRow>
+                ))}
+              </Panel>
+              <Panel aria-label="What goes with better days">
+                <PanelHead>
+                  <div>
+                    <PanelTitle>What goes with better days</PanelTitle>
+                    <PanelSub>How good your day was (out of 5), with and without each</PanelSub>
+                  </div>
+                </PanelHead>
+                {inv.better.length === 0 ? (
+                  <Quiet>Not enough days yet. Rate how good your day was in the check-in, along with the rest of Your day, to compare.</Quiet>
+                ) : inv.better.map(b => {
+                  const diff = b.withIt - b.without;
+                  return (
+                    <ListRow key={b.label}>
+                      <RowText>
+                        <ListName>{b.label}</ListName>
+                        <RowSub>{b.withIt.toFixed(1)} on {b.daysWith} {plural(b.daysWith, 'day')} · {b.without.toFixed(1)} on the other {b.daysWithout}</RowSub>
+                      </RowText>
+                      <ListCount style={{ color: Math.abs(diff) < 0.05 ? undefined : diff > 0 ? 'var(--chart-green)' : 'var(--mood-1)' }}>
+                        {diff > 0 ? '+' : diff < 0 ? '−' : ''}{Math.abs(diff).toFixed(1)}
+                      </ListCount>
+                    </ListRow>
+                  );
+                })}
+              </Panel>
+            </Grid>
           </Stack>
         </>
       )}

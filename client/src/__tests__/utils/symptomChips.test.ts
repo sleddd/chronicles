@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_SYMPTOMS, EMPTY_SYMPTOM_CHIPS, symptomChipList, splitSymptoms, hasSymptom, toggleSymptom,
-  addSymptomChip, removeSymptomChip,
+  addSymptomChip, removeSymptomChip, frequentSymptoms, matchSymptoms,
 } from '@/utils/symptomChips';
 
 describe('symptom chips', () => {
@@ -32,5 +32,20 @@ describe('symptom chips', () => {
     expect(c.hidden).toEqual(['Cough']);
     c = addSymptomChip(c, 'cough');
     expect(c).toEqual({ added: [], hidden: [] });
+  });
+});
+
+describe('symptom type-ahead', () => {
+  const chips = ['Headache', 'Fatigue', 'Brain fog', 'Bloating', 'Back pain', 'Heartburn'];
+
+  it('puts the most logged first, keeping list order for ties', () => {
+    expect(frequentSymptoms(chips, ['Bloating', 'brain fog, Bloating', 'Fatigue'], 3)).toEqual(['Bloating', 'Fatigue', 'Brain fog']);
+    expect(frequentSymptoms(chips, [], 2)).toEqual(['Headache', 'Fatigue']);
+  });
+
+  it('matches names starting with the query first, then containing it, leaving out picked ones', () => {
+    expect(matchSymptoms(chips, 'b')).toEqual(['Brain fog', 'Bloating', 'Back pain', 'Heartburn']);
+    expect(matchSymptoms(chips, 'he', ['Headache'])).toEqual(['Heartburn']);
+    expect(matchSymptoms(chips, '  ')).toEqual([]);
   });
 });

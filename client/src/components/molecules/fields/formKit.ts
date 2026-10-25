@@ -340,3 +340,42 @@ export const BareSelect = styled.label`
   option { color: var(--text-primary); background: var(--bg-surface); }
   & > span { position: absolute; right: 12px; pointer-events: none; display: inline-flex; }
 `;
+
+/* Joined buttons in one outlined box, split by rules ("1 | 2 | 3 | 4 | 5",
+   "None | Spotting | Light…"): the chosen one gets its own accent outline and
+   soft-accent text, no fill */
+export const JoinedGroup = styled.div`
+  display: inline-flex;
+  flex: none;
+  max-width: 100%;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--bg-control, transparent);
+`;
+
+export const JoinedBtn = styled.button<{ $active: boolean }>`
+  position: relative;
+  flex: none;
+  min-width: 40px;
+  height: 34px;
+  /* a touch tighter as its box narrows, so a row of words stays on one line */
+  padding: 0 clamp(8px, 1.1cqi, 11px);
+  white-space: nowrap;
+  border: none;
+  border-left: 1px solid var(--border-card);
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:first-child { border-left: none; border-radius: 7px 0 0 7px; }
+  &:last-child { border-radius: 0 7px 7px 0; }
+  ${({ $active }) => ($active ? `
+    z-index: 1;
+    border-radius: 7px !important;
+    box-shadow: 0 0 0 1px var(--color-accent-line);
+  ` : '')}
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; z-index: 2; }
+`;

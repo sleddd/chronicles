@@ -74,7 +74,7 @@ group
 groups
 handyman
 headphones
-health_cross
+health_and_safety
 hiking
 history_edu
 home

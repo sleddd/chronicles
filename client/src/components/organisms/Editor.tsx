@@ -229,6 +229,9 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
 
   // Keep a stable ref to the editor for the dictation callback
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  // The prompt can change after the editor is made (a rotating writing prompt)
+  const placeholderRef = useRef(placeholder);
+  placeholderRef.current = placeholder;
   // Last HTML this editor emitted via onChange
   const lastEmittedRef = useRef<string | null>(null);
 
@@ -305,7 +308,7 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
     extensions: [
       // v3's StarterKit added these; off so entries save the same HTML as before
       StarterKit.configure({ link: false, underline: false, trailingNode: false }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({ placeholder: () => placeholderRef.current }),
       charLimitExtension,
       enterSaveExtension,
       DrawingNode,
@@ -318,6 +321,12 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
       onChange(html);
     },
   });
+
+  // Redraw the empty-editor prompt when it changes
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    try { editor.view?.dispatch(editor.state.tr); } catch { /* not mounted yet */ }
+  }, [editor, placeholder]);
 
   // Keep editorRef current so the dictation callback always has the latest instance
   editorRef.current = editor;

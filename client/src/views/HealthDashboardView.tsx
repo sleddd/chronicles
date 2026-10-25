@@ -196,15 +196,15 @@ export function HealthDashboardView() {
           {food && <FoodGlance />}
 
           <Stack>
-            <WellnessCheckIn title="Wellness check-in" quad />
+            <WellnessCheckIn title="Wellness check-in" quad bare />
             {hasMeds && medsOn && (food || exercise) ? (
               <Pair>
                 <Column>
                   <QuickLog meal={food} exercise={exercise} />
-                  <QuickSymptom />
+                  <QuickChange />
                 </Column>
                 <Column>
-                  <QuickChange />
+                  <QuickSymptom />
                   <MedicationsToday doses={doses} panel />
                   {routines && <ExerciseToday panel />}
                 </Column>
@@ -212,8 +212,8 @@ export function HealthDashboardView() {
             ) : (
               <>
                 <QuickLog meal={food} exercise={exercise} />
-                <QuickSymptom />
                 <QuickChange />
+                <QuickSymptom />
                 {medsOn && <MedicationsToday doses={doses} hideWhenEmpty panel />}
                 {routines && <ExerciseToday panel />}
               </>

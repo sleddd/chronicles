@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { nextPrompt } from '../utils/journalPrompts.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -160,6 +161,8 @@ const imagesSig = (imgs: EntryImage[], featured: string | null) =>
 export function JournalView() {
   const { encryptionData } = useAuth();
   const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptNewPost, encryptBytes, decryptBytes } = useEncryption();
+  // A new entry's prompt — the next one each time the journal opens (utils/journalPrompts)
+  const [writingPrompt] = useState(nextPrompt);
   const {
     decryptedEntries, setDecryptedEntries, setRawEntries,
     topics, setTopics, setFeatureFlags, isInitialized, setLoading, isLoading,
@@ -1089,6 +1092,7 @@ export function JournalView() {
             )}
             <EntryForm
               entryId={selectedEntryId}
+              placeholder={selectedEntryId == null ? writingPrompt : undefined}
               content={editorContent}
               onContentChange={setEditorContent}
               topicId={editorTopicId}

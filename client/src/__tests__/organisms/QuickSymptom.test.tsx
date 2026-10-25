@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { QuickSymptom, QuickChange } from '@/components/organisms/HealthQuickLog';
-import { renderWithTheme, renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../testUtils';
 
 const create = vi.fn();
 const addDecryptedEntry = vi.fn();
@@ -38,8 +38,10 @@ describe('QuickSymptom', () => {
   });
 
   it('logs tapped chips with severity and notes as a Symptom entry', async () => {
-    renderWithTheme(<QuickSymptom />);
-    expect(screen.getByRole('button', { name: 'Log symptom' })).toBeDisabled();
+    renderWithRouter(<QuickSymptom />);
+    expect(screen.queryByRole('button', { name: 'Log symptom' })).toBeNull(); // only once something is picked
+    expect(screen.queryByRole('button', { name: 'Hives' })).toBeNull(); // the six most used show first
+    fireEvent.click(screen.getByRole('button', { name: 'All 16' }));
     expect(screen.getByRole('button', { name: 'Hives' })).toBeInTheDocument(); // your own chip
     expect(screen.queryByRole('button', { name: 'Cough' })).toBeNull(); // hidden built-in
     fireEvent.click(screen.getByRole('button', { name: 'Flare day' }));
@@ -60,22 +62,34 @@ describe('QuickSymptom', () => {
     expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'false'); // cleared for the next one
   });
 
-  it('+ Add saves a chip of your own and picks it', async () => {
+  it('type-ahead picks a match as a token, and Backspace takes it out', () => {
+    renderWithRouter(<QuickSymptom />);
+    const box = screen.getByLabelText('Search symptoms');
+    fireEvent.change(box, { target: { value: 'flar' } });
+    expect(screen.getByRole('option', { name: 'Flare day' })).toBeInTheDocument();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove Flare day' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(box, { key: 'Backspace' });
+    expect(screen.queryByRole('button', { name: 'Remove Flare day' })).toBeNull();
+  });
+
+  it('typing a new symptom adds it as a chip of your own and picks it', async () => {
     saveChips.mockClear();
-    renderWithTheme(<QuickSymptom />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
-    const box = screen.getByLabelText('New symptom');
+    renderWithRouter(<QuickSymptom />);
+    const box = screen.getByLabelText('Search symptoms');
     fireEvent.change(box, { target: { value: 'Ear ache' } });
+    expect(screen.getByRole('option', { name: 'Add “Ear ache”' })).toBeInTheDocument();
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(saveChips).toHaveBeenCalledWith({ added: ['Hives', 'Ear ache'], hidden: ['Cough'] });
-    expect(screen.getByRole('button', { name: 'Ear ache' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Remove Ear ache' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Log symptom' }));
     await waitFor(() => expect(addDecryptedEntry).toHaveBeenCalled());
     expect(addDecryptedEntry.mock.calls[0][0].metadata._customFields.symptomName).toBe('Ear ache');
   });
 
   it('opens the full form in the journal with what is filled in', async () => {
-    renderWithTheme(<QuickSymptom />);
+    renderWithRouter(<QuickSymptom />);
     fireEvent.click(screen.getByRole('button', { name: 'Headache' }));
     fireEvent.click(screen.getByRole('button', { name: 'More details' }));
     await waitFor(() => expect(openNew).toHaveBeenCalledWith(3, expect.objectContaining({ symptomName: 'Headache', severity: 5 })));

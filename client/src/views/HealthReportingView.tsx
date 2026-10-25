@@ -18,6 +18,9 @@ import { collectHealthChanges } from '../utils/healthChanges.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { splitSymptoms } from '../utils/symptomChips.js';
 import { stripHtml } from '../utils/stripHtml.js';
+import { foodRowsFrom } from '../utils/foodLog.js';
+import { sessionsFrom } from '../utils/training.js';
+import { inventoryDays } from '../utils/dailyInventory.js';
 import type { PeriodType } from '../types/health.js';
 import type {
   DecryptedSymptom,
@@ -278,6 +281,26 @@ export function HealthReportingView() {
       }),
     [entries, startDate, endDate]);
 
+  // The daily inventory: the check-in, Meals and Exercise, scored per day
+  const inventory = useMemo(() => {
+    const wellnessDays = entries.flatMap(e => {
+      const meta = e.metadata as Record<string, unknown>;
+      if (meta._widgetType !== 'wellness-checkin') return [];
+      const cf = (meta._customFields as Record<string, unknown>) ?? {};
+      if (typeof cf.date !== 'string') return [];
+      return [{
+        date: cf.date, moodScore: Number(cf.moodScore) || 0, sleepQuality: Number(cf.sleepQuality) || 0,
+        sleepHours: Number(cf.sleepHours) || 0, waterGlasses: Number(cf.waterGlasses) || 0,
+        wokeAtNight: typeof cf.wokeAtNight === 'boolean' ? cf.wokeAtNight : null, eating: typeof cf.eating === 'string' ? cf.eating : '',
+        workDay: Number(cf.workDay) || 0, social: Number(cf.social) || 0, procrastination: Number(cf.procrastination) || 0,
+      }];
+    });
+    const meals = foodRowsFrom(entries, topicIdMap['meals'])
+      .map(r => ({ day: r.day, mealType: r.mealType, healthiness: Number(r.cf.healthiness) || 0 }));
+    const workouts = sessionsFrom(entries, topicIdMap['exercise'], stripHtml).map(x => ({ day: x.date, minutes: x.minutes }));
+    return inventoryDays(wellnessDays, meals, workouts, { from: startDate, to: endDate });
+  }, [entries, topicIdMap, startDate, endDate]);
+
   // Fetch medication dose logs for the date range
   useEffect(() => {
     if (!isReady) return;
@@ -356,6 +379,7 @@ export function HealthReportingView() {
             wellness={wellness}
             period={period}
             accentColor={accentColor}
+            inventory={inventory}
           />
         </Inner>
       </Page>

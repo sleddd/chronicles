@@ -130,6 +130,8 @@ export interface FoodFieldValues {
   nutrientSource?: Partial<Record<string, 'ai' | 'manual'>>;
   /** Inputs the AI nutrient estimates were based on */
   nutritionBasis?: string;
+  /** How healthy it was, "1"–"5" ('' = not rated) */
+  healthiness?: string;
   notes: string;
 }
 
@@ -284,7 +286,18 @@ export interface WellnessFieldValues {
   waterGoal: number;   // default 8
   moodScore: number;   // 1–5, 0 = unset
   sleepHours: number;  // 0–12, 0.5 increments, 0 = unset
-  sleepQuality: number; // 1–5, 0 = unset
+  sleepQuality: number; // 1–5, 0 = unset — "How rested did you feel when you woke up?"
   periodToday?: boolean;
   flowIntensity?: string;
+  /* The rest of the daily inventory (utils/dailyInventory) — unset = not answered */
+  /** Woke up during the night */
+  wokeAtNight?: boolean | null;
+  /** Ate too much or too little overall */
+  eating?: 'too_little' | 'just_right' | 'too_much' | '';
+  /** Quality of the work day, 1–5, 0 = unset */
+  workDay?: number;
+  /** Quality of social activity / interactions, 1–5, 0 = unset */
+  social?: number;
+  /** How much you procrastinated, 1 (not at all) – 5 (all day), 0 = unset */
+  procrastination?: number;
 }

@@ -64,3 +64,25 @@ export function removeSymptomChip(config: SymptomChipConfig, label: string): Sym
   }
   return { ...config, added: config.added.filter(a => key(a) !== k) };
 }
+
+/** The chips logged most often (from past symptom names), most first; ties keep the list's order */
+export function frequentSymptoms(chips: string[], loggedNames: string[], n = 6): string[] {
+  const count = new Map<string, number>();
+  for (const name of loggedNames) for (const s of splitSymptoms(name)) count.set(key(s), (count.get(key(s)) ?? 0) + 1);
+  return chips
+    .map((c, i) => ({ c, i, n: count.get(key(c)) ?? 0 }))
+    .sort((a, b) => b.n - a.n || a.i - b.i)
+    .slice(0, n)
+    .map(x => x.c);
+}
+
+/** Type-ahead: chips starting with the query first, then ones containing it; picked ones left out */
+export function matchSymptoms(chips: string[], query: string, picked: string[] = [], limit = 8): string[] {
+  const q = key(query);
+  if (!q) return [];
+  const taken = new Set(picked.map(key));
+  const open = chips.filter(c => !taken.has(key(c)));
+  const starts = open.filter(c => key(c).startsWith(q));
+  const contains = open.filter(c => !key(c).startsWith(q) && key(c).includes(q));
+  return [...starts, ...contains].slice(0, limit);
+}

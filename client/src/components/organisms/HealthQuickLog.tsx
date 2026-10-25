@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
-import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, addSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
+import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, addSymptomChip, splitSymptoms, frequentSymptoms, matchSymptoms, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { SeveritySection } from '../molecules/fields/SymptomFields.js';
 import styled from 'styled-components';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
@@ -139,26 +139,6 @@ function dayWord(date: string): string {
   return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-/* + Add: a dashed chip that becomes a small box to type a symptom of your own */
-const QAddChip = styled(QChip)`
-  border-style: dashed;
-  color: var(--color-accent-soft);
-`;
-
-const QAddBox = styled.input`
-  && {
-    height: 28px;
-    width: 150px;
-    padding: 0 13px;
-    border: 1px dashed var(--color-accent-line) !important;
-    border-radius: 999px;
-    background: transparent !important;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--text-secondary);
-    outline: none;
-  }
-`;
 
 const QChips = styled(Chips)`
   gap: 8px;
@@ -438,23 +418,151 @@ function ExerciseQuick() {
 
 /* ── Symptom ── */
 
-/** The quick symptom form: the symptom(s) tapped from the same chips as the
- *  journal's symptom form (no title box — + Add saves a chip of your own and
- *  picks it), severity and notes, logged as now.
- *  "More details" opens the full form in the journal. Used by the Health
- *  dashboard (QuickSymptom) and the home dashboard's Log a symptom section. */
+/* A link in a panel's head ("Symptoms") */
+const PanelLink = styled(Link)`
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-accent-link);
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+`;
+
+/* Log a symptom: one outlined search box — your picks as tokens in it (×
+   takes one out), type-ahead from your symptom list in a floating menu, or
+   "Add “…”" for a new one (saved as a chip of your own) — over your most
+   logged symptoms as chips and an "All N" link for the rest. Severity, notes
+   and Log symptom appear once something is picked. */
+const SymBox = styled.div`
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--bg-control, transparent);
+  cursor: text;
+  &:focus-within { border-color: var(--color-accent); }
+`;
+
+const Token = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  background: var(--color-accent-subtle);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-accent-link);
+  button {
+    display: inline-flex;
+    padding: 3px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  button:hover { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+`;
+
+const SymInput = styled.input`
+  && {
+    flex: 1 1 160px;
+    min-width: 120px;
+    height: 34px;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
+const SymMenu = styled.ul`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--border-pop, var(--border-card));
+  border-radius: 10px;
+  background: var(--bg-tile, var(--bg-panel));
+  box-shadow: var(--shadow-lg);
+`;
+
+const SymOption = styled.li<{ $active: boolean }>`
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+  background: ${({ $active }) => ($active ? 'var(--bg-hover)' : 'transparent')};
+  cursor: pointer;
+  &[data-add='true'] { color: var(--color-accent-link); }
+`;
+
+const AllLink = styled.button`
+  align-self: center;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+`;
+
+/** The quick symptom form (see above). "More details" opens the full form in
+ *  the journal. Used by the Health dashboard (QuickSymptom) and the home
+ *  dashboard's Log a symptom section. */
 export function QuickSymptomForm() {
   const createEntry = useCreateEntry();
   const openNew = useNewEntryInJournal();
   const [chipConfig, saveChips, chipsLoaded] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
   const chips = symptomChipList(chipConfig);
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState('');
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const [query, setQuery] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const [showAll, setShowAll] = useState(false);
   const blank = () => ({ name: '', severity: 5, notes: '' });
   const [v, setV] = useState(blank);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
+  const picked = splitSymptoms(v.name);
+
+  // Your most logged symptoms first
+  const frequent = useMemo(() => {
+    const tid = (allTopics ?? []).find(t => t.name.toLowerCase() === 'symptom')?.id;
+    const names = (entries ?? []).flatMap(e => {
+      const meta = e.metadata as Record<string, unknown> | undefined;
+      if (tid === undefined || meta?._taxonomyId !== tid) return [];
+      const cf = (meta._customFields as Record<string, unknown>) ?? {};
+      return typeof cf.symptomName === 'string' ? [cf.symptomName] : [];
+    });
+    return frequentSymptoms(chips, names);
+  }, [entries, allTopics, chips.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const matches = matchSymptoms(chips, query, picked);
+  const typed = query.trim().replace(/\s+/g, ' ').slice(0, 40);
+  const canAdd = !!typed && !chips.some(c => c.toLowerCase() === typed.toLowerCase())
+    && !picked.some(p => p.toLowerCase() === typed.toLowerCase());
+  const options = [...matches.map(m => ({ label: m, add: false })), ...(canAdd ? [{ label: typed, add: true }] : [])];
 
   const fields = (): Record<string, unknown> => ({
     symptomName: v.name.trim(), severity: v.severity,
@@ -479,55 +587,87 @@ export function QuickSymptomForm() {
 
   const more = async () => openNew(await getOrCreateTopicId('Symptom', 'flask'), fields());
 
-  /* + Add: save a chip of your own and pick it */
-  const addDraft = () => {
-    const label = draft.trim().replace(/\s+/g, ' ').slice(0, 40);
-    if (label) {
-      if (chipsLoaded) void saveChips(addSymptomChip(chipConfig, label)).catch(err => console.warn('Symptom chip not saved:', err));
-      setV(prev => (hasSymptom(prev.name, label) ? prev : { ...prev, name: toggleSymptom(prev.name, label) }));
-    }
-    setDraft('');
-    setAdding(false);
+  const toggle = (label: string) => setV(prev => ({ ...prev, name: toggleSymptom(prev.name, label) }));
+
+  /* Pick a match, or add a new one (saved as a chip of your own) */
+  const choose = (o: { label: string; add: boolean }) => {
+    if (o.add && chipsLoaded) void saveChips(addSymptomChip(chipConfig, o.label)).catch(err => console.warn('Symptom chip not saved:', err));
+    setV(prev => (hasSymptom(prev.name, o.label) ? prev : { ...prev, name: toggleSymptom(prev.name, o.label) }));
+    setQuery('');
+    setHi(0);
   };
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' && options.length) { e.preventDefault(); setMenuOpen(true); setHi(h => (h + 1) % options.length); }
+    else if (e.key === 'ArrowUp' && options.length) { e.preventDefault(); setHi(h => (h - 1 + options.length) % options.length); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const o = options[Math.min(hi, options.length - 1)];
+      if (o) choose(o);
+    } else if (e.key === 'Escape') { setQuery(''); setMenuOpen(false); }
+    else if (e.key === 'Backspace' && !query && picked.length) toggle(picked[picked.length - 1]);
+  };
+
+  const shown = showAll ? chips : frequent;
+  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <>
-      <Section>
-        <QChips role="group" aria-label="Symptoms">
-          {chips.map(c => (
-            <QChip key={c} type="button" aria-pressed={hasSymptom(v.name, c)} $active={hasSymptom(v.name, c)}
-              onClick={() => set({ name: toggleSymptom(v.name, c) })}>{c}</QChip>
-          ))}
-          {/* a picked symptom that isn't a chip (e.g. added while the list was loading) */}
-          {v.name && v.name.split(', ').filter(n => !chips.some(c => c.toLowerCase() === n.toLowerCase())).map(n => (
-            <QChip key={`own-${n}`} type="button" aria-pressed $active onClick={() => set({ name: toggleSymptom(v.name, n) })}>{n}</QChip>
-          ))}
-          {adding ? (
-            <QAddBox autoFocus value={draft} maxLength={40} placeholder="New symptom" aria-label="New symptom"
-              onChange={e => setDraft(e.target.value)} onBlur={addDraft}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); addDraft(); }
-                if (e.key === 'Escape') { setDraft(''); setAdding(false); }
-              }} />
-          ) : (
-            <QAddChip type="button" $active={false} onClick={() => setAdding(true)}>+ Add</QAddChip>
-          )}
-        </QChips>
-      </Section>
-      <div style={{ marginTop: 24 }}>
-        <SeveritySection value={v.severity} onChange={n => set({ severity: n })} />
-      </div>
-      <Section style={{ marginTop: 20 }}>
-        <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
-          onChange={e => set({ notes: e.target.value })} />
-      </Section>
-      <Footer>
-        <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
-        <Status role="status" aria-live="polite">{status}</Status>
-        <PillButton type="button" onClick={() => void log()} disabled={saving || !v.name.trim()}>
-          {saving ? 'Logging…' : 'Log symptom'}
-        </PillButton>
-      </Footer>
+      <SymBox onClick={() => inputRef.current?.focus()}>
+        {picked.map(p => (
+          <Token key={p}>
+            {p}
+            <button type="button" aria-label={`Remove ${p}`} onClick={e => { e.stopPropagation(); toggle(p); }}>
+              <Icon name="x" size={12} strokeWidth={2.2} />
+            </button>
+          </Token>
+        ))}
+        <SymInput ref={inputRef} value={query} aria-label="Search symptoms"
+          role="combobox" aria-expanded={menuOpen && options.length > 0} aria-autocomplete="list"
+          placeholder={picked.length ? 'Add another' : `Search ${chips.length} symptoms or add one`}
+          onChange={e => { setQuery(e.target.value); setMenuOpen(true); setHi(0); }}
+          onFocus={() => setMenuOpen(true)}
+          onBlur={() => setTimeout(() => setMenuOpen(false), 120)}
+          onKeyDown={onKey} />
+        {menuOpen && options.length > 0 && (
+          <SymMenu role="listbox" aria-label="Symptoms">
+            {options.map((o, i) => (
+              <SymOption key={`${o.add ? '+' : ''}${o.label}`} role="option" aria-selected={i === hi} $active={i === hi}
+                data-add={o.add} onMouseDown={e => { e.preventDefault(); choose(o); }} onMouseEnter={() => setHi(i)}>
+                {o.add ? `Add “${o.label}”` : o.label}
+              </SymOption>
+            ))}
+          </SymMenu>
+        )}
+      </SymBox>
+      <QChips role="group" aria-label="Your symptoms" style={{ marginTop: 16 }}>
+        {shown.map(c => (
+          <QChip key={c} type="button" aria-pressed={hasSymptom(v.name, c)} $active={hasSymptom(v.name, c)}
+            onClick={() => toggle(c)}>{c}</QChip>
+        ))}
+        {chips.length > frequent.length && (
+          <AllLink type="button" onClick={() => setShowAll(a => !a)}>{showAll ? 'Fewer' : `All ${chips.length}`}</AllLink>
+        )}
+      </QChips>
+      {picked.length > 0 && (
+        <>
+          <div style={{ marginTop: 24 }}>
+            <SeveritySection value={v.severity} onChange={n => set({ severity: n })} />
+          </div>
+          <Section style={{ marginTop: 20 }}>
+            <QNotes value={v.notes} placeholder="Notes (optional)" aria-label="Notes"
+              onChange={e => set({ notes: e.target.value })} />
+          </Section>
+          <Footer>
+            <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
+            <Status role="status" aria-live="polite">{status}</Status>
+            <PillButton type="button" onClick={() => void log()} disabled={saving}>
+              {saving ? 'Logging…' : 'Log symptom'}
+            </PillButton>
+          </Footer>
+        </>
+      )}
+      {picked.length === 0 && status && <Status role="status" aria-live="polite" style={{ display: 'block', marginTop: 14 }}>{status}</Status>}
     </>
   );
 }
@@ -599,7 +739,7 @@ export function QuickChange() {
 export function QuickSymptom() {
   return (
     <DashPanel aria-label="Log a symptom">
-      <DashPanelHead title="Log a symptom" />
+      <DashPanelHead title="Log a symptom" aside={<PanelLink to="/health/symptoms">Symptoms</PanelLink>} />
       <QuickSymptomForm />
     </DashPanel>
   );
