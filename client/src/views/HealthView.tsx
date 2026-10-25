@@ -75,6 +75,19 @@ const SubTabs = styled.div`
   padding: 24px 0 4px; /* room between the section tabs and the sub-sub tabs */
 `;
 
+const Above = styled.div`
+  padding-top: 24px;
+`;
+
+/* Thin section heading over the list (Routines: "Your routines") */
+const ListHeading = styled.h2`
+  margin: 48px 0 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 200;
+  color: var(--text-primary);
+`;
+
 const SummaryBar = styled.div`
   display: flex;
   justify-content: flex-start;
@@ -201,6 +214,12 @@ interface HealthViewProps {
   tabBar?: React.ReactNode;
   /** The New button's label — defaults to "New <topic>" (New recipe, New symptom…) */
   newLabel?: string;
+  /** Sub-sub tabs under the tab bar (Exercise: Log | Routines | Training) */
+  subTabs?: React.ReactNode;
+  /** Shown above the entry list (Routines: today's checklist) */
+  children?: React.ReactNode;
+  /** A heading over the entry list */
+  listHeading?: string;
 }
 
 /**
@@ -209,7 +228,7 @@ interface HealthViewProps {
  * reveal Delete; clicking opens the entry in the journal editor — its
  * breadcrumb leads back here.
  */
-export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel }: HealthViewProps) {
+export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel, subTabs, children, listHeading }: HealthViewProps) {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -315,6 +334,10 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
 
           <TabsRow data-print-hide>{tabBar ?? <HealthTabBar />}</TabsRow>
 
+          {subTabs && <SubTabs data-print-hide>{subTabs}</SubTabs>}
+
+          {children && <Above data-print-hide>{children}</Above>}
+
           {showDateFilter && (
             <SubTabs data-print-hide>
               <FilterTabs options={DATE_FILTERS} active={dateFilter} onChange={setDateFilter} flush bordered={false} />
@@ -367,6 +390,8 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
               )}
             </PrintReport>
           )}
+
+          {listHeading && <ListHeading data-print-hide>{listHeading}</ListHeading>}
 
           {sortedEntries.length === 0 ? (
             <div data-print-hide={printable || undefined}><EmptyState message="No entries yet." /></div>

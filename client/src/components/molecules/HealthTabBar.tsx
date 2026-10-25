@@ -21,7 +21,7 @@ export function HealthTabBar() {
   return (
     <Bar>
       {tabs.map((t) => {
-        const isActive = location.pathname === t.path || (t.path === '/health/meds' && location.pathname.startsWith('/health/meds'));
+        const isActive = location.pathname === t.path || ((t.path === '/health/meds' || t.path === '/health/exercise') && location.pathname.startsWith(t.path + '/'));
         return (
           <TabBtn
             key={t.path}

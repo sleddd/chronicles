@@ -13,6 +13,8 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Meals', icon: 'utensils', color: '#F97316' },
   { name: 'Exercise', icon: 'dumbbell', color: '#EF4444' },
   { name: 'Medication', icon: 'pills', color: '#14B8A6' },
+  { name: 'Routine', icon: 'person-running', color: '#EF4444' },
+  { name: 'Training Plan', icon: 'mountain', color: '#10B981' },
   { name: 'Symptom', icon: 'flask', color: '#EF4444' },
   { name: 'Music', icon: 'music', color: '#EC4899' },
   { name: 'Books', icon: 'book', color: '#8B5CF6' },

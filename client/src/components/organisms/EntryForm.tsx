@@ -21,6 +21,11 @@ import { MedicationFields, type MedicationFieldValues } from '../molecules/field
 import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/MenuPlanFields.js';
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
 import { ExerciseFields, type ExerciseFieldValues } from '../molecules/fields/ExerciseFields.js';
+import { RoutineFields } from '../molecules/fields/RoutineFields.js';
+import { TrainingPlanFields } from '../molecules/fields/TrainingPlanFields.js';
+import type { RoutineFieldValues, TrainingPlanFieldValues } from '../../types/fields.js';
+import { categoryNames, trainingPlans } from '../../utils/training.js';
+import { ROUTINE_DEFAULTS } from '../../utils/routines.js';
 import { EventFields, type EventFieldValues } from '../molecules/fields/EventFields.js';
 import { MeetingFields, type MeetingFieldValues } from '../molecules/fields/MeetingFields.js';
 import { AllergyFields, type AllergyFieldValues } from '../molecules/fields/AllergyFields.js';
@@ -462,6 +467,8 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   recipe: 'recipe', recipes: 'recipe',
   priorities: 'priorities', wellness: 'wellness', 'menu plan': 'menu_plan',
   changes: 'change', change: 'change',
+  routine: 'routine', routines: 'routine',
+  'training plan': 'training_plan', 'training plans': 'training_plan',
 };
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
@@ -469,6 +476,7 @@ const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
   event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName', change: 'changeWhat',
+  routine: 'routineName', training_plan: 'planName',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -618,6 +626,14 @@ export function EntryForm({
         parentGoalId: (cf?.parentGoalId as number) || undefined,
       };
     }), [entries, topics, entryId]);
+
+  // Training plan categories, for Exercise / Routine's Training category
+  const needsCategories = customType === 'exercise' || customType === 'routine';
+  const trainingCategoryOptions = useMemo(() => {
+    if (!needsCategories) return [];
+    const planTopic = topics.find(t => getCustomType(t.name) === 'training_plan');
+    return categoryNames(trainingPlans(entries, planTopic?.id, stripHtml));
+  }, [entries, topics, needsCategories]);
 
   // Build recipe options for shopping list linking
   const recipeOptions = useMemo(() => entries
@@ -961,11 +977,13 @@ export function EntryForm({
               {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
               {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
+              {customType === 'routine' && <RoutineFields values={{ ...ROUTINE_DEFAULTS, duration: '', items: [], days: [], isActive: true, notes: '', ...customFields } as RoutineFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} categoryOptions={trainingCategoryOptions} />}
+              {customType === 'training_plan' && <TrainingPlanFields values={{ startDate: '', eventDate: '', categories: [], phases: [], isActive: true, notes: '', ...customFields } as TrainingPlanFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'change' && <ChangeFields values={{ changeWhat: '', changeDate: '', notes: '', ...customFields } as ChangeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'symptom' && <SymptomFields values={{ symptomName: '', severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
                 chips={symptomChipList(symptomChips)} onAddChip={chipsLoaded ? l => { void saveSymptomChips(addSymptomChip(symptomChips, l)); } : undefined}
                 onRemoveChip={chipsLoaded ? l => { void saveSymptomChips(removeSymptomChip(symptomChips, l)); } : undefined} />}
-              {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
+              {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} categoryOptions={trainingCategoryOptions} />}
               {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
               {customType === 'meeting' && <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as MeetingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
               {customType === 'allergy' && <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as AllergyFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}

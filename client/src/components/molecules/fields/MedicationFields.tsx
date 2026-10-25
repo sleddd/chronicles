@@ -1,8 +1,8 @@
 import { medChangesOf, describeMedChange } from '../../../utils/healthChanges.js';
 import { useId, useState } from 'react';
 import styled from 'styled-components';
-import { Icon } from '../../atoms/core/Icon.jsx';
 import { Toggle } from '../../atoms/Toggle.js';
+import { ReminderTimes } from './ReminderTimes.js';
 import { DOSE_NUTRIENTS, parseMedNutrients } from '../../../utils/medNutrients.js';
 import type { MedicationFieldValues } from '../../../types/fields.js';
 import {
@@ -67,64 +67,6 @@ const LabelNote = styled.span`
 
 const Head = styled.div`
   margin-bottom: 4px;
-`;
-
-const Times = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-`;
-
-/* A reminder: an outlined pill holding the time (its native clock) and × */
-const TimePill = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 42px;
-  padding: 0 10px 0 16px;
-  border: 1px solid var(--border-card);
-  border-radius: 999px;
-  &:focus-within { border-color: var(--color-accent); }
-`;
-
-const TimeInput = styled.input`
-  && {
-    width: auto;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 16px;
-    color: var(--text-primary);
-    color-scheme: light dark;
-  }
-  &::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; margin-left: 8px; }
-`;
-
-const RemoveBtn = styled.button`
-  display: inline-flex;
-  padding: 4px;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  &:hover { color: var(--color-danger); }
-`;
-
-const AddTimePill = styled.button`
-  height: 42px;
-  padding: 0 18px;
-  border: 1px dashed var(--border-dashed);
-  border-radius: 999px;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: var(--color-accent-link);
-  cursor: pointer;
-  &:hover { border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 /* Four across; two-up on phones */
@@ -211,12 +153,6 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
     ? [...FREQUENCIES, { value: values.frequency, label: LEGACY_FREQUENCY[values.frequency] }]
     : FREQUENCIES;
 
-  const updateTime = (index: number, time: string) => {
-    const times = [...values.scheduleTimes];
-    times[index] = time;
-    set({ scheduleTimes: times });
-  };
-
   return (
     <FormWrap>
       <Head>
@@ -251,21 +187,8 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
 
       <Section aria-label="Reminders">
         <SectionHead><SectionLabel>Reminders</SectionLabel></SectionHead>
-        <Times>
-          {values.scheduleTimes.map((time, i) => (
-            <TimePill key={i}>
-              <TimeInput type="time" value={time} onChange={e => updateTime(i, e.target.value)}
-                aria-label={`Dose time ${i + 1}`} />
-              <RemoveBtn type="button" aria-label={`Remove ${time}`}
-                onClick={() => set({ scheduleTimes: values.scheduleTimes.filter((_, j) => j !== i) })}>
-                <Icon name="x" size={14} strokeWidth={2} />
-              </RemoveBtn>
-            </TimePill>
-          ))}
-          <AddTimePill type="button" onClick={() => set({ scheduleTimes: [...values.scheduleTimes, '08:00'] })}>
-            + Add time
-          </AddTimePill>
-        </Times>
+        <ReminderTimes times={values.scheduleTimes} label="Dose time"
+          onChange={scheduleTimes => set({ scheduleTimes })} />
       </Section>
 
       <Section aria-label="Nutrients per dose">

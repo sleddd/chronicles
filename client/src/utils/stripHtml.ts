@@ -14,7 +14,7 @@ export function stripHtml(html: string): string {
  *  a structured entry carries when its text content is empty. */
 const BUILTIN_NAME_KEYS = [
   'eventName', 'meetingName', 'goalObjective', 'milestoneObjective',
-  'taskDescription', 'mealDescription', 'recipeName', 'medicationName', 'allergen',
+  'taskDescription', 'mealDescription', 'recipeName', 'medicationName', 'allergen', 'routineName', 'planName',
 ] as const;
 
 /** The entry's built-in name/description field value, or '' when none is set. */

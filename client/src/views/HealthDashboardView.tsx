@@ -8,6 +8,9 @@ import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { AsNeededMeds } from '../components/organisms/AsNeededMeds.js';
 import { QuickLog, QuickSymptom, QuickChange } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
+import { RoutineSchedule } from '../components/organisms/RoutineSchedule.js';
+import { activeRoutines } from '../utils/routines.js';
+import { stripHtml } from '../utils/stripHtml.js';
 import { MedicationSchedule } from '../components/organisms/MedicationSchedule.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
@@ -134,6 +137,16 @@ function useHasScheduledMeds(): boolean {
   }, [entries, allTopics]);
 }
 
+/** True when an active exercise routine has at least one time. */
+function useHasRoutines(): boolean {
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  return useMemo(() => {
+    const id = allTopics.find(t => ['routine', 'routines'].includes(t.name.toLowerCase()))?.id;
+    return id !== undefined && activeRoutines(entries, id, stripHtml).some(r => r.times.length > 0);
+  }, [entries, allTopics]);
+}
+
 /* ── View ── */
 
 /**
@@ -145,6 +158,7 @@ export function HealthDashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const ff = useEntriesStore(s => s.featureFlags);
   const hasMeds = useHasScheduledMeds();
+  const hasRoutines = useHasRoutines();
 
   if (needsUnlock) return (
     <>
@@ -163,6 +177,7 @@ export function HealthDashboardView() {
 
   const food = ff.foodEnabled !== false;
   const exercise = ff.exerciseEnabled !== false;
+  const routines = exercise && hasRoutines;
 
   return (
     <ContentTemplate>
@@ -185,6 +200,7 @@ export function HealthDashboardView() {
               <Pair>
                 <Column>
                   <QuickLog meal={food} exercise={exercise} />
+                  {routines && <RoutineSchedule />}
                   <QuickSymptom />
                 </Column>
                 <Column>
@@ -196,6 +212,7 @@ export function HealthDashboardView() {
             ) : (
               <>
                 <QuickLog meal={food} exercise={exercise} />
+                {routines && <RoutineSchedule />}
                 <QuickSymptom />
                 {hasMeds && ff.medicationEnabled !== false && <MedicationSchedule isReady={isReady} />}
                 {ff.medicationEnabled !== false && <AsNeededMeds />}

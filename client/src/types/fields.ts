@@ -166,6 +166,68 @@ export interface ExerciseFieldValues {
   calorieBasis?: string;
   performedDate: string;
   performedTime: string;
+  /** Training plan category this session counts toward */
+  trainingCategory?: string;
+  /** Set when the session was logged by ticking a routine */
+  routineId?: number;
+  /** The routine's exercises done in this session (RoutineItem ids) */
+  routineItemsDone?: string[];
+  notes: string;
+}
+
+/** One exercise inside a routine — "Sun salutation" · "5 min" or "3 × 10" */
+export interface RoutineItem {
+  id: string;
+  name: string;
+  /** Free text: "5 min", "3 × 10", "30 sec each side" */
+  amount: string;
+}
+
+export interface RoutineFieldValues {
+  /** The routine's name — the entry's title (its text mirrors it) */
+  routineName?: string;
+  /** Activity the logged sessions are saved as (EXERCISE_TYPES) */
+  exerciseType: string;
+  /** Minutes one full session takes */
+  duration: string;
+  items: RoutineItem[];
+  /** Days it runs, 0 = Sunday … 6 = Saturday; empty = every day */
+  days: number[];
+  scheduleTimes: string[];
+  isActive: boolean;
+  /** Training plan category its sessions count toward (optional) */
+  trainingCategory?: string;
+  notes: string;
+}
+
+/** An activity category in a training plan — "Aerobic", "Core stability" */
+export interface TrainingCategory {
+  id: string;
+  name: string;
+  /** Exercise activities that count here when a session names no category */
+  exerciseTypes: string[];
+}
+
+/** One phase of a plan: its length and the hours to put into each category
+ *  across the whole phase */
+export interface TrainingPhase {
+  id: string;
+  name: string;
+  weeks: string;
+  /** Hours for the whole phase, by TrainingCategory id */
+  targets: Record<string, string>;
+}
+
+export interface TrainingPlanFieldValues {
+  /** The plan's name — the entry's title ("Mt Hood") */
+  planName?: string;
+  /** The first day of phase 1 */
+  startDate: string;
+  /** The climb / race / trip the plan builds toward (optional) */
+  eventDate: string;
+  categories: TrainingCategory[];
+  phases: TrainingPhase[];
+  isActive: boolean;
   notes: string;
 }
 

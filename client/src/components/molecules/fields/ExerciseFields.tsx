@@ -28,13 +28,19 @@ interface ExerciseFieldsProps {
   onEstimateCalories?: () => void;
   estimatingCalories?: boolean;
   calorieError?: string;
+  /** Categories from your training plans — shown as Training category chips */
+  categoryOptions?: string[];
 }
 
-export function ExerciseFields({ values, onChange, onEstimateCalories, estimatingCalories, calorieError }: ExerciseFieldsProps) {
+export function ExerciseFields({ values, onChange, onEstimateCalories, estimatingCalories, calorieError, categoryOptions = [] }: ExerciseFieldsProps) {
   const set = (patch: Partial<ExerciseFieldValues>) => onChange({ ...values, ...patch });
   const numeric = (v: string) => v.replace(/[^\d.]/g, '');
   const aiCalories = values.caloriesSource === 'ai' && !!values.calories;
   const notesId = useId();
+  const category = values.trainingCategory ?? '';
+  // A category no plan lists any more still shows while it's set
+  const categories = category && !categoryOptions.some(c => c.toLowerCase() === category.toLowerCase())
+    ? [...categoryOptions, category] : categoryOptions;
 
   return (
     <FormWrap>
@@ -107,6 +113,24 @@ export function ExerciseFields({ values, onChange, onEstimateCalories, estimatin
           ? <FieldNote $error role="status">{calorieError}</FieldNote>
           : aiCalories && <FieldNote><em>Italic</em> calories are an AI estimate. Edit to override.</FieldNote>}
       </Section>
+
+      {categories.length > 0 && (
+        <Section aria-label="Training category">
+          <SectionHead><SectionLabel>Training category</SectionLabel></SectionHead>
+          <Chips>
+            {categories.map(c => {
+              const on = c.toLowerCase() === category.toLowerCase();
+              return (
+                <Chip key={c} type="button" $active={on} aria-pressed={on}
+                  onClick={() => set({ trainingCategory: on ? '' : c })}>
+                  {c}
+                </Chip>
+              );
+            })}
+          </Chips>
+          {!category && <FieldNote>None picked. It counts by its activity.</FieldNote>}
+        </Section>
+      )}
 
       <Section aria-label="When">
         <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
