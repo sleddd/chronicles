@@ -6,7 +6,7 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
-import { RoutineSchedule } from '../components/organisms/RoutineSchedule.js';
+import { ExerciseToday } from '../components/organisms/TodayLists.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { ExerciseSubTabs } from '../components/molecules/ExerciseSubTabs.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -21,8 +21,8 @@ import {
 } from '../utils/routines.js';
 import { categoryOf, sessionsFrom, trainingPlans, weekProgress, type WeekProgress } from '../utils/training.js';
 
-/* Health → Exercise → Schedule: the day's schedule (RoutineSchedule) on the
-   left. On the right, beside an active training plan: "This week" — this
+/* Health → Exercise → Schedule: today's schedule on the left, as the dashboards'
+   Exercise schedule widget (TodayLists ExerciseToday, in a panel card). On the right, beside an active training plan: "This week" — this
    calendar week against the phase's hours per week, each category with a
    rule and what's left ("Target met" / "+10 min left on today's schedule" /
    "5 min to go · nothing scheduled") — with "Manage schedule (N)" swapping
@@ -348,7 +348,7 @@ export function ExerciseScheduleView() {
             )}
           </SubRow>
           <Grid>
-            <RoutineSchedule />
+            <ExerciseToday panel />
             {showWeek
               ? <ThisWeek planName={planWeek.plan.name} week={planWeek.week} leftToday={leftToday}
                   onOpenPlan={() => navigate('/health/exercise/training')} />

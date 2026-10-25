@@ -89,6 +89,19 @@ const Fill = styled.span<{ $pct: number; $color: string }>`
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
+/* "Today  Great" / "7 days  Okay" under the rule */
+const Rows = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  span { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+  b { font-weight: 400; color: var(--text-secondary); }
+`;
+
 export const StatTileRow = styled.div<{ $cols?: number }>`
   display: grid;
   grid-template-columns: repeat(${({ $cols }) => $cols ?? 4}, minmax(0, 1fr));
@@ -114,9 +127,11 @@ export interface StatTileProps {
   color?: string;
   selected?: boolean;
   onSelect?: () => void;
+  /** Label / value lines under the rule, e.g. [["Today", "8 h"], ["7 days", "7 h"]] */
+  rows?: [string, string][];
 }
 
-export function StatTile({ value, unit, name, caption, delta, progress, color, selected, onSelect }: StatTileProps) {
+export function StatTile({ value, unit, name, caption, delta, progress, color, selected, onSelect, rows }: StatTileProps) {
   const isStatic = !onSelect;
   return (
     <Tile
@@ -135,6 +150,9 @@ export function StatTile({ value, unit, name, caption, delta, progress, color, s
       <Figure>{value}{unit && <small>{unit}</small>}</Figure>
       {progress !== undefined && (
         <Track><Fill $pct={Math.max(0, Math.min(1, progress)) * 100} $color={color ?? 'var(--color-accent)'} /></Track>
+      )}
+      {rows && rows.length > 0 && (
+        <Rows>{rows.map(([label, v]) => <span key={label}>{label}<b>{v}</b></span>)}</Rows>
       )}
     </Tile>
   );

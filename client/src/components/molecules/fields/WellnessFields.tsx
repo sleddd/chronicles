@@ -39,8 +39,8 @@ export function WellnessFields({ values, onChange, cycleTrackingEnabled, onAutoS
           <DayInventory
             inside
             values={{
-              sleepQuality: values.sleepQuality || 0, wokeAtNight: values.wokeAtNight ?? null, eating: values.eating || '',
-              workDay: values.workDay || 0, social: values.social || 0, procrastination: values.procrastination || 0,
+              sleepQuality: values.sleepQuality || 0, wokeAtNight: values.wokeAtNight ?? null, dreamed: values.dreamed ?? null, eating: values.eating || '',
+              workDay: values.workDay || 0, social: values.social || 0, procrastination: values.procrastination || 0, stress: values.stress || 0,
             }}
             onChange={patch => change({ ...values, ...patch })}
           />

@@ -247,13 +247,12 @@ const Chip = styled.button<{ $active: boolean }>`
   font-weight: 500;
   border-radius: 999px;
   cursor: pointer;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-pill, var(--border-default))')};
-  /* Outline pill (like PillButton): chosen = accent outline + accent text
-     (on the pale --bg-selected in light; no fill in dark) */
-  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'var(--bg-control, transparent)')};
-  color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--text-tertiary)')};
+  border: 1px solid var(--border-pill, var(--border-default));
+  /* Outline pill (like PillButton): chosen = a light grey fill in the body colour, no accent */
+  background: ${({ $active }) => ($active ? 'var(--bg-tab-active)' : 'var(--bg-control, transparent)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-tertiary)')};
   transition: border-color 120ms, color 120ms, background 120ms;
-  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
+  &:hover { border-color: var(--border-strong); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -504,7 +503,7 @@ export function WellnessPanel({
       {row ? (
         <JoinedGroup role="group" aria-label="Cycle">
           {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
-            <JoinedBtn key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
+            <JoinedBtn key={f || 'none'} type="button" $fill $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
               {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
             </JoinedBtn>
           ))}

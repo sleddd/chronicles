@@ -75,6 +75,7 @@ const VIEW_TRAILS: Record<string, TrailCrumb[]> = {
   '/health/exercise': [HEALTH, { label: 'Exercise', path: '/health/exercise' }],
   '/health/exercise/schedule': [HEALTH, { label: 'Exercise', path: '/health/exercise' }, { label: 'Schedule', path: '/health/exercise/schedule' }],
   '/health/exercise/training': [HEALTH, { label: 'Exercise', path: '/health/exercise' }, { label: 'Training', path: '/health/exercise/training' }],
+  '/health/exercise/history': [HEALTH, { label: 'Exercise', path: '/health/exercise' }, { label: 'History', path: '/health/exercise/history' }],
   '/health/symptoms': [HEALTH, { label: 'Symptoms', path: '/health/symptoms' }],
   '/health/meds': [HEALTH, { label: 'Med list', path: '/health/meds' }],
   '/health/allergies': [HEALTH, { label: 'Allergies', path: '/health/allergies' }],

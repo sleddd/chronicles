@@ -78,7 +78,9 @@ const PlanHead = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px 24px;
-  margin-top: 44px;
+  margin-top: 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 const PlanName = styled.h2`

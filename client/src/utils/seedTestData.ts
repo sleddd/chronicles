@@ -253,6 +253,9 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
       }, { day: dayFromToday(offset) }); count++;
     }
 
+    onProgress?.('Creating a month of meals, symptoms, exercise and supplements for Reports...');
+    count += await seedReportMonth(deps);
+
     onProgress?.('Creating 30 days of wellness check-ins...');
     count += await seedWellness(deps);
 
@@ -614,6 +617,106 @@ async function seedDoses(ids: { lisinopril: number; metformin: number; vitD: num
   return n;
 }
 
+/* ── A month for Reports (the daily inventory report) ──
+   Patterned so every section has something real to show: a dairy latte
+   followed by bloating and red wine by a headache the next morning (Possible
+   triggers), an iron supplement on the bloating days and an antihistamine kept
+   off the cold days (Medication), magnesium every day (nothing to compare),
+   fatigue mostly on days without exercise (Exercise), and a cold — cough,
+   trouble swallowing, runny nose, congestion — plus back pain with itching
+   that land on the same days (Symptoms at a glance). Breakfast, lunch and
+   dinner come and go so the meal questions have both answers. */
+
+export interface ReportMonthPlan {
+  meals: { day: string; time: string; name: string; mealType: string; ingredients: string; healthiness: string }[];
+  symptoms: { day: string; time: string; name: string; severity: number }[];
+  exercise: { day: string; time: string; type: string; minutes: number; intensity: string; text: string }[];
+}
+
+/** `days` oldest first. Meals stop at `mealsUntil` and exercise at `exerciseUntil` (the hand-written week takes over) */
+export function reportMonthPlan(days: string[], { mealsUntil, exerciseUntil }: { mealsUntil: string; exerciseUntil: string }): ReportMonthPlan {
+  const plan: ReportMonthPlan = { meals: [], symptoms: [], exercise: [] };
+  const next = (i: number) => days[i + 1];
+  const meal = (day: string, time: string, name: string, mealType: string, ingredients: string, healthiness: number) =>
+    plan.meals.push({ day, time, name, mealType, ingredients, healthiness: String(healthiness) });
+  const symptom = (day: string | undefined, time: string, name: string, severity: number) => {
+    if (day) plan.symptoms.push({ day, time, name, severity });
+  };
+  const COLD = [8, 9, 10, 11, 12];
+  const EXERCISE: [string, number, string, string][] = [
+    ['walking', 30, 'low', 'Evening walk'], ['yoga', 40, 'low', 'Yoga flow'], ['strength', 45, 'high', 'Strength session'],
+  ];
+
+  days.forEach((day, i) => {
+    const latte = i % 4 === 0;
+    const wine = i % 6 === 2;
+    const exercised = [1, 3, 5].includes(i % 7);
+
+    if (day <= mealsUntil) {
+      if (i % 5 !== 1 && i % 5 !== 3) meal(day, '07:45', ['Oatmeal with berries', 'Toast and eggs', 'Yogurt and granola'][i % 3], 'breakfast', ['oats, blueberries', 'sourdough, eggs', 'greek yogurt, granola'][i % 3], 4);
+      if (latte) meal(day, '08:30', 'Dairy latte', 'snack', 'milk, espresso', 2);
+      if (i % 3 === 0) meal(day, '12:30', i % 2 ? 'Chicken salad' : 'Rice bowl', 'lunch', i % 2 ? 'chicken, greens' : 'rice, tofu, vegetables', 4);
+      if (i % 10 < 7) meal(day, '19:00', ['Salmon and rice', 'Pasta', 'Stir fry', 'Tacos'][i % 4], 'dinner', '', [4, 2, 4, 3][i % 4]);
+      if (wine) meal(day, '19:30', 'Red wine', 'snack', '', 1);
+      // Supplements logged as Meals rows (Medication: Iron supplement → more bloating; Antihistamine → less runny nose)
+      if (latte || i % 7 === 3) meal(day, '08:00', 'Iron supplement', 'supplement', '', 0);
+      if (!COLD.includes(i) && i % 5 !== 2) meal(day, '08:05', 'Antihistamine', 'supplement', '', 0);
+      meal(day, '21:00', 'Magnesium', 'supplement', '', 0);
+    }
+    if (day <= exerciseUntil && exercised) {
+      const [type, minutes, intensity, text] = EXERCISE[i % 3];
+      plan.exercise.push({ day, time: '18:00', type, minutes, intensity, text });
+    }
+
+    if (latte) symptom(day, '11:00', 'Bloating', 4 + (i % 2));
+    if (wine) symptom(next(i), '09:00', 'Headache', 6);
+    if (i % 3 === 1 && !exercised) symptom(day, '15:00', 'Fatigue', 3 + (i % 4));
+    if (COLD.includes(i)) {
+      symptom(day, '08:30', 'Cough', 5);
+      symptom(day, '08:30', 'Trouble swallowing', 4);
+      symptom(day, '08:30', 'Runny nose', 3);
+    }
+    if (COLD.includes(i - 1)) symptom(day, '10:00', 'Congestion', 4);
+    if (i % 9 === 4) { symptom(day, '14:00', 'Back pain', 5); symptom(day, '14:00', 'Itching', 3); }
+    if (i % 11 === 3) symptom(day, '16:00', 'Dizziness', 7);
+  });
+  return plan;
+}
+
+async function seedReportMonth(deps: SeedDeps): Promise<number> {
+  const days: string[] = [];
+  for (let offset = -29; offset <= -1; offset++) days.push(dayFromToday(offset));
+  const plan = reportMonthPlan(days, { mealsUntil: dayFromToday(-4), exerciseUntil: dayFromToday(-7) });
+  let n = 0;
+  for (const m of plan.meals) {
+    await createEntry(deps, m.name, 'Meals', {
+      mealDescription: m.name, mealType: m.mealType, consumedDate: m.day, consumedTime: m.time, ingredients: m.ingredients,
+      ...(m.mealType === 'supplement' ? {} : { healthiness: m.healthiness }), notes: '',
+    }, { day: m.day }); n++;
+  }
+  for (const x of plan.exercise) {
+    await createEntry(deps, x.text, 'Exercise', {
+      exerciseType: x.type, duration: String(x.minutes), intensity: x.intensity, distance: '', distanceUnit: 'km', performedDate: x.day, performedTime: x.time, notes: '',
+    }, { day: x.day }); n++;
+  }
+  // One entry per symptom per day and time ("Cough, Trouble swallowing, Runny nose" as chips)
+  const byTime = new Map<string, { day: string; time: string; names: string[]; severity: number }>();
+  for (const sy of plan.symptoms) {
+    const k = `${sy.day} ${sy.time}`;
+    const cur = byTime.get(k) ?? { day: sy.day, time: sy.time, names: [], severity: 0 };
+    cur.names.push(sy.name);
+    cur.severity = Math.max(cur.severity, sy.severity);
+    byTime.set(k, cur);
+  }
+  for (const g of byTime.values()) {
+    const name = g.names.join(', ');
+    await createEntry(deps, name, 'Symptom', {
+      symptomName: name, severity: g.severity, occurredDate: g.day, occurredTime: g.time, duration: '60', notes: '',
+    }, { day: g.day }); n++;
+  }
+  return n;
+}
+
 /* ── Wellness check-ins: about a month, a few days missed ── */
 
 export interface SeedWellness {
@@ -648,6 +751,22 @@ export function realisticWellness(days: string[], symptomDays: Set<string>, exer
   return out;
 }
 
+/** "Your day" answers that follow the check-in: social time and the work day track mood, waking in the night follows a poor night */
+export function yourDay(date: string, v: SeedWellness) {
+  const n = Number(date.replace(/-/g, '')) % 7;
+  return {
+    social: Math.max(1, Math.min(5, v.moodScore + (n % 3) - 1)),
+    workDay: Math.max(1, Math.min(5, v.moodScore + (n === 0 ? -1 : 0))),
+    procrastination: Math.max(1, Math.min(5, 6 - v.moodScore - (n % 2))),
+    // Stress runs opposite to mood, a notch higher on short nights
+    stress: Math.max(1, Math.min(5, 6 - v.moodScore + (v.sleepHours < 6 ? 1 : 0) - (n % 3 === 0 ? 1 : 0))),
+    wokeAtNight: v.sleepQuality <= 2,
+    // Dreams remembered more after a good night's sleep
+    dreamed: v.sleepQuality >= 4 ? n !== 3 : n % 3 === 0,
+    eating: n === 4 ? 'too_much' : n === 6 ? 'too_little' : 'just_right',
+  };
+}
+
 /** The days with symptoms and with exercise, from what's in the store */
 function activityDays(topics: TopicInfo[]): { symptomDays: Set<string>; exerciseDays: Set<string> } {
   const entries = useEntriesStore.getState().decryptedEntries;
@@ -663,7 +782,7 @@ async function seedWellness(deps: SeedDeps): Promise<number> {
   await ensureTopic(deps, 'Wellness', 'heart');
   const { symptomDays, exerciseDays } = activityDays(deps.topics);
   const days: string[] = [];
-  for (let offset = -30; offset <= -1; offset++) if (![-27, -19, -8].includes(offset)) days.push(dayFromToday(offset)); // a few days forgotten
+  for (let offset = -30; offset <= 0; offset++) if (![-27, -19, -8].includes(offset)) days.push(dayFromToday(offset)); // a few days forgotten
   const values = realisticWellness(days, symptomDays, exerciseDays);
   let n = 0;
   for (const date of days) {
@@ -673,7 +792,7 @@ async function seedWellness(deps: SeedDeps): Promise<number> {
     const flowIntensity = periodDay ? (['spotting', 'medium', 'heavy', 'medium', 'light'] as const)[offset + 24] : '';
     const text = [`${v.waterGlasses}/8 glasses`, `Mood ${v.moodScore}/5`, `${v.sleepHours}h sleep`].join(' · ');
     await createEntry(deps, text, 'Wellness', {
-      date, ...v, waterGoal: 8, periodToday: periodDay, flowIntensity,
+      date, ...v, ...yourDay(date, v), waterGoal: 8, periodToday: periodDay, flowIntensity,
     }, { day: date, widgetType: 'wellness-checkin' });
     n++;
   }

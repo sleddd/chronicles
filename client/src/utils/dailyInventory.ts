@@ -6,21 +6,22 @@
 
    Each answer becomes a score out of 100 the way the sheet's score row does —
    1–5 ratings × 20, hours slept ÷ 8, glasses ÷ 8, yes = 100 — except that
-   waking in the night and procrastinating are turned round (less is better)
+   waking in the night, procrastinating and stress are turned round (less is better)
    and sleep, water and minutes stop at 100. A day's score is the average of
    the questions it answers. Only what's answered counts: a meal question
    needs a meal logged that day, a 0 on the check-in means not answered.
    Pure. */
 
 export type InventoryKey =
-  | 'day' | 'rested' | 'sleep' | 'woke' | 'breakfast' | 'breakfastHealth' | 'lunch' | 'lunchHealth'
-  | 'dinner' | 'dinnerHealth' | 'eating' | 'water' | 'exercised' | 'exerciseMinutes' | 'work' | 'social' | 'procrastination';
+  | 'day' | 'rested' | 'sleep' | 'woke' | 'dreamed' | 'breakfast' | 'breakfastHealth' | 'lunch' | 'lunchHealth'
+  | 'dinner' | 'dinnerHealth' | 'eating' | 'water' | 'exercised' | 'exerciseMinutes' | 'work' | 'social' | 'procrastination' | 'stress';
 
 export const INVENTORY_QUESTIONS: { key: InventoryKey; label: string }[] = [
   { key: 'day', label: 'How good was your day?' },
   { key: 'rested', label: 'How rested did you feel when you woke up?' },
   { key: 'sleep', label: 'How many hours did you sleep?' },
   { key: 'woke', label: 'Did you wake up during the night?' },
+  { key: 'dreamed', label: 'Did you dream?' },
   { key: 'breakfast', label: 'Did you eat breakfast?' },
   { key: 'breakfastHealth', label: 'How healthy was your breakfast?' },
   { key: 'lunch', label: 'Did you eat lunch?' },
@@ -34,7 +35,16 @@ export const INVENTORY_QUESTIONS: { key: InventoryKey; label: string }[] = [
   { key: 'work', label: 'How was your work day?' },
   { key: 'social', label: 'How were your social interactions?' },
   { key: 'procrastination', label: 'How much did you procrastinate?' },
+  { key: 'stress', label: 'How stressed were you?' },
 ];
+
+/* The words on the check-in's 1–5 buttons (mood faces, Your day, How healthy?) */
+export const MOOD_WORDS = ['Very low', 'Low', 'Okay', 'Good', 'Great'];
+export const QUALITY_WORDS = ['Poor', 'Fair', 'OK', 'Good', 'Great'];
+export const RESTED_WORDS = ['Not at all', 'A little', 'Somewhat', 'Mostly', 'Fully'];
+export const PROCRASTINATION_WORDS = ['Not at all', 'A little', 'Some', 'A lot', 'All day'];
+export const STRESS_WORDS = ['Very low', 'Low', 'Moderate', 'High', 'Very high'];
+export const HEALTHY_WORDS = ['Not at all', 'A little', 'Somewhat', 'Mostly', 'Very'];
 
 export const SLEEP_TARGET = 8;
 export const WATER_TARGET = 8;
@@ -47,10 +57,12 @@ export interface InventoryWellness {
   sleepHours?: number;
   waterGlasses?: number;
   wokeAtNight?: boolean | null;
+  dreamed?: boolean | null;
   eating?: string;
   workDay?: number;
   social?: number;
   procrastination?: number;
+  stress?: number;
 }
 
 export interface InventoryMeal { day: string; mealType: string; healthiness?: number }
@@ -95,6 +107,8 @@ export function inventoryDays(
     if (w.sleepHours && w.sleepHours > 0) answer(d, 'sleep', w.sleepHours, capped(w.sleepHours, SLEEP_TARGET));
     if (w.waterGlasses && w.waterGlasses > 0) answer(d, 'water', w.waterGlasses, capped(w.waterGlasses, WATER_TARGET));
     if (typeof w.wokeAtNight === 'boolean') answer(d, 'woke', w.wokeAtNight, w.wokeAtNight ? 0 : 100);
+    // Dreaming is neither good nor bad: recorded, but left out of the day's score
+    if (typeof w.dreamed === 'boolean') d.answers.dreamed = w.dreamed;
     if (w.eating === 'too_little' || w.eating === 'just_right' || w.eating === 'too_much') {
       answer(d, 'eating', w.eating, w.eating === 'just_right' ? 100 : 0);
     }
@@ -104,6 +118,8 @@ export function inventoryDays(
     if (social) answer(d, 'social', social, social * 20);
     const pro = rating(w.procrastination);
     if (pro) answer(d, 'procrastination', pro, (6 - pro) * 20);
+    const stress = rating(w.stress);
+    if (stress) answer(d, 'stress', stress, (6 - stress) * 20);
   }
 
   // Meals: eaten or not, on days with a meal logged; how healthy, when rated
@@ -205,6 +221,7 @@ const FACTORS: { label: string; test: (d: InventoryDay) => boolean | null }[] = 
   { label: 'A good work day', test: d => (typeof d.answers.work === 'number' ? d.answers.work >= 4 : null) },
   { label: 'Good social time', test: d => (typeof d.answers.social === 'number' ? d.answers.social >= 4 : null) },
   { label: 'Procrastinated little', test: d => (typeof d.answers.procrastination === 'number' ? d.answers.procrastination <= 2 : null) },
+  { label: 'Low stress', test: d => (typeof d.answers.stress === 'number' ? d.answers.stress <= 2 : null) },
 ];
 
 /** What goes with better days: each factor needs 2+ days with it and 2+ without; biggest gap first */

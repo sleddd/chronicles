@@ -96,12 +96,16 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
     headers['Content-Type'] = 'application/json';
   }
 
+  const started = performance.now();
   const res = await fetch(url, {
     method,
     headers,
     credentials: 'include', // Send cookies
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  // Development only: name any request that keeps a page waiting
+  const took = performance.now() - started;
+  if (import.meta.env.DEV && took > 1000) console.info(`[slow request] ${method} ${path} ${res.status} ${(took / 1000).toFixed(1)}s`);
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: 'Request failed' }));
@@ -393,6 +397,7 @@ async function writeSealMarker(key: string): Promise<void> {
 /** On lock: the next unlock (maybe another account) checks again. */
 export function clearSealMarkers(): void {
   sealMarkers.clear();
+  forgetAllDoses();
 }
 
 // Topic names and icons are encrypted here (one { name, icon } payload, kind
@@ -663,13 +668,28 @@ async function putDose(id: string, date: string, p: DosePayload) {
 
 let resealingDoses: Promise<number> | null = null;
 
+/* Every dose record, kept in memory once opened (Med history, Reports) so a
+   revisit is instant. Dropped on any dose write here, on lock and after
+   DOSES_CACHE_MS, so doses ticked on another device show up soon after. */
+const DOSES_CACHE_MS = 2 * 60_000;
+let allDoses: { at: number; logs: Promise<DoseLogRecord[]> } | null = null;
+const forgetAllDoses = () => { allDoses = null; };
+
 export const doses = {
   getByDate: async (date: string) =>
     ({ logs: await openDoses((await request<{ records: DoseWire[] }>('/doses', { params: { date } })).records) }),
 
-  /** Every dose record (reports, Settings → Data → Export All) */
-  getAll: async () =>
-    ({ logs: await openDoses((await request<{ records: DoseWire[] }>('/doses/all')).records) }),
+  /** Every dose record (Med history, Reports). `fresh` skips the in-memory copy (Export All). */
+  getAll: async ({ fresh = false }: { fresh?: boolean } = {}) => {
+    if (fresh || !allDoses || Date.now() - allDoses.at > DOSES_CACHE_MS) {
+      const logs = request<{ records: DoseWire[] }>('/doses/all').then(r => openDoses(r.records));
+      const entry = { at: Date.now(), logs };
+      allDoses = entry;
+      logs.catch(() => { if (allDoses === entry) allDoses = null; });
+    }
+    // Copies, so no caller can change another's records
+    return { logs: (await allDoses.logs).map(l => ({ ...l })) };
+  },
 
   log: async (data: {
     medicationPostId: number;
@@ -687,6 +707,7 @@ export const doses = {
       status: data.status,
       takenAt: data.status === 'taken' ? (data.takenAt || nowTakenAt()) : null,
     };
+    forgetAllDoses();
     const { record } = await putDose(id, data.date, payload);
     return { log: { id, date: data.date, createdAt: record.createdAt, ...payload } as DoseLogRecord };
   },
@@ -710,12 +731,16 @@ export const doses = {
         : nowTakenAt(),
       asNeeded: true,
     };
+    forgetAllDoses();
     const { record } = await putDose(id, data.date, payload);
     return { log: { id, date: data.date, createdAt: record.createdAt, ...payload } as DoseLogRecord };
   },
 
   /** Delete one dose record (e.g. an as-needed dose logged by mistake) */
-  remove: (id: string) => request<{ deleted: boolean }>(`/doses/${id}`, { method: 'DELETE' }),
+  remove: (id: string) => {
+    forgetAllDoses();
+    return request<{ deleted: boolean }>(`/doses/${id}`, { method: 'DELETE' });
+  },
 
   /**
    * Once per account: re-save records sealed before the day was bound (200 at
@@ -732,6 +757,7 @@ export const doses = {
         if (o?.older) older.push({ id: w.id, date: w.date, ...(await sealDose(w.id, w.date, o.payload)) });
       }
       let moved = 0;
+      if (older.length) forgetAllDoses();
       for (let i = 0; i < older.length; i += 200) {
         moved += (await request<{ resealed: number }>('/doses/reseal', { method: 'PUT', body: { records: older.slice(i, i + 200) } })).resealed;
       }

@@ -587,25 +587,22 @@ export function JournalView() {
 
         // Older entry formats open only until this account is past the move to v3
         setOlderEntriesFromMarker(sealed(ENTRIES_SEAL_MARKER) !== undefined);
-        // Decrypt entries individually — skip ones that fail
-        const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
-        for (const entry of encrypted) {
+        // Decrypt entries individually, all at once — a failed one keeps a placeholder so it isn't lost
+        const decrypted: import('@shared/crypto/types').DecryptedPost[] = (await Promise.all(encrypted.map(async entry => {
           try {
-            const d = await decryptPosts([entry]);
-            decrypted.push(...d);
+            return await decryptPosts([entry]);
           } catch (err) {
             console.warn(`Skipping entry ${entry.id} — decryption failed:`, err);
-            // Add a placeholder so we don't lose it
-            decrypted.push({
+            return [{
               id: entry.id,
               content: '[Decryption failed]',
               metadata: {},
               isEncrypted: entry.isEncrypted,
               createdAt: entry.createdAt,
               updatedAt: entry.updatedAt,
-            });
+            }];
           }
-        }
+        }))).flat();
         setDecryptedEntries(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
         if (olderEntriesAllowed()) {

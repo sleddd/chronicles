@@ -2,25 +2,23 @@ import { useId, useState } from 'react';
 import styled from 'styled-components';
 import type { WellnessFieldValues } from '../../types/fields.js';
 import { JoinedGroup, JoinedBtn } from './fields/formKit.js';
+import { QUALITY_WORDS, RESTED_WORDS, PROCRASTINATION_WORDS, STRESS_WORDS } from '../../utils/dailyInventory.js';
 
 /* "Your day" — the daily inventory questions the four-square check-in doesn't
    ask (Lifehacker's Daily Personal Inventory): Rested, Woke in the night,
-   Ate, Work day, Social time and Procrastinated, two columns of labelled rows
-   with hairlines between, each answer a joined group of buttons (tap the
-   chosen one again to clear it), inside one outlined box whose bar —
-   "Your day · 2 of 6" and "Tap to answer" ⌄ — opens them; closed by
+   Did you dream, Ate, Work day, Social time, Procrastinated and Stress, two
+   columns of labelled rows with hairlines between, each answer a joined group
+   of buttons (the chosen one on a light grey fill; tap it again to clear it), inside one outlined box whose bar —
+   "Your day · 2 of 8" and "Tap to answer" ⌄ — opens them; closed by
    default. Used under the check-in on both dashboards and in the
    journal's Wellness entry. Props only (plus whether it's open). */
 
 export type DayInventoryValues = Pick<WellnessFieldValues,
-  'sleepQuality' | 'wokeAtNight' | 'eating' | 'workDay' | 'social' | 'procrastination'>;
+  'sleepQuality' | 'wokeAtNight' | 'dreamed' | 'eating' | 'workDay' | 'social' | 'procrastination' | 'stress'>;
 
-export const QUALITY_WORDS = ['Poor', 'Fair', 'OK', 'Good', 'Great'];
-export const RESTED_WORDS = ['Not at all', 'A little', 'Somewhat', 'Mostly', 'Fully'];
-export const PROCRASTINATION_WORDS = ['Not at all', 'A little', 'Some', 'A lot', 'All day'];
-export const HEALTHY_WORDS = ['Not at all', 'A little', 'Somewhat', 'Mostly', 'Very'];
+export { QUALITY_WORDS, RESTED_WORDS, PROCRASTINATION_WORDS, STRESS_WORDS, HEALTHY_WORDS } from '../../utils/dailyInventory.js';
 
-/* "Your day" — one outlined box: a bar ("Your day · 2 of 6", "Tap to answer" ⌄)
+/* "Your day" — one outlined box: a bar ("Your day · 2 of 8", "Tap to answer" ⌄)
    that opens the questions inside it (closed by default) */
 const Box = styled.div<{ $inside?: boolean }>`
   margin-top: ${({ $inside }) => ($inside ? '0' : '24px')};
@@ -102,7 +100,7 @@ export function RatingRow({ value, onChange, words, label }: {
     <JoinedGroup role="radiogroup" aria-label={label}>
       {[1, 2, 3, 4, 5].map(n => (
         <JoinedBtn key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n}, ${words[n - 1]}`}
-          title={words[n - 1]} $active={value === n} onClick={() => onChange(value === n ? 0 : n)}>
+          title={words[n - 1]} $fill $active={value === n} onClick={() => onChange(value === n ? 0 : n)}>
           {n}
         </JoinedBtn>
       ))}
@@ -127,15 +125,16 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
   const [open, setOpen] = useState(false);
   const bodyId = useId();
   const woke = values.wokeAtNight;
+  const dreamed = values.dreamed;
   const answered = [
-    !!values.sleepQuality, typeof woke === 'boolean', !!values.eating,
-    !!values.workDay, !!values.social, !!values.procrastination,
+    !!values.sleepQuality, typeof woke === 'boolean', typeof dreamed === 'boolean', !!values.eating,
+    !!values.workDay, !!values.social, !!values.procrastination, !!values.stress,
   ].filter(Boolean).length;
   return (
     <Box as="section" aria-label="Your day" $inside={inside}>
       <Bar type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(o => !o)}>
-        <span><span className="title">Your day</span><span className="count"> · {answered} of 6</span></span>
-        <span className="hint">{open ? 'Hide' : answered === 6 ? 'All answered' : 'Tap to answer'}</span>
+        <span><span className="title">Your day</span><span className="count"> · {answered} of 8</span></span>
+        <span className="hint">{open ? 'Hide' : answered === 8 ? 'All answered' : 'Tap to answer'}</span>
       </Bar>
       {open && (
         <Body id={bodyId}>
@@ -149,8 +148,17 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
               <span>Woke in the night</span>
               <JoinedGroup role="radiogroup" aria-label="Woke in the night">
                 {([[true, 'Yes'], [false, 'No']] as const).map(([v, label]) => (
-                  <JoinedBtn key={label} type="button" role="radio" aria-checked={woke === v} $active={woke === v}
+                  <JoinedBtn key={label} type="button" role="radio" aria-checked={woke === v} $fill $active={woke === v}
                     onClick={() => onChange({ wokeAtNight: woke === v ? null : v })}>{label}</JoinedBtn>
+                ))}
+              </JoinedGroup>
+            </Item>
+            <Item>
+              <span>Did you dream?</span>
+              <JoinedGroup role="radiogroup" aria-label="Did you dream?">
+                {([[true, 'Yes'], [false, 'No']] as const).map(([v, label]) => (
+                  <JoinedBtn key={label} type="button" role="radio" aria-checked={dreamed === v} $fill $active={dreamed === v}
+                    onClick={() => onChange({ dreamed: dreamed === v ? null : v })}>{label}</JoinedBtn>
                 ))}
               </JoinedGroup>
             </Item>
@@ -158,7 +166,7 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
               <span>Ate today</span>
               <JoinedGroup role="radiogroup" aria-label="Ate today">
                 {EATING.map(e => (
-                  <JoinedBtn key={e.value} type="button" role="radio" aria-checked={values.eating === e.value} $active={values.eating === e.value}
+                  <JoinedBtn key={e.value} type="button" role="radio" aria-checked={values.eating === e.value} $fill $active={values.eating === e.value}
                     onClick={() => onChange({ eating: values.eating === e.value ? '' : e.value })}>{e.label}</JoinedBtn>
                 ))}
               </JoinedGroup>
@@ -175,6 +183,10 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
               <span>Procrastinated</span>
               <RatingRow label="How much you procrastinated" value={values.procrastination || 0} words={PROCRASTINATION_WORDS}
                 onChange={v => onChange({ procrastination: v })} />
+            </Item>
+            <Item>
+              <span>Stress level</span>
+              <RatingRow label="Stress level" value={values.stress || 0} words={STRESS_WORDS} onChange={v => onChange({ stress: v })} />
             </Item>
           </Grid>
         </Body>

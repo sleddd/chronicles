@@ -51,16 +51,24 @@ export function useInitializeData() {
     let attempt = 0;
     const load = async () => {
       setLoading(true);
+      // Development only: how long each startup step takes (see "[startup]" in the console)
+      const t0 = performance.now();
+      const step = (name: string) => { if (import.meta.env.DEV) console.info(`[startup] ${name} at ${((performance.now() - t0) / 1000).toFixed(1)}s`); };
       try {
         const [rawEntries, topicsData, settingsData] = await Promise.all([
-          entriesApi.getAll(), topicsApi.getAll(), settingsApi.getAll(),
+          entriesApi.getAll().finally(() => step('entries downloaded')),
+          topicsApi.getAll().finally(() => step('topics opened')),
+          settingsApi.getAll().finally(() => step('settings downloaded')),
         ]);
         // Dose records sealed before they were bound to their day are re-saved, once
         void dosesApi.resealOlder().catch(() => { /* tried again next session */ });
+        // Med history and Reports read every dose; start opening them now so those pages don't wait
+        void dosesApi.getAll().catch(() => { /* the page loads them itself */ });
 
         // Apply theme settings
         // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
         const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
+        step('settings opened');
         // No saved accent → Teal (never the previous account's colour)
         const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
         setAccentColor(accent);
@@ -109,24 +117,23 @@ export function useInitializeData() {
 
         // Older entry formats open only until this account is past the move to v3
         setOlderEntriesFromMarker(sealed(ENTRIES_SEAL_MARKER) !== undefined);
-        // Decrypt entries individually — skip ones that fail
-        const decrypted: import('@shared/crypto/types').DecryptedPost[] = [];
-        for (const entry of encrypted) {
+        // Decrypt entries individually, all at once (one at a time held every page up) — a failed one shows as such
+        const decrypted: import('@shared/crypto/types').DecryptedPost[] = (await Promise.all(encrypted.map(async entry => {
           try {
-            const d = await decryptPosts([entry]);
-            decrypted.push(...d);
+            return await decryptPosts([entry]);
           } catch (err) {
             console.warn(`Skipping entry ${entry.id} — decryption failed:`, err);
-            decrypted.push({
+            return [{
               id: entry.id,
               content: '[Decryption failed]',
               metadata: {},
               isEncrypted: entry.isEncrypted,
               createdAt: entry.createdAt,
               updatedAt: entry.updatedAt,
-            });
+            }];
           }
-        }
+        }))).flat();
+        step(`${decrypted.length} entries decrypted`);
         setDecryptedEntries(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
         if (olderEntriesAllowed()) {
@@ -134,6 +141,7 @@ export function useInitializeData() {
             .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err));
         }
         setLoading(false);
+        step('ready');
       } catch (err) {
         // Transient failure (rate limit, server restart, network) — keep the
         // loading state and retry rather than rendering an empty journal,

@@ -343,7 +343,8 @@ export const BareSelect = styled.label`
 
 /* Joined buttons in one outlined box, split by rules ("1 | 2 | 3 | 4 | 5",
    "None | Spotting | Light…"): the chosen one gets its own accent outline and
-   soft-accent text, no fill */
+   soft-accent text, no fill — or, with `$fill` (tabs, Reports' Compare with),
+   a light grey fill in the body colour, square, no accent */
 export const JoinedGroup = styled.div`
   display: inline-flex;
   flex: none;
@@ -353,7 +354,7 @@ export const JoinedGroup = styled.div`
   background: var(--bg-control, transparent);
 `;
 
-export const JoinedBtn = styled.button<{ $active: boolean }>`
+export const JoinedBtn = styled.button<{ $active: boolean; $fill?: boolean }>`
   position: relative;
   flex: none;
   min-width: 40px;
@@ -371,11 +372,14 @@ export const JoinedBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
   &:first-child { border-left: none; border-radius: 7px 0 0 7px; }
   &:last-child { border-radius: 0 7px 7px 0; }
-  ${({ $active }) => ($active ? `
+  ${({ $active, $fill }) => ($active && $fill ? `
+    background: var(--bg-tab-active);
+    color: var(--text-primary);
+  ` : $active ? `
     z-index: 1;
     border-radius: 7px !important;
     box-shadow: 0 0 0 1px var(--color-accent-line);
   ` : '')}
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
+  &:hover { color: ${({ $active, $fill }) => ($active && !$fill ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; z-index: 2; }
 `;

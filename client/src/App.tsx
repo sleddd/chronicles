@@ -35,6 +35,7 @@ import { TopicEntriesView } from './views/TopicEntriesView.js';
 import { HealthView } from './views/HealthView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { ExerciseHistoryView } from './views/ExerciseHistoryView.js';
+import { SymptomHistoryView } from './views/SymptomHistoryView.js';
 import { ExerciseScheduleView } from './views/ExerciseScheduleView.js';
 import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsLogView } from './views/MealsLogView.js';
@@ -120,6 +121,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--chart-violet':      '#8a6fd1',
   '--chart-amber':       '#c98f3e',
   '--chart-green':       '#4f9e74',
+  '--chart-ghost':       '#cfd2d9',  /* the pale comparison line on report charts */
   /* Mood faces, very low → great (wellness check-in) */
   '--mood-1': '#cf6a62', '--mood-2': '#d48a63', '--mood-3': '#c49a45', '--mood-4': '#5c9e78', '--mood-5': '#3f9a8c',
   /* Status */
@@ -211,6 +213,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--chart-violet':      '#a68cf0',
   '--chart-amber':       '#e0ae68',
   '--chart-green':       '#6cc093',
+  '--chart-ghost':       '#6c6f78',
   '--mood-1': '#ea8a83', '--mood-2': '#eba584', '--mood-3': '#e0b468', '--mood-4': '#7cc49a', '--mood-5': '#6cc4b4',
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#1c3a2c',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#3a2f14',
@@ -554,9 +557,10 @@ export function App() {
               <Route path="/health/med-history" element={<R><MedHistoryView /></R>} />
               <Route path="/health/schedule" element={<Navigate to="/health" replace />} />
               <Route path="/health/food" element={<R><MealsLogView /></R>} />
-              <Route path="/health/symptoms" element={<R><HealthView topicNames={['Symptom']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'duration', label: 'Duration' }]} printable printTitle="Symptoms" /></R>} />
-              <Route path="/health/exercise" element={<R><ExerciseHistoryView /></R>} />
+              <Route path="/health/symptoms" element={<R><SymptomHistoryView /></R>} />
+              <Route path="/health/exercise" element={<Navigate to="/health/exercise/schedule" replace />} />
               <Route path="/health/exercise/schedule" element={<R><ExerciseScheduleView /></R>} />
+              <Route path="/health/exercise/history" element={<R><ExerciseHistoryView /></R>} />
               <Route path="/health/exercise/routines" element={<Navigate to="/health/exercise/schedule" replace />} />
               <Route path="/health/exercise/training" element={<R><TrainingView /></R>} />
               <Route path="/health/allergies" element={<R><HealthView topicNames={['Allergy']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'allergen', label: 'Allergen' }, { key: 'reaction', label: 'Reaction' }]} printable printTitle="Allergies" /></R>} />

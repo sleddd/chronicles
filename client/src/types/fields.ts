@@ -292,6 +292,8 @@ export interface WellnessFieldValues {
   /* The rest of the daily inventory (utils/dailyInventory) — unset = not answered */
   /** Woke up during the night */
   wokeAtNight?: boolean | null;
+  /** Remembers dreaming last night */
+  dreamed?: boolean | null;
   /** Ate too much or too little overall */
   eating?: 'too_little' | 'just_right' | 'too_much' | '';
   /** Quality of the work day, 1–5, 0 = unset */
@@ -300,4 +302,6 @@ export interface WellnessFieldValues {
   social?: number;
   /** How much you procrastinated, 1 (not at all) – 5 (all day), 0 = unset */
   procrastination?: number;
+  /** Stress level, 1 (very low) – 5 (very high), 0 = unset */
+  stress?: number;
 }

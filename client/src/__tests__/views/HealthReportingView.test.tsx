@@ -136,10 +136,11 @@ describe('HealthReportingView (ready)', () => {
   it('renders period filter tabs', () => {
     renderWithTheme(<HealthReportingView />);
     expect(screen.getByRole('tablist', { name: 'Report period' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Week')).toBeInTheDocument();
-    expect(screen.getByText('Month')).toBeInTheDocument();
-    expect(screen.getByText('Year')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '30 days' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Today' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Week' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Year' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Custom' })).toBeInTheDocument();
   });
 
   it('renders the health report component', () => {

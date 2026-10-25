@@ -64,12 +64,14 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
     ? {
         sleepQuality: Number(stored.sleepQuality) || 0,
         wokeAtNight: typeof stored.wokeAtNight === 'boolean' ? stored.wokeAtNight : null,
+        dreamed: typeof stored.dreamed === 'boolean' ? stored.dreamed : null,
         eating: (stored.eating as DayInventoryValues['eating']) || '',
         workDay: Number(stored.workDay) || 0,
         social: Number(stored.social) || 0,
         procrastination: Number(stored.procrastination) || 0,
+        stress: Number(stored.stress) || 0,
       }
-    : { sleepQuality: 0, wokeAtNight: null, eating: '', workDay: 0, social: 0, procrastination: 0, ...pendingDay };
+    : { sleepQuality: 0, wokeAtNight: null, dreamed: null, eating: '', workDay: 0, social: 0, procrastination: 0, stress: 0, ...pendingDay };
 
   // Next period from every logged check-in, with today's live value overlaid
   const prediction = useMemo(() => {

@@ -9,35 +9,27 @@ import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthReport } from '../components/organisms/HealthReport.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
-import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { doses as dosesApi } from '../services/api.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
-import { setTriggerReview, type TriggerReviews, type TriggerVerdict, type SymptomTrigger } from '../utils/foodSymptoms.js';
-import { collectHealthChanges } from '../utils/healthChanges.js';
-import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { setTriggerReview, triggerEvents, type TriggerReviews, type TriggerVerdict, type SymptomTrigger } from '../utils/foodSymptoms.js';
+import { addDays, shortDay, symptomDays, type ReportScope } from '../utils/healthReport.js';
 import { splitSymptoms } from '../utils/symptomChips.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
 import { sessionsFrom } from '../utils/training.js';
 import { inventoryDays } from '../utils/dailyInventory.js';
-import type { PeriodType } from '../types/health.js';
-import type {
-  DecryptedSymptom,
-  DecryptedFood,
-  DecryptedMedicationLog,
-  DecryptedExercise,
-  DecryptedWellness,
-} from '../utils/correlationAnalysis.js';
-import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import type { DecryptedFood, DecryptedMedicationLog, DecryptedExercise } from '../utils/correlationAnalysis.js';
 
 /* ── Period filter ── */
+
+type ReportPeriod = 'today' | 'week' | '30' | 'year' | 'custom';
 
 /* `short` is what phones show so the switch stays beside the title */
 const PERIOD_OPTIONS = [
   { value: 'today' as const, label: 'Today', short: 'Day' },
   { value: 'week' as const, label: 'Week', short: 'Wk' },
-  { value: 'month' as const, label: 'Month', short: 'Mo' },
+  { value: '30' as const, label: '30 days', short: '30d' },
   { value: 'year' as const, label: 'Year', short: 'Yr' },
   { value: 'custom' as const, label: 'Custom', short: null },
 ];
@@ -133,38 +125,24 @@ const TabsRow = styled.div`
 
 /* ── Helpers ── */
 
-function getDateRange(period: PeriodType): { startDate: string; endDate: string } {
-  const end = new Date();
-  const start = new Date();
-  if (period === 'today') { /* same day */ }
-  else if (period === 'week') start.setDate(end.getDate() - 7);
-  else if (period === 'month') start.setMonth(end.getMonth() - 1);
-  else if (period === 'year') start.setFullYear(end.getFullYear() - 1);
-  return { startDate: start.toISOString().split('T')[0], endDate: end.toISOString().split('T')[0] };
-}
-
-/* ── View ── */
-
 /** Today as YYYY-MM-DD (local) */
 function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** "2026-10-01", -2 → "2026-09-29" */
-function shiftDay(day: string, by: number): string {
-  const d = new Date(day + 'T12:00:00');
-  d.setDate(d.getDate() + by);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+const createdDay = (e: { createdAt: Date | string }) => toDay(e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt));
+const toDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const fields = (e: { metadata?: unknown }) => (((e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {});
+
+/* ── View ── */
 
 export function HealthReportingView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
-  const [period, setPeriod] = useState<PeriodType>('month');
+  const [period, setPeriod] = useState<ReportPeriod>('30');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [medLogs, setMedLogs] = useState<DecryptedMedicationLog[]>([]);
@@ -174,165 +152,143 @@ export function HealthReportingView() {
     void saveTriggerReviews(setTriggerReview(triggerReviews, t, verdict, localToday()));
   }, [saveTriggerReviews, triggerReviews]);
 
-  // Resolve topic IDs
   const topicIdMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const t of allTopics) map[t.name.toLowerCase()] = t.id;
     return map;
   }, [allTopics]);
 
-  const { startDate, endDate } = useMemo(() => {
-    if (period === 'custom' && customFrom && customTo) return { startDate: customFrom, endDate: customTo };
-    if (period === 'custom') return getDateRange('month'); // fallback until both dates set
-    return getDateRange(period);
-  }, [period, customFrom, customTo]);
+  const today = localToday();
+  const range = useMemo(() => {
+    if (period === 'custom' && customFrom && customTo) {
+      return customFrom <= customTo ? { from: customFrom, to: customTo } : { from: customTo, to: customFrom };
+    }
+    if (period === 'today') return { from: today, to: today };
+    if (period === 'week') return { from: addDays(today, -6), to: today };
+    if (period === 'year') return { from: addDays(today, -364), to: today };
+    return { from: addDays(today, -29), to: today }; // 30 days, and Custom until both dates are set
+  }, [period, customFrom, customTo, today]);
 
-  // Filter entries by topic and date range
-  // padDays reaches back before the range — meals eaten just before it can still
-  // come before a symptom inside it
-  const filterByTopic = useCallback((topicName: string, padDays = 0) => {
-    const tid = topicIdMap[topicName.toLowerCase()];
-    if (!tid) return [];
-    const from = padDays ? shiftDay(startDate, -padDays) : startDate;
-    return entries.filter(e => {
-      const meta = e.metadata as Record<string, unknown> | undefined;
-      if (!meta || meta._taxonomyId !== tid) return false;
-      const d = (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString().split('T')[0];
-      return d >= from && d <= endDate;
-    });
-  }, [entries, topicIdMap, startDate, endDate]);
+  /* What's read: the range, the last 30 days (the Today / 7 days columns and
+     Symptoms at a glance, which always shows 30 days) and two
+     days past the range's end (a symptom can follow a trigger by up to two days) */
+  const data = useMemo(() => ({
+    from: range.from < addDays(today, -29) ? range.from : addDays(today, -29),
+    to: addDays(range.to, 2) > today ? addDays(range.to, 2) : today,
+  }), [range, today]);
+  const inData = useCallback((day: string) => day >= data.from && day <= data.to, [data]);
+  const inTopic = useCallback((e: { metadata?: unknown }, name: string) =>
+    (e.metadata as Record<string, unknown> | undefined)?._taxonomyId === topicIdMap[name], [topicIdMap]);
 
-  // Build typed arrays from decrypted entries
-  const symptoms: DecryptedSymptom[] = useMemo(() =>
-    filterByTopic('symptom').flatMap(e => {
-      const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
-      const dateStr = (cf.occurredDate as string) || '';
-      const timeStr = (cf.occurredTime as string) || '12:00';
-      const occurredAt = dateStr ? `${dateStr}T${timeStr}:00` : (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString();
-      const severity = (cf.severity as number) || 5;
-      // One entry can list several symptoms from the chips ("Flare day, Runny nose")
-      const label = ((cf.symptomName as string) || stripHtml(e.content)).slice(0, 120);
-      const names = splitSymptoms(label);
-      return (names.length ? names : [label]).map(name => ({ id: e.id, name, severity, occurredAt }));
-    }), [filterByTopic]);
+  // Symptoms (one entry can list several from the chips: "Flare day, Runny nose")
+  const symptomList = useMemo(() => entries.filter(e => inTopic(e, 'symptom')).flatMap(e => {
+    const cf = fields(e);
+    const day = (cf.occurredDate as string) || createdDay(e);
+    const label = ((cf.symptomName as string) || stripHtml(e.content)).slice(0, 120);
+    const names = splitSymptoms(label);
+    const occurredAt = `${day}T${(cf.occurredTime as string) || '12:00'}:00`;
+    return (names.length ? names : [label]).map(name => ({ id: e.id, name, severity: Number(cf.severity) || 5, occurredAt }));
+  }), [entries, inTopic]);
 
-  // What changed in the period (medications record their own; the Changes topic holds the rest)
-  const changes = useMemo(() =>
-    collectHealthChanges(entries, allTopics, { from: startDate, to: endDate }, stripHtml), [entries, allTopics, startDate, endDate]);
-  const openInJournal = useOpenInJournal();
+  // Meals (a row synced from a ticked dose is already counted as that dose)
+  const foods: DecryptedFood[] = useMemo(() => entries.filter(e => inTopic(e, 'meals')).flatMap(e => {
+    const meta = e.metadata as Record<string, unknown>;
+    if (meta?._doseLink) return [];
+    const cf = fields(e);
+    const day = (cf.consumedDate as string) || createdDay(e);
+    if (!inData(day)) return [];
+    const raw = (cf.ingredients as string) || '';
+    return [{
+      id: e.id,
+      name: ((cf.mealDescription as string) || stripHtml(e.content)).slice(0, 120),
+      consumedAt: `${day}T${(cf.consumedTime as string) || '12:00'}:00`,
+      ingredients: raw ? raw.split(',').map(x => x.trim()).filter(Boolean) : [],
+      mealType: (cf.mealType as string) || undefined,
+    }];
+  }), [entries, inTopic, inData]);
 
-  // Meals from two days before the range too, for the food ↔ symptom patterns
-  const patternFoods: DecryptedFood[] = useMemo(() =>
-    filterByTopic('meals', 2).flatMap(e => {
-      const meta = e.metadata as Record<string, unknown>;
-      const cf = (meta?._customFields as Record<string, unknown>) || {};
-      // A row synced from a ticked dose is already counted as that dose
-      if (meta?._doseLink) return [];
-      const dateStr = (cf.consumedDate as string) || '';
-      const timeStr = (cf.consumedTime as string) || '12:00';
-      const consumedAt = dateStr ? `${dateStr}T${timeStr}:00` : (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString();
-      const rawIngredients = (cf.ingredients as string) || '';
-      const ingredients = rawIngredients ? rawIngredients.split(',').map(s => s.trim()).filter(Boolean) : [];
-      const rawCal = cf.calories;
-      const calories = typeof rawCal === 'number' ? rawCal : (typeof rawCal === 'string' ? parseInt(rawCal, 10) || undefined : undefined);
-      const name = ((cf.mealDescription as string) || stripHtml(e.content)).slice(0, 120);
-      return [{ id: e.id, name, consumedAt, ingredients, calories, mealType: (cf.mealType as string) || undefined }];
-    }), [filterByTopic]);
-  const foods = useMemo(() => patternFoods.filter(f => f.consumedAt.slice(0, 10) >= startDate), [patternFoods, startDate]);
-
-  const exercises: DecryptedExercise[] = useMemo(() =>
-    filterByTopic('exercise').map(e => {
-      const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
-      const dateStr = (cf.performedDate as string) || '';
-      const timeStr = (cf.performedTime as string) || '12:00';
-      const performedAt = dateStr ? `${dateStr}T${timeStr}:00` : (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString();
-      const dur = cf.duration;
-      return {
-        id: e.id, name: stripHtml(e.content).slice(0, 120),
-        exerciseType: (cf.exerciseType as string) || 'other',
-        duration: typeof dur === 'number' ? dur : (typeof dur === 'string' ? parseInt(dur, 10) || 0 : 0),
-        intensity: (cf.intensity as string) || 'medium', performedAt,
-      };
-    }), [filterByTopic]);
-
-  const wellness: DecryptedWellness[] = useMemo(() =>
-    entries
-      .filter(e => {
-        const meta = e.metadata as Record<string, unknown>;
-        if (meta._widgetType !== 'wellness-checkin') return false;
-        const cf = meta._customFields as Record<string, unknown> | undefined;
-        const date = cf?.date as string | undefined;
-        if (!date) return false;
-        return date >= startDate && date <= endDate;
-      })
-      .map(e => {
-        const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) ?? {};
-        return {
-          id: e.id,
-          date: (cf.date as string) || (e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)).toISOString().split('T')[0],
-          waterGlasses: (cf.waterGlasses as number) || 0,
-          waterGoal: (cf.waterGoal as number) || 8,
-          moodScore: (cf.moodScore as number) || 0,
-          sleepHours: (cf.sleepHours as number) || 0,
-          sleepQuality: (cf.sleepQuality as number) || 0,
-          periodToday: !!(cf.periodToday),
-          flowIntensity: (cf.flowIntensity as string) || '',
-        };
-      }),
-    [entries, startDate, endDate]);
+  const exercises: DecryptedExercise[] = useMemo(() => entries.filter(e => inTopic(e, 'exercise')).flatMap(e => {
+    const cf = fields(e);
+    const day = (cf.performedDate as string) || createdDay(e);
+    if (!inData(day)) return [];
+    return [{
+      id: e.id, name: stripHtml(e.content).slice(0, 120),
+      exerciseType: (cf.exerciseType as string) || 'other',
+      duration: Number(cf.duration) || 0,
+      intensity: (cf.intensity as string) || 'medium',
+      performedAt: `${day}T${(cf.performedTime as string) || '12:00'}:00`,
+    }];
+  }), [entries, inTopic, inData]);
 
   // The daily inventory: the check-in, Meals and Exercise, scored per day
-  const inventory = useMemo(() => {
+  const { inventory, startedOn } = useMemo(() => {
     const wellnessDays = entries.flatMap(e => {
       const meta = e.metadata as Record<string, unknown>;
       if (meta._widgetType !== 'wellness-checkin') return [];
-      const cf = (meta._customFields as Record<string, unknown>) ?? {};
+      const cf = fields(e);
       if (typeof cf.date !== 'string') return [];
       return [{
         date: cf.date, moodScore: Number(cf.moodScore) || 0, sleepQuality: Number(cf.sleepQuality) || 0,
         sleepHours: Number(cf.sleepHours) || 0, waterGlasses: Number(cf.waterGlasses) || 0,
-        wokeAtNight: typeof cf.wokeAtNight === 'boolean' ? cf.wokeAtNight : null, eating: typeof cf.eating === 'string' ? cf.eating : '',
-        workDay: Number(cf.workDay) || 0, social: Number(cf.social) || 0, procrastination: Number(cf.procrastination) || 0,
+        wokeAtNight: typeof cf.wokeAtNight === 'boolean' ? cf.wokeAtNight : null,
+        dreamed: typeof cf.dreamed === 'boolean' ? cf.dreamed : null, eating: typeof cf.eating === 'string' ? cf.eating : '',
+        workDay: Number(cf.workDay) || 0, social: Number(cf.social) || 0, procrastination: Number(cf.procrastination) || 0, stress: Number(cf.stress) || 0,
       }];
     });
     const meals = foodRowsFrom(entries, topicIdMap['meals'])
       .map(r => ({ day: r.day, mealType: r.mealType, healthiness: Number(r.cf.healthiness) || 0 }));
     const workouts = sessionsFrom(entries, topicIdMap['exercise'], stripHtml).map(x => ({ day: x.date, minutes: x.minutes }));
-    return inventoryDays(wellnessDays, meals, workouts, { from: startDate, to: endDate });
-  }, [entries, topicIdMap, startDate, endDate]);
+    // The first day anything was logged ("Since you started")
+    const firsts = [...wellnessDays.map(w => w.date), ...meals.map(m => m.day), ...workouts.map(w => w.day), ...symptomList.map(x => x.occurredAt.slice(0, 10))];
+    return {
+      inventory: inventoryDays(wellnessDays, meals, workouts, data),
+      startedOn: firsts.length ? firsts.reduce((a, b) => (b < a ? b : a)) : '',
+    };
+  }, [entries, topicIdMap, data, symptomList]);
 
-  // Fetch medication dose logs for the date range
+  const scope: ReportScope = useMemo(() => ({
+    today, range, inventory,
+    symptoms: symptomDays(symptomList.filter(x => inData(x.occurredAt.slice(0, 10)))),
+  }), [today, range, inventory, symptomList, inData]);
+
+  const events = useMemo(() => triggerEvents(foods, medLogs, exercises), [foods, medLogs, exercises]);
+  const sessions = useMemo(() => exercises.map(x => ({ day: x.performedAt.slice(0, 10), minutes: x.duration })), [exercises]);
+  const doses = useMemo(() => [
+    ...medLogs.map(m => ({ name: m.medicationName, day: m.takenAt.slice(0, 10) })),
+    ...foods.filter(f => f.mealType === 'medication' || f.mealType === 'supplement').map(f => ({ name: f.name, day: f.consumedAt.slice(0, 10) })),
+  ], [medLogs, foods]);
+
+  const rangeLabel = period === 'today' ? 'Today' : period === 'week' ? 'This week' : period === 'year' ? 'Last 12 months'
+    : period === 'custom' && customFrom && customTo ? `${shortDay(range.from)} – ${shortDay(range.to)}`
+    : startedOn > range.from ? 'Since you started' : 'Last 30 days';
+
+  // Medication doses for the data window (each record is decrypted in the browser)
   useEffect(() => {
     if (!isReady) return;
     const medTopicId = topicIdMap['medication'];
     if (!medTopicId) { setMedLogs([]); return; }
-
-    // Build medication name map from entries
-    const medEntries = entries.filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === medTopicId);
     const nameMap = new Map<number, string>();
-    for (const e of medEntries) {
-      const cf = ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {};
-      nameMap.set(e.id, ((cf.medicationName as string) || stripHtml(e.content)).trim().slice(0, 120) || 'Unknown');
+    for (const e of entries) {
+      if ((e.metadata as Record<string, unknown>)?._taxonomyId !== medTopicId) continue;
+      nameMap.set(e.id, ((fields(e).medicationName as string) || stripHtml(e.content)).trim().slice(0, 120) || 'Unknown');
     }
-
-    // One request for every dose record, filtered to the range here (each is decrypted in the browser)
-    const fetchLogs = async () => {
+    let cancelled = false;
+    void (async () => {
       try {
         const { logs: all } = await dosesApi.getAll();
+        if (cancelled) return;
         setMedLogs(all
-          .filter(log => log.date >= startDate && log.date <= endDate && log.status === 'taken' && log.takenAt)
+          .filter(log => log.date >= data.from && log.date <= data.to && log.status === 'taken' && log.takenAt)
           .map(log => ({
             id: log.id,
             medicationPostId: log.medicationPostId,
             medicationName: nameMap.get(log.medicationPostId) || 'Unknown',
             takenAt: `${log.date}T${log.scheduledTime.substring(0, 5)}:00`,
           })));
-      } catch { setMedLogs([]); }
-    };
-
-    fetchLogs();
-  }, [isReady, startDate, endDate, entries, topicIdMap]);
-
+      } catch { if (!cancelled) setMedLogs([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [isReady, data, entries, topicIdMap]);
 
   if (needsUnlock) return (<><ContentTemplate><EmptyState message="Unlock your journal to view reports" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
   if (isLoading || !isReady) return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
@@ -367,19 +323,13 @@ export function HealthReportingView() {
           )}
 
           <HealthReport
-            symptoms={symptoms}
-            foods={foods}
-            patternFoods={patternFoods}
-            changes={changes}
-            onOpenChange={openInJournal}
+            scope={scope}
+            rangeLabel={rangeLabel}
+            events={events}
+            sessions={sessions}
+            doses={doses}
             triggerReviews={triggerReviews}
             onReviewTrigger={reviewsLoaded ? reviewTrigger : undefined}
-            medLogs={medLogs}
-            exercises={exercises}
-            wellness={wellness}
-            period={period}
-            accentColor={accentColor}
-            inventory={inventory}
           />
         </Inner>
       </Page>

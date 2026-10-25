@@ -29,6 +29,8 @@ interface TrendChartProps {
   ariaLabel: string;
   /** Dotted vertical lines at points where something changed (label shows on hover) */
   markers?: { index: number; label: string }[];
+  /** Solid lines only: ghosts drawn solid, no dots, and no gaps (lines join across missing days) */
+  solid?: boolean;
 }
 
 const W = 900;
@@ -66,12 +68,12 @@ const Swatch = styled.i<{ $color: string; $dashed?: boolean }>`
   border-top: 2px ${({ $dashed }) => ($dashed ? 'dashed' : 'solid')} ${({ $color }) => $color};
 `;
 
-export function ChartLegend({ series }: { series: TrendSeries[] }) {
+export function ChartLegend({ series, solid }: { series: TrendSeries[]; solid?: boolean }) {
   const main = series.find(s => !s.ghost);
   return (
     <LegendRow>
       {main && <span><Swatch $color={main.color ?? 'var(--color-accent)'} />{main.label}</span>}
-      {series.filter(s => s.ghost).map(s => <span key={s.label}><Swatch $color="var(--text-placeholder)" $dashed />{s.label}</span>)}
+      {series.filter(s => s.ghost).map(s => <span key={s.label}><Swatch $color={solid ? 'var(--chart-ghost)' : 'var(--text-placeholder)'} $dashed={!solid} />{s.label}</span>)}
     </LegendRow>
   );
 }
@@ -83,12 +85,14 @@ function niceMax(v: number): number {
   return step * mag;
 }
 
-export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => String(v), ariaLabel, markers = [] }: TrendChartProps) {
+export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => String(v), ariaLabel, markers = [], solid = false }: TrendChartProps) {
   const n = labels.length;
   const all = series.flatMap(s => s.values).filter((v): v is number => v !== null);
   const top = yMax ?? niceMax(Math.max(0, ...all));
   const ticks = yTicks ?? [0, 0.5, 1].map(f => +(top * f).toFixed(2));
-  const x = (i: number) => PAD.l + (n <= 1 ? 0 : (i * (W - PAD.l - PAD.r)) / (n - 1));
+  // Room on the left for the longest tick label ("Very high"), not just numbers, so words never reach the card's edge
+  const padL = Math.max(PAD.l, Math.max(...ticks.map(t => formatTick(t).length)) * 7 + 24);
+  const x = (i: number) => padL + (n <= 1 ? 0 : (i * (W - padL - PAD.r)) / (n - 1));
   const y = (v: number) => PAD.t + (H - PAD.t - PAD.b) * (1 - Math.min(v, top) / top);
 
   /* Path through the points, starting a new segment after each gap. */
@@ -96,7 +100,7 @@ export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => Str
     let d = '';
     let pen = false;
     vals.forEach((v, i) => {
-      if (v === null) { pen = false; return; }
+      if (v === null) { if (!solid) pen = false; return; } // solid: join across unlogged days
       d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `;
       pen = true;
     });
@@ -116,9 +120,9 @@ export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => Str
     <Svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
       {ticks.map(t => (
         <g key={t}>
-          <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)}
+          <line x1={padL} x2={W - PAD.r} y1={y(t)} y2={y(t)}
             stroke={t === 0 ? 'var(--border-card)' : 'var(--border-subtle)'} strokeWidth={t === 0 ? 1.5 : 1} />
-          <text x={PAD.l - 10} y={y(t) + 4} textAnchor="end">{formatTick(t)}</text>
+          <text x={padL - 10} y={y(t) + 4} textAnchor="end">{formatTick(t)}</text>
         </g>
       ))}
       {labels.map((l, i) => showLabel(i) && (
@@ -134,13 +138,13 @@ export function TrendChart({ labels, series, yMax, yTicks, formatTick = v => Str
         </g>
       ))}
       {ghosts.map((s, gi) => (
-        <path key={s.label} d={path(s.values)} fill="none" stroke="var(--text-placeholder)"
-          strokeWidth={1.5} strokeDasharray="5 6" opacity={gi === 0 ? 1 : 0.6} />
+        <path key={s.label} d={path(s.values)} fill="none" stroke={solid ? 'var(--chart-ghost)' : 'var(--text-placeholder)'}
+          strokeWidth={solid ? 2.5 : 1.5} strokeDasharray={solid ? undefined : '5 6'} strokeLinejoin="round" opacity={gi === 0 ? 1 : 0.6} />
       ))}
       {main && (
         <>
           <path d={path(main.values)} fill="none" stroke={mainColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-          {main.values.map((v, i) => v !== null && (
+          {!solid && main.values.map((v, i) => v !== null && (
             <circle key={i} cx={x(i)} cy={y(v)} r={i === lastIdx ? 5.5 : n > 31 ? 0 : 4.5} fill={mainColor} />
           ))}
         </>

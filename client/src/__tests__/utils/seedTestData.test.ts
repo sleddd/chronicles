@@ -86,3 +86,49 @@ describe('realisticWellness', () => {
     expect(insights.every(i => i.direction === 'positive' || i.label.startsWith('Mood'))).toBe(true);
   });
 });
+
+import { reportMonthPlan, yourDay } from '@/utils/seedTestData';
+import { inventoryDays } from '@/utils/dailyInventory';
+import { symptomDays, dayTriggers, medicationReport, exerciseReport, symptomGlance, questionRows, type ReportScope } from '@/utils/healthReport';
+import { triggerEvents } from '@/utils/foodSymptoms';
+
+describe('reportMonthPlan', () => {
+  const days = Array.from({ length: 29 }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`);
+  const plan = reportMonthPlan(days, { mealsUntil: '2026-09-29', exerciseUntil: '2026-09-29' });
+  const symptomSet = new Set(plan.symptoms.map(s => s.day));
+  const exerciseSet = new Set(plan.exercise.map(x => x.day));
+  const wellness = realisticWellness(days, symptomSet, exerciseSet);
+  const range = { from: days[0], to: days[days.length - 1] };
+  const scope: ReportScope = {
+    today: range.to, range,
+    inventory: inventoryDays(
+      days.map(date => ({ date, ...wellness.get(date)!, ...yourDay(date, wellness.get(date)!) })),
+      plan.meals.map(m => ({ day: m.day, mealType: m.mealType, healthiness: Number(m.healthiness) })),
+      plan.exercise.map(x => ({ day: x.day, minutes: x.minutes })),
+      range,
+    ),
+    symptoms: symptomDays(plan.symptoms.map(s => ({ name: s.name, severity: s.severity, occurredAt: `${s.day}T${s.time}:00` }))),
+  };
+  const foods = plan.meals.map((m, id) => ({ id, name: m.name, consumedAt: `${m.day}T${m.time}:00`, ingredients: [], mealType: m.mealType }));
+
+  it('gives Reports a trigger for a food and for a drink', () => {
+    const found = dayTriggers(triggerEvents(foods, [], []), scope, 1).triggers.map(t => `${t.trigger} → ${t.symptom}`);
+    expect(found).toEqual(expect.arrayContaining(['Dairy latte → Bloating', 'Red wine → Headache']));
+  });
+
+  it('gives each medication section something to say', () => {
+    const doses = plan.meals.filter(m => m.mealType === 'supplement').map(m => ({ name: m.name, day: m.day }));
+    const rows = Object.fromEntries(medicationReport(scope, doses).map(r => [r.name, r]));
+    expect(rows['Iron supplement'].moreOften).toContain('Bloating');
+    expect(rows['Antihistamine'].lessOften).toContain('Runny nose');
+    expect(rows['Magnesium'].note).toMatch(/almost every day/);
+  });
+
+  it('gives exercise, the symptom grid and the questions enough to compare', () => {
+    expect(exerciseReport(scope, plan.exercise.map(x => ({ day: x.day, minutes: x.minutes }))).lessOften).toContain('Fatigue');
+    expect(symptomGlance(scope).clusters.map(c => c.names).join(' | ')).toMatch(/Cough/);
+    const rows = questionRows(scope, { kind: 'mood' });
+    expect(rows.map(r => r.key)).toEqual(expect.arrayContaining(['breakfast', 'lunch', 'dinner', 'social', 'work', 'eating']));
+    expect(rows.find(r => r.key === 'breakfast')!.compare?.ready).toBe(true);
+  });
+});

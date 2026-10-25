@@ -494,7 +494,7 @@ export function SettingsView() {
     try {
       const [settingRows, doseRes, finance] = await Promise.all([
         settingsApi.getAll(),
-        dosesApi.getAll(),
+        dosesApi.getAll({ fresh: true }),
         collectFinanceData({ list: financeApi.list, decryptRecord }),
       ]);
       const { settings, unreadable } = await openAllSettings(settingRows, decryptBytes);

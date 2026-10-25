@@ -48,3 +48,12 @@ describe('daily inventory', () => {
     expect(better.find(b => b.label === 'Exercised')).toMatchObject({ withIt: 3.5, without: 3 });
   });
 });
+
+describe('dreamed', () => {
+  it('records the answer but leaves it out of the day score', () => {
+    const [d] = inventoryDays([{ date: '2026-10-01', moodScore: 5, dreamed: true }], [], [], { from: '2026-10-01', to: '2026-10-01' });
+    expect(d.answers.dreamed).toBe(true);
+    expect(d.scores.dreamed).toBeUndefined();
+    expect(d.score).toBe(Math.round((100 + 0 + 0) / 3)); // mood 100, exercised 0 and minutes 0 — nothing for dreaming
+  });
+});

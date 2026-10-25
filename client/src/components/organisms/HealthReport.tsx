@@ -1,80 +1,59 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { TrendChart, ChartLegend, type TrendSeries } from '../molecules/charts/TrendChart.js';
-import { StatTile, StatTileRow } from '../molecules/StatTile.js';
-import type { PeriodType } from '../../types/health.js';
-import type {
-  DecryptedSymptom,
-  DecryptedFood,
-  DecryptedMedicationLog,
-  DecryptedExercise,
-  DecryptedWellness,
-  WellnessTrendPoint,
-  WellnessInsight,
-} from '../../utils/correlationAnalysis.js';
-import {
-  calculateExerciseImpact,
-  calculateExerciseFrequency,
-  calculateSymptomCoOccurrences,
-  calculateWellnessTrend,
-  calculateWellnessInsights,
-} from '../../utils/correlationAnalysis.js';
-import { useMemo, useState } from 'react';
+import { StatTile } from '../molecules/StatTile.js';
 import { FilterTabs } from '../molecules/FilterTabs.js';
-import { Chips, Chip } from '../molecules/fields/formKit.js';
+import { JoinedGroup, JoinedBtn } from '../molecules/fields/formKit.js';
+import { MOOD_WORDS, QUALITY_WORDS, STRESS_WORDS } from '../../utils/dailyInventory.js';
+import { TRIGGER_KIND_LABEL, triggerKey, type TriggerEvent, type TriggerReviews, type TriggerReview, type TriggerVerdict } from '../../utils/foodSymptoms.js';
 import {
-  TRIGGER_WINDOWS, TRIGGER_KIND_LABEL, triggerEvents, symptomTriggers, standsOut, beforeLabel, applyTriggerReviews, triggerKey,
-  type TriggerWindow, type TriggerReviews, type TriggerVerdict, type SymptomTrigger, type TriggerReview, type ReviewedTriggers,
-} from '../../utils/foodSymptoms.js';
-import { TickMark } from '../atoms/TickMark.js';
-import { betterDays, summarizeInventory, type InventoryDay } from '../../utils/dailyInventory.js';
-import type { HealthChange } from '../../utils/healthChanges.js';
+  addDays, dayList, shortDay, lc, questionRows, metricTiles, metricSeries, rankedSymptoms, dayTriggers, exerciseReport,
+  medicationReport, symptomGlance, loggedDays,
+  type ReportScope, type CompareTarget, type MetricKey, type DayTrigger, type GlanceCell, type Tone,
+} from '../../utils/healthReport.js';
 
-/* Health → Reports. Sections (Wellness, Symptoms, Meals, Exercise) are big
-   thin Work Sans headings on the canvas; their content sits in --bg-panel
-   cards (12px corners, no outline). Insights are outlined boxes inside a
-   panel. Props only apart from local UI state (the chosen wellness metric). */
+/* Health → Reports: the daily inventory report. Mood, sleep, social time,
+   exercise and stress tiles (the chosen one drives the chart), the inventory
+   questions for today / 7 days / the range, and — once something is picked
+   under "Compare with" — how mood or a symptom differs on days above and
+   below the person's own average. Then possible triggers (food, medication,
+   exercise), exercise and medication on days with vs without, and a
+   day-by-day grid of every symptom. Section headings are big thin Work Sans
+   on the canvas; content sits in --bg-panel cards. Props plus local UI state.
+   The maths is in utils/healthReport. */
 
 /* ── Layout ── */
 
 const Report = styled.div`
   display: flex;
   flex-direction: column;
-  padding: 8px 0 32px;
-`;
-
-const SectionHeading = styled.h2`
-  margin: 44px 0 26px;
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 300;
-  line-height: 1.1;
-  color: var(--text-secondary);
-  &:first-child { margin-top: 32px; }
-  @media (max-width: 480px) { font-size: 22px; margin-top: 36px; }
-  padding-left: 16px;
-`;
-
-const Stack = styled.div`
-  display: flex;
-  flex-direction: column;
   gap: 20px;
+  padding: 8px 0 32px;
   @media (max-width: 900px) { gap: 12px; }
 `;
 
-const Grid = styled.div<{ $cols: number }>`
-  display: grid;
-  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
-  gap: 20px;
-  align-items: start;
-  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+const SectionHeading = styled.h2`
+  margin: 32px 0 0;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 200;
+  line-height: 1.1;
+  color: var(--text-primary);
+  @media (max-width: 480px) { font-size: 26px; }
+`;
+
+const Sub = styled.span`
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
 export const Panel = styled.section`
   min-width: 0;
-  padding: 24px 28px 28px;
+  padding: 22px 26px;
   background: var(--bg-panel);
   border-radius: 12px;
-  @media (max-width: 480px) { padding: 18px; }
+  @media (max-width: 480px) { padding: 18px 16px; }
 `;
 
 const PanelHead = styled.div`
@@ -83,243 +62,234 @@ const PanelHead = styled.div`
   align-items: baseline;
   justify-content: space-between;
   gap: 8px 20px;
-  margin-bottom: 28px;
+  margin-bottom: 14px;
 `;
 
 const PanelTitle = styled.h3`
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-primary);
 `;
 
-const PanelSub = styled.p`
-  margin: 4px 0 0;
+const Note = styled.p`
+  margin: 12px 0 0;
+  max-width: 820px;
   font-family: var(--font-sans);
   font-size: 13px;
+  line-height: 1.5;
   color: var(--text-muted);
+  ${Report} > & { margin: 0; }
 `;
 
 const Quiet = styled.p`
-  margin: 16px 0 0;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
-  &:first-child { margin-top: 0; }
-`;
-
-/* ── Insights ── */
-
-const InsightBox = styled.div`
-  padding: 18px 24px 20px;
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
-  & + & { margin-top: 12px; }
-  @media (max-width: 480px) { padding: 18px; }
-`;
-
-const InsightHead = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  margin-bottom: 12px;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--text-secondary);
-`;
-
-const Pill = styled.span<{ $found?: boolean }>`
-  padding: 3px 12px;
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  background: ${({ $found }) => ($found
-    ? 'color-mix(in oklab, var(--chart-green) 16%, var(--bg-panel))'
-    : 'var(--bg-row-hover)')};
-  color: ${({ $found }) => ($found ? 'color-mix(in oklab, var(--chart-green), white 25%)' : 'var(--text-muted)')};
-`;
-
-const Facts = styled.dl`
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px 26px;
-  margin: 0;
+  margin: 14px 0;
   font-family: var(--font-sans);
   font-size: 14px;
-  dt { color: var(--text-muted); }
-  dd { margin: 0; color: var(--text-secondary); }
+  color: var(--text-muted);
 `;
 
-/* "6+ glasses: avg 0.0 symptoms/day" → ["6+ glasses", "0.0 symptoms / day"] */
-function splitFact(line: string): [string, string] {
-  const i = line.indexOf(': ');
-  if (i < 0) return ['', line];
-  return [line.slice(0, i), line.slice(i + 2).replace(/^avg /, '').replace(/\s*\/\s*day/, ' / day')];
-}
+/* ── Compare with ── */
 
-/* ── Symptom bars ── */
-
-const SEVERITY_BANDS = [
-  { name: 'Mild', range: '1–3', color: 'var(--mood-4)' },
-  { name: 'Moderate', range: '4–6', color: 'var(--chart-amber)' },
-  { name: 'Severe', range: '7–10', color: 'var(--mood-1)' },
-];
-const bandColor = (sev: number) => SEVERITY_BANDS[sev <= 3 ? 0 : sev <= 6 ? 1 : 2].color;
-
-const Legend = styled.div`
+const CompareRow = styled.div`
+  position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 20px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
-  span { display: inline-flex; align-items: center; gap: 8px; }
-  i { width: 11px; height: 11px; border-radius: 3px; }
-`;
-
-const Bars = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  height: 260px;
-  @media (max-width: 480px) { gap: 6px; height: 200px; }
-`;
-
-const BarCol = styled.div`
-  flex: 1;
-  min-width: 0;
-  max-width: 54px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
   align-items: center;
-  gap: 10px;
-`;
-
-const BarCount = styled.span`
+  gap: 10px 14px;
+  margin-top: 24px;
   font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-muted);
-`;
-
-const Bar = styled.div<{ $h: number; $color: string }>`
-  width: 100%;
-  height: ${({ $h }) => $h}%;
-  min-height: 6px;
-  border-radius: 6px 6px 3px 3px;
-  background: ${({ $color }) => $color};
-`;
-
-const BarLabel = styled.span`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-`;
-
-/* ── Changes ── */
-
-const ChangeRow = styled.div`
-  display: grid;
-  grid-template-columns: 70px minmax(0, 1fr) max-content;
-  align-items: baseline;
-  gap: 18px;
-  padding: 13px 0;
-  border-top: 1px solid var(--border-subtle);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  &:first-of-type { border-top: none; padding-top: 0; }
-  .when { color: var(--text-muted); font-size: 14px; }
-  .what { min-width: 0; padding: 0; border: none; background: none; text-align: left; font: inherit; color: var(--text-secondary); }
-  button.what { cursor: pointer; }
-  button.what:hover { text-decoration: underline; }
-  .kind { font-size: 13px; color: var(--text-muted); }
-  @media (max-width: 480px) { grid-template-columns: 56px minmax(0, 1fr); .kind { display: none; } }
-`;
-
-/* Under a chart: which change each ◆ marks */
-const MarkerKey = styled.ul`
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
-  li { display: flex; align-items: center; gap: 10px; }
-  i { flex: none; width: 8px; height: 8px; background: var(--text-muted); transform: rotate(45deg); }
-`;
-
-/* A ◆ over a symptom bar whose day had a change */
-const BarChange = styled.i`
-  width: 8px;
-  height: 8px;
-  background: var(--text-muted);
-  transform: rotate(45deg);
-`;
-
-/* ── Lists ── */
-
-const ListRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 14px 0;
-  border-top: 1px solid var(--border-subtle);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  &:last-child { padding-bottom: 0; }
-`;
-
-const ListName = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 14px;
   color: var(--text-secondary);
-  &::first-letter { text-transform: uppercase; }
+  ${JoinedGroup} { overflow-x: auto; }
 `;
 
-const ListCount = styled.span`
-  flex: none;
-  color: var(--text-muted);
+const ClearBtn = styled(JoinedBtn)<{ $off: boolean }>`
+  color: ${({ $off }) => ($off ? 'var(--text-placeholder)' : 'var(--text-secondary)')};
+  cursor: ${({ $off }) => ($off ? 'default' : 'pointer')};
 `;
 
-const RowText = styled.div`
-  min-width: 0;
+const MoreBtn = styled(JoinedBtn)`
+  color: var(--color-accent-link);
+`;
+
+/* The floating symptom list ("More symptoms") */
+const Pop = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: min(340px, 100%);
+  padding: 10px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  background: var(--bg-tile);
+  border: 1px solid var(--border-pop);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  @media (min-width: 600px) { left: 110px; }
 `;
 
-const RowSub = styled.span`
-  margin-top: 3px;
+const PopSearch = styled.input`
+  height: 38px;
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-field);
+  border-radius: 6px;
+  outline: none;
+  &:focus { border-color: var(--color-accent-line); }
+`;
+
+const PopList = styled.div`
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+`;
+
+const PopItem = styled.button<{ $active: boolean }>`
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  &:hover { background: var(--bg-row-hover); }
+  span { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+`;
+
+/* ── Tiles ── */
+
+const Tiles = styled.div<{ $cols: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
+  gap: 12px;
+  @media (max-width: 1000px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 640px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+`;
+
+/* ── Tables (questions, triggers, exercise, medication) ──
+   A grid per row; on phones each cell stacks under its own label */
+
+const Table = styled.div<{ $cols: string }>`
+  display: flex;
+  flex-direction: column;
+  --cols: ${({ $cols }) => $cols};
+`;
+
+const Row = styled.div<{ $head?: boolean }>`
+  display: grid;
+  grid-template-columns: var(--cols);
+  gap: 20px;
+  align-items: ${({ $head }) => ($head ? 'end' : 'center')};
+  padding: ${({ $head }) => ($head ? '12px 0' : '14px 0')};
+  border-bottom: 1px solid ${({ $head }) => ($head ? 'var(--border-card)' : 'var(--border-subtle)')};
+  font-family: var(--font-sans);
+  font-size: ${({ $head }) => ($head ? '13px' : '15px')};
+  color: ${({ $head }) => ($head ? 'var(--text-muted)' : 'var(--text-primary)')};
+  &:last-child { border-bottom: ${({ $head }) => ($head ? '' : 'none')}; }
+  @media (max-width: 768px) {
+    ${({ $head }) => ($head ? 'display: none;' : '')}
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 12px;
+    align-items: start;
+  }
+`;
+
+const Cell = styled.span<{ $muted?: boolean; $tone?: Tone | 'less' | 'more' }>`
+  min-width: 0;
+  font-size: inherit;
+  line-height: 1.45;
+  text-wrap: pretty;
+  color: ${({ $muted, $tone }) => ($tone === 'better' || $tone === 'less' ? 'var(--color-accent-soft)'
+    : $tone === 'worse' || $tone === 'more' ? 'var(--chart-amber)'
+    : $muted ? 'var(--text-secondary)' : 'inherit')};
+  @media (max-width: 768px) {
+    &[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  }
+`;
+
+/* The row's name: full width above the values on phones */
+const NameCell = styled(Cell)`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  small { font-size: 13px; color: var(--text-muted); }
+  @media (max-width: 768px) { grid-column: 1 / -1; }
+`;
+
+/* A cell that spans the row on phones (the comparison sentence, buttons) */
+const WideCell = styled(Cell)`
+  @media (max-width: 768px) { grid-column: 1 / -1; }
+`;
+
+const CompareText = styled(WideCell)`
+  font-size: 14px;
+`;
+
+const NeedText = styled(WideCell)`
   font-size: 13px;
   color: var(--text-muted);
 `;
+
+/* ── Triggers ── */
 
 const WindowRow = styled.div`
-  margin: -8px 0 20px;
-`;
-
-const Verdict = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
-  margin-top: 8px;
+  gap: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
 `;
 
-const ReviewBtn = styled.button`
-  display: inline-flex;
+const Actions = styled(WideCell)`
+  display: flex;
+  justify-content: flex-end;
   align-items: center;
-  gap: 6px;
-  padding: 0;
+  gap: 8px;
+  @media (max-width: 768px) { justify-content: flex-start; }
+`;
+
+const ReviewBtn = styled.button<{ $accent?: boolean }>`
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid ${({ $accent }) => ($accent ? 'var(--color-accent-line)' : 'var(--border-pill, var(--border-card))')};
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  white-space: nowrap;
+  color: ${({ $accent }) => ($accent ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const Status = styled.span<{ $yes: boolean }>`
+  font-size: 13px;
+  color: ${({ $yes }) => ($yes ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+`;
+
+const UndoBtn = styled.button`
+  padding: 6px 4px;
   border: none;
   background: none;
   font-family: var(--font-sans);
@@ -327,717 +297,521 @@ const ReviewBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-secondary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
-const Confirmed = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+const LinkBtn = styled.button`
+  padding: 0 0 0 6px;
+  border: none;
+  background: none;
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-accent-soft);
+  font-size: 14px;
+  color: var(--color-accent-link);
+  cursor: pointer;
 `;
-
-const DismissedToggle = styled(ReviewBtn)`
-  margin-top: 16px;
-`;
-
-/* The two fact lines under a trigger */
-function TriggerFacts({ t }: { t: SymptomTrigger }) {
-  return (
-    <>
-      <RowSub>{TRIGGER_KIND_LABEL[t.kind]} · before {t.before} of {t.of} {plural(t.of, 'time')} · {beforeLabel(t.avgHours)}</RowSub>
-      <RowSub>Usually on {Math.round(t.usual * 100)}% of days{standsOut(t) ? ' · stands out' : ''}</RowSub>
-    </>
-  );
-}
-
-/* "2026-10-19" → "Oct 19" */
-const shortDate = (day: TriggerReview['at']) =>
-  new Date(day + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-const DISMISSED_PAGE = 5;
-
-/* A list of possible triggers with the owner's reviews: confirmed ones pinned
-   first, then the open ones with Confirm / Not a trigger, then the ones marked
-   not a trigger folded away (this period's first, newest first, five at a
-   time) so they never pile up. `withSymptom` titles rows "Food → Symptom"
-   (Possible triggers); without it, just the food (Before a symptom). */
-function TriggerList({ reviewed, onReview, withSymptom, openLimit, empty }: {
-  reviewed: ReviewedTriggers;
-  onReview?: (t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => void;
-  withSymptom?: boolean;
-  openLimit: number;
-  empty: string;
-}) {
-  const [shown, setShown] = useState(0);
-  const title = (t: { trigger: string; symptom: string }) => (withSymptom ? `${t.trigger} → ${t.symptom}` : t.trigger);
-  const label = (t: { trigger: string; symptom: string }) => `${t.trigger} → ${t.symptom}`;
-  const count = (t: SymptomTrigger) => (withSymptom ? `${Math.round(t.share * 100)}%` : `${t.before} of ${t.of} ${plural(t.of, 'time')}`);
-  const facts = (t: SymptomTrigger) => (withSymptom ? <TriggerFacts t={t} /> : (
-    <RowSub>{TRIGGER_KIND_LABEL[t.kind]} · usually on {Math.round(t.usual * 100)}% of days{standsOut(t) ? ' · stands out' : ''}</RowSub>
-  ));
-  const open = reviewed.open.slice(0, openLimit);
-  const dismissed = [...reviewed.dismissed].sort((a, b) =>
-    Number(!a.row) - Number(!b.row) || b.review.at.localeCompare(a.review.at));
-
-  return (
-    <>
-      {reviewed.confirmed.map(({ review, row }) => (
-        <ListRow key={triggerKey(review)}>
-          <RowText>
-            <ListName title={title(review)}>{title(review)}</ListName>
-            {row ? facts(row) : <RowSub>{TRIGGER_KIND_LABEL[review.kind]} · not seen in this period</RowSub>}
-            <Verdict>
-              <Confirmed><TickMark checked size={16} />Confirmed {shortDate(review.at)}</Confirmed>
-              {onReview && <ReviewBtn type="button" onClick={() => onReview(review, null)} aria-label={`Undo confirm ${label(review)}`}>Undo</ReviewBtn>}
-            </Verdict>
-          </RowText>
-          {row && <ListCount>{count(row)}</ListCount>}
-        </ListRow>
-      ))}
-      {open.length === 0 && reviewed.confirmed.length === 0 ? <Quiet>{empty}</Quiet> : open.map(t => (
-        <ListRow key={triggerKey(t)}>
-          <RowText>
-            <ListName title={title(t)}>{title(t)}</ListName>
-            {facts(t)}
-            {onReview && (
-              <Verdict>
-                <ReviewBtn type="button" onClick={() => onReview(t, 'confirmed')} aria-label={`Confirm ${label(t)}`}>
-                  <TickMark checked={false} size={16} />Confirm
-                </ReviewBtn>
-                <ReviewBtn type="button" onClick={() => onReview(t, 'dismissed')} aria-label={`${label(t)} is not a trigger`}>
-                  Not a trigger
-                </ReviewBtn>
-              </Verdict>
-            )}
-          </RowText>
-          <ListCount>{count(t)}</ListCount>
-        </ListRow>
-      ))}
-      {dismissed.length > 0 && (
-        <>
-          <DismissedToggle type="button" aria-expanded={shown > 0} onClick={() => setShown(n => (n ? 0 : DISMISSED_PAGE))}>
-            {dismissed.length} marked not a trigger · {shown ? 'Hide' : 'Show'}
-          </DismissedToggle>
-          {dismissed.slice(0, shown).map(({ review, row }) => (
-            <ListRow key={triggerKey(review)}>
-              <RowText>
-                <ListName style={{ color: 'var(--text-muted)' }} title={title(review)}>{title(review)}</ListName>
-                <RowSub>{TRIGGER_KIND_LABEL[review.kind]} · marked {shortDate(review.at)}{row ? '' : ' · not seen in this period'}</RowSub>
-              </RowText>
-              {onReview && <ReviewBtn type="button" onClick={() => onReview(review, null)} aria-label={`Restore ${label(review)}`}>Restore</ReviewBtn>}
-            </ListRow>
-          ))}
-          {shown > 0 && shown < dismissed.length && (
-            <DismissedToggle type="button" onClick={() => setShown(n => n + DISMISSED_PAGE)}>
-              Show {Math.min(DISMISSED_PAGE, dismissed.length - shown)} more
-            </DismissedToggle>
-          )}
-        </>
-      )}
-    </>
-  );
-}
 
 /* ── Exercise ── */
 
-const BigFigures = styled.div`
+const Figures = styled.div`
   display: flex;
   flex-wrap: wrap;
+  gap: 12px 40px;
   align-items: baseline;
-  gap: 8px 32px;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 200;
-  line-height: 1;
-  color: var(--text-secondary);
-  small { margin-left: 8px; font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text-muted); }
+  span { display: inline-flex; align-items: baseline; gap: 8px; font-family: var(--font-sans); font-size: 14px; color: var(--text-secondary); }
+  b { font-family: var(--font-display); font-weight: 300; font-size: 30px; color: var(--text-primary); }
 `;
 
-const WeekRow = styled.div`
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
-  align-items: center;
-  gap: 18px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  & + & { margin-top: 14px; }
-  & > span:first-child { color: var(--text-muted); }
-  & > span:last-child { color: var(--text-secondary); }
-  @media (max-width: 480px) { gap: 12px; font-size: 15px; }
-`;
+/* ── Symptoms at a glance ── */
 
-const WeekBar = styled.div<{ $pct: number }>`
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat left / ${({ $pct }) => Math.max(4, $pct)}% 100%;
-`;
+const SEVERITY_COLOR: Record<GlanceCell, string> = {
+  mild: 'var(--mood-4)', moderate: 'var(--chart-amber)', severe: 'var(--mood-1)', none: 'var(--border-subtle)', unlogged: 'transparent',
+};
 
-const ImpactRow = styled.div`
+const Legend = styled.div`
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   font-family: var(--font-sans);
-  & + & { margin-top: 18px; }
-`;
-
-const ImpactName = styled.div`
-  font-size: 15px;
-  color: var(--text-secondary);
-  &::first-letter { text-transform: uppercase; }
-`;
-
-const ImpactSub = styled.div`
-  margin-top: 4px;
   font-size: 13px;
   color: var(--text-muted);
+  span { display: inline-flex; align-items: center; gap: 6px; }
 `;
 
-const ImpactChange = styled.div`
+const Swatch = styled.i<{ $c: string }>`
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: ${({ $c }) => $c};
+`;
+
+const HeatRow = styled.div<{ $head?: boolean }>`
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 50px 80px 150px;
+  gap: 14px;
+  align-items: center;
+  min-height: 22px;
+  padding: ${({ $head }) => ($head ? '0 0 6px' : '1.5px 0')};
+  font-family: var(--font-sans);
+  font-size: ${({ $head }) => ($head ? '12px' : '14px')};
+  color: ${({ $head }) => ($head ? 'var(--text-muted)' : 'var(--text-primary)')};
+  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num { text-align: right; }
+  .soft { font-size: 13px; color: var(--text-secondary); }
+  @media (max-width: 768px) {
+    grid-template-columns: 110px minmax(0, 1fr) 30px;
+    .wide { display: none; }
+  }
+`;
+
+const Cells = styled.span`
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  font-size: 15px;
-  color: var(--text-muted);
-  white-space: nowrap;
+  gap: 2px;
 `;
 
-const Delta = styled.b<{ $worse: boolean; $flat: boolean }>`
-  font-weight: 600;
-  color: ${({ $worse, $flat }) => ($flat ? 'var(--text-muted)' : $worse ? 'var(--mood-1)' : 'var(--chart-green)')};
+const Square = styled.i<{ $c: string }>`
+  flex: 1;
+  height: 18px;
+  border-radius: 2px;
+  background: ${({ $c }) => $c};
+`;
+
+const Ends = styled.span`
+  display: flex;
+  justify-content: space-between;
+`;
+
+const Together = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-card);
+`;
+
+const TogetherRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 20px;
+  padding: 8px 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  span:last-child { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
 `;
 
 /* ── Helpers ── */
 
-type WellnessMetric = 'water' | 'mood' | 'sleep';
+const plural = (n: number, a: string, b: string) => (n === 1 ? a : b);
 
-const METRICS: Record<WellnessMetric, { name: string; color: string; max: number; unit: string; pick: (p: WellnessTrendPoint) => number }> = {
-  water: { name: 'Water', color: 'var(--chart-blue)', max: 8, unit: '', pick: p => p.waterGlasses },
-  mood: { name: 'Mood', color: 'var(--chart-amber)', max: 5, unit: '', pick: p => p.moodScore },
-  sleep: { name: 'Sleep', color: 'var(--chart-violet)', max: 10, unit: 'h', pick: p => p.sleepHours },
+const METRIC_COLOR: Record<MetricKey, string> = {
+  symptom: 'var(--mood-2)', mood: 'var(--chart-amber)', sleep: 'var(--chart-violet)',
+  social: 'var(--color-accent)', exercise: 'var(--mood-1)', stress: 'var(--chart-blue)',
 };
 
-/* Trailing 7-day average of the logged (non-zero) days — the dashed comparison line. */
-function rollingAverage(vals: (number | null)[]): (number | null)[] {
-  return vals.map((_, i) => {
-    const win = vals.slice(Math.max(0, i - 6), i + 1).filter((v): v is number => v !== null);
-    return win.length ? +(win.reduce((t, v) => t + v, 0) / win.length).toFixed(2) : null;
-  });
+const TRIGGER_WINDOWS = [
+  { value: '0', label: 'Same day' },
+  { value: '1', label: 'Within a day' },
+  { value: '2', label: 'Within 2 days' },
+] as const;
+type WindowValue = typeof TRIGGER_WINDOWS[number]['value'];
+
+/* A verdict from before, on something not seen in this range */
+function PastRow({ r, onReviewTrigger }: { r: TriggerReview; onReviewTrigger?: (t: TriggerRef, verdict: TriggerVerdict | null) => void }) {
+  const confirmed = r.verdict === 'confirmed';
+  return (
+    <Row>
+      <NameCell>
+        {r.trigger}
+        <small>{r.kind === 'food' ? '' : `${TRIGGER_KIND_LABEL[r.kind]} · `}then {lc(r.symptom)}</small>
+      </NameCell>
+      <WideCell $muted style={{ gridColumn: 'span 2' }}>Not seen in this period</WideCell>
+      <Actions>
+        <Status $yes={confirmed}>{confirmed ? 'Marked as trigger' : 'Not a trigger'} · {shortDay(r.at)}</Status>
+        {onReviewTrigger && <UndoBtn type="button" onClick={() => onReviewTrigger(r, null)}>{confirmed ? 'Undo' : 'Restore'}</UndoBtn>}
+      </Actions>
+    </Row>
+  );
 }
-
-const dayLabel = (iso: string) =>
-  new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-const localDay = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-/* "W2026-10-11" → "Week of Oct 11", "2026-10" → "Oct 2026" */
-function periodLabel(key: string): string {
-  if (key.startsWith('W')) return `Week of ${dayLabel(key.slice(1))}`;
-  if (/^\d{4}-\d{2}$/.test(key)) return new Date(key + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  return dayLabel(key);
-}
-
-const PERIOD_TITLE: Record<PeriodType, string> = {
-  today: 'Today', week: 'This week', month: 'This month', year: 'This year', custom: 'This period',
-};
-
-const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
 
 /* ── Props ── */
 
+type TriggerRef = Pick<DayTrigger, 'kind' | 'trigger' | 'symptom'>;
+
 interface HealthReportProps {
-  symptoms: DecryptedSymptom[];
-  foods: DecryptedFood[];
-  /** Meals for the food ↔ symptom patterns (reaching a little before the range); defaults to foods */
-  patternFoods?: DecryptedFood[];
-  medLogs: DecryptedMedicationLog[];
-  exercises: DecryptedExercise[];
-  wellness: DecryptedWellness[];
-  period: PeriodType;
-  /** Kept for callers; the report now draws in the accent token directly */
-  accentColor?: string;
-  /** Things changed in the period (medications, the Changes topic), newest first */
-  changes?: HealthChange[];
+  /** Inventory and symptoms for the range and the last 30 days (utils/healthReport) */
+  scope: ReportScope;
+  /** The range column's header: "Last 30 days", "Since you started", "Last 12 months", "Oct 1 – Oct 20" */
+  rangeLabel: string;
+  /** Foods, medications and exercise as dated events (utils/foodSymptoms triggerEvents) */
+  events: TriggerEvent[];
+  /** Exercise sessions in the range */
+  sessions: { day: string; minutes: number }[];
+  /** Medications taken (ticked doses and Meals rows logged as medication / supplement) */
+  doses: { name: string; day: string }[];
   /** The owner's verdicts on possible triggers (encrypted setting, held by the view) */
   triggerReviews?: TriggerReviews;
   /** Mark a trigger confirmed / not a trigger (null clears); omitted = no buttons */
-  onReviewTrigger?: (t: Pick<SymptomTrigger, 'kind' | 'trigger' | 'symptom'>, verdict: TriggerVerdict | null) => void;
-  /** Open a change's entry (the medication, or the Changes entry) */
-  onOpenChange?: (entryId: number) => void;
-  /** The daily inventory scored per day (utils/dailyInventory) — the Daily inventory section */
-  inventory?: InventoryDay[];
+  onReviewTrigger?: (t: TriggerRef, verdict: TriggerVerdict | null) => void;
 }
 
 /* ── Component ── */
 
-export function HealthReport({ symptoms, foods, patternFoods = foods, medLogs, exercises, wellness, period, triggerReviews, onReviewTrigger, changes = [], onOpenChange, inventory = [] }: HealthReportProps) {
-  // Food, medications and exercise before each symptom (What comes before symptoms)
-  const [triggerWindow, setTriggerWindow] = useState<TriggerWindow>('4');
-  const events = useMemo(() => triggerEvents(patternFoods, medLogs, exercises), [patternFoods, medLogs, exercises]);
-  const reviewed = useMemo(() =>
-    applyTriggerReviews(symptomTriggers(symptoms, events, Number(triggerWindow)), triggerReviews), [symptoms, events, triggerWindow, triggerReviews]);
+export function HealthReport({ scope, rangeLabel, events, sessions, doses, triggerReviews, onReviewTrigger }: HealthReportProps) {
+  const [target, setTarget] = useState<CompareTarget | null>(null);
+  const [chartKey, setChartKey] = useState<MetricKey>('mood');
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [win, setWin] = useState<WindowValue>('1');
+  const [exAll, setExAll] = useState(false);
+  const [symAll, setSymAll] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
+  const compareRef = useRef<HTMLDivElement>(null);
 
-  const coOccurrences = useMemo(() =>
-    symptoms.length > 0 ? calculateSymptomCoOccurrences(symptoms) : [], [symptoms]);
+  const ranked = useMemo(() => rankedSymptoms(scope), [scope]);
+  const days = useMemo(() => dayList(scope.range.from, scope.range.to), [scope]);
+  const symptomTarget = target?.kind === 'symptom' ? target : undefined;
+  const tiles = useMemo(() => metricTiles(scope, symptomTarget), [scope, symptomTarget]);
+  const rows = useMemo(() => questionRows(scope, target), [scope, target]);
+  const triggers = useMemo(() => dayTriggers(events, scope, Number(win)), [events, scope, win]);
+  const exercise = useMemo(() => exerciseReport(scope, sessions), [scope, sessions]);
+  const meds = useMemo(() => medicationReport(scope, doses), [scope, doses]);
+  // Symptoms at a glance always shows the last 30 days, whatever the range
+  const glance = useMemo(() => symptomGlance({ ...scope, range: { from: addDays(scope.today, -29), to: scope.today } }), [scope]);
+  const hasAnything = useMemo(() =>
+    loggedDays(scope, scope.range.from, scope.range.to).length > 0, [scope]);
 
-  const exerciseImpact = useMemo(() =>
-    exercises.length > 0 ? calculateExerciseImpact(symptoms, exercises) : [], [symptoms, exercises]);
+  // The chart falls back to mood when the compared symptom is cleared
+  const shownKey: MetricKey = chartKey === 'symptom' && !symptomTarget ? 'mood' : chartKey;
 
-  const exerciseFrequency = useMemo(() =>
-    exercises.length > 0 ? calculateExerciseFrequency(exercises, period === 'year' ? 'month' : 'week') : [], [exercises, period]);
+  /* Close the symptom list on a click outside or Escape */
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: MouseEvent) => { if (!compareRef.current?.contains(e.target as Node)) setMoreOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [moreOpen]);
 
-  /* Symptoms per day (per month over a year): count + average severity */
-  const symptomBars = useMemo(() => {
-    const byKey = new Map<string, number[]>();
-    for (const s of symptoms) {
-      const d = new Date(s.occurredAt);
-      const key = period === 'year' ? localDay(d).slice(0, 7) : localDay(d);
-      byKey.set(key, [...(byKey.get(key) ?? []), s.severity || 5]);
-    }
-    return [...byKey.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-12)
-      .map(([key, sevs]) => ({
-        key, count: sevs.length, avg: sevs.reduce((t, v) => t + v, 0) / sevs.length,
-        changes: changes.filter(c => (period === 'year' ? c.date.slice(0, 7) : c.date) === key),
-      }));
-  }, [symptoms, period, changes]);
-
-  const topSymptoms = useMemo(() => {
-    const counts = new Map<string, { name: string; n: number }>();
-    for (const s of symptoms) {
-      const k = s.name.toLowerCase();
-      const cur = counts.get(k);
-      counts.set(k, { name: cur?.name ?? s.name, n: (cur?.n ?? 0) + 1 });
-    }
-    return [...counts.values()].sort((a, b) => b.n - a.n).slice(0, 5);
-  }, [symptoms]);
-
-  const [chosenSymptom, setChosenSymptom] = useState('');
-  const beforeSymptom = topSymptoms.find(t => t.name.toLowerCase() === chosenSymptom.toLowerCase())?.name ?? topSymptoms[0]?.name ?? '';
-  // Everything before the chosen symptom, split by the reviews for that symptom
-  const before = useMemo(() => {
-    if (!beforeSymptom) return applyTriggerReviews([], {});
-    const rows = symptomTriggers(symptoms, events, Number(triggerWindow), { symptom: beforeSymptom, minTimes: 1, minShare: 0 });
-    const forSymptom = Object.fromEntries(Object.entries(triggerReviews ?? {})
-      .filter(([, r]) => r?.symptom?.trim().toLowerCase() === beforeSymptom.trim().toLowerCase()));
-    return applyTriggerReviews(rows, forSymptom);
-  }, [symptoms, events, beforeSymptom, triggerWindow, triggerReviews]);
-
-
-  const exerciseTotals = useMemo(() => {
-    if (exercises.length === 0) return null;
-    const byType = new Map<string, number>();
-    for (const e of exercises) byType.set(e.exerciseType.toLowerCase(), (byType.get(e.exerciseType.toLowerCase()) ?? 0) + 1);
-    const types = [...byType.entries()].sort((a, b) => b[1] - a[1]);
-    const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-    return {
-      sessions: exercises.length,
-      minutes: exercises.reduce((t, e) => t + (e.duration || 0), 0),
-      note: types.length === 1 ? `All logged as ${cap(types[0][0])}` : `Mostly ${cap(types[0][0])} · ${types.length} types`,
-    };
-  }, [exercises]);
-
-  const wellnessTrend: WellnessTrendPoint[] = useMemo(() =>
-    wellness.length > 0 ? calculateWellnessTrend(wellness) : [], [wellness]);
-
-  const wellnessInsights: WellnessInsight[] = useMemo(() =>
-    wellness.length >= 3 ? calculateWellnessInsights(wellness, symptoms, exercises) : [],
-    [wellness, symptoms, exercises]);
-
-  const wellnessSummary = useMemo(() => {
-    if (wellness.length === 0) return null;
-    const avg = (pick: (w: DecryptedWellness) => number) => {
-      const xs = wellness.map(pick).filter(v => v > 0);
-      return xs.length ? xs.reduce((t, v) => t + v, 0) / xs.length : 0;
-    };
-    return { avgWater: avg(w => w.waterGlasses), avgMood: avg(w => w.moodScore), avgSleep: avg(w => w.sleepHours), days: wellness.length };
-  }, [wellness]);
-
-  const [metric, setMetric] = useState<WellnessMetric>('sleep');
-  /* Daily inventory: the day scores, each question's usual answer, and what goes with better days */
-  const inv = useMemo(() => {
-    const scored = inventory.filter(d => d.score !== null);
-    if (!scored.length) return null;
-    const scores = scored.map(d => d.score!);
-    const best = scored.reduce((a, b) => (b.score! > a.score! ? b : a));
-    const worst = scored.reduce((a, b) => (b.score! < a.score! ? b : a));
-    const values = scored.map(d => d.score);
-    return {
-      days: scored.length,
-      avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-      best, worst,
-      labels: scored.map(d => dayLabel(d.date)),
-      series: [
-        { label: 'Daily score', values, color: 'var(--color-accent)' },
-        { label: '7-day average', values: rollingAverage(values), ghost: true },
-      ] as TrendSeries[],
-      questions: summarizeInventory(inventory),
-      better: betterDays(inventory),
-    };
-  }, [inventory]);
+  const pickSymptom = (key: string, name: string) => {
+    setTarget(t => (t?.kind === 'symptom' && t.key === key ? null : { kind: 'symptom', key, name }));
+    setMoreOpen(false);
+    setQuery('');
+  };
 
   const chart = useMemo(() => {
-    const m = METRICS[metric];
-    const values = wellnessTrend.map(p => (m.pick(p) > 0 ? m.pick(p) : null));
-    const series: TrendSeries[] = [
-      { label: 'Daily', values, color: m.color },
-      { label: '7-day average', values: rollingAverage(values), ghost: true },
-    ];
-    // Each change sits on the first logged day on or after it
-    const byIndex = new Map<number, HealthChange[]>();
-    for (const c of changes) {
-      const i = wellnessTrend.findIndex(p => p.date >= c.date);
-      if (i >= 0) byIndex.set(i, [...(byIndex.get(i) ?? []), c]);
+    const values = metricSeries(scope, shownKey, days, symptomTarget?.key);
+    const nums = values.filter((v): v is number => v !== null);
+    const peak = Math.max(0, ...nums);
+    let yMax: number;
+    let yTicks: number[];
+    let formatTick: (v: number) => string;
+    if (shownKey === 'mood' || shownKey === 'social' || shownKey === 'stress') {
+      const words = shownKey === 'mood' ? MOOD_WORDS : shownKey === 'stress' ? STRESS_WORDS : QUALITY_WORDS;
+      yMax = 5; yTicks = [1, 3, 5]; formatTick = v => words[v - 1] ?? '';
+    } else if (shownKey === 'symptom') {
+      yMax = 10; yTicks = [0, 5, 10]; formatTick = v => (v === 0 ? 'None' : v === 5 ? 'Moderate' : 'Severe');
+    } else {
+      const floor = shownKey === 'exercise' ? 30 : 8;
+      const step = shownKey === 'exercise' ? 10 : 2;
+      yMax = Math.max(floor, Math.ceil(peak / step) * step);
+      yTicks = [0, yMax / 2, yMax];
+      formatTick = v => (shownKey === 'sleep' ? `${v} h` : shownKey === 'exercise' ? `${v} min` : String(v));
     }
-    const markers = [...byIndex].sort((a, b) => a[0] - b[0]).map(([index, cs]) => ({
-      index, label: cs.map(c => `${dayLabel(c.date)} · ${c.text}`).join(' · '), cs,
-    }));
-    return { m, labels: wellnessTrend.map(p => dayLabel(p.date)), series, markers };
-  }, [wellnessTrend, metric, changes]);
-
-  const hasAnything = changes.length > 0 || wellness.length > 0 || symptoms.length > 0 || exercises.length > 0 || foods.length > 0;
-  const maxBar = Math.max(1, ...symptomBars.map(b => b.count));
-  const maxWeek = Math.max(1, ...exerciseFrequency.map(d => d.count));
+    const series: TrendSeries[] = [{ label: 'Daily', values, color: METRIC_COLOR[shownKey] }];
+    // The compared outcome, scaled onto this chart's axis, as a pale line behind
+    if (target && !(target.kind === 'mood' && shownKey === 'mood') && !(target.kind === 'symptom' && shownKey === 'symptom')) {
+      const raw = target.kind === 'mood' ? metricSeries(scope, 'mood', days) : metricSeries(scope, 'symptom', days, target.key);
+      const full = target.kind === 'mood' ? 5 : 10;
+      series.push({
+        label: target.kind === 'mood' ? 'Mood (very low → great)' : `${target.name} (none → severe)`,
+        ghost: true,
+        values: raw.map(v => (v === null ? null : (v / full) * yMax)),
+      });
+    }
+    const name = shownKey === 'symptom' ? symptomTarget!.name : tiles.find(t => t.key === shownKey)?.name ?? '';
+    return { series, yMax, yTicks, formatTick, title: `${name} over time`, labels: days.map(shortDay) };
+  }, [scope, shownKey, days, symptomTarget, target, tiles]);
 
   if (!hasAnything) {
     return <Report><Quiet style={{ marginTop: 40 }}>Nothing logged in this period yet. Wellness check-ins, symptoms, meals and exercise show up here as you log them.</Quiet></Report>;
   }
 
+  const top3 = ranked.slice(0, 3);
+  const extra = symptomTarget && !top3.some(s => s.key === symptomTarget.key) ? [{ key: symptomTarget.key, name: symptomTarget.name, days: 0 }] : [];
+  const q = query.trim().toLowerCase();
+  const filtered = ranked.filter(s => !q || s.name.toLowerCase().includes(q));
+  const comparing = !!target;
+  const outcomeLabel = target?.kind === 'symptom' ? `Days with ${lc(target.name)}` : 'Your mood';
+  const cols = comparing
+    ? 'minmax(0, 1.3fr) repeat(3, minmax(0, 0.7fr)) minmax(0, 1.6fr)'
+    : 'minmax(0, 1.6fr) repeat(3, minmax(0, 1fr))';
+
+  const review = (t: DayTrigger) => triggerReviews?.[triggerKey(t)];
+  // Verdicts on things that didn't come up in this range (newest first)
+  const shown = new Set(triggers.triggers.map(triggerKey));
+  const earlier = Object.entries(triggerReviews ?? {})
+    .filter(([k, r]) => !shown.has(k) && r && typeof r === 'object')
+    .map(([, r]) => r)
+    .sort((a, b) => b.at.localeCompare(a.at));
+  const past = { confirmed: earlier.filter(r => r.verdict === 'confirmed'), dismissed: earlier.filter(r => r.verdict === 'dismissed') };
+  const exLess = exAll ? exercise.lessOften : exercise.lessOften.slice(0, 4);
+  const exMore = exAll ? exercise.moreOften : exercise.moreOften.slice(0, 4);
+  const heatRows = symAll ? glance.rows : glance.rows.slice(0, 10);
+
   return (
     <Report>
-      {changes.length > 0 && (
-        <>
-          <SectionHeading>Changes</SectionHeading>
-          <Panel aria-label="Changes in this period">
-            <PanelHead>
-              <div>
-                <PanelTitle>Changes in this period</PanelTitle>
-                <PanelSub>What you changed, to line up against the data below. Marked ◆ on the charts.</PanelSub>
-              </div>
-            </PanelHead>
-            {changes.map((c, i) => (
-              <ChangeRow key={`${c.entryId}-${c.date}-${i}`}>
-                <span className="when">{dayLabel(c.date)}</span>
-                {onOpenChange
-                  ? <button type="button" className="what" onClick={() => onOpenChange(c.entryId)}>{c.text}</button>
-                  : <span className="what">{c.text}</span>}
-                <span className="kind">{c.source === 'medication' ? 'Medication' : 'Other'}</span>
-              </ChangeRow>
+      {/* Compare with: mood or a symptom */}
+      <CompareRow ref={compareRef}>
+        <span>Compare with</span>
+        <JoinedGroup role="group" aria-label="Compare with">
+          <JoinedBtn type="button" $fill $active={target?.kind === 'mood'} aria-pressed={target?.kind === 'mood'}
+            onClick={() => setTarget(t => (t?.kind === 'mood' ? null : { kind: 'mood' }))}>Mood</JoinedBtn>
+          {[...top3, ...extra].map(s => {
+            const on = symptomTarget?.key === s.key;
+            return (
+              <JoinedBtn key={s.key} type="button" $fill $active={on} aria-pressed={on} onClick={() => pickSymptom(s.key, s.name)}>{s.name}</JoinedBtn>
+            );
+          })}
+          {ranked.length > 3 && (
+            <MoreBtn type="button" $active={false} aria-expanded={moreOpen} onClick={() => setMoreOpen(o => !o)}>
+              {moreOpen ? 'Close' : 'More symptoms ⌄'}
+            </MoreBtn>
+          )}
+          <ClearBtn type="button" $active={false} $off={!comparing} disabled={!comparing} onClick={() => setTarget(null)}>× Clear</ClearBtn>
+        </JoinedGroup>
+        {moreOpen && (
+          <Pop>
+            <PopSearch autoFocus value={query} onChange={e => setQuery(e.target.value)}
+              placeholder={`Search ${ranked.length} symptoms`} aria-label="Search symptoms" />
+            <PopList>
+              {filtered.map(s => (
+                <PopItem key={s.key} type="button" $active={symptomTarget?.key === s.key} onClick={() => pickSymptom(s.key, s.name)}>
+                  {s.name}<span>{s.days} {plural(s.days, 'day', 'days')}</span>
+                </PopItem>
+              ))}
+              {filtered.length === 0 && <Quiet>No symptoms match “{query}”.</Quiet>}
+            </PopList>
+          </Pop>
+        )}
+      </CompareRow>
+
+      <Tiles $cols={tiles.length === 6 ? 3 : 5}>
+        {tiles.map(t => (
+          <StatTile key={t.key} name={t.name} caption={t.caption} value={t.value} unit={t.unit} progress={t.progress}
+            color={METRIC_COLOR[t.key]} selected={shownKey === t.key} onSelect={() => setChartKey(t.key)}
+            rows={[['Today', t.today], ['7 days', t.week]]} />
+        ))}
+      </Tiles>
+
+      <Panel aria-label={chart.title}>
+        <PanelHead>
+          <PanelTitle>{chart.title}</PanelTitle>
+          <ChartLegend series={chart.series} solid />
+        </PanelHead>
+        <TrendChart labels={chart.labels} series={chart.series} yMax={chart.yMax} yTicks={chart.yTicks}
+          formatTick={chart.formatTick} ariaLabel={chart.title} solid />
+      </Panel>
+
+      {rows.length > 0 && (
+        <Panel aria-label="Questions">
+          <Table $cols={cols}>
+            <Row $head>
+              <span>Question</span><span>Today</span><span>Last 7 days</span><span>{rangeLabel}</span>
+              {comparing && <span>{outcomeLabel}</span>}
+            </Row>
+            {rows.map(r => (
+              <Row key={r.key}>
+                <NameCell>{r.label}</NameCell>
+                <Cell data-label="Today">{r.today}</Cell>
+                <Cell data-label="7 days">{r.week}</Cell>
+                <Cell data-label={rangeLabel} $muted>{r.period}</Cell>
+                {comparing && (r.compare === null ? <WideCell $muted>—</WideCell>
+                  : r.compare.ready ? <CompareText>{r.compare.sentence}</CompareText>
+                  : <NeedText>{r.compare.need}</NeedText>)}
+              </Row>
             ))}
+          </Table>
+        </Panel>
+      )}
+      {comparing && (
+        <Note>
+          Averages only count days you logged. The last column compares {target.kind === 'symptom'
+            ? `how often you had ${lc(target.name)}` : 'your usual mood'} on days above and below your own average, or on days you did something and days you didn’t. These are links, not causes.
+        </Note>
+      )}
+
+      {/* Possible food triggers */}
+      <SectionHeading>Possible food triggers</SectionHeading>
+      <WindowRow>
+        <span>Symptom shows up</span>
+        <FilterTabs options={[...TRIGGER_WINDOWS]} active={win} onChange={setWin} />
+      </WindowRow>
+      <Panel aria-label="Possible food triggers">
+        <Table $cols="minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) 210px">
+          <Row $head><span>Trigger and symptom</span><span>After it</span><span>Other days</span><span /></Row>
+          {triggers.triggers.map(t => {
+            const r = review(t);
+            return (
+              <Row key={triggerKey(t)}>
+                <NameCell>
+                  {t.trigger}
+                  <small>{t.kind === 'food' ? '' : `${TRIGGER_KIND_LABEL[t.kind]} · `}then {lc(t.symptom)}</small>
+                </NameCell>
+                <Cell data-label="After it">{t.hits} of {t.times} {plural(t.times, 'time', 'times')}</Cell>
+                <Cell data-label="Other days" $muted>{Math.round(t.otherRate * 10)} in 10 other days</Cell>
+                {onReviewTrigger ? (
+                  <Actions>
+                    {!r ? (
+                      <>
+                        <ReviewBtn type="button" $accent onClick={() => onReviewTrigger(t, 'confirmed')}>Trigger</ReviewBtn>
+                        <ReviewBtn type="button" onClick={() => onReviewTrigger(t, 'dismissed')}>Not a trigger</ReviewBtn>
+                      </>
+                    ) : (
+                      <>
+                        <Status $yes={r.verdict === 'confirmed'}>{r.verdict === 'confirmed' ? 'Marked as trigger' : 'Not a trigger'} · {shortDay(r.at)}</Status>
+                        <UndoBtn type="button" onClick={() => onReviewTrigger(t, null)}>Undo</UndoBtn>
+                      </>
+                    )}
+                  </Actions>
+                ) : <span />}
+              </Row>
+            );
+          })}
+          {/* Confirmed earlier but not seen in this range: kept so past findings stay in view */}
+          {past.confirmed.map(r => (
+            <PastRow key={triggerKey(r)} r={r} onReviewTrigger={onReviewTrigger} />
+          ))}
+          {showDismissed && past.dismissed.map(r => (
+            <PastRow key={triggerKey(r)} r={r} onReviewTrigger={onReviewTrigger} />
+          ))}
+        </Table>
+        {past.dismissed.length > 0 && (
+          <LinkBtn type="button" style={{ padding: '10px 0 0' }} onClick={() => setShowDismissed(v => !v)}>
+            {showDismissed ? 'Hide' : 'Show'} {past.dismissed.length} earlier marked not a trigger
+          </LinkBtn>
+        )}
+        {triggers.triggers.length === 0 && past.confirmed.length === 0 && (
+          <Quiet>Nothing stands out yet. Something shows here once a symptom has followed it at least 4 times, and far more often than on other days.</Quiet>
+        )}
+        {triggers.tooFew > 0 && (
+          <Note>{triggers.tooFew} {plural(triggers.tooFew, 'thing was', 'things were')} logged on fewer than 3 days, too few to tell.</Note>
+        )}
+      </Panel>
+
+      {/* Exercise */}
+      <SectionHeading>Exercise</SectionHeading>
+      <Figures>
+        <span><b>{exercise.sessions}</b>{plural(exercise.sessions, 'session', 'sessions')}</span>
+        <span><b>{exercise.minutes}</b>minutes</span>
+        <span><b>{exercise.perWeek}</b>times a week</span>
+      </Figures>
+      <Panel aria-label="Exercise">
+        {exercise.enough ? (
+          <>
+            <Table $cols="minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr)">
+              <Row $head><span /><span>Days you exercise</span><span>Days you don’t</span></Row>
+              {exercise.rows.map(r => (
+                <Row key={r.name}>
+                  <NameCell>{r.name}</NameCell>
+                  <Cell data-label="Exercise days" $tone={r.tone}>{r.on}</Cell>
+                  <Cell data-label="Other days" $muted>{r.off}</Cell>
+                </Row>
+              ))}
+              {exercise.lessOften.length > 0 && (
+                <Row>
+                  <NameCell><Cell $tone="less">Less often on exercise days</Cell></NameCell>
+                  <WideCell style={{ gridColumn: 'span 2' }}>
+                    {exLess.join(', ')}
+                    {!exAll && exercise.lessOften.length > 4 && <LinkBtn type="button" onClick={() => setExAll(true)}>+{exercise.lessOften.length - 4} more</LinkBtn>}
+                  </WideCell>
+                </Row>
+              )}
+              {exercise.moreOften.length > 0 && (
+                <Row>
+                  <NameCell><Cell $tone="more">More often on exercise days</Cell></NameCell>
+                  <WideCell style={{ gridColumn: 'span 2' }}>
+                    {exMore.join(', ')}
+                    {!exAll && exercise.moreOften.length > 4 && <LinkBtn type="button" onClick={() => setExAll(true)}>+{exercise.moreOften.length - 4} more</LinkBtn>}
+                  </WideCell>
+                </Row>
+              )}
+            </Table>
+            <Note>A value in colour is clearly better (accent) or worse (amber) on days you exercise. Symptoms are listed only when the difference is clear, most different first.</Note>
+          </>
+        ) : (
+          <Quiet>Log at least 3 days with exercise and 3 without to see how it lines up with your mood, sleep and symptoms.</Quiet>
+        )}
+      </Panel>
+
+      {/* Medication */}
+      {meds.length > 0 && (
+        <>
+          <SectionHeading>Medication Impact</SectionHeading>
+          <Panel aria-label="Medication Impact">
+            <Table $cols="minmax(0, 1.2fr) minmax(0, 2fr)">
+              {meds.map(m => (
+                <Row key={m.name}>
+                  <NameCell>{m.name}<small>Taken {m.taken} of {m.of} days lately</small></NameCell>
+                  <WideCell style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14 }}>
+                    {m.lessOften.length > 0 && <span><Cell $tone="less">Less often: </Cell>{m.lessOften.join(', ')}</span>}
+                    {m.moreOften.length > 0 && <span><Cell $tone="more">More often: </Cell>{m.moreOften.join(', ')}</span>}
+                    {m.note && <Cell $muted>{m.note}</Cell>}
+                  </WideCell>
+                </Row>
+              ))}
+            </Table>
+            <Note>Symptoms on days you took it, compared with days you didn’t. This shows what tends to happen together, not what the medication causes.</Note>
           </Panel>
         </>
       )}
 
-      {(wellnessSummary || symptoms.length > 0) && (
+      {/* Symptoms at a glance */}
+      {glance.rows.length > 0 && (
         <>
-          <SectionHeading>Wellness</SectionHeading>
-          <Stack>
-            {wellnessSummary && (
-              <StatTileRow $cols={3}>
-                <StatTile
-                  value={wellnessSummary.avgWater.toFixed(1)} unit="/ 8" name="Water"
-                  caption={`avg glasses · ${wellnessSummary.days} ${plural(wellnessSummary.days, 'day')}`}
-                  progress={wellnessSummary.avgWater / 8} color={METRICS.water.color}
-                  selected={metric === 'water'} onSelect={() => setMetric('water')}
-                />
-                <StatTile
-                  value={wellnessSummary.avgMood > 0 ? wellnessSummary.avgMood.toFixed(1) : '—'} unit="/ 5" name="Mood"
-                  caption="avg score"
-                  progress={wellnessSummary.avgMood / 5} color={METRICS.mood.color}
-                  selected={metric === 'mood'} onSelect={() => setMetric('mood')}
-                />
-                <StatTile
-                  value={wellnessSummary.avgSleep > 0 ? wellnessSummary.avgSleep.toFixed(1) : '—'} unit="h" name="Sleep"
-                  caption="avg per night"
-                  progress={wellnessSummary.avgSleep / 10} color={METRICS.sleep.color}
-                  selected={metric === 'sleep'} onSelect={() => setMetric('sleep')}
-                />
-              </StatTileRow>
+          <SectionHeading>Symptoms at a glance</SectionHeading>
+          <Panel aria-label="Symptoms at a glance">
+            <PanelHead>
+              <Sub>
+                {glance.rows.length} {plural(glance.rows.length, 'symptom', 'symptoms')} logged. Each square is a {glance.unit}. Symptoms that line up in the same column happened together.
+              </Sub>
+              <Legend>
+                {(['mild', 'moderate', 'severe', 'none'] as const).map(b => (
+                  <span key={b}><Swatch $c={SEVERITY_COLOR[b]} />{b.charAt(0).toUpperCase() + b.slice(1)}</span>
+                ))}
+              </Legend>
+            </PanelHead>
+            <HeatRow $head>
+              <span />
+              <Ends><span>{shortDay(glance.first)}</span><span>{shortDay(glance.last)}</span></Ends>
+              <span className="num">Days</span><span className="wide">Usually</span><span className="wide">Often with</span>
+            </HeatRow>
+            {heatRows.map(r => (
+              <HeatRow key={r.name}>
+                <span title={r.name}>{r.name}</span>
+                <Cells aria-label={`${r.name}, ${r.days} ${plural(r.days, 'day', 'days')}`}>
+                  {r.cells.map((c, i) => <Square key={i} $c={SEVERITY_COLOR[c]} />)}
+                </Cells>
+                <span className="num">{r.days}</span>
+                <span className="wide soft">{r.usual}</span>
+                <span className="wide soft">{r.often ?? '—'}</span>
+              </HeatRow>
+            ))}
+            {glance.rows.length > 10 && (
+              <LinkBtn type="button" style={{ padding: '8px 0 0' }} onClick={() => setSymAll(a => !a)}>
+                {symAll ? 'Show fewer' : `Show all ${glance.rows.length}`}
+              </LinkBtn>
             )}
-
-            {wellnessTrend.length > 1 && (
-              <Panel aria-label={`${chart.m.name} over time`}>
-                <PanelHead>
-                  <PanelTitle>{chart.m.name} over time</PanelTitle>
-                  <ChartLegend series={chart.series} />
-                </PanelHead>
-                <TrendChart
-                  ariaLabel={`${chart.m.name} by day`}
-                  labels={chart.labels}
-                  yMax={chart.m.max}
-                  formatTick={v => `${v}${chart.m.unit}`}
-                  series={chart.series}
-                  markers={chart.markers}
-                />
-                {chart.markers.length > 0 && (
-                  <MarkerKey aria-label="Changes on this chart">
-                    {chart.markers.flatMap(mk => mk.cs).map((c, i) => (
-                      <li key={i}><i aria-hidden="true" />{dayLabel(c.date)} · {c.text}</li>
-                    ))}
-                  </MarkerKey>
-                )}
-              </Panel>
-            )}
-
-            <Panel aria-label="Insights">
-              <PanelHead>
-                <div>
-                  <PanelTitle>Insights</PanelTitle>
-                  <PanelSub>Cross-correlations between sleep, water, mood, exercise and symptoms</PanelSub>
-                </div>
-              </PanelHead>
-              {wellnessInsights.map((insight, i) => (
-                <InsightBox key={`w${i}`}>
-                  <InsightHead>
-                    {insight.label}
-                    <Pill $found={insight.direction === 'positive'}>
-                      {insight.direction === 'positive' ? 'Pattern found' : 'Tracking'} · {insight.dataPoints} {plural(insight.dataPoints, 'day')}
-                    </Pill>
-                  </InsightHead>
-                  <Facts>
-                    {[insight.high, insight.low].map(line => {
-                      const [k, v] = splitFact(line);
-                      return <div key={line} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>;
-                    })}
-                  </Facts>
-                </InsightBox>
+            <Together>
+              <Sub style={{ paddingBottom: 6 }}>Tend to happen together</Sub>
+              {glance.clusters.map(c => (
+                <TogetherRow key={c.names}><span>{c.names}</span><span>{c.days}</span></TogetherRow>
               ))}
-              {wellnessInsights.length === 0 && (
-                <Quiet>No patterns yet. Keep logging sleep, water, mood and symptoms to find them. Food, medications and exercise are under What comes before symptoms.</Quiet>
+              {glance.clusters.length === 0 && (
+                <Quiet>No clear groups yet. Symptoms need to land on the same day at least 3 times.</Quiet>
               )}
-            </Panel>
-          </Stack>
-        </>
-      )}
-
-      {inv && (
-        <>
-          <SectionHeading>Daily inventory</SectionHeading>
-          <Stack>
-            <StatTileRow $cols={3}>
-              <StatTile value={inv.avg} unit="/ 100" name="Daily score"
-                caption={`avg · ${inv.days} ${plural(inv.days, 'day')}`} progress={inv.avg / 100} />
-              <StatTile value={inv.best.score!} unit="/ 100" name="Best day" caption={dayLabel(inv.best.date)}
-                progress={inv.best.score! / 100} />
-              <StatTile value={inv.worst.score!} unit="/ 100" name="Hardest day" caption={dayLabel(inv.worst.date)}
-                progress={inv.worst.score! / 100} color="var(--text-muted)" />
-            </StatTileRow>
-
-            {inv.days > 1 && (
-              <Panel aria-label="Daily score over time">
-                <PanelHead>
-                  <PanelTitle>Daily score over time</PanelTitle>
-                  <ChartLegend series={inv.series} />
-                </PanelHead>
-                <TrendChart ariaLabel="Daily score by day" labels={inv.labels} yMax={100} series={inv.series} />
-              </Panel>
-            )}
-
-            <Grid $cols={2}>
-              <Panel aria-label="By question">
-                <PanelHead>
-                  <div>
-                    <PanelTitle>By question</PanelTitle>
-                    <PanelSub>Your usual answer and its score out of 100</PanelSub>
-                  </div>
-                </PanelHead>
-                {inv.questions.map(q => (
-                  <ListRow key={q.key}>
-                    <RowText>
-                      <ListName>{q.label}</ListName>
-                      <RowSub>{q.answer}</RowSub>
-                    </RowText>
-                    <ListCount>{q.score}</ListCount>
-                  </ListRow>
-                ))}
-              </Panel>
-              <Panel aria-label="What goes with better days">
-                <PanelHead>
-                  <div>
-                    <PanelTitle>What goes with better days</PanelTitle>
-                    <PanelSub>How good your day was (out of 5), with and without each</PanelSub>
-                  </div>
-                </PanelHead>
-                {inv.better.length === 0 ? (
-                  <Quiet>Not enough days yet. Rate how good your day was in the check-in, along with the rest of Your day, to compare.</Quiet>
-                ) : inv.better.map(b => {
-                  const diff = b.withIt - b.without;
-                  return (
-                    <ListRow key={b.label}>
-                      <RowText>
-                        <ListName>{b.label}</ListName>
-                        <RowSub>{b.withIt.toFixed(1)} on {b.daysWith} {plural(b.daysWith, 'day')} · {b.without.toFixed(1)} on the other {b.daysWithout}</RowSub>
-                      </RowText>
-                      <ListCount style={{ color: Math.abs(diff) < 0.05 ? undefined : diff > 0 ? 'var(--chart-green)' : 'var(--mood-1)' }}>
-                        {diff > 0 ? '+' : diff < 0 ? '−' : ''}{Math.abs(diff).toFixed(1)}
-                      </ListCount>
-                    </ListRow>
-                  );
-                })}
-              </Panel>
-            </Grid>
-          </Stack>
-        </>
-      )}
-
-      {symptoms.length > 0 && (
-        <>
-          <SectionHeading>Symptoms</SectionHeading>
-          <Stack>
-            <Grid $cols={2}>
-              <Panel aria-label="Frequency and severity">
-                <PanelHead>
-                  <PanelTitle>Frequency and severity</PanelTitle>
-                  <Legend>
-                    {SEVERITY_BANDS.map(b => <span key={b.name}><i style={{ background: b.color }} />{b.name} {b.range}</span>)}
-                  </Legend>
-                </PanelHead>
-                <Bars role="img" aria-label="Symptoms per day, coloured by average severity">
-                  {symptomBars.map(b => (
-                    <BarCol key={b.key} title={`${periodLabel(b.key)}: ${b.count} · avg severity ${b.avg.toFixed(1)}${b.changes.map(c => ` · changed: ${c.text}`).join('')}`}>
-                      {b.changes.length > 0 && <BarChange aria-label={`Changed: ${b.changes.map(c => c.text).join(', ')}`} />}
-                      <BarCount>{b.count}</BarCount>
-                      <Bar $h={(b.count / maxBar) * 78} $color={bandColor(Math.round(b.avg))} />
-                    </BarCol>
-                  ))}
-                </Bars>
-                <Bars as="div" aria-hidden="true" style={{ height: 'auto', marginTop: 10 }}>
-                  {symptomBars.map(b => (
-                    <BarCol key={b.key} style={{ height: 'auto' }}><BarLabel>{periodLabel(b.key).replace(/ \d{4}$/, '')}</BarLabel></BarCol>
-                  ))}
-                </Bars>
-              </Panel>
-
-              <Panel aria-label="Most common">
-                <PanelHead><PanelTitle>Most common</PanelTitle></PanelHead>
-                {topSymptoms.map(t => (
-                  <ListRow key={t.name}><ListName title={t.name}>{t.name}</ListName><ListCount>{t.n}×</ListCount></ListRow>
-                ))}
-              </Panel>
-            </Grid>
-
-            {coOccurrences.length > 0 && (
-              <Panel aria-label="Often together">
-                <PanelHead>
-                  <div>
-                    <PanelTitle>Often together</PanelTitle>
-                    <PanelSub>Symptoms that tend to occur within 24 hours of each other</PanelSub>
-                  </div>
-                </PanelHead>
-                {coOccurrences.slice(0, 8).map((co, i) => (
-                  <ListRow key={i}>
-                    <ListName>{co.symptom1.name} ↔ {co.symptom2.name}</ListName>
-                    <ListCount>{co.correlation}% · {co.coOccurrences}×</ListCount>
-                  </ListRow>
-                ))}
-              </Panel>
-            )}
-          </Stack>
-        </>
-      )}
-
-      {symptoms.length > 0 && events.length > 0 && (
-        <>
-          <SectionHeading>What comes before symptoms</SectionHeading>
-          <WindowRow>
-            <FilterTabs options={[...TRIGGER_WINDOWS]} active={triggerWindow} onChange={setTriggerWindow} label="Before a symptom" />
-          </WindowRow>
-          <Grid $cols={2}>
-            <Panel aria-label="Possible triggers">
-              <PanelHead>
-                <div>
-                  <PanelTitle>Possible triggers</PanelTitle>
-                  <PanelSub>Food, medications and exercise logged before a symptom</PanelSub>
-                </div>
-              </PanelHead>
-              <TriggerList
-                reviewed={reviewed} onReview={onReviewTrigger} withSymptom openLimit={12}
-                empty="Nothing yet. Something shows up here once it has come before the same symptom at least twice."
-              />
-            </Panel>
-
-            <Panel aria-label="Before a symptom">
-              <PanelHead>
-                <div>
-                  <PanelTitle>Before a symptom</PanelTitle>
-                  <PanelSub>Everything logged before it, and how often you usually have it</PanelSub>
-                </div>
-              </PanelHead>
-              {topSymptoms.length > 1 && (
-                <Chips role="group" aria-label="Symptom" style={{ marginBottom: 12 }}>
-                  {topSymptoms.map(t => (
-                    <Chip key={t.name} type="button" $active={t.name === beforeSymptom} aria-pressed={t.name === beforeSymptom}
-                      onClick={() => setChosenSymptom(t.name)}>{t.name}</Chip>
-                  ))}
-                </Chips>
-              )}
-              <TriggerList
-                reviewed={before} onReview={onReviewTrigger} openLimit={10}
-                empty={`Nothing logged before ${beforeSymptom ? beforeSymptom.toLowerCase() : 'it'} in this window.`}
-              />
-            </Panel>
-          </Grid>
-          <Quiet>These are patterns in what you logged, not a diagnosis. Talk with your doctor before changing a medication or cutting foods out.</Quiet>
-        </>
-      )}
-
-
-      {exerciseTotals && (
-        <>
-          <SectionHeading>Exercise</SectionHeading>
-          <Grid $cols={3}>
-            <Panel aria-label={PERIOD_TITLE[period]}>
-              <PanelHead><PanelTitle>{PERIOD_TITLE[period]}</PanelTitle></PanelHead>
-              <BigFigures>
-                <span>{exerciseTotals.sessions}<small>{plural(exerciseTotals.sessions, 'session')}</small></span>
-                <span>{exerciseTotals.minutes}<small>min</small></span>
-              </BigFigures>
-              <Quiet>{exerciseTotals.note}</Quiet>
-            </Panel>
-
-            <Panel aria-label={period === 'year' ? 'By month' : 'By week'}>
-              <PanelHead><PanelTitle>{period === 'year' ? 'By month' : 'By week'}</PanelTitle></PanelHead>
-              {exerciseFrequency.slice(-6).map(d => (
-                <WeekRow key={d.period}>
-                  <span>{periodLabel(d.period)}</span>
-                  <WeekBar $pct={(d.count / maxWeek) * 100} />
-                  <span>{d.count} · {d.totalDuration} min</span>
-                </WeekRow>
-              ))}
-            </Panel>
-
-            <Panel aria-label="Impact on symptoms">
-              <PanelHead>
-                <div>
-                  <PanelTitle>Impact on symptoms</PanelTitle>
-                  <PanelSub>Severity change within 24 hours</PanelSub>
-                </div>
-              </PanelHead>
-              {exerciseImpact.length === 0 ? (
-                <Quiet>Not enough symptoms around your workouts yet.</Quiet>
-              ) : exerciseImpact.map(impact => {
-                const change = +(impact.avgSeverityAfter - impact.avgSeverityBefore).toFixed(1);
-                return (
-                  <ImpactRow key={impact.exerciseType}>
-                    <div>
-                      <ImpactName>{impact.exerciseType}</ImpactName>
-                      <ImpactSub>{impact.occurrences} data {plural(impact.occurrences, 'point')}</ImpactSub>
-                    </div>
-                    <ImpactChange>
-                      <span>{impact.avgSeverityBefore} → {impact.avgSeverityAfter}</span>
-                      <Delta $worse={change > 0} $flat={change === 0}>{change > 0 ? `+${change}` : change < 0 ? `−${Math.abs(change)}` : '±0'}</Delta>
-                    </ImpactChange>
-                  </ImpactRow>
-                );
-              })}
-            </Panel>
-          </Grid>
+            </Together>
+          </Panel>
         </>
       )}
     </Report>

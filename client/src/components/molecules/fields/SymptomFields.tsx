@@ -5,6 +5,7 @@ import {
   FormWrap, Section, SectionHead, SectionLabel, DateTimeBox, DateTimeField, Unit, BoxText, TitleInput, Chips, Chip, TextAction,
 } from './formKit.js';
 import { hasSymptom, toggleSymptom } from '../../../utils/symptomChips.js';
+import { severityWord } from '../../../utils/symptomHistory.js';
 export type { SymptomFieldValues } from '../../../types/fields.js';
 
 /* Symptom fields (journal editor): the symptom(s) as a big borderless title,
@@ -19,9 +20,7 @@ export type { SymptomFieldValues } from '../../../types/fields.js';
 
 const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-export function severityWord(n: number): string {
-  return n <= 3 ? 'Mild' : n <= 6 ? 'Moderate' : 'Severe';
-}
+export { severityWord };
 
 const Readout = styled.span`
   display: inline-flex;

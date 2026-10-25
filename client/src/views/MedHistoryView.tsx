@@ -239,7 +239,7 @@ export function MedHistoryView() {
   });
 
   if (needsUnlock) return (<><ContentTemplate><EmptyState message="Unlock your journal to see your medication history" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
-  if (isLoading || !isReady || !doses) return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
+  if (isLoading || !isReady) return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
 
   const multiYear = range.from.slice(0, 4) !== range.to.slice(0, 4);
   return (
@@ -263,6 +263,9 @@ export function MedHistoryView() {
             </Range>
           )}
 
+          {!doses ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '56px 0' }}><Spinner size={32} /></div>
+          ) : (<>
           <Summary>
             <strong>{totals.taken}</strong> {totals.taken === 1 ? 'dose' : 'doses'} taken across{' '}
             <strong>{totals.medications}</strong> {totals.medications === 1 ? 'medication' : 'medications'}
@@ -326,6 +329,7 @@ export function MedHistoryView() {
               </Table>
             </Scroll>
           )}
+          </>)}
         </Inner>
       </Page>
     </ContentTemplate>
