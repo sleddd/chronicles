@@ -7,11 +7,9 @@ Chronicles is now available to sign up for beta testing at [mydailychronicles.co
 
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
-
-<img width="1341" height="709" alt="Screenshot 2026-10-18 at 1 05 04 PM" src="https://github.com/user-attachments/assets/3de508c0-a605-4d6f-8124-b6690bfe069c" />
-<img width="1334" height="721" alt="Screenshot 2026-10-18 at 1 05 13 PM" src="https://github.com/user-attachments/assets/0ed9a807-f600-43fd-a6cc-495910b3f6a5" />
-<img width="1332" height="717" alt="Screenshot 2026-10-18 at 1 04 55 PM" src="https://github.com/user-attachments/assets/ce364ad3-a8d5-41d1-b480-70aed8ffe458" />
-
+<img width="1600" height="1000" alt="dashboard-dark" src="https://github.com/user-attachments/assets/553e4f1e-126a-46c5-8ae0-cedbc3c99034" />
+<img width="1268" height="1300" alt="dashboard" src="https://github.com/user-attachments/assets/4730ff94-ecf0-4fe6-82c5-cd69398f5411" />
+<img width="1268" height="1300" alt="dashboard-2" src="https://github.com/user-attachments/assets/be1ce9b0-5700-4340-a0e2-94758b429036" />
 
 ### Journal
 The main view, and where the app opens. Pick a topic, write a line (or fill in the topic's fields) and save. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket( Bring your key), voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and saving takes you back there.
@@ -21,14 +19,12 @@ The main view, and where the app opens. Pick a topic, write a line (or fill in t
 ### Health
 A health dashboard with today's nutrition against your goals, a wellness check-in, quick meal and exercise logging and your medication schedule, plus tabs for Meals, Exercise, Symptoms, Med list and Allergies. Marking a dose taken adds its nutrients (a vitamin D supplement, say) to the day's totals. Reports chart water, mood and sleep over time, symptom frequency and severity, and the patterns between them, such as how water, foods or exercise relate to your symptoms. Medication lists, symptom logs and allergy records print for appointments.
 
-<img width="1449" height="741" alt="Screenshot 2026-10-17 at 9 50 52 PM" src="https://github.com/user-attachments/assets/a6aeda98-524f-4c77-a286-afbf1aed86b3" />
-<img width="1450" height="732" alt="Screenshot 2026-10-17 at 9 51 01 PM" src="https://github.com/user-attachments/assets/4b39780b-5ca7-447c-8c57-13d16cdfc40a" />
-<img width="1158" height="727" alt="Screenshot 2026-10-17 at 10 08 44 PM" src="https://github.com/user-attachments/assets/a2dbd91a-d1ab-4a07-a1d1-b57f80c26a7e" />
-<img width="1212" height="656" alt="Screenshot 2026-10-17 at 10 08 52 PM" src="https://github.com/user-attachments/assets/a1137179-6533-4352-96fd-22c296111450" />
-<img width="1464" height="732" alt="Screenshot 2026-10-17 at 9 51 14 PM" src="https://github.com/user-attachments/assets/367b2f5d-ef65-4414-af02-37510e2549a1" />
-<img width="1444" height="723" alt="Screenshot 2026-10-17 at 9 51 37 PM" src="https://github.com/user-attachments/assets/7ab3435c-8bd7-41d7-8982-feab4d736aa5" />
-<img width="1446" height="731" alt="Screenshot 2026-10-17 at 9 51 27 PM" src="https://github.com/user-attachments/assets/4c2f211c-36bc-46a7-943a-ce61c3c8ca21" />
-<img width="1435" height="546" alt="Screenshot 2026-10-17 at 9 51 47 PM" src="https://github.com/user-attachments/assets/a6fee1bd-91a8-4df0-a6a0-0352408a8ec1" />
+<img width="1268" height="1300" alt="health-dashboard" src="https://github.com/user-attachments/assets/f56348ea-cfec-41c8-a77a-0b5b22549104" />
+<img width="1268" height="1300" alt="health-exercise" src="https://github.com/user-attachments/assets/f97909b2-053c-4b25-8e42-b5ba83b4a891" />
+<img width="1268" height="1300" alt="health-meals" src="https://github.com/user-attachments/assets/3809319c-1f79-4125-80b5-7d8b348432ad" />
+<img width="1268" height="1300" alt="health-reports" src="https://github.com/user-attachments/assets/1938f2ee-20cf-456a-b232-6bdb48eec498" />
+<img width="1268" height="1293" alt="health-reports-symptoms" src="https://github.com/user-attachments/assets/c21cc625-26e4-4fba-bbb0-4b0092493a2a" />
+<img width="1268" height="1300" alt="health-med-history" src="https://github.com/user-attachments/assets/80e29f46-29a7-4435-b4e7-1d3d468cc71a" />
 
 ### In-App AI
 Optional, and you bring your own key from OpenAI, Claude (Anthropic) or Amazon Bedrock. It estimates calories and nutrients for meals and exercise, and a chat bubble helps with the app and suggests ready-made saves — `/save Meals oatmeal with berries` files a journal entry without going to the AI. The AI never sees your journal entries, only what you type to it. Chats aren't kept: they're gone when you clear them or sign out, unless you save one to your journal with `/save chat`. Add notes in Settings for things you want the AI to always know. Requests go from your browser straight to the provider, never through the Chronicles server.
