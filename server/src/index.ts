@@ -32,6 +32,7 @@ import { checkBackupLockCapacity } from './db/backupCheck.js';
 import { initShards } from './db/shards.js';
 import { initSharedState, sharedState } from './services/sharedState.js';
 import { initRememberGrants } from './services/rememberGrants.js';
+import { tokenCryptoProblem } from './services/tokenCrypto.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -170,7 +171,7 @@ checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) =>
 }).catch(err => console.error('Credential check failed:', err instanceof Error ? err.message : err));
 sealStoredTotpSecrets().then(({ sealed, readable }) => {
   if (sealed) console.log(`Credential check: ${sealed} authenticator secret(s) sealed`);
-  if (readable) console.warn(`SECRETS_ENCRYPTION_KEY is not set: ${readable} account(s) have their authenticator secret stored readable — set the key to seal them`);
+  if (readable) console.warn(`${tokenCryptoProblem()}: ${readable} account(s) have their authenticator secret stored readable until the key is usable`);
 }).catch(err => console.error('Authenticator secret check failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);

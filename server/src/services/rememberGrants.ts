@@ -4,7 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 // Loaded on first use, so the memory mode (tests) never needs a database
 let prismaClient: Promise<PrismaClient> | null = null;
 const db = () => (prismaClient ??= import('../db/prisma.js').then(m => m.prisma));
-import { encryptToken, decryptToken, isTokenCryptoConfigured } from './tokenCrypto.js';
+import { encryptToken, decryptToken, isTokenCryptoConfigured, tokenCryptoProblem } from './tokenCrypto.js';
 import { SHARED_STATE_IN_POSTGRES } from './sharedState.js';
 
 /**
@@ -110,7 +110,7 @@ const store: GrantStore = REMEMBER_GRANTS_SHARED ? postgresGrants() : memoryGran
 export async function initRememberGrants(): Promise<void> {
   if (REMEMBER_GRANTS_SHARED) { await (await db()).$executeRawUnsafe(REMEMBER_GRANTS_TABLE_SQL); return; }
   if (SHARED_STATE_IN_POSTGRES) {
-    console.warn('Remember me grants are kept in memory (SECRETS_ENCRYPTION_KEY is not set): it works on one server instance only, and a restart forgets it');
+    console.warn(`Remember me grants are kept in memory (${tokenCryptoProblem() ?? 'shared state is off'}): it works on one server instance only, and a restart forgets it`);
   }
 }
 
