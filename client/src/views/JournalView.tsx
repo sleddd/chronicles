@@ -62,8 +62,8 @@ const DateFilterBar = styled.div`
   padding: 14px 20px;
   background: transparent;
   border: none;
-  border-top: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
-  border-bottom: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
+  /* Just a hairline under it — the tabs above already draw the one on top */
+  border-bottom: 1px solid var(--border-subtle);
   border-radius: 0;
   font-family: var(--mono, ${({ theme }) => theme.fontFamily.mono});
   font-size: 10.5px;
@@ -296,14 +296,15 @@ export function JournalView() {
     }
   }, [location.state]);
 
-  // The journal is home: it opens on today (the Today tab) with a blank new
-  // entry in the editor — unless you arrive to edit an entry from another view
+  // The journal opens on today (the Today tab) with a blank new entry in the
+  // editor — phones show the entry list first — unless you arrive to edit an
+  // entry from another view, which opens the editor
   useEffect(() => {
-    const state = location.state as { from?: string; newEntryTopicId?: number; newEntryDate?: string } | null;
-    if (state?.from || state?.newEntryTopicId || state?.newEntryDate) return;
+    const state = location.state as { from?: string; newEntryTopicId?: number; newEntryDate?: string; newEntry?: number } | null;
+    if (state?.from || state?.newEntryTopicId || state?.newEntryDate || state?.newEntry) return;
     const ui = useUIStore.getState();
     ui.setSelectedEntryId(null);
-    ui.setShowMobileEditor(true);
+    ui.setShowMobileEditor(false);
     if (ui.viewMode !== 'date') {
       ui.setSelectedDate(new Date());
       ui.setViewMode('date');
@@ -902,7 +903,7 @@ export function JournalView() {
     setPendingNewFields(null);
     setShowMobileEditor(false);
     setEditorExpanded(false);
-    // Edit view (opened from another page): "+ New" / "Discard changes" close
+    // Edit view (opened from another page): "+ New" / "Close" close
     // the editor and return to that page, same as Save
     if (originPath) navigate(originPath);
   };

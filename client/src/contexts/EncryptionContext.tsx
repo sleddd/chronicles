@@ -421,6 +421,11 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** The encryption context, or null outside EncryptionProvider (for hooks that only use it when present) */
+export function useOptionalEncryption(): EncryptionContextValue | null {
+  return useContext(EncryptionContext);
+}
+
 export function useEncryption(): EncryptionContextValue {
   const context = useContext(EncryptionContext);
   if (!context) throw new Error('useEncryption must be used within EncryptionProvider');

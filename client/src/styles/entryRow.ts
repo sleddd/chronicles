@@ -21,7 +21,7 @@ const HOVER_FLAG = 'entryRowHover';
 
 export const rowActive = css`
   background: var(--bg-app);
-  box-shadow: inset 3px 0 0 var(--color-accent);
+  box-shadow: inset 4px 0 0 var(--color-accent);
 `;
 
 /* Non-journal lists are the reverse: rows on the page colour, the active row
@@ -32,7 +32,7 @@ const rowActivePlain = css`
 
 /* Journal hover: just the accent bar — the background stays put */
 const rowHoverBar = css`
-  box-shadow: inset 3px 0 0 var(--color-accent);
+  box-shadow: inset 4px 0 0 var(--color-accent);
 `;
 
 const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: boolean, hover = active) => css<{ $active?: boolean; $hint?: boolean }>`

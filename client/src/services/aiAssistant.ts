@@ -176,6 +176,28 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
   }
 }
 
+let reloading: Promise<void> | null = null;
+/** Checked since the last unlock / settings change and there's nothing saved — don't ask again */
+let checkedNone = false;
+
+/**
+ * Unlocked but no config in memory (a live reload of this module in development
+ * wipes it, or init raced): read the `aiConfig` setting again and open it, so
+ * Estimate and the chat come back without a page refresh. Once at a time.
+ */
+export function ensureAiConfig(decryptBytes: DecryptBytesFn, loadSettings: () => Promise<{ key: string; value: unknown }[]>): Promise<void> {
+  if (aiConfig || checkedNone) return Promise.resolve();
+  reloading ??= (async () => {
+    if (encryptedConfig) await loadAiConfig(encryptedConfig, decryptBytes);
+    if (!aiConfig) {
+      const row = (await loadSettings()).find(r => r.key === 'aiConfig');
+      if (row && !aiConfig) await loadAiConfig(row.value, decryptBytes);
+    }
+    if (!aiConfig) checkedNone = true;
+  })().catch(err => console.warn('AI settings could not be reloaded:', err)).finally(() => { reloading = null; });
+  return reloading;
+}
+
 /** Re-derive the in-memory config after an unlock (called from EncryptionContext). */
 export async function rederiveAiConfig(decryptBytes: DecryptBytesFn): Promise<void> {
   if (aiConfig || !encryptedConfig) return;
@@ -185,12 +207,14 @@ export async function rederiveAiConfig(decryptBytes: DecryptBytesFn): Promise<vo
 /** Drop decrypted credentials on lock; the encrypted blob stays for unlock. */
 export function clearAiConfig(): void {
   aiConfig = null;
+  checkedNone = false;
   notify();
 }
 
 /** Set (or clear) the config directly — used by the Settings autosave. */
 export function setAiConfig(cfg: AiConfig | null, encrypted: EncryptedAiConfig | null): void {
   aiConfig = cfg;
+  checkedNone = false;
   encryptedConfig = encrypted;
   notify();
 }
@@ -418,6 +442,9 @@ const NUTRITION_PROMPT =
 
 const NUTRIENT_PROMPT_UNITS: Record<NutrientKey, string> = {
   calories: 'calories (kcal)',
+  protein: 'protein (g)',
+  carbs: 'carbs (g)',
+  fat: 'fat (g)',
   iron: 'iron (mg)',
   vitaminD: 'vitaminD (mcg)',
   vitaminB12: 'vitaminB12 (mcg)',

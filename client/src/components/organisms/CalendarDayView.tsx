@@ -198,19 +198,9 @@ export function CalendarDayView({
       </DayHead>
 
       <List>
-        {bills.map(b => (
-          <EntryRow key={b.key} onClick={() => onBillClick?.(b)}>
-            <TimeLabel>Due</TimeLabel>
-            <div>
-              <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />Bill</TopicLabel>
-              <EntryTitle>{b.name} · {formatCents(b.amountCents)}</EntryTitle>
-            </div>
-          </EntryRow>
-        ))}
-        {entries.length === 0 && bills.length === 0 ? (
-          <EmptyMsg>Nothing on this day.</EmptyMsg>
-        ) : (
-          entries.map(entry => {
+        {/* Events and meetings first, then bills due */}
+        {entries.length === 0 && bills.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>}
+        {entries.map(entry => {
             const topic = getTopicForEntry(entry);
             const timeLabel = getTimeLabel(entry, eventTopicIds);
             const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
@@ -223,8 +213,16 @@ export function CalendarDayView({
                 </div>
               </EntryRow>
             );
-          })
-        )}
+          })}
+        {bills.map(b => (
+          <EntryRow key={b.key} onClick={() => onBillClick?.(b)}>
+            <TimeLabel>Due</TimeLabel>
+            <div>
+              <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />Bill</TopicLabel>
+              <EntryTitle>{b.name} · {formatCents(b.amountCents)}</EntryTitle>
+            </div>
+          </EntryRow>
+        ))}
       </List>
     </Wrapper>
   );

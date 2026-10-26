@@ -38,9 +38,62 @@ export const DAILY_QUOTES: { text: string; author: string }[] = [
   { text: 'You only live once, but if you do it right, once is enough.', author: 'Mae West' },
 ];
 
-export function dailyQuote(now = new Date()): { text: string; author: string } {
+export interface Quote { text: string; author: string }
+
+const QUOTE_MARKS = /^[“"'‘]+|[”"'’]+$/g;
+
+/**
+ * A Quote entry's text as quote + author: "“Quote” — Author" (what the Quotes
+ * topic's fields write), the fields summary "Quote: … · Author: …",
+ * "Quote - Author", or just the quote. null when empty.
+ */
+export function parseQuoteText(raw: string): Quote | null {
+  const line = raw.replace(/\s+/g, ' ').trim();
+  if (!line) return null;
+  // The fields summary: "Quote: Life is… · Author: Oprah Winfrey" (labels optional on the quote)
+  const parts = line.split(/\s+·\s+/);
+  const labelled = parts.map(p => p.match(/^([A-Za-z][A-Za-z ]{0,29}):\s*(.*)$/));
+  if (labelled.some(Boolean)) {
+    let text = '';
+    let author = '';
+    parts.forEach((part, i) => {
+      const m = labelled[i];
+      const label = m ? m[1].toLowerCase() : '';
+      const value = (m ? m[2] : part).trim();
+      if (/author|by|source|who|said/.test(label)) author ||= value;
+      else if (!m || /quote|text|saying|words/.test(label)) text ||= value;
+    });
+    text = text.replace(QUOTE_MARKS, '').trim();
+    if (text) return { text, author };
+  }
+  // The author follows the last dash after the closing quote mark (or the last " — " / " - ")
+  const m = line.match(/^(.*?[”"’]|.*)\s+[—–-]\s+([^—–]+)$/);
+  const text = (m ? m[1] : line).trim().replace(QUOTE_MARKS, '').trim();
+  const author = m ? m[2].trim() : '';
+  return text ? { text, author } : null;
+}
+
+/** A repeatable shuffle: the same seed always gives the same order */
+function shuffled<T>(list: T[], seed: number): T[] {
+  const out = [...list];
+  let x = seed || 1;
+  const next = () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; };
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Today's quote, the same all day: your own quotes (a Quote topic) mixed in
+ * with the built-in ones, in a shuffled order that's fixed for the year, one a
+ * day. Without quotes of your own it's the built-in list alone.
+ */
+export function dailyQuote(now = new Date(), mine: Quote[] = []): Quote {
   const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
-  return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+  const pool = shuffled([...mine, ...DAILY_QUOTES], now.getFullYear());
+  return pool[dayOfYear % pool.length];
 }
 
 export function greeting(now = new Date()): string {

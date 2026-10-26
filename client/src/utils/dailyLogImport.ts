@@ -13,7 +13,7 @@ import { toDateStr } from './dateUtils.js';
 
 /** Artifact field → Chronicles nutrient key. */
 const NUTRIENT_FROM: Record<string, NutrientKey> = {
-  kcal: 'calories', iron: 'iron', vitD: 'vitaminD', b12: 'vitaminB12', vitC: 'vitaminC',
+  kcal: 'calories', protein: 'protein', carbs: 'carbs', fat: 'fat', iron: 'iron', vitD: 'vitaminD', b12: 'vitaminB12', vitC: 'vitaminC',
 };
 
 export interface DailyLogItem {

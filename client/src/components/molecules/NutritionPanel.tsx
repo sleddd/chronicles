@@ -122,7 +122,8 @@ const Strip = styled.div`
   display: grid;
   grid-template-columns: repeat(${MICRONUTRIENTS.length}, minmax(0, 1fr));
   border-top: 1px solid var(--border-card);
-  @media (max-width: 640px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Always one row: tighter as it narrows, scrolling sideways only on the smallest screens */
+  @media (max-width: 480px) { grid-template-columns: repeat(${MICRONUTRIENTS.length}, minmax(80px, 1fr)); overflow-x: auto; }
 `;
 
 const Cell = styled.label`
@@ -134,12 +135,8 @@ const Cell = styled.label`
   cursor: text;
   & + & { border-left: 1px solid var(--border-card); }
   &:focus-within { box-shadow: inset 0 0 0 1px var(--color-accent); }
-  @media (max-width: 640px) {
-    padding: 14px 18px 16px;
-    &:nth-child(odd) { border-left: none; }
-    &:nth-child(n + 3) { border-top: 1px solid var(--border-card); }
-  }
-  [data-compact] & { padding-left: 14px; padding-right: 14px; }
+  @media (max-width: 900px) { padding: 14px 12px 16px; }
+  [data-compact] & { padding-left: 12px; padding-right: 12px; }
 `;
 
 const CellValue = styled.span`
@@ -158,6 +155,7 @@ const CellInput = styled(BareInput)`
     font-size: 22px;
     font-weight: 300;
     line-height: 1.2;
+    @media (max-width: 900px) { font-size: 19px; }
   }
 `;
 

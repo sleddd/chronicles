@@ -5,6 +5,9 @@
  */
 export const NUTRIENTS = [
   { key: 'calories', label: 'Calories', short: 'Calories', unit: '', step: '1', max: 20000 },
+  { key: 'protein', label: 'Protein', short: 'Protein', unit: 'g', step: '0.1', max: 1000 },
+  { key: 'carbs', label: 'Carbs', short: 'Carbs', unit: 'g', step: '0.1', max: 2000 },
+  { key: 'fat', label: 'Fat', short: 'Fat', unit: 'g', step: '0.1', max: 1000 },
   { key: 'iron', label: 'Iron', short: 'Iron', unit: 'mg', step: '0.1', max: 1000 },
   { key: 'vitaminD', label: 'Vitamin D', short: 'Vit D', unit: 'mcg', step: '0.1', max: 10000 },
   { key: 'vitaminB12', label: 'Vitamin B12', short: 'B12', unit: 'mcg', step: '0.1', max: 100000 },
@@ -14,6 +17,12 @@ export const NUTRIENTS = [
 export type NutrientKey = typeof NUTRIENTS[number]['key'];
 export const NUTRIENT_KEYS: NutrientKey[] = NUTRIENTS.map(n => n.key);
 
+/** The macros (grams) — split in the Health dashboard's Macro distribution, not its stats strip */
+export const MACRO_KEYS: NutrientKey[] = ['protein', 'carbs', 'fat'];
+
+/** Calories per gram, for each macro's share of a day's calories */
+export const KCAL_PER_GRAM: Record<'protein' | 'carbs' | 'fat', number> = { protein: 4, carbs: 4, fat: 9 };
+
 export type NutrientSource = 'ai' | 'manual';
 
 /** Daily targets; null = no goal. A day "meets" a goal when its total reaches it. */
@@ -21,6 +30,9 @@ export type NutrientGoals = Record<NutrientKey, number | null>;
 
 export const DEFAULT_NUTRIENT_GOALS: NutrientGoals = {
   calories: null,
+  protein: null,
+  carbs: null,
+  fat: null,
   iron: null,
   vitaminD: 15,
   vitaminB12: 2.4,

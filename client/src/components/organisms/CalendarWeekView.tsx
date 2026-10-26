@@ -205,11 +205,6 @@ export function CalendarWeekView({
                 <DayWeekday>{date.toLocaleDateString('en-US', { weekday: 'short' })}</DayWeekday>
               </DayLabel>
               <Items>
-                {dayBills.map(b => (
-                  <Item key={b.key} type="button" onClick={() => onBillClick?.(b)}>
-                    <Dot $bill aria-hidden="true" /><span>{b.name}</span><small>{formatCents(b.amountCents)} due</small>
-                  </Item>
-                ))}
                 {dayEntries.map(entry => {
                   const topic = getTopicForEntry(entry);
                   const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
@@ -219,6 +214,11 @@ export function CalendarWeekView({
                     </Item>
                   );
                 })}
+                {dayBills.map(b => (
+                  <Item key={b.key} type="button" onClick={() => onBillClick?.(b)}>
+                    <Dot $bill aria-hidden="true" /><span>{b.name}</span><small>{formatCents(b.amountCents)} due</small>
+                  </Item>
+                ))}
                 {dayBills.length === 0 && dayEntries.length === 0 && <Dash aria-label="Nothing this day">—</Dash>}
               </Items>
             </DayRow>

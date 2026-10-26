@@ -65,11 +65,10 @@ const TopicSearch = styled(RoundSearch)`
   margin-bottom: 20px;
 `;
 
-/* A firmer rule under the title, then hairlines between rows */
+/* Hairlines under each row — no rule above the first */
 const List = styled.div`
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--border-default);
 `;
 
 /* Shared row style (styles/entryRow) — same as every entry list. */

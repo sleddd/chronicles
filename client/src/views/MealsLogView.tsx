@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
+import { MacroDistribution } from '../components/organisms/MacroDistribution.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -25,6 +26,15 @@ import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.j
 /* ── Layout (mirrors HealthView) ── */
 
 /* Brief confirmation ("Deleted") — a floating toast, the one place a shadow is allowed. */
+/* Daily totals: the stats as one column on the left, the macro split on the right; stacked on phones */
+const TotalsPair = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+`;
+
 const Toast = styled.div<{ $show: boolean }>`
   position: fixed;
   left: 50%;
@@ -170,9 +180,19 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
     return rowsByDay(rows, from).map(([d, r]) => ({ day: d, rows: r, noticed: noticed.get(d) ?? [] }));
   }, [rows, entries, symptomTopicId, windowDays]);
 
+  /* Scroll only this page's own scroller to `el` — scrollIntoView also scrolls
+     the app frame around it, which slid the whole layout up and left a gap below */
+  const pageRef = useRef<HTMLDivElement>(null);
+  const scrollTo = (el: HTMLElement | null) => {
+    const page = pageRef.current;
+    if (!el || !page) return;
+    const top = el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop - 16;
+    page.scrollTo({ top: Math.max(0, top), behavior: smooth() });
+  };
+
   const openDay = (d: string) => {
     setDay(d);
-    sheetRef.current?.scrollIntoView({ behavior: smooth() });
+    scrollTo(sheetRef.current);
   };
 
   /* A new Meals entry in the journal, dated the day being viewed */
@@ -198,7 +218,7 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
 
   return (
     <ContentTemplate>
-      <Page>
+      <Page ref={pageRef}>
         <Inner>
           <Head><Title>{title}</Title></Head>
           {tabBar ?? <HealthTabBar />}
@@ -213,9 +233,12 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
           <Section aria-label="Daily totals" style={{ marginTop: 40 }}>
             <SectionHead>
               <SectionLabel>Daily totals</SectionLabel>
-              <TextAction type="button" onClick={() => goalsRef.current?.scrollIntoView({ behavior: smooth() })}>Edit goals</TextAction>
+              <TextAction type="button" onClick={() => scrollTo(goalsRef.current)}>Edit goals</TextAction>
             </SectionHead>
-            <DayAtAGlance rows={dayRows} goals={goals} />
+            <TotalsPair>
+              <DayAtAGlance rows={dayRows} goals={goals} stacked />
+              <MacroDistribution rows={dayRows} />
+            </TotalsPair>
           </Section>
 
           <Section aria-label="Logged items">

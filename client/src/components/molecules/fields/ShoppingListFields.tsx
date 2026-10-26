@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
+import { AutoTextarea } from './AutoTextarea.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { RecipeAutocomplete } from '../RecipeAutocomplete.js';
 import type { ShoppingListFieldValues, ShoppingItem, ShoppingCategory } from '../../../types/fields.js';
@@ -176,7 +177,7 @@ const AddInput = styled.input`
   &::placeholder { color: var(--text-placeholder); }
 `;
 
-const NotesBox = styled.textarea`
+const NotesBox = styled(AutoTextarea)`
   && {
     width: 100%;
     min-height: 112px;
@@ -188,7 +189,6 @@ const NotesBox = styled.textarea`
     font-size: 16px;
     line-height: 1.5;
     color: var(--text-secondary);
-    resize: vertical;
     outline: none;
   }
   &&:focus { border-color: var(--color-accent) !important; }

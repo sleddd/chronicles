@@ -1,15 +1,20 @@
 import styled from 'styled-components';
+import { AutoTextarea } from './AutoTextarea.js';
 import { TitleInput } from './TitleInput.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { Toggle } from '../../atoms/Toggle.js';
 import type { EventFieldValues, MeetingFieldValues } from '../../../types/fields.js';
+import { Chips, Chip } from './formKit.js';
+import { REPEAT_OPTIONS, describeRepeat, repeatRuleOf, type RepeatKind } from '../../../utils/recurrence.js';
 export type { EventFieldValues } from '../../../types/fields.js';
 
 /* Event and meeting fields in the journal editor (and Quick Entry): the name as
    a big borderless title; meetings add an About box (topic, attendees);
    When — Starts / Ends rows of date | time in one outlined box, with an All day
-   switch that drops the times; Where — venue, address and phone rows with
+   switch that drops the times; Repeats — Never / Daily / Weekly / Monthly /
+   Yearly chips, then Every N, the weekdays (weekly) and an Until date in one
+   outlined box, with the rule in a sentence under it; Where — venue, address and phone rows with
    icons in one outlined box; Notes in an outlined box; and a "Sync to
    calendar" card with a switch. Sentence-case section labels. Props only. */
 
@@ -25,10 +30,8 @@ const Section = styled.section`
   margin-top: 30px;
 `;
 
-/* The shared title field (wraps and grows to fit), a size up */
-const NameInput = styled(TitleInput)`
-  && { font-size: 38px; }
-`;
+/* The shared title field (labelled, wraps and grows to fit) */
+const NameInput = TitleInput;
 
 const SectionHead = styled.div`
   display: flex;
@@ -130,7 +133,7 @@ const RowInput = styled.input`
   &::placeholder { color: var(--text-hint); }
 `;
 
-const NotesBox = styled.textarea`
+const NotesBox = styled(AutoTextarea)`
   && {
     width: 100%;
     min-height: 112px;
@@ -142,12 +145,106 @@ const NotesBox = styled.textarea`
     font-size: 16px;
     line-height: 1.5;
     color: var(--text-secondary);
-    resize: vertical;
     outline: none;
   }
   &&:focus { border-color: var(--color-accent) !important; }
   &::placeholder { color: var(--text-hint); }
 `;
+
+/* Repeats: Every | On (weekly) | Until rows */
+const RepeatRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding-right: 12px;
+  & > :first-child { flex: none; width: 84px; padding-left: 16px; }
+  @media (max-width: 560px) { & > :first-child { width: 64px; } }
+`;
+
+const EveryInput = styled.input`
+  && {
+    width: 56px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--border-card) !important;
+    border-radius: 8px;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  &&:focus { border-color: var(--color-accent) !important; }
+`;
+
+const RepeatUnit = styled.span`
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
+`;
+
+const WeekDays = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+`;
+
+/* A square weekday chip; chosen = accent outline + accent text */
+const WeekDay = styled.button<{ $active: boolean }>`
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-card)')};
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const UntilInput = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    height: 48px;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-secondary);
+  }
+`;
+
+const TextBtn = styled.button`
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+`;
+
+const RepeatNote = styled.p`
+  margin: 10px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+const DAY_LETTERS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const UNIT_WORDS: Record<Exclude<RepeatKind, ''>, [string, string]> = {
+  daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'], yearly: ['year', 'years'],
+};
 
 /* "Sync to calendar" card: title + note on the left, switch on the right */
 const SyncCard = styled.div`
@@ -190,6 +287,8 @@ function EventLikeFields<V extends EventLike>({ kind, values, onChange, showCale
   const name = ((values as unknown as Record<string, unknown>)[nameKey] as string | undefined) ?? '';
   const allDay = !!values.allDay;
   const meeting = values as MeetingFieldValues;
+  const repeat: RepeatKind = values.repeat ?? '';
+  const rule = repeatRuleOf(values as unknown as Record<string, unknown>);
 
   return (
     <Wrapper>
@@ -251,6 +350,62 @@ function EventLikeFields<V extends EventLike>({ kind, values, onChange, showCale
             )}
           </WhenRow>
         </Box>
+      </Section>
+
+      <Section aria-label="Repeats">
+        <SectionHead><SectionLabel>Repeats</SectionLabel></SectionHead>
+        <Chips role="radiogroup" aria-label="Repeats">
+          {REPEAT_OPTIONS.map(o => (
+            <Chip key={o.value || 'never'} type="button" role="radio" aria-checked={repeat === o.value} $active={repeat === o.value}
+              onClick={() => set({
+                repeat: o.value,
+                // Weekly starts on the start date's weekday
+                ...(o.value === 'weekly' && !(values.repeatDays ?? []).length && values.startDate
+                  ? { repeatDays: [new Date(`${values.startDate}T12:00:00`).getDay()] } : {}),
+              })}>
+              {o.label}
+            </Chip>
+          ))}
+        </Chips>
+        {rule && (
+          <>
+            <Box style={{ marginTop: 14 }}>
+              <RepeatRow>
+                <RowLabel as="label" htmlFor={`${kind}-every`}>Every</RowLabel>
+                <EveryInput id={`${kind}-every`} inputMode="numeric" value={values.repeatEvery ?? '1'}
+                  onChange={e => set({ repeatEvery: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
+                <RepeatUnit>{rule.every === 1 ? UNIT_WORDS[rule.repeat][0] : UNIT_WORDS[rule.repeat][1]}</RepeatUnit>
+              </RepeatRow>
+              {rule.repeat === 'weekly' && (
+                <RepeatRow>
+                  <RowLabel>On</RowLabel>
+                  <WeekDays role="group" aria-label="Days of the week">
+                    {DAY_LETTERS.map((label, d) => {
+                      const on = (values.repeatDays ?? []).includes(d);
+                      return (
+                        <WeekDay key={label} type="button" $active={on} aria-pressed={on}
+                          onClick={() => set({ repeatDays: on ? (values.repeatDays ?? []).filter(x => x !== d) : [...(values.repeatDays ?? []), d].sort() })}>
+                          {label}
+                        </WeekDay>
+                      );
+                    })}
+                  </WeekDays>
+                </RepeatRow>
+              )}
+              <RepeatRow>
+                <RowLabel as="label" htmlFor={`${kind}-until`}>Until</RowLabel>
+                <UntilInput id={`${kind}-until`} type="date" value={values.repeatUntil ?? ''} min={values.startDate || undefined}
+                  onChange={e => set({ repeatUntil: e.target.value })} />
+                {values.repeatUntil
+                  ? <TextBtn type="button" onClick={() => set({ repeatUntil: '' })}>No end</TextBtn>
+                  : <RepeatUnit>No end</RepeatUnit>}
+              </RepeatRow>
+            </Box>
+            <RepeatNote>
+              {values.startDate ? describeRepeat(values.startDate, rule) : 'Pick a start date and it repeats from there.'}
+            </RepeatNote>
+          </>
+        )}
       </Section>
 
       <Section aria-label="Where">

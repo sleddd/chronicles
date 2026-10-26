@@ -1,5 +1,4 @@
 import { useId } from 'react';
-import { RatingRow, HEALTHY_WORDS } from '../DayInventory.js';
 import { NutritionPanel, PillBtn } from '../NutritionPanel.js';
 import { nutrientSourceOf, withManualNutrient, type NutrientKey } from '../../../types/nutrition.js';
 import type { FoodFieldValues } from '../../../types/fields.js';
@@ -54,7 +53,7 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
           onChange={e => set({ mealDescription: e.target.value })}
           onKeyDown={enter}
           placeholder="What did you eat?"
-          aria-label="What did you eat?"
+          aria-label="Meal description"
         />
       </Section>
 
@@ -69,14 +68,6 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
           ))}
         </Chips>
       </Section>
-
-      {values.mealType !== 'supplement' && values.mealType !== 'medication' && (
-        <Section aria-label="How healthy">
-          <SectionHead><SectionLabel>How healthy?</SectionLabel></SectionHead>
-          <RatingRow label="How healthy it was" value={Number(values.healthiness) || 0} words={HEALTHY_WORDS}
-            onChange={v => set({ healthiness: v ? String(v) : '' })} />
-        </Section>
-      )}
 
       <Section aria-label="When">
         <SectionHead><SectionLabel>When</SectionLabel></SectionHead>

@@ -201,6 +201,17 @@ const Note = styled.p`
   color: var(--text-muted);
 `;
 
+/* Credit for the training approach, at the foot of the page */
+const Credit = styled.p`
+  margin: 56px 0 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  a { color: var(--color-accent-link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+`;
+
 const InlineLink = styled.button`
   padding: 0;
   border: none;
@@ -674,6 +685,11 @@ export function TrainingView() {
               )}
             </>
           )}
+
+          <Credit>
+            This training plan is based by Kate Sielmann Train Smarter Climb Higher. To learn more check out{' '}
+            <a href="https://kate-sielmann.com/" target="_blank" rel="noopener noreferrer">https://kate-sielmann.com/</a>
+          </Credit>
         </Inner>
       </Page>
     </ContentTemplate>

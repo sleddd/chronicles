@@ -122,10 +122,10 @@ describe('EntryForm', () => {
     expect(screen.getByText('Save entry')).not.toBeDisabled();
   });
 
-  it('shows Discard changes, wired to onNew', () => {
+  it('shows Close, wired to onNew', () => {
     const onNew = vi.fn();
     renderWithTheme(<EntryForm {...defaultProps} isEditing={true} entryId={1} onNew={onNew} />);
-    fireEvent.click(screen.getByText('Discard changes'));
+    fireEvent.click(screen.getByText('Close'));
     expect(onNew).toHaveBeenCalled();
   });
 

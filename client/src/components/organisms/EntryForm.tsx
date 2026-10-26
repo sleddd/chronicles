@@ -326,7 +326,7 @@ const SaveRowActions = styled.div`
   margin-left: auto;
 `;
 
-/* Discard changes — the standard neutral outlined pill */
+/* Close (discards unsaved changes) — the standard neutral outlined pill */
 const DiscardBtn = styled(PillButton).attrs({ $variant: 'neutral' as const, type: 'button' as const })`
   @media (max-width: 768px) { order: 2; }
 `;
@@ -921,7 +921,7 @@ export function EntryForm({
         {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
       </FooterLeft>
       <SaveRowActions>
-        <DiscardBtn onClick={onNew}>Discard changes</DiscardBtn>
+        <DiscardBtn onClick={onNew}>Close</DiscardBtn>
         {saveButton}
       </SaveRowActions>
     </>

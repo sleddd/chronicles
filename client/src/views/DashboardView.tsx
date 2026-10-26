@@ -1,5 +1,11 @@
 import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  DndContext, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors,
+  type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -17,8 +23,10 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
-import { useTodayDoses, type DoseGroup } from '../hooks/useTodayDoses.js';
+import { useTodayDoses } from '../hooks/useTodayDoses.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
+import { QuickLog } from '../components/organisms/HealthQuickLog.js';
+import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -32,7 +40,7 @@ import { MENU_SLOTS, defaultShoppingListTitle, latestOpenList, menuDays } from '
 import { getOrCreateTopic } from '../utils/getOrCreateJournalTopic.js';
 import { prioritiesTitle } from '../utils/entrySave.js';
 import type { ThemePreference } from '../utils/autoTheme.js';
-import { dailyQuote, greeting } from '../utils/dailyQuote.js';
+import { dailyQuote, greeting, parseQuoteText, type Quote } from '../utils/dailyQuote.js';
 import { currentWeather, describeWeather, findPlace, hoursFromLocal, type CurrentWeather, type Place } from '../utils/weather.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { ShoppingItem } from '../types/fields.js';
@@ -49,17 +57,18 @@ import type { PriorityItem } from '../components/molecules/fields/PrioritiesFiel
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
-  { key: 'nextUp', label: 'Next up (when the quote is off)' },
+  { key: 'nextUp', label: 'Next event or meeting (when the quote is off)' },
   { key: 'wellness', label: 'Wellness check-in' },
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
   { key: 'priorities', label: "Today's priorities" },
   { key: 'comingUp', label: 'Coming up' },
   { key: 'exercise', label: 'Exercise schedule' },
+  { key: 'quickLog', label: 'Quick meal log' },
   { key: 'symptom', label: 'Log a symptom' },
   { key: 'menu', label: 'On the menu' },
   { key: 'meds', label: 'Medications' },
@@ -73,6 +82,26 @@ interface DashboardConfig {
   places: Place[];
   /** The full world-clock grid is open under the one-line strip */
   clocksExpanded?: boolean;
+  /** Cards folded down to their title row */
+  collapsed?: SectionKey[];
+  /** The two columns' cards, top to bottom, as dragged into place */
+  layout?: { left: SectionKey[]; right: SectionKey[] };
+}
+
+/** The cards that can be dragged between the two columns, and where they start */
+const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
+  left: ['priorities', 'comingUp', 'quickLog', 'exercise'],
+  right: ['recent', 'shopping', 'menu', 'meds', 'symptom'],
+};
+
+/** The saved layout with any card it doesn't know put back in its default column */
+function fullLayout(saved?: { left: SectionKey[]; right: SectionKey[] }): { left: SectionKey[]; right: SectionKey[] } {
+  const all = [...DEFAULT_LAYOUT.left, ...DEFAULT_LAYOUT.right];
+  const left = (saved?.left ?? DEFAULT_LAYOUT.left).filter(k => all.includes(k));
+  const right = (saved?.right ?? DEFAULT_LAYOUT.right).filter(k => all.includes(k) && !left.includes(k));
+  for (const k of DEFAULT_LAYOUT.left) if (!left.includes(k) && !right.includes(k)) left.push(k);
+  for (const k of DEFAULT_LAYOUT.right) if (!left.includes(k) && !right.includes(k)) right.push(k);
+  return { left, right };
 }
 
 const DEFAULT_CONFIG: DashboardConfig = { hidden: [], places: [] };
@@ -390,20 +419,79 @@ const QuoteBy = styled.p`
 const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 80px;
-  margin-top: 44px;
-  /* Stacked: the same 56px between the two columns as between sections */
-  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); row-gap: 56px; }
-  /* Phones: these sections sit on the canvas with no card around them, so
-     they get their own side inset to sit in from the screen edge */
-  @media (max-width: 768px) { padding-inline: 12px; }
+  gap: 24px;
+  /* The same 24px under the world clocks (or the cards above) as between cards */
+  margin-top: 24px;
+  align-items: start;
+  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 const Col = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 56px;
+  gap: 24px;
   min-width: 0;
+`;
+
+/* Each section in the two columns sits in its own grey card, like Next up and the
+   quote, with a chevron on the right that folds it down to its title row */
+const WidgetCard = styled.div<{ $collapsed: boolean }>`
+  position: relative;
+  min-width: 0;
+  padding: 28px 92px 28px 32px;
+  border-radius: 14px;
+  background: var(--bg-panel);
+  @media (max-width: 480px) { padding: 22px 76px 22px 20px; }
+  /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
+  & > section > :first-child { align-items: center; }
+  & > section > :first-child h2 { line-height: 30px; }
+  ${({ $collapsed }) => ($collapsed ? `
+    & > section > :not(:first-child) { display: none; }
+    & > section > :first-child { padding-bottom: 0; border-bottom: none; }
+  ` : '')}
+`;
+
+/* The grip to drag a card by, just left of its fold chevron */
+const DragHandle = styled.button`
+  position: absolute;
+  top: 28px;
+  right: 54px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-faint);
+  cursor: grab;
+  touch-action: none;
+  html[data-theme='dark'] & { color: var(--text-disabled); }
+  &:hover { color: var(--text-muted); background: var(--bg-row-hover); }
+  &:active { cursor: grabbing; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (max-width: 480px) { top: 22px; right: 44px; }
+`;
+
+const FoldBtn = styled.button<{ $collapsed: boolean }>`
+  position: absolute;
+  top: 28px;
+  right: 22px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  svg { transition: transform 150ms ease; transform: rotate(${({ $collapsed }) => ($collapsed ? 0 : 180)}deg); }
+  &:hover { color: var(--text-primary); background: var(--bg-row-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (max-width: 480px) { top: 22px; right: 14px; }
 `;
 
 const SectionHead = styled.div`
@@ -412,26 +500,20 @@ const SectionHead = styled.div`
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-subtle);
   h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }
 `;
 
-/* Two things on the right of a section head (a count and a link) */
-const HeadAside = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-`;
-
+/* Hairlines between rows only — none under the last one */
 const Row = styled.div`
   display: flex;
   align-items: center;
   gap: 14px;
   min-height: 52px;
-  border-bottom: 1px solid var(--border-subtle);
+  & + & { border-top: 1px solid var(--border-subtle); }
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-secondary);
@@ -606,16 +688,9 @@ function WorldClocks({ places, now, open, onToggle }: { places: Place[]; now: Da
   );
 }
 
-/* Next up: the next medication doses still to take today (upcoming first,
-   else the latest overdue), with Mark all taken and Snooze 30 min. Snoozes
-   are a per-browser convenience (localStorage). */
-const SNOOZE_KEY = 'dashboard-snooze-v1';
-const SNOOZE_MS = 30 * 60_000;
-
-function readSnoozes(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem(SNOOZE_KEY) || '{}') as Record<string, number>; } catch { return {}; }
-}
-
+/* Next up: the next event or meeting (repeats included) — when it starts
+   ("in 25 min", "Tomorrow", "Thu, Oct 29") with its time across, the title,
+   its kind and where, and an Open button. One still under way today shows as now. */
 function minutesOf(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -627,59 +702,75 @@ function spanLabel(mins: number): string {
   return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`;
 }
 
-function partOfDay(hhmm: string): string {
-  const h = Math.floor(minutesOf(hhmm) / 60);
-  if (h < 5) return 'Night';
-  if (h < 12) return 'Morning';
-  if (h < 17) return 'Afternoon';
-  if (h < 22) return 'Evening';
-  return 'Night';
-}
+interface NextItem { id: number; day: string; time: string; allDay: boolean; title: string; detail: string }
 
-type Doses = ReturnType<typeof useTodayDoses>;
-
-/** The dose group the Next up card shows, or null when nothing is due */
-function nextGroup(groups: DoseGroup[], now: Date, snoozes: Record<string, number>, today: string): DoseGroup | null {
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const open = groups.filter(g => g.pending.length > 0 && !((snoozes[`${today}|${g.time}`] ?? 0) > now.getTime()));
-  return open.find(g => minutesOf(g.time) >= nowMin) ?? open.filter(g => minutesOf(g.time) < nowMin).at(-1) ?? null;
-}
-
-function NextUp({ doses, now }: { doses: Doses; now: Date }) {
+function NextUp({ now }: { now: Date }) {
   const navigate = useNavigate();
-  const [snoozes, setSnoozes] = useState(readSnoozes);
-  const [busy, setBusy] = useState(false);
+  const openInJournal = useOpenInJournal();
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
   const today = toDateStr(now);
-  const g = nextGroup(doses.groups, now, snoozes, today);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  const snooze = (time: string) => {
-    const next = { ...Object.fromEntries(Object.entries(snoozes).filter(([k]) => k.startsWith(today))), [`${today}|${time}`]: Date.now() + SNOOZE_MS };
-    setSnoozes(next);
-    try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-  };
+  const next = useMemo<NextItem | null>(() => {
+    const kinds = new Map<number, string>();
+    for (const t of allTopics) {
+      const n = t.name.toLowerCase();
+      if (n === 'event' || n === 'events') kinds.set(t.id, 'Event');
+      if (n === 'meeting' || n === 'meetings') kinds.set(t.id, 'Meeting');
+    }
+    const until = addDays(today, 90);
+    let best: (NextItem & { sort: string }) | null = null;
+    for (const e of entries) {
+      const tid = (e.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
+      const kind = tid !== undefined ? kinds.get(tid) : undefined;
+      if (!kind) continue;
+      const cf = cfOf(e);
+      const allDay = !!cf.allDay;
+      const time = allDay ? '' : String(cf.startTime ?? '');
+      const end = allDay ? '' : String(cf.endTime ?? '');
+      for (const day of occurrencesBetween(String(cf.startDate ?? ''), repeatRuleOf(cf), today, until, 3)) {
+        // Today: skip one that's over (past its end, or its start when it has no end)
+        if (day === today && time && minutesOf(end || time) < nowMin) continue;
+        const sort = `${day} ${time || '00:00'}`;
+        if (!best || sort < best.sort) {
+          const title = (builtinEntryName(cf) || stripHtml(e.content).trim()).slice(0, 80) || 'Untitled';
+          const where = [kind === 'Meeting' ? cf.meetingTopic : undefined, cf.location].find(v => typeof v === 'string' && v.trim()) as string | undefined;
+          best = { id: e.id, day, time, allDay, title, detail: where ? `${kind} · ${where}` : kind, sort };
+        }
+        break;
+      }
+    }
+    return best;
+  }, [entries, allTopics, today, nowMin]);
 
-  if (!g) return (
+  if (!next) return (
     <NextCard aria-label="Next up">
-      <NextTop><b>Next up</b>{doses.total > 0 && <span>{doses.taken} of {doses.total} taken</span>}</NextTop>
-      <NextTitle>{doses.total > 0 ? 'All caught up' : 'No medications scheduled'}</NextTitle>
-      <NextList>{doses.total > 0 ? 'Nothing else is due right now.' : 'Add reminder times to a medication and its doses show up here.'}</NextList>
-      <NextActions><PillButton type="button" $variant="neutral" onClick={() => navigate('/health')}>Health</PillButton></NextActions>
+      <NextTop><b>Next up</b></NextTop>
+      <NextTitle>Nothing coming up</NextTitle>
+      <NextList>No events or meetings in the next three months.</NextList>
+      <NextActions><PillButton type="button" $variant="neutral" onClick={() => navigate('/calendar')}>Calendar</PillButton></NextActions>
     </NextCard>
   );
 
-  const diff = minutesOf(g.time) - (now.getHours() * 60 + now.getMinutes());
-  const when = diff >= 0 ? `Next up · ${diff === 0 ? 'now' : `in ${spanLabel(diff)}`}` : `Overdue · ${spanLabel(-diff)} ago`;
+  const tomorrow = addDays(today, 1);
+  let when: string;
+  if (next.day === today) {
+    const diff = next.time ? minutesOf(next.time) - nowMin : 0;
+    when = !next.time ? 'Next up · today' : diff <= 0 ? 'Now' : `Next up · in ${spanLabel(diff)}`;
+  } else if (next.day === tomorrow) {
+    when = 'Next up · tomorrow';
+  } else {
+    when = `Next up · ${new Date(`${next.day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  }
   return (
     <NextCard aria-label="Next up">
-      <NextTop><b>{when}</b><span>{time12(g.time)}</span></NextTop>
-      <NextTitle>{partOfDay(g.time)} medications</NextTitle>
-      <NextList>{g.pending.map(d => d.medicationName).join(', ')}</NextList>
-      {doses.error && <NextList role="alert" style={{ color: 'var(--color-danger)' }}>{doses.error}</NextList>}
+      <NextTop><b>{when}</b><span>{next.time ? time12(next.time) : 'All day'}</span></NextTop>
+      <NextTitle>{next.title}</NextTitle>
+      <NextList>{next.detail}</NextList>
       <NextActions>
-        <PillButton type="button" disabled={busy} onClick={async () => { setBusy(true); await doses.takeAll(g.pending); setBusy(false); }}>
-          {busy ? 'Saving…' : 'Mark all taken'}
-        </PillButton>
-        <PillButton type="button" $variant="neutral" onClick={() => snooze(g.time)}>Snooze 30 min</PillButton>
+        <PillButton type="button" onClick={() => openInJournal(next.id)}>Open</PillButton>
+        <PillButton type="button" $variant="neutral" onClick={() => navigate('/calendar')}>Calendar</PillButton>
       </NextActions>
     </NextCard>
   );
@@ -800,7 +891,6 @@ function Priorities() {
   const save = useSaveFields();
   const [draft, setDraft] = useState('');
   const { entry, items, tid } = usePriorities();
-  const done = items.filter(i => i.done).length;
   const [starting, setStarting] = useState(false);
   // The entry's title: "Priorities: 10/18/2026" — the list's own date
   const textOf = (date = new Date()) => `<p>${prioritiesTitle(date)}</p>`;
@@ -849,10 +939,7 @@ function Priorities() {
       <SectionHead>
         <h2>Today's priorities</h2>
         {items.length > 0 && (
-          <HeadAside>
-            <span>{done} of {items.length} done</span>
-            <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
-          </HeadAside>
+          <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
         )}
       </SectionHead>
       {items.map((p, i) => (
@@ -959,11 +1046,14 @@ function ComingUp({ financeOn }: { financeOn: boolean }) {
       const kind = tid !== undefined && eventIds.has(tid) ? 'event' : tid !== undefined && meetingIds.has(tid) ? 'meeting' : null;
       if (!kind) continue;
       const cf = cfOf(e);
-      const day = String(cf.startDate ?? '');
-      if (!day || day < today || day > end) continue;
+      // Each day it lands on in the next two weeks (just its start day unless it repeats)
+      const days = occurrencesBetween(String(cf.startDate ?? ''), repeatRuleOf(cf), today, end);
+      if (!days.length) continue;
       const title = (builtinEntryName(cf) || stripHtml(e.content).trim()).slice(0, 80) || 'Untitled';
       const sub = [cf.location, kind === 'meeting' ? cf.meetingTopic : undefined].filter(v => typeof v === 'string' && v.trim()).join(' · ');
-      out.push({ key: `e${e.id}`, day, time: cf.allDay ? undefined : (cf.startTime as string | undefined) || undefined, title, sub: sub || undefined, kind, open: () => openInJournal(e.id) });
+      for (const day of days) {
+        out.push({ key: `e${e.id}-${day}`, day, time: cf.allDay ? undefined : (cf.startTime as string | undefined) || undefined, title, sub: sub || undefined, kind, open: () => openInJournal(e.id) });
+      }
     }
     if (financeOn) {
       for (const { bill, date } of billOccurrences(bills.records, today, end)) {
@@ -1084,7 +1174,6 @@ function Shopping() {
   const [error, setError] = useState('');
   const list = useMemo(() => latestOpenList(entries, topicIdByName(allTopics, 'shopping list', 'shopping lists')), [entries, allTopics]);
   const items = ((list ? cfOf(list).items : undefined) as ShoppingItem[] | undefined) ?? [];
-  const left = items.filter(i => !i.checked).length;
 
   // Adds to the open list; with none open, starts a new dated one
   const add = async (e: React.FormEvent) => {
@@ -1119,11 +1208,8 @@ function Shopping() {
       <SectionHead>
         <h2>Shopping list</h2>
         {list ? (
-          <HeadAside>
-            <span>{left} left</span>
-            {/* The full list in the journal editor — rename, remove items, notes… */}
-            <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>
-          </HeadAside>
+          // The full list in the journal editor — rename, remove items, notes…
+          <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>
         ) : <button type="button" onClick={() => navigate('/shopping')}>Lists</button>}
       </SectionHead>
       {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : (
@@ -1147,10 +1233,80 @@ function Shopping() {
 
 /* ── View ── */
 
+/* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
+function SortableCard({ id, collapsed, label, children }: { id: SectionKey; collapsed: boolean; label: string; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
+      {children}
+      <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
+        <Icon name="grip" size={18} strokeWidth={2.6} />
+      </DragHandle>
+    </WidgetCard>
+  );
+}
+
+/* A column cards can be dropped into — even when it's empty */
+function DropCol({ id, items, children }: { id: 'left' | 'right'; items: SectionKey[]; children: ReactNode }) {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <SortableContext id={id} items={items} strategy={verticalListSortingStrategy}>
+      <Col ref={setNodeRef} style={{ minHeight: 80 }}>{children}</Col>
+    </SortableContext>
+  );
+}
+
 export function DashboardView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const ff = useEntriesStore(s => s.featureFlags);
+  const quoteEntries = useEntriesStore(s => s.decryptedEntries);
+  const quoteTopics = useEntriesStore(s => s.allTopics);
+  // Quotes of your own (a Quote or Quotes topic, when there is one) take turns with the built-in ones
+  const myQuotes = useMemo<Quote[]>(() => {
+    const ids = new Set(quoteTopics.filter(t => ['quote', 'quotes'].includes(t.name.toLowerCase())).map(t => t.id));
+    if (!ids.size) return [];
+    return quoteEntries
+      .filter(e => ids.has((e.metadata as Record<string, unknown> | undefined)?._taxonomyId as number))
+      .sort((a, b) => a.id - b.id)
+      .flatMap(e => parseQuoteText(stripHtml(e.content)) ?? []);
+  }, [quoteEntries, quoteTopics]);
   const [config, saveConfig, configLoaded] = useEncryptedSetting<DashboardConfig>('dashboardConfig', DEFAULT_CONFIG);
+  // The two columns' card order — live while dragging, saved on drop
+  const [layout, setLayout] = useState(() => fullLayout(config.layout));
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => { if (!dragging) setLayout(fullLayout(config.layout)); }, [config.layout, dragging]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const colOf = (id: UniqueIdentifier, l = layout): 'left' | 'right' | null =>
+    id === 'left' || id === 'right' ? id : l.left.includes(id as SectionKey) ? 'left' : l.right.includes(id as SectionKey) ? 'right' : null;
+  // Into the other column as soon as the card is over it
+  const onDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over) return;
+    setLayout(l => {
+      const from = colOf(active.id, l), to = colOf(over.id, l);
+      if (!from || !to || from === to) return l;
+      const key = active.id as SectionKey;
+      const target = l[to].filter(k => k !== key);
+      const at = over.id === to ? target.length : target.indexOf(over.id as SectionKey);
+      target.splice(at < 0 ? target.length : at, 0, key);
+      return { ...l, [from]: l[from].filter(k => k !== key), [to]: target };
+    });
+  };
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    setDragging(false);
+    let next = layout;
+    const col = colOf(active.id);
+    if (over && col && colOf(over.id) === col && over.id !== active.id && over.id !== col) {
+      const list = layout[col];
+      next = { ...layout, [col]: arrayMove(list, list.indexOf(active.id as SectionKey), list.indexOf(over.id as SectionKey)) };
+      setLayout(next);
+    }
+    const saved = fullLayout(config.layout);
+    if (next.left.join() !== saved.left.join() || next.right.join() !== saved.right.join()) void saveConfig({ ...config, layout: next });
+  };
   const [customizing, setCustomizing] = useState(false);
   const displayName = useUIStore(s => s.displayName) ?? '';
   const { user } = useAuth();
@@ -1198,7 +1354,7 @@ export function DashboardView() {
   // "Good evening, Alex" — the display name, else the username
   const helloName = displayName.trim() || user?.username?.trim() || '';
   const hello = helloName ? `${greeting(now)}, ${helloName}` : greeting(now);
-  const quote = dailyQuote(now);
+  const quote = dailyQuote(now, myQuotes);
   const kitchenOn = true;
 
   const toggleSection = (k: SectionKey, on: boolean) =>
@@ -1223,21 +1379,48 @@ export function DashboardView() {
       <NextTop $plain><b>Daily quote</b></NextTop>
       <QuoteBody>
         <QuoteText>{quote.text}</QuoteText>
-        <QuoteBy>— {quote.author}</QuoteBy>
+        {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
       </QuoteBody>
     </QuoteCard>
-  ) : shown('nextUp') && medsOn ? <NextUp doses={doses} now={now} /> : null;
+  ) : shown('nextUp') ? <NextUp now={now} /> : null;
 
   const left: ReactNode[] = [];
   const right: ReactNode[] = [];
-  if (shown('priorities')) left.push(<Priorities key="p" />);
-  if (shown('comingUp')) left.push(<ComingUp key="c" financeOn={financeOn} />);
-  if (shown('exercise') && ff.exerciseEnabled !== false) left.push(<ExerciseToday key="x" />);
-  if (shown('recent')) right.push(<RecentEntries key="r" />);
-  if (shown('shopping')) right.push(<Shopping key="s" />);
-  if (shown('menu') && kitchenOn) right.push(<Menu key="m" />);
-  if (shown('meds') && medsOn) right.push(<MedicationsToday key="d" doses={doses} />);
-  if (shown('symptom')) right.push(<LogSymptom key="y" />);
+  const collapsed = new Set(config.collapsed ?? []);
+  const toggleFold = (k: SectionKey) =>
+    void saveConfig({ ...config, collapsed: collapsed.has(k) ? [...collapsed].filter(x => x !== k) : [...collapsed, k] });
+  // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
+  const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
+    priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },
+    comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} /> },
+    exercise: { label: 'exercise schedule', on: shown('exercise') && ff.exerciseEnabled !== false, node: <ExerciseToday /> },
+    quickLog: {
+      label: 'quick meal log',
+      on: shown('quickLog') && (ff.foodEnabled !== false || ff.exerciseEnabled !== false),
+      node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} />,
+    },
+    recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
+    shopping: { label: 'shopping list', on: shown('shopping'), node: <Shopping /> },
+    menu: { label: 'on the menu', on: shown('menu') && kitchenOn, node: <Menu /> },
+    meds: { label: 'medications', on: shown('meds') && medsOn, node: <MedicationsToday doses={doses} /> },
+    symptom: { label: 'log a symptom', on: shown('symptom'), node: <LogSymptom /> },
+  };
+  const visible = (k: SectionKey) => !!widgets[k]?.on;
+  const cols = { left: layout.left.filter(visible), right: layout.right.filter(visible) };
+  const card = (k: SectionKey) => {
+    const w = widgets[k]!;
+    return (
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label}>
+        {w.node}
+        <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
+          aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
+          <Icon name="chevron-down" size={18} strokeWidth={1.8} />
+        </FoldBtn>
+      </SortableCard>
+    );
+  };
+  left.push(...cols.left.map(card));
+  right.push(...cols.right.map(card));
 
   return (
     <ContentTemplate>
@@ -1308,10 +1491,14 @@ export function DashboardView() {
 
 
           {(left.length > 0 || right.length > 0) && (
-            <Columns>
-              <Col>{left}</Col>
-              <Col>{right}</Col>
-            </Columns>
+            <DndContext sensors={sensors} collisionDetection={closestCorners}
+              onDragStart={() => setDragging(true)} onDragOver={onDragOver} onDragEnd={onDragEnd}
+              onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
+              <Columns>
+                <DropCol id="left" items={cols.left}>{left}</DropCol>
+                <DropCol id="right" items={cols.right}>{right}</DropCol>
+              </Columns>
+            </DndContext>
           )}
         </Inner>
       </Page>

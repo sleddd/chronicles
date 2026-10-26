@@ -21,18 +21,19 @@ import {
   Section, TitleInput, Chips, Chip, DateTimeBox, DateTimeField, Unit, BoxText, FieldNote,
 } from '../molecules/fields/formKit.js';
 
-/* Health dashboard "Quick log": a Meal | Exercise switch, then the few fields
-   you need right now — meal name + meal chips, or activity chips — a
-   date | time | kcal (or min) box, then an outlined accent Log pill.
+/* Health dashboard "Quick meal log" / "Quick exercise log": a Meal | Exercise
+   switch, then the few fields you need right now. Meal: the name, the meal
+   types as plain words (the chosen one in the accent over a 2px rule), then
+   one row — "Today, 5:26 PM" (tap to change the day and time), More details
+   and the Log meal pill. Exercise: activity chips, a date | time | min box,
+   then the Log pill.
    Notes live under "More details", which opens the full form in the
    journal with what's typed so far. Unset date/time = now. */
 
 /* ── Styled ── */
 
-/* The quick form runs a size down from the journal's field forms */
-const QTitle = styled(TitleInput)`
-  && { font-size: 26px; }
-`;
+/* The shared title field (labelled, underlined) */
+const QTitle = TitleInput;
 
 const QChip = styled(Chip)`
   height: 28px;
@@ -129,6 +130,13 @@ const ChangeNote = styled.p`
   a:hover { text-decoration: underline; }
 `;
 
+/** "5:26 PM" from "17:26" */
+function time12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h)) return '';
+  return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
 /** "Today", "Yesterday", else "Oct 12" */
 function dayWord(date: string): string {
   const t = today();
@@ -190,6 +198,53 @@ const AmountInput = styled(QField)`
   &::placeholder { color: var(--text-hint); }
 `;
 
+/* Meal types as plain words; the chosen one in the accent over a 2px accent rule */
+const MealTabs = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 20px;
+`;
+
+const MealTab = styled.button<{ $active: boolean }>`
+  padding: 0 0 5px;
+  border: none;
+  border-bottom: 2px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'transparent')};
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: 2px; }
+`;
+
+/* "Today, 5:26 PM" — tap to change the day and time */
+const WhenLink = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
+`;
+
+const WhenPair = styled(DateTimeBox)`
+  margin-top: 20px;
+`;
+
+const MealFooter = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px 18px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  > :last-child { margin-left: auto; }
+`;
+
 const Footer = styled.div`
   display: flex;
   align-items: center;
@@ -204,7 +259,7 @@ const MoreLink = styled.button`
   border: none;
   background: none;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-accent-link);
   cursor: pointer;
   &:hover { text-decoration: underline; }
@@ -277,6 +332,7 @@ function MealQuick() {
   const openNew = useNewEntryInJournal();
   const blank = () => ({ name: '', mealType: mealForNow(), date: today(), time: nowTime(), calories: '', notes: '' });
   const [v, setV] = useState(blank);
+  const [editWhen, setEditWhen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
@@ -297,6 +353,7 @@ function MealQuick() {
       const id = await actions.create(f.consumedDate, name, f);
       if (aiReady) void actions.fill(id);
       setV(blank());
+      setEditWhen(false);
       setStatus(`Logged ${name}`);
       setTimeout(() => setStatus(''), 2600);
     } catch (err) {
@@ -309,36 +366,31 @@ function MealQuick() {
 
   return (
     <>
-      <QTitle value={v.name} placeholder="What did you eat?" aria-label="What did you eat?"
+      <QTitle value={v.name} placeholder="What did you eat?" aria-label="What did you eat?" hideLabel
         onChange={e => set({ name: e.target.value })}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
-      <Section style={{ marginTop: 20 }}>
-        <QChips role="radiogroup" aria-label="Meal">
-          {MEALS.map(m => (
-            <QChip key={m.value} type="button" role="radio" aria-checked={v.mealType === m.value}
-              $active={v.mealType === m.value} onClick={() => set({ mealType: m.value })}>{m.label}</QChip>
-          ))}
-        </QChips>
-      </Section>
-      <Section style={{ marginTop: 20 }}>
-        <WhenBox>
+      <MealTabs role="radiogroup" aria-label="Meal">
+        {MEALS.map(m => (
+          <MealTab key={m.value} type="button" role="radio" aria-checked={v.mealType === m.value}
+            $active={v.mealType === m.value} onClick={() => set({ mealType: m.value })}>{m.label}</MealTab>
+        ))}
+      </MealTabs>
+      {editWhen && (
+        <WhenPair>
           <QField type="date" value={v.date} aria-label="Date" onChange={e => set({ date: e.target.value })} />
           <QField type="time" value={v.time} aria-label="Time" onChange={e => set({ time: e.target.value })} />
-          <Amount>
-            <AmountInput inputMode="numeric" value={v.calories} placeholder="kcal" aria-label="Calories"
-              onChange={e => set({ calories: e.target.value.replace(/[^\d.]/g, '') })} />
-            {v.calories && <Unit>kcal</Unit>}
-          </Amount>
-        </WhenBox>
-        {aiReady && <QNote>Leave calories and nutrients blank and AI will estimate them.</QNote>}
-      </Section>
-      <Footer>
+        </WhenPair>
+      )}
+      <MealFooter>
+        <WhenLink type="button" aria-expanded={editWhen} onClick={() => setEditWhen(o => !o)}>
+          {dayWord(v.date || today())}, {time12(v.time || nowTime())}
+        </WhenLink>
         <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
-        <Status role="status" aria-live="polite">{status}</Status>
+        {status && <Status role="status" aria-live="polite">{status}</Status>}
         <PillButton type="button" onClick={() => void log()} disabled={saving || !v.name.trim()}>
           {saving ? 'Logging…' : 'Log meal'}
         </PillButton>
-      </Footer>
+      </MealFooter>
     </>
   );
 }
@@ -747,21 +799,40 @@ export function QuickSymptom() {
 
 /* ── Panel ── */
 
-export function QuickLog({ meal = true, exercise = true }: { meal?: boolean; exercise?: boolean }) {
+/* `bare` (the home dashboard's widget card): no panel of its own, the title
+   with no rule under it */
+const BareHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+  h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
+`;
+
+export function QuickLog({ meal = true, exercise = true, bare = false }: { meal?: boolean; exercise?: boolean; bare?: boolean }) {
   const [kind, setKind] = useState<'meal' | 'exercise'>(meal ? 'meal' : 'exercise');
   if (!meal && !exercise) return null;
+  const title = kind === 'meal' ? 'Quick meal log' : 'Quick exercise log';
+  const toggle = meal && exercise ? (
+    <Switch role="tablist" aria-label="Log a">
+      <SwitchBtn type="button" role="tab" aria-selected={kind === 'meal'} $active={kind === 'meal'} onClick={() => setKind('meal')}>Meal</SwitchBtn>
+      <SwitchBtn type="button" role="tab" aria-selected={kind === 'exercise'} $active={kind === 'exercise'} onClick={() => setKind('exercise')}>Exercise</SwitchBtn>
+    </Switch>
+  ) : undefined;
+  const body = kind === 'meal' ? <MealQuick /> : <ExerciseQuick />;
+  if (bare) {
+    return (
+      <section aria-label={title}>
+        <BareHead><h2>{title}</h2>{toggle}</BareHead>
+        {body}
+      </section>
+    );
+  }
   return (
-    <DashPanel aria-label="Quick log">
-      <DashPanelHead
-        title="Quick log"
-        aside={meal && exercise ? (
-          <Switch role="tablist" aria-label="Log a">
-            <SwitchBtn type="button" role="tab" aria-selected={kind === 'meal'} $active={kind === 'meal'} onClick={() => setKind('meal')}>Meal</SwitchBtn>
-            <SwitchBtn type="button" role="tab" aria-selected={kind === 'exercise'} $active={kind === 'exercise'} onClick={() => setKind('exercise')}>Exercise</SwitchBtn>
-          </Switch>
-        ) : undefined}
-      />
-      {kind === 'meal' ? <MealQuick /> : <ExerciseQuick />}
+    <DashPanel aria-label={title}>
+      <DashPanelHead title={title} aside={toggle} />
+      {body}
     </DashPanel>
   );
 }

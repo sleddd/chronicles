@@ -47,7 +47,7 @@ describe('planDailyLogImport', () => {
   });
 
   it('maps goals', () => {
-    expect(plan.goals).toEqual({ calories: 1200, iron: 12, vitaminD: 100, vitaminB12: 2.4, vitaminC: 75 });
+    expect(plan.goals).toEqual({ calories: 1200, protein: null, carbs: null, fat: null, iron: 12, vitaminD: 100, vitaminB12: 2.4, vitaminC: 75 });
   });
 
   it('accepts an array of days and rejects other files', () => {

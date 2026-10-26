@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { AutoTextarea } from './AutoTextarea.js';
 
 /* Shared pieces for the mockup-style field forms (exercise, meals, …):
    sentence-case section labels, outline chips, a segmented control, an
@@ -232,7 +233,8 @@ export const BoxInput = styled.input`
 `;
 
 /* Outlined multi-line box */
-export const BoxText = styled.textarea`
+/* Outlined multi-line box — stretches to show all of its text */
+export const BoxText = styled(AutoTextarea)`
   && {
     width: 100%;
     min-height: 112px;
@@ -241,7 +243,6 @@ export const BoxText = styled.textarea`
     border-radius: 10px;
     background: transparent !important;
     outline: none;
-    resize: vertical;
     font-family: var(--font-sans);
     font-size: 16px;
     line-height: 1.5;

@@ -250,6 +250,14 @@ export interface EventFieldValues {
   calendarTitle?: string;
   /** All-day: no start/end times */
   allDay?: boolean;
+  /** Repeats: '' (never) | daily | weekly | monthly | yearly (utils/recurrence) */
+  repeat?: '' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  /** Every N days / weeks / months / years, "1" when blank */
+  repeatEvery?: string;
+  /** Weekly: the weekdays it lands on, 0 = Sunday */
+  repeatDays?: number[];
+  /** Last day it repeats on, '' = no end */
+  repeatUntil?: string;
 }
 
 export interface MeetingFieldValues {
@@ -269,6 +277,14 @@ export interface MeetingFieldValues {
   noCalendarSync?: boolean;
   /** All-day: no start/end times */
   allDay?: boolean;
+  /** Repeats: '' (never) | daily | weekly | monthly | yearly (utils/recurrence) */
+  repeat?: '' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  /** Every N days / weeks / months / years, "1" when blank */
+  repeatEvery?: string;
+  /** Weekly: the weekdays it lands on, 0 = Sunday */
+  repeatDays?: number[];
+  /** Last day it repeats on, '' = no end */
+  repeatUntil?: string;
 }
 
 export interface AllergyFieldValues {

@@ -32,7 +32,7 @@ export function ChangeFields({ values, onChange }: ChangeFieldsProps) {
       <TitleInput
         value={values.changeWhat}
         onChange={e => set({ changeWhat: e.target.value })}
-        placeholder="What changed? e.g. Cut out dairy"
+        placeholder="e.g. Cut out dairy"
         aria-label="What changed?"
       />
 

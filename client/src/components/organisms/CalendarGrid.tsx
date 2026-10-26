@@ -309,9 +309,10 @@ export function CalendarGrid({
               const dayBills = billsByDate?.get(dateStr) || [];
               // A cell fits 3 lines: show 3 items, or 2 plus "+N more" when there are more
               const lines = dayEntries.length + dayBills.length > MAX_LINES ? MAX_LINES - 1 : MAX_LINES;
-              const billSlots = Math.min(dayBills.length, lines);
-              const entrySlots = lines - billSlots;
-              const hidden = dayEntries.length + dayBills.length - billSlots - Math.min(entrySlots, dayEntries.length);
+              // Events and meetings take the lines first, then bills
+              const entrySlots = Math.min(dayEntries.length, lines);
+              const billSlots = Math.min(dayBills.length, lines - entrySlots);
+              const hidden = dayEntries.length + dayBills.length - entrySlots - billSlots;
               const isToday = isSameDay(date, today);
               const isSelected = selectedDate === dateStr;
 
@@ -330,16 +331,16 @@ export function CalendarGrid({
                         {date.getDate()}
                       </DayNumber>
                       <DayItems>
-                        {dayBills.slice(0, billSlots).map(b => (
-                          <BillItem key={b.key} type="button" title={billLabel(b)} onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>
-                            <Dot $bill aria-hidden="true" /><span>{b.name}</span>
-                          </BillItem>
-                        ))}
                         {dayEntries.slice(0, entrySlots).map(entry => {
                           const topicName = getTopicName(entry);
                           const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 30) || topicName || 'Entry';
                           return <DayItem key={entry.id}><Dot aria-hidden="true" /><span>{preview}</span></DayItem>;
                         })}
+                        {dayBills.slice(0, billSlots).map(b => (
+                          <BillItem key={b.key} type="button" title={billLabel(b)} onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>
+                            <Dot $bill aria-hidden="true" /><span>{b.name}</span>
+                          </BillItem>
+                        ))}
                         {hidden > 0 && <MoreLabel>+{hidden} more</MoreLabel>}
                       </DayItems>
                     </>
@@ -360,7 +361,8 @@ export function CalendarGrid({
             const dateStr = toDateStr(date);
             const nBills = billsByDate?.get(dateStr)?.length ?? 0;
             const nEntries = entriesByDate.get(dateStr)?.length ?? 0;
-            const dots = [...Array(Math.min(nBills, 3)).fill(true), ...Array(Math.max(0, Math.min(nEntries, 3 - Math.min(nBills, 3)))).fill(false)] as boolean[];
+            // Up to three dots: events and meetings first, then bills
+            const dots = [...Array(Math.min(nEntries, 3)).fill(false), ...Array(Math.max(0, Math.min(nBills, 3 - Math.min(nEntries, 3)))).fill(true)] as boolean[];
             const isToday = isSameDay(date, today);
             const isSelected = selectedDate === dateStr;
             return (

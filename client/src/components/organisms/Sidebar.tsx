@@ -19,8 +19,9 @@ const SidebarRoot = styled.aside<{ $open: boolean }>`
   transition: width 160ms ease, min-width 160ms ease;
   @media (prefers-reduced-motion: reduce) { transition: none; }
   height: 100%;
-  /* A toned rail (no outline) — separates from the canvas by fill alone */
+  /* A toned rail with a hairline down its right edge, the full height */
   background: var(--bg-rail);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -39,7 +40,7 @@ const activeTab = `
     left: 0;
     top: 0;
     bottom: 0;
-    width: 4px;
+    width: 5px;
     background: var(--color-accent-nav);
   }
 `;

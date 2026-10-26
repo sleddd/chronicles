@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { calendarDayFor } from '../utils/calendarItems.js';
+import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
 import styled from 'styled-components';
 import { CalendarGrid } from '../components/organisms/CalendarGrid.js';
 import { CalendarDayView } from '../components/organisms/CalendarDayView.js';
@@ -101,10 +102,16 @@ export function CalendarView() {
     };
 
     const topicNames = new Map(allTopics.map(t => [t.id, t.name]));
+    // Repeating events land on every day they repeat on, around the month or week shown
+    const from = toDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    const to = toDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 3, 0));
     for (const entry of entries) {
       const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
       const day = calendarDayFor(entry, taxId === undefined ? undefined : topicNames.get(taxId));
-      if (day) addEntry(day, entry);
+      if (!day) continue;
+      const rule = repeatRuleOf(((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) ?? {});
+      if (!rule) { addEntry(day, entry); continue; }
+      for (const d of occurrencesBetween(day, rule, from, to)) addEntry(d, entry);
     }
 
     for (const [key, arr] of map) {
@@ -118,7 +125,7 @@ export function CalendarView() {
     }
 
     return map;
-  }, [entries, allTopics, eventTopicIds]);
+  }, [entries, allTopics, eventTopicIds, currentDate]);
 
   // Bills due (Finance) — loaded only when Finance is switched on
   const financeOn = useEntriesStore(s => s.featureFlags.financeEnabled === true);

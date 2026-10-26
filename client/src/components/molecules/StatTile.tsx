@@ -15,7 +15,7 @@ const Tile = styled.button<{ $selected?: boolean; $static?: boolean }>`
   font: inherit;
   color: inherit;
   background: var(--bg-panel);
-  border: 1px solid ${({ $selected }) => ($selected ? 'var(--control-border)' : 'transparent')};
+  border: 1px solid ${({ $selected }) => ($selected ? 'var(--border-default)' : 'transparent')};
   border-radius: 12px;
   cursor: ${({ $static }) => ($static ? 'default' : 'pointer')};
   transition: border-color 200ms ease;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
+import { AutoTextarea } from './AutoTextarea.js';
 import { TitleInput } from './TitleInput.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import type { RecipeFieldValues, RecipeIngredient, RecipeStep, RecipeCategory, RecipeDifficulty } from '../../../types/fields.js';
@@ -47,10 +48,8 @@ const Section = styled.section`
   margin-top: 32px;
 `;
 
-/* The shared title field (wraps and grows to fit), a size up */
-const NameInput = styled(TitleInput)`
-  && { font-size: 38px; }
-`;
+/* The shared title field (labelled, wraps and grows to fit) */
+const NameInput = TitleInput;
 
 const DescInput = styled.input`
   && {
@@ -233,7 +232,7 @@ const RowInput = styled.input<{ $w?: string; $strong?: boolean }>`
   &::placeholder { color: var(--text-hint); }
 `;
 
-const RowText = styled.textarea`
+const RowText = styled(AutoTextarea)`
   && {
     width: 100%;
     min-height: 26px;
@@ -241,8 +240,6 @@ const RowText = styled.textarea`
     border: none !important;
     background: transparent !important;
     outline: none;
-    resize: none;
-    field-sizing: content;
     font-family: var(--font-sans);
     font-size: 17px;
     line-height: 1.5;

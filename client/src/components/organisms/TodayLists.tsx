@@ -10,7 +10,7 @@ import { useTodayDoses } from '../../hooks/useTodayDoses.js';
 
 /* Today's medications and exercise schedule as flat sections — the home
    dashboard's look, shared with the Health dashboard: a thin Work Sans title
-   over a firmer rule with "3 of 12 taken" across, then one flat list by time —
+   over a firmer rule with a link (Med list / Schedule) across, then one flat list by time —
    the standard checkmark (core Checkbox), the name, and the time or "Taken
    1:35 PM" / "Done 7:42 AM" on the right; as-needed medications under their
    own small heading. On the Health dashboard (`panel`) they sit in its
@@ -22,19 +22,20 @@ const SectionHead = styled.div`
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-subtle);
   h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }
 `;
 
+/* Hairlines between rows only — none under the last one */
 const Row = styled.div`
   display: flex;
   align-items: center;
   gap: 14px;
   min-height: 52px;
-  border-bottom: 1px solid var(--border-subtle);
+  & + & { border-top: 1px solid var(--border-subtle); }
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-secondary);
@@ -97,7 +98,7 @@ export function MedicationsToday({ doses, hideWhenEmpty = false, panel = false }
     <Frame aria-label="Medications">
       <SectionHead>
         <h2>Medications</h2>
-        {doses.total > 0 ? <span>{doses.taken} of {doses.total} taken</span> : <button type="button" onClick={() => navigate('/health/meds')}>Med list</button>}
+        <button type="button" onClick={() => navigate('/health/meds')}>Med list</button>
       </SectionHead>
       {doses.error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{doses.error}</Muted>}
       {doses.total === 0 ? <Muted>No medications scheduled today.</Muted> : doses.scheduled.map((d, i) => {
@@ -133,7 +134,7 @@ export function ExerciseToday({ panel = false }: { panel?: boolean }) {
     <Frame aria-label="Exercise schedule">
       <SectionHead>
         <h2>Exercise schedule</h2>
-        {list.total > 0 ? <span>{list.done} of {list.total} done</span> : <button type="button" onClick={() => navigate('/health/exercise/schedule')}>Schedule</button>}
+        <button type="button" onClick={() => navigate('/health/exercise/schedule')}>Schedule</button>
       </SectionHead>
       {list.error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{list.error}</Muted>}
       {list.total === 0 ? <Muted>Nothing scheduled today.</Muted> : list.slots.map(s => {

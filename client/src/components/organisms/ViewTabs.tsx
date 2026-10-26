@@ -44,7 +44,7 @@ const SearchBox = styled.label<{ $active: boolean }>`
   padding: 0 6px 0 12px;
   border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-card)')};
   border-radius: 8px;
-  background: var(--bg-sunken);
+  background: transparent;
   color: var(--text-muted);
   &:focus-within { border-color: var(--color-accent); }
 `;

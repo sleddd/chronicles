@@ -12,7 +12,7 @@ import {
   MEAL_TYPE_OPTIONS, goalMet, parseDay, shiftDay, summarizeDay, type FoodRow,
 } from '../../utils/foodLog.js';
 import {
-  NUTRIENTS, formatNutrient, nutrientNumber, nutrientSourceOf,
+  NUTRIENTS, MACRO_KEYS, formatNutrient, nutrientNumber, nutrientSourceOf,
   type NutrientGoals, type NutrientKey,
 } from '../../types/nutrition.js';
 
@@ -163,16 +163,27 @@ export type FoodLogActions = ReturnType<typeof useFoodLogActions>;
 /* ══ Today at a glance ══ */
 
 /* One outlined --bg-panel strip, a cell per nutrient split by rules: the name,
-   a thin figure with "/ goal unit", and a 4px progress rule */
-const Glance = styled.div`
+   a thin figure with "/ goal unit", and a 4px progress rule. Always one row —
+   tighter and smaller as it narrows, scrolling sideways only on the smallest screens */
+const STACKED_ROW = `
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px 12px;
+  padding: 14px 22px 16px;
+  box-shadow: 0 -1px 0 var(--border-subtle);
+`;
+
+const Glance = styled.div<{ $cols: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   overflow: hidden;
-  @media (max-width: 860px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  @media (max-width: 480px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* stacked (and always on phones): one column — a row per nutrient */
+  &[data-stacked] { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 const Stat = styled.div`
@@ -181,8 +192,15 @@ const Stat = styled.div`
   gap: 8px;
   min-width: 0;
   padding: 18px 22px 20px;
-  box-shadow: -1px 0 0 var(--border-subtle), 0 -1px 0 var(--border-subtle); /* rules between cells */
-  @media (max-width: 480px) { padding: 18px 18px 22px; }
+  box-shadow: -1px 0 0 var(--border-subtle); /* rules between cells */
+  @media (max-width: 1024px) { padding: 16px 14px 18px; }
+  /* A row: the name on the left, the figure on the right, the rule under both (the stacked strip, and phones) */
+  [data-stacked] & { ${STACKED_ROW} }
+  [data-stacked] & > :last-child { grid-column: 1 / -1; margin-top: 0; }
+  @media (max-width: 560px) {
+    ${STACKED_ROW}
+    & > :last-child { grid-column: 1 / -1; margin-top: 0; }
+  }
 `;
 
 const StatLabel = styled.span`
@@ -202,7 +220,9 @@ const StatValue = styled.span<{ $met?: boolean }>`
   text-overflow: ellipsis;
   color: ${({ $met }) => ($met ? 'var(--chart-green)' : 'var(--text-primary)')};
   small { font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--text-muted); margin-left: 8px; }
-  @media (max-width: 480px) { font-size: 22px; small { font-size: 12px; } }
+  @media (max-width: 1024px) { font-size: 22px; small { font-size: 12px; margin-left: 5px; } }
+  [data-stacked] & { font-size: 22px; }
+  @media (max-width: 560px) { font-size: 22px; }
 `;
 
 const Track = styled.div`
@@ -221,12 +241,14 @@ const Fill = styled.div<{ $pct: number; $met: boolean }>`
   transition: width 300ms ease-out;
 `;
 
-/** The selected day's totals against goals — one outlined strip of five cells with progress rules. */
-export function DayAtAGlance({ rows, goals }: { rows: FoodRow[]; goals: NutrientGoals }) {
+/** The day's totals against goals: calories and the micronutrients — never protein, carbs or fat
+ *  (they're the Macro distribution chart). One row of cells, or `stacked` one column of rows. */
+export function DayAtAGlance({ rows, goals, stacked = false }: { rows: FoodRow[]; goals: NutrientGoals; stacked?: boolean }) {
   const summary = useMemo(() => summarizeDay(rows), [rows]);
+  const shown = NUTRIENTS.filter(n => !MACRO_KEYS.includes(n.key));
   return (
-    <Glance>
-      {NUTRIENTS.map(n => {
+    <Glance $cols={shown.length} data-stacked={stacked || undefined}>
+      {shown.map(n => {
         const total = summary.has[n.key] ? summary.totals[n.key] : null;
         const goal = goals[n.key];
         const met = goalMet(goals, n.key, summary);
@@ -372,9 +394,7 @@ const ItemRow = styled.tr`
   cursor: pointer;
   &:hover td { background: var(--bg-row-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-  .actions { opacity: 0; transition: opacity 120ms; }
-  &:hover .actions, &:focus-within .actions { opacity: 1; }
-  @media (hover: none) { .actions { opacity: 1; } }
+  /* Estimate and Delete always show — not only on hover */
 `;
 
 const ItemName = styled.div`
@@ -717,13 +737,13 @@ const GoalsSub = styled.p`
   padding-left: 16px;
 `;
 
-/* Five outlined boxes: name (+ "at least") on top, the target typed large with its unit */
+/* An outlined box per nutrient in one row: name (+ "at least") on top, the target typed large with its unit */
 const GoalGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 18px;
-  @media (max-width: 1024px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  @media (max-width: 560px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  grid-template-columns: repeat(${NUTRIENTS.length}, minmax(0, 1fr));
+  gap: 14px;
+  @media (max-width: 1024px) { gap: 8px; }
+  @media (max-width: 560px) { grid-template-columns: repeat(${NUTRIENTS.length}, minmax(96px, 1fr)); overflow-x: auto; }
 `;
 
 const GoalBox = styled.label`
@@ -731,12 +751,12 @@ const GoalBox = styled.label`
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  padding: 16px 20px 18px;
+  padding: 16px 18px 18px;
   border: 1px solid var(--border-card);
   border-radius: 12px;
   cursor: text;
   &:focus-within { border-color: var(--color-accent); }
-  @media (max-width: 560px) { padding: 14px 16px 16px; }
+  @media (max-width: 1024px) { padding: 12px 12px 14px; }
 `;
 
 const GoalTop = styled.span`
@@ -778,7 +798,7 @@ const GoalInput = styled.input`
   &::placeholder { color: var(--text-hint); font-size: 16px; }
 `;
 
-/** Daily targets as five outlined boxes; each saves when you leave it. */
+/** Daily targets as an outlined box per nutrient, in one row; each saves when you leave it. */
 export function NutritionGoalsPanel({ goals, onChange }: NutritionGoalsPanelProps) {
   return (
     <section aria-label="Daily nutrition goals">

@@ -14,6 +14,7 @@ import { stripHtml } from '../utils/stripHtml.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
+import { MacroDistribution } from '../components/organisms/MacroDistribution.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -73,6 +74,16 @@ const Pair = styled.div`
   ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
+/* Macro distribution on the left, Wellness check-in on the right — side by side
+   on tablets too, stacked only on phones */
+const TopPair = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+`;
+
 /* A column of the pair: Quick log over Log a symptom, Medications over As needed */
 const Column = styled.div`
   display: flex;
@@ -118,6 +129,16 @@ function FoodGlance() {
   const todayRows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
 
   return <DayAtAGlance rows={todayRows} goals={goals} />;
+}
+
+/** Today's protein / carbs / fat split */
+function TodayMacros() {
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const today = toDateStr(new Date());
+  const mealsTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'meals')?.id, [allTopics]);
+  const rows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
+  return <MacroDistribution rows={rows} />;
 }
 
 /** True when an active medication has at least one scheduled dose time. */
@@ -196,15 +217,20 @@ export function HealthDashboardView() {
           {food && <FoodGlance />}
 
           <Stack>
-            <WellnessCheckIn title="Wellness check-in" quad bare />
+            {food ? (
+              <TopPair>
+                <Column><TodayMacros /></Column>
+                <Column><WellnessCheckIn title="Wellness check-in" quad bare /></Column>
+              </TopPair>
+            ) : <WellnessCheckIn title="Wellness check-in" quad bare />}
             {hasMeds && medsOn && (food || exercise) ? (
               <Pair>
                 <Column>
                   <QuickLog meal={food} exercise={exercise} />
                   <QuickChange />
+                  <QuickSymptom />
                 </Column>
                 <Column>
-                  <QuickSymptom />
                   <MedicationsToday doses={doses} panel />
                   {routines && <ExerciseToday panel />}
                 </Column>

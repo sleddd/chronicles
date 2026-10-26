@@ -216,15 +216,7 @@ export function CalendarDayDetail({
       </DayHeader>
 
       <List>
-        {bills.map(b => (
-          <EventRow key={b.key} $accent={accentColor} onClick={() => navigate('/finance')}>
-            <Dot $bill aria-hidden="true" />
-            <EventContent>
-              <EventTitle>{b.name}</EventTitle>
-              <EventMeta>Bill · {formatCents(b.amountCents)} due</EventMeta>
-            </EventContent>
-          </EventRow>
-        ))}
+        {/* Events and meetings first, then bills due */}
         {rows.length === 0 ? (
           bills.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>
         ) : (
@@ -274,6 +266,15 @@ export function CalendarDayDetail({
             );
           })
         )}
+        {bills.map(b => (
+          <EventRow key={b.key} $accent={accentColor} onClick={() => navigate('/finance')}>
+            <Dot $bill aria-hidden="true" />
+            <EventContent>
+              <EventTitle>{b.name}</EventTitle>
+              <EventMeta>Bill · {formatCents(b.amountCents)} due</EventMeta>
+            </EventContent>
+          </EventRow>
+        ))}
       </List>
     </Panel>
   );

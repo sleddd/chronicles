@@ -95,7 +95,7 @@ const Badge = styled.button<{ $color: string }>`
   padding: 0;
   cursor: pointer;
   transition: border-color 120ms, transform 120ms;
-  &:hover:not(:disabled) { border-color: var(--color-accent-hover, var(--color-accent-line)); }
+  &:hover:not(:disabled) { border-color: var(--border-strong); }
   &:active:not(:disabled) { transform: scale(0.94); }
   &:disabled { cursor: default; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -107,8 +107,8 @@ const Badge = styled.button<{ $color: string }>`
   height: 56px;
   border-radius: 50%;
   color: ${({ $color }) => $color};
-  /* No fill — a thin accent circle outline */
-  border: 1px solid var(--color-accent-line, var(--color-accent));
+  /* No fill — a thin light grey circle outline (the icon keeps the accent) */
+  border: 1px solid var(--border-card);
 `;
 
 const Figure = styled.span`
