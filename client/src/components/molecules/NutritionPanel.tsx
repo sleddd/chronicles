@@ -128,7 +128,16 @@ const Strip = styled.div`
   border-top: 1px solid var(--border-card);
   /* One row when the panel is wide; narrower ones (tablets, phones, cards) get
      two rows of four with the short names, so nothing squeezes */
-  @container nutrition (max-width: 880px) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @container nutrition (max-width: 880px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* Seven cells leave the eighth slot empty: an empty cell with the same
+       rules closes the grid instead of leaving a gap at the bottom right */
+    &::after {
+      content: '';
+      border-left: 1px solid var(--border-card);
+      border-top: 1px solid var(--border-card);
+    }
+  }
 `;
 
 const Cell = styled.label`
