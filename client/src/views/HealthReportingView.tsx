@@ -253,11 +253,14 @@ export function HealthReportingView() {
   }), [today, range, inventory, symptomList, inData]);
 
   const events = useMemo(() => triggerEvents(foods, medLogs, exercises), [foods, medLogs, exercises]);
-  const sessions = useMemo(() => exercises.map(x => ({ day: x.performedAt.slice(0, 10), minutes: x.duration })), [exercises]);
+  const sessions = useMemo(() => exercises.map(x => ({ day: x.performedAt.slice(0, 10), minutes: x.duration, type: x.exerciseType })), [exercises]);
+  // Medications set to "As needed" are taken for symptoms — Medication Impact says so instead of comparing them
+  const asNeededNames = useMemo(() => new Set(entries.filter(e => inTopic(e, 'medication') && fields(e).frequency === 'as_needed')
+    .map(e => (((fields(e).medicationName as string) || stripHtml(e.content)).trim().toLowerCase()))), [entries, inTopic]);
   const doses = useMemo(() => [
-    ...medLogs.map(m => ({ name: m.medicationName, day: m.takenAt.slice(0, 10) })),
-    ...foods.filter(f => f.mealType === 'medication' || f.mealType === 'supplement').map(f => ({ name: f.name, day: f.consumedAt.slice(0, 10) })),
-  ], [medLogs, foods]);
+    ...medLogs.map(m => ({ name: m.medicationName, day: m.takenAt.slice(0, 10), asNeeded: asNeededNames.has(m.medicationName.trim().toLowerCase()) })),
+    ...foods.filter(f => f.mealType === 'medication' || f.mealType === 'supplement').map(f => ({ name: f.name, day: f.consumedAt.slice(0, 10), asNeeded: asNeededNames.has(f.name.trim().toLowerCase()) })),
+  ], [medLogs, foods, asNeededNames]);
 
   const rangeLabel = period === 'today' ? 'Today' : period === 'week' ? 'This week' : period === 'year' ? 'Last 12 months'
     : period === 'custom' && customFrom && customTo ? `${shortDay(range.from)} – ${shortDay(range.to)}`

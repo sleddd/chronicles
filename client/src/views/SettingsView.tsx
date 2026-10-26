@@ -38,7 +38,7 @@ import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topi
 import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
 import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
 import { BugReportForm } from '../components/organisms/BugReportForm.js';
-import { seedTestData } from '../utils/seedTestData.js';
+import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
@@ -572,6 +572,44 @@ export function SettingsView() {
       setSeedEntriesResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSeedingEntries(false);
+    }
+  };
+
+  const [seedingWellness, setSeedingWellness] = useState(false);
+  const [seedWellnessResult, setSeedWellnessResult] = useState('');
+  const handleSeedWellness = async () => {
+    setSeedingWellness(true); setSeedWellnessResult('');
+    try {
+      const freshTopics = await topicsApi.getAll();
+      setSeedWellnessResult(await seedWellnessOnly({
+        encryptPost: encryptNewPost,
+        topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
+        addDecryptedEntry,
+        onProgress: (msg) => setSeedWellnessResult(msg),
+      }));
+    } catch (err) {
+      setSeedWellnessResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingWellness(false);
+    }
+  };
+
+  const [seedingSchedule, setSeedingSchedule] = useState(false);
+  const [seedScheduleResult, setSeedScheduleResult] = useState('');
+  const handleSeedSchedule = async () => {
+    setSeedingSchedule(true); setSeedScheduleResult('');
+    try {
+      const freshTopics = await topicsApi.getAll();
+      setSeedScheduleResult(await seedExerciseScheduleOnly({
+        encryptPost: encryptNewPost,
+        topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
+        addDecryptedEntry,
+        onProgress: (msg) => setSeedScheduleResult(msg),
+      }));
+    } catch (err) {
+      setSeedScheduleResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingSchedule(false);
     }
   };
 
@@ -1302,6 +1340,26 @@ export function SettingsView() {
           }
         />
         {seedEntriesResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedEntriesResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedEntriesResult}</div>}
+        <SettingsRow
+          title="Seed Wellness"
+          description="Add only wellness check-ins for the last 30 days (a few skipped): water, sleep, mood, a period and the Your day answers. Days that already have a check-in are left alone"
+          action={
+            <ActionButton onClick={() => void handleSeedWellness()} disabled={seedingWellness}>
+              {seedingWellness ? <Spinner size={14} /> : 'Seed Wellness'}
+            </ActionButton>
+          }
+        />
+        {seedWellnessResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedWellnessResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedWellnessResult}</div>}
+        <SettingsRow
+          title="Seed Exercise Schedule"
+          description="Add only an exercise schedule — morning yoga, an evening walk, leg strength and an evening stretch, most with several exercises — a week of ticked sessions, and a training plan if there isn’t one. Adds to existing data"
+          action={
+            <ActionButton onClick={() => void handleSeedSchedule()} disabled={seedingSchedule}>
+              {seedingSchedule ? <Spinner size={14} /> : 'Seed Schedule'}
+            </ActionButton>
+          }
+        />
+        {seedScheduleResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedScheduleResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedScheduleResult}</div>}
         {features.financeEnabled && (
           <>
             <SettingsRow

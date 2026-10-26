@@ -37,12 +37,13 @@ describe('HealthReport', () => {
     expect(screen.getByText(/Nothing logged in this period yet/)).toBeInTheDocument();
   });
 
-  it('shows the tiles, the chart and the question table without a comparison column', () => {
+  it('opens comparing with mood: the tiles, the chart and the question table with its findings column', () => {
     renderReport();
-    expect(screen.queryByText('Daily inventory')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sleep/ })).toBeInTheDocument();
     expect(screen.getByText('Mood over time')).toBeInTheDocument();
-    expect(screen.getByText('How many hours did you sleep?')).toBeInTheDocument();
+    expect(screen.getByText('Water')).toBeInTheDocument(); // the question named by its topic
+    expect(screen.getByText('Your mood')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Compare with' })).getByRole('button', { name: '× Clear' }));
     expect(screen.queryByText('Your mood')).not.toBeInTheDocument();
   });
 
@@ -69,6 +70,14 @@ describe('HealthReport', () => {
     expect(within(panel).getByText('Latte')).toBeInTheDocument();
     fireEvent.click(within(panel).getByRole('button', { name: 'Trigger' }));
     expect(onReviewTrigger).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'Latte', symptom: 'Bloating' }), 'confirmed');
+  });
+
+  it('leaves medications out of the food triggers', () => {
+    const pill: TriggerEvent[] = DAYS.filter((_, i) => i % 4 === 0).map(day => ({ key: 'f:iron', name: 'Iron', kind: 'medication', at: Date.parse(`${day}T08:00:00`), day }));
+    renderReport({ events: [...latte, ...pill] });
+    const panel = screen.getByRole('region', { name: 'Possible food triggers' });
+    expect(within(panel).getByText('Latte')).toBeInTheDocument();
+    expect(within(panel).queryByText('Iron')).not.toBeInTheDocument();
   });
 
   it('shows a saved verdict with Undo', () => {

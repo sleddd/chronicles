@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { SettingsRow } from '../molecules/SettingsCard.js';
-import { ActionButton } from '../atoms/SettingsAtoms.js';
+import { ActionButton, RowLink } from '../atoms/SettingsAtoms.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -10,6 +10,7 @@ import { exerciseSummary } from '../../utils/exerciseSummary.js';
 import { trainingPlans } from '../../utils/training.js';
 import { mergeTrainingPlan, parseTrainingCsv, type TrainingImport as Parsed } from '../../utils/trainingImport.js';
 import type { TrainingPlanFieldValues } from '../../types/fields.js';
+import { downloadTrainingExample } from '../../utils/importExamples.js';
 
 const IMPORT_BATCH = 50;
 const NEW_PLAN = 'new';
@@ -185,6 +186,7 @@ export function TrainingImport() {
           )
         }
       >
+        {!parsed && <div><RowLink type="button" onClick={downloadTrainingExample}>Download example CSV</RowLink></div>}
         {parsed && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginTop: 12 }}>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, color: 'var(--text-secondary)' }}>

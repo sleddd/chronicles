@@ -132,3 +132,15 @@ describe('reportMonthPlan', () => {
     expect(rows.find(r => r.key === 'breakfast')!.compare?.ready).toBe(true);
   });
 });
+
+import { nutritionFor } from '@/utils/seedTestData';
+
+describe('nutritionFor', () => {
+  it('gives a seeded meal its calories, macros and vitamins as form strings', () => {
+    expect(nutritionFor('Salmon and rice')).toEqual({
+      calories: '600', protein: '38', carbs: '60', fat: '20', iron: '1.8', vitaminD: '12', vitaminB12: '4', vitaminC: '5',
+    });
+    expect(nutritionFor('Iron supplement')).toEqual({ iron: '18' });
+    expect(nutritionFor('Something new')).toEqual({});
+  });
+});

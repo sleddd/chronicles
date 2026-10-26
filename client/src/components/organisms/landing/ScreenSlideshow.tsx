@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
+import { useSwipe } from '../../../hooks/useSwipe.js';
 
 /* The landing hero's slideshow of the real app (test account), in the light theme; a
    dark shot only ever follows the same view's light one (dashboard, then dashboard in dark).
    Screenshots live in src/assets/landing/<key>.jpg (JPEG on purpose: the PWA
    precaches png/svg, and these shouldn't ride along to every signed-in user).
    A slide whose file is missing is skipped. Sits straight on the teal hero. Advances every 6s; pauses while
-   pointed at or focused, and doesn't advance at all for reduced motion. */
+   pointed at or focused, and doesn't advance at all for reduced motion. Swipe sideways, the ‹ › arrows or the arrow keys move it by hand. */
 
 export const SLIDES = [
   { key: 'dashboard', name: 'Dashboard', caption: 'Your day at a glance' },
@@ -141,6 +142,7 @@ export function ScreenSlideshow() {
     return () => clearTimeout(id);
   }, [index, paused, count, go]);
 
+  const swipe = useSwipe(() => go(index + 1), () => go(index - 1));
   if (count === 0) return null;
   const slide = AVAILABLE[index];
 
@@ -157,7 +159,7 @@ export function ScreenSlideshow() {
         if (e.key === 'ArrowLeft') go(index - 1);
       }}
     >
-      <Stage>
+      <Stage {...swipe}>
       <Viewport>
         {AVAILABLE.map((s, i) => (
           <img

@@ -26,3 +26,20 @@ describe('import example files', () => {
     expect(plan.goals?.calories).toBe(2000);
   });
 });
+
+import { EXAMPLE_TRAINING_CSV } from '@/utils/importExamples';
+import { parseTrainingCsv } from '@/utils/trainingImport';
+
+describe('training tracker example', () => {
+  it('imports with the real parser: the phase, its categories and hours, sessions and skipped cells', () => {
+    const r = parseTrainingCsv(EXAMPLE_TRAINING_CSV);
+    expect(r).toMatchObject({ phaseName: 'Phase 1', weeks: 6, totalHours: 10, firstDate: '2026-10-12' });
+    expect(r.categories.map(c => [c.name, c.hours])).toEqual([
+      ['Aerobic', 5], ['Leg & Glute', 2], ['Core Stability', 1.5], ['Ankle Mobility & Balance', 1], ['Anaerobic Power', 0.5],
+    ]);
+    expect(r.sessions.find(s => s.date === '2026-10-12' && s.category === 'Aerobic')).toMatchObject({ minutes: 60, distance: 4.7 });
+    expect(r.sessions.find(s => s.date === '2026-10-17' && s.category === 'Aerobic')).toMatchObject({ minutes: 120, distance: 6 });
+    expect(r.skipped).toEqual([{ date: '2026-10-15', category: 'Aerobic', text: 'SICK' }]);
+    expect(r.sessions.length).toBeGreaterThan(20);
+  });
+});

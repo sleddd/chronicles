@@ -408,6 +408,38 @@ const METRIC_COLOR: Record<MetricKey, string> = {
   social: 'var(--color-accent)', exercise: 'var(--mood-1)', stress: 'var(--chart-blue)',
 };
 
+/* The report's disclaimer: small muted text in a light outlined box at the foot */
+const Disclaimer = styled.p`
+  margin: 40px 0 0;
+  padding: 16px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+`;
+
+/** "a", "a and b", "a, b and c" */
+const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/* Plain findings, one per line with a small accent dot */
+const Findings = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  li { position: relative; padding-left: 18px; }
+  li::before { content: ''; position: absolute; left: 0; top: 0.62em; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
+  li button { margin-left: 8px; }
+`;
+
 const TRIGGER_WINDOWS = [
   { value: '0', label: 'Same day' },
   { value: '1', label: 'Within a day' },
@@ -445,7 +477,7 @@ interface HealthReportProps {
   /** Foods, medications and exercise as dated events (utils/foodSymptoms triggerEvents) */
   events: TriggerEvent[];
   /** Exercise sessions in the range */
-  sessions: { day: string; minutes: number }[];
+  sessions: { day: string; minutes: number; type?: string }[];
   /** Medications taken (ticked doses and Meals rows logged as medication / supplement) */
   doses: { name: string; day: string }[];
   /** The owner's verdicts on possible triggers (encrypted setting, held by the view) */
@@ -457,7 +489,8 @@ interface HealthReportProps {
 /* ── Component ── */
 
 export function HealthReport({ scope, rangeLabel, events, sessions, doses, triggerReviews, onReviewTrigger }: HealthReportProps) {
-  const [target, setTarget] = useState<CompareTarget | null>(null);
+  // Opens comparing with mood, so "You feel better on days…" shows straight away (× Clear hides it)
+  const [target, setTarget] = useState<CompareTarget | null>({ kind: 'mood' });
   const [chartKey, setChartKey] = useState<MetricKey>('mood');
   const [moreOpen, setMoreOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -472,7 +505,9 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
   const symptomTarget = target?.kind === 'symptom' ? target : undefined;
   const tiles = useMemo(() => metricTiles(scope, symptomTarget), [scope, symptomTarget]);
   const rows = useMemo(() => questionRows(scope, target), [scope, target]);
-  const triggers = useMemo(() => dayTriggers(events, scope, Number(win)), [events, scope, win]);
+  // Food only — medications and supplements (Medication Impact covers them; and a pain reliever just follows its pain) and exercise stay out
+  const foodEvents = useMemo(() => events.filter(e => e.kind === 'food'), [events]);
+  const triggers = useMemo(() => dayTriggers(foodEvents, scope, Number(win)), [foodEvents, scope, win]);
   const exercise = useMemo(() => exerciseReport(scope, sessions), [scope, sessions]);
   const meds = useMemo(() => medicationReport(scope, doses), [scope, doses]);
   // Symptoms at a glance always shows the last 30 days, whatever the range
@@ -551,7 +586,7 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
   // Verdicts on things that didn't come up in this range (newest first)
   const shown = new Set(triggers.triggers.map(triggerKey));
   const earlier = Object.entries(triggerReviews ?? {})
-    .filter(([k, r]) => !shown.has(k) && r && typeof r === 'object')
+    .filter(([k, r]) => !shown.has(k) && r && typeof r === 'object' && r.kind === 'food')
     .map(([, r]) => r)
     .sort((a, b) => b.at.localeCompare(a.at));
   const past = { confirmed: earlier.filter(r => r.verdict === 'confirmed'), dismissed: earlier.filter(r => r.verdict === 'dismissed') };
@@ -709,35 +744,25 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
       <Panel aria-label="Exercise">
         {exercise.enough ? (
           <>
-            <Table $cols="minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr)">
-              <Row $head><span /><span>Days you exercise</span><span>Days you don’t</span></Row>
-              {exercise.rows.map(r => (
-                <Row key={r.name}>
-                  <NameCell>{r.name}</NameCell>
-                  <Cell data-label="Exercise days" $tone={r.tone}>{r.on}</Cell>
-                  <Cell data-label="Other days" $muted>{r.off}</Cell>
-                </Row>
-              ))}
+            {/* Plain statements, not a table */}
+            <Findings>
+              {exercise.findings.map(f => <li key={f}>{f}</li>)}
               {exercise.lessOften.length > 0 && (
-                <Row>
-                  <NameCell><Cell $tone="less">Less often on exercise days</Cell></NameCell>
-                  <WideCell style={{ gridColumn: 'span 2' }}>
-                    {exLess.join(', ')}
-                    {!exAll && exercise.lessOften.length > 4 && <LinkBtn type="button" onClick={() => setExAll(true)}>+{exercise.lessOften.length - 4} more</LinkBtn>}
-                  </WideCell>
-                </Row>
+                <li>
+                  You get {listWords(exLess.map(lc))} less often on days you exercise.
+                  {!exAll && exercise.lessOften.length > 4 && <LinkBtn type="button" onClick={() => setExAll(true)}>+{exercise.lessOften.length - 4} more</LinkBtn>}
+                </li>
               )}
               {exercise.moreOften.length > 0 && (
-                <Row>
-                  <NameCell><Cell $tone="more">More often on exercise days</Cell></NameCell>
-                  <WideCell style={{ gridColumn: 'span 2' }}>
-                    {exMore.join(', ')}
-                    {!exAll && exercise.moreOften.length > 4 && <LinkBtn type="button" onClick={() => setExAll(true)}>+{exercise.moreOften.length - 4} more</LinkBtn>}
-                  </WideCell>
-                </Row>
+                <li>
+                  You get {listWords(exMore.map(lc))} more often on days you exercise.
+                  {!exAll && exercise.moreOften.length > 4 && <LinkBtn type="button" onClick={() => setExAll(true)}>+{exercise.moreOften.length - 4} more</LinkBtn>}
+                </li>
               )}
-            </Table>
-            <Note>A value in colour is clearly better (accent) or worse (amber) on days you exercise. Symptoms are listed only when the difference is clear, most different first.</Note>
+              {/* By activity — only where the difference is clear */}
+              {exercise.byActivity.map(f => <li key={f}>{f}</li>)}
+            </Findings>
+            <Note>These are links, not causes. Symptoms and activities are named only when the difference is clear.</Note>
           </>
         ) : (
           <Quiet>Log at least 3 days with exercise and 3 without to see how it lines up with your mood, sleep and symptoms.</Quiet>
@@ -761,7 +786,7 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
                 </Row>
               ))}
             </Table>
-            <Note>Symptoms on days you took it, compared with days you didn’t. This shows what tends to happen together, not what the medication causes.</Note>
+            <Note>How often each symptom shows up on days you took a medication, compared with days you didn’t. A link means the two tend to happen together. It doesn’t show that the medication causes or prevents the symptom.</Note>
           </Panel>
         </>
       )}
@@ -814,6 +839,13 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
           </Panel>
         </>
       )}
+
+      {/* Always at the foot of the report */}
+      <Disclaimer role="note" aria-label="About this report">
+        This report isn’t medical advice, and it can get things wrong. Use it with care, alongside what you know
+        about your own body and experience. It’s meant to point out patterns worth noticing, not to be a medical
+        authority on your health. Talk to a doctor or other health professional about any health concerns.
+      </Disclaimer>
     </Report>
   );
 }

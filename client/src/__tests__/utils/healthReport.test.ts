@@ -61,7 +61,7 @@ describe('questionRows', () => {
   it('shows today, the last 7 days and the range for each answered question', () => {
     const rows = questionRows(diary(), null);
     const sleep = rows.find(r => r.key === 'sleep')!;
-    expect(sleep.label).toBe('How many hours did you sleep?');
+    expect(sleep.label).toBe('Sleep');
     expect(sleep.today).toBe('5 h'); // TODAY is index 19, odd
     expect(sleep.period).toBe('6.5 h');
     expect(sleep.compare).toBeNull();
@@ -71,14 +71,14 @@ describe('questionRows', () => {
 
   it('compares mood on days above and below the average', () => {
     const sleep = questionRows(diary(), { kind: 'mood' }).find(r => r.key === 'sleep')!;
-    expect(sleep.compare).toEqual({ ready: true, sentence: 'Mood usually good on days with over 6.5 h of sleep, low on days with 6.5 h or less.' });
+    expect(sleep.compare).toEqual({ ready: true, sentence: 'You feel better on days with over 6.5 h of sleep.' });
     // Mood isn't compared with itself
     expect(questionRows(diary(), { kind: 'mood' }).find(r => r.key === 'day')!.compare).toBeNull();
   });
 
-  it('compares a symptom as days with it on each side', () => {
+  it('says which side you get a symptom less often on', () => {
     const ex = questionRows(diary(), { kind: 'symptom', key: 'headache', name: 'Headache' }).find(r => r.key === 'exerciseMinutes')!;
-    expect(ex.compare).toEqual({ ready: true, sentence: "Headache on 0 of 10 days you exercised, and 10 of 10 days you didn't." });
+    expect(ex.compare).toEqual({ ready: true, sentence: 'You get headache less often on days you exercised.' });
   });
 
   it('says how many more days it needs on the short side', () => {
@@ -125,6 +125,11 @@ describe('exerciseReport', () => {
       { name: 'Sleep that night', on: '5 h', off: '8 h', tone: 'worse' },
       { name: 'Symptoms', on: '0.5 symptoms', off: '1 symptom', tone: 'better' },
     ]);
+    expect(r.findings).toEqual([
+      'You feel better on days you exercise.',
+      'You sleep about 3 hours less the night after you exercise.',
+      'You have fewer symptoms on days you exercise.',
+    ]);
     expect(r.lessOften).toEqual(['Headache']);
     expect(r.moreOften).toEqual(['Bloating']);
   });
@@ -140,6 +145,13 @@ describe('medicationReport', () => {
     // Bloating is 0 of 10 on Iron days vs 5 of 10 off them — p ≈ 0.016, not clear enough
     expect(medicationReport(diary(), doses)).toEqual([
       { name: 'Iron', taken: 10, of: 20, lessOften: [], moreOften: ['Headache'], note: null },
+    ]);
+  });
+
+  it('never compares a medication taken as needed with the symptoms it is taken for', () => {
+    const doses = DAYS.filter((_, i) => i % 2 === 1).map(day => ({ name: 'Ibuprofen', day, asNeeded: true }));
+    expect(medicationReport(diary(), doses)).toEqual([
+      { name: 'Ibuprofen', taken: 10, of: 20, lessOften: [], moreOften: [], note: 'Taken as needed for symptoms, so it isn’t compared with them' },
     ]);
   });
 
@@ -181,8 +193,8 @@ describe('Did you dream?', () => {
   it('shows as a yes/no question and compares like one', () => {
     const wellness = DAYS.map((date, i) => ({ date, moodScore: i % 2 ? 2 : 4, dreamed: i % 2 === 0 }));
     const row = questionRows(diary({ wellness }), { kind: 'mood' }).find(r => r.key === 'dreamed')!;
-    expect(row).toMatchObject({ label: 'Did you dream?', today: 'No', week: '3 of 7 days' });
-    expect(row.compare).toEqual({ ready: true, sentence: "Mood usually good on days you dreamed, low on days you didn't." });
+    expect(row).toMatchObject({ label: 'Dreamed', today: 'No', week: '3 of 7 days' });
+    expect(row.compare).toEqual({ ready: true, sentence: 'You feel better on days you dreamed.' });
   });
 });
 
@@ -193,6 +205,36 @@ describe('Stress level', () => {
     expect(scope.inventory.find(d => d.date === TODAY)?.scores.stress).toBe(40); // TODAY is odd → 4, High
     const tile = metricTiles(scope).find(t => t.key === 'stress')!;
     expect(tile).toMatchObject({ name: 'Stress', value: 'Moderate', today: 'High' });
-    expect(questionRows(scope, null).find(r => r.key === 'stress')).toMatchObject({ label: 'How stressed were you?', today: 'High' });
+    expect(questionRows(scope, null).find(r => r.key === 'stress')).toMatchObject({ label: 'Stress', today: 'High' });
+  });
+});
+
+describe('exercise by activity', () => {
+  // Strength on 6 days with muscle soreness each time; yoga on 6 days with headache; rest days have neither
+  const days = dayList(addDays(TODAY, -29), TODAY);
+  const strength = days.filter((_, i) => i % 5 === 0);
+  const yoga = days.filter((_, i) => i % 5 === 2);
+  const scope = (): ReportScope => ({
+    today: TODAY, range: { from: days[0], to: TODAY },
+    inventory: inventoryDays(days.map(date => ({ date, moodScore: 3 })), [], [], { from: days[0], to: TODAY }),
+    symptoms: symptomDays([
+      ...strength.map(d => ({ name: 'Muscle soreness', severity: 5, occurredAt: `${d}T18:00:00` })),
+      ...yoga.map(d => ({ name: 'Headache', severity: 5, occurredAt: `${d}T18:00:00` })),
+    ]),
+  });
+  const sessions = [
+    ...strength.map(day => ({ day, minutes: 40, type: 'strength' })),
+    ...yoga.map(day => ({ day, minutes: 30, type: 'yoga' })),
+  ];
+
+  it('names a symptom clearly more common on one activity’s days, never “more often” for a gentle one', () => {
+    const r = exerciseReport(scope(), sessions);
+    expect(r.byActivity).toContain('You get muscle soreness more often on strength training days.');
+    expect(r.byActivity.some(f => f.includes('yoga days') && f.includes('more often'))).toBe(false);
+  });
+
+  it('says nothing about an activity with too few days', () => {
+    const r = exerciseReport(scope(), sessions.filter(x => x.type === 'yoga').concat(strength.slice(0, 2).map(day => ({ day, minutes: 40, type: 'strength' }))));
+    expect(r.byActivity.some(f => f.includes('strength'))).toBe(false);
   });
 });

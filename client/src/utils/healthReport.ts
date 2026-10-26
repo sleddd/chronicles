@@ -23,6 +23,7 @@ import {
   type InventoryDay, type InventoryKey,
 } from './dailyInventory.js';
 import type { TriggerEvent, TriggerKind } from './foodSymptoms.js';
+import { exerciseTypeLabel } from './exerciseSummary.js';
 
 /* ── Days ── */
 
@@ -189,10 +190,27 @@ const ORDER: InventoryKey[] = [
   'day', 'woke', 'dreamed', 'eating', 'breakfastHealth', 'lunchHealth', 'dinnerHealth', 'work', 'procrastination', 'stress',
 ];
 
+/** The table names each question by its topic, not the full question */
 const LABELS: Partial<Record<InventoryKey, string>> = {
-  rested: 'Rested when you woke',
+  sleep: 'Sleep',
+  water: 'Water',
+  exerciseMinutes: 'Exercise',
+  exercised: 'Exercised',
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  breakfastHealth: 'Breakfast, how healthy',
+  lunchHealth: 'Lunch, how healthy',
+  dinnerHealth: 'Dinner, how healthy',
+  rested: 'Rested',
   social: 'Social time',
-  day: 'How good was your day?',
+  day: 'Your day',
+  woke: 'Woke in the night',
+  dreamed: 'Dreamed',
+  eating: 'Eating',
+  work: 'Work day',
+  procrastination: 'Procrastination',
+  stress: 'Stress',
 };
 
 const EATING_WORDS: Record<string, string> = { too_little: 'Too little', just_right: 'Just right', too_much: 'Too much' };
@@ -258,15 +276,18 @@ function compareQuestion(scope: ReportScope, key: InventoryKey, spec: QuestionSp
     const phrase = hi.length < MIN_SIDE ? hiText : loText;
     return { ready: false, need: `Needs ${k} more ${k === 1 ? phrase.replace(/^days/, 'day') : phrase}` };
   }
+  // Plain findings, not counts: which side you feel better on / get the symptom less often on
   const gh = group(scope, hi, t)!;
   const gl = group(scope, lo, t)!;
   if (t.kind === 'symptom') {
-    return { ready: true, sentence: `${outcomeName} on ${gh.text} ${hiText}, and ${gl.text} ${loText}.` };
+    const name = lc(outcomeName);
+    if (Math.abs(gh.score - gl.score) < 0.15) return { ready: true, sentence: `You get ${name} about as often either way.` };
+    return { ready: true, sentence: `You get ${name} less often on ${gh.score < gl.score ? hiText : loText}.` };
   }
   if (Math.abs(gh.score - gl.score) < 0.5 || gh.text === gl.text) {
-    return { ready: true, sentence: `Mood about the same either way (usually ${gl.text.toLowerCase()}).` };
+    return { ready: true, sentence: 'Your mood is about the same either way.' };
   }
-  return { ready: true, sentence: `Mood usually ${gh.text.toLowerCase()} on ${hiText}, ${gl.text.toLowerCase()} on ${loText}.` };
+  return { ready: true, sentence: `You feel better on ${gh.score > gl.score ? hiText : loText}.` };
 }
 
 /** One row per inventory question answered in the range or the last 7 days */
@@ -458,11 +479,53 @@ export interface ExerciseReport {
   /** 3+ logged days with exercise and 3+ without */
   enough: boolean;
   rows: { name: string; on: string; off: string; tone: Tone }[];
+  /** The same in plain words: "You sleep about 1.5 hours longer the night after you exercise." */
+  findings: string[];
+  /** By activity, only where it's clear: "You get muscle soreness more often on strength days." */
+  byActivity: string[];
   lessOften: string[];
   moreOften: string[];
 }
 
-export function exerciseReport(scope: ReportScope, sessions: { day: string; minutes: number }[]): ExerciseReport {
+/* Gentle activities are often done because someone already feels off, so they're never named for "more often" */
+const GENTLE = new Set(['yoga', 'walking', 'breathing', 'balance', 'stretching', 'mobility']);
+const ACTIVITY_MIN_DAYS = 3;
+
+/**
+ * Each activity against the days without exercise: a symptom clearly more (or
+ * less) common on that activity's days — the hypergeometric test Medication
+ * Impact uses (p < 0.01), 3+ days of the activity, never "more often" for a
+ * gentle one. Plain sentences, strongest first.
+ */
+function activityFindings(scope: ReportScope, sessions: { day: string; type?: string }[], logged: string[], off: string[]): string[] {
+  const loggedSet = new Set(logged);
+  const byType = new Map<string, Set<string>>();
+  for (const x of sessions) {
+    const type = (x.type ?? '').trim().toLowerCase();
+    if (!type || type === 'other' || !loggedSet.has(x.day)) continue;
+    byType.set(type, (byType.get(type) ?? new Set()).add(x.day));
+  }
+  const symptoms = rankedSymptoms(scope);
+  const out: { text: string; p: number }[] = [];
+  for (const [type, days] of byType) {
+    if (days.size < ACTIVITY_MIN_DAYS || off.length < MIN_SIDE) continue;
+    const on = [...days];
+    const pool = [...on, ...off];
+    const label = lc(exerciseTypeLabel(type));
+    for (const sym of symptoms) {
+      const K = pool.filter(d => hasSymptom(scope, d, sym.key)).length;
+      if (K < 3) continue;
+      const k = on.filter(d => hasSymptom(scope, d, sym.key)).length;
+      const up = pUpper(pool.length, K, on.length, k);
+      const down = pLower(pool.length, K, on.length, k);
+      if (up < MED_P && !GENTLE.has(type)) out.push({ text: `You get ${lc(sym.name)} more often on ${label} days.`, p: up });
+      else if (down < MED_P) out.push({ text: `You get ${lc(sym.name)} less often on ${label} days.`, p: down });
+    }
+  }
+  return out.sort((a, b) => a.p - b.p).slice(0, 4).map(x => x.text);
+}
+
+export function exerciseReport(scope: ReportScope, sessions: { day: string; minutes: number; type?: string }[]): ExerciseReport {
   const inRange = sessions.filter(x => x.day >= scope.range.from && x.day <= scope.range.to);
   // A logged session counts as exercising that day, even with no minutes typed
   const exDays = new Set(inRange.map(x => x.day));
@@ -475,7 +538,7 @@ export function exerciseReport(scope: ReportScope, sessions: { day: string; minu
     minutes: inRange.reduce((t, x) => t + (x.minutes || 0), 0),
     perWeek: Math.round(exDays.size / Math.max(1, rangeDays / 7) * 10) / 10,
     enough: on.length >= MIN_SIDE && off.length >= MIN_SIDE,
-    rows: [], lessOften: [], moreOften: [],
+    rows: [], findings: [], byActivity: [], lessOften: [], moreOften: [],
   };
   if (!report.enough) return report;
 
@@ -485,6 +548,8 @@ export function exerciseReport(scope: ReportScope, sessions: { day: string; minu
   if (moodOn.length && moodOff.length) {
     const a = avg(moodOn), b = avg(moodOff);
     report.rows.push({ name: 'Mood', on: MOOD_WORDS[Math.round(a) - 1], off: MOOD_WORDS[Math.round(b) - 1], tone: a - b >= 0.5 ? 'better' : b - a >= 0.5 ? 'worse' : 'same' });
+    report.findings.push(a - b >= 0.5 ? 'You feel better on days you exercise.'
+      : b - a >= 0.5 ? 'You feel better on days you don’t exercise.' : 'Your mood is about the same either way.');
   }
   // The check-in's sleep is the night before, so the night after a day is the next day's answer
   const sleepOn = nums(on, d => answer(scope, addDays(d, 1), 'sleep'));
@@ -492,11 +557,16 @@ export function exerciseReport(scope: ReportScope, sessions: { day: string; minu
   if (sleepOn.length && sleepOff.length) {
     const a = avg(sleepOn), b = avg(sleepOff);
     report.rows.push({ name: 'Sleep that night', on: `${half(a)} h`, off: `${half(b)} h`, tone: a - b >= 0.5 ? 'better' : b - a >= 0.5 ? 'worse' : 'same' });
+    const gap = half(Math.abs(a - b));
+    report.findings.push(Math.abs(a - b) < 0.5 ? 'You sleep about the same either way.'
+      : `You sleep about ${gap} ${gap === 1 ? 'hour' : 'hours'} ${a > b ? 'longer' : 'less'} the night after you exercise.`);
   }
   const count = (d: string) => scope.symptoms.get(d)?.size ?? 0;
   const a = avg(on.map(count)), b = avg(off.map(count));
   const sw = (x: number) => `${one(x)} ${plural(Number(one(x)), 'symptom', 'symptoms')}`;
   report.rows.push({ name: 'Symptoms', on: sw(a), off: sw(b), tone: b - a >= 0.5 ? 'better' : a - b >= 0.5 ? 'worse' : 'same' });
+  report.findings.push(b - a >= 0.5 ? 'You have fewer symptoms on days you exercise.'
+    : a - b >= 0.5 ? 'You have more symptoms on days you exercise.' : 'You have about as many symptoms either way.');
 
   const diffs = rankedSymptoms(scope).map(sym => ({
     name: sym.name,
@@ -504,6 +574,7 @@ export function exerciseReport(scope: ReportScope, sessions: { day: string; minu
   })).filter(x => Math.abs(x.d) >= 0.2).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
   report.lessOften = diffs.filter(x => x.d < 0).map(x => x.name);
   report.moreOften = diffs.filter(x => x.d > 0).map(x => x.name);
+  report.byActivity = activityFindings(scope, inRange, logged, off);
   return report;
 }
 
@@ -532,16 +603,18 @@ const MED_SIDE = 5;
 const MED_P = 0.01;
 
 /** Per medication: symptoms on days it was taken compared with days it wasn't */
-export function medicationReport(scope: ReportScope, doses: { name: string; day: string }[]): MedRow[] {
+/** `asNeeded`: taken for symptoms (a pain reliever on headache days) — never compared with them */
+export function medicationReport(scope: ReportScope, doses: { name: string; day: string; asNeeded?: boolean }[]): MedRow[] {
   const logged = loggedDays(scope, scope.range.from, scope.range.to);
   const loggedSet = new Set(logged);
-  const byMed = new Map<string, { name: string; days: Set<string> }>();
+  const byMed = new Map<string, { name: string; days: Set<string>; asNeeded: boolean }>();
   for (const d of doses) {
     if (!loggedSet.has(d.day)) continue;
     const k = norm(d.name);
     if (!k) continue;
-    const cur = byMed.get(k) ?? { name: d.name.trim(), days: new Set<string>() };
+    const cur = byMed.get(k) ?? { name: d.name.trim(), days: new Set<string>(), asNeeded: false };
     cur.days.add(d.day);
+    if (d.asNeeded) cur.asNeeded = true;
     byMed.set(k, cur);
   }
   const symptoms = rankedSymptoms(scope);
@@ -549,6 +622,7 @@ export function medicationReport(scope: ReportScope, doses: { name: string; day:
   return [...byMed.values()].sort((a, b) => b.days.size - a.days.size || a.name.localeCompare(b.name)).map(m => {
     const on = logged.filter(d => m.days.has(d));
     const row: MedRow = { name: m.name, taken: on.length, of: N, lessOften: [], moreOften: [], note: null };
+    if (m.asNeeded) { row.note = 'Taken as needed for symptoms, so it isn’t compared with them'; return row; }
     if (on.length < MED_SIDE) { row.note = 'Too few days to tell yet'; return row; }
     if (N - on.length < MED_SIDE) { row.note = 'Taken almost every day, so there is nothing to compare against'; return row; }
     const found = symptoms.flatMap(sym => {
@@ -563,7 +637,7 @@ export function medicationReport(scope: ReportScope, doses: { name: string; day:
     }).sort((a, b) => a.p - b.p);
     row.moreOften = found.filter(x => x.more).slice(0, 2).map(x => x.name);
     row.lessOften = found.filter(x => !x.more).slice(0, 2).map(x => x.name);
-    if (!row.moreOften.length && !row.lessOften.length) row.note = 'No clear difference in symptoms';
+    if (!row.moreOften.length && !row.lessOften.length) row.note = 'No correlations noted.';
     return row;
   });
 }

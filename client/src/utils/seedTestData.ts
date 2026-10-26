@@ -4,6 +4,8 @@
  */
 import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '../services/api.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { routineLinkKey } from './routines.js';
+import { mountaineeringTemplate } from './training.js';
 
 type EncryptPost = (content: string, metadata: Record<string, unknown>) => Promise<{
   id: number;
@@ -43,6 +45,42 @@ function dayFromToday(offset: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/* What each seeded meal holds — kcal, protein / carbs / fat (g), iron (mg), vitamin D (mcg), B12 (mcg), vitamin C (mg) —
+   so the Daily totals, the Macro distribution chart and the goals have real numbers */
+const MEAL_NUTRITION: Record<string, [number, number, number, number, number, number, number, number]> = {
+  'morning smoothie — banana, spinach, protein powder, almond milk': [350, 28, 45, 7, 2.5, 1, 0.5, 15],
+  'grilled chicken salad with avocado and quinoa': [580, 42, 38, 28, 4, 0, 0.6, 25],
+  'handful of almonds and a banana': [250, 7, 32, 13, 1.1, 0, 0, 10],
+  'scrambled eggs on sourdough with avocado': [450, 20, 38, 24, 3, 2, 1.1, 8],
+  'turkey and hummus wrap with side salad': [520, 32, 52, 18, 3.5, 0, 0.8, 18],
+  'salmon with roasted vegetables and brown rice': [650, 42, 62, 22, 2.5, 14, 4.8, 60],
+  'greek yogurt with honey and walnuts': [220, 14, 20, 10, 0.4, 0, 1, 1],
+  'oatmeal with blueberries and chia seeds': [380, 11, 62, 10, 3.5, 1, 0, 8],
+  'chicken tikka masala with naan bread': [780, 45, 80, 30, 4.5, 0.2, 0.9, 12],
+  'veggie burger with sweet potato fries': [620, 20, 82, 24, 5, 0, 0, 20],
+  'pasta carbonara with garlic bread': [720, 28, 85, 30, 3, 0.8, 1.2, 2],
+  'oatmeal with berries': [320, 10, 55, 7, 3, 0, 0, 6],
+  'toast and eggs': [380, 20, 30, 18, 2.5, 2, 1, 0],
+  'yogurt and granola': [340, 16, 45, 10, 1.5, 0, 1, 2],
+  'dairy latte': [190, 10, 15, 9, 0.1, 2.5, 1.1, 0],
+  'chicken salad': [450, 38, 18, 24, 2.5, 0, 0.5, 20],
+  'rice bowl': [520, 18, 78, 14, 4, 0, 0, 15],
+  'salmon and rice': [600, 38, 60, 20, 1.8, 12, 4, 5],
+  'pasta': [650, 22, 90, 20, 3, 0, 0.4, 8],
+  'stir fry': [520, 30, 55, 18, 3.5, 0, 0.3, 45],
+  'tacos': [560, 28, 50, 26, 3, 0, 1.2, 10],
+  'red wine': [125, 0, 4, 0, 0.7, 0, 0, 0],
+  'iron supplement': [0, 0, 0, 0, 18, 0, 0, 0],
+};
+
+/** A meal's nutrient fields, as the forms store them (strings), or {} when it isn't in the table */
+export function nutritionFor(name: string): Record<string, string> {
+  const n = MEAL_NUTRITION[name.trim().toLowerCase()];
+  if (!n) return {};
+  const keys = ['calories', 'protein', 'carbs', 'fat', 'iron', 'vitaminD', 'vitaminB12', 'vitaminC'];
+  return Object.fromEntries(keys.map((k, i) => [k, n[i] ? String(n[i]) : '']).filter(([, v]) => v !== ''));
+}
+
 /** "10/19/2026" for a YYYY-MM-DD day */
 const usDate = (day: string) => { const [y, m, d] = day.split('-'); return `${m}/${d}/${y}`; };
 
@@ -57,8 +95,8 @@ async function createEntry(
   content: string,
   topicName: string | null,
   customFields?: Record<string, unknown>,
-  /** Backdate it (YYYY-MM-DD) and/or tag it as a widget's entry */
-  opts: { day?: string; widgetType?: string; html?: string } = {},
+  /** Backdate it (YYYY-MM-DD), tag it as a widget's entry, or add metadata (e.g. _routineLink) */
+  opts: { day?: string; widgetType?: string; html?: string; meta?: Record<string, unknown> } = {},
 ): Promise<number> {
   const { encryptPost, topics, addDecryptedEntry, onProgress } = deps;
   const topicId = topicName ? findTopic(topics, topicName) : null;
@@ -67,7 +105,10 @@ async function createEntry(
     throw new Error(`Topic "${topicName}" not found. Available: ${topics.map(t => t.name).join(', ')}`);
   }
 
-  const metadata: Record<string, unknown> = {};
+  // Every seeded meal carries its calories, macros and vitamins (typed values win)
+  if (topicName === 'Meals') customFields = { ...nutritionFor(String(customFields?.mealDescription ?? content)), ...customFields };
+
+  const metadata: Record<string, unknown> = { ...opts.meta };
   if (topicId) metadata._taxonomyId = topicId;
   if (opts.widgetType) metadata._widgetType = opts.widgetType;
   if (customFields && Object.keys(customFields).length > 0) metadata._customFields = customFields;
@@ -215,6 +256,9 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
       exerciseType: 'walking', duration: '20', intensity: 'low', distance: '1.5', distanceUnit: 'km', calories: '70', performedDate: sixDaysAgo, performedTime: '08:00', notes: 'Active recovery. Stretched after.',
     }); count++;
 
+    onProgress?.('Creating an exercise schedule, a week of sessions and a training plan...');
+    count += await seedExerciseSchedule(deps);
+
     onProgress?.('Creating symptom entries...');
 
     // ── Symptoms (varied across days) ──
@@ -275,9 +319,26 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
 
     onProgress?.('Creating events and meetings...');
 
-    // Event
-    await createEntry(deps, 'Team standup — daily sync on sprint progress', 'Event', {
-      startDate: today, startTime: '09:00', endDate: today, endTime: '09:15', location: 'Zoom', address: '', phone: '', notes: 'Bring up the deployment blocker',
+    // Events — some repeating (calendar, Coming up, Next up)
+    await createEntry(deps, 'Team standup', 'Event', {
+      eventName: 'Team standup', startDate: dayFromToday(-14), startTime: '09:00', endDate: dayFromToday(-14), endTime: '09:15', location: 'Zoom', address: '', phone: '',
+      notes: 'Daily sync on sprint progress', repeat: 'weekly', repeatDays: [1, 2, 3, 4, 5], repeatEvery: '1', repeatUntil: '',
+    }); count++;
+    await createEntry(deps, 'Yoga class', 'Event', {
+      eventName: 'Yoga class', startDate: dayFromToday(-7), startTime: '18:00', endDate: dayFromToday(-7), endTime: '19:00', location: 'Riverside Studio', address: '412 SE Water Ave', phone: '',
+      notes: 'Bring my own mat', repeat: 'weekly', repeatDays: [2, 4], repeatEvery: '1', repeatUntil: dayFromToday(60),
+    }); count++;
+    await createEntry(deps, 'Book club', 'Event', {
+      eventName: 'Book club', startDate: dayFromToday(5), startTime: '19:00', endDate: dayFromToday(5), endTime: '21:00', location: 'Annie’s place', address: '', phone: '',
+      notes: 'This month: Tomorrow, and Tomorrow, and Tomorrow', repeat: 'monthly', repeatEvery: '1', repeatUntil: '',
+    }); count++;
+    await createEntry(deps, 'Mom’s birthday', 'Event', {
+      eventName: 'Mom’s birthday', startDate: dayFromToday(12), startTime: '', endDate: dayFromToday(12), endTime: '', allDay: true, location: '', address: '', phone: '',
+      notes: 'Order flowers the week before', repeat: 'yearly', repeatEvery: '1', repeatUntil: '',
+    }); count++;
+    await createEntry(deps, 'Dentist appointment', 'Event', {
+      eventName: 'Dentist appointment', startDate: dayFromToday(3), startTime: '10:30', endDate: dayFromToday(3), endTime: '11:30', location: 'Bright Smiles Dental', address: '1200 NW Glisan St', phone: '(503) 555-0142',
+      notes: 'Cleaning and check-up',
     }); count++;
 
     // Meeting
@@ -293,8 +354,14 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
     // Research
     await createEntry(deps, 'Investigating WebRTC for real-time collaboration — could enable shared journals or live co-editing. Found good resources on PeerJS for simplified WebRTC.', 'Research', {}); count++;
 
-    // Quote
-    await createEntry(deps, '"The best way to predict the future is to invent it." — Alan Kay', 'Quote', {}); count++;
+    // Quotes — mixed into the dashboard's daily quote
+    for (const q of [
+      '“The best way to predict the future is to invent it.” — Alan Kay',
+      '“You do not rise to the level of your goals. You fall to the level of your systems.” — James Clear',
+      '“Rest is not idleness.” — John Lubbock',
+      '“What we fear doing most is usually what we most need to do.” — Tim Ferriss',
+      '“Almost everything will work again if you unplug it for a few minutes, including you.” — Anne Lamott',
+    ]) { await createEntry(deps, q, 'Quote', {}); count++; }
 
     onProgress?.('Creating recipes...');
 
@@ -516,6 +583,71 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
 
 /* ── Planning: every status on every board ── */
 
+/* ── Exercise schedule + training plan ──
+   Three scheduled exercises (morning yoga every day, an evening walk on
+   weekdays, strength on Tue / Thu / Sat), ticked off most of the last week —
+   each tick an Exercise entry linked to its slot (_routineLink), as the
+   checklist writes them — and a Mt Hood training plan three weeks into its
+   first phase, whose categories the sessions count toward. */
+async function seedExerciseSchedule(deps: SeedDeps): Promise<number> {
+  await ensureTopic(deps, 'Exercise Schedule', 'person-running');
+  await ensureTopic(deps, 'Training Plan', 'mountain');
+  let n = 0;
+  // A Mt Hood plan — unless the account already has a training plan
+  const planTopic = findTopic(deps.topics, 'Training Plan');
+  const hasPlan = useEntriesStore.getState().decryptedEntries
+    .some(e => (e.metadata as Record<string, unknown> | undefined)?._taxonomyId === planTopic);
+  if (!hasPlan) {
+    const { categories, phases } = mountaineeringTemplate();
+    await createEntry(deps, 'Mt Hood', 'Training Plan', {
+      planName: 'Mt Hood', startDate: dayFromToday(-17), eventDate: dayFromToday(150), categories, phases, isActive: true,
+      notes: 'South side route, late spring',
+    }); n++;
+  }
+
+  const item = (name: string, amount: string) => ({ id: crypto.randomUUID(), name, amount });
+  const routines = [
+    { name: 'Morning yoga', type: 'yoga', minutes: 20, time: '07:00', days: [] as number[], category: 'Core stability',
+      items: [item('Sun salutations', '5 min'), item('Pigeon pose', '5 min'), item('Plank', '3 min'), item('Breathing', '7 min')] },
+    { name: 'Evening walk', type: 'walking', minutes: 30, time: '18:30', days: [1, 2, 3, 4, 5], category: 'Aerobic', items: [] },
+    { name: 'Leg strength', type: 'strength', minutes: 40, time: '17:30', days: [2, 4, 6], category: 'Leg & glute',
+      items: [item('Squats', '3 × 10'), item('Step-ups', '3 × 12'), item('Lunges', '3 × 10')] },
+    { name: 'Evening stretch', type: 'yoga', minutes: 15, time: '21:00', days: [] as number[], category: 'Ankle mobility & balance',
+      items: [item('Calf stretch', '2 min'), item('Ankle circles', '2 min'), item('Single-leg balance', '3 min'), item('Child’s pose', '3 min')] },
+  ];
+  for (const r of routines) {
+    const id = await createEntry(deps, r.name, 'Exercise Schedule', {
+      routineName: r.name, exerciseType: r.type, duration: String(r.minutes), scheduleTimes: [r.time], days: r.days,
+      trainingCategory: r.category, items: r.items, isActive: true, notes: '',
+    }); n++;
+    // Ticked on most of the last week (a couple missed), and this morning's yoga
+    for (let offset = -6; offset <= 0; offset++) {
+      const day = dayFromToday(offset);
+      const weekday = new Date(`${day}T12:00:00`).getDay();
+      if (r.days.length && !r.days.includes(weekday)) continue;
+      if (offset === 0 && r.time > '12:00') continue;
+      if ((offset + r.minutes) % 5 === 0) continue;
+      await createEntry(deps, `${r.name} · ${r.minutes} min`, 'Exercise', {
+        exerciseType: r.type, duration: String(r.minutes), intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '',
+        performedDate: day, performedTime: r.time, notes: '', routineId: id, routineItemsDone: r.items.map(i => i.id), trainingCategory: r.category,
+      }, { day, meta: { _routineLink: routineLinkKey(id, day, r.time) } }); n++;
+    }
+  }
+  return n;
+}
+
+/** Just the wellness check-ins — the last 30 days (a few skipped) with the Your day answers; days that have one are kept */
+export async function seedWellnessOnly(deps: SeedDeps): Promise<string> {
+  const n = await seedWellness(deps);
+  return n ? `Done — added ${n} wellness check-ins.` : 'Every day already has a check-in — nothing added.';
+}
+
+/** Just the exercise schedule (and a training plan if there isn't one) — for an account that already has data */
+export async function seedExerciseScheduleOnly(deps: SeedDeps): Promise<string> {
+  const n = await seedExerciseSchedule(deps);
+  return `Done — added ${n} entries: the exercise schedule, a week of sessions and a training plan if there wasn’t one.`;
+}
+
 async function seedPlanning(deps: SeedDeps): Promise<number> {
   let n = 0;
   const d = dayFromToday;
@@ -690,8 +822,7 @@ async function seedReportMonth(deps: SeedDeps): Promise<number> {
   let n = 0;
   for (const m of plan.meals) {
     await createEntry(deps, m.name, 'Meals', {
-      mealDescription: m.name, mealType: m.mealType, consumedDate: m.day, consumedTime: m.time, ingredients: m.ingredients,
-      ...(m.mealType === 'supplement' ? {} : { healthiness: m.healthiness }), notes: '',
+      mealDescription: m.name, mealType: m.mealType, consumedDate: m.day, consumedTime: m.time, ingredients: m.ingredients, notes: '',
     }, { day: m.day }); n++;
   }
   for (const x of plan.exercise) {
@@ -781,8 +912,17 @@ function activityDays(topics: TopicInfo[]): { symptomDays: Set<string>; exercise
 async function seedWellness(deps: SeedDeps): Promise<number> {
   await ensureTopic(deps, 'Wellness', 'heart');
   const { symptomDays, exerciseDays } = activityDays(deps.topics);
+  // Days that already have a check-in are left alone (no duplicates on a second run)
+  const have = new Set(useEntriesStore.getState().decryptedEntries.flatMap(e => {
+    const meta = e.metadata as Record<string, unknown> | undefined;
+    const date = (meta?._customFields as Record<string, unknown> | undefined)?.date;
+    return meta?._widgetType === 'wellness-checkin' && typeof date === 'string' ? [date] : [];
+  }));
   const days: string[] = [];
-  for (let offset = -30; offset <= 0; offset++) if (![-27, -19, -8].includes(offset)) days.push(dayFromToday(offset)); // a few days forgotten
+  for (let offset = -30; offset <= 0; offset++) {
+    const day = dayFromToday(offset);
+    if (![-27, -19, -8].includes(offset) && !have.has(day)) days.push(day); // a few days forgotten
+  }
   const values = realisticWellness(days, symptomDays, exerciseDays);
   let n = 0;
   for (const date of days) {

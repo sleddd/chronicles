@@ -6,6 +6,7 @@ import { AsNeededList } from './AsNeededMeds.js';
 import { DashPanel } from '../molecules/DashPanel.js';
 import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
 import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
+import type { RoutineSlot } from '../../utils/routines.js';
 import { useTodayDoses } from '../../hooks/useTodayDoses.js';
 
 /* Today's medications and exercise schedule as flat sections — the home
@@ -158,5 +159,44 @@ export function ExerciseToday({ panel = false }: { panel?: boolean }) {
         );
       })}
     </Frame>
+  );
+}
+
+/* Routine breakdown: a card per routine on today's schedule with two or more
+   exercises — once, even when it's scheduled more than once today — its name
+   (no time) over a light rule, then its exercises as a plain list to follow
+   (name, and the amount on the right). Nothing shows when no routine qualifies. */
+const Amount = styled.span`
+  flex: none;
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+export function RoutineBreakdown({ panel = false }: { panel?: boolean }) {
+  const list = useRoutineChecklist();
+  // One card per routine: its first session today
+  const byRoutine = new Map<number, RoutineSlot>();
+  for (const s of list.slots) {
+    if (s.routine.items.length >= 2 && !byRoutine.has(s.routine.id)) byRoutine.set(s.routine.id, s);
+  }
+  const routines = [...byRoutine.values()];
+  const Frame = panel ? DashPanel : 'section';
+  if (routines.length === 0) return null;
+  return (
+    <>
+      {routines.map(s => (
+        <Frame key={s.routine.id} aria-label={s.routine.name}>
+          <SectionHead>
+            <h2>{s.routine.name}</h2>
+          </SectionHead>
+          {s.routine.items.map(it => (
+            <Row key={it.id}>
+              <ItemName $done={false}>{it.name}</ItemName>
+              {it.amount && <Amount>{it.amount}</Amount>}
+            </Row>
+          ))}
+        </Frame>
+      ))}
+    </>
   );
 }

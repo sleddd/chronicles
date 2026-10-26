@@ -6,7 +6,7 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
-import { ExerciseToday } from '../components/organisms/TodayLists.js';
+import { ExerciseToday, RoutineBreakdown } from '../components/organisms/TodayLists.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { ExerciseSubTabs } from '../components/molecules/ExerciseSubTabs.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -82,6 +82,14 @@ const Link = styled.button`
   color: var(--color-accent-link);
   cursor: pointer;
   &:hover { text-decoration: underline; }
+`;
+
+/* Today's schedule over the routine breakdown */
+const LeftCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
 `;
 
 const Grid = styled.div`
@@ -350,7 +358,10 @@ export function ExerciseScheduleView() {
             )}
           </SubRow>
           <Grid>
-            <ExerciseToday panel />
+            <LeftCol>
+              <ExerciseToday panel />
+              <RoutineBreakdown panel />
+            </LeftCol>
             {showWeek
               ? <ThisWeek planName={planWeek.plan.name} week={planWeek.week} leftToday={leftToday}
                   onOpenPlan={() => navigate('/health/exercise/training')} />
