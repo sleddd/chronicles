@@ -31,8 +31,12 @@ export const SectionTitle = styled.h3`
 /* Estimate / Re-estimate: the app's outlined accent pill (PillButton) */
 export const PillBtn = PillButton;
 
-/* Panel + its note; the space below separates it from the next field's label */
-const Block = styled.div``;
+/* Panel + its note; the space below separates it from the next field's label.
+   The layout follows the panel's own width (container queries), not the
+   screen's: a tablet is wide, but the journal or Log a Meal card is not */
+const Block = styled.div`
+  container: nutrition / inline-size;
+`;
 
 /* Outlined (no fill), like the other field boxes */
 const Panel = styled.div`
@@ -50,7 +54,7 @@ const CaloriesRow = styled.label`
   padding: 22px 28px;
   cursor: text;
   &:focus-within { box-shadow: inset 0 0 0 1px var(--color-accent); }
-  @media (max-width: 640px) { padding: 18px 18px; }
+  @container nutrition (max-width: 560px) { padding: 18px 18px; }
 `;
 
 const PanelLabel = styled.span`
@@ -122,8 +126,9 @@ const Strip = styled.div`
   display: grid;
   grid-template-columns: repeat(${MICRONUTRIENTS.length}, minmax(0, 1fr));
   border-top: 1px solid var(--border-card);
-  /* Always one row: tighter as it narrows, scrolling sideways only on the smallest screens */
-  @media (max-width: 480px) { grid-template-columns: repeat(${MICRONUTRIENTS.length}, minmax(80px, 1fr)); overflow-x: auto; }
+  /* One row when the panel is wide; narrower ones (tablets, phones, cards) get
+     two rows of four with the short names, so nothing squeezes */
+  @container nutrition (max-width: 880px) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 `;
 
 const Cell = styled.label`
@@ -135,8 +140,17 @@ const Cell = styled.label`
   cursor: text;
   & + & { border-left: 1px solid var(--border-card); }
   &:focus-within { box-shadow: inset 0 0 0 1px var(--color-accent); }
-  @media (max-width: 900px) { padding: 14px 12px 16px; }
+  @container nutrition (max-width: 1000px) { padding: 14px 12px 16px; }
   [data-compact] & { padding-left: 12px; padding-right: 12px; }
+  /* Two rows of four: no rule before each row's first cell, a rule above the second row */
+  @container nutrition (max-width: 880px) {
+    padding: 12px 10px 14px;
+    &:nth-child(4n + 1) { border-left: none; }
+    &:nth-child(n + 5) { border-top: 1px solid var(--border-card); }
+  }
+  /* The full name, or the short one in two rows ("Vit D", "B12") */
+  .short { display: none; }
+  @container nutrition (max-width: 880px) { .full { display: none; } .short { display: inline; } }
 `;
 
 const CellValue = styled.span`
@@ -155,7 +169,7 @@ const CellInput = styled(BareInput)`
     font-size: 22px;
     font-weight: 300;
     line-height: 1.2;
-    @media (max-width: 900px) { font-size: 19px; }
+    @container nutrition (max-width: 1000px) { font-size: 19px; }
   }
 `;
 
@@ -215,7 +229,7 @@ export function NutritionPanel({ values, onChange, isAi = () => false, action, e
           <Strip>
             {MICRONUTRIENTS.map(n => (
               <Cell key={n.key} title={ai(n.key) ? 'AI estimate — edit to override' : undefined}>
-                <PanelLabel>{n.label}</PanelLabel>
+                <PanelLabel><span className="full">{n.label}</span><span className="short">{n.short}</span></PanelLabel>
                 <CellValue>
                   <CellInput
                     type="number"

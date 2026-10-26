@@ -143,7 +143,7 @@ Settings → Theme offers **30 named accent presets** (`ACCENT_PRESETS` in `Sett
   **Every meal form** (journal `FoodFields`, Health → Log a Meal `FoodAddForm`) shows
   its nutrients in the shared `NutritionPanel` (`molecules/NutritionPanel.tsx`): a **NUTRITION**
   heading (+ optional Estimate pill), calories as a large thin Work Sans figure (300, not bold) + kcal over a column-ruled
-  strip of the macros (protein, carbs, fat) and the micronutrients (its values thin Work Sans too; always one row — tighter on narrow screens, sideways scroll only on the smallest), italic = AI, 18px below before the next label. The journal adds the single
+  strip of the macros (protein, carbs, fat) and the micronutrients (its values thin Work Sans too; one row when the panel is wide, two rows of four with the short names once the panel itself is under 880px — a container query, so tablets and narrow cards get it too — Vit D, B12, Vit C), italic = AI, 18px below before the next label. The journal adds the single
   date | time "Eaten at" box. **No title above a custom-fields block** (no topic name, no
   "MEAL" heading, no check-in date) — the fields start straight away
 - **Checkmarks — one look everywhere** (the user's favourite; never restyle): ticked = an accent **check-circle** (a ring with the tick breaking out of it — stroke only, never a filled disc), unticked = a plain grey ring (`--control-border`). Form checkboxes use the core `Checkbox` (`ch-check`); every round tick button (shopping lists, priorities, doses, recipe ingredients, dashboards) draws `TickMark` (`atoms/TickMark.tsx`) inside a bare button
