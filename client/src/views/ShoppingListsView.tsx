@@ -19,6 +19,7 @@ import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import type { ShoppingItem } from '../types/fields.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* ── Layout (mirrors HealthView) ── */
 
@@ -45,7 +46,8 @@ const Head = styled.div`
   padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
@@ -142,9 +144,11 @@ export function ShoppingListsView() {
           <Head>
             <Title>{KITCHEN_TITLE}</Title>
             {shoppingListTopic && (
-              <PillButton type="button" onClick={() => shoppingListTopic && newEntry(shoppingListTopic.id)}>
-                New list
-              </PillButton>
+              <TopBarAction>
+                <PillButton type="button" onClick={() => shoppingListTopic && newEntry(shoppingListTopic.id)}>
+                  New list
+                </PillButton>
+              </TopBarAction>
             )}
           </Head>
 

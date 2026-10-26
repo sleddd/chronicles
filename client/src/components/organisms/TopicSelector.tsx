@@ -74,7 +74,7 @@ const Dropdown = styled.div`
   max-height: 320px;
   overflow-y: auto;
   background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-faint);
   border-radius: ${({ theme }) => theme.borderRadius.md}px;
   box-shadow: ${({ theme }) => theme.shadow.lg};
   animation: ${dropdownSlide} 0.15s ease-out;
@@ -83,7 +83,7 @@ const Dropdown = styled.div`
 
 const SearchWrapper = styled.div`
   padding: 8px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-faint);
   position: sticky;
   top: 0;
   background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
@@ -126,7 +126,7 @@ const Item = styled.button<{ $active?: boolean }>`
   color: var(--text-secondary);
   background: ${({ $active }) => $active ? 'rgba(0,0,0,0.04)' : 'transparent'};
   border: none;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-faint);
   cursor: pointer;
   transition: background 0.1s;
 

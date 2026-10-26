@@ -237,6 +237,8 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean }>`
   margin-top: ${({ $quick }) => ($quick ? '8px' : '24px')};
   /* A real writing area even when the entry is one line */
   .tiptap { min-height: ${({ $quick }) => ($quick ? '120px' : '220px')}; }
+  /* Phones: the Quick entry's writing area a little taller */
+  @media (max-width: 768px) { .tiptap { min-height: ${({ $quick }) => ($quick ? '180px' : '220px')}; } }
   /* Quick entry: the journal's own text (font, size, weight), the prompt in italics */
   ${({ $quick }) => ($quick ? `
     .tiptap { padding: 12px 0 20px; }
@@ -424,14 +426,15 @@ const QuickTopic = styled.div`
     height: 36px;
     padding: 0 14px 0 16px;
     gap: 16px;
-    border: 1px solid var(--border-pill, var(--border-card));
+    border: 1px solid var(--border-card); /* light grey, not the darker pill outline */
     border-radius: var(--r-full, 999px);
-    background: var(--bg-control, transparent);
+    background: transparent;
     font-size: 15px;
     text-transform: none;
     color: var(--text-primary);
   }
-  & > div > button:hover { background: var(--bg-hover); }
+  /* Hover: no fill — the outline firms up instead */
+  & > div > button:hover { background: transparent; border-color: var(--border-strong); }
   & > div > button > span:last-child { color: var(--text-muted); font-size: 11px; }
   & > div > div { left: auto; right: 0; }
 `;
@@ -445,6 +448,14 @@ const QuickFoot = styled.div`
   margin-top: 4px;
   padding-top: 16px;
   border-top: 1px solid var(--border-subtle);
+  /* Save entry: accent outline + accent text in both themes (no fill), faded until there's something to save */
+  && ${SaveButton}, html[data-theme='light'] && ${SaveButton} {
+    color: var(--color-accent-line);
+    border-color: var(--color-accent-line);
+    background: transparent;
+  }
+  && ${SaveButton}:disabled { opacity: 0.5; }
+  && ${SaveButton}:hover:not(:disabled) { background: var(--color-accent-subtle); }
 `;
 
 const QuickTools = styled.div`

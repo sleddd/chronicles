@@ -42,6 +42,7 @@ import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -1048,10 +1049,12 @@ export function JournalView() {
         )}
         // New entry: an outlined pill right beside the title
         titleAside={(
-          <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
-            <Icon name="plus" size={14} strokeWidth={2} aria-hidden="true" />
-            New entry
-          </NewEntryPill>
+          <TopBarAction>
+            <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
+              <Icon name="plus" size={14} strokeWidth={2} aria-hidden="true" />
+              New entry
+            </NewEntryPill>
+          </TopBarAction>
         )}
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>

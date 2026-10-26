@@ -22,6 +22,7 @@ import { medPeriodRange, type MedPeriod } from '../utils/medHistory.js';
 import {
   buildSymptomHistory, searchSymptomHistory, severityWord, symptomEventsFrom, symptomHistoryTotals, type SymptomHistoryRow,
 } from '../utils/symptomHistory.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* Health → Symptoms: what you noticed over a period, laid out like Exercise
    history — Log symptom and Download CSV in the header, period chips and a
@@ -103,7 +104,7 @@ export function SymptomHistoryView() {
             <Title>Health</Title>
             <HeadActions>
               <CsvLink onClick={() => downloadCsv(rows, range)} disabled={!rows.length} />
-              <PillButton type="button" onClick={() => void logSymptom()}>Log symptom</PillButton>
+              <TopBarAction><PillButton type="button" onClick={() => void logSymptom()}>Log symptom</PillButton></TopBarAction>
             </HeadActions>
           </Head>
           <HealthTabBar />

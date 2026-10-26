@@ -22,8 +22,10 @@ const SectionHead = styled.div`
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 12px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--border-subtle);
-  h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
+  /* The Daily quote label's style, like every dashboard card title */
+  h2 { margin: 0; font-family: var(--font-sans); font-size: 15px; font-weight: 400; line-height: 30px; color: var(--text-muted); }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }
@@ -35,7 +37,8 @@ const Row = styled.div`
   align-items: center;
   gap: 14px;
   min-height: 52px;
-  & + & { border-top: 1px solid var(--border-subtle); }
+  /* --border-faint: a lighter hairline in light theme, the same as before in dark */
+  & + & { border-top: 1px solid var(--border-faint); }
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-secondary);

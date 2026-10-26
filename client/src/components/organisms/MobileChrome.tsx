@@ -1,9 +1,9 @@
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Icon } from '../atoms/core/Icon.jsx';
 import { useUIStore } from '../../stores/uiStore.js';
 import { BrandMark } from '../atoms/BrandMark.js';
+import { TOP_BAR_SLOT_ID } from './TopBarAction.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
@@ -33,12 +33,27 @@ const MobileNavBar = styled.div<{ $open: boolean }>`
   }
 `;
 
-const LogoContainer = styled.div`
+/* The page's main action (New entry, New topic…), across from the logo */
+const BarActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  &:empty { display: none; }
+`;
+
+/* The logo and page name — the button that opens and closes the menu (there's no ☰) */
+const LogoContainer = styled.button`
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
   cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 6px; }
 `;
 
 const PageName = styled.span`
@@ -48,22 +63,6 @@ const PageName = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-`;
-
-/* ☰ — or, while open, × in a softly tinted square */
-const MenuButton = styled.button<{ $open: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: none;
-  border-radius: 10px;
-  background: ${({ $open }) => ($open ? 'color-mix(in srgb, var(--color-accent) 8%, var(--bg-app))' : 'transparent')};
-  color: var(--text-primary);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 `;
 
 /* The menu: a sheet dropping from under the bar, full width, rounded at the
@@ -145,7 +144,9 @@ export function MobileChrome() {
   const items = useNavItems();
   const { pathname } = useLocation();
   const current = items.find(i => i.active);
-  const main = items.filter(i => i.key !== 'settings');
+  // The menu starts with Home (the dashboard) — on phones the logo opens this menu
+  const home: NavItem = { key: 'home', label: 'Home', icon: 'home', path: '/dashboard', active: pathname === '/dashboard' };
+  const main = [home, ...items.filter(i => i.key !== 'settings')];
   const settings = items.find(i => i.key === 'settings');
   const signOut = useSignOut();
   const { lock } = useEncryption();
@@ -168,14 +169,12 @@ export function MobileChrome() {
   return (
     <>
       <MobileNavBar $open={open}>
-        <LogoContainer onClick={() => { setOpen(false); navigate('/dashboard'); }}>
+        <LogoContainer type="button" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="mobile-nav">
           <BrandMark size={26} gradientId="logo-mobile" />
           <PageName>{current?.label ?? (pathname === '/dashboard' ? 'Today' : 'Chronicles')}</PageName>
         </LogoContainer>
-        <MenuButton $open={open} onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'}
-          aria-expanded={open} aria-controls="mobile-nav">
-          <Icon name={open ? 'x' : 'menu'} size={22} strokeWidth={2} />
-        </MenuButton>
+        {/* The page's main action lands here (TopBarAction) */}
+        <BarActions id={TOP_BAR_SLOT_ID} />
       </MobileNavBar>
       <Overlay $open={open} onClick={() => setOpen(false)} />
       {open && (

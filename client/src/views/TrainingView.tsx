@@ -23,6 +23,7 @@ import {
   type PlanPhase, type Session, type TrainingPlan,
 } from '../utils/training.js';
 import type { TrainingCategory } from '../types/fields.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* Health → Exercise → Training: the active training plan. Its name with Edit
    plan and where you are ("Phase 1 of 4 · Week 3 of 6"); the
@@ -58,7 +59,8 @@ const Head = styled.div`
   padding: 53px 0 28px;
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   margin: 0;
   font-family: var(--font-display);
   font-size: 44px;
@@ -504,7 +506,7 @@ export function TrainingView() {
         <Inner>
           <Head>
             <Title>Health</Title>
-            <PillButton type="button" onClick={() => void startPlan()}>New plan</PillButton>
+            <TopBarAction><PillButton type="button" onClick={() => void startPlan()}>New plan</PillButton></TopBarAction>
           </Head>
           <HealthTabBar />
           <SubTabs><ExerciseSubTabs /></SubTabs>

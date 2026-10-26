@@ -43,7 +43,7 @@ describe('MobileChrome drop-down menu', () => {
 
   it('shows every destination as an icon over its name, marking the current one', () => {
     renderAt('/journal');
-    for (const name of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
+    for (const name of ['Home', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByRole('button', { name: new RegExp(name), hidden: true })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: /Journal/, hidden: true })).toHaveAttribute('aria-current', 'page');
@@ -78,5 +78,18 @@ describe('MobileChrome drop-down menu', () => {
     renderAt();
     expect(screen.queryByRole('navigation', { name: 'Main', hidden: true })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open menu', hidden: true })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens the menu from the logo', () => {
+    open = false;
+    renderAt();
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu', hidden: true }));
+    expect(mockSetOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('starts the menu with Home, which opens the dashboard', () => {
+    renderAt('/journal');
+    fireEvent.click(screen.getByRole('button', { name: /Home/, hidden: true }));
+    expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
 });

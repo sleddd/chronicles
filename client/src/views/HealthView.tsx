@@ -23,6 +23,7 @@ import type { DateFilter } from '../types/health.js';
 import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import { tableColumnRules } from '../styles/columnRules.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 const DATE_FILTERS = [
   { value: 'all' as const, label: 'All' },
@@ -56,7 +57,8 @@ const Head = styled.div`
   padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
@@ -304,9 +306,11 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             {(addTopic || printable) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-print-hide>
                 {addTopic && (
-                  <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
-                    {newLabel ?? `New ${singular(addTopic.name)}`}
-                  </PillButton>
+                  <TopBarAction>
+                    <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
+                      {newLabel ?? `New ${singular(addTopic.name)}`}
+                    </PillButton>
+                  </TopBarAction>
                 )}
                 {printable && <PrintButton />}
               </div>

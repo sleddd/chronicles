@@ -23,6 +23,7 @@ import { formatShort, sessionsFrom } from '../utils/training.js';
 import {
   buildExerciseHistory, exerciseHistoryTotals, searchExerciseHistory, type ExerciseHistoryRow,
 } from '../utils/exerciseHistory.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* Health → Exercise → History: what you did over a period, laid out like Med
    history — big text sub tabs with Download CSV across, period chips and a
@@ -93,7 +94,7 @@ export function ExerciseHistoryView() {
         <Inner>
           <Head>
             <Title>Health</Title>
-            <PillButton type="button" onClick={() => void logExercise()}>Log exercise</PillButton>
+            <TopBarAction><PillButton type="button" onClick={() => void logExercise()}>Log exercise</PillButton></TopBarAction>
           </Head>
           <HealthTabBar />
           <SubTabs>

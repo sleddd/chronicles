@@ -18,7 +18,7 @@ import { useFoodLogActions } from './FoodLog.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
 import {
-  Section, TitleInput, Chips, Chip, DateTimeBox, DateTimeField, Unit, BoxText, FieldNote,
+  Section, Chips, Chip, DateTimeBox, DateTimeField, Unit, BoxText, FieldNote,
 } from '../molecules/fields/formKit.js';
 
 /* Health dashboard "Quick meal log" / "Quick exercise log": a Meal | Exercise
@@ -32,8 +32,6 @@ import {
 
 /* ── Styled ── */
 
-/* The shared title field (labelled, underlined) */
-const QTitle = TitleInput;
 
 const QChip = styled(Chip)`
   height: 28px;
@@ -130,13 +128,6 @@ const ChangeNote = styled.p`
   a:hover { text-decoration: underline; }
 `;
 
-/** "5:26 PM" from "17:26" */
-function time12(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  if (Number.isNaN(h)) return '';
-  return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-}
-
 /** "Today", "Yesterday", else "Oct 12" */
 function dayWord(date: string): string {
   const t = today();
@@ -198,12 +189,39 @@ const AmountInput = styled(QField)`
   &::placeholder { color: var(--text-hint); }
 `;
 
+/* The meal's name: a standard outlined text box, like the symptom search. The
+   outline is on the box — the global rule strips every input's own border */
+const MealBox = styled.label`
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--bg-control, transparent);
+  cursor: text;
+  &:focus-within { border-color: var(--color-accent); }
+`;
+
+const MealName = styled.input`
+  && {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
 /* Meal types as plain words; the chosen one in the accent over a 2px accent rule */
 const MealTabs = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 6px 18px;
-  margin-top: 20px;
+  margin-top: 28px;
 `;
 
 const MealTab = styled.button<{ $active: boolean }>`
@@ -217,23 +235,6 @@ const MealTab = styled.button<{ $active: boolean }>`
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: 2px; }
-`;
-
-/* "Today, 5:26 PM" — tap to change the day and time */
-const WhenLink = styled.button`
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-muted);
-  cursor: pointer;
-  &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
-`;
-
-const WhenPair = styled(DateTimeBox)`
-  margin-top: 20px;
 `;
 
 const MealFooter = styled.div`
@@ -316,8 +317,6 @@ const MEALS = [
   { value: 'lunch', label: 'Lunch' },
   { value: 'dinner', label: 'Dinner' },
   { value: 'snack', label: 'Snack' },
-  { value: 'supplement', label: 'Supplement' },
-  { value: 'medication', label: 'Medication' },
 ];
 
 const ACTIVITY_LABEL: Record<string, string> = { strength: 'Strength' };
@@ -332,14 +331,14 @@ function MealQuick() {
   const openNew = useNewEntryInJournal();
   const blank = () => ({ name: '', mealType: mealForNow(), date: today(), time: nowTime(), calories: '', notes: '' });
   const [v, setV] = useState(blank);
-  const [editWhen, setEditWhen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
 
   const fields = () => ({
     mealDescription: v.name.trim(), mealType: v.mealType,
-    consumedDate: v.date || today(), consumedTime: v.time || nowTime(),
+    // Logged now (no day / time picker here — More details has one)
+    consumedDate: today(), consumedTime: nowTime(),
     calories: v.calories.trim(), ...(v.calories.trim() ? { caloriesSource: 'manual' } : {}),
     ingredients: '', notes: v.notes.trim(),
   });
@@ -353,7 +352,6 @@ function MealQuick() {
       const id = await actions.create(f.consumedDate, name, f);
       if (aiReady) void actions.fill(id);
       setV(blank());
-      setEditWhen(false);
       setStatus(`Logged ${name}`);
       setTimeout(() => setStatus(''), 2600);
     } catch (err) {
@@ -366,25 +364,18 @@ function MealQuick() {
 
   return (
     <>
-      <QTitle value={v.name} placeholder="What did you eat?" aria-label="What did you eat?" hideLabel
-        onChange={e => set({ name: e.target.value })}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+      <MealBox>
+        <MealName value={v.name} placeholder="What did you eat?" aria-label="What did you eat?"
+          onChange={e => set({ name: e.target.value })}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void log(); } }} />
+      </MealBox>
       <MealTabs role="radiogroup" aria-label="Meal">
         {MEALS.map(m => (
           <MealTab key={m.value} type="button" role="radio" aria-checked={v.mealType === m.value}
             $active={v.mealType === m.value} onClick={() => set({ mealType: m.value })}>{m.label}</MealTab>
         ))}
       </MealTabs>
-      {editWhen && (
-        <WhenPair>
-          <QField type="date" value={v.date} aria-label="Date" onChange={e => set({ date: e.target.value })} />
-          <QField type="time" value={v.time} aria-label="Time" onChange={e => set({ time: e.target.value })} />
-        </WhenPair>
-      )}
       <MealFooter>
-        <WhenLink type="button" aria-expanded={editWhen} onClick={() => setEditWhen(o => !o)}>
-          {dayWord(v.date || today())}, {time12(v.time || nowTime())}
-        </WhenLink>
         <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
         {status && <Status role="status" aria-live="polite">{status}</Status>}
         <PillButton type="button" onClick={() => void log()} disabled={saving || !v.name.trim()}>
@@ -800,14 +791,21 @@ export function QuickSymptom() {
 /* ── Panel ── */
 
 /* `bare` (the home dashboard's widget card): no panel of its own, the title
-   with no rule under it */
+   over a light rule like the dashboard's other widgets */
 const BareHead = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: 12px;
   margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-subtle);
   h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
+`;
+
+/* A little more room above the meal name / activity chips than the card's usual gap */
+const BareBody = styled.div`
+  padding-top: 12px;
 `;
 
 export function QuickLog({ meal = true, exercise = true, bare = false }: { meal?: boolean; exercise?: boolean; bare?: boolean }) {
@@ -825,7 +823,7 @@ export function QuickLog({ meal = true, exercise = true, bare = false }: { meal?
     return (
       <section aria-label={title}>
         <BareHead><h2>{title}</h2>{toggle}</BareHead>
-        {body}
+        <BareBody>{body}</BareBody>
       </section>
     );
   }

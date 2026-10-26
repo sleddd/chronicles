@@ -5,3 +5,6 @@
  * (768px) breakpoints — this only decides which navigation shows.
  */
 export const NAV_COMPACT = '@media (max-width: 1024px), (hover: none) and (pointer: coarse) and (max-width: 1366px)';
+
+/** NAV_COMPACT as a plain query, for matchMedia (useMediaQuery) */
+export const NAV_COMPACT_QUERY = NAV_COMPACT.replace(/^@media\s+/, '');

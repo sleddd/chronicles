@@ -105,6 +105,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
   '--border-subtle':     '#d3d7dd',
+  '--border-faint':      '#e6e8ec', /* the lightest hairline (topic picker) */
   '--border-pill':       '#80868f',  /* pills, ± buttons, round controls (light only) */
   '--progress-track':    '#d3d7dd',  /* empty part of a progress rule */
   '--bg-control':        '#fefefe',  /* pills, the topic picker, ± buttons (light only) */
@@ -196,6 +197,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-hint':         '#60636c',  /* placeholders in big borderless fields */
   '--text-inverse':      '#14161b',
   '--border-subtle':     '#2c2f3a',
+  '--border-faint':      '#2c2f3a', /* same as --border-subtle in dark */
   '--border-default':    '#343844',
   /* Light-only tokens: empty = unset, so components use their own dark values */
   '--border-pill':       '',

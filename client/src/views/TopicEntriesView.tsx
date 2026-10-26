@@ -18,6 +18,7 @@ import { useUIStore } from '../stores/uiStore.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* ── Layout (mirrors TopicDetailView / TopicsView) ── */
 
@@ -44,7 +45,8 @@ const Head = styled.div`
   padding: 53px 0 20px;
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
@@ -144,9 +146,11 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
           <Head>
             <Title>{title}</Title>
             {addTopic && (
-              <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
-                New entry
-              </PillButton>
+              <TopBarAction>
+                <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
+                  New entry
+                </PillButton>
+              </TopBarAction>
             )}
           </Head>
 

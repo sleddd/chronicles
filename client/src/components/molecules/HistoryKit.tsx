@@ -35,7 +35,8 @@ export const Head = styled.div`
   padding: 53px 0 28px;
 `;
 
-export const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+export const Title = styled.h1.attrs({ className: 'view-title' })`
   margin: 0;
   font-family: var(--font-display);
   font-size: 44px;

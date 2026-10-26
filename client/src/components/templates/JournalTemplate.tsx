@@ -25,6 +25,12 @@ const Head = styled.header`
   padding: 53px 36px 30px;
   border-bottom: 1px solid var(--border-subtle);
   @media (max-width: 768px) { padding: 34px 24px 32px; align-items: center; row-gap: 10px; }
+  /* Phones/tablets: the top bar names the page and holds New entry — this row
+     is only the back caret, while an entry is open */
+  ${NAV_COMPACT} {
+    padding: 4px 16px;
+    &:not([data-back]) { display: none; }
+  }
 `;
 
 const TitleBlock = styled.div`
@@ -62,7 +68,8 @@ const TitleAside = styled.div`
   margin-left: 24px;
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
@@ -155,7 +162,7 @@ interface JournalTemplateProps {
 export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', titleAside, headerAside, onBack }: JournalTemplateProps) {
   return (
     <Page>
-      <Head>
+      <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (
             <BackBtn type="button" onClick={onBack} aria-label="Back to entries">

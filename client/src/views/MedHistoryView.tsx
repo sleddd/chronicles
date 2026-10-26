@@ -40,7 +40,8 @@ const Inner = styled.div`
   @media (max-width: 768px) { padding: 0 16px 48px; }
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   margin: 0;
   padding: 53px 0 28px;
   font-family: var(--font-display);

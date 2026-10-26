@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { entryRowPlain, rowHoverHandlers, clearRowHover } from '../styles/entryRow.js';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -20,6 +21,7 @@ import { usePrivateSettings } from '../services/privateSettings.js';
 import type { Topic } from '../types/topics.js';
 import type { UserFieldDef } from '../types/userFields.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* ── Layout ── */
 
@@ -48,7 +50,8 @@ const Head = styled.div`
   padding: 53px 0 28px;
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
@@ -63,6 +66,8 @@ const Title = styled.h1`
 /* Search topics: under the title, above the list's rule */
 const TopicSearch = styled(RoundSearch)`
   margin-bottom: 20px;
+  /* Phones/tablets: the title row is gone (the top bar names the page), so the search needs room above it */
+  ${NAV_COMPACT} { margin-top: 24px; }
 `;
 
 /* Hairlines under each row — no rule above the first */
@@ -247,7 +252,7 @@ export function TopicsView() {
           <Head>
             <Title>Topics</Title>
             {!adding && (
-              <PillButton type="button" onClick={() => { setAdding(true); setEditingId(null); setConfirmDeleteId(null); }}>New topic</PillButton>
+              <TopBarAction><PillButton type="button" onClick={() => { setAdding(true); setEditingId(null); setConfirmDeleteId(null); }}>New topic</PillButton></TopBarAction>
             )}
           </Head>
 

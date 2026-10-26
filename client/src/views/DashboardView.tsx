@@ -20,6 +20,7 @@ import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
@@ -84,6 +85,8 @@ interface DashboardConfig {
   clocksExpanded?: boolean;
   /** Cards folded down to their title row */
   collapsed?: SectionKey[];
+  /** Phones: every card starts folded — these are the ones opened there */
+  openOnPhone?: SectionKey[];
   /** The two columns' cards, top to bottom, as dragged into place */
   layout?: { left: SectionKey[]; right: SectionKey[] };
 }
@@ -138,7 +141,9 @@ const DateBlock = styled.div`
 `;
 
 const Eyebrow = styled.div`
-  margin-top: 14px;
+  margin-top: 6px;
+  /* In a touch, so it lines up under the greeting's first letter */
+  padding-left: 12px;
   font-family: var(--font-sans);
   font-size: 15px;
   font-style: italic;
@@ -163,12 +168,15 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  @media (max-width: 640px) { padding: 12px 0 0; margin-bottom: 12px; }
+  @media (max-width: 640px) { padding: 24px 0 0; margin-bottom: 12px; }
 `;
 
 /* Customize view: the neutral pill, in sentence case at normal spacing (both themes) */
 const CustomizeBtn = styled(PillButton)`
   && { text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 500; }
+  /* A light grey outline and no fill, like the theme switch beside it */
+  &&& { border-color: var(--border-card); background: transparent; }
+  &&&:hover:not(:disabled) { border-color: var(--border-strong); }
 `;
 
 const ThemeSwitch = styled.div`
@@ -444,10 +452,23 @@ const WidgetCard = styled.div<{ $collapsed: boolean }>`
   @media (max-width: 480px) { padding: 22px 76px 22px 20px; }
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
   & > section > :first-child { align-items: center; }
-  & > section > :first-child h2 { line-height: 30px; }
+  /* The same room between every title row and the card's content */
+  && > section > :first-child { margin-bottom: 16px; }
+  /* Titles in the Daily quote label's style: 15px Open Sans, 400, grey */
+  & > section > :first-child h2 {
+    line-height: 30px;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
   ${({ $collapsed }) => ($collapsed ? `
+    padding-top: 14px;
+    padding-bottom: 14px;
     & > section > :not(:first-child) { display: none; }
-    & > section > :first-child { padding-bottom: 0; border-bottom: none; }
+    && > section > :first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
+    /* Grip and chevron centred on the folded card's one row */
+    & > button { top: 50% !important; transform: translateY(-50%); }
   ` : '')}
 `;
 
@@ -852,6 +873,18 @@ function PriorityText({ item, onCommit }: { item: PriorityItem; onCommit: (text:
 }
 
 
+/* "Add a priority": a standard outlined text box (the border on the box — inputs are flat app-wide) */
+const AddBox = styled.label`
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  cursor: text;
+  &:focus-within { border-color: var(--color-accent); }
+`;
+
 const BareInput = styled.input`
   && {
     flex: 1;
@@ -956,12 +989,11 @@ function Priorities() {
         </Row>
       ))}
       {items.length < 5 && (
-        <Row>
-          <PNum style={{ color: 'var(--text-faint)' }}>{items.length + 1}</PNum>
+        <AddBox style={items.length ? { marginTop: 12 } : undefined}>
           <BareInput value={draft} placeholder="Add a priority" aria-label="Add a priority"
             onChange={e => setDraft(e.target.value)} onBlur={add}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-        </Row>
+        </AddBox>
       )}
     </section>
   );
@@ -1272,6 +1304,7 @@ export function DashboardView() {
       .flatMap(e => parseQuoteText(stripHtml(e.content)) ?? []);
   }, [quoteEntries, quoteTopics]);
   const [config, saveConfig, configLoaded] = useEncryptedSetting<DashboardConfig>('dashboardConfig', DEFAULT_CONFIG);
+  const onPhone = useMediaQuery('(max-width: 768px)');
   // The two columns' card order — live while dragging, saved on drop
   const [layout, setLayout] = useState(() => fullLayout(config.layout));
   const [dragging, setDragging] = useState(false);
@@ -1386,9 +1419,17 @@ export function DashboardView() {
 
   const left: ReactNode[] = [];
   const right: ReactNode[] = [];
-  const collapsed = new Set(config.collapsed ?? []);
-  const toggleFold = (k: SectionKey) =>
-    void saveConfig({ ...config, collapsed: collapsed.has(k) ? [...collapsed].filter(x => x !== k) : [...collapsed, k] });
+  // Phones start with every card folded (their own list of opened cards); wider screens keep `collapsed`
+  const openOnPhone = new Set(config.openOnPhone ?? []);
+  const collapsed = new Set(onPhone ? [...DEFAULT_LAYOUT.left, ...DEFAULT_LAYOUT.right].filter(k => !openOnPhone.has(k)) : config.collapsed ?? []);
+  const toggleFold = (k: SectionKey) => {
+    if (onPhone) {
+      void saveConfig({ ...config, openOnPhone: openOnPhone.has(k) ? [...openOnPhone].filter(x => x !== k) : [...openOnPhone, k] });
+      return;
+    }
+    const folded = new Set(config.collapsed ?? []);
+    void saveConfig({ ...config, collapsed: folded.has(k) ? [...folded].filter(x => x !== k) : [...folded, k] });
+  };
   // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
   const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
     priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },

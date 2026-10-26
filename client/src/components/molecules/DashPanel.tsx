@@ -1,16 +1,17 @@
 import styled from 'styled-components';
 import type { ReactNode } from 'react';
 
-/* Health dashboard panel: a --bg-panel card (12px corners, no outline) with a
-   thin Work Sans title on the left and a muted note or control on the right.
-   Props only. */
+/* Health dashboard panel — the home dashboard's widget card: a --bg-panel card
+   (14px corners, no outline), the title in the Daily quote label's style (15px
+   Open Sans, grey) over a light rule with a muted note or control on the right,
+   16px above the content. Props only. */
 
 export const DashPanel = styled.section`
   min-width: 0;
-  padding: 22px 22px 24px;
+  padding: 28px 32px;
   background: var(--bg-panel);
-  border-radius: 12px;
-  @media (max-width: 768px) { padding: 24px 20px 28px; }
+  border-radius: 14px;
+  @media (max-width: 480px) { padding: 22px 20px; }
 `;
 
 const Head = styled.div`
@@ -19,17 +20,19 @@ const Head = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
-  margin-bottom: 32px;
+  min-height: 30px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 const Title = styled.h2`
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 300;
-  line-height: 1.15;
-  color: var(--text-secondary);
-  @media (max-width: 480px) { font-size: 19px; }
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 30px;
+  color: var(--text-muted);
 `;
 
 const Aside = styled.div`

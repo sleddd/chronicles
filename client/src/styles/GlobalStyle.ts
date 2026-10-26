@@ -1,4 +1,5 @@
 import { createGlobalStyle } from 'styled-components';
+import { NAV_COMPACT } from './breakpoints.js';
 
 /* Work Sans + Open Sans, bundled with the app (not Google Fonts) so Safari/iOS load them */
 import './fonts.css';
@@ -6,6 +7,15 @@ import './fonts.css';
 import './core.css';
 
 export const GlobalStyle = createGlobalStyle`
+  /* Phones and tablets: the mobile top bar names the page, so the page's own big title goes */
+  ${NAV_COMPACT} {
+    .view-title { display: none !important; }
+    /* A header row with nothing else showing (its button moved to the top bar) goes too… */
+    :has(> .view-title):not(:has(> :not(.view-title):not(:empty))) { display: none !important; }
+    /* …and one that still holds something loses the room the title needed */
+    :has(> .view-title) { padding-top: 16px !important; padding-bottom: 8px !important; }
+  }
+
   *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;

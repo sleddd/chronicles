@@ -20,6 +20,7 @@ import {
   ROUTINE_DEFAULTS, SCHEDULE_TOPIC, activeRoutines, describeDays, scheduleTopicId, sessionMinutes, type Routine,
 } from '../utils/routines.js';
 import { categoryOf, sessionsFrom, trainingPlans, weekProgress, type WeekProgress } from '../utils/training.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 
 /* Health → Exercise → Schedule: today's schedule on the left, as the dashboards'
    Exercise schedule widget (TodayLists ExerciseToday, in a panel card). On the right, beside an active training plan: "This week" — this
@@ -52,7 +53,8 @@ const Head = styled.div`
   padding: 53px 0 28px;
 `;
 
-const Title = styled.h1`
+/* The page's name — hidden on phones and tablets, where the top bar shows it (GlobalStyle) */
+const Title = styled.h1.attrs({ className: 'view-title' })`
   margin: 0;
   font-family: var(--font-display);
   font-size: 44px;
@@ -336,7 +338,7 @@ export function ExerciseScheduleView() {
         <Inner>
           <Head>
             <Title>Health</Title>
-            <PillButton type="button" onClick={() => void addExercise()}>Add exercise</PillButton>
+            <TopBarAction><PillButton type="button" onClick={() => void addExercise()}>Add exercise</PillButton></TopBarAction>
           </Head>
           <HealthTabBar />
           <SubRow>
