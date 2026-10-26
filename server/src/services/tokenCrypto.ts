@@ -19,6 +19,20 @@ function getKey(): Buffer {
   return key;
 }
 
+/**
+ * Why the key can't be used, for startup warnings — which variable was read
+ * and what it decoded to, never the key itself. null when it's fine.
+ */
+export function tokenCryptoProblem(): string | null {
+  const name = process.env.SECRETS_ENCRYPTION_KEY ? 'SECRETS_ENCRYPTION_KEY'
+    : process.env.CALENDAR_TOKEN_KEY ? 'CALENDAR_TOKEN_KEY' : null;
+  if (!name) return 'SECRETS_ENCRYPTION_KEY is not set (nor CALENDAR_TOKEN_KEY)';
+  const raw = process.env[name]!;
+  const bytes = Buffer.from(raw, 'base64').length;
+  if (bytes === 32) return null;
+  return `${name} is set (${raw.trim().length} characters) but decodes to ${bytes} bytes, not 32 — it must be base64 of 32 random bytes (44 characters ending in =)`;
+}
+
 export function isTokenCryptoConfigured(): boolean {
   try {
     getKey();
