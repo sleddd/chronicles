@@ -204,38 +204,52 @@ export function getSyncCandidates(): SyncCandidate[] {
 }
 
 // ── Pending remote deletions (survive reloads via localStorage) ──────────────
+// The calendar id is a private setting (often an email address), and
+// localStorage is plain text that outlives a lock, so a queued delete keeps
+// only the event id and "primary" or "the synced calendar" — resolved to the
+// calendar being synced when the queue drains, at the next push.
 
-export function readPendingDeletes(): PendingCalendarDelete[] {
+interface StoredPendingDelete { googleEventId: string; calendar: 'primary' | 'synced' }
+
+function readStored(): StoredPendingDelete[] {
   try {
     const raw = localStorage.getItem(PENDING_DELETES_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // An older queue held the calendar id itself: kept as "the synced calendar"
+    return parsed
+      .filter(i => i && typeof i.googleEventId === 'string')
+      .map((i): StoredPendingDelete => ({ googleEventId: i.googleEventId, calendar: i.calendar === 'primary' || i.calendarId === 'primary' ? 'primary' : 'synced' }));
   } catch {
     return [];
   }
 }
 
-function writePendingDeletes(items: PendingCalendarDelete[]): void {
+export function readPendingDeletes(): StoredPendingDelete[] {
+  return readStored();
+}
+
+function writePendingDeletes(items: StoredPendingDelete[]): void {
   try {
-    localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(items));
+    localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(items.map(i => ({ googleEventId: i.googleEventId, calendar: i.calendar }))));
   } catch { /* storage full/unavailable — deletes will be reconciled on full resync */ }
 }
 
 export function enqueuePendingDelete(item: PendingCalendarDelete): void {
-  const items = readPendingDeletes();
+  const items = readStored();
   if (!items.some(i => i.googleEventId === item.googleEventId)) {
-    items.push(item);
+    items.push({ googleEventId: item.googleEventId, calendar: item.calendarId === 'primary' ? 'primary' : 'synced' });
     writePendingDeletes(items);
   }
 }
 
-async function drainPendingDeletes(): Promise<void> {
-  const items = readPendingDeletes();
+async function drainPendingDeletes(calendarId: string): Promise<void> {
+  const items = readStored();
   if (!items.length) return;
-  const remaining: PendingCalendarDelete[] = [];
+  const remaining: StoredPendingDelete[] = [];
   for (const item of items) {
     try {
-      await gcalDeleteEvent(item.calendarId, item.googleEventId);
+      await gcalDeleteEvent(item.calendar === 'primary' ? 'primary' : calendarId, item.googleEventId);
     } catch (err) {
       if (err instanceof SyncAborted) throw err;
       remaining.push(item);
@@ -466,7 +480,7 @@ async function pullPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
 // ── Push: Chronicles → Google ────────────────────────────────────────────────
 
 async function pushPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<void> {
-  await drainPendingDeletes();
+  await drainPendingDeletes(calendarId);
 
   for (const candidate of getSyncCandidates()) {
     const { entry, topicType } = candidate;

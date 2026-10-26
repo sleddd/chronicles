@@ -57,7 +57,11 @@ vi.mock('../../utils/securityLogger.js', () => ({
   logSecurityEvent: vi.fn(),
 }));
 
-vi.mock('../../db/betaQueries.js', () => ({ isApproved: vi.fn().mockResolvedValue(false) }));
+vi.mock('../../db/betaQueries.js', () => ({
+  isApproved: vi.fn().mockResolvedValue(false),
+  hasPendingInvite: vi.fn().mockResolvedValue(false),
+  spendInvite: vi.fn().mockResolvedValue(undefined),
+}));
 
 // Mock the password hasher (bcryptjs in worker threads)
 vi.mock('../../services/passwordHasher.js', () => ({
@@ -73,7 +77,7 @@ import * as authMw from '../../middleware/auth.js';
 import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
-import { isApproved } from '../../db/betaQueries.js';
+import { isApproved, hasPendingInvite, spendInvite } from '../../db/betaQueries.js';
 import { createSession, revokeSession } from '../../middleware/auth.js';
 import bcrypt from '../../services/passwordHasher.js';
 import { createHash } from 'crypto';
@@ -207,13 +211,33 @@ describe('Auth Routes', () => {
         expect(registerTenant).not.toHaveBeenCalled();
       });
 
-      it('lets in an email approved on the beta list, without a restart', async () => {
+      it('lets in an email approved on the beta list, with its invite code, without a restart', async () => {
         process.env.REGISTRATION_WHITELIST = 'owner@example.com';
         (isApproved as any).mockResolvedValue(true);
         ok();
+        const res = await request(app).post('/api/auth/register').send({ ...validRegisterBody, inviteCode: 'A'.repeat(22) });
+        expect(res.status).toBe(201);
+        expect(isApproved).toHaveBeenCalledWith('test@example.com', 'A'.repeat(22));
+        // the code is spent once the account exists
+        expect(spendInvite).toHaveBeenCalledWith('test@example.com');
+      });
+
+      it('refuses an approved email without its code exactly like an unapproved one', async () => {
+        (isApproved as any).mockResolvedValue(false); // approval needs the code
+        const noCode = await request(app).post('/api/auth/register').send(validRegisterBody);
+        process.env.REGISTRATION_WHITELIST = '';
+        const stranger = await request(app).post('/api/auth/register').send({ ...validRegisterBody, email: 'nobody@example.com' });
+        expect(noCode.status).toBe(403);
+        expect(noCode.body).toEqual(stranger.body);
+        expect(registerTenant).not.toHaveBeenCalled();
+      });
+
+      it('needs no code for an email on REGISTRATION_WHITELIST', async () => {
+        process.env.REGISTRATION_WHITELIST = 'test@example.com';
+        ok();
         const res = await request(app).post('/api/auth/register').send(validRegisterBody);
         expect(res.status).toBe(201);
-        expect(isApproved).toHaveBeenCalledWith('test@example.com');
+        expect(spendInvite).not.toHaveBeenCalled();
       });
 
       it('answers a taken username the same whether or not the email is approved', async () => {
@@ -541,6 +565,21 @@ describe('Auth Routes', () => {
       expect(authMw.revokeAllSessions).toHaveBeenCalledWith(1, 'aabbccddee11', 'email_change');
       // and this browser stays a known device under the new email
       expect((res.headers['set-cookie'] as unknown as string[]).some(c => /chronicle_device=/.test(c))).toBe(true);
+    });
+
+    it('refuses an email approved for someone else’s beta invite, like a taken one', async () => {
+      (prisma.account.findUnique as any)
+        .mockResolvedValueOnce({ id: 1, passwordHash: AUTH_HASH })
+        .mockResolvedValueOnce(null);
+      (bcrypt.compare as any).mockResolvedValueOnce(true);
+      (hasPendingInvite as any).mockResolvedValueOnce(true);
+
+      const res = await request(app).post('/api/auth/change-email').send(body);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('Email already in use');
+      expect(hasPendingInvite).toHaveBeenCalledWith('new@example.com');
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
     it('allows 5 tries an hour per account, wrong passwords included, before answering 429', async () => {

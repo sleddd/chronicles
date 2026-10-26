@@ -64,14 +64,16 @@ function generateUsernameSuggestions(base: string): string[] {
 
 interface RegisterFormProps {
   onSubmit: (data: { email: string; username: string; password: string }) => Promise<void>;
+  /** Prefilled email (from a beta sign-up link) */
+  initialEmail?: string;
   /** Shown above Create account (the consent card) */
   extra?: ReactNode;
   /** Create account stays disabled until this is true (every consent box ticked) */
   canSubmit?: boolean;
 }
 
-export function RegisterForm({ onSubmit, extra, canSubmit = true }: RegisterFormProps) {
-  const [email, setEmail] = useState('');
+export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail = '' }: RegisterFormProps) {
+  const [email, setEmail] = useState(initialEmail);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

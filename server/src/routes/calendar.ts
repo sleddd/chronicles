@@ -36,8 +36,11 @@ function googleEnv(): { clientId: string; clientSecret: string; redirectUri: str
   return { clientId, clientSecret, redirectUri };
 }
 
+// Where the app is. Without CLIENT_URL outside development the app is served
+// by this server, so the redirect stays on this origin ('' = relative)
 function clientUrl(): string {
-  return (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const url = process.env.CLIENT_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : '');
+  return url.replace(/\/$/, '');
 }
 
 // The state is signed with a key of its own, derived from the client secret

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
@@ -16,6 +16,10 @@ export function RegisterView() {
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [consent, setConsent] = useState<ConsentValue>(EMPTY_CONSENT);
   const agree = useConsentStore(s => s.agree);
+  // The sign-up link from a beta approval carries the email and its invite code
+  const [params] = useSearchParams();
+  const inviteCode = params.get('invite')?.trim() || undefined;
+  const invitedEmail = params.get('email')?.trim() ?? '';
 
   const handleRegister = async ({ email, username, password }: { email: string; username: string; password: string }) => {
     // Setup encryption — generates master key, wraps with password + recovery key
@@ -39,6 +43,7 @@ export function RegisterView() {
       recoveryWrapIv: result.recoveryWrapIv,
       recoveryKeyHash,
       recoveryKeySalt,
+      ...(inviteCode ? { inviteCode } : {}),
     });
 
     // Record the consent given on the card (if this fails, the consent gate
@@ -78,6 +83,7 @@ export function RegisterView() {
     >
       <RegisterForm
         onSubmit={handleRegister}
+        initialEmail={invitedEmail}
         canSubmit={consentComplete(consent)}
         extra={<ConsentCard value={consent} onChange={setConsent} />}
       />

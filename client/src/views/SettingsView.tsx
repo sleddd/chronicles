@@ -265,6 +265,11 @@ export function SettingsView() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteCode, setDeleteCode] = useState('');
+  // With 2FA on, password / email / recovery-key changes need a code too
+  const [emailCode, setEmailCode] = useState('');
+  const [pwCode, setPwCode] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const withCode = (code: string) => (totpEnabled && code.trim() ? { code: code.trim() } : {});
   const [deleteError, setDeleteError] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [disable2FAError, setDisable2FAError] = useState('');
@@ -333,11 +338,12 @@ export function SettingsView() {
         deriveAuthSecret(emailPassword, user?.email ?? ''),
         deriveAuthSecret(emailPassword, newEmail),
       ]);
-      const result = await authApi.changeEmail({ newEmail: newEmail.trim(), currentAuthSecret, newAuthSecret });
+      const result = await authApi.changeEmail({ newEmail: newEmail.trim(), currentAuthSecret, newAuthSecret, ...withCode(emailCode) });
       setEmailMessage('Email updated');
       setEditingEmail(false);
       setNewEmail('');
       setEmailPassword('');
+      setEmailCode('');
       if (user) (user as unknown as Record<string, unknown>).email = result.email;
     } catch (err) {
       setEmailError(true);
@@ -384,8 +390,8 @@ export function SettingsView() {
         deriveAuthSecret(currentPw, user?.email ?? ''),
         deriveAuthSecret(newPw, user?.email ?? ''),
       ]);
-      await authApi.changePassword({ currentAuthSecret, newAuthSecret, newEncryptedMasterKey: wrappedMK, newKekSalt: salt, newKekWrapIv: wrapIv });
-      setPwMessage('Password changed'); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setShowPassword(false);
+      await authApi.changePassword({ currentAuthSecret, newAuthSecret, newEncryptedMasterKey: wrappedMK, newKekSalt: salt, newKekWrapIv: wrapIv, ...withCode(pwCode) });
+      setPwMessage('Password changed'); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setShowPassword(false);
     } catch (err) { setPwMessage(err instanceof Error ? err.message : 'Failed'); setPwError(true); }
     finally { setPwLoading(false); }
   };
@@ -405,9 +411,10 @@ export function SettingsView() {
         newRecoveryProof(recoveryKey),
       ]);
 
-      await authApi.saveRecoveryKey({ currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt });
+      await authApi.saveRecoveryKey({ currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, ...withCode(recoveryCode) });
       setGeneratedRecoveryKey(recoveryKey);
       setRecoveryKeyPw('');
+      setRecoveryCode('');
     } catch (err) {
       setRecoveryKeyError(err instanceof Error ? err.message : 'Failed to generate recovery key');
     } finally {
@@ -883,11 +890,21 @@ export function SettingsView() {
                 autoComplete="current-password"
               />
             </FormField>
+            {totpEnabled && (
+              <FormField label="2FA code">
+                <TextInput
+                  value={emailCode}
+                  onChange={e => setEmailCode(e.target.value.slice(0, 64))}
+                  placeholder="Authenticator or backup code"
+                  autoComplete="one-time-code"
+                />
+              </FormField>
+            )}
             <EditActions>
-              <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailMessage(''); }}>
+              <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailCode(''); setEmailMessage(''); }}>
                 Cancel
               </ActionButton>
-              <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword}>
+              <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword || (totpEnabled && !emailCode.trim())}>
                 {emailLoading ? <Spinner size={14} /> : 'Save email'}
               </ActionButton>
             </EditActions>
@@ -1091,7 +1108,17 @@ export function SettingsView() {
             <FormField label="Confirm New Password">
               <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} autoComplete="new-password" />
             </FormField>
-            <ActionButton onClick={handleChangePassword} disabled={pwLoading}>
+            {totpEnabled && (
+              <FormField label="2FA code">
+                <TextInput
+                  value={pwCode}
+                  onChange={e => setPwCode(e.target.value.slice(0, 64))}
+                  placeholder="Authenticator or backup code"
+                  autoComplete="one-time-code"
+                />
+              </FormField>
+            )}
+            <ActionButton onClick={handleChangePassword} disabled={pwLoading || (totpEnabled && !pwCode.trim())}>
               {pwLoading ? <Spinner size={14} /> : 'Update Password'}
             </ActionButton>
           </PasswordForm>
@@ -1123,7 +1150,7 @@ export function SettingsView() {
           description="Generate a new recovery key for emergency account access"
           action={
             !generatedRecoveryKey && (
-              <ActionButton onClick={() => { setShowRecoveryKey(!showRecoveryKey); setRecoveryKeyError(''); setRecoveryKeyPw(''); }}>
+              <ActionButton onClick={() => { setShowRecoveryKey(!showRecoveryKey); setRecoveryKeyError(''); setRecoveryKeyPw(''); setRecoveryCode(''); }}>
                 {showRecoveryKey ? 'Cancel' : 'Generate'}
               </ActionButton>
             )
@@ -1142,7 +1169,16 @@ export function SettingsView() {
                 autoComplete="current-password"
                 autoFocus
               />
-              <ActionButton onClick={handleGenerateRecoveryKey} disabled={recoveryKeyLoading || !recoveryKeyPw}>
+              {totpEnabled && (
+                <TextInput
+                  value={recoveryCode}
+                  onChange={e => setRecoveryCode(e.target.value.slice(0, 64))}
+                  placeholder="2FA code (authenticator or backup)"
+                  aria-label="2FA code"
+                  autoComplete="one-time-code"
+                />
+              )}
+              <ActionButton onClick={handleGenerateRecoveryKey} disabled={recoveryKeyLoading || !recoveryKeyPw || (totpEnabled && !recoveryCode.trim())}>
                 {recoveryKeyLoading ? <Spinner size={14} /> : 'Generate recovery key'}
               </ActionButton>
             </div>

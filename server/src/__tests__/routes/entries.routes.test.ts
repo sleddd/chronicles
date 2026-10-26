@@ -4,7 +4,7 @@ import { createTestApp, TEST_AUTH } from './testHelper.js';
 
 // Mock tenantQueries
 vi.mock('../../db/tenantQueries.js', () => ({
-  getAllPosts: vi.fn(),
+  getPostPage: vi.fn(),
   getPost: vi.fn(),
   createPost: vi.fn(),
   createPosts: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getAllPosts, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
+import { getPostPage, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -66,7 +66,7 @@ describe('Entry Routes', () => {
   // =========================================================================
   describe('GET /api/entries', () => {
     it('returns a list of entries with serialized buffers', async () => {
-      (getAllPosts as any).mockResolvedValue([mockPost]);
+      (getPostPage as any).mockResolvedValue({ posts: [mockPost], more: false });
 
       const res = await request(app).get('/api/entries');
 
@@ -74,36 +74,62 @@ describe('Entry Routes', () => {
       expect(res.body).toHaveLength(1);
       expect(res.body[0].contentEncrypted).toBe(Buffer.from('encrypted').toString('base64'));
       expect(res.body[0].contentIv).toBe(Buffer.from('iv12345678ab').toString('base64'));
-      // Default is large on purpose — the client keeps every entry in its store
-      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 0 });
+      // Default is large on purpose — the client keeps every entry in its store;
+      // each page is also capped by bytes
+      expect(getPostPage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 0, maxBytes: 16 * 1024 * 1024 });
+    });
+
+    it('answers { entries, more } to ?v=2', async () => {
+      (getPostPage as any).mockResolvedValue({ posts: [mockPost], more: true });
+
+      const res = await request(app).get('/api/entries?v=2');
+
+      expect(res.body.more).toBe(true);
+      expect(res.body.entries).toHaveLength(1);
     });
 
     it('respects limit and offset query params', async () => {
-      (getAllPosts as any).mockResolvedValue([]);
+      (getPostPage as any).mockResolvedValue({ posts: [], more: false });
 
       await request(app).get('/api/entries?limit=50&offset=10');
 
-      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 50, offset: 10 });
+      expect(getPostPage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ limit: 50, offset: 10 }));
     });
 
     it('clamps limit to max 10000', async () => {
-      (getAllPosts as any).mockResolvedValue([]);
+      (getPostPage as any).mockResolvedValue({ posts: [], more: false });
 
       await request(app).get('/api/entries?limit=999999');
 
-      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 10000, offset: 0 });
+      expect(getPostPage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ limit: 10000, offset: 0 }));
     });
 
     it('allows offsets past 10000 so large journals can page to the end', async () => {
-      (getAllPosts as any).mockResolvedValue([]);
+      (getPostPage as any).mockResolvedValue({ posts: [], more: false });
 
       await request(app).get('/api/entries?limit=5000&offset=15000');
 
-      expect(getAllPosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 15000 });
+      expect(getPostPage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ limit: 5000, offset: 15000 }));
+    });
+
+    it('lets one account run only a few list requests at once', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>(r => { release = r; });
+      (getPostPage as any).mockImplementation(async () => { await gate; return { posts: [], more: false }; });
+
+      const running = [1, 2, 3].map(() => request(app).get('/api/entries').then(r => r));
+      await new Promise(r => setTimeout(r, 50));
+      const extra = await request(app).get('/api/entries');
+      expect(extra.status).toBe(429);
+      expect(extra.headers['retry-after']).toBe('2');
+
+      release();
+      expect((await Promise.all(running)).map(r => r.status)).toEqual([200, 200, 200]);
+      expect((await request(app).get('/api/entries')).status).toBe(200);
     });
 
     it('returns 500 on database error', async () => {
-      (getAllPosts as any).mockRejectedValue(new Error('DB error'));
+      (getPostPage as any).mockRejectedValue(new Error('DB error'));
 
       const res = await request(app).get('/api/entries');
 
@@ -295,7 +321,7 @@ describe('Entry Routes', () => {
   // =========================================================================
   describe('entry sync', () => {
     it('makes sure change tracking is in place before any entries route', async () => {
-      (getAllPosts as any).mockResolvedValue([]);
+      (getPostPage as any).mockResolvedValue({ posts: [], more: false });
       await request(app).get('/api/entries');
       expect(ensurePostSync).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
     });
@@ -315,7 +341,7 @@ describe('Entry Routes', () => {
         deleted: [2, 3],
       });
       const res = await request(app).get('/api/entries/changes?since=1234');
-      expect(getPostChanges).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '1234');
+      expect(getPostChanges).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '1234', 5000, 16 * 1024 * 1024);
       expect(res.body).toMatchObject({ reset: false, cursor: '1300', deleted: [2, 3] });
       expect(res.body.entries[0].contentEncrypted).toBe(Buffer.from('c').toString('base64'));
     });

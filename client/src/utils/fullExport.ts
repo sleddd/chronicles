@@ -9,7 +9,9 @@ import { isSealed, openForExport, SEAL_MARKER_KEY } from '../services/privateSet
 /** Setting fields never written to an export. */
 const SECRET_FIELDS = new Set([
   'apiKey', 'bedrockApiKey', 'awsAccessKeyId', 'awsSecretAccessKey', 'awsSessionToken',
-  'r2AccessKeyId', 'r2SecretAccessKey',
+  // imageStorageConfig is stored as an R2Config (r2Signer.ts); the r2-prefixed
+  // names are the form schema's, kept in case an old value used them
+  'accessKeyId', 'secretAccessKey', 'r2AccessKeyId', 'r2SecretAccessKey',
 ]);
 
 export function redactSecrets(value: unknown): unknown {

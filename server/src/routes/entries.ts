@@ -1,6 +1,6 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import crypto from 'crypto';
-import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getAllPosts, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
+import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
@@ -47,18 +47,53 @@ function serializePost(post: Record<string, unknown>) {
   return result;
 }
 
-// GET /api/entries — Get all entries, a page at a time (newest first). The
-// client pages until a short page comes back, so a journal can hold more than
-// one page; the offset is uncapped for that reason.
+// One list response holds at most this much ciphertext (it's sent as base64
+// in JSON, so the response is ~1.4× it); the client keeps paging. Without it
+// an account at its storage cap could make each request buffer it all.
+const ENTRY_PAGE_BYTES = 16 * 1024 * 1024;
+
+// List requests (full pages and /changes) running at once per account, in
+// this process: each holds up to a page in memory
+const MAX_LIST_IN_FLIGHT = 3;
+const listsInFlight = new Map<number, number>();
+
+function claimListSlot(accountId: number): boolean {
+  const n = listsInFlight.get(accountId) ?? 0;
+  if (n >= MAX_LIST_IN_FLIGHT) return false;
+  listsInFlight.set(accountId, n + 1);
+  return true;
+}
+
+function releaseListSlot(accountId: number): void {
+  const n = (listsInFlight.get(accountId) ?? 1) - 1;
+  if (n <= 0) listsInFlight.delete(accountId);
+  else listsInFlight.set(accountId, n);
+}
+
+function busy(res: Response): void {
+  res.set('Retry-After', '2');
+  res.status(429).json({ error: 'Still loading your entries. Try again in a moment.' });
+}
+
+// GET /api/entries — Get all entries, a page at a time (newest first), each
+// page capped by count and by bytes. `?v=2` answers { entries, more } and the
+// client pages while `more`; without it (older clients) the bare array, which
+// those page through until a short page comes back. The offset is uncapped so
+// a journal can hold more than one page.
 router.get('/', async (req, res) => {
+  const accountId = req.auth!.accountId;
+  if (!claimListSlot(accountId)) { busy(res); return; }
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 5000, 1), 10000);
     const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
-    const posts = await getAllPosts(req.auth!.tenantSchemaName, { limit, offset });
-    res.json(posts.map(p => serializePost(p as unknown as Record<string, unknown>)));
+    const page = await getPostPage(req.auth!.tenantSchemaName, { limit, offset, maxBytes: ENTRY_PAGE_BYTES });
+    const entries = page.posts.map(p => serializePost(p as unknown as Record<string, unknown>));
+    res.json(req.query.v === '2' ? { entries, more: page.more } : entries);
   } catch (err) {
     console.error('Get entries error:', err);
     res.status(500).json({ error: 'Failed to fetch entries' });
+  } finally {
+    releaseListSlot(accountId);
   }
 });
 
@@ -76,13 +111,15 @@ router.get('/cursor', async (req, res) => {
 // GET /api/entries/changes?since=<cursor> — Entries written and ids deleted
 // since the cursor, and the next cursor. { reset: true } means load everything
 router.get('/changes', async (req, res) => {
+  const accountId = req.auth!.accountId;
+  if (!claimListSlot(accountId)) { busy(res); return; }
   try {
     const since = String(req.query.since ?? '');
     if (!/^\d{1,20}$/.test(since) || BigInt(since) > MAX_XID8) {
       res.status(400).json({ error: 'Invalid cursor' });
       return;
     }
-    const changes = await getPostChanges(req.auth!.tenantSchemaName, since);
+    const changes = await getPostChanges(req.auth!.tenantSchemaName, since, 5000, ENTRY_PAGE_BYTES);
     const scope = syncScope(req.auth!.tenantSchemaName);
     if (changes.reset) {
       res.json({ reset: true, scope });
@@ -98,6 +135,8 @@ router.get('/changes', async (req, res) => {
   } catch (err) {
     console.error('Entry changes error:', err);
     res.status(500).json({ error: 'Failed to load entries' });
+  } finally {
+    releaseListSlot(accountId);
   }
 });
 
@@ -305,9 +344,11 @@ router.delete('/:id', async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
-    await deletePost(req.auth!.tenantSchemaName, id);
-    // Public links hold the entry as plaintext — they go with it
+    // Public links hold the entry as plaintext — they go first, so a failure
+    // leaves the entry (and the client retries) rather than a live link to
+    // an entry that's gone
     await deleteSharesForEntry(req.auth!.accountId, id);
+    await deletePost(req.auth!.tenantSchemaName, id);
     res.json({ success: true });
   } catch (err) {
     console.error('Delete entry error:', err);

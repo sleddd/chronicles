@@ -10,6 +10,11 @@ describe('fullExport', () => {
       .toEqual({ provider: 'anthropic', nested: { keep: 1 }, chatNotes: 'Call me Sam' });
   });
 
+  it('removes the R2 keys under the names imageStorageConfig is stored with', () => {
+    const r2 = { accountId: 'a'.repeat(32), bucket: 'photos', accessKeyId: 'AKID', secretAccessKey: 'SECRET' };
+    expect(redactSecrets({ imageStorageConfig: r2 })).toEqual({ imageStorageConfig: { accountId: 'a'.repeat(32), bucket: 'photos' } });
+  });
+
   it('opens sealed settings, keeps plain ones, and reports ones that won’t open', async () => {
     const rows = [
       { key: 'aiConfig', value: enc({ chatNotes: 'Notes', apiKey: 'secret' }) },

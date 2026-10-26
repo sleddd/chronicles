@@ -9,7 +9,7 @@ import { clearRecordCipher, installRecordCipher } from '../services/recordCipher
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { olderEntriesAllowed, reserveEntryId, clearReservedEntryIds } from '../services/entryReseal.js';
-import { clearSealMarkers } from '../services/api.js';
+import { clearSealMarkers, clearIssuedTopicIds } from '../services/api.js';
 import { useUIStore } from '../stores/uiStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
@@ -140,6 +140,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     useEntriesStore.getState().clearAll();
     useUIStore.getState().clearPrivateState();
     clearReservedEntryIds();
+    clearIssuedTopicIds();
     clearSealMarkers();
     setIsUnlocked(false);
   }, []);

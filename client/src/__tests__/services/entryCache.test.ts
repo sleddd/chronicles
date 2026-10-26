@@ -17,7 +17,7 @@ function server(opts: { scope: string; cursor: string; journal: unknown[]; chang
     let body: unknown;
     if (url.startsWith('/api/entries/cursor')) body = { cursor: opts.cursor, scope: opts.scope };
     else if (url.startsWith('/api/entries/changes')) body = opts.changes;
-    else if (url.startsWith('/api/entries?')) body = opts.journal;
+    else if (url.startsWith('/api/entries?')) body = { entries: opts.journal, more: false };
     else throw new Error(`unexpected ${url}`);
     return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body };
   });
@@ -33,7 +33,7 @@ describe('entries.getAll with the browser cache', () => {
     const calls = server({ scope: SCOPE_A, cursor: '100', journal: [row(2, 5), row(1, 4)] });
     const got = await entries.getAll();
     expect(got.map(e => e.id)).toEqual([2, 1]);
-    expect(calls).toEqual(['/entries/cursor', '/entries?limit=5000']);
+    expect(calls).toEqual(['/entries/cursor', '/entries?v=2&limit=5000']);
     const cached = await readCache(SCOPE_A);
     expect(cached?.cursor).toBe('100');
     expect(cached?.rows.map(r => r.id).sort()).toEqual([1, 2]);
@@ -65,7 +65,7 @@ describe('entries.getAll with the browser cache', () => {
     await entries.getAll();
     const calls = server({ scope: SCOPE_A, cursor: '500', journal: [row(9, 9)], changes: { reset: true, scope: SCOPE_A } });
     expect((await entries.getAll()).map(e => e.id)).toEqual([9]);
-    expect(calls).toEqual(['/entries/cursor', '/entries/changes?since=100', '/entries?limit=5000']);
+    expect(calls).toEqual(['/entries/cursor', '/entries/changes?since=100', '/entries?v=2&limit=5000']);
     expect((await readCache(SCOPE_A))?.rows.map(r => r.id)).toEqual([9]);
   });
 
@@ -74,7 +74,7 @@ describe('entries.getAll with the browser cache', () => {
     await entries.getAll();
     const calls = server({ scope: SCOPE_B, cursor: '7', journal: [row(50, 4)] });
     expect((await entries.getAll()).map(e => e.id)).toEqual([50]);
-    expect(calls).toEqual(['/entries/cursor', '/entries?limit=5000']);
+    expect(calls).toEqual(['/entries/cursor', '/entries?v=2&limit=5000']);
     expect((await readCache(SCOPE_A))?.rows.map(r => r.id)).toEqual([1]);
   });
 
@@ -85,7 +85,7 @@ describe('entries.getAll with the browser cache', () => {
     vi.setSystemTime(Date.now() + 8 * 24 * 60 * 60 * 1000);
     const calls = server({ scope: SCOPE_A, cursor: '900', journal: [row(1, 4), row(2, 5)] });
     await entries.getAll();
-    expect(calls).toEqual(['/entries/cursor', '/entries?limit=5000']);
+    expect(calls).toEqual(['/entries/cursor', '/entries?v=2&limit=5000']);
   });
 
   it('is erased on sign-out', async () => {

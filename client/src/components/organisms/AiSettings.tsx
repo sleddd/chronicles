@@ -12,6 +12,7 @@ import { AiSafetyProtocol } from '../molecules/AiSafetyProtocol.js';
 import { useAiChatStore } from '../../stores/aiChatStore.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
+import { showFlash } from '../../services/flashNotice.js';
 import {
   AI_MODEL_PRESETS,
   AI_PROVIDER_LABELS,
@@ -169,7 +170,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     setCustomModel(false);
     setBedrockModels(null);
     setTestState('idle'); setTestMessage(''); setSaveState('idle');
-    await settingsApi.upsert('aiConfig', null).catch(() => {});
+    await settingsApi.remove('aiConfig').catch(() => showFlash('Couldn’t remove your AI keys from the server. Try again.'));
     setAiConfig(null, null);
   };
 

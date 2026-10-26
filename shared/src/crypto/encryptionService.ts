@@ -33,6 +33,15 @@ import type {
   DecryptedPost,
 } from './types.js';
 
+function isJsonObject(text: string): boolean {
+  try {
+    const v = JSON.parse(text);
+    return typeof v === 'object' && v !== null && !Array.isArray(v);
+  } catch {
+    return false;
+  }
+}
+
 class EncryptionService {
   /**
    * Set up encryption for a new user (called during registration)
@@ -321,6 +330,14 @@ class EncryptionService {
           decrypt(masterKey, metadataEncrypted, metadataIv),
         ]);
       }
+    }
+
+    // An older entry's halves aren't bound to its id (and before AAD, not to
+    // each other), so a server could pair any ciphertext with it; one whose
+    // metadata isn't a JSON object wasn't written by this app — refuse it
+    // rather than open (and later re-seal) it with empty metadata
+    if (needsReseal && !isJsonObject(metadataStr)) {
+      throw new Error('Refusing older entry whose metadata is not an object');
     }
 
     let metadata: Record<string, unknown>;

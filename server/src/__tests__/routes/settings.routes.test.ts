@@ -8,10 +8,13 @@ vi.mock('../../db/tenantQueries.js', () => ({
   upsertSetting: vi.fn(),
   countSettings: vi.fn(),
   settingExists: vi.fn(),
+  settingsStorageBytes: vi.fn(),
+  deleteSetting: vi.fn(),
+  withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 import settingsRouter from '../../routes/settings.js';
-import { getAllSettings, upsertSetting, countSettings, settingExists } from '../../db/tenantQueries.js';
+import { getAllSettings, upsertSetting, countSettings, settingExists, settingsStorageBytes, deleteSetting, withTenantLock } from '../../db/tenantQueries.js';
 
 const app = createTestApp('/api/settings', settingsRouter);
 
@@ -25,6 +28,7 @@ describe('Settings Routes', () => {
     vi.clearAllMocks();
     (countSettings as any).mockResolvedValue(2);
     (settingExists as any).mockResolvedValue(false);
+    (settingsStorageBytes as any).mockResolvedValue(1000);
   });
 
   // =========================================================================
@@ -92,6 +96,26 @@ describe('Settings Routes', () => {
       expect(res.status).toBe(200);
     });
 
+    it('refuses a write that would take the settings past their total size', async () => {
+      (settingsStorageBytes as any).mockResolvedValue(8 * 1024 * 1024 - 10);
+
+      const res = await request(app)
+        .put('/api/settings')
+        .send({ key: 'headerColor', value: 'x'.repeat(100) });
+
+      expect(res.status).toBe(400);
+      expect(upsertSetting).not.toHaveBeenCalled();
+      // the size of the key being replaced doesn't count against it
+      expect(settingsStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'headerColor', 'TX');
+    });
+
+    it('checks the caps and writes under the account lock', async () => {
+      (upsertSetting as any).mockResolvedValue({ key: 'a', value: 1, updatedAt: new Date() });
+      await request(app).put('/api/settings').send({ key: 'a', value: 1 });
+      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
+      expect(countSettings).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'TX');
+    });
+
     it('upserts a string setting', async () => {
       const result = { key: 'headerColor', value: '#FF0000', updatedAt: new Date() };
       (upsertSetting as any).mockResolvedValue(result);
@@ -102,7 +126,7 @@ describe('Settings Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.key).toBe('headerColor');
-      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'headerColor', '#FF0000');
+      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'headerColor', '#FF0000', 'TX');
     });
 
     it('upserts a boolean setting', async () => {
@@ -114,7 +138,7 @@ describe('Settings Routes', () => {
         .send({ key: 'darkMode', value: true });
 
       expect(res.status).toBe(200);
-      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'darkMode', true);
+      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'darkMode', true, 'TX');
     });
 
     it('upserts an object setting', async () => {
@@ -151,7 +175,7 @@ describe('Settings Routes', () => {
       (upsertSetting as any).mockResolvedValue({ key: 'displayName', value, updatedAt: new Date() });
       const res = await request(app).put('/api/settings').send({ key: 'displayName', value });
       expect(res.status).toBe(200);
-      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'displayName', value);
+      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'displayName', value, 'TX');
     });
 
     it('returns 400 when key is missing', async () => {
@@ -179,6 +203,29 @@ describe('Settings Routes', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Failed to update setting');
+    });
+  });
+
+  // =========================================================================
+  // DELETE /api/settings/:key
+  // =========================================================================
+  describe('DELETE /api/settings/:key', () => {
+    it('deletes the setting — the way removed credentials are forgotten', async () => {
+      (deleteSetting as any).mockResolvedValue(true);
+      const res = await request(app).delete('/api/settings/aiConfig');
+      expect(res.status).toBe(200);
+      expect(deleteSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'aiConfig');
+    });
+
+    it('succeeds when the setting was already gone', async () => {
+      (deleteSetting as any).mockResolvedValue(false);
+      expect((await request(app).delete('/api/settings/imageStorageConfig')).status).toBe(200);
+    });
+
+    it('refuses a key over 100 characters', async () => {
+      const res = await request(app).delete(`/api/settings/${'k'.repeat(101)}`);
+      expect(res.status).toBe(400);
+      expect(deleteSetting).not.toHaveBeenCalled();
     });
   });
 });
