@@ -7,18 +7,20 @@ import { toDateStr } from '../utils/dateUtils.js';
 export interface AsNeededMed { id: number; name: string; dosage: string }
 
 /**
- * As-needed medications (active, How often = As needed) and today's doses of
- * them. Each take is its own encrypted dose record at the time taken, so the
- * count, Med history and Reports see every one. Refetched when the tab comes
+ * As-needed medications (active, How often = As needed) and one day's doses of
+ * them (today unless `day` is given). Each take is its own encrypted dose
+ * record at the time taken, so the count, Med history and Reports see every one. Refetched when the tab comes
  * back, like the scheduled doses.
  */
-export function useAsNeededDoses() {
+export function useAsNeededDoses(day?: string) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const [logs, setLogs] = useState<DoseLogRecord[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
   const today = toDateStr(new Date());
+  const date = day ?? today;
+  const isToday = date === today;
 
   const meds = useMemo<AsNeededMed[]>(() => {
     const medTopicId = allTopics.find(t => t.name.toLowerCase() === 'medication')?.id;
@@ -37,15 +39,16 @@ export function useAsNeededDoses() {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const { logs: all } = await dosesApi.getByDate(today);
+      const { logs: all } = await dosesApi.getByDate(date);
       setLogs(all.filter(l => l.asNeeded && l.status === 'taken'));
     } catch (err) {
       console.error('Failed to fetch as-needed doses:', err);
     }
-  }, [today]);
+  }, [date]);
 
   useEffect(() => {
     if (!meds.length) return;
+    setLogs([]);
     void fetchLogs();
     const onVisible = () => { if (document.visibilityState === 'visible') void fetchLogs(); };
     document.addEventListener('visibilitychange', onVisible);
@@ -77,5 +80,5 @@ export function useAsNeededDoses() {
   const takenOf = useCallback((medId: number) =>
     logs.filter(l => l.medicationPostId === medId).sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)), [logs]);
 
-  return { meds, takenOf, take, remove, busy, error };
+  return { meds, isToday, takenOf, take, remove, busy, error };
 }

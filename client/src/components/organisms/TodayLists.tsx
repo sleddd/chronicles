@@ -2,6 +2,7 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { AsNeededList } from './AsNeededMeds.js';
 import { DashPanel } from '../molecules/DashPanel.js';
 import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
@@ -19,9 +20,10 @@ import { useTodayDoses } from '../../hooks/useTodayDoses.js';
 
 const SectionHead = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   padding-bottom: 12px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border-subtle);
@@ -68,6 +70,30 @@ const ItemWhen = styled.span`
   color: var(--text-muted);
 `;
 
+/* ‹ Today › beside the Med list link — flips the schedule back a day at a time */
+const DayNav = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  && span { min-width: 64px; text-align: center; font-size: 14px; color: var(--text-secondary); }
+  && button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    color: var(--text-muted);
+  }
+  && button:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-row-hover); text-decoration: none; }
+  && button:disabled { opacity: 0.35; cursor: default; }
+`;
+
+const HeadAside = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+`;
+
 const AsNeededHead = styled.h3`
   margin: 28px 0 4px;
   font-family: var(--font-sans);
@@ -75,6 +101,15 @@ const AsNeededHead = styled.h3`
   font-weight: 500;
   color: var(--text-muted);
 `;
+
+/** "Today", "Yesterday", else "Mon, Oct 19" */
+function dayLabel(day: string, isToday: boolean): string {
+  if (isToday) return 'Today';
+  const d = new Date(`${day}T12:00:00`);
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
 
 function time12(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number);
@@ -95,17 +130,28 @@ interface MedicationsTodayProps {
 export function MedicationsToday({ doses, hideWhenEmpty = false, panel = false }: MedicationsTodayProps) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState<string | null>(null);
-  const asNeeded = useAsNeededDoses();
+  const asNeeded = useAsNeededDoses(doses.day);
   if (hideWhenEmpty && doses.total === 0 && asNeeded.meds.length === 0) return null;
   const Frame = panel ? DashPanel : 'section';
   return (
     <Frame aria-label="Medications">
       <SectionHead>
         <h2>Medications</h2>
-        <button type="button" onClick={() => navigate('/health/meds')}>Med list</button>
+        <HeadAside>
+          <DayNav>
+            <button type="button" aria-label="Previous day" title="Previous day" onClick={() => doses.shiftDay(-1)}>
+              <Icon name="chevron-left" size={16} strokeWidth={2} />
+            </button>
+            <span aria-live="polite">{dayLabel(doses.day, doses.isToday)}</span>
+            <button type="button" aria-label="Next day" title="Next day" disabled={doses.isToday} onClick={() => doses.shiftDay(1)}>
+              <Icon name="chevron-right" size={16} strokeWidth={2} />
+            </button>
+          </DayNav>
+          <button type="button" onClick={() => navigate('/health/meds')}>Med list</button>
+        </HeadAside>
       </SectionHead>
       {doses.error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{doses.error}</Muted>}
-      {doses.total === 0 ? <Muted>No medications scheduled today.</Muted> : doses.scheduled.map((d, i) => {
+      {doses.total === 0 ? <Muted>No medications scheduled{doses.isToday ? ' today' : ''}.</Muted> : doses.scheduled.map((d, i) => {
         const key = `${d.medicationPostId}-${d.time}`;
         const taken = doses.isTaken(d);
         const log = doses.logOf(d);

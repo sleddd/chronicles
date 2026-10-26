@@ -95,7 +95,7 @@ function timeLabel(log: DoseLogRecord): string {
 export type AsNeededState = ReturnType<typeof useAsNeededDoses>;
 
 export function AsNeededList({ state }: { state: AsNeededState }) {
-  const { meds, takenOf, take, remove, busy, error } = state;
+  const { meds, isToday, takenOf, take, remove, busy, error } = state;
   if (!meds.length) return null;
   return (
     <div>
@@ -105,8 +105,8 @@ export function AsNeededList({ state }: { state: AsNeededState }) {
           <Row key={m.id}>
             <Info>
               <Name>{m.name}{m.dosage && <small>{m.dosage}</small>}</Name>
-              <Taken aria-label={`${m.name} doses today`}>
-                {taken.length === 0 ? 'Not taken today' : taken.map(l => (
+              <Taken aria-label={`${m.name} doses ${isToday ? 'today' : 'that day'}`}>
+                {taken.length === 0 ? (isToday ? 'Not taken today' : 'Not taken') : taken.map(l => (
                   <TimePill key={l.id}>
                     {timeLabel(l)}
                     <button type="button" aria-label={`Remove the ${timeLabel(l)} dose of ${m.name}`} onClick={() => void remove(l.id)}>✕</button>
@@ -115,10 +115,11 @@ export function AsNeededList({ state }: { state: AsNeededState }) {
               </Taken>
             </Info>
             <Side>
-              <PillButton type="button" disabled={busy === m.id} onClick={() => void take(m.id)} aria-label={`Take one ${m.name}`}>
+              {/* Take one logs a dose now, so only on today */}
+              {isToday && <PillButton type="button" disabled={busy === m.id} onClick={() => void take(m.id)} aria-label={`Take one ${m.name}`}>
                 {busy === m.id ? 'Logging…' : 'Take one'}
-              </PillButton>
-              {taken.length > 0 && <span>{taken.length}× today</span>}
+              </PillButton>}
+              {taken.length > 0 && <span>{taken.length}×{isToday ? ' today' : ''}</span>}
             </Side>
           </Row>
         );

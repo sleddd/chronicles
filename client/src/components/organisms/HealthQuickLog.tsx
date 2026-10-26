@@ -52,7 +52,8 @@ const QNote = styled(FieldNote)`
   margin-top: 8px;
 `;
 
-/* Log a change, one line: what changed | Today ⌄ | Log in one outlined box */
+/* Log a change, one line: what changed | Today ⌄ | Log in one outlined box.
+   On phones the text gets its own line, the buttons under it on the right */
 const ChangeBox = styled.div`
   display: flex;
   align-items: center;
@@ -63,6 +64,11 @@ const ChangeBox = styled.div`
   border-radius: 8px;
   background: var(--bg-control, transparent);
   &:focus-within { border-color: var(--color-accent); }
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+    padding: 8px 8px 8px 16px;
+    & > label { margin-left: auto; }
+  }
 `;
 
 const ChangeInput = styled.input`
@@ -76,6 +82,7 @@ const ChangeInput = styled.input`
     font-family: var(--font-sans);
     font-size: 16px;
     color: var(--text-primary);
+    @media (max-width: 560px) { flex-basis: 100%; height: 40px; }
   }
   &::placeholder { color: var(--text-hint); }
 `;

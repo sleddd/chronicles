@@ -17,10 +17,11 @@ export interface DoseGroup {
 const keyOf = (d: ScheduledDose) => `${d.medicationPostId}-${d.time.substring(0, 5)}`;
 
 /**
- * Today's medication schedule for the dashboard: every active medication's
- * scheduled times, today's dose logs (refetched when the tab comes back), and
- * take / un-take — which logs the dose and syncs its nutrients into Meals, like the
- * Health dashboard's MedicationSchedule.
+ * The medication schedule for the dashboards: every active medication's
+ * scheduled times, one day's dose logs (refetched when the tab comes back), and
+ * take / un-take — which logs the dose and syncs its nutrients into Meals. The
+ * day is today unless `setDay` flips back to an earlier one, to check or fill
+ * in past doses.
  */
 export function useTodayDoses(enabled: boolean) {
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -29,6 +30,10 @@ export function useTodayDoses(enabled: boolean) {
   const [logs, setLogs] = useState<Record<string, DoseLogRecord>>({});
   const [error, setError] = useState<string | null>(null);
   const today = toDateStr(new Date());
+  const [picked, setPicked] = useState<string | null>(null);
+  // Never past today; null follows today across midnight
+  const day = picked && picked < today ? picked : today;
+  const isToday = day === today;
 
   const medTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'medication')?.id, [allTopics]);
 
@@ -50,7 +55,7 @@ export function useTodayDoses(enabled: boolean) {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const data = await dosesApi.getByDate(today);
+      const data = await dosesApi.getByDate(day);
       const map: Record<string, DoseLogRecord> = {};
       // As-needed doses are their own records, never one of the scheduled doses
       for (const log of data.logs) if (!log.asNeeded) map[`${log.medicationPostId}-${log.scheduledTime.substring(0, 5)}`] = log;
@@ -58,10 +63,12 @@ export function useTodayDoses(enabled: boolean) {
     } catch (err) {
       console.error('Failed to fetch dose logs:', err);
     }
-  }, [today]);
+  }, [day]);
 
   useEffect(() => {
     if (!enabled) return;
+    setLogs({});
+    setError(null);
     void fetchLogs();
     const onVisible = () => { if (document.visibilityState === 'visible') void fetchLogs(); };
     document.addEventListener('visibilitychange', onVisible);
@@ -85,11 +92,12 @@ export function useTodayDoses(enabled: boolean) {
   const setTaken = async (d: ScheduledDose, on: boolean) => {
     const time = d.time.substring(0, 5).padStart(5, '0');
     try {
-      const takenAt = on ? new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : null;
-      const { log } = await dosesApi.log({ medicationPostId: d.medicationPostId, scheduledTime: time, date: today, status: on ? 'taken' : 'pending', takenAt });
+      // A dose ticked for an earlier day wasn't taken now — its scheduled time stands in
+      const takenAt = on && isToday ? new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : null;
+      const { log } = await dosesApi.log({ medicationPostId: d.medicationPostId, scheduledTime: time, date: day, status: on ? 'taken' : 'pending', takenAt });
       setLogs(prev => ({ ...prev, [`${d.medicationPostId}-${time}`]: { ...log, scheduledTime: log.scheduledTime.substring(0, 5) } }));
       const sync = on ? doseToMeals.onTaken : doseToMeals.onUntaken;
-      void sync(d.medicationPostId, today, time).catch(err => console.warn('Dose → Meals sync failed:', err));
+      void sync(d.medicationPostId, day, time).catch(err => console.warn('Dose → Meals sync failed:', err));
     } catch (err) {
       console.error('Failed to update dose:', err);
       setError(`Couldn’t update ${d.medicationName}`);
@@ -103,6 +111,14 @@ export function useTodayDoses(enabled: boolean) {
 
   const logOf = useCallback((d: ScheduledDose) => logs[keyOf(d)], [logs]);
 
+  /** Move the viewed day by `days` (never past today) */
+  const shiftDay = useCallback((days: number) => {
+    const d = new Date(`${day}T12:00:00`);
+    d.setDate(d.getDate() + days);
+    const next = toDateStr(d);
+    setPicked(next >= today ? null : next);
+  }, [day, today]);
+
   const taken = scheduled.filter(isTaken).length;
-  return { scheduled, groups, taken, total: scheduled.length, isTaken, logOf, setTaken, takeAll, error };
+  return { day, isToday, shiftDay, scheduled, groups, taken, total: scheduled.length, isTaken, logOf, setTaken, takeAll, error };
 }
