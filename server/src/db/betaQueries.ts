@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { BETA_DETAILS } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 
@@ -5,9 +6,11 @@ import { prisma } from './prisma.js';
    people without an account, so nothing here links to public.accounts. One row
    per email: `seat` holds a beta place; `waitlist` is an application that came
    in after the seats were taken; `invited` is someone approved who never
-   applied. `approved_at` is the owner's say-so to create an account: sign-up
-   accepts an approved email straight away (no restart), alongside the
-   REGISTRATION_WHITELIST env list. Readable on purpose —
+   applied. `approved_at` is the owner's say-so to create an account, and
+   approving issues a one-time invite code (only its SHA-256, `invite_hash`, is
+   kept) that the owner sends with the sign-up link: sign-up needs the email
+   approved AND its code, so knowing (or guessing) an approved email isn't
+   enough to claim it. The REGISTRATION_WHITELIST env list needs no code. Readable on purpose —
    we need the email to write back — and covered by the privacy policy's
    "Beta applications and the waitlist" section. */
 
@@ -27,6 +30,7 @@ export async function initBetaTable(): Promise<void> {
   `;
   // Added after launch: approvals, and the 'invited' status for people approved without applying
   await prisma.$executeRaw`ALTER TABLE public.beta_signups ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`;
+  await prisma.$executeRaw`ALTER TABLE public.beta_signups ADD COLUMN IF NOT EXISTS invite_hash TEXT`;
   await prisma.$executeRaw`ALTER TABLE public.beta_signups DROP CONSTRAINT IF EXISTS beta_signups_status_check`;
   await prisma.$executeRaw`
     ALTER TABLE public.beta_signups ADD CONSTRAINT beta_signups_status_check
@@ -34,25 +38,59 @@ export async function initBetaTable(): Promise<void> {
   `;
 }
 
-/** May this email create an account? (approved by the owner) */
-export async function isApproved(email: string): Promise<boolean> {
+const hashInvite = (code: string) => crypto.createHash('sha256').update(code).digest('hex');
+
+/** The code's shape: 22 base64url characters (128 random bits). */
+export const INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
+
+/**
+ * May this email create an account? Approved by the owner and holding the
+ * invite code issued with the approval (compared by hash, in constant time).
+ */
+export async function isApproved(email: string, inviteCode: string | undefined): Promise<boolean> {
+  if (!inviteCode || !INVITE_CODE_PATTERN.test(inviteCode)) return false;
+  const rows = await prisma.$queryRaw<{ invite_hash: string | null }[]>`
+    SELECT invite_hash FROM public.beta_signups WHERE email = ${email} AND approved_at IS NOT NULL
+  `;
+  const stored = rows[0]?.invite_hash;
+  if (!stored) return false;
+  const a = Buffer.from(stored, 'hex');
+  const b = Buffer.from(hashInvite(inviteCode), 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** Is this email approved but not signed up yet (someone else mustn't take it)? */
+export async function hasPendingInvite(email: string): Promise<boolean> {
   const rows = await prisma.$queryRaw<{ ok: number }[]>`
-    SELECT 1 AS ok FROM public.beta_signups WHERE email = ${email} AND approved_at IS NOT NULL
+    SELECT 1 AS ok FROM public.beta_signups b
+    WHERE b.email = ${email} AND b.approved_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.email = b.email)
   `;
   return rows.length > 0;
 }
 
-/** Approve an email to sign up. Someone who never applied is added as `invited`. */
-export async function approve(email: string): Promise<'approved' | 'invited'> {
+/** An account was made with the invite: its code is spent. */
+export async function spendInvite(email: string): Promise<void> {
+  await prisma.$executeRaw`UPDATE public.beta_signups SET invite_hash = NULL WHERE email = ${email}`;
+}
+
+/**
+ * Approve an email to sign up. Someone who never applied is added as
+ * `invited`. Each call issues a fresh invite code (an earlier one stops
+ * working) — returned once, for the owner to send; only its hash is kept.
+ */
+export async function approve(email: string): Promise<{ how: 'approved' | 'invited'; inviteCode: string }> {
   const e = email.trim().toLowerCase();
+  const inviteCode = crypto.randomBytes(16).toString('base64url');
+  const hash = hashInvite(inviteCode);
   const updated = await prisma.$executeRaw`
-    UPDATE public.beta_signups SET approved_at = COALESCE(approved_at, NOW()) WHERE email = ${e}
+    UPDATE public.beta_signups SET approved_at = COALESCE(approved_at, NOW()), invite_hash = ${hash} WHERE email = ${e}
   `;
-  if (updated) return 'approved';
+  if (updated) return { how: 'approved', inviteCode };
   await prisma.$executeRaw`
-    INSERT INTO public.beta_signups (email, status, approved_at) VALUES (${e}, 'invited', NOW())
+    INSERT INTO public.beta_signups (email, status, approved_at, invite_hash) VALUES (${e}, 'invited', NOW(), ${hash})
   `;
-  return 'invited';
+  return { how: 'invited', inviteCode };
 }
 
 /** Take an approval back (an account already created is not affected). Returns false if the email isn't listed. */
@@ -60,7 +98,7 @@ export async function unapprove(email: string): Promise<boolean> {
   const e = email.trim().toLowerCase();
   // Someone only invited goes entirely; an applicant keeps their application
   const removed = await prisma.$executeRaw`DELETE FROM public.beta_signups WHERE email = ${e} AND status = 'invited'`;
-  const cleared = await prisma.$executeRaw`UPDATE public.beta_signups SET approved_at = NULL WHERE email = ${e}`;
+  const cleared = await prisma.$executeRaw`UPDATE public.beta_signups SET approved_at = NULL, invite_hash = NULL WHERE email = ${e}`;
   return removed + cleared > 0;
 }
 

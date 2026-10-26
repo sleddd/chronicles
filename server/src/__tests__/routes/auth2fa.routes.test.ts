@@ -12,6 +12,7 @@ vi.mock('../../db/prisma.js', () => ({
   prisma: {
     account: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -23,6 +24,12 @@ vi.mock('../../db/prisma.js', () => ({
 
 vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAccountById: vi.fn() }));
 vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn().mockResolvedValue(true) }));
+
+vi.mock('../../db/betaQueries.js', () => ({
+  isApproved: vi.fn().mockResolvedValue(false),
+  hasPendingInvite: vi.fn().mockResolvedValue(false),
+  spendInvite: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('../../middleware/auth.js', () => ({
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
@@ -51,7 +58,7 @@ vi.mock('../../services/passwordHasher.js', () => ({
   HasherBusyError: class HasherBusyError extends Error {},
 }));
 
-import authRouter, { resetAuthStateForTests } from '../../routes/auth.js';
+import authRouter, { resetAuthStateForTests, sealStoredTotpSecrets } from '../../routes/auth.js';
 import * as authMw from '../../middleware/auth.js';
 import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
@@ -555,7 +562,9 @@ describe('2FA hardening', () => {
   describe('pending sign-ins after a password change', () => {
     it('are cancelled, so the old password can no longer finish signing in', async () => {
       const secret = generateSecret();
-      const account = twoFAAccount(secret);
+      // A backup code for the password change, so the authenticator code below
+      // is still unused and only the cancellation can refuse it
+      const account = twoFAAccount(secret, [sha256('BACKUP-0001')]);
       (prisma.account.findUnique as any).mockResolvedValue(account);
       const login = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
       expect(login.body.requires2FA).toBe(true);
@@ -565,11 +574,90 @@ describe('2FA hardening', () => {
         currentAuthSecret: SECRET, newAuthSecret: 'b'.repeat(64),
         newEncryptedMasterKey: Buffer.alloc(40, 1).toString('base64'),
         newKekSalt: Buffer.alloc(16, 2).toString('base64'), newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
+        code: 'BACKUP-0001',
       });
       expect(changed.status).toBe(200);
 
       const finish = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: generateSync({ secret }) });
       expect(finish.status).toBe(401);
     }, 30000);
+  });
+
+  // A stolen session plus a phished password must not be enough to take the
+  // account over: with 2FA on, these changes need a code too
+  describe('account changes with 2FA on', () => {
+    const passwordBody = {
+      currentAuthSecret: SECRET, newAuthSecret: 'b'.repeat(64),
+      newEncryptedMasterKey: Buffer.alloc(40, 1).toString('base64'),
+      newKekSalt: Buffer.alloc(16, 2).toString('base64'), newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
+    };
+    const emailBody = { newEmail: 'new@example.com', currentAuthSecret: SECRET, newAuthSecret: 'c'.repeat(64) };
+    const recoveryBody = {
+      currentAuthSecret: SECRET,
+      recoveryWrappedMK: Buffer.alloc(40, 4).toString('base64'),
+      recoveryWrapIv: Buffer.alloc(12, 5).toString('base64'),
+      recoveryKeyHash: 'd'.repeat(64),
+      recoveryKeySalt: 'e'.repeat(32),
+    };
+    const routes: [string, Record<string, unknown>][] = [
+      ['/api/auth/change-password', passwordBody],
+      ['/api/auth/change-email', emailBody],
+      ['/api/auth/recovery-key', recoveryBody],
+    ];
+
+    for (const [path, body] of routes) {
+      it(`${path} asks for a code, and refuses a wrong one`, async () => {
+        const account = twoFAAccount(generateSecret());
+        (prisma.account.findUnique as any).mockImplementation(({ where }: { where: { id?: number } }) => (where.id ? account : null));
+
+        const missing = await request(app).post(path).send(body);
+        expect(missing.status).toBe(401);
+        expect(missing.body.requires2FA).toBe(true);
+
+        const wrong = await request(app).post(path).send({ ...body, code: '000000' });
+        expect(wrong.status).toBe(401);
+        expect(prisma.account.update).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      }, 30000);
+
+      it(`${path} goes ahead with a current authenticator code`, async () => {
+        const secret = generateSecret();
+        const account = twoFAAccount(secret);
+        (prisma.account.findUnique as any).mockImplementation(({ where }: { where: { id?: number } }) => (where.id ? account : null));
+        (prisma.$transaction as any).mockResolvedValue([]);
+        const res = await request(app).post(path).send({ ...body, code: generateSync({ secret }) });
+        expect(res.status).toBe(200);
+      }, 30000);
+    }
+
+    it('replacing the recovery key signs every other session out', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      (prisma.account.findUnique as any).mockImplementation(({ where }: { where: { id?: number } }) => (where.id ? account : null));
+      await request(app).post('/api/auth/recovery-key').send({ ...recoveryBody, code: generateSync({ secret }) });
+      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(account.id, expect.any(String), 'recovery_key_changed');
+    }, 30000);
+
+    it('turning 2FA off signs every other session out', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      const res = await request(app).delete('/api/auth/2fa').send({ authSecret: SECRET, code: generateSync({ secret }) });
+      expect(res.status).toBe(200);
+      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(expect.any(Number), expect.any(String), '2fa_disabled');
+    }, 30000);
+  });
+
+  describe('sealStoredTotpSecrets (startup)', () => {
+    it('seals authenticator secrets stored readable, conditionally', async () => {
+      (prisma.account.findMany as any).mockResolvedValueOnce([{ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' }]);
+      (prisma.account.updateMany as any).mockResolvedValue({ count: 1 });
+      const r = await sealStoredTotpSecrets();
+      expect(r).toEqual({ sealed: 1, readable: 0 });
+      const call = (prisma.account.updateMany as any).mock.calls[0][0];
+      expect(call.where).toEqual({ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' });
+      expect(call.data.totpSecret).toContain(':');
+      expect(call.data.totpSecret).not.toContain('JBSWY3DPEHPK3PXP');
+    });
   });
 });

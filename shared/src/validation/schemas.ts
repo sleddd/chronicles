@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Auth validation
-export const emailSchema = z.string().email('Invalid email address');
+export const emailSchema = z.string().max(254, 'Invalid email address').email('Invalid email address');
 export const usernameSchema = z.string().min(3, 'Username must be at least 3 characters').max(30);
 export const passwordSchema = z.string()
   .min(12, 'Password must be at least 12 characters')
@@ -35,6 +35,8 @@ export const registerSchema = z.object({
   recoveryWrapIv: saltOrIvSchema,
   recoveryKeyHash: recoveryProofSchema,
   recoveryKeySalt: recoverySaltSchema,
+  // The beta invite code from the sign-up link (needed for an approved email)
+  inviteCode: z.string().max(64).optional(),
 });
 
 // Strict: the password itself is never part of a sign-in, so a body carrying
@@ -50,6 +52,8 @@ export const changePasswordSchema = z.object({
   newEncryptedMasterKey: wrappedKeySchema,
   newKekSalt: kekSaltSchema,
   newKekWrapIv: saltOrIvSchema,
+  // Authenticator or backup code — required when the account has 2FA on
+  code: z.string().min(1).max(64).optional(),
 });
 
 export const recoverSchema = z.object({
@@ -96,13 +100,15 @@ export const deleteAccountSchema = z.object({
   code: z.string().min(1).max(64).optional(),
 });
 
-// Account changes that could lock the owner out require the current password,
+// Account changes that could lock the owner out require the current password
+// (and, with 2FA on, an authenticator or backup code),
 // so a session left signed in on an unattended device isn't enough
 export const changeEmailSchema = z.object({
   newEmail: z.string().min(1, 'Email is required').max(254),
   currentAuthSecret: authSecretSchema,
   // The sign-in secret is salted with the email, so it changes with it
   newAuthSecret: authSecretSchema,
+  code: z.string().min(1).max(64).optional(),
 });
 
 export const saveRecoveryKeySchema = z.object({
@@ -111,6 +117,7 @@ export const saveRecoveryKeySchema = z.object({
   recoveryWrapIv: saltOrIvSchema,
   recoveryKeyHash: recoveryProofSchema,
   recoveryKeySalt: recoverySaltSchema,
+  code: z.string().min(1).max(64).optional(),
 });
 
 // Shares validation — shared content is stored as plaintext by design; the
@@ -278,8 +285,9 @@ export const imageStorageConfigSchema = z.object({
 });
 
 // Settings validation
+export const settingKeySchema = z.string().min(1).max(100);
 export const upsertSettingSchema = z.object({
-  key: z.string().min(1).max(100),
+  key: settingKeySchema,
   value: z.unknown(),
 }).refine(
   (data) => JSON.stringify(data.value).length <= 65536,

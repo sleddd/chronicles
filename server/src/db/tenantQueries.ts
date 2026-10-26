@@ -113,22 +113,31 @@ export async function getAllSettings(schemaName: string): Promise<TenantSetting[
   );
 }
 
-export async function countSettings(schemaName: string): Promise<number> {
-  const db = await tenantDb(schemaName);
+export async function countSettings(schemaName: string, client?: TenantClient): Promise<number> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<{ n: bigint }[]>(`SELECT COUNT(*) AS n FROM ${s}.settings`);
   return Number(rows[0]?.n ?? 0);
 }
 
-export async function settingExists(schemaName: string, key: string): Promise<boolean> {
-  const db = await tenantDb(schemaName);
+export async function settingExists(schemaName: string, key: string, client?: TenantClient): Promise<boolean> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<{ e: boolean }[]>(`SELECT EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) AS e`, key);
   return !!rows[0]?.e;
 }
 
-export async function upsertSetting(schemaName: string, key: string, value: unknown): Promise<TenantSetting> {
-  const db = await tenantDb(schemaName);
+/** Bytes stored in the account's settings, leaving out one key (the one about to be replaced). */
+export async function settingsStorageBytes(schemaName: string, excludeKey: string, client?: TenantClient): Promise<number> {
+  const db = await clientFor(schemaName, client);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+    `SELECT COALESCE(SUM(octet_length(value::text)), 0) AS n FROM ${s}.settings WHERE key <> $1`, excludeKey);
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function upsertSetting(schemaName: string, key: string, value: unknown, client?: TenantClient): Promise<TenantSetting> {
+  const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const result = await db.$queryRawUnsafe<TenantSetting[]>(
     `INSERT INTO ${s}.settings (key, value, updated_at)
@@ -141,10 +150,11 @@ export async function upsertSetting(schemaName: string, key: string, value: unkn
   return result[0];
 }
 
-export async function deleteSetting(schemaName: string, key: string): Promise<void> {
+/** Returns true when a row was deleted. */
+export async function deleteSetting(schemaName: string, key: string): Promise<boolean> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  await db.$executeRawUnsafe(`DELETE FROM ${s}.settings WHERE key = $1`, key);
+  return (await db.$executeRawUnsafe(`DELETE FROM ${s}.settings WHERE key = $1`, key)) > 0;
 }
 
 // =============================================================================
@@ -453,18 +463,39 @@ export async function postExists(schemaName: string, id: number): Promise<boolea
   return rows.length > 0;
 }
 
-export async function getAllPosts(
+/** One entry's stored size: both encrypted halves. */
+const POST_BYTES = `COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)`;
+
+/**
+ * A page of entries (newest first) that also stops at `maxBytes` of
+ * ciphertext — always at least one entry — so one response can't hold an
+ * account's whole storage cap in memory. `more` says another page may follow.
+ */
+export async function getPostPage(
   schemaName: string,
-  options?: { limit?: number; offset?: number }
-): Promise<TenantPost[]> {
+  options: { limit: number; offset: number; maxBytes: number },
+): Promise<{ posts: TenantPost[]; more: boolean }> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return db.$queryRawUnsafe<TenantPost[]>(
-    // id breaks created_at ties so pages never overlap or skip
-    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
-    options?.limit || 1000,
-    options?.offset || 0
+  // Sizes first (no ciphertext read), to see how many rows fit
+  const sizes = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
+    `SELECT ${POST_BYTES} AS n FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
+    options.limit, options.offset
   );
+  let take = 0;
+  let bytes = 0;
+  for (const row of sizes) {
+    const n = Number(row.n);
+    if (take > 0 && bytes + n > options.maxBytes) break;
+    bytes += n;
+    take++;
+  }
+  if (take === 0) return { posts: [], more: false };
+  const posts = await db.$queryRawUnsafe<TenantPost[]>(
+    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
+    take, options.offset
+  );
+  return { posts, more: take < sizes.length || sizes.length === options.limit };
 }
 
 export async function updatePost(
@@ -608,9 +639,10 @@ export type PostChanges =
 /**
  * Entries written and ids deleted since `since` (a cursor from this database).
  * `reset` when the client should load everything instead: more than `limit`
- * changes, or a cursor from the future (the database was restored).
+ * changes or `maxBytes` of them, or a cursor from the future (the database
+ * was restored).
  */
-export async function getPostChanges(schemaName: string, since: string, limit = 5000): Promise<PostChanges> {
+export async function getPostChanges(schemaName: string, since: string, limit = 5000, maxBytes = Infinity): Promise<PostChanges> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const [{ cursor, future }] = await db.$queryRawUnsafe<{ cursor: string; future: boolean }[]>(
@@ -619,6 +651,14 @@ export async function getPostChanges(schemaName: string, since: string, limit = 
     since
   );
   if (future) return { reset: true };
+  // Too much changed to send in one response: a full (paged) load instead
+  if (Number.isFinite(maxBytes)) {
+    const [{ n }] = await db.$queryRawUnsafe<{ n: number | bigint | null }[]>(
+      `SELECT COALESCE(SUM(${POST_BYTES}), 0) AS n FROM ${s}.posts WHERE change_xid >= $1::xid8`,
+      since
+    );
+    if (Number(n) > maxBytes) return { reset: true };
+  }
   const entries = await db.$queryRawUnsafe<TenantPost[]>(
     `SELECT ${POST_SELECT} FROM ${s}.posts WHERE change_xid >= $1::xid8 ORDER BY change_xid, id LIMIT $2`,
     since, limit + 1

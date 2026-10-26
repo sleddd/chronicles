@@ -9,6 +9,7 @@ import { recordCipher } from './recordCipher.js';
 import { sealSetting } from './settingCipher.js';
 import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
 import { missingDefaultTopics } from '../utils/defaultTopics.js';
+import { useEntriesStore } from '../stores/entriesStore.js';
 
 const BASE_URL = '/api';
 
@@ -142,6 +143,8 @@ export const auth = {
     recoveryWrapIv: string;
     recoveryKeyHash: string;
     recoveryKeySalt: string;
+    /** The beta invite code from the sign-up link */
+    inviteCode?: string;
   }) => request<{ user: { email: string; username: string } }>('/auth/register', { method: 'POST', body: data }),
 
   // authSecret comes from deriveAuthSecret — the password itself is never sent
@@ -200,9 +203,11 @@ export const auth = {
     newEncryptedMasterKey: string;
     newKekSalt: string;
     newKekWrapIv: string;
+    /** Authenticator or backup code — required when the account has 2FA on */
+    code?: string;
   }) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
 
-  changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string }) =>
+  changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string; code?: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
 
   getRecoveryParams: (email: string) =>
@@ -237,6 +242,7 @@ export const auth = {
     recoveryWrapIv: string;
     recoveryKeyHash: string;
     recoveryKeySalt: string;
+    code?: string;
   }) => request<{ success: boolean }>('/auth/recovery-key', { method: 'POST', body: data }),
 };
 
@@ -251,21 +257,23 @@ function withoutTopicLink(data: Record<string, unknown>): Record<string, unknown
 
 const ENTRY_PAGE = 5000;
 
-// Every entry, newest first, a page (ENTRY_PAGE) at a time until a short page
-// comes back — one request for almost everyone. Ids seen on an earlier page
-// are skipped: an entry saved meanwhile shifts the pages by one.
+// Every entry, newest first, a page at a time while the server says there's
+// more — one request for almost everyone. A page stops at ENTRY_PAGE entries
+// or a byte cap, so the next offset is what came back. Ids seen on an earlier
+// page are skipped: an entry saved meanwhile shifts the pages by one.
 async function allEntryPages(): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   const seen = new Set<unknown>();
-  for (let offset = 0; ; offset += ENTRY_PAGE) {
-    const page = await request<Record<string, unknown>[]>(`/entries?limit=${ENTRY_PAGE}${offset ? `&offset=${offset}` : ''}`);
-    if (!Array.isArray(page)) return page;
-    for (const e of page) {
+  for (let offset = 0; ; ) {
+    const page = await request<{ entries: Record<string, unknown>[]; more: boolean }>(`/entries?v=2&limit=${ENTRY_PAGE}${offset ? `&offset=${offset}` : ''}`);
+    if (!page || !Array.isArray(page.entries)) return page as unknown as Record<string, unknown>[];
+    for (const e of page.entries) {
       if (seen.has(e.id)) continue;
       seen.add(e.id);
       all.push(e);
     }
-    if (page.length < ENTRY_PAGE) return all;
+    if (!page.more || page.entries.length === 0) return all;
+    offset += page.entries.length;
   }
 }
 
@@ -443,10 +451,26 @@ async function openTopic(w: TopicWire, allowOlder: boolean): Promise<{ topic: To
 }
 
 let seedingDefaults: Promise<void> | null = null;
+// Topic ids this tab was handed (cleared with the topics on lock): one the
+// server hands out twice, or one a topic already has, is refused — a new topic
+// sealed under an existing id would be valid for that topic too
+const issuedTopicIds = new Set<number>();
+
 /** A fresh id for a new topic (its payload is bound to it). */
 async function reserveTopicId(): Promise<number> {
   const { ids } = await request<{ ids: number[] }>('/topics/ids', { method: 'POST', body: { count: 1 } });
-  return ids[0];
+  const id = ids[0];
+  const known = useEntriesStore.getState().allTopics.some(t => t.id === id);
+  if (!Number.isSafeInteger(id) || id <= 0 || known || issuedTopicIds.has(id)) {
+    throw new Error('The server reserved a topic id already in use');
+  }
+  issuedTopicIds.add(id);
+  return id;
+}
+
+/** On lock / sign-out, with the rest of the decrypted state. */
+export function clearIssuedTopicIds(): void {
+  issuedTopicIds.clear();
 }
 
 async function loadTopics(seed: boolean): Promise<TopicRecord[]> {
@@ -515,6 +539,10 @@ export const settings = {
 
   upsert: (key: string, value: unknown) =>
     request<{ key: string; value: unknown; updatedAt: string }>('/settings', { method: 'PUT', body: { key, value } }),
+
+  /** Forget a setting for good (sealed settings can't be saved as null). */
+  remove: (key: string) =>
+    request<{ success: boolean }>(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' }),
 };
 
 // =============================================================================
@@ -626,7 +654,14 @@ const DOSES_SEAL_MARKER = 'dosesSealV2';
 const doseAadId = (id: string, date: string) => `${id}|${date}`;
 
 /** Open one record: bound to its day, or (before the marker) the older UUID-only form. */
+// The id and day come from the server and go into the AAD: anything but a
+// UUID and a YYYY-MM-DD day is refused, so `<id>|<date>` can't be forged by
+// putting a '|' in the id
+const DOSE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DOSE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 async function openDose(w: DoseWire, allowOlder: boolean): Promise<{ payload: DosePayload; older: boolean } | null> {
+  if (!DOSE_ID.test(w.id) || !DOSE_DATE.test(w.date)) return null;
   try {
     return { payload: await recordCipher().decrypt<DosePayload>(DOSE_KIND, doseAadId(w.id, w.date), w.payload, w.iv), older: false };
   } catch {

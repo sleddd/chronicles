@@ -36,7 +36,7 @@ import {
   resealPosts,
   createPost,
   getPost,
-  getAllPosts,
+  getPostPage,
   createPosts,
   updatePost,
   deletePost,
@@ -432,27 +432,40 @@ describe('Post queries', () => {
     });
   });
 
-  describe('getAllPosts', () => {
-    it('uses default limit of 1000 and offset of 0', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([]);
+  describe('getPostPage', () => {
+    const MB = 1024 * 1024;
 
-      await getAllPosts(SCHEMA);
+    it('reads sizes first, then only the entries that fit the byte cap', async () => {
+      mockQueryRawUnsafe
+        .mockResolvedValueOnce([{ n: 6 * MB }, { n: 6 * MB }, { n: 6 * MB }])
+        .mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
 
-      const sql = mockQueryRawUnsafe.mock.calls[0][0] as string;
-      expect(sql).toContain('usr_1_abc123.posts');
-      expect(sql).toContain('ORDER BY created_at DESC, id DESC');
-      expect(sql).toContain('LIMIT $1 OFFSET $2');
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(1000);
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(0);
+      const page = await getPostPage(SCHEMA, { limit: 5000, offset: 100, maxBytes: 16 * MB });
+
+      const sizeSql = mockQueryRawUnsafe.mock.calls[0][0] as string;
+      expect(sizeSql).toContain('octet_length(content_encrypted)');
+      expect(sizeSql).not.toContain('content_iv');
+      expect(sizeSql).toContain('ORDER BY created_at DESC, id DESC');
+      expect(mockQueryRawUnsafe.mock.calls[0].slice(1)).toEqual([5000, 100]);
+      expect(mockQueryRawUnsafe.mock.calls[1].slice(1)).toEqual([2, 100]);
+      expect(page).toEqual({ posts: [{ id: 1 }, { id: 2 }], more: true });
     });
 
-    it('passes custom limit and offset', async () => {
-      mockQueryRawUnsafe.mockResolvedValue([]);
+    it('always sends at least one entry, even one over the cap', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ n: 20 * MB }]).mockResolvedValueOnce([{ id: 9 }]);
+      const page = await getPostPage(SCHEMA, { limit: 5000, offset: 0, maxBytes: 16 * MB });
+      expect(mockQueryRawUnsafe.mock.calls[1].slice(1)).toEqual([1, 0]);
+      expect(page.more).toBe(false);
+    });
 
-      await getAllPosts(SCHEMA, { limit: 50, offset: 100 });
+    it('says more may follow after a full page, and nothing after the end', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ n: 1 }, { n: 1 }]).mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+      expect((await getPostPage(SCHEMA, { limit: 2, offset: 0, maxBytes: MB })).more).toBe(true);
 
-      expect(mockQueryRawUnsafe.mock.calls[0][1]).toBe(50);
-      expect(mockQueryRawUnsafe.mock.calls[0][2]).toBe(100);
+      mockQueryRawUnsafe.mockReset();
+      mockQueryRawUnsafe.mockResolvedValueOnce([]);
+      expect(await getPostPage(SCHEMA, { limit: 2, offset: 2, maxBytes: MB })).toEqual({ posts: [], more: false });
+      expect(mockQueryRawUnsafe).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -637,7 +650,7 @@ describe('Schema validation in tenant queries', () => {
     await expect(deleteTaxonomy(invalidSchema, 1)).rejects.toThrow();
     await expect(createPost(invalidSchema, {})).rejects.toThrow();
     await expect(getPost(invalidSchema, 1)).rejects.toThrow();
-    await expect(getAllPosts(invalidSchema)).rejects.toThrow();
+    await expect(getPostPage(invalidSchema, { limit: 1, offset: 0, maxBytes: 1 })).rejects.toThrow();
     await expect(updatePost(invalidSchema, 1, {})).rejects.toThrow();
     await expect(deletePost(invalidSchema, 1)).rejects.toThrow();
     await expect(getPostTaxonomies(invalidSchema, 1)).rejects.toThrow();

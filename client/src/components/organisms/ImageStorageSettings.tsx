@@ -9,6 +9,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { usePrivateSettings } from '../../services/privateSettings.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
+import { showFlash } from '../../services/flashNotice.js';
 import { imageStorageConfigSchema } from '@shared/validation/schemas.js';
 import {
   testR2Connection,
@@ -89,7 +90,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
 
     // All fields cleared → forget the stored credentials
     if (!cfg.accountId && !cfg.bucket && !cfg.accessKeyId && !cfg.secretAccessKey) {
-      await settingsApi.upsert('imageStorageConfig', null).catch(() => {});
+      await settingsApi.remove('imageStorageConfig').catch(() => showFlash('Couldn’t remove your R2 credentials from the server. Try again.'));
       setImageStorageConfig(null, null);
       setImagesConfigured(false);
       setSaveState('idle');
@@ -168,7 +169,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
     setAccountId(''); setBucket(''); setAccessKeyId(''); setSecretAccessKey('');
     setTestState('idle'); setTestMessage(''); setSaveState('idle'); setHint('');
     setImageStorageDraft(null);
-    await settingsApi.upsert('imageStorageConfig', null).catch(() => {});
+    await settingsApi.remove('imageStorageConfig').catch(() => showFlash('Couldn’t remove your R2 credentials from the server. Try again.'));
     setImageStorageConfig(null, null);
     setImagesConfigured(false);
   };

@@ -578,7 +578,7 @@ describe('decryptPost', () => {
     ).rejects.toThrow('Encrypted post missing required fields');
   });
 
-  it('handles malformed metadata gracefully (non-object JSON)', async () => {
+  it('refuses an older entry with malformed metadata (non-object JSON)', async () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
@@ -602,11 +602,12 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
-    expect(decrypted.metadata).toEqual({});
+    // An older entry isn't bound to its id: metadata that isn't an object can't
+    // be the app's, so it's refused rather than opened (and re-sealed) as {}
+    await expect(encryptionService.decryptPost(nonExtKey, post, { allowOlder: true })).rejects.toThrow(/not an object/);
   });
 
-  it('handles malformed metadata gracefully (array JSON)', async () => {
+  it('refuses an older entry with malformed metadata (array JSON)', async () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
@@ -627,11 +628,12 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
-    expect(decrypted.metadata).toEqual({});
+    // An older entry isn't bound to its id: metadata that isn't an object can't
+    // be the app's, so it's refused rather than opened (and re-sealed) as {}
+    await expect(encryptionService.decryptPost(nonExtKey, post, { allowOlder: true })).rejects.toThrow(/not an object/);
   });
 
-  it('handles malformed metadata gracefully (null JSON)', async () => {
+  it('refuses an older entry with malformed metadata (null JSON)', async () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
@@ -652,11 +654,12 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
-    expect(decrypted.metadata).toEqual({});
+    // An older entry isn't bound to its id: metadata that isn't an object can't
+    // be the app's, so it's refused rather than opened (and re-sealed) as {}
+    await expect(encryptionService.decryptPost(nonExtKey, post, { allowOlder: true })).rejects.toThrow(/not an object/);
   });
 
-  it('handles invalid JSON metadata gracefully', async () => {
+  it('refuses an older entry with metadata that is not JSON', async () => {
     const key = await generateMasterKey();
     const nonExtKey = await toNonExtractable(key);
 
@@ -677,8 +680,9 @@ describe('decryptPost', () => {
       updatedAt: new Date(),
     };
 
-    const decrypted = await encryptionService.decryptPost(nonExtKey, post, { allowOlder: true });
-    expect(decrypted.metadata).toEqual({});
+    // An older entry isn't bound to its id: metadata that isn't an object can't
+    // be the app's, so it's refused rather than opened (and re-sealed) as {}
+    await expect(encryptionService.decryptPost(nonExtKey, post, { allowOlder: true })).rejects.toThrow(/not an object/);
   });
 });
 

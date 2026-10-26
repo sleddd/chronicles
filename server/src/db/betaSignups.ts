@@ -2,14 +2,18 @@
  * See and manage beta applications, the waitlist and who may sign up.
  *
  *   npm run beta                          # seats, the waitlist and invites, with who's approved / signed up
- *   npm run beta -- --approve <email>     # may create an account now (no restart); adds them if they never applied
+ *   npm run beta -- --approve <email>     # may create an account now (no restart); adds them if they never applied;
+ *                                         # prints their one-time sign-up link (running it again issues a new one)
  *   npm run beta -- --unapprove <email>   # takes that back (an account already made stays)
  *   npm run beta -- --csv                 # everything as CSV (redirect to a file)
  *   npm run beta -- --remove <email>      # delete someone (on request, or after launch)
  *
  * Sign-up is closed to everyone not approved here (or listed in the optional
  * REGISTRATION_WHITELIST), unless the server sets REGISTRATION_OPEN=true. Send
- * approved testers the /sign-up link yourself.
+ * approved testers the sign-up link --approve prints, yourself: it carries their
+ * invite code, which sign-up needs (only its hash is stored, so it can't be
+ * shown again — approve again for a new one). Set APP_URL (else CLIENT_URL)
+ * to the app's address so the link is complete.
  */
 import './scriptEnv.js';
 import { BETA_DETAILS } from '@chronicles/shared';
@@ -38,10 +42,15 @@ async function main(): Promise<void> {
   await initBetaTable();
   const toApprove = arg('approve');
   if (toApprove) {
-    const how = await approve(toApprove);
+    const { how, inviteCode } = await approve(toApprove);
+    const email = toApprove.trim().toLowerCase();
+    const base = (process.env.APP_URL || process.env.CLIENT_URL || '').replace(/\/$/, '');
+    const link = `${base}/sign-up?${new URLSearchParams({ email, invite: inviteCode }).toString()}`;
     console.log(how === 'invited'
-      ? `Approved ${toApprove.trim().toLowerCase()} (added as an invite — they hadn't applied). They can sign up now.`
-      : `Approved ${toApprove.trim().toLowerCase()}. They can sign up now.`);
+      ? `Approved ${email} (added as an invite — they hadn't applied).`
+      : `Approved ${email}.`);
+    console.log(`Send them this sign-up link (it only works for this email, and isn't stored — approve again for a new one):\n  ${link}`);
+    if (!base) console.log('(Set APP_URL to the app\'s address to get a full link.)');
     return;
   }
   const toUnapprove = arg('unapprove');
@@ -77,7 +86,7 @@ async function main(): Promise<void> {
     invited.forEach(r => console.log(`  ${printable(r.email)}${progress(r)}`));
   }
   const pending = rows.filter(r => r.approvedAt && !r.signedUp).length;
-  if (pending) console.log(`\n${pending} approved but not signed up yet — send them the /sign-up link.`);
+  if (pending) console.log(`\n${pending} approved but not signed up yet — send them their sign-up link (--approve <email> issues a new one).`);
 }
 
 main()

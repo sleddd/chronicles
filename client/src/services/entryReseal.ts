@@ -43,7 +43,22 @@ function usable(id: unknown): id is number {
   return !rawEntries.some(e => e.id === id) && !decryptedEntries.some(e => e.id === id);
 }
 
+// Right after an unlock the store is empty until the entries load, so the
+// check above would have nothing to check against: a save that early (Quick
+// entry) waits for the load first — up to a limit, so a save is never stuck
+const LOAD_WAIT_MS = 15_000;
+
+function entriesLoaded(): Promise<void> {
+  if (useEntriesStore.getState().isInitialized) return Promise.resolve();
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(timer); unsubscribe(); resolve(); };
+    const timer = setTimeout(done, LOAD_WAIT_MS);
+    const unsubscribe = useEntriesStore.subscribe(s => { if (s.isInitialized) done(); });
+  });
+}
+
 export async function reserveEntryId(): Promise<number> {
+  if (reserved.length === 0) await entriesLoaded();
   while (reserved.length === 0) {
     pending ??= entriesApi.reserveIds(RESERVE_BATCH)
       .then(r => {

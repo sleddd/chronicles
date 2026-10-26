@@ -10,6 +10,7 @@
 
 import { SignatureV4 } from '@smithy/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
+import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 
 export type BedrockAuth = 'apiKey' | 'iam';
 
@@ -61,6 +62,9 @@ async function bedrockFetch(
   body?: unknown,
 ): Promise<unknown> {
   const region = creds.region.trim();
+  // The region goes into the host name: only listed regions (the CSP allows
+  // exactly their hosts), so a bad value can't point the signed request elsewhere
+  if (!isBedrockRegion(region)) throw new Error(`Amazon Bedrock isn't available in "${region}". Pick a listed region.`);
   const hostname = service === 'runtime'
     ? `bedrock-runtime.${region}.amazonaws.com`
     : `bedrock.${region}.amazonaws.com`;

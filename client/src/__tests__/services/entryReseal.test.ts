@@ -30,6 +30,20 @@ beforeEach(() => {
 });
 
 describe('reserving ids for new entries', () => {
+  // The journal has loaded (an early save waits for that — see below)
+  beforeEach(() => { useEntriesStore.setState({ isInitialized: true }); });
+
+  it('waits for the entries to load before reserving, so it can check ids against them', async () => {
+    useEntriesStore.setState({ isInitialized: false, rawEntries: [] });
+    reserveIds.mockResolvedValueOnce({ ids: [3] });
+    const got = reserveEntryId();
+    await new Promise(r => setTimeout(r, 20));
+    expect(reserveIds).not.toHaveBeenCalled();
+    // the load brings an entry that already has id 3: the server's id is refused
+    useEntriesStore.setState({ isInitialized: true, rawEntries: [{ id: 3 } as never] });
+    await expect(got).rejects.toThrow(/already in use/);
+  });
+
   it('reserves a batch and hands them out one by one', async () => {
     reserveIds.mockResolvedValueOnce({ ids: [5, 6, 7] });
     expect(await reserveEntryId()).toBe(5);

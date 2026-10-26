@@ -260,22 +260,23 @@ describe('auth', () => {
 
 describe('entries', () => {
   it('getAll fetches a journal under 5000 entries in one request', async () => {
-    fetchSpy = mockFetchResponse([]);
+    fetchSpy = mockFetchResponse({ entries: [], more: false });
     vi.stubGlobal('fetch', fetchSpy);
 
     await entries.getAll();
 
     // Topic filtering relies on the whole journal being in the store
-    expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries?limit=5000');
+    expect(fetchSpy.mock.calls).toHaveLength(1);
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/entries?v=2&limit=5000');
   });
 
-  it('getAll pages past 5000 entries and skips ids repeated across pages', async () => {
+  it('getAll pages while the server says there is more, from where the last page ended, skipping repeated ids', async () => {
     const page = (from: number, n: number) => Array.from({ length: n }, (_, k) => ({ id: from - k }));
-    const pages: Record<string, unknown[]> = {
-      '/api/entries?limit=5000': page(12000, 5000),
+    const pages: Record<string, { entries: unknown[]; more: boolean }> = {
+      '/api/entries?v=2&limit=5000': { entries: page(12000, 5000), more: true },
       // an entry saved while paging shifts the next page by one: 7001 repeats
-      '/api/entries?limit=5000&offset=5000': page(7001, 5000),
-      '/api/entries?limit=5000&offset=10000': page(2001, 2001),
+      '/api/entries?v=2&limit=5000&offset=5000': { entries: page(7001, 3000), more: true }, // cut short by the byte cap
+      '/api/entries?v=2&limit=5000&offset=8000': { entries: page(4001, 4001), more: false },
     };
     fetchSpy = vi.fn(async (url: string) => ({
       ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => pages[url],
@@ -542,6 +543,16 @@ describe('sessions', () => {
 // ---------------------------------------------------------------------------
 
 describe('doses', () => {
+  // Dose ids are UUIDs (anything else is refused before opening)
+  const A = '00000001-0000-4000-8000-000000000000';
+  const OLD = '00000002-0000-4000-8000-000000000000';
+  const NEW = '00000003-0000-4000-8000-000000000000';
+  const MOVED = '00000004-0000-4000-8000-000000000000';
+  const SWAPPED = '00000005-0000-4000-8000-000000000000';
+  const UNBOUND = '00000006-0000-4000-8000-000000000000';
+  const O1 = '00000007-0000-4000-8000-000000000000';
+  const B1 = '00000008-0000-4000-8000-000000000000';
+  const SOMEONE_ELSE = '00000009-0000-4000-8000-000000000000';
   const dose = { medicationPostId: 1, scheduledTime: '08:00', status: 'taken', takenAt: '8:05 AM' };
   const bound = (id: string, date: string, p: unknown) => seal('dose', `${id}|${date}`, p);
 
@@ -549,14 +560,14 @@ describe('doses', () => {
     setRecordCipherForTests(fakeCipher);
     fetchSpy = routeFetch({
       ...markers('dosesSealV2'),
-      'GET /api/doses': () => ({ records: [{ id: 'a', date: '2026-04-03', payload: bound('a', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
+      'GET /api/doses': () => ({ records: [{ id: A, date: '2026-04-03', payload: bound(A, '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
     });
     vi.stubGlobal('fetch', fetchSpy);
 
     const { logs } = await doses.getByDate('2026-04-03');
 
     expect(fetchSpy.mock.calls.find(c => String(c[0]).startsWith('/api/doses'))![0]).toContain('date=2026-04-03');
-    expect(logs).toEqual([{ id: 'a', date: '2026-04-03', createdAt: 'c', ...dose }]);
+    expect(logs).toEqual([{ id: A, date: '2026-04-03', createdAt: 'c', ...dose }]);
   });
 
   it('keeps the newest when two devices saved the same dose, and drops one moved to another day or record', async () => {
@@ -564,17 +575,31 @@ describe('doses', () => {
     fetchSpy = routeFetch({
       ...markers('dosesSealV2'),
       'GET /api/doses/all': () => ({ records: [
-        { id: 'old', date: '2026-04-03', payload: bound('old', '2026-04-03', { ...dose, status: 'pending', takenAt: null }), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T08:00:00Z' },
-        { id: 'new', date: '2026-04-03', payload: bound('new', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T09:00:00Z' },
-        { id: 'moved', date: '2026-04-04', payload: bound('moved', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
-        { id: 'swapped', date: '2026-04-03', payload: bound('someone-else', '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
-        { id: 'unbound', date: '2026-04-05', payload: seal('dose', 'unbound', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: OLD, date: '2026-04-03', payload: bound(OLD, '2026-04-03', { ...dose, status: 'pending', takenAt: null }), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T08:00:00Z' },
+        { id: NEW, date: '2026-04-03', payload: bound(NEW, '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: '2026-04-03T09:00:00Z' },
+        { id: MOVED, date: '2026-04-04', payload: bound(MOVED, '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: SWAPPED, date: '2026-04-03', payload: bound(SOMEONE_ELSE, '2026-04-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: UNBOUND, date: '2026-04-05', payload: seal('dose', UNBOUND, dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
       ] }),
     });
     vi.stubGlobal('fetch', fetchSpy);
 
     const { logs } = await doses.getAll();
-    expect(logs.map(l => l.id)).toEqual(['new']);
+    expect(logs.map(l => l.id)).toEqual([NEW]);
+  });
+
+  it('refuses a record whose id is not a UUID or whose day is malformed', async () => {
+    setRecordCipherForTests(fakeCipher);
+    // A '|' in the id would otherwise let an older record's AAD pass as `<id>|<day>`
+    fetchSpy = routeFetch({
+      ...markers('dosesSealV2'),
+      'GET /api/doses/all': () => ({ records: [
+        { id: `${A}|2026-04-03`, date: '2026-04-09', payload: seal('dose', `${A}|2026-04-03`, dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: B1, date: '2026-4-3', payload: bound(B1, '2026-4-3', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+      ] }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    expect((await doses.getAll()).logs).toEqual([]);
   });
 
   it('log updates the existing record for that dose, sealed to its day, with only the date readable', async () => {
@@ -605,16 +630,16 @@ describe('doses', () => {
       'GET /api/settings': () => [],
       'PUT /api/settings': b => { if (b.key === 'dosesSealV2') markerWritten = true; return b; },
       'GET /api/doses/all': () => ({ records: [
-        { id: 'o1', date: '2026-01-02', payload: seal('dose', 'o1', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
-        { id: 'b1', date: '2026-01-03', payload: bound('b1', '2026-01-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: O1, date: '2026-01-02', payload: seal('dose', O1, dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
+        { id: B1, date: '2026-01-03', payload: bound(B1, '2026-01-03', dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' },
       ] }),
       'PUT /api/doses/reseal': b => { resealed.push(...b.records); return { resealed: b.records.length }; },
     });
     vi.stubGlobal('fetch', fetchSpy);
 
     expect(await doses.resealOlder()).toBe(1);
-    expect(resealed.map(r => r.id)).toEqual(['o1']);
-    expect(await fakeCipher.decrypt('dose', 'o1|2026-01-02', resealed[0].payload)).toEqual(dose);
+    expect(resealed.map(r => r.id)).toEqual([O1]);
+    expect(await fakeCipher.decrypt('dose', `${O1}|2026-01-02`, resealed[0].payload)).toEqual(dose);
     expect(markerWritten).toBe(true);
   });
 

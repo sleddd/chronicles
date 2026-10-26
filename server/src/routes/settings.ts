@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getAllSettings, upsertSetting, countSettings, settingExists } from '../db/tenantQueries.js';
-import { upsertSettingSchema, SEALED_SETTING_KEYS, isBoundSealedValue } from '@chronicles/shared';
+import { getAllSettings, upsertSetting, countSettings, settingExists, settingsStorageBytes, deleteSetting, withTenantLock } from '../db/tenantQueries.js';
+import { upsertSettingSchema, settingKeySchema, SEALED_SETTING_KEYS, isBoundSealedValue } from '@chronicles/shared';
 
 const SEALED = new Set(SEALED_SETTING_KEYS);
 
@@ -9,6 +9,8 @@ const router = Router();
 // Ceiling on distinct setting keys per account. The app uses a few dozen; this
 // only stops a signed-in client from filling the database with junk keys.
 const MAX_SETTING_KEYS = 500;
+// …and on their total size (each value is capped at 64 KB by the schema)
+const MAX_SETTINGS_BYTES = 8 * 1024 * 1024;
 
 // GET /api/settings
 router.get('/', async (req, res) => {
@@ -37,15 +39,39 @@ router.put('/', async (req, res) => {
       return;
     }
     const schema = req.auth!.tenantSchemaName;
-    if (!(await settingExists(schema, key)) && (await countSettings(schema)) >= MAX_SETTING_KEYS) {
-      res.status(400).json({ error: 'Too many settings' });
+    // The caps are a read then a write: under the account's lock, so two
+    // requests at once can't both see room
+    const result = await withTenantLock(schema, async (tx) => {
+      if (!(await settingExists(schema, key, tx)) && (await countSettings(schema, tx)) >= MAX_SETTING_KEYS) return 'Too many settings';
+      if (await settingsStorageBytes(schema, key, tx) + JSON.stringify(value).length > MAX_SETTINGS_BYTES) return 'Settings storage is full';
+      return upsertSetting(schema, key, value, tx);
+    });
+    if (typeof result === 'string') {
+      res.status(400).json({ error: result });
       return;
     }
-    const setting = await upsertSetting(schema, key, value);
-    res.json(setting);
+    res.json(result);
   } catch (err) {
     console.error('Update setting error:', err);
     res.status(500).json({ error: 'Failed to update setting' });
+  }
+});
+
+// DELETE /api/settings/:key — forget a setting (e.g. removed AI or R2
+// credentials: sealed settings can't be overwritten with null, so they're
+// deleted instead)
+router.delete('/:key', async (req, res) => {
+  try {
+    const key = settingKeySchema.safeParse(req.params.key);
+    if (!key.success) {
+      res.status(400).json({ error: 'Invalid setting key' });
+      return;
+    }
+    await deleteSetting(req.auth!.tenantSchemaName, key.data);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete setting error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to delete setting' });
   }
 });
 

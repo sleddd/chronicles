@@ -18,10 +18,11 @@ const json = (r) => {
 async function fullLoad() {
   const { cursor } = json(await api(u, 'GET', '/api/entries/cursor'));
   const rows = new Map();
-  for (let off = 0; ; off += 5000) {
-    const page = json(await api(u, 'GET', `/api/entries?limit=5000${off ? `&offset=${off}` : ''}`));
-    for (const e of page) rows.set(e.id, e);
-    if (page.length < 5000) break;
+  for (let off = 0; ; ) {
+    const page = json(await api(u, 'GET', `/api/entries?v=2&limit=5000${off ? `&offset=${off}` : ''}`));
+    for (const e of page.entries) rows.set(e.id, e);
+    if (!page.more || page.entries.length === 0) break;
+    off += page.entries.length;
   }
   return { cursor, rows };
 }

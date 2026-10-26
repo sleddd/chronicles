@@ -7,7 +7,7 @@ import { securityHeaders, corsOriginFor, trustProxySetting } from './middleware/
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import authRoutes, { checkStoredCredentials } from './routes/auth.js';
+import authRoutes, { checkStoredCredentials, sealStoredTotpSecrets } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
@@ -168,6 +168,10 @@ checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) =>
     console.warn(`Credential check: ${outdated.length} account(s) still on a pre-upgrade password hash (ids ${outdated.join(', ')}) can only sign in by recovery; ${sessionsRevoked} session(s) signed out`);
   }
 }).catch(err => console.error('Credential check failed:', err instanceof Error ? err.message : err));
+sealStoredTotpSecrets().then(({ sealed, readable }) => {
+  if (sealed) console.log(`Credential check: ${sealed} authenticator secret(s) sealed`);
+  if (readable) console.warn(`SECRETS_ENCRYPTION_KEY is not set: ${readable} account(s) have their authenticator secret stored readable — set the key to seal them`);
+}).catch(err => console.error('Authenticator secret check failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {
   if (count > 0) console.log(`Cleaned up ${count} expired/revoked sessions`);
 }).catch(() => {});

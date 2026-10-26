@@ -5,7 +5,7 @@ import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
-import { isApproved } from '../db/betaQueries.js';
+import { isApproved, hasPendingInvite, spendInvite } from '../db/betaQueries.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
@@ -179,6 +179,38 @@ async function verifySecondFactor(
   if (factor) await sharedState.clear(TWO_FA_FAILURES, String(account.id));
   else if (attempt === TWO_FA_MAX_FAILURES) await strikeTwoFALock(account.id);
   return factor;
+}
+
+/**
+ * With 2FA on, an account change that could lock the owner out (password,
+ * email, recovery key, deleting the account) also needs an authenticator or
+ * backup code, so a stolen session plus a phished password isn't enough.
+ * Sends the refusal itself; true means go ahead.
+ */
+async function secondFactorGate(
+  account: { id: number; totpEnabled: boolean; totpSecret: string | null; totpBackupCodes: string[] },
+  code: string | undefined,
+  res: Response,
+  failedEvent: string,
+  ip: string | undefined,
+): Promise<boolean> {
+  if (!account.totpEnabled || !account.totpSecret) return true;
+  const lock = await twoFALock(account.id);
+  if (lock) {
+    res.status(429).json({ error: twoFALockMessage(lock) });
+    return false;
+  }
+  if (!code) {
+    res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
+    return false;
+  }
+  const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code);
+  if (!factor) {
+    logSecurityEvent(failedEvent, { accountId: account.id, ip, details: { reason: 'bad_code' } });
+    res.status(401).json({ error: 'Invalid code', requires2FA: true });
+    return false;
+  }
+  return true;
 }
 
 async function checkSecondFactor(
@@ -424,6 +456,28 @@ export async function checkStoredCredentials(): Promise<{ recoverySealed: number
   return { recoverySealed: unsealed.length, outdated, sessionsRevoked: revoked.count };
 }
 
+/**
+ * Startup: authenticator secrets stored readable (saved before
+ * SECRETS_ENCRYPTION_KEY was set) are sealed with it. Without the key they
+ * stay readable — a database copy would hold every account's second factor —
+ * so the count is returned for a warning.
+ */
+export async function sealStoredTotpSecrets(): Promise<{ sealed: number; readable: number }> {
+  const plain = await prisma.account.findMany({
+    where: { totpSecret: { not: null }, NOT: { totpSecret: { contains: ':' } } },
+    select: { id: true, totpSecret: true },
+  });
+  if (!isTokenCryptoConfigured()) return { sealed: 0, readable: plain.length };
+  for (const a of plain) {
+    // Conditional, so a 2FA change racing this can't be overwritten
+    await prisma.account.updateMany({
+      where: { id: a.id, totpSecret: a.totpSecret },
+      data: { totpSecret: sealTotpSecret(a.totpSecret!) },
+    });
+  }
+  return { sealed: plain.length, readable: 0 };
+}
+
 /** Enforce a constant-time floor on endpoint response time to prevent timing-based enumeration */
 async function constantTimeDelay(startTime: number, minMs = 200): Promise<void> {
   const elapsed = Date.now() - startTime;
@@ -443,7 +497,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       return;
     }
 
-    const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
+    const { email: rawEmail, username, authSecret, encryptedMasterKey, kekSalt, kekWrapIv, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, inviteCode } = parsed.data;
     const email = normalizeEmail(rawEmail);
 
     // Order matters. The username is checked first and answered the same for
@@ -453,8 +507,10 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     // with no email verification sign-up has to say so. Every refusal pays
     // for a hash, like a sign-up does.
     //
-    // Squatting: without email verification or invite tokens, whoever first
-    // registers an approved email owns that account. Approval is the only gate.
+    // Squatting: an approved email also needs the invite code issued with the
+    // approval (sent by the owner with the link), so knowing an approved email
+    // isn't enough to claim it — and without the code it's refused like any
+    // other, so approval can't be told from the answer.
     const existingUsername = await prisma.account.findUnique({ where: { username } });
     if (existingUsername) {
       logSecurityEvent('register_duplicate', { ip: req.ip });
@@ -464,11 +520,14 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     }
 
     // Who may sign up: closed unless REGISTRATION_OPEN=true. Emails approved on
-    // the beta list (`npm run beta -- --approve`, no restart) or listed in the
-    // optional REGISTRATION_WHITELIST may; anyone else is refused
+    // the beta list (`npm run beta -- --approve`, no restart) with their invite
+    // code, or listed in the optional REGISTRATION_WHITELIST, may; anyone else
+    // is refused
+    let invited = false;
     if (process.env.REGISTRATION_OPEN !== 'true') {
       const listed = (process.env.REGISTRATION_WHITELIST ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-      if (!listed.includes(email) && !(await isApproved(email).catch(() => false))) {
+      invited = !listed.includes(email) && await isApproved(email, inviteCode).catch(() => false);
+      if (!listed.includes(email) && !invited) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
         await bcrypt.hash('dummy', BCRYPT_ROUNDS);
         res.status(403).json({ error: 'Registration is currently restricted. If you joined the waitlist, check your email for your sign-up instructions. Please allow one day for processing.' });
@@ -502,6 +561,9 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       userAgent: req.headers['user-agent'],
     });
 
+    if (invited) {
+      try { await spendInvite(email); } catch { /* the account exists; a code left unspent is refused by the 409 anyway */ }
+    }
     logSecurityEvent('register_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, { id: account.id, email, passwordHash });
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
@@ -655,7 +717,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       return;
     }
 
-    const { currentAuthSecret, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv } = parsed.data;
+    const { currentAuthSecret, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv, code } = parsed.data;
     const account = await prisma.account.findUnique({ where: { id: req.auth!.accountId } });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
@@ -668,6 +730,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
+    if (!(await secondFactorGate(account, code, res, 'password_change_failed', req.ip))) return;
 
     const passwordHash = await hashAuthSecret(newAuthSecret);
 
@@ -742,17 +805,20 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     // The email is the login identifier — changing it needs the password
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true },
+      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account || !(await checkConfirmSecret(account, parsed.data.currentAuthSecret))) {
       logSecurityEvent('email_change_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
+    if (!(await secondFactorGate(account, parsed.data.code, res, 'email_change_failed', req.ip))) return;
 
     // Check if email is already taken
+    // An email approved for someone else's beta invite is taken too: moving an
+    // account onto it would lock the invited person out of signing up
     const existing = await prisma.account.findUnique({ where: { email: normalizedEmail } });
-    if (existing && existing.id !== req.auth!.accountId) {
+    if ((existing && existing.id !== req.auth!.accountId) || (!existing && await hasPendingInvite(normalizedEmail))) {
       res.status(409).json({ error: 'Email already in use' });
       return;
     }
@@ -1145,6 +1211,9 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     });
     await clearTwoFAState(req.auth!.accountId);
     await cancelPendingTwoFA(req.auth!.accountId);
+    // Like turning it on: every other session (and its Remember me grant) is
+    // signed out, so one that was let in before stays out; this one stays
+    await revokeAllSessions(req.auth!.accountId, req.auth!.selector, '2fa_disabled');
 
     logSecurityEvent('2fa_disabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
@@ -1179,23 +1248,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       res.status(401).json({ error: 'Incorrect password' });
       return;
     }
-    if (account.totpEnabled && account.totpSecret) {
-      const lock = await twoFALock(account.id);
-      if (lock) {
-        res.status(429).json({ error: twoFALockMessage(lock) });
-        return;
-      }
-      if (!parsed.data.code) {
-        res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
-        return;
-      }
-      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code);
-      if (!factor) {
-        logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip, details: { reason: 'bad_code' } });
-        res.status(401).json({ error: 'Invalid code', requires2FA: true });
-        return;
-      }
-    }
+    if (!(await secondFactorGate(account, parsed.data.code, res, 'account_delete_failed', req.ip))) return;
 
     await revokeGrantsForAccount(account.id);
     // Revoke Google Calendar access at Google before the token row is deleted
@@ -1277,19 +1330,20 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
       res.status(400).json({ error: parsed.error.errors[0].message });
       return;
     }
-    const { currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt } = parsed.data;
+    const { currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, code } = parsed.data;
 
     // Whoever sets the recovery key can later reset the password with it, so
     // a signed-in session alone must not be enough to replace it
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true },
+      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account || !(await checkConfirmSecret(account, currentAuthSecret))) {
       logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
+    if (!(await secondFactorGate(account, code, res, 'recovery_key_regenerate_failed', req.ip))) return;
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },
@@ -1301,6 +1355,10 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
       },
     });
 
+    // Whoever held the old key may be the reason for replacing it: every other
+    // session (and its Remember me grant) is signed out, this one stays
+    await revokeAllSessions(account.id, req.auth!.selector, 'recovery_key_changed');
+    await cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_key_regenerated', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
   } catch (err) {
