@@ -39,6 +39,8 @@
     "@fortawesome/free-regular-svg-icons": "^6.7.2"
   },
   "overrides": {
-    "deepmerge-ts": "8.0.2"
+    "deepmerge-ts": "8.0.2",
+    "vite": "^6.4.5",
+    "zod": "^4.6.7"
   }
 }

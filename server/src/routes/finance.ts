@@ -57,12 +57,12 @@ router.put('/:kind/:id', async (req, res) => {
   }
   const id = financeRecordIdSchema.safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ error: id.error.errors[0].message });
+    res.status(400).json({ error: id.error.issues[0].message });
     return;
   }
   const body = putFinanceRecordSchema.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.errors[0].message });
+    res.status(400).json({ error: body.error.issues[0].message });
     return;
   }
   try {
@@ -94,7 +94,7 @@ router.delete('/:kind/:id', async (req, res) => {
   }
   const id = financeRecordIdSchema.safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ error: id.error.errors[0].message });
+    res.status(400).json({ error: id.error.issues[0].message });
     return;
   }
   try {

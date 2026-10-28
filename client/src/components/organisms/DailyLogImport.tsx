@@ -91,6 +91,7 @@ export function DailyLogImport() {
         const tid = ids.get(item.topic)!;
         const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: item.importKey };
         if (Object.keys(item.customFields).length) metadata._customFields = item.customFields;
+        if (item.createdAt) metadata._createdAt = item.createdAt;
         const encrypted = await encryptNewPost(item.content, metadata);
         pending.push({ item, metadata, payload: { id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,

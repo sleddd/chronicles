@@ -72,7 +72,7 @@ export function RecoverView() {
     // The server only sees a secret derived from the password, so the rules are checked here
     const rules = passwordSchema.safeParse(newPassword);
     if (!rules.success) {
-      setError(rules.error.errors[0].message);
+      setError(rules.error.issues[0].message);
       return;
     }
 

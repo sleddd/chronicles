@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const parsed = accountConsentSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Check each box to continue' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check each box to continue' });
     return;
   }
   const d = parsed.data;
@@ -48,7 +48,7 @@ router.post('/', async (req, res) => {
 router.put('/breach-notice', async (req, res) => {
   const parsed = breachNoticeSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Invalid choice' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid choice' });
     return;
   }
   try {

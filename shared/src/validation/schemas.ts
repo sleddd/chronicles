@@ -165,7 +165,7 @@ const ENTRY_ID = z.number().int().positive().max(2_147_483_647);
 // `format: 3` = encrypted bound to the entry id. An older client (pair-bound
 // v2 ciphertext) is refused rather than saving an entry that would stop
 // opening once the account is past the move to v3
-const FORMAT_V3 = z.literal(3, { errorMap: () => ({ message: 'Update Chronicles to save entries' }) });
+const FORMAT_V3 = z.literal(3, { message: 'Update Chronicles to save entries' });
 
 export const createPostSchema = z.object({
   id: ENTRY_ID,
@@ -174,7 +174,7 @@ export const createPostSchema = z.object({
   contentIv: IV_FIELD,
   metadataEncrypted: METADATA_FIELD,
   metadataIv: IV_FIELD,
-  isEncrypted: z.literal(true, { errorMap: () => ({ message: 'Entries must be encrypted' }) }),
+  isEncrypted: z.literal(true, { message: 'Entries must be encrypted' }),
   taxonomyIds: z.array(z.number()).max(50).optional(),
   createdAt: z.string().datetime({ offset: true }).optional(),
 });
@@ -240,7 +240,7 @@ export const putFinanceRecordSchema = z.object({
 // payload); only the colour stays readable. Plaintext names are refused.
 // `format: 2` = the payload is bound to the topic's id. A topic is created
 // under an id reserved first (POST /api/topics/ids)
-const TOPIC_FORMAT_V2 = z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save topics' }) });
+const TOPIC_FORMAT_V2 = z.literal(2, { message: 'Update Chronicles to save topics' });
 
 export const createTaxonomySchema = z.object({
   id: z.number().int().positive(),
@@ -269,7 +269,7 @@ export const doseRecordIdSchema = z.string().uuid('Invalid dose id');
 // `format: 2` = sealed bound to the record's id and its day, so the server
 // can't move a dose to another day; an older client is told to update
 export const putDoseRecordSchema = z.object({
-  format: z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save doses' }) }),
+  format: z.literal(2, { message: 'Update Chronicles to save doses' }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
   payload: ciphertext(10_000),
   iv: IV_FIELD,
@@ -360,7 +360,7 @@ export const betaApplicationSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254),
   trackFirst: z.enum(BETA_TRACK_OPTIONS),
   device: z.enum(BETA_DEVICE_OPTIONS),
-  ageConfirmed: z.literal(true, { errorMap: () => ({ message: 'You must be 18 or older to join' }) }),
-  riskAccepted: z.literal(true, { errorMap: () => ({ message: 'Tick the box to show you understand the beta' }) }),
+  ageConfirmed: z.literal(true, { message: 'You must be 18 or older to join' }),
+  riskAccepted: z.literal(true, { message: 'Tick the box to show you understand the beta' }),
   website: z.string().max(200).optional(),
 }).strict();

@@ -69,7 +69,7 @@ export function ChangePassword() {
 
     const rules = passwordSchema.safeParse(newPassword);
     if (!rules.success) {
-      setMessage(rules.error.errors[0].message);
+      setMessage(rules.error.issues[0].message);
       setIsError(true);
       return;
     }

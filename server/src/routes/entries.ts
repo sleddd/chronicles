@@ -146,7 +146,7 @@ router.post('/ids', async (req, res) => {
   try {
     const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     res.json({ ids: await reservePostIds(req.auth!.tenantSchemaName, parsed.data.count) });
@@ -162,7 +162,7 @@ router.put('/reseal', async (req, res) => {
   try {
     const parsed = resealPostsSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const entries = parsed.data.entries.map(e => ({
@@ -215,7 +215,7 @@ router.post('/', async (req, res) => {
   try {
     const parsed = createPostSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
 
@@ -247,7 +247,7 @@ router.post('/batch', async (req, res) => {
   try {
     const parsed = createPostsBatchSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const inputs = parsed.data.entries.map(toCreateInput);
@@ -303,7 +303,7 @@ router.put('/:id', async (req, res) => {
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
     const parsed = updatePostSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
 

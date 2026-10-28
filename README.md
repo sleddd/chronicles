@@ -188,7 +188,7 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
    `CALENDAR_TOKEN_KEY` (see comments in `.env.example`). Entry images need **no**
    server configuration — each user connects their own R2 bucket from Settings.
    Sign-up is closed by default: approve each email with
-   `npm run beta -- --approve <email>` (or list them in `REGISTRATION_WHITELIST`).
+   `npm run beta -- --approve <email>` (or, outside production, list them in `REGISTRATION_WHITELIST` — it is ignored when `NODE_ENV=production`). Sign-up links last 30 days.
    `REGISTRATION_OPEN=true` lets anyone create an account on your server.
 
 4. Set up the database:

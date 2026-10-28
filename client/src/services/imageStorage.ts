@@ -79,6 +79,20 @@ function activeConfig(): R2Config | null {
 /** Decrypted object URLs cached per session, keyed by object key. */
 const objectUrlCache = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
+// Moves on at every lock, so a download still running when the journal locks
+// can't put a decrypted URL back into the cache afterwards
+let lockEpoch = 0;
+
+/** The only object keys this app makes: `img/<uuid>` and its `-t` thumbnail. */
+const IMAGE_KEY = /^img\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-t)?$/;
+export function isImageKey(key: string): boolean {
+  return IMAGE_KEY.test(key);
+}
+
+// Uploads are re-encoded to JPEG; anything else named in metadata is shown as
+// JPEG, never as a type a browser would run (text/html, image/svg+xml)
+const DISPLAY_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+const displayType = (mimeType: string) => DISPLAY_TYPES.has(mimeType) ? mimeType : 'image/jpeg';
 
 function isValidConfig(cfg: unknown): cfg is R2Config {
   if (!cfg || typeof cfg !== 'object') return false;
@@ -223,12 +237,14 @@ export async function getImageObjectUrl(
   mimeType: string,
   decryptBytes: DecryptBytesFn
 ): Promise<string> {
+  if (!isImageKey(key)) throw new Error('Not an image key');
   const cached = objectUrlCache.get(key);
   if (cached) return cached;
 
   const pending = inflight.get(key);
   if (pending) return pending;
 
+  const epoch = lockEpoch;
   const promise = (async () => {
     const cfg = requireConfig();
     const url = await presignR2(cfg, 'GET', key);
@@ -240,7 +256,8 @@ export async function getImageObjectUrl(
     // from any other object can't decrypt under it either way
     const plaintext = await decryptBytes(ciphertext, iv, imageAad(key))
       .catch(() => decryptBytes(ciphertext, iv));
-    const objectUrl = URL.createObjectURL(new Blob([plaintext], { type: mimeType }));
+    if (epoch !== lockEpoch) throw new Error('Locked while loading');
+    const objectUrl = URL.createObjectURL(new Blob([plaintext], { type: displayType(mimeType) }));
     objectUrlCache.set(key, objectUrl);
     return objectUrl;
   })();
@@ -259,6 +276,7 @@ export async function getImageObjectUrl(
  * can re-derive the credentials without refetching settings.
  */
 export function clearImageCache(): void {
+  lockEpoch++;
   for (const url of objectUrlCache.values()) {
     URL.revokeObjectURL(url);
   }
@@ -274,7 +292,10 @@ export function clearImageCache(): void {
 
 /** Best-effort R2 object deletion — never throws. Skips silently when the
  *  config is unavailable (locked); orphans sit in the user's own bucket. */
-export async function bestEffortDeleteImages(keys: string[]): Promise<void> {
+export async function bestEffortDeleteImages(allKeys: string[]): Promise<void> {
+  // Only keys this app makes: never sign a DELETE for some other object in
+  // the bucket because an entry's metadata named it
+  const keys = allKeys.filter(isImageKey);
   if (keys.length === 0) return;
   const cfg = activeConfig();
   if (!cfg) {

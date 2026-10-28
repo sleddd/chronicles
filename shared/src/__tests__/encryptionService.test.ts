@@ -799,3 +799,18 @@ describe('encryptRecord / decryptRecord', () => {
     await expect(encryptionService.decryptRecord(key, 'bills', other, enc.payload, enc.iv)).rejects.toThrow();
   });
 });
+
+describe('entry creation time', () => {
+  it('the time sealed in the metadata wins over the server’s readable created_at', async () => {
+    const key = await generateMasterKey();
+    const sealedAt = '2026-03-01T12:00:00.000Z';
+    const enc = await encryptionService.encryptPost(key, 7, '<p>x</p>', { _createdAt: sealedAt });
+    const served = { id: 7, ...enc, isEncrypted: true, createdAt: new Date('2026-09-09T00:00:00Z'), updatedAt: new Date() };
+    const post = await encryptionService.decryptPost(key, served);
+    expect(new Date(post.createdAt).toISOString()).toBe(sealedAt);
+    // An entry from before keeps the server's
+    const old = await encryptionService.encryptPost(key, 8, '<p>x</p>', {});
+    const oldPost = await encryptionService.decryptPost(key, { id: 8, ...old, isEncrypted: true, createdAt: served.createdAt, updatedAt: new Date() });
+    expect(oldPost.createdAt).toEqual(served.createdAt);
+  });
+});

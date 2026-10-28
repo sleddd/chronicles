@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -84,8 +84,16 @@ export function LoginView() {
   const { login, submitTotpCode, cancel2FA, pending2FA } = useAuth();
   const { unlock } = useEncryption();
 
-  // Saved password for encryption unlock after 2FA completes
-  const [savedPassword, setSavedPassword] = useState('');
+  // The password, held for the unlock after 2FA completes: in a ref, not
+  // state (no copies in React's render history or devtools), and dropped as
+  // soon as it's used, the code screen is left, or the 5-minute code window ends
+  const savedPasswordRef = useRef('');
+  const forgetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const forgetPassword = () => {
+    savedPasswordRef.current = '';
+    if (forgetTimerRef.current) { clearTimeout(forgetTimerRef.current); forgetTimerRef.current = null; }
+  };
+  useEffect(() => forgetPassword, []);
   const [savedRemember, setSavedRemember] = useState(false);
 
   // 2FA screen state
@@ -100,7 +108,7 @@ export function LoginView() {
   const leave2FA = (note = '') => {
     cancel2FA();
     setOtpCode(''); setOtpError(''); setUseBackup(false);
-    setSavedPassword('');
+    forgetPassword();
     setSignInNote(note);
   };
 
@@ -108,8 +116,10 @@ export function LoginView() {
     const encryptionData = await login(email, password);
 
     if (encryptionData === null) {
-      // 2FA required — save password for later unlock
-      setSavedPassword(password);
+      // 2FA required — keep the password for the unlock once the code is in
+      forgetPassword();
+      savedPasswordRef.current = password;
+      forgetTimerRef.current = setTimeout(forgetPassword, 5 * 60 * 1000);
       setSavedRemember(remember);
       return;
     }
@@ -148,7 +158,7 @@ export function LoginView() {
         encryptionData.kekWrapIv
       ) {
         await unlock(
-          savedPassword,
+          savedPasswordRef.current,
           encryptionData.kekSalt,
           encryptionData.encryptedMasterKey,
           encryptionData.kekWrapIv,
@@ -156,6 +166,7 @@ export function LoginView() {
           savedRemember
         );
       }
+      forgetPassword();
       navigate('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Invalid code';

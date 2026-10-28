@@ -113,13 +113,14 @@ export function useDoseToMeals() {
 
     const tid = await mealsTopicId();
     const content = `<p>${escapeHtml(name)}</p>`;
-    const metadata = { _taxonomyId: tid, _doseLink: key, _customFields: cf };
+    const createdAt = date === today ? undefined : new Date(`${date}T12:00:00`).toISOString();
+    const metadata = { _taxonomyId: tid, _doseLink: key, _customFields: cf, ...(createdAt ? { _createdAt: createdAt } : {}) };
     const enc = await encryptNewPost(content, metadata);
     const res = await entriesApi.create({ id: enc.id,
       contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
       metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
       isEncrypted: true, taxonomyIds: [tid],
-      ...(date === today ? {} : { createdAt: new Date(`${date}T12:00:00`).toISOString() }),
+      ...(createdAt ? { createdAt } : {}),
     });
     useEntriesStore.getState().addDecryptedEntry({
       id: res.id as number, content, metadata, isEncrypted: true,

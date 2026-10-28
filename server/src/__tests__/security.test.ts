@@ -212,7 +212,7 @@ describe('Generic password validation errors', () => {
     // Register should return generic message
     const registerSection = authContent.split("router.post('/register'")[1]?.split("router.")[0] || '';
     expect(registerSection).toContain("'Invalid registration details'");
-    expect(registerSection).not.toContain('parsed.error.errors[0].message');
+    expect(registerSection).not.toContain('parsed.error.issues[0].message');
   });
 
   it('change-password endpoint returns generic validation error', async () => {
@@ -407,7 +407,7 @@ describe('Login validation error sanitization', () => {
     );
     const loginSection = authContent.split("router.post('/login'")[1]?.split("router.")[0] || '';
     // Should NOT expose Zod error details
-    expect(loginSection).not.toContain('parsed.error.errors[0].message');
+    expect(loginSection).not.toContain('parsed.error.issues[0].message');
     expect(loginSection).not.toContain('parsed.error.errors');
   });
 });

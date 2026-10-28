@@ -33,3 +33,10 @@ describe('Trusted Types default policy', () => {
     expect(() => trustedScriptURL('data:text/javascript,alert(1)', base)).toThrow();
   });
 });
+
+describe('links kept by the policy', () => {
+  it('a link opening a new tab always carries rel=noopener', () => {
+    const out = trustedHTML('<a href="https://example.com" target="_blank">x</a>');
+    expect(out).toContain('rel="noopener noreferrer"');
+  });
+});

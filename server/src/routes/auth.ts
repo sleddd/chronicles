@@ -876,7 +876,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
   try {
     const parsed = changeEmailSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
 
@@ -1425,7 +1425,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
   try {
     const parsed = saveRecoveryKeySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const { currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, code } = parsed.data;

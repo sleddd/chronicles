@@ -115,7 +115,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
       setImagesConfigured(complete && parsed.success);
       setSaveState('saved');
       if (!complete) setHint('Fill in the remaining fields to finish setup');
-      else if (!parsed.success) setHint(parsed.error.errors[0]?.message || 'Check the highlighted values');
+      else if (!parsed.success) setHint(parsed.error.issues[0]?.message || 'Check the highlighted values');
       else setHint('');
     } catch (err) {
       setSaveState('error');

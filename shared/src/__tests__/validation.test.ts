@@ -453,7 +453,7 @@ describe('createTaxonomySchema', () => {
     expect(createTaxonomySchema.safeParse({ id: 3, payload: 'x', iv: 'y' }).success).toBe(false);
     const bad = createTaxonomySchema.safeParse({ ...T, color: 'red' });
     expect(bad.success).toBe(false);
-    if (!bad.success) expect(bad.error.errors[0].message).toBe('Invalid hex color');
+    if (!bad.success) expect(bad.error.issues[0].message).toBe('Invalid hex color');
   });
   it('isPlaintextTopicWrite spots an out-of-date app', () => {
     expect(isPlaintextTopicWrite({ name: 'Work' })).toBe(true);

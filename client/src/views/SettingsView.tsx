@@ -391,7 +391,7 @@ export function SettingsView() {
     setPwMessage(''); setPwError(false);
     if (newPw !== confirmPw) { setPwMessage('Passwords do not match'); setPwError(true); return; }
     const rules = passwordSchema.safeParse(newPw);
-    if (!rules.success) { setPwMessage(rules.error.errors[0].message); setPwError(true); return; }
+    if (!rules.success) { setPwMessage(rules.error.issues[0].message); setPwError(true); return; }
     setPwLoading(true);
     try {
       const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPw, currentPw);
@@ -781,14 +781,17 @@ export function SettingsView() {
           metadata._customFields = customFields;
         }
 
-        // Wrap plain text in HTML paragraphs for TipTap
-        const htmlContent = content.split('\n').map(line => `<p>${line || '<br>'}</p>`).join('');
+        // Wrap plain text in HTML paragraphs for TipTap. The CSV is text, so
+        // it's escaped: markup in a cell stays words, never tags in the entry
+        const escapeCell = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const htmlContent = content.split('\n').map(line => `<p>${line ? escapeCell(line) : '<br>'}</p>`).join('');
+
+        // Parse date (sealed into the metadata too, so the server can't re-date it)
+        const createdAt = new Date(dateStr).toISOString();
+        metadata._createdAt = createdAt;
 
         // Encrypt
         const encrypted = await encryptNewPost(htmlContent, metadata);
-
-        // Parse date
-        const createdAt = new Date(dateStr).toISOString();
 
         // Queue for the next batch create
         const taxonomyIds = metadata._taxonomyId ? [metadata._taxonomyId as number] : [];

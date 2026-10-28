@@ -23,6 +23,7 @@ vi.mock('@shared/crypto/encryptionService.js', () => ({
     encryptPost: (...args: unknown[]) => mockEncryptPost(...args),
     decryptPost: (...args: unknown[]) => mockDecryptPost(...args),
     decryptPosts: (...args: unknown[]) => mockDecryptPosts(...args),
+    accountTag: async () => 'test-account-tag',
     unwrapWithRecoveryKey: (...args: unknown[]) => mockUnwrapWithRecoveryKey(...args),
     rewrapMasterKey: (...args: unknown[]) => mockRewrapMasterKey(...args),
     rewrapFromParams: (...args: unknown[]) => mockRewrapFromParams(...args),
@@ -244,40 +245,7 @@ describe('EncryptionProvider – decryptPost / decryptPosts', () => {
   });
 });
 
-describe('EncryptionProvider – unlockWithRecoveryKey', () => {
-  it('unlocks using recovery key', async () => {
-    mockUnwrapWithRecoveryKey.mockResolvedValue(fakeCryptoKey);
-
-    const { result } = renderHook(() => useEncryption(), { wrapper });
-
-    await act(async () => {
-      await result.current.unlockWithRecoveryKey('recoveryKey', 'rwmk', 'rwiv');
-    });
-
-    expect(result.current.isUnlocked).toBe(true);
-    expect(mockUnwrapWithRecoveryKey).toHaveBeenCalledWith('recoveryKey', 'rwmk', 'rwiv');
-  });
-});
-
 describe('EncryptionProvider – rewrapMasterKey', () => {
-  it('rewraps using extractable key from recovery flow', async () => {
-    mockUnwrapWithRecoveryKey.mockResolvedValue(fakeCryptoKey);
-    mockRewrapMasterKey.mockResolvedValue({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
-
-    const { result } = renderHook(() => useEncryption(), { wrapper });
-
-    await act(async () => {
-      await result.current.unlockWithRecoveryKey('rk', 'rwmk', 'rwiv');
-    });
-
-    let rewrapResult: unknown;
-    await act(async () => {
-      rewrapResult = await result.current.rewrapMasterKey('newPassword');
-    });
-
-    expect(rewrapResult).toEqual({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
-  });
-
   it('rewraps using current password in change-password flow', async () => {
     mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
     mockRewrapFromParams.mockResolvedValue({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
@@ -298,40 +266,14 @@ describe('EncryptionProvider – rewrapMasterKey', () => {
     expect(mockRewrapFromParams).toHaveBeenCalledWith('currentPw', 'salt', 'emk', 'iv', 600000, 'newPw');
   });
 
-  it('throws when no extractable key available for recovery rewrap', async () => {
+  it('needs the current password (no extractable key is ever kept for a rewrap)', async () => {
     const { result } = renderHook(() => useEncryption(), { wrapper });
 
     await expect(
       act(async () => {
         await result.current.rewrapMasterKey('newPassword');
       })
-    ).rejects.toThrow('No extractable key available for rewrap');
+    ).rejects.toThrow('Enter your current password to change it');
   });
 });
 
-describe('EncryptionProvider – lock clears extractable key', () => {
-  it('clears extractable key so rewrap fails after lock', async () => {
-    mockUnwrapWithRecoveryKey.mockResolvedValue(fakeCryptoKey);
-
-    const { result } = renderHook(() => useEncryption(), { wrapper });
-
-    // Unlock via recovery (sets extractableKeyRef)
-    await act(async () => {
-      await result.current.unlockWithRecoveryKey('rk', 'rwmk', 'rwiv');
-    });
-    expect(result.current.isUnlocked).toBe(true);
-
-    // Lock (should clear extractableKeyRef)
-    act(() => {
-      result.current.lock();
-    });
-    expect(result.current.isUnlocked).toBe(false);
-
-    // Rewrap should fail because extractable key was cleared
-    await expect(
-      act(async () => {
-        await result.current.rewrapMasterKey('newPw');
-      })
-    ).rejects.toThrow('No extractable key available for rewrap');
-  });
-});

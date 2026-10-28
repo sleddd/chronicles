@@ -104,7 +104,7 @@ export function useRoutineChecklist(date: string = toDateStr(new Date())) {
       }
     }
     const content = `<p>${escapeHtml(sessionTitle(s.routine, fields))}</p>`;
-    const metadata = { ...(first ? meta(first) : {}), _taxonomyId: tid, _routineLink: s.key, _customFields: fields };
+    const metadata: Record<string, unknown> = { ...(first ? meta(first) : {}), _taxonomyId: tid, _routineLink: s.key, _customFields: fields };
     if (first) {
       const enc = await encryptPost(first.id, content, metadata);
       await entriesApi.update(first.id, {
@@ -120,12 +120,14 @@ export function useRoutineChecklist(date: string = toDateStr(new Date())) {
       return;
     }
     const today = toDateStr(new Date());
+    const createdAt = date === today ? undefined : new Date(`${date}T${s.time.slice(0, 5).padStart(5, '0')}:00`).toISOString();
+    if (createdAt) metadata._createdAt = createdAt;
     const enc = await encryptNewPost(content, metadata);
     const res = await entriesApi.create({ id: enc.id,
       contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
       metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
       isEncrypted: true, taxonomyIds: [tid],
-      ...(date === today ? {} : { createdAt: new Date(`${date}T${s.time.slice(0, 5).padStart(5, '0')}:00`).toISOString() }),
+      ...(createdAt ? { createdAt } : {}),
     });
     useEntriesStore.getState().addDecryptedEntry({
       id: res.id as number, content, metadata, isEncrypted: true,

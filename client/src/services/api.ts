@@ -844,14 +844,20 @@ export interface ShareRecord {
   expiresAt: string | null;
 }
 
+/** Share tokens are base64url (24 random bytes today). */
+const SHARE_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
+
 export const shares = {
   /** Create a share (protected) — content is stored as plaintext by design */
   create: (data: { content: string; entryId: number; expiresAt?: string | null }) =>
     request<ShareRecord>('/shares', { method: 'POST', body: data }),
 
-  /** Fetch a share by token — public, no auth */
-  get: (token: string) =>
-    request<ShareRecord>(`/shares/${token}`),
+  /** Fetch a share by token — public, no auth. The token comes from the
+   *  address bar, so it must look like one: "..%2Fentries" would otherwise
+   *  send a signed-in visitor's browser to another API path */
+  get: (token: string) => SHARE_TOKEN.test(token)
+    ? request<ShareRecord>(`/shares/${encodeURIComponent(token)}`)
+    : Promise.reject(new Error('Invalid share link')),
 
   /** List all my shares (protected) */
   list: () =>

@@ -28,7 +28,7 @@ router.put('/', async (req, res) => {
   try {
     const parsed = upsertSettingSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const { key, value } = parsed.data;

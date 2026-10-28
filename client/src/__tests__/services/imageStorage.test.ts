@@ -148,7 +148,7 @@ describe('bestEffortDeleteImages', () => {
   it('skips silently when unconfigured', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    await bestEffortDeleteImages(['img/a', 'img/b']);
+    await bestEffortDeleteImages(['img/00000004-0000-4000-8000-000000000000', 'img/00000005-0000-4000-8000-000000000000']);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -171,7 +171,7 @@ describe('bestEffortDeleteImages', () => {
   it('never throws on network failure', async () => {
     setImageStorageConfig(CFG, encryptedValueOf(CFG));
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
-    await expect(bestEffortDeleteImages(['img/a'])).resolves.toBeUndefined();
+    await expect(bestEffortDeleteImages(['img/00000006-0000-4000-8000-000000000000'])).resolves.toBeUndefined();
   });
 });
 
@@ -193,14 +193,14 @@ describe('getImageObjectUrl', () => {
     vi.stubGlobal('fetch', fetchMock);
     const decryptBytes = vi.fn().mockResolvedValue(new ArrayBuffer(8));
 
-    const url1 = await getImageObjectUrl('img/k1', 'aXY=', 'image/jpeg', decryptBytes);
-    const url2 = await getImageObjectUrl('img/k1', 'aXY=', 'image/jpeg', decryptBytes);
+    const url1 = await getImageObjectUrl('img/00000001-0000-4000-8000-000000000000', 'aXY=', 'image/jpeg', decryptBytes);
+    const url2 = await getImageObjectUrl('img/00000001-0000-4000-8000-000000000000', 'aXY=', 'image/jpeg', decryptBytes);
 
     expect(url1).toBe(url2);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(decryptBytes).toHaveBeenCalledTimes(1);
     const fetchedUrl = fetchMock.mock.calls[0][0] as string;
-    expect(fetchedUrl).toContain(`${'a'.repeat(32)}.r2.cloudflarestorage.com/my-images/img/k1?`);
+    expect(fetchedUrl).toContain(`${'a'.repeat(32)}.r2.cloudflarestorage.com/my-images/img/00000001-0000-4000-8000-000000000000?`);
     expect(fetchedUrl).toContain('X-Amz-Signature=');
   });
 
@@ -210,14 +210,14 @@ describe('getImageObjectUrl', () => {
     const decryptBytes = vi.fn()
       .mockRejectedValueOnce(new Error('tag mismatch'))
       .mockResolvedValueOnce(new ArrayBuffer(8));
-    await getImageObjectUrl('img/k9', 'aXY=', 'image/jpeg', decryptBytes);
-    expect(decryptBytes.mock.calls[0][2]).toBe('chronicles:image:v1:img/k9');
+    await getImageObjectUrl('img/00000009-0000-4000-8000-000000000000', 'aXY=', 'image/jpeg', decryptBytes);
+    expect(decryptBytes.mock.calls[0][2]).toBe('chronicles:image:v1:img/00000009-0000-4000-8000-000000000000');
     expect(decryptBytes.mock.calls[1][2]).toBeUndefined();
   });
 
   it('throws when the journal is locked / unconfigured', async () => {
     await expect(
-      getImageObjectUrl('img/k2', 'aXY=', 'image/jpeg', vi.fn())
+      getImageObjectUrl('img/00000002-0000-4000-8000-000000000000', 'aXY=', 'image/jpeg', vi.fn())
     ).rejects.toThrow(/not configured|locked/);
   });
 
@@ -225,7 +225,18 @@ describe('getImageObjectUrl', () => {
     setImageStorageConfig(CFG, encryptedValueOf(CFG));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     await expect(
-      getImageObjectUrl('img/k3', 'aXY=', 'image/jpeg', vi.fn())
+      getImageObjectUrl('img/00000003-0000-4000-8000-000000000000', 'aXY=', 'image/jpeg', vi.fn())
     ).rejects.toThrow('404');
+  });
+});
+
+describe('image keys from entry metadata', () => {
+  it('signs nothing for a key this app never makes', async () => {
+    setImageStorageConfig(CFG, encryptedValueOf(CFG));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await bestEffortDeleteImages(['backups/everything.zip', 'img/../secret', 'img/00000007-0000-4000-8000-000000000000']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(getImageObjectUrl('img/../x', 'aXY=', 'image/jpeg', vi.fn())).rejects.toThrow('Not an image key');
   });
 });
