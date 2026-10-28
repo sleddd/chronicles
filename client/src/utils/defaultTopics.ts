@@ -25,6 +25,7 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Recipe', icon: 'bowl-food', color: '#F97316' },
   { name: 'Menu Plan', icon: 'calendar-week', color: '#8B5CF6' },
   { name: 'Changes', icon: 'clock', color: '#64748B' },
+  { name: 'Mantra', icon: 'spa', color: '#14B8A6' },
 ];
 
 /* Earlier names a default topic went by — an account that has one doesn't get the new name too */

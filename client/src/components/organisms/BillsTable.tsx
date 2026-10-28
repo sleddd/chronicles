@@ -7,8 +7,8 @@ import {
   SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge,
 } from '../molecules/FinanceParts.js';
 import {
-  billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaid, monthlyEquivalent, primaryBillAction,
-  newId, nextUnpaidDue, parseMoney, todayStr, undoLastPayment,
+  billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaid, primaryBillAction,
+  newId, nextUnpaidDue, parseMoney, todayStr, undoLastPayment, billPeriodSuffix,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
 
@@ -35,7 +35,7 @@ const HeadRight = styled.div`
   gap: 12px;
 `;
 
-/* name + "Bill · Category" | amount /mo | due | Mark paid | ⋯ */
+/* name + "Bill · Category" | amount (its own: "/quarter") | due | Mark paid | ⋯ */
 const BillLine = styled.div<{ $muted?: boolean }>`
   display: grid;
   grid-template-columns: minmax(0, 1fr) 130px 170px 96px 32px;
@@ -346,7 +346,9 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
               {bill.status === 'cancelled' && <TagNote>Cancelled{bill.cancelledOn ? ` ${formatDay(bill.cancelledOn)}` : ''}</TagNote>}
               <span>{bill.kind === 'subscription' ? 'Subscription' : 'Bill'}{catName(bill.categoryId) ? ` · ${catName(bill.categoryId)}` : ''}</span>
             </BillName>
-            <Amount $strike={!billCounts(bill)}>{formatCents(monthlyEquivalent(bill))}<small>/mo</small></Amount>
+            <Amount $strike={!billCounts(bill)}>
+              {formatCents(bill.amountCents)}<small>{billPeriodSuffix(bill.frequency)}</small>
+            </Amount>
             {dueCell(bill, due)}
             <BillActions
               bill={bill}

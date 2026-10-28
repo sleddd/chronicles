@@ -7,7 +7,9 @@ import styled from 'styled-components';
  */
 export const MaterialIcon = styled.span<{ $size?: number }>`
   font-family: 'Material Symbols Outlined';
-  font-weight: normal;
+  /* Matches the wght below: Safari (iPad / iOS) draws the variable font at the
+     CSS weight, so the two must agree (a thinner override sets both too) */
+  font-weight: 300;
   font-style: normal;
   font-size: ${({ $size }) => $size ?? 20}px;
   line-height: 1;

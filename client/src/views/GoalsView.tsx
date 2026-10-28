@@ -787,6 +787,20 @@ export function GoalsView() {
   const shownMilestones = searchAndSort(orderedMilestones.filter(milestonePasses), milestoneRow, query, sort);
   const shownTasks = searchAndSort(sortedTasks.filter(taskPasses), taskRow, query, sort);
   const shownTodos = searchAndSort(sortedTodos.filter(taskPasses), taskRow, query, sort);
+  /* Clear completed: deletes the completed tasks this tab is showing (its
+     filters and search apply), after a second click to confirm */
+  const completedShown = (tab === 'tasks' ? shownTasks : tab === 'todos' ? shownTodos : []).filter(t => t.isCompleted);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => { setConfirmClear(false); }, [tab]);
+  const clearCompleted = async () => {
+    if (!confirmClear) { setConfirmClear(true); return; }
+    setClearing(true);
+    // One at a time: a failure puts that one back and says so (deleteEntryWithImages)
+    for (const t of completedShown) await handleDeleteEntry(t.id);
+    setClearing(false);
+    setConfirmClear(false);
+  };
   const shownCount = tab === 'goals' ? shownGoals.length : tab === 'milestones' ? shownMilestones.length
     : tab === 'tasks' ? shownTasks.length : shownTodos.length;
 
@@ -912,6 +926,13 @@ export function GoalsView() {
               {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
               </>)}
               <RowEnd>
+                {isTaskTab && completedShown.length > 0 && !naming && (
+                  <ClearBtn type="button" disabled={clearing} onClick={() => void clearCompleted()} onBlur={() => !clearing && setConfirmClear(false)}>
+                    {clearing ? 'Clearing…' : confirmClear
+                      ? `Delete ${completedShown.length} completed ${completedShown.length === 1 ? (tab === 'todos' ? 'todo' : 'task') : tab}?`
+                      : 'Clear completed'}
+                  </ClearBtn>
+                )}
                 {naming ? (
                   <SaveForm onSubmit={saveCurrent}>
                     <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}

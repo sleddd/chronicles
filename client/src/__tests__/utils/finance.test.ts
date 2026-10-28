@@ -357,3 +357,13 @@ describe('primaryBillAction', () => {
     expect(primaryBillAction(markBillPaid(bill({ frequency: 'once', dueDate: '2026-10-01' }), '2026-10-01', 'p'), '2026-10-16')).toBe('undo');
   });
 });
+
+describe('billPeriodSuffix', () => {
+  it('names how often the bill\'s own amount is paid', async () => {
+    const { billPeriodSuffix } = await import('@/utils/finance');
+    expect(billPeriodSuffix('quarterly')).toBe('/quarter');
+    expect(billPeriodSuffix('monthly')).toBe('/mo');
+    expect(billPeriodSuffix('biweekly')).toBe('/2 wks');
+    expect(billPeriodSuffix('once')).toBe(' once');
+  });
+});

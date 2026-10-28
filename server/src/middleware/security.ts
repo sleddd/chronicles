@@ -16,6 +16,19 @@ const CONNECT_SRC = [
   ...bedrockOrigins(),
 ].join(' ');
 
+/**
+ * Trusted Types for pages: a plain string can't reach an HTML or script sink;
+ * it goes through the client's default policy (client/src/security/
+ * trustedTypes.ts — DOMPurify for HTML, own-site script URLs only, no code
+ * from strings). 'dompurify' is DOMPurify's own policy. Left off script files:
+ * a service worker takes the CSP of its own response, and sw.js loads Workbox
+ * with importScripts, which has no policy in the worker.
+ */
+export function trustedTypesDirectives(path: string): string {
+  if (/\.m?js$/i.test(path)) return '';
+  return "; require-trusted-types-for 'script'; trusted-types default dompurify 'allow-duplicates'";
+}
+
 export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
   // API responses carry the wrapped master key + salt (/me, /login), encrypted
   // entries and settings — keep them out of the browser's disk cache, where they
@@ -34,7 +47,8 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
     "font-src 'self'; " +
     "img-src 'self' data: blob:; " +
     `connect-src ${CONNECT_SRC}; ` +
-    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" +
+    trustedTypesDirectives(req.path ?? '')
   );
   // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');

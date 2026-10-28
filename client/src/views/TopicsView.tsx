@@ -98,7 +98,7 @@ const RowIcon = styled.span`
   align-items: center;
   justify-content: flex-start;
   color: var(--color-accent);
-  & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24; }
+  & > span { font-weight: 200; font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24; }
 `;
 
 const RowName = styled.span`

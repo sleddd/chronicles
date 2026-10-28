@@ -79,6 +79,7 @@ const BackBtn = styled.button`
   &:hover { color: var(--text-primary); } /* brightens, never the accent */
   & > span {
     font-size: 56px;
+    font-weight: 100;
     font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48;
   }
   @media (max-width: 480px) {
@@ -110,7 +111,7 @@ const TitleIcon = styled.span`
   display: inline-flex;
   margin: 0 14px 0 6px;
   color: var(--color-accent);
-  & > span { font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
+  & > span { font-weight: 200; font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
 `;
 
 const HeadActions = styled.div`

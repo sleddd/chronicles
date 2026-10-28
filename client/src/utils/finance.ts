@@ -153,6 +153,18 @@ export function monthlyEquivalent(bill: Bill): number {
   }
 }
 
+/** How often a bill's own amount is paid, written after it: "$160.00/quarter" */
+export function billPeriodSuffix(frequency: BillFrequency): string {
+  switch (frequency) {
+    case 'weekly': return '/wk';
+    case 'biweekly': return '/2 wks';
+    case 'monthly': return '/mo';
+    case 'quarterly': return '/quarter';
+    case 'yearly': return '/yr';
+    default: return ' once';
+  }
+}
+
 export interface BillTotals { monthly: number; yearly: number; subscriptionsMonthly: number }
 
 export function billTotals(bills: Bill[]): BillTotals {

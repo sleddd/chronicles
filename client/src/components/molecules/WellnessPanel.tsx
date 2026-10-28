@@ -230,8 +230,10 @@ const FaceBtn = styled.button<{ $active: boolean; $color: string }>`
   &:hover { color: ${({ $color }) => $color}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   @media (max-width: 480px) { width: 50px; height: 50px; & > span { font-size: 60px; } }
-  /* Thin faces: lightest weight at the large optical size */
-  & > span { font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48; }
+  /* Thin faces: lightest weight at the large optical size. font-weight too:
+     Safari (iPad / iOS) draws the variable icon font at the CSS weight and
+     can ignore the wght in font-variation-settings, so the faces came out bold */
+  & > span { font-weight: 100; font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48; }
 `;
 
 const Chips = styled.div`

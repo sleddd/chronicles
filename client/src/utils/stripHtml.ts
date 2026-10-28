@@ -3,11 +3,10 @@ import type { UserFieldDef } from '../types/userFields.js';
 
 /** Strip HTML tags from a string, returning plain text. */
 export function stripHtml(html: string): string {
-  const clean = DOMPurify.sanitize(html, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
-  // DOMPurify with no allowed tags returns text-only content
-  const tmp = document.createElement('div');
-  tmp.innerHTML = clean;
-  return tmp.textContent || tmp.innerText || '';
+  // Read the text straight off DOMPurify's (inert) fragment — no innerHTML
+  // sink, so nothing here goes through Trusted Types a second time
+  const frag = DOMPurify.sanitize(html, { ALLOWED_TAGS: [], ALLOWED_ATTR: [], RETURN_DOM_FRAGMENT: true });
+  return frag.textContent || '';
 }
 
 /** Built-in "primary label" field keys, in priority order — the name/description

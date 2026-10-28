@@ -54,6 +54,7 @@ import {
   type ChecklistItem,
 } from '../utils/taskLists.js';
 import { PLAN_TAB_PATHS } from '../utils/planningView.js';
+import { MANTRA_TOPIC, MANTRA_ICON, isMantraTopic, dailyMantraIndex, stepIndex } from '../utils/mantras.js';
 
 /* The home dashboard (/dashboard — not the default page; the journal is home):
    the date and home weather over the greeting and a Light | Dark switch; the
@@ -66,7 +67,7 @@ import { PLAN_TAB_PATHS } from '../utils/planningView.js';
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -76,6 +77,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quote', label: 'Quote of the day' },
   { key: 'priorities', label: "Today's priorities" },
   { key: 'tasks', label: 'Tasks & to-do lists' },
+  { key: 'mantra', label: 'Mantra' },
   { key: 'comingUp', label: 'Coming up' },
   { key: 'exercise', label: 'Exercise schedule' },
   { key: 'quickLog', label: 'Quick meal log' },
@@ -107,7 +109,7 @@ interface DashboardConfig {
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
   left: ['priorities', 'tasks', 'comingUp', 'quickLog', 'exercise'],
-  right: ['recent', 'shopping', 'menu', 'meds', 'symptom'],
+  right: ['mantra', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
 /** The saved layout with any card it doesn't know put back in its default column */
@@ -1421,6 +1423,130 @@ const RecentRow = styled(Row)`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* ── Mantra: one of your mantras a day, in turn ── */
+
+/* The mantra in the daily quote's voice: thin italic Work Sans; tap to edit */
+const MantraText = styled.button`
+  display: block;
+  width: 100%;
+  margin: 18px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--text-primary);
+  white-space: pre-line;
+  cursor: pointer;
+  &:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  @media (max-width: 480px) { font-size: 19px; }
+`;
+
+/* ‹ › to look at the others (today's comes back tomorrow) */
+const MantraNav = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  button:hover { color: var(--text-primary); border-color: var(--control-border); }
+  button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+function Mantra() {
+  const navigate = useNavigate();
+  const openInJournal = useOpenInJournal();
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const { encryptNewPost } = useEncryption();
+  const [step, setStep] = useState(0);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+
+  const topicId = allTopics.find(t => isMantraTopic(t.name))?.id;
+  // Oldest first, so the daily turn is stable as new ones are added
+  const mantras = useMemo(() => (topicId === undefined ? [] : entries
+    .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === topicId)
+    .map(e => ({ id: e.id, text: stripHtml(e.content).trim() }))
+    .filter(m => m.text)
+    .sort((a, b) => a.id - b.id)), [entries, topicId]);
+  const shown = mantras[stepIndex(dailyMantraIndex(mantras.length), step, mantras.length)];
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    setError('');
+    try {
+      const tid = await getOrCreateTopic(MANTRA_TOPIC, MANTRA_ICON);
+      const content = `<p>${escapeHtml(text)}</p>`;
+      const metadata = { _taxonomyId: tid };
+      const enc = await encryptNewPost(content, metadata);
+      const res = await entriesApi.create({ id: enc.id,
+        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+        isEncrypted: true, taxonomyIds: [tid],
+      });
+      addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
+        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+      // Show the new one: it's last in the list
+      const count = mantras.length + 1;
+      setStep(count - 1 - dailyMantraIndex(count));
+    } catch (err) {
+      console.error('Mantra save failed:', err);
+      setDraft(text);
+      setError('That mantra didn’t save. Try again.');
+    }
+  };
+
+  return (
+    <section aria-label="Mantra">
+      <SectionHead>
+        <h2>Mantra</h2>
+        {topicId !== undefined && <button type="button" onClick={() => navigate(`/topics/${topicId}`)}>All mantras</button>}
+      </SectionHead>
+      {shown ? (<>
+        <MantraText type="button" title="Edit this mantra" onClick={() => openInJournal(shown.id)}>{shown.text}</MantraText>
+        {mantras.length > 1 && (
+          <MantraNav>
+            <button type="button" aria-label="Previous mantra" onClick={() => setStep(s => s - 1)}>
+              <Icon name="chevron-left" size={16} strokeWidth={2} />
+            </button>
+            <button type="button" aria-label="Next mantra" onClick={() => setStep(s => s + 1)}>
+              <Icon name="chevron-right" size={16} strokeWidth={2} />
+            </button>
+          </MantraNav>
+        )}
+      </>) : <Muted>No mantras yet. Write your first one below.</Muted>}
+      <form onSubmit={e => void add(e)}>
+        <AddBox style={{ marginTop: 20 }}>
+          <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
+            placeholder="Write a mantra" aria-label="Write a mantra" />
+        </AddBox>
+      </form>
+      {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
+    </section>
+  );
+}
+
 function RecentEntries() {
   const navigate = useNavigate();
   const openInJournal = useOpenInJournal();
@@ -1795,6 +1921,7 @@ export function DashboardView() {
       node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} />,
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
+    mantra: { label: 'mantra', on: shown('mantra'), node: <Mantra /> },
     shopping: {
       label: 'shopping list', on: shown('shopping'),
       node: <Shopping show={config.shoppingShow ?? 'latest'} onShow={next => void saveConfig({ ...config, shoppingShow: next })} />,

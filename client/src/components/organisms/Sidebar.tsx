@@ -228,7 +228,7 @@ const SrOnly = styled.span`
 /* Google Material Symbols (outlined). Loaded via the font in index.html. */
 const MaterialIcon = styled.span<{ $size?: number }>`
   font-family: 'Material Symbols Outlined';
-  font-weight: normal;
+  font-weight: 300; /* = the wght below (Safari draws the variable font at the CSS weight) */
   font-style: normal;
   font-size: ${({ $size }) => $size ?? 24}px;
   line-height: 1;
