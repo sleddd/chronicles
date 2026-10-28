@@ -14,7 +14,7 @@ export interface DoseGroup {
   pending: ScheduledDose[];
 }
 
-/** Fired on window when a dose is logged elsewhere (voice): every dose list reloads its day */
+/** Fired on window when a dose is logged (a tick, voice): every dose list reloads its day */
 export const DOSES_CHANGED = 'chronicles:doses-changed';
 
 const keyOf = (d: ScheduledDose) => `${d.medicationPostId}-${d.time.substring(0, 5)}`;
@@ -107,6 +107,8 @@ export function useTodayDoses(enabled: boolean) {
       const takenAt = on && isToday ? new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : null;
       const { log } = await dosesApi.log({ medicationPostId: d.medicationPostId, scheduledTime: time, date: day, status: on ? 'taken' : 'pending', takenAt });
       setLogs(prev => ({ ...prev, [`${d.medicationPostId}-${time}`]: { ...log, scheduledTime: log.scheduledTime.substring(0, 5) } }));
+      // Every other dose list (the bell, the other dashboard) picks it up too
+      window.dispatchEvent(new Event(DOSES_CHANGED));
       const sync = on ? doseToMeals.onTaken : doseToMeals.onUntaken;
       void sync(d.medicationPostId, day, time).catch(err => console.warn('Dose → Meals sync failed:', err));
     } catch (err) {

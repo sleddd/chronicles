@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
+import { cardLabel } from '../../styles/cardLabel.js';
 import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
 import { Icon } from '../atoms/core/Icon.jsx';
@@ -29,7 +30,7 @@ const SectionHead = styled.div`
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border-subtle);
   /* The Daily quote label's style, like every dashboard card title */
-  h2 { margin: 0; font-family: var(--font-sans); font-size: 15px; font-weight: 400; line-height: 30px; color: var(--text-muted); }
+  h2 { margin: 0; line-height: 30px; ${cardLabel} }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }

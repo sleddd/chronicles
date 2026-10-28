@@ -5,6 +5,7 @@ import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
 import { EMPTY_SYMPTOM_CHIPS, symptomChipList, hasSymptom, toggleSymptom, addSymptomChip, splitSymptoms, frequentSymptoms, matchSymptoms, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { SeveritySection } from '../molecules/fields/SymptomFields.js';
 import styled from 'styled-components';
+import { cardLabel } from '../../styles/cardLabel.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
@@ -807,7 +808,7 @@ const BareHead = styled.div`
   padding-bottom: 12px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border-subtle);
-  h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
+  h2 { margin: 0; ${cardLabel} }
 `;
 
 /* A little more room above the meal name / activity chips than the card's usual gap */

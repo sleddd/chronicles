@@ -2,6 +2,7 @@ import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore.js';
+import { NotificationBell } from './NotificationBell.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 import { TOP_BAR_SLOT_ID } from './TopBarAction.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
@@ -137,6 +138,13 @@ const Overlay = styled.div<{ $open: boolean }>`
  * as the desktop rail (`useNavItems`), Settings and Sign out last under a hairline. Open
  * state lives in uiStore (`mobileNavOpen`). Hidden on desktop.
  */
+const BarEnd = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+`;
+
 export function MobileChrome() {
   const open = useUIStore(s => s.mobileNavOpen);
   const setOpen = useUIStore(s => s.setMobileNavOpen);
@@ -173,8 +181,11 @@ export function MobileChrome() {
           <BrandMark size={26} gradientId="logo-mobile" />
           <PageName>{current?.label ?? (pathname === '/dashboard' ? 'Today' : 'Chronicles')}</PageName>
         </LogoContainer>
-        {/* The page's main action lands here (TopBarAction) */}
-        <BarActions id={TOP_BAR_SLOT_ID} />
+        {/* The page's main action lands here (TopBarAction), then the reminders bell */}
+        <BarEnd>
+          <BarActions id={TOP_BAR_SLOT_ID} />
+          <NotificationBell variant="bar" />
+        </BarEnd>
       </MobileNavBar>
       <Overlay $open={open} onClick={() => setOpen(false)} />
       {open && (

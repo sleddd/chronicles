@@ -1,12 +1,13 @@
 import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
+import { cardLabel } from '../styles/cardLabel.js';
 import { useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
@@ -19,6 +20,7 @@ import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { VoiceCommand, useVoiceSession } from '../components/organisms/VoiceCommand.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
@@ -185,39 +187,124 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  @media (max-width: 640px) { padding: 24px 0 0; margin-bottom: 12px; }
+  /* Phones / tablets: the actions move up into the top bar (TopBarAction) */
+  @media (max-width: 640px) { padding: 24px 0 0; margin-bottom: 12px; justify-content: flex-end; &:empty { display: none; } }
 `;
 
-/* Customize view: the neutral pill, in sentence case at normal spacing (both themes) */
-const CustomizeBtn = styled(PillButton)`
-  && { text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 500; }
-  /* A light grey outline and no fill, like the theme switch beside it */
-  &&& { border-color: var(--border-card); background: transparent; }
-  &&&:hover:not(:disabled) { border-color: var(--border-strong); }
-`;
-
-const ThemeSwitch = styled.div`
+/* Voice: a quiet button — the mic and the word, no outline, never a darker fill
+   (open: the accent; hover: brighter text) */
+const VoiceBtn = styled.button<{ $on: boolean }>`
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* View options: a round sliders button — no darker fill when open or hovered
+   (open: the accent; hover: brighter) */
+const ViewBtn = styled.button<{ $on: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* Its card: THEME over the Light | Dark | Auto switch, a hairline, then Customize view › */
+const ViewMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  padding: 18px 16px 10px;
+  background: var(--bg-tile);
+  html[data-theme='light'] & { background: var(--bg-control, var(--bg-panel)); }
+  border: 1px solid var(--border-pop);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xl);
+  font-family: var(--font-sans);
+  h2 { margin: 0 0 10px; ${cardLabel} }
+  hr { margin: 14px 0 6px; border: none; border-top: 1px solid var(--border-subtle); }
+`;
+
+const MenuRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  & > span:last-child { margin-left: auto; color: var(--text-muted); }
+  /* No darker fill — the chevron firms up */
+  &:hover > span:last-child { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+const ViewWrap = styled.div`
+  position: relative;
+`;
+
+/* Light | Dark | Auto: one rounded pill, an icon before each, the chosen one on
+   a grey pill in the body colour (no accent) */
+const ThemeSwitch = styled.div`
+  display: flex;
   gap: 2px;
+  height: 38px;
   padding: 3px;
   border: 1px solid var(--border-card);
-  border-radius: 10px;
+  border-radius: 999px;
+  background: var(--bg-control, transparent);
 `;
 
 const ThemeOpt = styled.button<{ $on: boolean }>`
-  height: 32px;
-  padding: 0 16px;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
   border: none;
-  border-radius: 7px;
+  border-radius: 999px;
   background: ${({ $on }) => ($on ? 'var(--bg-active)' : 'transparent')};
   font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: ${({ $on }) => ($on ? 600 : 400)};
+  font-size: 14px;
+  font-weight: ${({ $on }) => ($on ? 500 : 400)};
   color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-soft)')};
   cursor: pointer;
   &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
+
+const THEME_ICON = { light: 'light_mode', dark: 'dark_mode', auto: 'contrast' } as const;
 
 const LinkBtn = styled.button`
   padding: 0;
@@ -248,8 +335,8 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div`
-  margin-top: 56px;
-  @media (max-width: 640px) { margin-top: 36px; }
+  margin-top: 48px;
+  @media (max-width: 640px) { margin-top: 32px; }
 `;
 
 const Hero = styled.div<{ $single: boolean; $afterQuick?: boolean }>`
@@ -279,8 +366,9 @@ const NextTop = styled.div<{ $plain?: boolean }>`
   justify-content: space-between;
   gap: 12px;
   font-size: 15px;
-  /* $plain (Daily quote): a quiet grey label at 400 instead of the bold accent */
-  b { font-weight: ${({ $plain }) => ($plain ? 400 : 600)}; color: ${({ $plain }) => ($plain ? 'var(--text-muted)' : 'var(--color-accent-link)')}; }
+  /* $plain (Daily quote): the card label instead of the bold accent */
+  b { font-weight: 600; color: var(--color-accent-link); }
+  ${({ $plain }) => ($plain ? css`b { ${cardLabel} }` : '')}
   span { color: var(--text-muted); }
 `;
 
@@ -336,7 +424,7 @@ const Strip = styled.div`
   min-height: 64px;
   font-family: var(--font-sans);
   font-size: 16px;
-  & > b { flex: none; font-weight: 500; color: var(--text-primary); }
+  & > b { flex: none; ${cardLabel} }
   @media (max-width: 640px) { gap: 20px; }
 `;
 
@@ -460,7 +548,7 @@ const Col = styled.div`
 
 /* Each section in the two columns sits in its own grey card, like Next up and the
    quote, with a chevron on the right that folds it down to its title row */
-const WidgetCard = styled.div<{ $collapsed: boolean }>`
+const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean }>`
   position: relative;
   min-width: 0;
   padding: 28px 92px 28px 32px;
@@ -471,14 +559,17 @@ const WidgetCard = styled.div<{ $collapsed: boolean }>`
   & > section > :first-child { align-items: center; }
   /* The same room between every title row and the card's content */
   && > section > :first-child { margin-bottom: 16px; }
-  /* Titles in the Daily quote label's style: 15px Open Sans, 400, grey */
+  /* Titles: the dashboards' card label (small tracked grey capitals), on the chevron's 30px line */
   & > section > :first-child h2 {
+    margin: 0;
     line-height: 30px;
-    font-family: var(--font-sans);
-    font-size: 15px;
-    font-weight: 400;
-    color: var(--text-muted);
+    ${cardLabel}
   }
+  /* A title over a picker (Shopping list, Tasks): the grip and chevron sit on its middle */
+  ${({ $tall, $collapsed }) => ($tall && !$collapsed ? `
+    & > button { top: 47px; }
+    @media (max-width: 480px) { & > button { top: 41px; } }
+  ` : '')}
   ${({ $collapsed }) => ($collapsed ? `
     padding-top: 14px;
     padding-bottom: 14px;
@@ -539,7 +630,7 @@ const SectionHead = styled.div`
   gap: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-subtle);
-  h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-secondary); }
+  h2 { margin: 0; ${cardLabel} }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
   button:hover { text-decoration: underline; }
@@ -565,6 +656,15 @@ const Muted = styled.p`
 `;
 
 /* ── Customize panel ── */
+
+const CustomizeHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  h3 { margin: 0 !important; }
+`;
 
 const Customize = styled.div`
   margin-top: 24px;
@@ -1007,38 +1107,64 @@ const ShowPick = styled.label`
   position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-width: 0;
-  max-width: 220px;
-  height: 38px;
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
+  max-width: 260px;
+  height: 32px;
+  /* Bare: the choice as text, flush left, its chevron right after it; the real
+     select lies invisibly over both (a select is as wide as its longest option,
+     which would push the chevron away from the text) */
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
   color: var(--text-primary);
-  &:focus-within { border-color: var(--color-accent-line); }
+  cursor: pointer;
+  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  svg { flex: none; color: var(--text-muted); }
   select {
-    appearance: none;
-    min-width: 0;
-    max-width: 100%;
+    position: absolute;
+    inset: 0;
+    width: 100%;
     height: 100%;
-    padding: 0 32px 0 14px;
+    opacity: 0;
+    appearance: none;
     border: none;
-    border-radius: 10px;
-    background: transparent;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    font-weight: 400;
-    color: inherit;
-    text-overflow: ellipsis;
+    font-size: 16px; /* iOS doesn't zoom into a 16px control */
     cursor: pointer;
-    outline: none;
   }
-  svg { position: absolute; right: 12px; pointer-events: none; color: var(--text-muted); }
+  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
-const HeadEnd = styled.div`
-  display: flex;
+/* Shopping list / Tasks: the title over its picker, a + across from both (the
+   card's grip and chevron line up with it — WidgetCard $tall) and a rule under */
+const PickerHead = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  min-width: 0;
+  column-gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  & > h2 { grid-column: 1; }
+  & > label { grid-column: 1; justify-self: start; margin-top: 6px; }
+  & > button { grid-column: 2; grid-row: 1 / span 2; }
+`;
+
+/* + : start a new list (× while one is being named) */
+const PlusBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  /* No darker fill on hover — the + just firms up */
+  &:hover { color: var(--color-accent-line); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 /* A task's title: opens it in the journal (or a todo list in this card) */
@@ -1071,7 +1197,10 @@ const TaskMeta = styled.span`
 `;
 
 const MoreLink = styled.button`
-  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
   padding: 0;
   border: none;
   background: none;
@@ -1191,14 +1320,16 @@ function Tasks({ show, onShow }: { show: string; onShow: (next: string) => void 
     void save(e, { ...cf, isCompleted: !cf.isCompleted, isInProgress: false, isInReview: false });
   };
   const pickValue = mode === 'list' ? `list:${list!.id}` : mode === 'view' ? `view:${view!.id}` : 'open';
+  const pickLabel = mode === 'list' ? titleOf(list!) : mode === 'view' ? view!.name : 'Open tasks';
   const morePath = view ? PLAN_TAB_PATHS[view.tab] : '/goals/todos';
 
   return (
     <section aria-label="Tasks">
-      <SectionHead>
+      <PickerHead>
         <h2>Tasks</h2>
-        <HeadEnd>
-          <ShowPick>
+        <ShowPick>
+            <span>{pickLabel}</span>
+            <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
             <select aria-label="Show" value={pickValue} onChange={e => onShow(e.target.value)}>
               <option value="open">Open tasks</option>
               {views.length > 0 && (
@@ -1212,23 +1343,21 @@ function Tasks({ show, onShow }: { show: string; onShow: (next: string) => void 
                 </optgroup>
               )}
             </select>
-            <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
-          </ShowPick>
-          {/* Clears the card for a fresh list while it's named; the shown list itself is untouched */}
-          <button type="button" onClick={() => { setNaming(n => !n); setNewName(''); setDraft(''); }}>
-            {naming ? 'Cancel' : 'New To-Do List'}
-          </button>
-        </HeadEnd>
-      </SectionHead>
+        </ShowPick>
+        {/* +: clears the card for a fresh list while it's named; the shown list itself is untouched */}
+        <PlusBtn type="button" aria-label={naming ? 'Cancel the new to-do list' : 'New To-Do List'} title={naming ? 'Cancel' : 'New To-Do List'}
+          onClick={() => { setNaming(n => !n); setNewName(''); setDraft(''); }}>
+          <Icon name={naming ? 'x' : 'plus'} size={18} strokeWidth={2} />
+        </PlusBtn>
+      </PickerHead>
 
       {naming && (
-        <form onSubmit={e => void createList(e)}>
-          <AddBox style={{ marginTop: 12 }}>
-            <BareInput autoFocus value={newName} onChange={e => setNewName(e.target.value)} maxLength={120}
-              placeholder="Name the list, e.g. First week of October" aria-label="New to-do list name"
-              onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
-          </AddBox>
-        </form>
+        <AddItem onSubmit={e => void createList(e)}>
+          <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
+          <BareInput autoFocus value={newName} onChange={e => setNewName(e.target.value)} maxLength={120}
+            placeholder="Name the list, e.g. First week of October" aria-label="New to-do list name"
+            onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
+        </AddItem>
       )}
       {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
 
@@ -1246,12 +1375,12 @@ function Tasks({ show, onShow }: { show: string; onShow: (next: string) => void 
             </PRemove>
           </Row>
         ))}
-        <AddBox style={items.length ? { marginTop: 12 } : undefined}>
+        <AddItem onSubmit={e => { e.preventDefault(); addItem(); }}>
+          <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
           <BareInput value={draft} placeholder="Add a to-do" aria-label={`Add a to-do to ${titleOf(list)}`}
-            onChange={e => setDraft(e.target.value)} onBlur={addItem}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }} />
-        </AddBox>
-        <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list</MoreLink>
+            onChange={e => setDraft(e.target.value)} />
+        </AddItem>
+        <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>
       </>)}
 
       {!naming && mode !== 'list' && (<>
@@ -1567,7 +1696,7 @@ const Pills = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 2px;
 `;
 
 const ItemPill = styled.button<{ $got: boolean }>`
@@ -1582,6 +1711,15 @@ const ItemPill = styled.button<{ $got: boolean }>`
   text-decoration: ${({ $got }) => ($got ? 'line-through' : 'none')};
   cursor: pointer;
   &:hover { border-color: var(--control-border); }
+  /* Got: on the grey fill with a ✓, struck through */
+  ${({ $got }) => ($got ? css`
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-color: transparent;
+    background: var(--bg-active);
+    svg { flex: none; }
+  ` : '')}
 `;
 
 /* Add an item: an outlined pill with a + — Enter adds */
@@ -1673,38 +1811,38 @@ function Shopping({ show, onShow }: { show: string; onShow: (next: string) => vo
 
   return (
     <section aria-label="Shopping list">
-      <SectionHead>
+      <PickerHead>
         <h2>Shopping list</h2>
-        <HeadEnd>
-          {lists.length > 0 && (
-            <ShowPick>
-              <select aria-label="Which shopping list" value={chosen ? String(chosen.id) : 'latest'} onChange={e => onShow(e.target.value)}>
-                <option value="latest">Latest open list</option>
-                {lists.map(l => <option key={l.id} value={String(l.id)}>{listName(l)}</option>)}
-              </select>
-              <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
-            </ShowPick>
-          )}
-          {/* Clears the card for a fresh list while it's named; the shown list itself is untouched */}
-          <button type="button" onClick={() => { setNaming(n => !n); setNewName(''); setError(''); }}>
-            {naming ? 'Cancel' : 'New list'}
-          </button>
-        </HeadEnd>
-      </SectionHead>
+        {lists.length > 0 && (
+          <ShowPick>
+            <span>{chosen ? listName(chosen) : 'Latest open list'}</span>
+            <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+            <select aria-label="Which shopping list" value={chosen ? String(chosen.id) : 'latest'} onChange={e => onShow(e.target.value)}>
+              <option value="latest">Latest open list</option>
+              {lists.map(l => <option key={l.id} value={String(l.id)}>{listName(l)}</option>)}
+            </select>
+          </ShowPick>
+        )}
+        {/* +: clears the card for a fresh list while it's named; the shown list itself is untouched */}
+        <PlusBtn type="button" aria-label={naming ? 'Cancel the new shopping list' : 'New shopping list'} title={naming ? 'Cancel' : 'New list'}
+          onClick={() => { setNaming(n => !n); setNewName(''); setError(''); }}>
+          <Icon name={naming ? 'x' : 'plus'} size={18} strokeWidth={2} />
+        </PlusBtn>
+      </PickerHead>
       {naming ? (
-        <form onSubmit={e => void startList(e)}>
-          <AddBox style={{ marginTop: 12 }}>
-            <BareInput autoFocus value={newName} onChange={e => setNewName(e.target.value)} maxLength={120}
-              placeholder="Name the list, e.g. Weekend groceries" aria-label="New shopping list name"
-              onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
-          </AddBox>
-        </form>
+        <AddItem onSubmit={e => void startList(e)}>
+          <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
+          <BareInput autoFocus value={newName} onChange={e => setNewName(e.target.value)} maxLength={120}
+            placeholder="Name the list, e.g. Weekend groceries" aria-label="New shopping list name"
+            onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
+        </AddItem>
       ) : (<>
       {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : (
         <Pills>
           {[...items.filter(i => !i.checked), ...items.filter(i => i.checked)].map(i => (
             <ItemPill key={i.id} type="button" $got={!!i.checked} aria-pressed={!!i.checked}
               onClick={() => void save(list, { ...cfOf(list), items: items.map(x => (x.id === i.id ? { ...x, checked: !x.checked } : x)) })}>
+              {i.checked && <Icon name="check" size={14} strokeWidth={2} aria-hidden="true" />}
               {i.name}
             </ItemPill>
           ))}
@@ -1715,7 +1853,7 @@ function Shopping({ show, onShow }: { show: string; onShow: (next: string) => vo
         <BareInput value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list" />
       </AddItem>
       {/* The whole list in the journal editor: rename, remove items, notes… */}
-      {list && <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list</MoreLink>}
+      {list && <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>}
       </>)}
       {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
     </section>
@@ -1725,10 +1863,10 @@ function Shopping({ show, onShow }: { show: string; onShow: (next: string) => vo
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
-function SortableCard({ id, collapsed, label, children }: { id: SectionKey; collapsed: boolean; label: string; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, tall, children }: { id: SectionKey; collapsed: boolean; label: string; tall?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
-    <WidgetCard ref={setNodeRef} $collapsed={collapsed}
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $tall={tall}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
@@ -1800,6 +1938,17 @@ export function DashboardView() {
     if (next.left.join() !== saved.left.join() || next.right.join() !== saved.right.join()) void saveConfig({ ...config, layout: next });
   };
   const [customizing, setCustomizing] = useState(false);
+  // The sliders button's card (theme + Customize view); a click outside or Escape closes it
+  const [viewOpen, setViewOpen] = useState(false);
+  const viewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!viewOpen) return;
+    const onDown = (e: MouseEvent) => { if (!viewRef.current?.contains(e.target as Node)) setViewOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [viewOpen]);
   // Voice commands: only where the browser can do speech (not Firefox). One
   // tap opens the panel and starts listening (the session lives here so the
   // mic starts inside the tap)
@@ -1922,7 +2071,7 @@ export function DashboardView() {
   const card = (k: SectionKey) => {
     const w = widgets[k]!;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label}>
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} tall={k === 'shopping' || k === 'tasks'}>
         {w.node}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
           aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
@@ -1944,22 +2093,40 @@ export function DashboardView() {
               <Eyebrow>{eyebrow}</Eyebrow>
             </DateBlock>
             <HeadActions>
-              <ThemeSwitch role="group" aria-label="Theme">
-                {(['light', 'dark', 'auto'] as const).map(m => (
-                  <ThemeOpt key={m} type="button" $on={themePreference === m} aria-pressed={themePreference === m} onClick={() => changeTheme(m)}
-                    title={m === 'auto' ? 'Light from 7 AM, dark from 7 PM' : undefined}>
-                    {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'Auto'}
-                  </ThemeOpt>
-                ))}
-              </ThemeSwitch>
-              {voice.supported && (
-                <CustomizeBtn type="button" $variant="neutral" aria-expanded={voice.open} onClick={() => (voice.open ? voice.close() : voice.openAndListen())}>
-                  <Icon name="mic" size={15} strokeWidth={1.8} aria-hidden="true" />Voice
-                </CustomizeBtn>
-              )}
-              <CustomizeBtn type="button" $variant="neutral" aria-expanded={customizing} onClick={() => setCustomizing(c => !c)}>
-                {customizing ? 'Done' : 'Customize view'}
-              </CustomizeBtn>
+              {/* Phones / tablets: up in the top bar, beside the reminders bell (TopBarAction) */}
+              <TopBarAction>
+                {voice.supported && (
+                  <VoiceBtn type="button" $on={voice.open} aria-expanded={voice.open} onClick={() => (voice.open ? voice.close() : voice.openAndListen())}>
+                    <MaterialIcon $size={20} aria-hidden="true">mic</MaterialIcon>Voice
+                  </VoiceBtn>
+                )}
+                <ViewWrap ref={viewRef}>
+                  <ViewBtn type="button" $on={viewOpen} aria-label="Theme and layout" title="Theme and layout"
+                    aria-haspopup="dialog" aria-expanded={viewOpen} onClick={() => setViewOpen(o => !o)}>
+                    <MaterialIcon $size={22} aria-hidden="true">tune</MaterialIcon>
+                  </ViewBtn>
+                  {viewOpen && (
+                    <ViewMenu role="dialog" aria-label="Theme and layout">
+                      <h2>Theme</h2>
+                      <ThemeSwitch role="group" aria-label="Theme">
+                        {(['light', 'dark', 'auto'] as const).map(m => (
+                          <ThemeOpt key={m} type="button" $on={themePreference === m} aria-pressed={themePreference === m} onClick={() => changeTheme(m)}
+                            title={m === 'auto' ? 'Light from 7 AM, dark from 7 PM' : undefined}>
+                            <MaterialIcon $size={16} aria-hidden="true">{THEME_ICON[m]}</MaterialIcon>
+                            {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'Auto'}
+                          </ThemeOpt>
+                        ))}
+                      </ThemeSwitch>
+                      <hr />
+                      <MenuRow type="button" aria-expanded={customizing} onClick={() => { setViewOpen(false); setCustomizing(true); }}>
+                        <MaterialIcon $size={20} aria-hidden="true">grid_view</MaterialIcon>
+                        <span>Customize view</span>
+                        <MaterialIcon $size={20} aria-hidden="true">chevron_right</MaterialIcon>
+                      </MenuRow>
+                    </ViewMenu>
+                  )}
+                </ViewWrap>
+              </TopBarAction>
             </HeadActions>
           </Head>
 
@@ -1967,7 +2134,10 @@ export function DashboardView() {
 
           {customizing && (
             <Customize aria-label="Customize view">
-              <h3>Show on this page</h3>
+              <CustomizeHead>
+                <h3>Show on this page</h3>
+                <OutlineBtn type="button" onClick={() => setCustomizing(false)}>Done</OutlineBtn>
+              </CustomizeHead>
               <ToggleGrid>
                 {SECTIONS.map(s => (
                   <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>

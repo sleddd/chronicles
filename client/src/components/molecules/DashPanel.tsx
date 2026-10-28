@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { cardLabel } from '../../styles/cardLabel.js';
 import type { ReactNode } from 'react';
 
 /* Health dashboard panel — the home dashboard's widget card: a --bg-panel card
@@ -28,11 +29,8 @@ const Head = styled.div`
 
 const Title = styled.h2`
   margin: 0;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 400;
   line-height: 30px;
-  color: var(--text-muted);
+  ${cardLabel}
 `;
 
 const Aside = styled.div`

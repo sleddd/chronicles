@@ -7,6 +7,7 @@ import { useNavItems } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { BrandMark } from '../atoms/BrandMark.js';
+import { NotificationBell, BellBadge } from './NotificationBell.js';
 
 /* Collapsed: icons only (92px). Expanded: each item's name beside its icon.
    The icons keep a 92px column either way, so they never move. */
@@ -293,6 +294,19 @@ export const Sidebar = memo(function Sidebar() {
         {open && <Wordmark aria-hidden="true">Chronicles</Wordmark>}
       </LogoBtn>
 
+      {/* Reminders, first under the logo: today's doses and exercise that are due (the badge counts them) */}
+      <NotificationBell variant="rail" trigger={p => (
+        <NavIconBtn ref={p.ref} onClick={p.onClick} aria-expanded={p['aria-expanded']} aria-haspopup={p['aria-haspopup']}
+          aria-label={p['aria-label']} title={open ? undefined : p['aria-label']}>
+          <IconCell>
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <MaterialIcon aria-hidden="true">notifications</MaterialIcon>
+              {p.count > 0 && <BellBadge aria-hidden="true">{p.count}</BellBadge>}
+            </span>
+          </IconCell>
+          {open && <Label aria-hidden="true">Reminders</Label>}
+        </NavIconBtn>
+      )} />
       <NavScroll>
         {mainItems.map(item => (
           <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}>

@@ -2,6 +2,7 @@ import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/Change
 import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject } from 'react';
 import { PillButton } from '../atoms/PillButton.js';
 import styled from 'styled-components';
+import { cardLabel } from '../../styles/cardLabel.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
 import { Icon } from '../atoms/core/Icon.jsx';
@@ -239,9 +240,9 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean }>`
   --editor-surface: ${({ $quick }) => ($quick ? 'var(--bg-panel)' : 'var(--bg-app)')};
   margin-top: ${({ $quick }) => ($quick ? '8px' : '24px')};
   /* A real writing area even when the entry is one line */
-  .tiptap { min-height: ${({ $quick }) => ($quick ? '120px' : '220px')}; }
+  .tiptap { min-height: ${({ $quick }) => ($quick ? '170px' : '220px')}; }
   /* Phones: the Quick entry's writing area a little taller */
-  @media (max-width: 768px) { .tiptap { min-height: ${({ $quick }) => ($quick ? '180px' : '220px')}; } }
+  @media (max-width: 768px) { .tiptap { min-height: ${({ $quick }) => ($quick ? '210px' : '220px')}; } }
   /* Quick entry: the journal's own text (font, size, weight), the prompt in italics */
   ${({ $quick }) => ($quick ? `
     .tiptap { padding: 12px 0 20px; }
@@ -393,7 +394,7 @@ const QuickCard = styled.section`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 24px 40px 30px;
+  padding: 30px 28px 18px;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   background: var(--bg-panel);
@@ -413,31 +414,29 @@ const QuickHead = styled.div`
   z-index: 5;
 `;
 
-/* The card's label, like the Daily quote card's: quiet grey sans at 400 */
+/* The card's label: small tracked capitals in a quiet grey (the mockup's "QUICK ENTRY") */
 const QuickTitle = styled.h2`
   margin: 0;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--text-muted);
+  ${cardLabel}
 `;
 
 /* The topic picker as an outlined pill ("No topic ⌄"), its menu right-aligned */
 const QuickTopic = styled.div`
   & > div > button {
-    min-width: 132px;
-    height: 36px;
+    min-width: 160px;
+    height: 38px;
     padding: 0 14px 0 16px;
     gap: 16px;
+    justify-content: space-between;
     border: 1px solid var(--border-card); /* light grey, not the darker pill outline */
     border-radius: var(--r-full, 999px);
-    background: transparent;
-    font-size: 15px;
+    background: var(--bg-control, transparent);
+    font-size: 14px;
     text-transform: none;
     color: var(--text-primary);
   }
   /* Hover: no fill — the outline firms up instead */
-  & > div > button:hover { background: transparent; border-color: var(--border-strong); }
+  & > div > button:hover { background: var(--bg-control, transparent); border-color: var(--border-strong); }
   & > div > button > span:last-child { color: var(--text-muted); font-size: 11px; }
   & > div > div { left: auto; right: 0; }
 `;
@@ -457,14 +456,24 @@ const QuickFoot = styled.div`
     border-color: var(--color-accent-line);
     background: transparent;
   }
-  && ${SaveButton}:disabled { opacity: 0.5; }
+  /* Nothing to save yet: a quiet grey outline and grey text */
+  && ${SaveButton}:disabled { color: var(--text-muted); border-color: var(--border-card); opacity: 1; }
   && ${SaveButton}:hover:not(:disabled) { background: var(--color-accent-subtle); }
 `;
 
 const QuickTools = styled.div`
   display: flex;
   gap: 4px;
-  margin-left: -8px;
+`;
+
+/* "Logged to today" before Save entry, then the button */
+const QuickSaveSide = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-soft);
+  @media (max-width: 480px) { & > span { display: none; } }
 `;
 
 /* Only shown when a save fails */
@@ -1072,7 +1081,10 @@ export function EntryForm({
             <Icon name="mic" size={20} strokeWidth={1.8} />
           </IconBtn>
         </QuickTools>
-        {saveButton}
+        <QuickSaveSide>
+          <span>Logged to today</span>
+          {saveButton}
+        </QuickSaveSide>
       </QuickFoot>
       {saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
     </QuickCard>
