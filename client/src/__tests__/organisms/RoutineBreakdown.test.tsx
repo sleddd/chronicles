@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { renderWithTheme } from '../testUtils';
 
 const yoga = {
@@ -9,6 +9,8 @@ const yoga = {
 const walk = { ...yoga, id: 2, name: 'Evening walk', items: [{ id: 'c', name: 'Walk', amount: '30 min' }] };
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+const openInJournal = vi.fn();
+vi.mock('@/hooks/useOpenInJournal', () => ({ useOpenInJournal: () => openInJournal }));
 vi.mock('@/hooks/useRoutineChecklist', () => ({
   useRoutineChecklist: () => ({
     slots: [{ routine: yoga, time: '07:00', key: 'y' }, { routine: yoga, time: '19:00', key: 'y2' }, { routine: walk, time: '18:30', key: 'w' }],
@@ -25,5 +27,11 @@ describe('RoutineBreakdown', () => {
     expect(screen.getByText('Pigeon pose')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Evening walk' })).not.toBeInTheDocument(); // only one exercise
+  });
+
+  it('opens the routine (to edit its times) from the card title', () => {
+    renderWithTheme(<RoutineBreakdown panel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Morning yoga' }));
+    expect(openInJournal).toHaveBeenCalledWith(1);
   });
 });

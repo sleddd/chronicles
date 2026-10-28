@@ -6,7 +6,7 @@ import { entries as entriesApi, topics as topicsApi } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import {
-  activeRoutines, doneItemsOf, scheduleTopicId, sessionFields, sessionTitle, slotsOn, type RoutineSlot,
+  activeRoutines, doneItemsOf, scheduleTopicIds, sessionFields, sessionTitle, slotsOn, type RoutineSlot,
 } from '../utils/routines.js';
 
 const meta = (e: DecryptedPost) => (e.metadata as Record<string, unknown>) ?? {};
@@ -45,11 +45,11 @@ export function useRoutineChecklist(date: string = toDateStr(new Date())) {
   // One write at a time per slot, so quick ticks never log two sessions
   const queue = useRef(new Map<string, Promise<void>>());
 
-  const routineTopicId = useMemo(
-    () => scheduleTopicId(allTopics),
+  const routineTopicIds = useMemo(
+    () => scheduleTopicIds(allTopics),
     [allTopics],
   );
-  const routines = useMemo(() => activeRoutines(entries, routineTopicId, stripHtml), [entries, routineTopicId]);
+  const routines = useMemo(() => activeRoutines(entries, routineTopicIds, stripHtml), [entries, routineTopicIds]);
   const slots = useMemo(() => slotsOn(routines, date), [routines, date]);
 
   const sessions = useMemo(() => {

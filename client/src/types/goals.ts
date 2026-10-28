@@ -98,23 +98,25 @@ export interface TaskEntryData {
   createdAt: Date;
 }
 
-/* Task (and todo) board columns. A task stores isInProgress + isCompleted;
-   isCompleted wins. */
-export type TaskStatus = 'todo' | 'in_progress' | 'done';
+/* Task (and todo) board columns. A task stores isInProgress, isInReview and
+   isCompleted; isCompleted wins, then isInReview. */
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 
 export const TASK_COLUMNS: { key: TaskStatus; label: string }[] = [
   { key: 'todo', label: 'To Do' },
   { key: 'in_progress', label: 'In Progress' },
+  { key: 'in_review', label: 'In Review' },
   { key: 'done', label: 'Done' },
 ];
 
 export function taskStatusOf(cf: Record<string, unknown>): TaskStatus {
   if (cf.isCompleted) return 'done';
+  if (cf.isInReview) return 'in_review';
   if (cf.isInProgress) return 'in_progress';
   return 'todo';
 }
 
 /* Convert a chosen task column back into the task's stored fields. */
-export function taskFieldsForStatus(status: TaskStatus): { isInProgress: boolean; isCompleted: boolean } {
-  return { isInProgress: status === 'in_progress', isCompleted: status === 'done' };
+export function taskFieldsForStatus(status: TaskStatus): { isInProgress: boolean; isInReview: boolean; isCompleted: boolean } {
+  return { isInProgress: status === 'in_progress', isInReview: status === 'in_review', isCompleted: status === 'done' };
 }

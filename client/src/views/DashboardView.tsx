@@ -46,6 +46,14 @@ import { currentWeather, describeWeather, findPlace, hoursFromLocal, type Curren
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { ShoppingItem } from '../types/fields.js';
 import type { PriorityItem } from '../components/molecules/fields/PrioritiesFields.js';
+import { usePrivateSettings } from '../services/privateSettings.js';
+import { parseSavedViews, searchAndSort, type SavedPlanView, type PlanRow } from '../utils/planningView.js';
+import { taskTypeOf, taskTypeRank, taskTypeList } from '../utils/taskTypes.js';
+import {
+  isTodoList, checklistOf, checklistProgress, addChecklistItem, newTodoListFields, filterOfView, taskPassesFilter,
+  type ChecklistItem,
+} from '../utils/taskLists.js';
+import { PLAN_TAB_PATHS } from '../utils/planningView.js';
 
 /* The home dashboard (/dashboard — not the default page; the journal is home):
    the date and home weather over the greeting and a Light | Dark switch; the
@@ -58,7 +66,7 @@ import type { PriorityItem } from '../components/molecules/fields/PrioritiesFiel
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -67,6 +75,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
   { key: 'priorities', label: "Today's priorities" },
+  { key: 'tasks', label: 'Tasks & to-do lists' },
   { key: 'comingUp', label: 'Coming up' },
   { key: 'exercise', label: 'Exercise schedule' },
   { key: 'quickLog', label: 'Quick meal log' },
@@ -89,11 +98,15 @@ interface DashboardConfig {
   openOnPhone?: SectionKey[];
   /** The two columns' cards, top to bottom, as dragged into place */
   layout?: { left: SectionKey[]; right: SectionKey[] };
+  /** What the Tasks card shows: 'open', 'view:<saved view id>' or 'list:<entry id>' */
+  tasksShow?: string;
+  /** The Shopping list card's list: 'latest' (newest open list) or an entry id */
+  shoppingShow?: string;
 }
 
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['priorities', 'comingUp', 'quickLog', 'exercise'],
+  left: ['priorities', 'tasks', 'comingUp', 'quickLog', 'exercise'],
   right: ['recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
@@ -603,6 +616,12 @@ const AddPlace = styled.form`
 
 /* ── Helpers ── */
 
+const NO_TASK_TYPES: string[] = [];
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function topicIdByName(topics: { id: number; name: string }[], ...names: string[]): number | undefined {
   return topics.find(t => names.includes(t.name.toLowerCase()))?.id;
 }
@@ -858,12 +877,12 @@ const PRemove = styled.button`
 
 /** One priority's text: edited in place, saved on Enter or leaving the field;
  *  clearing it removes the priority. Escape puts the saved text back. */
-function PriorityText({ item, onCommit }: { item: PriorityItem; onCommit: (text: string) => void }) {
+function PriorityText({ item, onCommit, label = 'Priority' }: { item: PriorityItem; onCommit: (text: string) => void; label?: string }) {
   const [text, setText] = useState(item.text);
   useEffect(() => { setText(item.text); }, [item.text]);
   const commit = () => { if (text.trim() !== item.text) onCommit(text.trim()); };
   return (
-    <PText $done={item.done} value={text} aria-label={`Priority: ${item.text}`}
+    <PText $done={item.done} value={text} aria-label={`${label}: ${item.text}`}
       onChange={e => setText(e.target.value)} onBlur={commit}
       onKeyDown={e => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
@@ -962,7 +981,7 @@ function Priorities() {
 
   const add = () => {
     const text = draft.trim();
-    if (!text || items.length >= 5) return;
+    if (!text) return;
     setDraft('');
     void write([...items, { id: crypto.randomUUID(), text, done: false }]);
   };
@@ -988,13 +1007,293 @@ function Priorities() {
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
         </Row>
       ))}
-      {items.length < 5 && (
-        <AddBox style={items.length ? { marginTop: 12 } : undefined}>
-          <BareInput value={draft} placeholder="Add a priority" aria-label="Add a priority"
-            onChange={e => setDraft(e.target.value)} onBlur={add}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-        </AddBox>
+      <AddBox style={items.length ? { marginTop: 12 } : undefined}>
+        <BareInput value={draft} placeholder="Add a priority" aria-label="Add a priority"
+          onChange={e => setDraft(e.target.value)} onBlur={add}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+      </AddBox>
+    </section>
+  );
+}
+
+/* ── Tasks: open tasks, a saved Planning view, or one todo list ── */
+
+/* The picker in the Tasks and Shopping list cards' title rows: a rounded
+   square outlined in light grey (--border-card, 10px corners, no fill) like
+   the Meal | Exercise switch, with the choice and a chevron */
+const ShowPick = styled.label`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 220px;
+  height: 38px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  color: var(--text-primary);
+  &:focus-within { border-color: var(--color-accent-line); }
+  select {
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    height: 100%;
+    padding: 0 32px 0 14px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    color: inherit;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    outline: none;
+  }
+  svg { position: absolute; right: 12px; pointer-events: none; color: var(--text-muted); }
+`;
+
+const HeadEnd = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+`;
+
+/* A task's title: opens it in the journal (or a todo list in this card) */
+const TaskTitle = styled.button<{ $done?: boolean }>`
+  && {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 400;
+    color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
+    text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  &&:hover { text-decoration: underline; }
+`;
+
+const TaskMeta = styled.span`
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+const MoreLink = styled.button`
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+`;
+
+/** How many tasks the card lists before "N more in Planning" */
+const TASKS_SHOWN = 8;
+
+function shortDue(ymd: unknown): string {
+  if (typeof ymd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
+  return new Date(`${ymd}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function Tasks({ show, onShow }: { show: string; onShow: (next: string) => void }) {
+  const navigate = useNavigate();
+  const openInJournal = useOpenInJournal();
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const { encryptNewPost } = useEncryption();
+  const save = useSaveFields();
+  const { loadPrivateSettings } = usePrivateSettings();
+  const [savedTaskTypes] = useEncryptedSetting<string[]>('taskTypes', NO_TASK_TYPES);
+  const [views, setViews] = useState<SavedPlanView[]>([]);
+  const [draft, setDraft] = useState('');
+  const [naming, setNaming] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadPrivateSettings()
+      .then(map => setViews(parseSavedViews(map.planningViews).filter(v => v.tab === 'tasks' || v.tab === 'todos')))
+      .catch(() => {});
+  }, [loadPrivateSettings]);
+
+  const tid = topicIdByName(allTopics, 'task');
+  const tasks = useMemo(() => (tid === undefined ? [] : entries
+    .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())), [entries, tid]);
+  const milestoneGoal = useMemo(() => {
+    const mid = topicIdByName(allTopics, 'milestone');
+    return new Map(entries
+      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === mid)
+      .map(e => [e.id, (cfOf(e).parentGoalId as number) || null] as [number, number | null]));
+  }, [entries, allTopics]);
+  const lists = tasks.filter(t => isTodoList(cfOf(t)));
+  const titleOf = (e: DecryptedPost) => entryTitleText(e.content) || builtinEntryName(cfOf(e)) || 'Untitled';
+
+  // What's chosen — a missing view or list falls back to open tasks
+  const view = show.startsWith('view:') ? views.find(v => v.id === show.slice(5)) : undefined;
+  const list = show.startsWith('list:') ? lists.find(l => String(l.id) === show.slice(5)) : undefined;
+  const mode: 'open' | 'view' | 'list' = list ? 'list' : view ? 'view' : 'open';
+
+  const rows = useMemo(() => {
+    if (mode === 'list') return [];
+    const types = taskTypeList(Array.isArray(savedTaskTypes) ? savedTaskTypes : []);
+    const row = (e: DecryptedPost): PlanRow => {
+      const cf = cfOf(e);
+      const title = titleOf(e);
+      return { title, text: `${title} ${taskTypeOf(cf)}`, due: typeof cf.deadline === 'string' ? cf.deadline : '',
+        priority: (cf.priority as string) || 'none', typeRank: taskTypeRank(taskTypeOf(cf), types),
+        created: new Date(e.createdAt).getTime() };
+    };
+    if (view) {
+      // Done ones only when the view asks for them
+      const passing = tasks.filter(t => taskPassesFilter(cfOf(t), filterOfView(view), milestoneGoal)
+        && (view.status === 'done' || !cfOf(t).isCompleted));
+      return searchAndSort(passing, row, view.query, view.sort);
+    }
+    return searchAndSort(tasks.filter(t => !cfOf(t).isCompleted), row, '', 'due');
+  }, [mode, view, tasks, milestoneGoal, savedTaskTypes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const items = list ? checklistOf(cfOf(list)) : [];
+  const writeItems = (next: ChecklistItem[]) => list && save(list, { ...cfOf(list), checklist: next });
+  const addItem = () => {
+    if (!list || !draft.trim()) return;
+    const next = addChecklistItem(items, draft, crypto.randomUUID());
+    setDraft('');
+    void writeItems(next);
+  };
+
+  // A new todo list, named in place — shown here straight away
+  const createList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim()
+      || `To-do list, ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    setError('');
+    try {
+      const topicId = await getOrCreateTopic('Task', 'circle-check');
+      const content = `<p>${escapeHtml(name)}</p>`;
+      const metadata = { _taxonomyId: topicId, _customFields: newTodoListFields(name) };
+      const enc = await encryptNewPost(content, metadata);
+      const res = await entriesApi.create({ id: enc.id,
+        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+        isEncrypted: true, taxonomyIds: [topicId],
+      });
+      addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
+        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+      setNaming(false);
+      setNewName('');
+      onShow(`list:${res.id}`);
+    } catch (err) {
+      console.error('New todo list failed:', err);
+      setError('That list didn’t save. Try again.');
+    }
+  };
+
+  const toggleTask = (e: DecryptedPost) => {
+    const cf = cfOf(e);
+    void save(e, { ...cf, isCompleted: !cf.isCompleted, isInProgress: false, isInReview: false });
+  };
+  const pickValue = mode === 'list' ? `list:${list!.id}` : mode === 'view' ? `view:${view!.id}` : 'open';
+  const morePath = view ? PLAN_TAB_PATHS[view.tab] : '/goals/todos';
+
+  return (
+    <section aria-label="Tasks">
+      <SectionHead>
+        <h2>Tasks</h2>
+        <HeadEnd>
+          <ShowPick>
+            <select aria-label="Show" value={pickValue} onChange={e => onShow(e.target.value)}>
+              <option value="open">Open tasks</option>
+              {views.length > 0 && (
+                <optgroup label="Saved views">
+                  {views.map(v => <option key={v.id} value={`view:${v.id}`}>{v.name}</option>)}
+                </optgroup>
+              )}
+              {lists.length > 0 && (
+                <optgroup label="To-do lists">
+                  {lists.map(l => <option key={l.id} value={`list:${l.id}`}>{titleOf(l)}</option>)}
+                </optgroup>
+              )}
+            </select>
+            <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+          </ShowPick>
+          {/* Clears the card for a fresh list while it's named; the shown list itself is untouched */}
+          <button type="button" onClick={() => { setNaming(n => !n); setNewName(''); setDraft(''); }}>
+            {naming ? 'Cancel' : 'New To-Do List'}
+          </button>
+        </HeadEnd>
+      </SectionHead>
+
+      {naming && (
+        <form onSubmit={e => void createList(e)}>
+          <AddBox style={{ marginTop: 12 }}>
+            <BareInput autoFocus value={newName} onChange={e => setNewName(e.target.value)} maxLength={120}
+              placeholder="Name the list, e.g. First week of October" aria-label="New to-do list name"
+              onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
+          </AddBox>
+        </form>
       )}
+      {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
+
+      {!naming && mode === 'list' && list && (<>
+        {items.length === 0 && <Muted>Nothing on this list yet.</Muted>}
+        {items.map(i => (
+          <Row key={i.id}>
+            <Checkbox checked={i.done} aria-label={i.done ? `Mark "${i.text}" not done` : `Mark "${i.text}" done`}
+              onChange={() => void writeItems(items.map(x => (x.id === i.id ? { ...x, done: !x.done } : x)))} />
+            <PriorityText item={i} label="To-do"
+              onCommit={text => void writeItems(text ? items.map(x => (x.id === i.id ? { ...x, text } : x)) : items.filter(x => x.id !== i.id))} />
+            <PRemove type="button" aria-label={`Remove "${i.text}"`} title="Remove"
+              onClick={() => void writeItems(items.filter(x => x.id !== i.id))}>
+              <Icon name="x" size={14} strokeWidth={2} />
+            </PRemove>
+          </Row>
+        ))}
+        <AddBox style={items.length ? { marginTop: 12 } : undefined}>
+          <BareInput value={draft} placeholder="Add a to-do" aria-label={`Add a to-do to ${titleOf(list)}`}
+            onChange={e => setDraft(e.target.value)} onBlur={addItem}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }} />
+        </AddBox>
+        <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list</MoreLink>
+      </>)}
+
+      {!naming && mode !== 'list' && (<>
+        {rows.length === 0 && <Muted>{mode === 'view' ? 'Nothing matches this view.' : 'No open tasks.'}</Muted>}
+        {rows.slice(0, TASKS_SHOWN).map(t => {
+          const cf = cfOf(t);
+          const progress = checklistProgress(cf);
+          const meta = progress ? `${progress.done} of ${progress.total}` : shortDue(cf.deadline);
+          return (
+            <Row key={t.id}>
+              <Checkbox checked={!!cf.isCompleted} aria-label={cf.isCompleted ? `Mark "${titleOf(t)}" not done` : `Mark "${titleOf(t)}" done`}
+                onChange={() => toggleTask(t)} />
+              <TaskTitle type="button" $done={!!cf.isCompleted}
+                onClick={() => (isTodoList(cf) ? onShow(`list:${t.id}`) : openInJournal(t.id))}>
+                {titleOf(t)}
+              </TaskTitle>
+              {meta && <TaskMeta>{meta}</TaskMeta>}
+            </Row>
+          );
+        })}
+        {rows.length > TASKS_SHOWN && (
+          <MoreLink type="button" onClick={() => navigate(morePath)}>{rows.length - TASKS_SHOWN} more in Planning</MoreLink>
+        )}
+      </>)}
     </section>
   );
 }
@@ -1194,9 +1493,7 @@ const AddItem = styled.form`
   &:focus-within { border-color: var(--color-accent); }
 `;
 
-function Shopping() {
-  const navigate = useNavigate();
-  const openInJournal = useOpenInJournal();
+function Shopping({ show, onShow }: { show: string; onShow: (next: string) => void }) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
@@ -1204,7 +1501,18 @@ function Shopping() {
   const save = useSaveFields();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
-  const list = useMemo(() => latestOpenList(entries, topicIdByName(allTopics, 'shopping list', 'shopping lists')), [entries, allTopics]);
+  const [naming, setNaming] = useState(false);
+  const [newName, setNewName] = useState('');
+  const listTid = topicIdByName(allTopics, 'shopping list', 'shopping lists');
+  // Every list, newest first, for the picker
+  const lists = useMemo(() => (listTid === undefined ? [] : entries
+    .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === listTid)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())), [entries, listTid]);
+  // The chosen list, else (or when it's gone) the newest open one
+  const chosen = show !== 'latest' ? lists.find(l => String(l.id) === show) : undefined;
+  const latest = useMemo(() => latestOpenList(entries, listTid), [entries, listTid]);
+  const list = chosen ?? latest;
+  const listName = (e: DecryptedPost) => entryTitleText(e.content) || 'Shopping list';
   const items = ((list ? cfOf(list).items : undefined) as ShoppingItem[] | undefined) ?? [];
 
   // Adds to the open list; with none open, starts a new dated one
@@ -1217,21 +1525,42 @@ function Shopping() {
     const item: ShoppingItem = { id: crypto.randomUUID(), name, category: 'other', checked: false };
     if (list) return save(list, { ...cfOf(list), items: [...items, item] });
     try {
-      const topicId = await getOrCreateTopic('Shopping List', 'cart-shopping');
-      const content = `<p>${defaultShoppingListTitle()}</p>`;
-      const metadata = { _taxonomyId: topicId, _customFields: { items: [item], notes: '', linkedRecipeIds: [] } };
-      const enc = await encryptNewPost(content, metadata);
-      const res = await entriesApi.create({ id: enc.id,
-        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
-        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
-        isEncrypted: true, taxonomyIds: [topicId],
-      });
-      addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
-        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+      await createList(defaultShoppingListTitle(), [item]);
     } catch (err) {
       console.error('Shopping list create failed:', err);
       setDraft(name);
-      setError('That item didn’t save — try again.');
+      setError('That item didn’t save. Try again.');
+    }
+  };
+
+  /** A new shopping list (the newest, so "Latest open list" shows it too); returns its id */
+  const createList = async (title: string, first: ShoppingItem[] = []) => {
+    const topicId = await getOrCreateTopic('Shopping List', 'cart-shopping');
+    const content = `<p>${escapeHtml(title)}</p>`;
+    const metadata = { _taxonomyId: topicId, _customFields: { items: first, notes: '', linkedRecipeIds: [] } };
+    const enc = await encryptNewPost(content, metadata);
+    const res = await entriesApi.create({ id: enc.id,
+      contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+      metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+      isEncrypted: true, taxonomyIds: [topicId],
+    });
+    addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
+      createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+    return res.id as number;
+  };
+
+  // New list: named in place (blank = the dated default), then shown here
+  const startList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const id = await createList(newName.trim() || defaultShoppingListTitle());
+      setNaming(false);
+      setNewName('');
+      onShow(String(id));
+    } catch (err) {
+      console.error('New shopping list failed:', err);
+      setError('That list didn’t save. Try again.');
     }
   };
 
@@ -1239,11 +1568,31 @@ function Shopping() {
     <section aria-label="Shopping list">
       <SectionHead>
         <h2>Shopping list</h2>
-        {list ? (
-          // The full list in the journal editor — rename, remove items, notes…
-          <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>
-        ) : <button type="button" onClick={() => navigate('/shopping')}>Lists</button>}
+        <HeadEnd>
+          {lists.length > 0 && (
+            <ShowPick>
+              <select aria-label="Which shopping list" value={chosen ? String(chosen.id) : 'latest'} onChange={e => onShow(e.target.value)}>
+                <option value="latest">Latest open list</option>
+                {lists.map(l => <option key={l.id} value={String(l.id)}>{listName(l)}</option>)}
+              </select>
+              <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+            </ShowPick>
+          )}
+          {/* Clears the card for a fresh list while it's named; the shown list itself is untouched */}
+          <button type="button" onClick={() => { setNaming(n => !n); setNewName(''); setError(''); }}>
+            {naming ? 'Cancel' : 'New list'}
+          </button>
+        </HeadEnd>
       </SectionHead>
+      {naming ? (
+        <form onSubmit={e => void startList(e)}>
+          <AddBox style={{ marginTop: 12 }}>
+            <BareInput autoFocus value={newName} onChange={e => setNewName(e.target.value)} maxLength={120}
+              placeholder="Name the list, e.g. Weekend groceries" aria-label="New shopping list name"
+              onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
+          </AddBox>
+        </form>
+      ) : (<>
       {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : (
         <Pills>
           {[...items.filter(i => !i.checked), ...items.filter(i => i.checked)].map(i => (
@@ -1258,6 +1607,7 @@ function Shopping() {
         <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
         <BareInput value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list" />
       </AddItem>
+      </>)}
       {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
     </section>
   );
@@ -1433,6 +1783,10 @@ export function DashboardView() {
   // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
   const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
     priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },
+    tasks: {
+      label: 'tasks', on: shown('tasks'),
+      node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => void saveConfig({ ...config, tasksShow: next })} />,
+    },
     comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} /> },
     exercise: { label: 'exercise schedule', on: shown('exercise') && ff.exerciseEnabled !== false, node: <ExerciseToday /> },
     quickLog: {
@@ -1441,7 +1795,10 @@ export function DashboardView() {
       node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} />,
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
-    shopping: { label: 'shopping list', on: shown('shopping'), node: <Shopping /> },
+    shopping: {
+      label: 'shopping list', on: shown('shopping'),
+      node: <Shopping show={config.shoppingShow ?? 'latest'} onShow={next => void saveConfig({ ...config, shoppingShow: next })} />,
+    },
     menu: { label: 'on the menu', on: shown('menu') && kitchenOn, node: <Menu /> },
     meds: { label: 'medications', on: shown('meds') && medsOn, node: <MedicationsToday doses={doses} /> },
     symptom: { label: 'log a symptom', on: shown('symptom'), node: <LogSymptom /> },

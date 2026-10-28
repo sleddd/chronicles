@@ -446,12 +446,12 @@ export function PlannerFilterView() {
       return true;
     };
 
-    const matchTaskStatus = (completed: boolean, inProgress: boolean) => {
+    const matchTaskStatus = (completed: boolean, inProgress: boolean, inReview = false) => {
       if (taskStatus === 'all') return true;
       if (taskStatus === 'completed') return completed;
       if (taskStatus === 'not_completed') return !completed;
       if (taskStatus === 'in_progress') return !completed && inProgress;
-      if (taskStatus === 'not_started') return !completed && !inProgress;
+      if (taskStatus === 'not_started') return !completed && !inProgress && !inReview;
       return true;
     };
 
@@ -489,7 +489,7 @@ export function PlannerFilterView() {
         if (isTodo && !wantTodos) return;
         if (!isTodo && !wantTasks) return;
         if (!matchKeyword(t.content)) return;
-        if (!matchTaskStatus(t.isCompleted, !!(t.customFields as Record<string,unknown>).isInProgress)) return;
+        if (!matchTaskStatus(t.isCompleted, !!(t.customFields as Record<string,unknown>).isInProgress, !!(t.customFields as Record<string,unknown>).isInReview)) return;
         if (!matchPriority(t.priority)) return;
         if (parentMilestoneId && t.parentMilestoneId !== parentMilestoneId) return;
         if (parentGoalId && !parentMilestoneId) {

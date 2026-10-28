@@ -81,12 +81,19 @@ export interface TaskFieldValues {
   /** Primary label — shown when the entry has no text content. */
   taskDescription?: string;
   isInProgress: boolean;
+  /** Done, waiting on a review (between In progress and Completed) */
+  isInReview?: boolean;
   isCompleted: boolean;
   isAutoMigrating: boolean;
   parentGoalId: number | null;
   parentMilestoneId: number | null;
   deadline: string;
   priority: TaskPriority;
+  /** "Regular task", "Small victory" or one of the person's own; '' = none */
+  taskType?: string;
+  /** 'list' = a todo list: its items are `checklist` (any number); else a single task */
+  taskFormat?: 'single' | 'list';
+  checklist?: { id: string; text: string; done: boolean }[];
   notes?: string;
 }
 

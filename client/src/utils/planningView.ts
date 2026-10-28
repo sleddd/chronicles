@@ -1,6 +1,6 @@
 /* Search + sort for the Planning tab you're in (board and list alike). Pure. */
 
-export type PlanSort = 'newest' | 'oldest' | 'title' | 'due' | 'priority';
+export type PlanSort = 'newest' | 'oldest' | 'title' | 'due' | 'priority' | 'type';
 
 export const PLAN_SORTS: { value: PlanSort; label: string }[] = [
   { value: 'newest', label: 'Newest' },
@@ -8,6 +8,7 @@ export const PLAN_SORTS: { value: PlanSort; label: string }[] = [
   { value: 'title', label: 'Title A–Z' },
   { value: 'due', label: 'Due date' },
   { value: 'priority', label: 'Priority' },
+  { value: 'type', label: 'Type' },
 ];
 
 export interface PlanRow {
@@ -18,6 +19,8 @@ export interface PlanRow {
   due: string;
   /** Task priority ('urgent' … 'none'), '' for goals and milestones */
   priority: string;
+  /** Task type's place in the type list (taskTypeRank); goals and milestones leave it out */
+  typeRank?: number;
   created: number;
 }
 
@@ -41,6 +44,7 @@ export function searchAndSort<T>(items: T[], row: (t: T) => PlanRow, query: stri
     title: (a, b) => a.r.title.localeCompare(b.r.title, undefined, { sensitivity: 'base' }) || byNewest(a, b),
     due: (a, b) => (!a.r.due ? 1 : 0) - (!b.r.due ? 1 : 0) || a.r.due.localeCompare(b.r.due) || byNewest(a, b),
     priority: (a, b) => (PRIORITY_RANK[a.r.priority] ?? 4) - (PRIORITY_RANK[b.r.priority] ?? 4) || byNewest(a, b),
+    type: (a, b) => (a.r.typeRank ?? 0) - (b.r.typeRank ?? 0) || byNewest(a, b),
   };
   return [...matched].sort(cmp[sort]).map(x => x.item);
 }
@@ -58,7 +62,10 @@ export interface SavedPlanView {
   sort: PlanSort;
   goalId: number | null;
   milestoneId: number | null;
-  status: '' | 'todo' | 'in_progress' | 'done';
+  /** The tab's status filter ('' = all): a task status on Tasks/Todos, a board status on Goals/Milestones */
+  status: string;
+  /** Task type filter ('' = all); older saved views have none */
+  taskType?: string;
 }
 
 export type PlanViewState = Omit<SavedPlanView, 'id' | 'name'>;
@@ -70,7 +77,8 @@ export const PLAN_TAB_PATHS: Record<PlanTabKey, string> = {
 /** True when the current setup is exactly the saved one */
 export function isSameView(a: PlanViewState, b: PlanViewState): boolean {
   return a.tab === b.tab && a.view === b.view && a.query.trim() === b.query.trim() && a.sort === b.sort
-    && a.goalId === b.goalId && a.milestoneId === b.milestoneId && a.status === b.status;
+    && a.goalId === b.goalId && a.milestoneId === b.milestoneId && a.status === b.status
+    && (a.taskType ?? '') === (b.taskType ?? '');
 }
 
 /** Keep only well-formed saved views (the setting is user data from the server) */

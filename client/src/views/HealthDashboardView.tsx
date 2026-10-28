@@ -9,7 +9,7 @@ import { QuickLog, QuickSymptom, QuickChange } from '../components/organisms/Hea
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { useTodayDoses } from '../hooks/useTodayDoses.js';
-import { activeRoutines, scheduleTopicId } from '../utils/routines.js';
+import { activeRoutines, scheduleTopicIds } from '../utils/routines.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
@@ -163,8 +163,7 @@ function useHasRoutines(): boolean {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   return useMemo(() => {
-    const id = scheduleTopicId(allTopics);
-    return id !== undefined && activeRoutines(entries, id, stripHtml).some(r => r.times.length > 0);
+    return activeRoutines(entries, scheduleTopicIds(allTopics), stripHtml).some(r => r.times.length > 0);
   }, [entries, allTopics]);
 }
 

@@ -168,8 +168,9 @@ checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) =>
     console.warn(`Credential check: ${outdated.length} account(s) still on a pre-upgrade password hash (ids ${outdated.join(', ')}) can only sign in by recovery; ${sessionsRevoked} session(s) signed out`);
   }
 }).catch(err => console.error('Credential check failed:', err instanceof Error ? err.message : err));
-sealStoredTotpSecrets().then(({ sealed, readable }) => {
+sealStoredTotpSecrets().then(({ sealed, readable, unopenable }) => {
   if (sealed) console.log(`Credential check: ${sealed} authenticator secret(s) sealed`);
+  if (unopenable) console.error(`SECRETS_ENCRYPTION_KEY is missing or invalid (it must be 32 bytes, base64): ${unopenable} account(s) have an authenticator secret sealed with it, so their codes can't be checked here (backup codes still work). Set the same key as the server that sealed them`);
   if (readable) console.warn(`SECRETS_ENCRYPTION_KEY is not set: ${readable} account(s) have their authenticator secret stored readable — set the key to seal them`);
 }).catch(err => console.error('Authenticator secret check failed:', err instanceof Error ? err.message : err));
 cleanupSessions().then(count => {

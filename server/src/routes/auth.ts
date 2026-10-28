@@ -81,7 +81,7 @@ const TOTP_STEP_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Per-account cap on wrong second-factor codes, on top of the per-IP limits,
 // so guesses spread across many IPs still run out
-const TWO_FA_MAX_FAILURES = 5;
+const TWO_FA_MAX_FAILURES = 10;
 const TWO_FA_LOCK_MS = 15 * 60 * 1000;
 // Repeat offenders: the third 15-minute lock within a day locks 2FA for a day,
 // so a patient guesser gets ~15 codes a day per account instead of ~480
@@ -173,6 +173,13 @@ async function verifySecondFactor(
   // guesses can't slip past the cap. Exactly one attempt sees the count reach
   // the cap: if its code is wrong, that's the moment the lock triggered
   if (await sharedState.locked(TWO_FA_LONG_LOCK, String(account.id), 1)) return null;
+  // A sealed secret this server can't open (SECRETS_ENCRYPTION_KEY missing, e.g. a
+  // dev server on the live database): every authenticator code would fail, and
+  // counting them would lock the owner out everywhere. Refuse as a server error
+  // instead, uncounted. Backup codes don't need the key, so they still work.
+  if (/^\d{6}$/.test(code) && account.totpSecret.includes(':') && !isTokenCryptoConfigured()) {
+    throw new Error('SECRETS_ENCRYPTION_KEY is missing or invalid, so this server cannot open authenticator secrets');
+  }
   const attempt = await sharedState.attempt(TWO_FA_FAILURES, String(account.id), TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
   if (attempt > TWO_FA_MAX_FAILURES) return null;
   const factor = await checkSecondFactor(account, code);
@@ -462,12 +469,16 @@ export async function checkStoredCredentials(): Promise<{ recoverySealed: number
  * stay readable — a database copy would hold every account's second factor —
  * so the count is returned for a warning.
  */
-export async function sealStoredTotpSecrets(): Promise<{ sealed: number; readable: number }> {
+export async function sealStoredTotpSecrets(): Promise<{ sealed: number; readable: number; unopenable: number }> {
   const plain = await prisma.account.findMany({
     where: { totpSecret: { not: null }, NOT: { totpSecret: { contains: ':' } } },
     select: { id: true, totpSecret: true },
   });
-  if (!isTokenCryptoConfigured()) return { sealed: 0, readable: plain.length };
+  if (!isTokenCryptoConfigured()) {
+    // Sealed by a server that has the key: this one can't check their codes
+    const unopenable = await prisma.account.count({ where: { totpSecret: { contains: ':' } } });
+    return { sealed: 0, readable: plain.length, unopenable };
+  }
   for (const a of plain) {
     // Conditional, so a 2FA change racing this can't be overwritten
     await prisma.account.updateMany({
@@ -475,7 +486,7 @@ export async function sealStoredTotpSecrets(): Promise<{ sealed: number; readabl
       data: { totpSecret: sealTotpSecret(a.totpSecret!) },
     });
   }
-  return { sealed: plain.length, readable: 0 };
+  return { sealed: plain.length, readable: 0, unopenable: 0 };
 }
 
 /** Enforce a constant-time floor on endpoint response time to prevent timing-based enumeration */

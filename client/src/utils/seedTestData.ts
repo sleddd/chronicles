@@ -4,7 +4,7 @@
  */
 import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '../services/api.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
-import { routineLinkKey } from './routines.js';
+import { routineLinkKey, SCHEDULE_TOPIC } from './routines.js';
 import { mountaineeringTemplate } from './training.js';
 
 type EncryptPost = (content: string, metadata: Record<string, unknown>) => Promise<{
@@ -590,7 +590,7 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
    checklist writes them — and a Mt Hood training plan three weeks into its
    first phase, whose categories the sessions count toward. */
 async function seedExerciseSchedule(deps: SeedDeps): Promise<number> {
-  await ensureTopic(deps, 'Exercise Schedule', 'person-running');
+  await ensureTopic(deps, SCHEDULE_TOPIC, 'person-running');
   await ensureTopic(deps, 'Training Plan', 'mountain');
   let n = 0;
   // A Mt Hood plan — unless the account already has a training plan
@@ -616,7 +616,7 @@ async function seedExerciseSchedule(deps: SeedDeps): Promise<number> {
       items: [item('Calf stretch', '2 min'), item('Ankle circles', '2 min'), item('Single-leg balance', '3 min'), item('Child’s pose', '3 min')] },
   ];
   for (const r of routines) {
-    const id = await createEntry(deps, r.name, 'Exercise Schedule', {
+    const id = await createEntry(deps, r.name, SCHEDULE_TOPIC, {
       routineName: r.name, exerciseType: r.type, duration: String(r.minutes), scheduleTimes: [r.time], days: r.days,
       trainingCategory: r.category, items: r.items, isActive: true, notes: '',
     }); n++;

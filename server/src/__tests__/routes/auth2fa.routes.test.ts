@@ -62,7 +62,7 @@ import authRouter, { resetAuthStateForTests, sealStoredTotpSecrets } from '../..
 import * as authMw from '../../middleware/auth.js';
 import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
-import { decryptToken } from '../../services/tokenCrypto.js';
+import { decryptToken, encryptToken } from '../../services/tokenCrypto.js';
 import { deleteAccountById } from '../../db/schemaManager.js';
 import { revokeGoogleAccess } from '../../services/googleRevoke.js';
 import bcrypt from '../../services/passwordHasher.js';
@@ -272,11 +272,11 @@ describe('2FA hardening', () => {
       expect(res.status).toBe(200);
     });
 
-    it('locks the account after 5 wrong codes, even with fresh pending tokens', async () => {
+    it('locks the account after 10 wrong codes, even with fresh pending tokens', async () => {
       const secret = generateSecret();
       const account = twoFAAccount(secret);
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 10; i++) {
         const res = await request(app).post('/api/auth/login/2fa')
           .send({ pendingToken: await pendingTokenFor(app, account), code: '000000' === generateSync({ secret }) ? '111111' : '000000' });
         expect(res.status).toBe(401);
@@ -296,7 +296,7 @@ describe('2FA hardening', () => {
 
       for (let round = 0; round < 3; round++) {
         vi.setSystemTime(start + round * 16 * 60 * 1000); // each 15-minute lock has run out
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 10; i++) {
           const res = await request(app).post('/api/auth/login/2fa')
             .send({ pendingToken: await pendingTokenFor(app, account), code: wrong() });
           expect(res.status).toBe(401);
@@ -541,18 +541,18 @@ describe('2FA hardening', () => {
   });
 
   describe('second-factor cap under parallel guesses', () => {
-    it('lets at most 5 codes be checked even when they arrive at once', async () => {
+    it('lets at most 10 codes be checked even when they arrive at once', async () => {
       const secret = generateSecret();
       const account = twoFAAccount(secret);
       (prisma.account.findUnique as any).mockResolvedValue(account);
       const login = await request(app).post('/api/auth/login').send({ email: account.email, authSecret: SECRET });
       expect(login.body.requires2FA).toBe(true);
 
-      const results = await Promise.all(Array.from({ length: 12 }, () =>
+      const results = await Promise.all(Array.from({ length: 16 }, () =>
         request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: '000000' })));
 
-      expect(results.filter(r => r.status === 401).length).toBeLessThanOrEqual(5);
-      expect(results.filter(r => r.status === 429).length).toBeGreaterThanOrEqual(7);
+      expect(results.filter(r => r.status === 401).length).toBeLessThanOrEqual(10);
+      expect(results.filter(r => r.status === 429).length).toBeGreaterThanOrEqual(6);
       // Even the right code is refused now
       const right = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login.body.pendingToken, code: generateSync({ secret }) });
       expect(right.status).not.toBe(200);
@@ -648,12 +648,34 @@ describe('2FA hardening', () => {
     }, 30000);
   });
 
+  describe('a sealed secret on a server without the key', () => {
+    it('answers a server error and counts nothing, so a misconfigured server can\'t lock the owner out', async () => {
+      const secret = generateSecret();
+      const account = { ...twoFAAccount(secret), totpSecret: encryptToken(secret) };
+      const key = process.env.SECRETS_ENCRYPTION_KEY;
+      delete process.env.SECRETS_ENCRYPTION_KEY;
+      try {
+        for (let i = 0; i < 12; i++) {
+          const res = await request(app).post('/api/auth/login/2fa')
+            .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+          expect(res.status).toBe(500);
+        }
+      } finally {
+        process.env.SECRETS_ENCRYPTION_KEY = key;
+      }
+      // With the key back, the right code signs in: nothing was counted
+      const ok = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(ok.status).toBe(200);
+    }, 30000);
+  });
+
   describe('sealStoredTotpSecrets (startup)', () => {
     it('seals authenticator secrets stored readable, conditionally', async () => {
       (prisma.account.findMany as any).mockResolvedValueOnce([{ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' }]);
       (prisma.account.updateMany as any).mockResolvedValue({ count: 1 });
       const r = await sealStoredTotpSecrets();
-      expect(r).toEqual({ sealed: 1, readable: 0 });
+      expect(r).toEqual({ sealed: 1, readable: 0, unopenable: 0 });
       const call = (prisma.account.updateMany as any).mock.calls[0][0];
       expect(call.where).toEqual({ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' });
       expect(call.data.totpSecret).toContain(':');

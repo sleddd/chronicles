@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import type { SymptomFieldValues } from '../../../types/fields.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, DateTimeBox, DateTimeField, Unit, BoxText, TitleInput, Chips, Chip, TextAction,
+  RemoveChip, AddChip, AddChipBox,
 } from './formKit.js';
 import { hasSymptom, toggleSymptom } from '../../../utils/symptomChips.js';
 import { severityWord } from '../../../utils/symptomHistory.js';
@@ -130,31 +131,6 @@ const ChipHead = styled(SectionHead)`
   margin-top: 26px;
 `;
 
-/* A chip in Edit mode: tapping removes it */
-const RemoveChip = styled(Chip)`
-  &::after { content: '×'; margin-left: 8px; font-size: 16px; line-height: 1; }
-`;
-
-const AddBox = styled.input`
-  && {
-    height: 32px;
-    width: 160px;
-    padding: 0 14px;
-    border: 1px dashed var(--color-accent-line) !important;
-    border-radius: 999px;
-    background: transparent !important;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--text-secondary);
-    outline: none;
-  }
-`;
-
-const AddChip = styled(Chip)`
-  border-style: dashed;
-  color: var(--color-accent-soft);
-`;
-
 interface SymptomFieldsProps {
   values: SymptomFieldValues;
   onChange: (values: SymptomFieldValues) => void;
@@ -210,7 +186,7 @@ export function SymptomFields({ values, onChange, chips = [], onAddChip, onRemov
               onClick={() => set({ symptomName: toggleSymptom(values.symptomName, c) })}>{c}</Chip>
           )))}
           {onAddChip && !editing && (adding ? (
-            <AddBox autoFocus value={draft} maxLength={40} placeholder="New symptom" aria-label="New symptom"
+            <AddChipBox autoFocus value={draft} maxLength={40} placeholder="New symptom" aria-label="New symptom"
               onChange={e => setDraft(e.target.value)} onKeyDown={onDraftKey} onBlur={commitDraft} />
           ) : (
             <AddChip type="button" $active={false} onClick={() => setAdding(true)}>+ Add</AddChip>

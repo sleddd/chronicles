@@ -8,7 +8,7 @@ const FEATURE_TOPIC_MAP: Record<string, string[]> = {
   medicationEnabled: ['Medication', 'Symptom'],
   goalsEnabled: ['Goal'],
   milestonesEnabled: ['Milestone'],
-  exerciseEnabled: ['Exercise', 'Exercise Schedule', 'Routine', 'Training Plan'],
+  exerciseEnabled: ['Exercise', 'Exercise Routine', 'Exercise Schedule', 'Routine', 'Training Plan'],
   allergiesEnabled: ['Allergy'],
 };
 

@@ -34,6 +34,8 @@ import {
   milestoneFieldsForStatus, taskStatusOf, taskFieldsForStatus,
 } from '../types/goals.js';
 import { hasMixedTopics } from '../utils/mixedTopics.js';
+import { taskTypeList, taskTypeOf, taskTypeRank, sameTaskType } from '../utils/taskTypes.js';
+import { taskPassesFilter, checklistProgress } from '../utils/taskLists.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
 /* ── Layout (mirrors Health) ── */
@@ -332,7 +334,11 @@ function avatarImage(meta: Record<string, unknown> | undefined): BoardItem['imag
 
 /* Planning's sort and Tasks/Todos filters survive leaving the page (this tab only) */
 const FILTERS_KEY = 'planning-filters-v1';
-function savedFilters(): Partial<{ sortBy: PlanSort; goalFilter: number | null; milestoneFilter: number | null; statusFilter: TaskStatus | '' }> {
+const NO_TASK_TYPES: string[] = [];
+/* Status filters on the Goals and Milestones boards ('' = all) */
+type RoadmapFilters = { goals: RoadmapStatus | ''; milestones: RoadmapStatus | '' };
+const NO_ROADMAP_FILTERS: RoadmapFilters = { goals: '', milestones: '' };
+function savedFilters(): Partial<{ sortBy: PlanSort; goalFilter: number | null; milestoneFilter: number | null; statusFilter: TaskStatus | ''; typeFilter: string; roadmapStatus: RoadmapFilters }> {
   try { return JSON.parse(sessionStorage.getItem(FILTERS_KEY) || '{}'); } catch { return {}; }
 }
 
@@ -592,11 +598,26 @@ export function GoalsView() {
   const [goalFilter, setGoalFilter] = useState<number | null>(() => savedFilters().goalFilter ?? null);
   const [milestoneFilter, setMilestoneFilter] = useState<number | null>(() => savedFilters().milestoneFilter ?? null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>(() => savedFilters().statusFilter ?? '');
+  const [typeFilter, setTypeFilter] = useState<string>(() => savedFilters().typeFilter ?? '');
+  const [roadmapStatus, setRoadmapStatus] = useState<RoadmapFilters>(() => ({ ...NO_ROADMAP_FILTERS, ...savedFilters().roadmapStatus }));
+  const setPlanStatus = (which: keyof RoadmapFilters, status: RoadmapStatus | '') =>
+    setRoadmapStatus(prev => ({ ...prev, [which]: status }));
+  // Task types: Regular task / Small victory plus the owner's own (see TaskFields)
+  const [savedTaskTypes] = useEncryptedSetting<string[]>('taskTypes', NO_TASK_TYPES);
+  const taskTypes = useMemo(() => {
+    const list = taskTypeList(Array.isArray(savedTaskTypes) ? savedTaskTypes : []);
+    // Types still on a task but since removed from the list stay filterable
+    for (const t of tasks) {
+      const type = taskTypeOf(t.customFields);
+      if (type && !list.some(x => sameTaskType(x, type))) list.push(type);
+    }
+    return list;
+  }, [savedTaskTypes, tasks]);
   // Kept for this browser tab, so opening a card in the journal and coming
   // back finds the board as it was
   useEffect(() => {
-    try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ sortBy, goalFilter, milestoneFilter, statusFilter })); } catch { /* storage unavailable */ }
-  }, [sortBy, goalFilter, milestoneFilter, statusFilter]);
+    try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ sortBy, goalFilter, milestoneFilter, statusFilter, typeFilter, roadmapStatus })); } catch { /* storage unavailable */ }
+  }, [sortBy, goalFilter, milestoneFilter, statusFilter, typeFilter, roadmapStatus]);
   const milestoneGoal = useMemo(() => new Map(milestones.map(m => [m.id, m.parentGoalId])), [milestones]);
   // Milestones to pick from: those under the chosen goal, else all
   const milestoneChoices = useMemo(
@@ -612,19 +633,22 @@ export function GoalsView() {
   const filterLink: Record<string, unknown> = milestoneFilter
     ? { parentMilestoneId: milestoneFilter, parentGoalId: milestoneGoal.get(milestoneFilter) ?? goalFilter ?? null }
     : goalFilter ? { parentGoalId: goalFilter } : {};
-  const clearFilters = () => { setGoalFilter(null); setMilestoneFilter(null); setStatusFilter(''); };
-  const filtersSet = (tab === 'tasks' && (!!goalFilter || !!milestoneFilter)) || !!statusFilter;
-  const taskPasses = (t: TaskEntryData) => {
-    if (statusFilter && taskStatusOf(t.customFields) !== statusFilter) return false;
-    if (tab !== 'tasks') return true; // todos have no goal or milestone
-    if (milestoneFilter && t.parentMilestoneId !== milestoneFilter) return false;
-    if (goalFilter) {
-      const goalOf = t.parentGoalId ?? (t.parentMilestoneId ? milestoneGoal.get(t.parentMilestoneId) ?? null : null);
-      if (goalOf !== goalFilter) return false;
-    }
-    return true;
+  const clearFilters = () => {
+    setGoalFilter(null); setMilestoneFilter(null); setStatusFilter(''); setTypeFilter(''); setRoadmapStatus(NO_ROADMAP_FILTERS);
   };
   const isTaskTab = tab === 'tasks' || tab === 'todos';
+  // The status filter of the tab you're in
+  const tabStatus: string = isTaskTab ? statusFilter : tab === 'goals' || tab === 'milestones' ? roadmapStatus[tab] : '';
+  const hasGoalFilter = tab === 'tasks' || tab === 'milestones';
+  const filtersSet = (hasGoalFilter && !!goalFilter) || (tab === 'tasks' && !!milestoneFilter) || !!tabStatus || (isTaskTab && !!typeFilter);
+  const goalPasses = (g: GoalEntry) => !roadmapStatus.goals || normalizeRoadmapStatus(g.goalStatus) === roadmapStatus.goals;
+  const milestonePasses = (m: MilestoneEntryData) =>
+    (!goalFilter || m.parentGoalId === goalFilter)
+    && (!roadmapStatus.milestones || normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === roadmapStatus.milestones);
+  const taskPasses = (t: TaskEntryData) => taskPassesFilter(t.customFields, {
+    scope: tab === 'todos' ? 'todos' : 'tasks',
+    goalId: goalFilter, milestoneId: milestoneFilter, status: statusFilter, taskType: typeFilter,
+  }, milestoneGoal);
   const compact = useMediaQuery('(max-width: 768px)');
   const [filtersOpen, setFiltersOpen] = useState(false);
   useEffect(() => {
@@ -632,7 +656,7 @@ export function GoalsView() {
     if (p && p.tab === tab) { pendingView.current = null; applyView(p); }
     else setQuery('');
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
-  const sortOptions = PLAN_SORTS.filter(o => o.value !== 'priority' || isTaskTab);
+  const sortOptions = PLAN_SORTS.filter(o => (o.value !== 'priority' && o.value !== 'type') || isTaskTab);
   const sort: PlanSort = sortOptions.some(o => o.value === sortBy) ? sortBy : 'newest';
   /* ── Saved views (encrypted private setting `planningViews`) ── */
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
@@ -650,23 +674,27 @@ export function GoalsView() {
 
   const current: PlanViewState = {
     tab, view, query: query.trim(), sort,
-    goalId: tab === 'tasks' ? goalFilter : null,
+    goalId: hasGoalFilter ? goalFilter : null,
     milestoneId: tab === 'tasks' ? milestoneFilter : null,
-    status: isTaskTab ? statusFilter : '',
+    status: tabStatus,
+    taskType: isTaskTab ? typeFilter : '',
   };
   // How much is set — shown on the phone "Filters" button
   const activeCount = (current.query ? 1 : 0) + (sort !== 'newest' ? 1 : 0)
-    + (current.goalId ? 1 : 0) + (current.milestoneId ? 1 : 0) + (current.status ? 1 : 0);
-  const showTaskFilters = isTaskTab && (tab === 'tasks' ? linkedTasks.length > 0 : todos.length > 0);
+    + (current.goalId ? 1 : 0) + (current.milestoneId ? 1 : 0) + (current.status ? 1 : 0) + (current.taskType ? 1 : 0);
+  const showFilters = tab === 'goals' ? orderedGoals.length > 0 : tab === 'milestones' ? orderedMilestones.length > 0
+    : tab === 'tasks' ? linkedTasks.length > 0 : todos.length > 0;
   const activeSaved = savedViews.find(v => isSameView(v, current)) ?? null;
-  const hasSetup = !!current.query || sort !== 'newest' || !!current.goalId || !!current.milestoneId || !!current.status;
+  const hasSetup = !!current.query || sort !== 'newest' || !!current.goalId || !!current.milestoneId || !!current.status || !!current.taskType;
 
   const applyView = (v: SavedPlanView) => {
     setQuery(v.query);
     setSortBy(v.sort);
     setGoalFilter(v.goalId);
     setMilestoneFilter(v.milestoneId);
-    setStatusFilter(v.status);
+    if (v.tab === 'goals' || v.tab === 'milestones') setPlanStatus(v.tab, v.status as RoadmapStatus | '');
+    else setStatusFilter(v.status as TaskStatus | '');
+    setTypeFilter(v.taskType ?? '');
     const nextViews = { ...views, [v.tab]: v.view };
     setViews(nextViews);
     try { localStorage.setItem(VIEW_KEY, JSON.stringify(nextViews)); } catch { /* storage unavailable */ }
@@ -731,8 +759,10 @@ export function GoalsView() {
     return {
       id: t.id, title: title.slice(0, 140),
       badge: PRIORITY_BADGE[t.priority],
-      detail: parent,
+      detail: [taskTypeOf(t.customFields), parent].filter(Boolean).join(' · ') || undefined,
       date: shortDate(t.customFields.deadline),
+      // A todo list shows how far along it is
+      progress: checklistProgress(t.customFields),
       completed: t.isCompleted,
     };
   };
@@ -749,27 +779,29 @@ export function GoalsView() {
     return {
       title: item.title, text: `${item.title} ${item.detail ?? ''} ${item.badge?.label ?? ''}`,
       due: typeof t.customFields.deadline === 'string' ? t.customFields.deadline : '',
-      priority: t.priority, created: t.createdAt.getTime(),
+      priority: t.priority, typeRank: taskTypeRank(taskTypeOf(t.customFields), taskTypes), created: t.createdAt.getTime(),
     };
   };
 
-  const shownGoals = searchAndSort(orderedGoals, goalRow, query, sort);
-  const shownMilestones = searchAndSort(orderedMilestones, milestoneRow, query, sort);
+  const shownGoals = searchAndSort(orderedGoals.filter(goalPasses), goalRow, query, sort);
+  const shownMilestones = searchAndSort(orderedMilestones.filter(milestonePasses), milestoneRow, query, sort);
   const shownTasks = searchAndSort(sortedTasks.filter(taskPasses), taskRow, query, sort);
   const shownTodos = searchAndSort(sortedTodos.filter(taskPasses), taskRow, query, sort);
   const shownCount = tab === 'goals' ? shownGoals.length : tab === 'milestones' ? shownMilestones.length
     : tab === 'tasks' ? shownTasks.length : shownTodos.length;
 
-  const goalColumns = GOAL_COLUMNS.map(c => ({
+  // A status filter shows just that column
+  const goalColumns = GOAL_COLUMNS.filter(c => !roadmapStatus.goals || c.key === roadmapStatus.goals).map(c => ({
     ...c, items: shownGoals.filter(g => normalizeRoadmapStatus(g.goalStatus) === c.key).map(goalItem),
   }));
-  const milestoneColumns = ROADMAP_COLUMNS.map(c => ({
+  const milestoneColumns = ROADMAP_COLUMNS.filter(c => !roadmapStatus.milestones || c.key === roadmapStatus.milestones).map(c => ({
     ...c, items: shownMilestones.filter(m => normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === c.key).map(milestoneItem),
   }));
-  // A status filter shows just that column
-  const taskColumns = (list: TaskEntryData[]) => TASK_COLUMNS
+  // The Tasks board's first column reads "Task" (the Todos board keeps "To Do")
+  const taskColumns = (list: TaskEntryData[], firstLabel?: string) => TASK_COLUMNS
     .filter(c => !statusFilter || c.key === statusFilter)
-    .map(c => ({ ...c, items: list.filter(t => taskStatusOf(t.customFields) === c.key).map(taskItem) }));
+    .map(c => ({ ...c, label: c.key === 'todo' && firstLabel ? firstLabel : c.label,
+      items: list.filter(t => taskStatusOf(t.customFields) === c.key).map(taskItem) }));
 
   /* ── List rows (same rows as every other list) ── */
   const renderRows = (items: { id: number; taxonomyId: number; isCompleted?: boolean }[], mixed: boolean) => (
@@ -789,6 +821,7 @@ export function GoalsView() {
             topicColor={topic?.color || accentColor}
             completed={!!t.isCompleted}
             fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
+            preview={taskTypeOf((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined) || undefined}
             onClick={() => openInJournal(t.id)}
           />
         </SwipeActions>
@@ -820,7 +853,7 @@ export function GoalsView() {
       </select>
     </SortBox>
   );
-  const showRow = savedViews.length > 0 || hasSetup || naming || showTaskFilters;
+  const showRow = savedViews.length > 0 || hasSetup || naming || showFilters;
   const rowContent = (<>
               {savedViews.length > 0 && (
                 <FilterSelect $set={!!activeSaved}>
@@ -830,7 +863,24 @@ export function GoalsView() {
                   </select>
                 </FilterSelect>
               )}
-              {showTaskFilters && (<>
+              {showFilters && (tab === 'goals' || tab === 'milestones') && (<>
+              {tab === 'milestones' && (
+                <FilterSelect $set={!!goalFilter}>
+                  <select aria-label="Goal" value={goalFilter ?? ''} onChange={e => pickGoal(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">Goal: All</option>
+                    {goals.map(g => <option key={g.id} value={g.id}>Goal: {g.title}</option>)}
+                  </select>
+                </FilterSelect>
+              )}
+              <FilterSelect $set={!!roadmapStatus[tab]}>
+                <select aria-label="Status" value={roadmapStatus[tab]} onChange={e => setPlanStatus(tab, e.target.value as RoadmapStatus | '')}>
+                  <option value="">Status: All</option>
+                  {(tab === 'goals' ? GOAL_COLUMNS : ROADMAP_COLUMNS).map(c => <option key={c.key} value={c.key}>Status: {c.label}</option>)}
+                </select>
+              </FilterSelect>
+              {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
+              </>)}
+              {showFilters && isTaskTab && (<>
               {tab === 'tasks' && (
                 <>
                   <FilterSelect $set={!!goalFilter}>
@@ -851,6 +901,12 @@ export function GoalsView() {
                 <select aria-label="Status" value={statusFilter} onChange={e => setStatusFilter(e.target.value as TaskStatus | '')}>
                   <option value="">Status: All</option>
                   {TASK_COLUMNS.map(c => <option key={c.key} value={c.key}>Status: {c.label}</option>)}
+                </select>
+              </FilterSelect>
+              <FilterSelect $set={!!typeFilter}>
+                <select aria-label="Type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                  <option value="">Type: All</option>
+                  {taskTypes.map(t => <option key={t} value={t}>Type: {t}</option>)}
                 </select>
               </FilterSelect>
               {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
@@ -934,13 +990,13 @@ export function GoalsView() {
               : view === 'board'
                 ? <KanbanBoard columns={milestoneColumns} noun="milestone" onOpen={openInJournal}
                     onMove={persistMilestoneStatus} onReorder={refined ? undefined : reorder('milestones', orderedMilestones)}
-                    onAdd={key => addIn(milestoneFieldsForStatus(key))()} />
+                    onAdd={key => addIn({ ...milestoneFieldsForStatus(key), ...(goalFilter ? { parentGoalId: goalFilter } : {}) })()} />
                 : renderRows(shownMilestones, false))}
 
             {tab === 'tasks' && (linkedTasks.length === 0
               ? <EmptyState message="No tasks found." submessage="Tasks linked to a goal or milestone show here; unlinked ones are Todos." />
               : view === 'board'
-                ? <KanbanBoard columns={taskColumns(shownTasks)} noun="task" onOpen={openInJournal}
+                ? <KanbanBoard columns={taskColumns(shownTasks, 'Task')} noun="task" onOpen={openInJournal}
                     onMove={persistTaskStatus} onReorder={refined ? undefined : reorder('tasks', sortedTasks)}
                     onAdd={key => addIn({ ...taskFieldsForStatus(key), ...filterLink })()} />
                 : renderRows(shownTasks, tasksMixed))}

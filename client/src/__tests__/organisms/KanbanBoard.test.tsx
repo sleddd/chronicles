@@ -44,7 +44,9 @@ describe('task board status', () => {
     expect(taskStatusOf({})).toBe('todo');
     expect(taskStatusOf({ isInProgress: true })).toBe('in_progress');
     expect(taskStatusOf({ isInProgress: true, isCompleted: true })).toBe('done');
-    expect(taskFieldsForStatus('in_progress')).toEqual({ isInProgress: true, isCompleted: false });
-    expect(taskFieldsForStatus('done')).toEqual({ isInProgress: false, isCompleted: true });
+    expect(taskStatusOf({ isInReview: true })).toBe('in_review');
+    expect(taskFieldsForStatus('in_progress')).toEqual({ isInProgress: true, isInReview: false, isCompleted: false });
+    expect(taskFieldsForStatus('in_review')).toEqual({ isInProgress: false, isInReview: true, isCompleted: false });
+    expect(taskFieldsForStatus('done')).toEqual({ isInProgress: false, isInReview: false, isCompleted: true });
   });
 });

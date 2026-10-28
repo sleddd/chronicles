@@ -29,6 +29,7 @@ const TRAILS: Record<string, TrailCrumb[]> = {
   symptom: HEALTH_TRAIL,
   exercise: HEALTH_TRAIL,
   'exercise schedule': [...HEALTH_TRAIL, { label: 'Exercise', path: '/health/exercise' }, { label: 'Schedule', path: '/health/exercise/schedule' }],
+  'exercise routine': [...HEALTH_TRAIL, { label: 'Exercise', path: '/health/exercise' }, { label: 'Schedule', path: '/health/exercise/schedule' }],
   routine: [...HEALTH_TRAIL, { label: 'Exercise', path: '/health/exercise' }, { label: 'Schedule', path: '/health/exercise/schedule' }],
   'training plan': [...HEALTH_TRAIL, { label: 'Exercise', path: '/health/exercise' }, { label: 'Training', path: '/health/exercise/training' }],
   allergy: HEALTH_TRAIL,

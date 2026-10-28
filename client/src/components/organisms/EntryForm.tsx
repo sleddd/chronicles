@@ -42,6 +42,7 @@ import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
 import { EMPTY_SYMPTOM_CHIPS, symptomChipList, addSymptomChip, removeSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
+import { taskTypeList, addTaskType, removeTaskType } from '../../utils/taskTypes.js';
 import { ALLOWED_IMAGE_TYPES } from '../../utils/processImage.js';
 
 function escapeHtml(text: string): string {
@@ -49,6 +50,8 @@ function escapeHtml(text: string): string {
 }
 
 /* ── Styled components ── */
+
+const NO_TASK_TYPES: string[] = [];
 
 const FormWrapper = styled.div`
   display: flex;
@@ -481,7 +484,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   recipe: 'recipe', recipes: 'recipe',
   priorities: 'priorities', wellness: 'wellness', 'menu plan': 'menu_plan',
   changes: 'change', change: 'change',
-  routine: 'routine', routines: 'routine', 'exercise schedule': 'routine',
+  routine: 'routine', routines: 'routine', 'exercise schedule': 'routine', 'exercise routine': 'routine',
   'training plan': 'training_plan', 'training plans': 'training_plan',
 };
 
@@ -563,6 +566,9 @@ export function EntryForm({
   const phone = useMediaQuery('(max-width: 768px)');
   // Symptom chips: the built-in list plus the owner's own (encrypted setting)
   const [symptomChips, saveSymptomChips, chipsLoaded] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
+  // Task types: Regular task / Small victory plus the owner's own (encrypted setting)
+  const [savedTaskTypes, saveTaskTypes, taskTypesLoaded] = useEncryptedSetting<string[]>('taskTypes', NO_TASK_TYPES);
+  const taskTypes = Array.isArray(savedTaskTypes) ? savedTaskTypes.filter((t): t is string => typeof t === 'string') : NO_TASK_TYPES;
   const ownDictationRef = useRef<DictationControls | null>(null);
   const dictRef = dictationControlRef ?? ownDictationRef;
   const [listening, setListening] = useState(false);
@@ -986,7 +992,9 @@ export function EntryForm({
             )}
             <CustomFieldsBody>
               <FieldRowLayoutContext.Provider value={true}>
-              {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions} />}
+              {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
+                types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
+                onRemoveType={taskTypesLoaded ? l => { void saveTaskTypes(removeTaskType(taskTypes, l)); } : undefined} />}
               {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
               {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}

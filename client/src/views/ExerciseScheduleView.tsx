@@ -17,7 +17,7 @@ import { topics as topicsApi } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr, formatTime12h } from '../utils/dateUtils.js';
 import {
-  ROUTINE_DEFAULTS, SCHEDULE_TOPIC, activeRoutines, describeDays, scheduleTopicId, sessionMinutes, type Routine,
+  ROUTINE_DEFAULTS, SCHEDULE_TOPIC, activeRoutines, describeDays, scheduleTopicId, scheduleTopicIds, sessionMinutes, type Routine,
 } from '../utils/routines.js';
 import { categoryOf, sessionsFrom, trainingPlans, weekProgress, type WeekProgress } from '../utils/training.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
@@ -283,7 +283,7 @@ export function ExerciseScheduleView() {
   const [managing, setManaging] = useState(false);
 
   const routines = useMemo(() => {
-    const list = activeRoutines(entries, scheduleTopicId(allTopics), stripHtml, { withPaused: true });
+    const list = activeRoutines(entries, scheduleTopicIds(allTopics), stripHtml, { withPaused: true });
     const first = (r: Routine) => [...r.times].sort()[0] ?? '99';
     return list.sort((a, b) => Number(b.active) - Number(a.active) || first(a).localeCompare(first(b)) || a.name.localeCompare(b.name));
   }, [entries, allTopics]);
@@ -313,8 +313,8 @@ export function ExerciseScheduleView() {
   }, [planWeek, todayList, today]);
 
   const addExercise = async () => {
-    const { allTopics: topics, setTopics } = useEntriesStore.getState();
-    let id = scheduleTopicId(topics);
+    const { allTopics: topics, setTopics, decryptedEntries } = useEntriesStore.getState();
+    let id = scheduleTopicId(topics, decryptedEntries);
     if (id === undefined) {
       const topic = await topicsApi.create({ name: SCHEDULE_TOPIC, icon: 'person-running' });
       setTopics([...topics, topic]);

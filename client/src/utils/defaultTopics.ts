@@ -13,7 +13,7 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Meals', icon: 'utensils', color: '#F97316' },
   { name: 'Exercise', icon: 'dumbbell', color: '#EF4444' },
   { name: 'Medication', icon: 'pills', color: '#14B8A6' },
-  { name: 'Exercise Schedule', icon: 'person-running', color: '#EF4444' },
+  { name: 'Exercise Routine', icon: 'person-running', color: '#EF4444' },
   { name: 'Training Plan', icon: 'mountain', color: '#10B981' },
   { name: 'Symptom', icon: 'flask', color: '#EF4444' },
   { name: 'Music', icon: 'music', color: '#EC4899' },
@@ -28,7 +28,7 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
 ];
 
 /* Earlier names a default topic went by — an account that has one doesn't get the new name too */
-const ALIASES: Record<string, string> = { routine: 'exercise schedule' };
+const ALIASES: Record<string, string> = { routine: 'exercise routine', 'exercise schedule': 'exercise routine' };
 const norm = (n: string) => {
   const k = n.trim().toLowerCase().replace(/s$/, '');
   return ALIASES[k] ?? k;

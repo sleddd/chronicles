@@ -16,7 +16,7 @@ import { topics as topicsApi } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { tableColumnRules } from '../styles/columnRules.js';
-import { activeRoutines, routineLinkKey, runsOn, scheduleTopicId, type Routine } from '../utils/routines.js';
+import { activeRoutines, routineLinkKey, runsOn, scheduleTopicIds, type Routine } from '../utils/routines.js';
 import {
   addDays, categoryOf, daysBetween, formatShort, minutesByCategory, mountaineeringTemplate,
   phaseIndexOn, phaseWeeks, sessionsFrom, targetHours, trainingPlans, weeklyTarget,
@@ -442,7 +442,7 @@ export function TrainingView() {
     () => sessionsFrom(entries, allTopics.find(t => t.name.toLowerCase() === 'exercise')?.id, stripHtml),
     [entries, allTopics],
   );
-  const routines = useMemo(() => activeRoutines(entries, scheduleTopicId(allTopics), stripHtml), [entries, allTopics]);
+  const routines = useMemo(() => activeRoutines(entries, scheduleTopicIds(allTopics), stripHtml), [entries, allTopics]);
 
   const [planId, setPlanId] = useState<number | null>(null);
   const plan = plans.find(p => p.id === planId) ?? plans[0];

@@ -9,6 +9,7 @@ import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
 import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import type { RoutineSlot } from '../../utils/routines.js';
 import { useTodayDoses } from '../../hooks/useTodayDoses.js';
+import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 
 /* Today's medications and exercise schedule as flat sections — the home
    dashboard's look, shared with the Health dashboard: a thin Work Sans title
@@ -68,6 +69,39 @@ const ItemWhen = styled.span`
   flex: none;
   font-size: 14px;
   color: var(--text-muted);
+`;
+
+/* A schedule row's name and time: opens its routine in the journal, where
+   its times, days and exercises are edited */
+const OpenRoutine = styled.button`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  align-self: stretch;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  &:hover > span:first-child { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
+/* A routine breakdown card's title: opens the routine too (&& beats the
+   card head's accent-link button style, so it keeps the title's look) */
+const OpenTitle = styled.button`
+  && { font: inherit; font-weight: inherit; color: inherit; }
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* ‹ Today › beside the Med list link — flips the schedule back a day at a time */
@@ -178,6 +212,7 @@ export function MedicationsToday({ doses, hideWhenEmpty = false, panel = false }
 /** Today's exercise schedule (hooks/useRoutineChecklist) — ticking logs the session */
 export function ExerciseToday({ panel = false }: { panel?: boolean }) {
   const navigate = useNavigate();
+  const openInJournal = useOpenInJournal();
   const list = useRoutineChecklist();
   const Frame = panel ? DashPanel : 'section';
   return (
@@ -199,8 +234,11 @@ export function ExerciseToday({ panel = false }: { panel?: boolean }) {
             <Checkbox checked={done} disabled={list.busy === s.key}
               aria-label={done ? `Mark ${s.routine.name} not done` : `Mark ${s.routine.name} done`}
               onChange={() => void list.setDone(s, !done)} />
-            <ItemName $done={done}>{s.routine.name}{s.routine.minutes ? <small> · {s.routine.minutes} min</small> : null}</ItemName>
-            <ItemWhen>{when}</ItemWhen>
+            <OpenRoutine type="button" title="Edit routine" aria-label={`Edit ${s.routine.name}: times, days and exercises`}
+              onClick={() => openInJournal(s.routine.id)}>
+              <ItemName $done={done}>{s.routine.name}{s.routine.minutes ? <small> · {s.routine.minutes} min</small> : null}</ItemName>
+              <ItemWhen>{when}</ItemWhen>
+            </OpenRoutine>
           </Row>
         );
       })}
@@ -219,6 +257,7 @@ const Amount = styled.span`
 `;
 
 export function RoutineBreakdown({ panel = false }: { panel?: boolean }) {
+  const openInJournal = useOpenInJournal();
   const list = useRoutineChecklist();
   // One card per routine: its first session today
   const byRoutine = new Map<number, RoutineSlot>();
@@ -233,7 +272,7 @@ export function RoutineBreakdown({ panel = false }: { panel?: boolean }) {
       {routines.map(s => (
         <Frame key={s.routine.id} aria-label={s.routine.name}>
           <SectionHead>
-            <h2>{s.routine.name}</h2>
+            <h2><OpenTitle type="button" title="Edit routine" onClick={() => openInJournal(s.routine.id)}>{s.routine.name}</OpenTitle></h2>
           </SectionHead>
           {s.routine.items.map(it => (
             <Row key={it.id}>

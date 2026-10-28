@@ -29,11 +29,22 @@ export interface RoutineSlot {
   key: string;
 }
 
-/** The exercise schedule topic — "Exercise Schedule"; older accounts' "Routine" counts too */
-export const SCHEDULE_TOPIC = 'Exercise Schedule';
-const SCHEDULE_TOPIC_NAMES = ['exercise schedule', 'exercise schedules', 'routine', 'routines'];
+/** The exercise schedule topic — "Exercise Routine"; its earlier names ("Exercise Schedule", "Routine") count too */
+export const SCHEDULE_TOPIC = 'Exercise Routine';
+const SCHEDULE_TOPIC_NAMES = ['exercise routine', 'exercise routines', 'exercise schedule', 'exercise schedules', 'routine', 'routines'];
 export const isScheduleTopic = (name: string | undefined) => !!name && SCHEDULE_TOPIC_NAMES.includes(name.trim().toLowerCase());
-export const scheduleTopicId = (topics: { id: number; name: string }[]) => topics.find(t => isScheduleTopic(t.name))?.id;
+/** Every schedule-type topic. An account can hold more than one (an older
+ *  name beside the current one), and routines in any of them count. */
+export const scheduleTopicIds = (topics: { id: number; name: string }[]) => topics.filter(t => isScheduleTopic(t.name)).map(t => t.id);
+/** The topic new routines go in: the first one already holding entries, else the first */
+export const scheduleTopicId = (
+  topics: { id: number; name: string }[],
+  entries: { metadata?: unknown }[] = [],
+): number | undefined => {
+  const ids = scheduleTopicIds(topics);
+  const used = new Set(entries.map(e => (e.metadata as Record<string, unknown> | undefined)?._taxonomyId));
+  return ids.find(id => used.has(id)) ?? ids[0];
+};
 
 /** What a new routine's form shows — and so what an untouched field means */
 export const ROUTINE_DEFAULTS = { exerciseType: 'yoga', scheduleTimes: ['07:00'] };
@@ -58,15 +69,16 @@ const str = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' :
 /** Active routines from the store's entries (missing isActive counts as active). */
 export function activeRoutines(
   entries: { id: number; content: string; metadata?: unknown }[],
-  topicId: number | undefined,
+  topicId: number | number[] | undefined,
   textOf: (html: string) => string,
   { withPaused = false } = {},
 ): Routine[] {
-  if (topicId === undefined) return [];
+  const ids = new Set(topicId === undefined ? [] : Array.isArray(topicId) ? topicId : [topicId]);
+  if (!ids.size) return [];
   const out: Routine[] = [];
   for (const e of entries) {
     const meta = e.metadata as Record<string, unknown> | undefined;
-    if (!meta || meta._taxonomyId !== topicId) continue;
+    if (!meta || !ids.has(meta._taxonomyId as number)) continue;
     const cf = (meta._customFields as Record<string, unknown>) ?? {};
     if (cf.isActive === false && !withPaused) continue;
     const items = Array.isArray(cf.items) ? (cf.items as RoutineItem[]).filter(i => i && str(i.name)) : [];
