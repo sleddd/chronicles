@@ -547,7 +547,8 @@ export function JournalView() {
         // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
         const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         if (typeof settingsMap.accentColor === 'string') setAccentColor(settingsMap.accentColor);
-        { const pref = parseThemePreference(settingsMap.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
+        // No saved theme = the account default, dark
+        useUIStore.getState().setThemePreference(parseThemePreference(settingsMap.themeMode) ?? 'dark');
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
           setTopicCustomFields(settingsMap.topicCustomFields as import('../types/userFields.js').TopicCustomFields);
         }

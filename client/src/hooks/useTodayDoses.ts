@@ -14,6 +14,9 @@ export interface DoseGroup {
   pending: ScheduledDose[];
 }
 
+/** Fired on window when a dose is logged elsewhere (voice): every dose list reloads its day */
+export const DOSES_CHANGED = 'chronicles:doses-changed';
+
 const keyOf = (d: ScheduledDose) => `${d.medicationPostId}-${d.time.substring(0, 5)}`;
 
 /**
@@ -29,6 +32,8 @@ export function useTodayDoses(enabled: boolean) {
   const doseToMeals = useDoseToMeals();
   const [logs, setLogs] = useState<Record<string, DoseLogRecord>>({});
   const [error, setError] = useState<string | null>(null);
+  // The day whose logs are loaded (voice waits for it before ticking)
+  const [loadedDay, setLoadedDay] = useState<string | null>(null);
   const today = toDateStr(new Date());
   const [picked, setPicked] = useState<string | null>(null);
   // Never past today; null follows today across midnight
@@ -60,6 +65,7 @@ export function useTodayDoses(enabled: boolean) {
       // As-needed doses are their own records, never one of the scheduled doses
       for (const log of data.logs) if (!log.asNeeded) map[`${log.medicationPostId}-${log.scheduledTime.substring(0, 5)}`] = log;
       setLogs(map);
+      setLoadedDay(day);
     } catch (err) {
       console.error('Failed to fetch dose logs:', err);
     }
@@ -71,8 +77,13 @@ export function useTodayDoses(enabled: boolean) {
     setError(null);
     void fetchLogs();
     const onVisible = () => { if (document.visibilityState === 'visible') void fetchLogs(); };
+    const onChanged = () => { void fetchLogs(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener(DOSES_CHANGED, onChanged);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(DOSES_CHANGED, onChanged);
+    };
   }, [enabled, fetchLogs]);
 
   const isTaken = useCallback((d: ScheduledDose) => logs[keyOf(d)]?.status === 'taken', [logs]);
@@ -120,5 +131,5 @@ export function useTodayDoses(enabled: boolean) {
   }, [day, today]);
 
   const taken = scheduled.filter(isTaken).length;
-  return { day, isToday, shiftDay, scheduled, groups, taken, total: scheduled.length, isTaken, logOf, setTaken, takeAll, error };
+  return { day, isToday, loaded: loadedDay === day, shiftDay, scheduled, groups, taken, total: scheduled.length, isTaken, logOf, setTaken, takeAll, error };
 }

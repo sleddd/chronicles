@@ -302,7 +302,7 @@ export function SettingsView() {
   useEffect(() => {
     loadPrivateSettings().then(map => {
       if (typeof map.timezone === 'string') setTimezone(map.timezone);
-      { const pref = parseThemePreference(map.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
+      useUIStore.getState().setThemePreference(parseThemePreference(map.themeMode) ?? 'dark');
       if (typeof map.accentColor === 'string') setAccentColor(map.accentColor);
       const f: Record<string, boolean> = {};
       // Unset flags get the same defaults as useInitializeData (opt-in ones stay off)

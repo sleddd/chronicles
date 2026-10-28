@@ -26,3 +26,17 @@ describe('auto theme', () => {
     expect(parseThemePreference(undefined)).toBeNull();
   });
 });
+
+describe('remembered theme', () => {
+  it('starts light when nothing is remembered, else in the remembered choice', async () => {
+    const { rememberTheme, rememberedTheme, startingTheme } = await import('@/utils/autoTheme');
+    localStorage.removeItem('chronicles.theme-v1');
+    expect(rememberedTheme()).toBeNull();
+    expect(startingTheme()).toBe('light');
+    rememberTheme('dark');
+    expect(startingTheme()).toBe('dark');
+    localStorage.setItem('chronicles.theme-v1', 'purple');
+    expect(startingTheme()).toBe('light');
+    localStorage.removeItem('chronicles.theme-v1');
+  });
+});

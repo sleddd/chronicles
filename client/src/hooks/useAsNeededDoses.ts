@@ -3,6 +3,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { doses as dosesApi, type DoseLogRecord } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
+import { DOSES_CHANGED } from './useTodayDoses.js';
 
 export interface AsNeededMed { id: number; name: string; dosage: string }
 
@@ -51,8 +52,13 @@ export function useAsNeededDoses(day?: string) {
     setLogs([]);
     void fetchLogs();
     const onVisible = () => { if (document.visibilityState === 'visible') void fetchLogs(); };
+    const onChanged = () => { void fetchLogs(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener(DOSES_CHANGED, onChanged);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(DOSES_CHANGED, onChanged);
+    };
   }, [meds.length, fetchLogs]);
 
   const take = useCallback(async (medId: number) => {

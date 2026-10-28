@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, darkTheme } from '@shared/theme/tokens';
@@ -48,7 +48,7 @@ import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.j
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
 import { ShoppingListsView } from './views/ShoppingListsView.js';
-import { autoThemeFor } from './utils/autoTheme.js';
+import { autoThemeFor, PAGE_COLOR } from './utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
@@ -444,11 +444,15 @@ export function App() {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
   }, [themePreference]);
 
-  useEffect(() => {
+  // Layout effect: the theme's tokens are on the page before it paints (no flash of the other theme)
+  useLayoutEffect(() => {
     const color = accentColor || DEFAULT_ACCENT_COLOR;
     const [r, g, b] = hexToRgbParts(color);
 
     root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    // The browser bar (and the page behind the app) in the theme's page colour
+    root.style.backgroundColor = PAGE_COLOR[isDark ? 'dark' : 'light'];
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', PAGE_COLOR[isDark ? 'dark' : 'light']);
 
     /* Theme-based tokens (flip between light and dark) */
     const themeVars = isDark ? DARK_CSS_VARS : LIGHT_CSS_VARS;

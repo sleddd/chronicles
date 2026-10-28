@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
-import { resolveTheme, type ThemePreference } from '../utils/autoTheme.js';
+import { resolveTheme, rememberTheme, startingTheme, type ThemePreference } from '../utils/autoTheme.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
 
 interface UIState {
@@ -147,11 +147,12 @@ export const useUIStore = create<UIState>((set) => ({
   pencilOnly: true,
   setPencilOnly: (v) => set({ pencilOnly: v }),
 
-  themeMode: 'dark',
-  themePreference: 'dark',
+  // The theme remembered in this browser (else light) until settings load
+  themeMode: resolveTheme(startingTheme()),
+  themePreference: startingTheme(),
   accentColor: DEFAULT_ACCENT_COLOR,
   setThemeMode: (mode) => set({ themeMode: mode }),
-  setThemePreference: (pref) => set({ themePreference: pref, themeMode: resolveTheme(pref) }),
+  setThemePreference: (pref) => { rememberTheme(pref); set({ themePreference: pref, themeMode: resolveTheme(pref) }); },
   setAccentColor: (color) => set({ accentColor: color }),
 
   displayName: '',

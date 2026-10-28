@@ -19,11 +19,13 @@ import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
+import { VoiceCommand, useVoiceSession } from '../components/organisms/VoiceCommand.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { useSaveFields } from '../hooks/useSaveFields.js';
 import { useTodayDoses } from '../hooks/useTodayDoses.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { QuickLog } from '../components/organisms/HealthQuickLog.js';
@@ -638,28 +640,6 @@ function time12(hhmm: string): string {
   return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
-/** Save an entry's custom fields (optimistic; rolled back on failure). */
-function useSaveFields() {
-  const { encryptPost, encryptNewPost } = useEncryption();
-  const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
-  return async (entry: DecryptedPost, cf: Record<string, unknown>, content = entry.content) => {
-    const prev = { content: entry.content, metadata: entry.metadata };
-    const metadata: Record<string, unknown> = { ...((entry.metadata as Record<string, unknown>) ?? {}), _customFields: cf };
-    updateDecryptedEntry(entry.id, { content, metadata });
-    try {
-      const tid = metadata._taxonomyId as number | undefined;
-      const enc = await encryptPost(entry.id, content, metadata);
-      await entriesApi.update(entry.id, {
-        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
-        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
-        taxonomyIds: tid ? [tid] : [],
-      });
-    } catch (err) {
-      console.error('Dashboard save failed:', err);
-      updateDecryptedEntry(entry.id, prev);
-    }
-  };
-}
 
 /* ── Sections ── */
 
@@ -1620,6 +1600,7 @@ const AddItem = styled.form`
 `;
 
 function Shopping({ show, onShow }: { show: string; onShow: (next: string) => void }) {
+  const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
@@ -1733,6 +1714,8 @@ function Shopping({ show, onShow }: { show: string; onShow: (next: string) => vo
         <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
         <BareInput value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list" />
       </AddItem>
+      {/* The whole list in the journal editor: rename, remove items, notes… */}
+      {list && <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list</MoreLink>}
       </>)}
       {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
     </section>
@@ -1817,6 +1800,10 @@ export function DashboardView() {
     if (next.left.join() !== saved.left.join() || next.right.join() !== saved.right.join()) void saveConfig({ ...config, layout: next });
   };
   const [customizing, setCustomizing] = useState(false);
+  // Voice commands: only where the browser can do speech (not Firefox). One
+  // tap opens the panel and starts listening (the session lives here so the
+  // mic starts inside the tap)
+  const voice = useVoiceSession();
   const displayName = useUIStore(s => s.displayName) ?? '';
   const { user } = useAuth();
   const themePreference = useUIStore(s => s.themePreference);
@@ -1965,11 +1952,18 @@ export function DashboardView() {
                   </ThemeOpt>
                 ))}
               </ThemeSwitch>
+              {voice.supported && (
+                <CustomizeBtn type="button" $variant="neutral" aria-expanded={voice.open} onClick={() => (voice.open ? voice.close() : voice.openAndListen())}>
+                  <Icon name="mic" size={15} strokeWidth={1.8} aria-hidden="true" />Voice
+                </CustomizeBtn>
+              )}
               <CustomizeBtn type="button" $variant="neutral" aria-expanded={customizing} onClick={() => setCustomizing(c => !c)}>
                 {customizing ? 'Done' : 'Customize view'}
               </CustomizeBtn>
             </HeadActions>
           </Head>
+
+          {voice.open && <VoiceCommand session={voice} />}
 
           {customizing && (
             <Customize aria-label="Customize view">

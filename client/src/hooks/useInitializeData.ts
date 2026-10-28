@@ -73,7 +73,8 @@ export function useInitializeData() {
         const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
         setAccentColor(accent);
         document.documentElement.style.setProperty('--color-accent', accent);
-        { const pref = parseThemePreference(settingsMap.themeMode); if (pref) useUIStore.getState().setThemePreference(pref); }
+        // No saved theme = the account default, dark
+        useUIStore.getState().setThemePreference(parseThemePreference(settingsMap.themeMode) ?? 'dark');
         if (typeof settingsMap.displayName === 'string') setDisplayName(settingsMap.displayName);
         if (settingsMap.topicCustomFields && typeof settingsMap.topicCustomFields === 'object' && !Array.isArray(settingsMap.topicCustomFields)) {
           setTopicCustomFields(settingsMap.topicCustomFields as import('../types/userFields.js').TopicCustomFields);
