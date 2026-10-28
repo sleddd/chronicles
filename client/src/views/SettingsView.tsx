@@ -122,6 +122,15 @@ const FEATURES = [
   { key: 'reconcileEnabled', title: 'Paycheck reconcile', description: 'Adds a Reconcile tab to Finance: pay bills from each paycheck and tick them off as they clear' },
 ];
 
+/* Settings → Account → Welcome tour: plain text (no box) beside Show it again */
+const TourNote = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+`;
+
 /* ── Layout: each section is a bordered, collapsible card like the dashboards ── */
 
 const Sections = styled.div`
@@ -859,6 +868,13 @@ export function SettingsView() {
                 <ActionButton onClick={() => { setEditingDisplayName(false); setDraftDisplayName(''); }}>Cancel</ActionButton>
               </>
             )}
+          </InlineControls>
+        </FormField>
+        {/* The dashboard's first-visit tour, and its Getting started checklist again */}
+        <FormField label="Welcome tour">
+          <InlineControls>
+            <TourNote>A quick look around Chronicles</TourNote>
+            <ActionButton onClick={() => navigate('/dashboard', { state: { showTour: true } })}>Show it again</ActionButton>
           </InlineControls>
         </FormField>
         {/* Email changes need the current password, so it stays a Change flow */}

@@ -8,7 +8,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import styled, { css } from 'styled-components';
 import { cardLabel } from '../styles/cardLabel.js';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -20,8 +20,11 @@ import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
-import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { VoiceCommand, useVoiceSession } from '../components/organisms/VoiceCommand.js';
+import { OnboardingTour } from '../components/organisms/OnboardingTour.js';
+import { GettingStarted } from '../components/organisms/GettingStarted.js';
+import { firstRun, gettingStarted, showChecklist, toggleTicked, type OnboardingState, type ChecklistKey } from '../utils/onboarding.js';
+import { usePrivateSettings, type PrivateSettingKey } from '../services/privateSettings.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
@@ -46,11 +49,11 @@ import { getOrCreateTopic } from '../utils/getOrCreateJournalTopic.js';
 import { prioritiesTitle } from '../utils/entrySave.js';
 import type { ThemePreference } from '../utils/autoTheme.js';
 import { dailyQuote, greeting, parseQuoteText, type Quote } from '../utils/dailyQuote.js';
+import { shortDateLine } from '../utils/dateLine.js';
 import { currentWeather, describeWeather, findPlace, hoursFromLocal, type CurrentWeather, type Place } from '../utils/weather.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { ShoppingItem } from '../types/fields.js';
 import type { PriorityItem } from '../components/molecules/fields/PrioritiesFields.js';
-import { usePrivateSettings } from '../services/privateSettings.js';
 import { parseSavedViews, searchAndSort, type SavedPlanView, type PlanRow } from '../utils/planningView.js';
 import { taskTypeOf, taskTypeRank, taskTypeList } from '../utils/taskTypes.js';
 import {
@@ -151,7 +154,8 @@ const Head = styled.div`
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px 40px;
-  @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); }
+  /* Phones: the greeting and its two buttons stay side by side, the buttons on its first line */
+  @media (max-width: 640px) { align-items: start; gap: 12px; }
 `;
 
 /* "Good evening, Alex" over "Saturday, October 17 · 55° and clear in Portland" */
@@ -167,6 +171,9 @@ const Eyebrow = styled.div`
   font-size: 15px;
   font-style: italic;
   color: var(--text-muted);
+  /* Phones get the short line ("Tues, Oct. 27th - 50° and cloudy") */
+  & > .short { display: none; }
+  @media (max-width: 640px) { margin-top: 10px; padding-left: 6px; & > .long { display: none; } & > .short { display: inline; } }
 `;
 
 const Hello = styled.h1`
@@ -177,7 +184,8 @@ const Hello = styled.h1`
   line-height: 1.1;
   color: var(--text-primary);
   text-wrap: balance;
-  @media (max-width: 480px) { font-size: 38px; }
+  @media (max-width: 640px) { font-size: 38px; }
+  @media (max-width: 400px) { font-size: 34px; }
 `;
 
 /* Light | Dark (an outlined pair, the chosen one on the grey --bg-active) beside
@@ -187,8 +195,8 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  /* Phones / tablets: the actions move up into the top bar (TopBarAction) */
-  @media (max-width: 640px) { padding: 24px 0 0; margin-bottom: 12px; justify-content: flex-end; &:empty { display: none; } }
+  /* Phones: beside the greeting, tight together, Voice as just its mic */
+  @media (max-width: 640px) { flex-wrap: nowrap; gap: 0; margin-right: -10px; }
 `;
 
 /* Voice: a quiet button — the mic and the word, no outline, never a darker fill
@@ -209,6 +217,19 @@ const VoiceBtn = styled.button<{ $on: boolean }>`
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (max-width: 640px) { position: relative; width: 44px; padding: 0; justify-content: center; }
+`;
+
+/* "Voice": the word beside the mic, left out on phones (the mic alone, named for screen readers) */
+const VoiceWord = styled.span`
+  @media (max-width: 640px) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 `;
 
 /* View options: a round sliders button — no darker fill when open or hovered
@@ -334,9 +355,33 @@ const OutlineBtn = styled.button`
 
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
-const QuickWrap = styled.div`
+const QuickWrap = styled.div<{ $guided?: boolean }>`
   margin-top: 48px;
   @media (max-width: 640px) { margin-top: 32px; }
+  /* Getting started → Write your first entry: the card ringed in the accent */
+  ${({ $guided }) => ($guided ? css`
+    & > section { box-shadow: 0 0 0 2px var(--color-accent); transition: box-shadow 200ms ease; }
+  ` : '')}
+`;
+
+/* The guide over the Quick entry: three numbered steps, then "saved" */
+const EntryGuide = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-accent-line);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  ol { margin: 0; padding-left: 20px; flex: 1; }
+  li { margin: 2px 0; }
+  li b { font-weight: 600; }
+  p { margin: 0; flex: 1; }
+  button { flex: none; padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
+  button:hover { text-decoration: underline; }
 `;
 
 const Hero = styled.div<{ $single: boolean; $afterQuick?: boolean }>`
@@ -662,7 +707,10 @@ const CustomizeHead = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  /* A rule under the head, then room before the switches */
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-subtle);
   h3 { margin: 0 !important; }
 `;
 
@@ -1970,6 +2018,49 @@ export function DashboardView() {
   const medsOn = ff.medicationEnabled !== false;
   const doses = useTodayDoses(isReady && medsOn);
 
+  /* ── Onboarding: the welcome tour on a new account's first visit, then the
+     Getting started checklist (utils/onboarding; the encrypted `onboarding` setting) ── */
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  const [onboarding, saveOnboarding, onboardingLoaded] = useEncryptedSetting<OnboardingState | null>('onboarding', null);
+  const onboardingRef = useRef(onboarding);
+  onboardingRef.current = onboarding;
+  function markOnboarding(patch: OnboardingState) {
+    const cur = onboardingRef.current ?? {};
+    if (Object.entries(patch).every(([k, v]) => cur[k as keyof OnboardingState] === v)) return;
+    const next = { ...cur, ...patch };
+    onboardingRef.current = next;
+    void saveOnboarding(next).catch(() => {});
+  }
+  const [tourOpen, setTourOpen] = useState(false);
+  const firstRunDone = useRef(false);
+  useEffect(() => {
+    if (firstRunDone.current || !isReady || !onboardingLoaded) return;
+    firstRunDone.current = true;
+    const run = firstRun(onboarding, quoteEntries.length);
+    // An account that already had entries skips it quietly
+    if (run === 'existing') markOnboarding({ tourDone: true, checklistDismissed: true });
+    if (run === 'tour') setTourOpen(true);
+  }, [isReady, onboardingLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Settings → "Show the welcome tour"
+  useEffect(() => {
+    if (!onboardingLoaded || !(location.state as { showTour?: boolean } | null)?.showTour) return;
+    setTourOpen(true);
+    // A replay starts the checklist fresh
+    markOnboarding({ checklistDismissed: false, ticked: [] });
+    routerNavigate(location.pathname, { replace: true, state: null });
+  }, [location.state, onboardingLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeTour = () => { setTourOpen(false); markOnboarding({ tourDone: true }); };
+  // Show me → Write your first entry: the Quick entry ringed, with its steps over it, until an entry's saved
+  const [entryGuide, setEntryGuide] = useState<null | { baseline: number }>(null);
+  const setFeatureFlags = useEntriesStore(s => s.setFeatureFlags);
+  const { savePrivateSetting } = usePrivateSettings();
+  const featureOn = (flag: string) => (flag === 'financeEnabled' || flag === 'reconcileEnabled' ? ff[flag] === true : ff[flag] !== false);
+  const setFeature = (flags: string[], on: boolean) => {
+    setFeatureFlags({ ...ff, ...Object.fromEntries(flags.map(f => [f, on])) });
+    for (const f of flags) void savePrivateSetting(f as PrivateSettingKey, on).catch(() => {});
+  };
+
   const places = config.places ?? NO_PLACES;
   const home = places[0];
   useEffect(() => {
@@ -1990,11 +2081,49 @@ export function DashboardView() {
   );
 
   const shown = (k: SectionKey) => !(config.hidden ?? []).includes(k);
+  const onboardingState = onboarding ?? {};
+  const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported });
+  const entrySaved = !!entryGuide && quoteEntries.length > entryGuide.baseline;
+  const toggleChecklist = (key: ChecklistKey) => markOnboarding({ ticked: toggleTicked(onboardingState, key) });
+  const checklistAction = (key: ChecklistKey) => {
+    if (key === 'name') routerNavigate('/settings');
+    else if (key === 'city') {
+      // Customize view, down to the box where a city is typed
+      setCustomizing(true);
+      setTimeout(() => {
+        const input = document.querySelector<HTMLInputElement>('input[aria-label="Add a city"]');
+        const target = input ?? document.querySelector('[aria-label="Customize view"]');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input?.focus({ preventScroll: true });
+      }, 50);
+    }
+    else if (key === 'entry') {
+      // Ring the Quick entry and show its steps over it, the cursor in it; without one, the journal
+      const box = document.querySelector<HTMLElement>('[aria-label="Quick entry"] .tiptap');
+      if (!box) { routerNavigate('/journal'); return; }
+      setEntryGuide({ baseline: quoteEntries.length });
+      requestAnimationFrame(() => {
+        document.querySelector('[aria-label="Quick entry"]')?.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        box.focus();
+      });
+    } else if (key === 'health') routerNavigate('/health');
+    else if (key === 'voice') {
+      voice.openAndListen();
+      // Up to the voice panel, under the header
+      requestAnimationFrame(() => document.querySelector('[aria-label="Voice command"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    else if (key === 'recovery' && !(onboardingState.ticked ?? []).includes('recovery')) markOnboarding({ ticked: toggleTicked(onboardingState, 'recovery') });
+  };
   const hd = homeWeather ? describeWeather(homeWeather.code, homeWeather.isDay) : null;
   const eyebrow = [
     now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
     homeWeather && hd && home ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()} in ${home.name}` : null,
   ].filter(Boolean).join(' · ');
+  // Phones: "Tues, Oct. 27th - 50° and cloudy" (today's weather, no city)
+  const shortEyebrow = [
+    shortDateLine(now),
+    homeWeather && hd ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()}` : null,
+  ].filter(Boolean).join(' - ');
   const financeOn = ff.financeEnabled === true;
   // "Good evening, Alex" — the display name, else the username
   const helloName = displayName.trim() || user?.username?.trim() || '';
@@ -2090,14 +2219,12 @@ export function DashboardView() {
           <Head>
             <DateBlock>
               <Hello>{hello}</Hello>
-              <Eyebrow>{eyebrow}</Eyebrow>
+              <Eyebrow><span className="long">{eyebrow}</span><span className="short">{shortEyebrow}</span></Eyebrow>
             </DateBlock>
             <HeadActions>
-              {/* Phones / tablets: up in the top bar, beside the reminders bell (TopBarAction) */}
-              <TopBarAction>
                 {voice.supported && (
                   <VoiceBtn type="button" $on={voice.open} aria-expanded={voice.open} onClick={() => (voice.open ? voice.close() : voice.openAndListen())}>
-                    <MaterialIcon $size={20} aria-hidden="true">mic</MaterialIcon>Voice
+                    <MaterialIcon $size={20} aria-hidden="true">mic</MaterialIcon><VoiceWord>Voice</VoiceWord>
                   </VoiceBtn>
                 )}
                 <ViewWrap ref={viewRef}>
@@ -2126,11 +2253,14 @@ export function DashboardView() {
                     </ViewMenu>
                   )}
                 </ViewWrap>
-              </TopBarAction>
             </HeadActions>
           </Head>
 
           {voice.open && <VoiceCommand session={voice} />}
+          {tourOpen && (
+            <OnboardingTour onClose={closeTour} themePreference={themePreference} onTheme={changeTheme}
+              isOn={featureOn} onFeature={setFeature} />
+          )}
 
           {customizing && (
             <Customize aria-label="Customize view">
@@ -2164,7 +2294,28 @@ export function DashboardView() {
             </Customize>
           )}
 
-          {shown('quickEntry') && <QuickWrap><QuickEntry /></QuickWrap>}
+          {shown('quickEntry') && (
+            <QuickWrap $guided={!!entryGuide && !entrySaved}>
+              {entryGuide && (
+                <EntryGuide role="status">
+                  {entrySaved ? (
+                    <p>Nice, your first entry is saved. You’ll find it in Journal. Tick it off in Getting started below.</p>
+                  ) : (
+                    <ol>
+                      <li><b>Pick a topic</b> from the Journal ⌄ menu, or keep Journal for everyday notes.</li>
+                      <li><b>Write your entry.</b> A line or two is plenty.</li>
+                      <li><b>Press Save entry</b>, or Ctrl / ⌘ + S.</li>
+                    </ol>
+                  )}
+                  <button type="button" onClick={() => setEntryGuide(null)}>{entrySaved ? 'Done' : 'Close'}</button>
+                </EntryGuide>
+              )}
+              <QuickEntry />
+            </QuickWrap>
+          )}
+          {showChecklist(onboarding) && (
+            <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
+          )}
 
           {(lead || shown('wellness')) && (
             <Hero $single={!(lead && shown('wellness'))} $afterQuick={shown('quickEntry')}>

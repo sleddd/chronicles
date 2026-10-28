@@ -25,7 +25,7 @@ export const PRIVATE_SETTING_KEYS = [
 /** Every key the server stores sealed only: private settings, the master-key settings with their own hooks, credentials and the seal marker. */
 export const SEALED_SETTING_KEYS: readonly string[] = [
   ...PRIVATE_SETTING_KEYS,
-  'nutritionGoals', 'dashboardConfig', 'planningOrder', 'symptomChips', 'symptomTriggerReviews', 'taskTypes',
+  'nutritionGoals', 'dashboardConfig', 'planningOrder', 'symptomChips', 'symptomTriggerReviews', 'taskTypes', 'onboarding',
   'aiConfig', 'imageStorageConfig',
   'settingsSealV2', 'entriesSealV3', 'topicsSealV2', 'dosesSealV2',
 ];

@@ -55,7 +55,7 @@ const LogoBtn = styled.button<{ $active?: boolean }>`
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  height: 76px;
+  height: 64px;
   padding: 0;
   border: none;
   cursor: pointer;
@@ -114,7 +114,7 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  height: 64px;
+  height: 60px; /* compact enough that ⋯ More shows without scrolling */
   padding: 0;
   border: none;
   cursor: pointer;
@@ -169,7 +169,7 @@ const Wordmark = styled.span`
 
 /* Expand / collapse, then ⋯ (Settings, Lock, Sign out), under the last item */
 const ToggleBtn = styled(NavIconBtn)`
-  height: 52px;
+  height: 44px;
   color: var(--text-muted);
 `;
 
@@ -231,7 +231,7 @@ const MaterialIcon = styled.span<{ $size?: number }>`
   font-family: 'Material Symbols Outlined';
   font-weight: 300; /* = the wght below (Safari draws the variable font at the CSS weight) */
   font-style: normal;
-  font-size: ${({ $size }) => $size ?? 24}px;
+  font-size: ${({ $size }) => $size ?? 26}px;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
