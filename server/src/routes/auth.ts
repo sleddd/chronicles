@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { PENDING_2FA } from './authState.js';
 import bcrypt, { HasherBusyError } from '../services/passwordHasher.js';
 import crypto from 'crypto';
 import { promisify } from 'util';
@@ -8,7 +9,7 @@ import { prisma } from '../db/prisma.js';
 import { isApproved, hasPendingInvite, spendInvite } from '../db/betaQueries.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
-import { createSession, revokeSession, revokeAllSessions, authMiddleware } from '../middleware/auth.js';
+import { createSession, revokeSession, revokeAllSessions, authMiddleware, revokeBrowserSession } from '../middleware/auth.js';
 import { revokeGrantsForAccount } from '../services/rememberGrants.js';
 import { sharedState, resetSharedStateForTests } from '../services/sharedState.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
@@ -20,7 +21,6 @@ import { clearRememberCookie } from './remember.js';
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
 // default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
 // step each account used, and the lockout counters below
-const PENDING_2FA = 'pending_2fa';
 const PENDING_2FA_TTL_MS = 5 * 60 * 1000;
 const TOTP_STEP = 'totp_step';
 const TWO_FA_FAILURES = 'fail_2fa';
@@ -28,6 +28,8 @@ const TWO_FA_STRIKES = 'strike_2fa';
 const TWO_FA_LONG_LOCK = 'lock_2fa';
 const LOGIN_FAILURES = 'fail_login';
 const CONFIRM_FAILURES = 'fail_confirm';
+const PASSWORD_STRIKES = 'strike_pw';
+const PASSWORD_LONG_LOCK = 'lock_pw';
 const EMAIL_CHANGES = 'email_change';
 
 /** Drop an account's pending 2FA sign-ins (after a password change, recovery or 2FA change). */
@@ -66,12 +68,16 @@ async function findBackupCode(code: string, stored: string[]): Promise<number> {
 
 // The TOTP secret is encrypted at rest with the server secrets key when one is
 // configured. Base32 secrets never contain ':', which marks the encrypted form.
-function sealTotpSecret(secret: string): string {
-  return isTokenCryptoConfigured() ? encryptToken(secret) : secret;
+// Bound to the account, so a sealed secret copied onto another account's row
+// doesn't open there; older unbound ones are re-sealed at startup.
+const totpAad = (accountId: number) => `totp:${accountId}`;
+
+function sealTotpSecret(secret: string, accountId: number): string {
+  return isTokenCryptoConfigured() ? encryptToken(secret, totpAad(accountId)) : secret;
 }
 
-function openTotpSecret(stored: string): string {
-  return stored.includes(':') ? decryptToken(stored) : stored;
+function openTotpSecret(stored: string, accountId: number): string {
+  return stored.includes(':') ? decryptToken(stored, totpAad(accountId)) : stored;
 }
 
 // Replay protection: a TOTP code is accepted at most once (its time step must
@@ -89,11 +95,26 @@ const TWO_FA_MAX_STRIKES = 3;
 const TWO_FA_STRIKE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const TWO_FA_LONG_LOCK_MS = 24 * 60 * 60 * 1000;
 
-/** Which 2FA lock the account is under, if any. */
-async function twoFALock(accountId: number): Promise<'long' | 'short' | null> {
-  const id = String(accountId);
-  if (await sharedState.locked(TWO_FA_LONG_LOCK, id, 1)) return 'long';
-  if (await sharedState.locked(TWO_FA_FAILURES, id, TWO_FA_MAX_FAILURES)) return 'short';
+/**
+ * Wrong codes count per bucket, like wrong passwords at sign-in: a signed-in
+ * session (a password-confirmed action) and a known device (the code screen
+ * after signing in on a browser that signed in before) each get their own, and
+ * everyone else shares the account's. Someone holding a phished password can
+ * then lock only the strangers' bucket — not the owner's own browsers, where
+ * they still need to change the password and recover. A session or a known
+ * device can only be had by passing 2FA once, so the extra buckets don't give
+ * a guesser more tries.
+ */
+function twoFABucket(req: Request, account: DeviceAccount): string {
+  if (req.auth?.accountId === account.id) return `${account.id}:s:${req.auth.selector}`;
+  const nonce = knownDeviceNonce(req, account);
+  return nonce ? `${account.id}:d:${nonce}` : String(account.id);
+}
+
+/** Which 2FA lock the bucket is under, if any. */
+async function twoFALock(bucket: string): Promise<'long' | 'short' | null> {
+  if (await sharedState.locked(TWO_FA_LONG_LOCK, bucket, 1)) return 'long';
+  if (await sharedState.locked(TWO_FA_FAILURES, bucket, TWO_FA_MAX_FAILURES)) return 'short';
   return null;
 }
 
@@ -102,11 +123,10 @@ const twoFALockMessage = (lock: 'long' | 'short') => lock === 'long'
   : 'Too many incorrect codes. Try again in 15 minutes.';
 
 /** A wrong code just locked the account: count the strike, and lock for a day on the third. */
-async function strikeTwoFALock(accountId: number): Promise<void> {
-  const id = String(accountId);
-  const { count } = await sharedState.hit(TWO_FA_STRIKES, id, TWO_FA_STRIKE_WINDOW_MS);
+async function strikeTwoFALock(accountId: number, bucket: string): Promise<void> {
+  const { count } = await sharedState.hit(TWO_FA_STRIKES, bucket, TWO_FA_STRIKE_WINDOW_MS);
   if (count >= TWO_FA_MAX_STRIKES) {
-    await sharedState.hit(TWO_FA_LONG_LOCK, id, TWO_FA_LONG_LOCK_MS);
+    await sharedState.hit(TWO_FA_LONG_LOCK, bucket, TWO_FA_LONG_LOCK_MS);
     logSecurityEvent('2fa_locked_long', { accountId, details: { strikes: count } });
   } else {
     logSecurityEvent('2fa_locked', { accountId, details: { strikes: count } });
@@ -142,8 +162,30 @@ export function resetAuthStateForTests(): void {
  * while, and parallel requests mustn't all pass the lock in that time).
  * Returns false when this bucket is locked. A correct password clears it.
  */
-function claimLoginAttempt(key: string): Promise<boolean> {
-  return sharedState.claim(LOGIN_FAILURES, key, LOGIN_MAX_FAILURES, LOGIN_LOCK_MS);
+// Repeat offenders, as for 2FA codes: the third 15-minute password lock within
+// a day locks that bucket for a day, so guessing from rotating IPs gets ~30
+// passwords a day per bucket instead of ~960, for as long as it keeps going
+const PASSWORD_MAX_STRIKES = 3;
+const PASSWORD_STRIKE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_LONG_LOCK_MS = 24 * 60 * 60 * 1000;
+
+/** The attempt number (1-based) when the bucket has room, else null (locked). */
+async function claimPasswordAttempt(failures: string, key: string, max: number, lockMs: number): Promise<number | null> {
+  if (await sharedState.locked(PASSWORD_LONG_LOCK, `${failures}:${key}`, 1)) return null;
+  const n = await sharedState.attempt(failures, key, max, lockMs);
+  return n <= max ? n : null;
+}
+
+/** A wrong password on attempt `n`: when it was the one that locked the bucket, count a strike. */
+async function passwordFailed(failures: string, key: string, n: number, max: number): Promise<void> {
+  if (n !== max) return;
+  const id = `${failures}:${key}`;
+  const { count } = await sharedState.hit(PASSWORD_STRIKES, id, PASSWORD_STRIKE_WINDOW_MS);
+  if (count >= PASSWORD_MAX_STRIKES) await sharedState.hit(PASSWORD_LONG_LOCK, id, PASSWORD_LONG_LOCK_MS);
+}
+
+function claimLoginAttempt(key: string): Promise<number | null> {
+  return claimPasswordAttempt(LOGIN_FAILURES, key, LOGIN_MAX_FAILURES, LOGIN_LOCK_MS);
 }
 
 // Per-account cap on wrong passwords at the password-confirmed actions (change
@@ -157,8 +199,8 @@ const CONFIRM_LOCK_MS = 15 * 60 * 1000;
 const EMAIL_CHANGE_MAX = 5;
 const EMAIL_CHANGE_WINDOW_MS = 60 * 60 * 1000;
 
-function claimConfirmAttempt(accountId: number): Promise<boolean> {
-  return sharedState.claim(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES, CONFIRM_LOCK_MS);
+function claimConfirmAttempt(accountId: number): Promise<number | null> {
+  return claimPasswordAttempt(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES, CONFIRM_LOCK_MS);
 }
 
 /**
@@ -168,11 +210,12 @@ function claimConfirmAttempt(accountId: number): Promise<boolean> {
 async function verifySecondFactor(
   account: { id: number; totpSecret: string; totpBackupCodes: string[] },
   code: string,
+  bucket: string,
 ): Promise<'totp' | 'backup' | null> {
   // Counted (atomically, across instances) before the check, so concurrent
   // guesses can't slip past the cap. Exactly one attempt sees the count reach
   // the cap: if its code is wrong, that's the moment the lock triggered
-  if (await sharedState.locked(TWO_FA_LONG_LOCK, String(account.id), 1)) return null;
+  if (await sharedState.locked(TWO_FA_LONG_LOCK, bucket, 1)) return null;
   // A sealed secret this server can't open (SECRETS_ENCRYPTION_KEY missing, e.g. a
   // dev server on the live database): every authenticator code would fail, and
   // counting them would lock the owner out everywhere. Refuse as a server error
@@ -180,11 +223,11 @@ async function verifySecondFactor(
   if (/^\d{6}$/.test(code) && account.totpSecret.includes(':') && !isTokenCryptoConfigured()) {
     throw new Error('SECRETS_ENCRYPTION_KEY is missing or invalid, so this server cannot open authenticator secrets');
   }
-  const attempt = await sharedState.attempt(TWO_FA_FAILURES, String(account.id), TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
+  const attempt = await sharedState.attempt(TWO_FA_FAILURES, bucket, TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
   if (attempt > TWO_FA_MAX_FAILURES) return null;
   const factor = await checkSecondFactor(account, code);
-  if (factor) await sharedState.clear(TWO_FA_FAILURES, String(account.id));
-  else if (attempt === TWO_FA_MAX_FAILURES) await strikeTwoFALock(account.id);
+  if (factor) await sharedState.clear(TWO_FA_FAILURES, bucket);
+  else if (attempt === TWO_FA_MAX_FAILURES) await strikeTwoFALock(account.id, bucket);
   return factor;
 }
 
@@ -197,12 +240,14 @@ async function verifySecondFactor(
 async function secondFactorGate(
   account: { id: number; totpEnabled: boolean; totpSecret: string | null; totpBackupCodes: string[] },
   code: string | undefined,
+  req: Request,
   res: Response,
   failedEvent: string,
-  ip: string | undefined,
 ): Promise<boolean> {
   if (!account.totpEnabled || !account.totpSecret) return true;
-  const lock = await twoFALock(account.id);
+  const ip = req.ip;
+  const bucket = `${account.id}:s:${req.auth!.selector}`;
+  const lock = await twoFALock(bucket);
   if (lock) {
     res.status(429).json({ error: twoFALockMessage(lock) });
     return false;
@@ -211,7 +256,7 @@ async function secondFactorGate(
     res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
     return false;
   }
-  const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code);
+  const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code, bucket);
   if (!factor) {
     logSecurityEvent(failedEvent, { accountId: account.id, ip, details: { reason: 'bad_code' } });
     res.status(401).json({ error: 'Invalid code', requires2FA: true });
@@ -227,7 +272,7 @@ async function checkSecondFactor(
   if (/^\d{6}$/.test(code)) {
     let step: number | null = null;
     try {
-      const result = verifySync({ token: code, secret: openTotpSecret(account.totpSecret) });
+      const result = verifySync({ token: code, secret: openTotpSecret(account.totpSecret, account.id) });
       // TOTP results carry timeStep (HOTP's don't — the union covers both)
       if (result.valid && 'timeStep' in result) step = result.timeStep;
     } catch {
@@ -332,19 +377,27 @@ function rememberKnownDevice(res: Response, account: DeviceAccount): void {
   res.cookie(DEVICE_COOKIE, `${nonce}.${deviceMac(account, nonce)}`, DEVICE_COOKIE_OPTIONS);
 }
 
+/** This browser's known-device nonce for the account, when its cookie verifies. */
+function knownDeviceNonce(req: Request, account: DeviceAccount): string | null {
+  const raw = req.cookies?.[DEVICE_COOKIE];
+  if (typeof raw !== 'string' || raw.length > 128) return null;
+  const [nonce, mac] = raw.split('.');
+  if (!nonce || !mac) return null;
+  const a = Buffer.from(mac);
+  const b = Buffer.from(deviceMac(account, nonce));
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? nonce : null;
+}
+
 /** The failure bucket for this attempt: the device's own when it's known for this account. */
 async function loginFailureKey(req: Request, email: string): Promise<string> {
   const raw = req.cookies?.[DEVICE_COOKIE];
   if (typeof raw !== 'string' || raw.length > 128) return email;
-  const [nonce, mac] = raw.split('.');
-  if (!nonce || !mac) return email;
   // Only browsers carrying a cookie pay for this lookup; without an account
   // there's nothing to be known for
   const account = await prisma.account.findUnique({ where: { email }, select: { id: true, email: true, passwordHash: true } });
   if (!account) return email;
-  const a = Buffer.from(mac);
-  const b = Buffer.from(deviceMac(account, nonce));
-  return a.length === b.length && crypto.timingSafeEqual(a, b) ? `${email}#${nonce}` : email;
+  const nonce = knownDeviceNonce(req, account);
+  return nonce ? `${email}#${nonce}` : email;
 }
 
 function decoyBytes(email: string, label: string, length: number): string {
@@ -394,15 +447,17 @@ async function checkAuthSecret(stored: string, authSecret: string): Promise<bool
   return current && matched;
 }
 
-function confirmLocked(accountId: number): Promise<boolean> {
-  return sharedState.locked(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES);
+async function confirmLocked(accountId: number): Promise<boolean> {
+  const id = String(accountId);
+  return (await sharedState.locked(PASSWORD_LONG_LOCK, `${CONFIRM_FAILURES}:${id}`, 1))
+    || sharedState.locked(CONFIRM_FAILURES, id, CONFIRM_MAX_FAILURES);
 }
 
 /** Route guard for the password-confirmed actions: 429 once the account is locked. */
 async function confirmGate(req: Request, res: Response, next: (err?: unknown) => void): Promise<void> {
   try {
     if (req.auth && (await confirmLocked(req.auth.accountId))) {
-      res.status(429).json({ error: 'Too many incorrect passwords. Try again in 15 minutes.' });
+      res.status(429).json({ error: 'Too many incorrect passwords. Try again later.' });
       return;
     }
     next();
@@ -413,9 +468,11 @@ async function confirmGate(req: Request, res: Response, next: (err?: unknown) =>
 
 /** Check the current password at a password-confirmed action (counted per account). */
 async function checkConfirmSecret(account: { id: number; passwordHash: string }, authSecret: string): Promise<boolean> {
-  if (!(await claimConfirmAttempt(account.id))) return false;
+  const n = await claimConfirmAttempt(account.id);
+  if (n === null) return false;
   const ok = await checkAuthSecret(account.passwordHash, authSecret);
   if (ok) await sharedState.clear(CONFIRM_FAILURES, String(account.id));
+  else await passwordFailed(CONFIRM_FAILURES, String(account.id), n, CONFIRM_MAX_FAILURES);
   return ok;
 }
 
@@ -483,10 +540,29 @@ export async function sealStoredTotpSecrets(): Promise<{ sealed: number; readabl
     // Conditional, so a 2FA change racing this can't be overwritten
     await prisma.account.updateMany({
       where: { id: a.id, totpSecret: a.totpSecret },
-      data: { totpSecret: sealTotpSecret(a.totpSecret!) },
+      data: { totpSecret: sealTotpSecret(a.totpSecret!, a.id) },
     });
   }
-  return { sealed: plain.length, readable: 0, unopenable: 0 };
+  // Sealed before secrets were bound to their account: bind them
+  const unbound = await prisma.account.findMany({
+    where: { totpSecret: { contains: ':' }, NOT: { totpSecret: { startsWith: 'b1:' } } },
+    select: { id: true, totpSecret: true },
+  });
+  let rebound = 0;
+  for (const a of unbound) {
+    let secret: string;
+    try { secret = decryptToken(a.totpSecret!); } catch { continue; }
+    await prisma.account.updateMany({
+      where: { id: a.id, totpSecret: a.totpSecret },
+      data: { totpSecret: sealTotpSecret(secret, a.id) },
+    });
+    rebound++;
+  }
+  return { sealed: plain.length + rebound, readable: 0, unopenable: 0 };
+}
+
+export function registrationWhitelist(): string[] {
+  return (process.env.REGISTRATION_WHITELIST ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 }
 
 /** Enforce a constant-time floor on endpoint response time to prevent timing-based enumeration */
@@ -532,11 +608,13 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
 
     // Who may sign up: closed unless REGISTRATION_OPEN=true. Emails approved on
     // the beta list (`npm run beta -- --approve`, no restart) with their invite
-    // code, or listed in the optional REGISTRATION_WHITELIST, may; anyone else
-    // is refused
+    // code, or (outside production) listed in the optional
+    // REGISTRATION_WHITELIST, may; anyone else is refused
     let invited = false;
     if (process.env.REGISTRATION_OPEN !== 'true') {
-      const listed = (process.env.REGISTRATION_WHITELIST ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      // The whitelist needs no code, so anyone who learns a listed email can
+      // claim it first: in production only approvals (with their code) count
+      const listed = process.env.NODE_ENV === 'production' ? [] : registrationWhitelist();
       invited = !listed.includes(email) && await isApproved(email, inviteCode).catch(() => false);
       if (!listed.includes(email) && !invited) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
@@ -642,15 +720,18 @@ router.post('/login', authLimiter, async (req, res) => {
     const failureKey = await loginFailureKey(req, normalizedEmail);
     // Counted (atomically, across instances) before the password check:
     // parallel guesses can't all pass the lock
-    if (!(await claimLoginAttempt(failureKey))) {
+    const attemptNo = await claimLoginAttempt(failureKey);
+    if (attemptNo === null) {
       logSecurityEvent('login_locked', { ip: req.ip });
       await constantTimeDelay(startTime);
-      res.status(429).json({ error: 'Too many failed sign-in attempts. Try again in 15 minutes.' });
+      res.status(429).json({ error: 'Too many failed sign-in attempts. Try again later.' });
       return;
     }
     const account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
     if (!account) {
       logSecurityEvent('login_failed_no_account', { ip: req.ip });
+      // Strikes too, so a lockout looks the same whether or not the account exists
+      await passwordFailed(LOGIN_FAILURES, failureKey, attemptNo, LOGIN_MAX_FAILURES);
       // Constant-time delay to prevent timing-based email enumeration
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
@@ -660,6 +741,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     if (!(await checkAuthSecret(account.passwordHash, authSecret))) {
       logSecurityEvent('login_failed_bad_password', { accountId: account.id, ip: req.ip });
+      await passwordFailed(LOGIN_FAILURES, failureKey, attemptNo, LOGIN_MAX_FAILURES);
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
@@ -682,6 +764,7 @@ router.post('/login', authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
+    try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({
@@ -741,7 +824,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
-    if (!(await secondFactorGate(account, code, res, 'password_change_failed', req.ip))) return;
+    if (!(await secondFactorGate(account, code, req, res, 'password_change_failed'))) return;
 
     const passwordHash = await hashAuthSecret(newAuthSecret);
 
@@ -793,7 +876,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
   try {
     const parsed = changeEmailSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
 
@@ -823,7 +906,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
-    if (!(await secondFactorGate(account, parsed.data.code, res, 'email_change_failed', req.ip))) return;
+    if (!(await secondFactorGate(account, parsed.data.code, req, res, 'email_change_failed'))) return;
 
     // Check if email is already taken
     // An email approved for someone else's beta invite is taken too: moving an
@@ -899,7 +982,8 @@ router.post('/recover', strictLimiter, async (req, res) => {
     // With 2FA on, the recovery key alone isn't enough: also need an
     // authenticator or backup code (asked for only after the key checks out)
     if (account.totpEnabled && account.totpSecret) {
-      const lock = await twoFALock(account.id);
+      const bucket = twoFABucket(req, account);
+      const lock = await twoFALock(bucket);
       if (lock) {
         res.status(429).json({ error: twoFALockMessage(lock), requires2FA: true });
         return;
@@ -908,7 +992,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
         res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
         return;
       }
-      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code);
+      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code, bucket);
       if (!factor) {
         logSecurityEvent('recovery_2fa_failed', { accountId: account.id, ip: req.ip });
         res.status(401).json({ error: 'Invalid code', requires2FA: true });
@@ -1042,14 +1126,15 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
 
-    const lock = await twoFALock(account.id);
+    const bucket = twoFABucket(req, account);
+    const lock = await twoFALock(bucket);
     if (lock) {
       logSecurityEvent('login_2fa_locked', { accountId: account.id, ip: req.ip });
       res.status(429).json({ error: twoFALockMessage(lock) });
       return;
     }
 
-    const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code);
+    const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code, bucket);
     if (!factor) {
       logSecurityEvent('login_2fa_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Invalid code' });
@@ -1067,6 +1152,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     });
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
+    try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
     res.json({
@@ -1155,7 +1241,7 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },
-      data: { totpSecret: sealTotpSecret(secret), totpEnabled: true, totpBackupCodes: hashedCodes },
+      data: { totpSecret: sealTotpSecret(secret, req.auth!.accountId), totpEnabled: true, totpBackupCodes: hashedCodes },
     });
     // A fresh count, then the enabling code's step marked used, so that same
     // code can't then finish a sign-in (replay)
@@ -1203,12 +1289,13 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     }
 
     if (account.totpEnabled && account.totpSecret) {
-      const lock = await twoFALock(account.id);
+      const bucket = `${account.id}:s:${req.auth!.selector}`;
+      const lock = await twoFALock(bucket);
       if (lock) {
         res.status(429).json({ error: twoFALockMessage(lock) });
         return;
       }
-      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code);
+      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code, bucket);
       if (!factor) {
         logSecurityEvent('2fa_disable_failed', { accountId: account.id, ip: req.ip, details: { reason: 'bad_code' } });
         res.status(401).json({ error: 'Invalid code' });
@@ -1259,7 +1346,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       res.status(401).json({ error: 'Incorrect password' });
       return;
     }
-    if (!(await secondFactorGate(account, parsed.data.code, res, 'account_delete_failed', req.ip))) return;
+    if (!(await secondFactorGate(account, parsed.data.code, req, res, 'account_delete_failed'))) return;
 
     await revokeGrantsForAccount(account.id);
     // Revoke Google Calendar access at Google before the token row is deleted
@@ -1338,7 +1425,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
   try {
     const parsed = saveRecoveryKeySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const { currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, code } = parsed.data;
@@ -1354,7 +1441,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
-    if (!(await secondFactorGate(account, code, res, 'recovery_key_regenerate_failed', req.ip))) return;
+    if (!(await secondFactorGate(account, code, req, res, 'recovery_key_regenerate_failed'))) return;
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },

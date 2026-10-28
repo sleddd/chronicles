@@ -23,7 +23,7 @@ function requireXhr(req: Request, res: Response, next: NextFunction) {
 router.post('/apply', requireXhr, betaLimiter, async (req, res) => {
   const parsed = betaApplicationSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Check the form and try again' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the form and try again' });
     return;
   }
   const d = parsed.data;

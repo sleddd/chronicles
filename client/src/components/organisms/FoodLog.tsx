@@ -134,14 +134,15 @@ export function useFoodLogActions(topicName: string) {
   const create = useCallback(async (day: string, item: string, cf: Record<string, unknown>) => {
     const tid = await topicId();
     const content = `<p>${escapeHtml(item)}</p>`;
-    const metadata = { _taxonomyId: tid, _customFields: cf };
-    const encrypted = await encryptNewPost(content, metadata);
     const isToday = day === toDateStr(new Date());
+    const createdAt = isToday ? undefined : new Date(`${day}T12:00:00`).toISOString();
+    const metadata = { _taxonomyId: tid, _customFields: cf, ...(createdAt ? { _createdAt: createdAt } : {}) };
+    const encrypted = await encryptNewPost(content, metadata);
     const result = await entriesApi.create({ id: encrypted.id,
       contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
       metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
       isEncrypted: true, taxonomyIds: [tid],
-      ...(isToday ? {} : { createdAt: new Date(`${day}T12:00:00`).toISOString() }),
+      ...(createdAt ? { createdAt } : {}),
     });
     const id = result.id as number;
     addDecryptedEntry({

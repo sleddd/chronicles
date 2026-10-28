@@ -11,7 +11,7 @@ import {
   type FinanceRecordRow,
 } from '../db/tenantQueries.js';
 import { financeRecordIdSchema, putFinanceRecordSchema } from '@chronicles/shared';
-import { FINANCE_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
+import { FINANCE_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 
 // Finance records are opaque to the server: each row is one AES-GCM payload
 // the client encrypted (AAD bound to kind + id). The server only stores it.
@@ -57,12 +57,12 @@ router.put('/:kind/:id', async (req, res) => {
   }
   const id = financeRecordIdSchema.safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ error: id.error.errors[0].message });
+    res.status(400).json({ error: id.error.issues[0].message });
     return;
   }
   const body = putFinanceRecordSchema.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.errors[0].message });
+    res.status(400).json({ error: body.error.issues[0].message });
     return;
   }
   try {
@@ -71,7 +71,7 @@ router.put('/:kind/:id', async (req, res) => {
     const schema = req.auth!.tenantSchemaName;
     // Check and write under the account's lock, so parallel saves can't both fit
     const row = await withTenantLock(schema, async (tx) => {
-      if (await financeStorageBytes(schema, { kind, id: id.data }, tx) + payload.length > FINANCE_STORAGE_LIMIT_BYTES) return null;
+      if (await financeStorageBytes(schema, { kind, id: id.data }, tx) + payload.length + ROW_OVERHEAD_BYTES > FINANCE_STORAGE_LIMIT_BYTES) return null;
       return upsertFinanceRecord(schema, kind, id.data, payload, Buffer.from(body.data.iv, 'base64'), tx);
     });
     if (!row) {
@@ -94,7 +94,7 @@ router.delete('/:kind/:id', async (req, res) => {
   }
   const id = financeRecordIdSchema.safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ error: id.error.errors[0].message });
+    res.status(400).json({ error: id.error.issues[0].message });
     return;
   }
   try {

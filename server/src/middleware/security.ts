@@ -20,12 +20,18 @@ const CONNECT_SRC = [
  * Trusted Types for pages: a plain string can't reach an HTML or script sink;
  * it goes through the client's default policy (client/src/security/
  * trustedTypes.ts — DOMPurify for HTML, own-site script URLs only, no code
- * from strings). 'dompurify' is DOMPurify's own policy. Left off script files:
- * a service worker takes the CSP of its own response, and sw.js loads Workbox
- * with importScripts, which has no policy in the worker.
+ * from strings). 'dompurify' is DOMPurify's own policy. Left off the service
+ * worker's script: a worker takes the CSP of its own response, and sw.js loads
+ * Workbox with importScripts, which has no policy in the worker. (Other script
+ * files run in the page, under the page's policy, whatever their own header.)
  */
+export const SERVICE_WORKER_PATH = '/sw.js';
+
 export function trustedTypesDirectives(path: string): string {
-  if (/\.m?js$/i.test(path)) return '';
+  // Only the service worker itself: every other path (a missing "x.js" falls
+  // through to index.html) keeps the policy, so a link can't load the app
+  // without it
+  if (path.toLowerCase() === SERVICE_WORKER_PATH) return '';
   return "; require-trusted-types-for 'script'; trusted-types default dompurify 'allow-duplicates'";
 }
 
@@ -56,7 +62,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  // Control referrer leakage — no-referrer prevents share URLs (with #key fragment) from leaking
+  // Control referrer leakage — no-referrer keeps share-link tokens and in-app paths out of other sites' logs
   res.setHeader('Referrer-Policy', 'no-referrer');
   // Disable browser features we don't need. The microphone stays available to
   // our own origin only — voice dictation in the editor needs it.

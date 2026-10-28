@@ -61,7 +61,7 @@ router.post('/ids', async (req, res) => {
   try {
     const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
@@ -83,7 +83,7 @@ router.post('/', async (req, res) => {
     if (isPlaintextTopicWrite(req.body)) { res.status(409).json(OUTDATED); return; }
     const parsed = createTaxonomySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
@@ -134,7 +134,7 @@ router.put('/:id', async (req, res) => {
     if (isPlaintextTopicWrite(req.body)) { res.status(409).json(OUTDATED); return; }
     const parsed = updateTaxonomySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);

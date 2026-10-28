@@ -212,7 +212,7 @@ describe('Generic password validation errors', () => {
     // Register should return generic message
     const registerSection = authContent.split("router.post('/register'")[1]?.split("router.")[0] || '';
     expect(registerSection).toContain("'Invalid registration details'");
-    expect(registerSection).not.toContain('parsed.error.errors[0].message');
+    expect(registerSection).not.toContain('parsed.error.issues[0].message');
   });
 
   it('change-password endpoint returns generic validation error', async () => {
@@ -352,7 +352,7 @@ describe('Metadata size limit', () => {
       'utf8'
     );
     expect(content).toContain("isEncrypted: z.literal(true");
-    expect(content).toContain("max(200_000, 'Metadata too large')");
+    expect(content).toContain("ciphertext(200_000, 'Metadata too large')");
     // One cap shared by create and update
     expect(content).toMatch(/createPostSchema[\s\S]*?metadataEncrypted: METADATA_FIELD,/);
     expect(content).toMatch(/updatePostSchema[\s\S]*?metadataEncrypted: METADATA_FIELD\.optional\(\)/);
@@ -407,7 +407,7 @@ describe('Login validation error sanitization', () => {
     );
     const loginSection = authContent.split("router.post('/login'")[1]?.split("router.")[0] || '';
     // Should NOT expose Zod error details
-    expect(loginSection).not.toContain('parsed.error.errors[0].message');
+    expect(loginSection).not.toContain('parsed.error.issues[0].message');
     expect(loginSection).not.toContain('parsed.error.errors');
   });
 });
@@ -530,7 +530,8 @@ describe('Middleware order (index.ts)', () => {
     const headers = content.indexOf('app.use(securityHeaders)');
     expect(headers).toBeGreaterThan(-1);
     expect(headers).toBeLessThan(content.indexOf('express.json('));
-    expect(content).toMatch(/app\.use\('\/api\/entries', authMiddleware, apiLimiter, express\.json\(\{ limit: '5mb' \}\), entriesRoutes\)/);
+    // The write gate runs before the 5 MB body is read, so queued writes can't pile up bodies
+    expect(content).toMatch(/app\.use\('\/api\/entries', authMiddleware, apiLimiter, writeGate, express\.json\(\{ limit: '5mb' \}\), entriesRoutes\)/);
     expect(content).not.toContain("'http://localhost:5173'");
   });
 });

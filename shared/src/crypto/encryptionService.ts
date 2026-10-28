@@ -353,12 +353,17 @@ class EncryptionService {
       metadata = {};
     }
 
+    // The creation time sealed in the metadata wins over the server's
+    // readable one (entries saved before it was sealed keep the server's)
+    const sealedAt = typeof metadata._createdAt === 'string' && !Number.isNaN(Date.parse(metadata._createdAt))
+      ? metadata._createdAt : null;
+
     return {
       id: post.id,
       content,
       metadata,
       isEncrypted: true,
-      createdAt: post.createdAt,
+      createdAt: sealedAt ? new Date(sealedAt) : post.createdAt,
       updatedAt: post.updatedAt,
       ...(needsReseal && { needsReseal: true }),
     };
@@ -416,6 +421,22 @@ class EncryptionService {
   /**
    * Decrypt multiple posts
    */
+  /**
+   * A stable tag for this account, derived from its master key and a label:
+   * the GCM tag of an empty message under a fixed all-zero IV — a PRF of the
+   * key over the label. Only the master key's holder can compute it, and two
+   * accounts never share one. (The zero IV is never used for anything else:
+   * every other encryption takes 12 random bytes, a 2^-96 chance of meeting it.)
+   */
+  async accountTag(masterKey: CryptoKey, label: string): Promise<string> {
+    const out = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: new Uint8Array(12), additionalData: new TextEncoder().encode(`chronicles:tag:v1:${label}`), tagLength: 128 },
+      masterKey,
+      new Uint8Array(0),
+    );
+    return Array.from(new Uint8Array(out), b => b.toString(16).padStart(2, '0')).join('');
+  }
+
   async decryptPosts(
     masterKey: CryptoKey,
     posts: EncryptedPost[],

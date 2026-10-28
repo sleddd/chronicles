@@ -29,10 +29,15 @@ import { SHARED_STATE_IN_POSTGRES } from './sharedState.js';
  */
 
 export const REMEMBER_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+// Unused this long (no page load, no activity touch from the browser), a grant
+// is gone: the browser's 60-minute idle lock alone could be wound back by
+// anyone at the open machine resetting its localStorage timestamp
+export const REMEMBER_IDLE_MS = 60 * 60 * 1000;
 
 interface GrantStore {
-  put(hash: string, g: { secret: Buffer; selector: string; accountId: number; expiresAt: number }): Promise<void>;
-  get(hash: string): Promise<{ secret: Buffer; selector: string; accountId: number; expiresAt: number } | null>;
+  put(hash: string, g: Grant): Promise<void>;
+  get(hash: string): Promise<Grant | null>;
+  touch(hash: string, usedAt: number): Promise<void>;
   delete(hash: string): Promise<void>;
   deleteForSession(selector: string): Promise<void>;
   deleteForAccount(accountId: number, exceptSelector?: string): Promise<void>;
@@ -44,6 +49,7 @@ interface Grant {
   selector: string;
   accountId: number;
   expiresAt: number;
+  usedAt: number;
 }
 
 function memoryGrants(): GrantStore {
@@ -56,6 +62,7 @@ function memoryGrants(): GrantStore {
       grants.set(hash, { ...g, secret: Buffer.from(g.secret) });
     },
     async get(hash) { const g = grants.get(hash); return g ? { ...g, secret: Buffer.from(g.secret) } : null; },
+    async touch(hash, usedAt) { const g = grants.get(hash); if (g) g.usedAt = usedAt; },
     async delete(hash) { drop(hash); },
     async deleteForSession(selector) { for (const [k, g] of grants) if (g.selector === selector) drop(k); },
     async deleteForAccount(accountId, exceptSelector) {
@@ -70,27 +77,36 @@ export const REMEMBER_GRANTS_TABLE_SQL = `CREATE UNLOGGED TABLE IF NOT EXISTS pu
   account_id INTEGER NOT NULL,
   selector VARCHAR(12) NOT NULL,
   sealed_secret TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`;
+// Tables made before grants tracked their last use
+const REMEMBER_GRANTS_USED_AT_SQL = `ALTER TABLE public.remember_grants ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ NOT NULL DEFAULT now()`;
+
+// The sealed secret is bound to its grant's hash, so it opens only as that grant
+const grantAad = (hash: string) => `remember:${hash}`;
 
 function postgresGrants(): GrantStore {
   return {
     async put(hash, g) {
       await (await db()).$executeRawUnsafe(`DELETE FROM public.remember_grants WHERE expires_at <= now()`);
       await (await db()).$executeRawUnsafe(
-        `INSERT INTO public.remember_grants (grant_hash, account_id, selector, sealed_secret, expires_at) VALUES ($1, $2, $3, $4, $5)`,
-        hash, g.accountId, g.selector, encryptToken(g.secret.toString('base64')), new Date(g.expiresAt)
+        `INSERT INTO public.remember_grants (grant_hash, account_id, selector, sealed_secret, expires_at, used_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+        hash, g.accountId, g.selector, encryptToken(g.secret.toString('base64'), grantAad(hash)), new Date(g.expiresAt), new Date(g.usedAt)
       );
     },
     async get(hash) {
-      const rows = await (await db()).$queryRawUnsafe<{ account_id: number; selector: string; sealed_secret: string; expires_at: Date }[]>(
-        `SELECT account_id, selector, sealed_secret, expires_at FROM public.remember_grants WHERE grant_hash = $1`, hash
+      const rows = await (await db()).$queryRawUnsafe<{ account_id: number; selector: string; sealed_secret: string; expires_at: Date; used_at: Date }[]>(
+        `SELECT account_id, selector, sealed_secret, expires_at, used_at FROM public.remember_grants WHERE grant_hash = $1`, hash
       );
       const r = rows[0];
       if (!r) return null;
       let secret: Buffer;
-      try { secret = Buffer.from(decryptToken(r.sealed_secret), 'base64'); } catch { return null; }
-      return { secret, selector: r.selector, accountId: r.account_id, expiresAt: r.expires_at.getTime() };
+      try { secret = Buffer.from(decryptToken(r.sealed_secret, grantAad(hash), { allowUnbound: false }), 'base64'); } catch { return null; }
+      return { secret, selector: r.selector, accountId: r.account_id, expiresAt: r.expires_at.getTime(), usedAt: r.used_at.getTime() };
+    },
+    async touch(hash, usedAt) {
+      await (await db()).$executeRawUnsafe(`UPDATE public.remember_grants SET used_at = $2 WHERE grant_hash = $1`, hash, new Date(usedAt));
     },
     async delete(hash) { await (await db()).$executeRawUnsafe(`DELETE FROM public.remember_grants WHERE grant_hash = $1`, hash); },
     async deleteForSession(selector) { await (await db()).$executeRawUnsafe(`DELETE FROM public.remember_grants WHERE selector = $1`, selector); },
@@ -108,7 +124,16 @@ const store: GrantStore = REMEMBER_GRANTS_SHARED ? postgresGrants() : memoryGran
 
 /** Startup: the table (shared mode), or say why Remember me stays on one instance. */
 export async function initRememberGrants(): Promise<void> {
-  if (REMEMBER_GRANTS_SHARED) { await (await db()).$executeRawUnsafe(REMEMBER_GRANTS_TABLE_SQL); return; }
+  if (REMEMBER_GRANTS_SHARED) {
+    const client = await db();
+    await client.$executeRawUnsafe(REMEMBER_GRANTS_TABLE_SQL);
+    // Read before the ALTER: it takes an exclusive lock even when there's nothing to add
+    const has = await client.$queryRawUnsafe<{ n: number }[]>(
+      `SELECT 1 AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'remember_grants' AND column_name = 'used_at'`
+    );
+    if (has.length === 0) await client.$executeRawUnsafe(REMEMBER_GRANTS_USED_AT_SQL);
+    return;
+  }
   if (SHARED_STATE_IN_POSTGRES) {
     console.warn('Remember me grants are kept in memory (SECRETS_ENCRYPTION_KEY is not set): it works on one server instance only, and a restart forgets it');
   }
@@ -123,7 +148,7 @@ export async function createGrant(accountId: number, selector: string, now = Dat
   const grantId = crypto.randomBytes(32).toString('base64url');
   const secret = crypto.randomBytes(32);
   const expiresAt = now + REMEMBER_MAX_AGE_MS;
-  await store.put(hashId(grantId), { secret, selector, accountId, expiresAt });
+  await store.put(hashId(grantId), { secret, selector, accountId, expiresAt, usedAt: now });
   return { grantId, secret, expiresAt };
 }
 
@@ -133,12 +158,30 @@ export async function readGrant(grantId: string | undefined, accountId: number, 
   const key = hashId(grantId);
   const g = await store.get(key);
   if (!g) return null;
-  if (g.expiresAt <= now) { g.secret.fill(0); await store.delete(key); return null; }
   const sameSession = g.accountId === accountId
     && g.selector.length === selector.length
     && crypto.timingSafeEqual(Buffer.from(g.selector), Buffer.from(selector));
   if (!sameSession) { g.secret.fill(0); return null; }
+  if (g.expiresAt <= now || now - g.usedAt > REMEMBER_IDLE_MS) { g.secret.fill(0); await store.delete(key); return null; }
+  // Opening the journal is use
+  await store.touch(key, now);
   return { secret: g.secret, expiresAt: g.expiresAt };
+}
+
+/** The browser was in use: keep its grant from going idle. Only the session that made it. */
+export async function touchGrant(grantId: string | undefined, accountId: number, selector: string, now = Date.now()): Promise<boolean> {
+  if (!grantId || grantId.length > 128) return false;
+  const key = hashId(grantId);
+  const g = await store.get(key);
+  if (!g) return false;
+  g.secret.fill(0);
+  const sameSession = g.accountId === accountId
+    && g.selector.length === selector.length
+    && crypto.timingSafeEqual(Buffer.from(g.selector), Buffer.from(selector));
+  if (!sameSession) return false;
+  if (g.expiresAt <= now || now - g.usedAt > REMEMBER_IDLE_MS) { await store.delete(key); return false; }
+  await store.touch(key, now);
+  return true;
 }
 
 export async function revokeGrant(grantId: string | undefined): Promise<void> {

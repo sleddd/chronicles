@@ -452,7 +452,7 @@ export function JournalView() {
     try {
       const encrypted = selectedEntryId
         ? { ...(await encryptPost(selectedEntryId, contentToSave, metadata)), id: selectedEntryId }
-        : await encryptNewPost(contentToSave, metadata);
+        : await encryptNewPost(contentToSave, pendingEntryDate ? { ...metadata, _createdAt: new Date(pendingEntryDate + 'T12:00:00').toISOString() } : metadata);
       if (selectedEntryId) {
         await entriesApi.update(selectedEntryId, {
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
@@ -723,7 +723,7 @@ export function JournalView() {
       }
       const encrypted = selectedEntryId
         ? { ...(await encryptPost(selectedEntryId, finalContent, metadata)), id: selectedEntryId }
-        : await encryptNewPost(finalContent, metadata);
+        : await encryptNewPost(finalContent, pendingEntryDate ? { ...metadata, _createdAt: new Date(pendingEntryDate + 'T12:00:00').toISOString() } : metadata);
 
       // Save the entry (it closes once saved — see below)
       if (selectedEntryId) {

@@ -22,6 +22,12 @@ export const TRUSTED_HTML_CONFIG = {
   ADD_ATTR: ['svgcontent', 'target'],
 };
 
+// A kept `target` (a link opening a new tab) always carries rel=noopener, so
+// the opened page can never reach back to this one through window.opener
+DOMPurify.addHook('afterSanitizeAttributes', node => {
+  if (node instanceof Element && node.hasAttribute('target')) node.setAttribute('rel', 'noopener noreferrer');
+});
+
 export function trustedHTML(input: string): string {
   return DOMPurify.sanitize(input, TRUSTED_HTML_CONFIG) as string;
 }

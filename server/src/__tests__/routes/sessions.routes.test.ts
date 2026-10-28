@@ -1,3 +1,5 @@
+import { sharedState } from '../../services/sharedState.js';
+import { PENDING_2FA } from '../../routes/authState.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createTestApp, TEST_AUTH } from './testHelper.js';
@@ -109,6 +111,14 @@ describe('Session Routes', () => {
         TEST_AUTH.selector,
         'user_logout',
       );
+    });
+
+    it('also cancels sign-ins still waiting on their 2FA code', async () => {
+      await sharedState.putToken(PENDING_2FA, 'p'.repeat(64), TEST_AUTH.accountId, 60_000);
+      await sharedState.putToken(PENDING_2FA, 'q'.repeat(64), TEST_AUTH.accountId + 1, 60_000);
+      expect((await request(app).post('/api/sessions/revoke-all')).status).toBe(200);
+      expect(await sharedState.getToken(PENDING_2FA, 'p'.repeat(64))).toBeNull();
+      expect(await sharedState.getToken(PENDING_2FA, 'q'.repeat(64))).toBe(TEST_AUTH.accountId + 1);
     });
 
     it('returns 500 on database error', async () => {

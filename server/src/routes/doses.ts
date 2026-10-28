@@ -76,7 +76,7 @@ router.get('/all', async (req, res) => {
 router.put('/reseal', async (req, res) => {
   const body = resealDoseRecordsSchema.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.errors[0].message });
+    res.status(400).json({ error: body.error.issues[0].message });
     return;
   }
   if (new Set(body.data.records.map(r => r.id)).size !== body.data.records.length) {
@@ -118,12 +118,12 @@ router.post('/', (_req, res) => {
 router.put('/:id', async (req, res) => {
   const id = doseRecordIdSchema.safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ error: id.error.errors[0].message });
+    res.status(400).json({ error: id.error.issues[0].message });
     return;
   }
   const body = putDoseRecordSchema.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.errors[0].message });
+    res.status(400).json({ error: body.error.issues[0].message });
     return;
   }
   if (!isCalendarDate(body.data.date)) {
@@ -155,7 +155,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const id = doseRecordIdSchema.safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ error: id.error.errors[0].message });
+    res.status(400).json({ error: id.error.issues[0].message });
     return;
   }
   try {

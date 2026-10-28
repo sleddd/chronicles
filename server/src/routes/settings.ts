@@ -28,7 +28,7 @@ router.put('/', async (req, res) => {
   try {
     const parsed = upsertSettingSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const { key, value } = parsed.data;
@@ -43,7 +43,7 @@ router.put('/', async (req, res) => {
     // requests at once can't both see room
     const result = await withTenantLock(schema, async (tx) => {
       if (!(await settingExists(schema, key, tx)) && (await countSettings(schema, tx)) >= MAX_SETTING_KEYS) return 'Too many settings';
-      if (await settingsStorageBytes(schema, key, tx) + JSON.stringify(value).length > MAX_SETTINGS_BYTES) return 'Settings storage is full';
+      if (await settingsStorageBytes(schema, key, tx) + Buffer.byteLength(JSON.stringify(value), 'utf8') > MAX_SETTINGS_BYTES) return 'Settings storage is full';
       return upsertSetting(schema, key, value, tx);
     });
     if (typeof result === 'string') {

@@ -47,9 +47,9 @@ const mockPost = {
   id: 1,
   content: null,
   metadata: null,
-  contentEncrypted: Buffer.from('encrypted'),
+  contentEncrypted: Buffer.from('encrypted-content-with-tag'),
   contentIv: Buffer.from('iv12345678ab'),
-  metadataEncrypted: Buffer.from('metaenc'),
+  metadataEncrypted: Buffer.from('metadata-content-with-tag'),
   metadataIv: Buffer.from('metaiv123456'),
   isEncrypted: true,
   createdAt: new Date('2025-01-01'),
@@ -72,7 +72,7 @@ describe('Entry Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);
-      expect(res.body[0].contentEncrypted).toBe(Buffer.from('encrypted').toString('base64'));
+      expect(res.body[0].contentEncrypted).toBe(Buffer.from('encrypted-content-with-tag').toString('base64'));
       expect(res.body[0].contentIv).toBe(Buffer.from('iv12345678ab').toString('base64'));
       // Default is large on purpose — the client keeps every entry in its store;
       // each page is also capped by bytes
@@ -146,9 +146,9 @@ describe('Entry Routes', () => {
       id: 2,
       format: 3,
       isEncrypted: true,
-      contentEncrypted: Buffer.from('encrypted').toString('base64'),
+      contentEncrypted: Buffer.from('encrypted-content-with-tag').toString('base64'),
       contentIv: Buffer.from('iv12345678ab').toString('base64'),
-      metadataEncrypted: Buffer.from('metaenc').toString('base64'),
+      metadataEncrypted: Buffer.from('metadata-content-with-tag').toString('base64'),
       metadataIv: Buffer.from('metaiv123456').toString('base64'),
     };
 
@@ -170,9 +170,9 @@ describe('Entry Routes', () => {
       (updatePost as any).mockResolvedValueOnce(undefined);
       const res = await request(app).put('/api/entries/7').send({
         format: 3,
-        contentEncrypted: Buffer.from('encrypted').toString('base64'),
+        contentEncrypted: Buffer.from('encrypted-content-with-tag').toString('base64'),
         contentIv: Buffer.from('iv12345678ab').toString('base64'),
-        metadataEncrypted: Buffer.from('metaenc').toString('base64'),
+        metadataEncrypted: Buffer.from('metadata-content-with-tag').toString('base64'),
         metadataIv: Buffer.from('metaiv123456').toString('base64'),
       });
       expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7, 'TX');
@@ -214,7 +214,7 @@ describe('Entry Routes', () => {
 
     it('re-seals older entries in batches, each once, within the storage cap', async () => {
       (resealPosts as any).mockResolvedValue(2);
-      const row = (id: number) => ({ id, format: 3, updatedAt: '2026-10-01T10:00:00.123Z', contentEncrypted: 'YQ==', contentIv: 'Yg==', metadataEncrypted: 'Yw==', metadataIv: 'ZA==' });
+      const row = (id: number) => ({ id, format: 3, updatedAt: '2026-10-01T10:00:00.123Z', contentEncrypted: 'Y29udGVudC1jaXBoZXJ0ZXh0LWFuZC10YWc=', contentIv: 'Y29udGVudC1pdi0x', metadataEncrypted: 'bWV0YWRhdGEtY2lwaGVydGV4dC1hbmQtdGFn', metadataIv: 'bWV0YWRhdGEtaXYx' });
       const ok = await request(app).put('/api/entries/reseal').send({ entries: [row(1), row(2)] });
       expect(ok.status).toBe(200);
       expect(ok.body).toEqual({ resealed: 2 });
@@ -249,7 +249,7 @@ describe('Entry Routes', () => {
       const res = await request(app).post('/api/entries').send(old);
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Update Chronicles to save entries');
-      const upd = await request(app).put('/api/entries/2').send({ contentEncrypted: 'YQ==', contentIv: 'Yg==', metadataEncrypted: 'Yw==', metadataIv: 'ZA==' });
+      const upd = await request(app).put('/api/entries/2').send({ contentEncrypted: 'Y29udGVudC1jaXBoZXJ0ZXh0LWFuZC10YWc=', contentIv: 'Y29udGVudC1pdi0x', metadataEncrypted: 'bWV0YWRhdGEtY2lwaGVydGV4dC1hbmQtdGFn', metadataIv: 'bWV0YWRhdGEtaXYx' });
       expect(upd.status).toBe(400);
     });
 

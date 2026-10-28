@@ -30,6 +30,7 @@ vi.mock('../../db/schemaManager.js', () => ({
 
 // Mock auth middleware and helpers
 vi.mock('../../middleware/auth.js', () => ({
+  revokeBrowserSession: vi.fn().mockResolvedValue(undefined),
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
     req.auth = {
       accountId: 1,

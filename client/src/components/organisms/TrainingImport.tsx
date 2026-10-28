@@ -135,12 +135,13 @@ export function TrainingImport() {
           performedDate: s.date, performedTime: '', notes: s.notes, trainingCategory: s.category,
         };
         const content = `<p>${escapeHtml(exerciseSummary(fields))}</p>`;
-        const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: s.importKey, _customFields: fields };
+        const createdAt = new Date(`${s.date}T12:00:00`).toISOString();
+        const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: s.importKey, _customFields: fields, _createdAt: createdAt };
         const enc = await encryptNewPost(content, metadata);
         pending.push({ content, metadata, payload: { id: enc.id,
           contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
           metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
-          isEncrypted: true, taxonomyIds: [tid], createdAt: new Date(`${s.date}T12:00:00`).toISOString(),
+          isEncrypted: true, taxonomyIds: [tid], createdAt,
         } });
         if (pending.length >= IMPORT_BATCH) await flush();
       }

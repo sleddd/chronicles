@@ -86,3 +86,41 @@ describe('strictLimiter buckets', () => {
     expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
   });
 });
+
+describe('writeGate', () => {
+  const run = async (method: string, accountId?: number) => {
+    const { writeGate } = await import('../middleware/rateLimiter.js');
+    const handlers: Record<string, () => void> = {};
+    const res: any = {
+      statusCode: 200,
+      headers: {} as Record<string, string>,
+      set(k: string, v: string) { this.headers[k] = v; return this; },
+      status(c: number) { this.statusCode = c; return this; },
+      json() { return this; },
+      on(ev: string, fn: () => void) { handlers[ev] = fn; },
+    };
+    let passed = false;
+    writeGate({ method, auth: accountId === undefined ? undefined : { accountId } } as any, res, () => { passed = true; });
+    return { passed, res, finish: () => handlers.finish?.() };
+  };
+
+  it('caps one account’s writes in flight, and frees a slot when one finishes', async () => {
+    const { MAX_WRITES_IN_FLIGHT } = await import('../middleware/rateLimiter.js');
+    const open = [];
+    for (let i = 0; i < MAX_WRITES_IN_FLIGHT; i++) {
+      const r = await run('PUT', 7);
+      expect(r.passed).toBe(true);
+      open.push(r);
+    }
+    const refused = await run('POST', 7);
+    expect(refused.passed).toBe(false);
+    expect(refused.res.statusCode).toBe(429);
+    expect(refused.res.headers['Retry-After']).toBe('2');
+    // Reads and other accounts aren't held back
+    expect((await run('GET', 7)).passed).toBe(true);
+    expect((await run('PUT', 8)).passed).toBe(true);
+    open[0].finish();
+    expect((await run('PUT', 7)).passed).toBe(true);
+    for (const r of open) r.finish();
+  });
+});

@@ -49,7 +49,7 @@ async function main(): Promise<void> {
     console.log(how === 'invited'
       ? `Approved ${email} (added as an invite — they hadn't applied).`
       : `Approved ${email}.`);
-    console.log(`Send them this sign-up link (it only works for this email, and isn't stored — approve again for a new one):\n  ${link}`);
+    console.log(`Send them this sign-up link (it only works for this email, lasts 30 days, and isn't stored — approve again for a new one):\n  ${link}`);
     if (!base) console.log('(Set APP_URL to the app\'s address to get a full link.)');
     return;
   }

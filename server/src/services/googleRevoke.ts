@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma.js';
-import { decryptToken } from './tokenCrypto.js';
+import { decryptToken, googleTokenAad } from './tokenCrypto.js';
 
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 
@@ -16,7 +16,7 @@ export async function revokeGoogleAccess(accountId: number): Promise<boolean> {
   });
   if (!integration?.googleRefreshToken) return false;
   try {
-    const token = decryptToken(integration.googleRefreshToken);
+    const token = decryptToken(integration.googleRefreshToken, googleTokenAad(accountId));
     const res = await fetch(GOOGLE_REVOKE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

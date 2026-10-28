@@ -28,8 +28,8 @@ const app = createTestApp('/api/finance', financeRouter);
 const ID = '3f1c2a64-8d1e-4f5a-9b2c-0d1e2f3a4b5c';
 const row = {
   id: ID,
-  payloadEncrypted: Buffer.from('cipher'),
-  payloadIv: Buffer.from('iv-bytes'),
+  payloadEncrypted: Buffer.from('finance-cipher-with-tag!'),
+  payloadIv: Buffer.from('iv-bytes-12b'),
   createdAt: new Date('2026-10-01T00:00:00Z'),
   updatedAt: new Date('2026-10-01T00:00:00Z'),
 };
@@ -45,8 +45,8 @@ describe('Finance Routes', () => {
       const res = await request(app).get('/api/finance/bills');
       expect(res.status).toBe(200);
       expect(res.body.records).toHaveLength(1);
-      expect(res.body.records[0].payload).toBe(Buffer.from('cipher').toString('base64'));
-      expect(res.body.records[0].iv).toBe(Buffer.from('iv-bytes').toString('base64'));
+      expect(res.body.records[0].payload).toBe(Buffer.from('finance-cipher-with-tag!').toString('base64'));
+      expect(res.body.records[0].iv).toBe(Buffer.from('iv-bytes-12b').toString('base64'));
       expect(ensureFinanceTables).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
       expect(getFinanceRecords).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'bills');
     });
@@ -77,8 +77,8 @@ describe('Finance Routes', () => {
   describe('PUT /api/finance/:kind/:id', () => {
     it('upserts an encrypted record', async () => {
       (upsertFinanceRecord as any).mockResolvedValue(row);
-      const payload = Buffer.from('cipher').toString('base64');
-      const iv = Buffer.from('iv-bytes').toString('base64');
+      const payload = Buffer.from('finance-cipher-with-tag!').toString('base64');
+      const iv = Buffer.from('iv-bytes-12b').toString('base64');
       const res = await request(app).put(`/api/finance/goals/${ID}`).send({ payload, iv });
       expect(res.status).toBe(200);
       expect(res.body.record.id).toBe(ID);
@@ -87,13 +87,13 @@ describe('Finance Routes', () => {
       expect(args[1]).toBe('goals');
       expect(args[2]).toBe(ID);
       expect(Buffer.isBuffer(args[3])).toBe(true);
-      expect(args[3].toString()).toBe('cipher');
+      expect(args[3].toString()).toBe('finance-cipher-with-tag!');
     });
 
     it('refuses a record once finance storage is full (the row being replaced not counted)', async () => {
       (financeStorageBytes as any).mockResolvedValueOnce(FINANCE_STORAGE_LIMIT_BYTES);
       const res = await request(app).put(`/api/finance/goals/${ID}`)
-        .send({ payload: Buffer.from('cipher').toString('base64'), iv: Buffer.from('iv-bytes').toString('base64') });
+        .send({ payload: Buffer.from('finance-cipher-with-tag!').toString('base64'), iv: Buffer.from('iv-bytes-12b').toString('base64') });
       expect(res.status).toBe(413);
       expect(financeStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { kind: 'goals', id: ID }, 'TX');
       expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));

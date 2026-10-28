@@ -151,7 +151,7 @@ describe('authMiddleware', () => {
     mockPrisma.session.findUnique.mockResolvedValue({
       id: 1,
       selector,
-      verifierHash: 'doesntmatter',
+      verifierHash: crypto.createHash('sha256').update(verifier).digest('hex'),
       accountId: 42,
       tenantSchemaName: 'usr_1_abc123',
       revokedAt: new Date(),
@@ -171,6 +171,25 @@ describe('authMiddleware', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Session revoked' });
   });
 
+  it('says nothing about a revoked or expired session until the verifier matches', async () => {
+    const selector = 'a'.repeat(12);
+    mockPrisma.session.findUnique.mockResolvedValue({
+      id: 1,
+      selector,
+      verifierHash: crypto.createHash('sha256').update('c'.repeat(32)).digest('hex'),
+      accountId: 42,
+      tenantSchemaName: 'usr_1_abc123',
+      revokedAt: new Date(),
+      expiresAt: new Date(Date.now() - 1000),
+      lastActiveAt: new Date(),
+    });
+    const req = createMockReq({ headers: { authorization: `Bearer ${selector}${'b'.repeat(32)}` } });
+    const res = createMockRes();
+    await authMiddleware(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid session' });
+  });
+
   it('rejects expired sessions', async () => {
     const selector = 'a'.repeat(12);
     const verifier = 'b'.repeat(32);
@@ -178,7 +197,7 @@ describe('authMiddleware', () => {
     mockPrisma.session.findUnique.mockResolvedValue({
       id: 1,
       selector,
-      verifierHash: 'doesntmatter',
+      verifierHash: crypto.createHash('sha256').update(verifier).digest('hex'),
       accountId: 42,
       tenantSchemaName: 'usr_1_abc123',
       revokedAt: null,

@@ -28,25 +28,49 @@ export function isTokenCryptoConfigured(): boolean {
   }
 }
 
-export function encryptToken(plaintext: string): string {
+// Bound form: `b1:iv:ciphertext:tag`, sealed with an AAD naming the row the
+// secret belongs to (`totp:<account id>`, a grant's hash…), so a ciphertext
+// copied into another row of the database no longer opens there. The older
+// unbound `iv:ciphertext:tag` still opens where the caller allows it.
+const BOUND_PREFIX = 'b1';
+
+export function isBoundToken(stored: string): boolean {
+  return stored.startsWith(`${BOUND_PREFIX}:`);
+}
+
+export function encryptToken(plaintext: string, aad?: string): string {
   const key = getKey();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  if (aad !== undefined) cipher.setAAD(Buffer.from(aad, 'utf8'));
   const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return `${iv.toString('base64')}:${ciphertext.toString('base64')}:${tag.toString('base64')}`;
+  const body = `${iv.toString('base64')}:${ciphertext.toString('base64')}:${tag.toString('base64')}`;
+  return aad !== undefined ? `${BOUND_PREFIX}:${body}` : body;
 }
 
-export function decryptToken(stored: string): string {
+/**
+ * Open a sealed secret. With `aad`, a bound value must carry that AAD; an
+ * unbound (older) value opens only while `allowUnbound` (the default) holds.
+ */
+export function decryptToken(stored: string, aad?: string, { allowUnbound = true } = {}): string {
   const key = getKey();
-  const parts = stored.split(':');
+  let parts = stored.split(':');
+  let bound = false;
+  if (parts.length === 4 && parts[0] === BOUND_PREFIX) { parts = parts.slice(1); bound = true; }
   if (parts.length !== 3) {
     throw new Error('Invalid encrypted token format');
   }
+  if (bound && aad === undefined) throw new Error('Sealed secret needs its binding');
+  if (!bound && aad !== undefined && !allowUnbound) throw new Error('Unbound sealed secret refused');
   const [iv, ciphertext, tag] = parts.map(p => Buffer.from(p, 'base64'));
   // A full 16-byte tag only: a truncated one would be accepted otherwise
   if (tag.length !== 16) throw new Error('Invalid encrypted token format');
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
+  if (bound) decipher.setAAD(Buffer.from(aad!, 'utf8'));
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
+
+/** The AAD a Google Calendar refresh token is sealed with: its account. */
+export const googleTokenAad = (accountId: number) => `google:${accountId}`;

@@ -28,7 +28,7 @@ import { getAllTaxonomies, getTaxonomy, createTaxonomy, updateTaxonomy, deleteTa
 import { TOPIC_LIMIT } from '../../routes/topics.js';
 
 const app = createTestApp('/api/topics', topicsRouter);
-const sealed = { id: 1, name: null, icon: null, color: '#3B82F6', sort_order: 0, payload: 'c2VhbGVk', iv: 'aXY=' };
+const sealed = { id: 1, name: null, icon: null, color: '#3B82F6', sort_order: 0, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi' };
 
 describe('Topic Routes (encrypted names)', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -43,16 +43,16 @@ describe('Topic Routes (encrypted names)', () => {
 
   it('creates a topic from an encrypted payload', async () => {
     (createTaxonomy as any).mockResolvedValue(sealed);
-    const res = await request(app).post('/api/topics').send({ id: 4, format: 2, payload: 'c2VhbGVk', iv: 'aXY=', color: '#3B82F6' });
+    const res = await request(app).post('/api/topics').send({ id: 4, format: 2, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi', color: '#3B82F6' });
     expect(res.status).toBe(201);
-    expect(createTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { id: 4, payload: 'c2VhbGVk', iv: 'aXY=', color: '#3B82F6' }, 'TX');
+    expect(createTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { id: 4, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi', color: '#3B82F6' }, 'TX');
   });
 
   it('needs a reserved id and format 2; 409 for one never reserved', async () => {
-    expect((await request(app).post('/api/topics').send({ format: 2, payload: 'c2VhbGVk', iv: 'aXY=' })).status).toBe(400);
-    expect((await request(app).post('/api/topics').send({ id: 4, payload: 'c2VhbGVk', iv: 'aXY=' })).status).toBe(400);
+    expect((await request(app).post('/api/topics').send({ format: 2, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi' })).status).toBe(400);
+    expect((await request(app).post('/api/topics').send({ id: 4, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi' })).status).toBe(400);
     (createTaxonomy as any).mockResolvedValue(null);
-    expect((await request(app).post('/api/topics').send({ id: 4, format: 2, payload: 'c2VhbGVk', iv: 'aXY=' })).status).toBe(409);
+    expect((await request(app).post('/api/topics').send({ id: 4, format: 2, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi' })).status).toBe(409);
   });
 
   it('reserves topic ids', async () => {
@@ -78,22 +78,22 @@ describe('Topic Routes (encrypted names)', () => {
 
   it('updates the payload and/or colour', async () => {
     (updateTaxonomy as any).mockResolvedValue(sealed);
-    const res = await request(app).put('/api/topics/1').send({ format: 2, payload: 'bmV3', iv: 'aXY=' });
+    const res = await request(app).put('/api/topics/1').send({ format: 2, payload: 'bmV3LXRvcGljLWNpcGhlcnRleHQtdGFn', iv: 'dG9waWMtaXYtMTJi' });
     expect(res.status).toBe(200);
-    expect(updateTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, { payload: 'bmV3', iv: 'aXY=' });
-    expect((await request(app).put('/api/topics/1').send({ payload: 'bmV3', iv: 'aXY=' })).status).toBe(400);
+    expect(updateTaxonomy).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 1, { payload: 'bmV3LXRvcGljLWNpcGhlcnRleHQtdGFn', iv: 'dG9waWMtaXYtMTJi' });
+    expect((await request(app).put('/api/topics/1').send({ payload: 'bmV3LXRvcGljLWNpcGhlcnRleHQtdGFn', iv: 'dG9waWMtaXYtMTJi' })).status).toBe(400);
     expect((await request(app).put('/api/topics/1').send({ color: '#123456' })).status).toBe(200);
   });
 
   it('answers 404 for an update of a topic that doesn\'t exist', async () => {
     (updateTaxonomy as any).mockResolvedValue(null);
-    const res = await request(app).put('/api/topics/99').send({ format: 2, payload: 'bmV3', iv: 'aXY=' });
+    const res = await request(app).put('/api/topics/99').send({ format: 2, payload: 'bmV3LXRvcGljLWNpcGhlcnRleHQtdGFn', iv: 'dG9waWMtaXYtMTJi' });
     expect(res.status).toBe(404);
   });
 
   it('caps topics per account — counted under the account lock, and no ids once full', async () => {
     (taxonomyCount as any).mockResolvedValue(TOPIC_LIMIT);
-    const res = await request(app).post('/api/topics').send({ format: 2, id: 4, payload: 'c2VhbGVk', iv: 'aXY=' });
+    const res = await request(app).post('/api/topics').send({ format: 2, id: 4, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi' });
     expect(res.status).toBe(413);
     expect(createTaxonomy).not.toHaveBeenCalled();
     expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));

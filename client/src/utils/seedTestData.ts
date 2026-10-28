@@ -112,6 +112,7 @@ async function createEntry(
   if (topicId) metadata._taxonomyId = topicId;
   if (opts.widgetType) metadata._widgetType = opts.widgetType;
   if (customFields && Object.keys(customFields).length > 0) metadata._customFields = customFields;
+  if (opts.day) metadata._createdAt = new Date(`${opts.day}T12:00:00`).toISOString();
 
   const html = opts.html ?? `<p>${content}</p>`;
   const encrypted = await encryptPost(html, metadata);

@@ -1,4 +1,5 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import type { Request, Response, NextFunction } from 'express';
 import { sharedRateLimitStore } from '../services/sharedState.js';
 
 /**
@@ -108,3 +109,36 @@ export const betaLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many sign-ups from here, please try again later' },
 });
+
+/**
+ * Writes (anything but GET / HEAD) running or queued at once per account, in
+ * this process. One account's writes wait in `withTenantLock`'s queue each
+ * holding its parsed body (up to 5 MB on entries), so without a cap a burst of
+ * concurrent saves well under `apiLimiter` could hold gigabytes. Normal use
+ * (autosave, dose ticks, an import's 50-entry batches) stays far below it.
+ */
+export const MAX_WRITES_IN_FLIGHT = 16;
+const writesInFlight = new Map<number, number>();
+
+export function writeGate(req: Request, res: Response, next: NextFunction): void {
+  const accountId = req.auth?.accountId;
+  if (accountId === undefined || req.method === 'GET' || req.method === 'HEAD') return next();
+  const n = writesInFlight.get(accountId) ?? 0;
+  if (n >= MAX_WRITES_IN_FLIGHT) {
+    res.set('Retry-After', '2');
+    res.status(429).json({ error: 'Too many saves at once. Try again in a moment.' });
+    return;
+  }
+  writesInFlight.set(accountId, n + 1);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    const left = (writesInFlight.get(accountId) ?? 1) - 1;
+    if (left <= 0) writesInFlight.delete(accountId);
+    else writesInFlight.set(accountId, left);
+  };
+  res.on('finish', release);
+  res.on('close', release);
+  next();
+}

@@ -19,3 +19,15 @@ describe('planner filter in the URL', () => {
     expect(decoded?.goalStatus).toBe('all');
   });
 });
+
+describe('planner filter search words', () => {
+  it('never puts them in the address, but brings them back in this tab', () => {
+    const f = { ...EMPTY_PLANNER_FILTER, keyword: 'divorce lawyer', itemTypes: ['tasks' as const] };
+    const raw = encodePlannerFilter(f);
+    expect(raw).not.toContain('divorce');
+    expect(decodePlannerFilter(raw)).toEqual(f);
+    // An old link carrying words is read without them
+    sessionStorage.clear();
+    expect(decodePlannerFilter(JSON.stringify({ keyword: 'secret' }))?.keyword).toBe('');
+  });
+});

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import { encryptionService } from '@shared/crypto/encryptionService.js';
 import { toNonExtractable } from '@shared/crypto/primitives.js';
+import { clearEntryTitleCache } from '../utils/entryTitle.js';
+import { setEgressAccount } from '../services/deviceConsent.js';
 import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import type { EncryptedPostData, DecryptedPost, EncryptedPost, SetupEncryptionResult } from '@shared/crypto/types.js';
 import { clearImageCache, rederiveImageStorageConfig } from '../services/imageStorage.js';
@@ -46,7 +48,6 @@ interface EncryptionContextValue {
   /** Encrypt one Finance record (AAD bound to kind + id). */
   encryptRecord: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
   decryptRecord: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
-  unlockWithRecoveryKey: (recoveryKey: string, recoveryWrappedMK: string, recoveryWrapIv: string) => Promise<void>;
   rewrapMasterKey: (newPassword: string, currentPassword?: string, params?: EncryptionParams) => Promise<{ salt: string; wrappedMK: string; wrapIv: string }>;
   /** Generate a new recovery key wrapping using the current password to re-derive the extractable master key. */
   generateRecoveryKey: (currentPassword: string, externalParams?: EncryptionParams) => Promise<{ recoveryKey: string; recoveryWrappedMK: string; recoveryWrapIv: string }>;
@@ -69,7 +70,10 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   // Stored encryption params for re-derivation during password change
   const encryptionParamsRef = useRef<EncryptionParams | null>(null);
   /** Install an unlocked master key and restore the in-memory secrets that depend on it. */
-  const install = useCallback((key: CryptoKey) => {
+  const install = useCallback(async (key: CryptoKey) => {
+    // Before anything reads the off-device switches (the startup settings load
+    // once isUnlocked flips): their records are kept under this tag
+    setEgressAccount(await encryptionService.accountTag(key, 'egress'));
     masterKeyRef.current = key;
     // Restore the in-memory R2 credentials (cleared on lock) from their
     // master-key-encrypted blob so image display/cleanup keeps working
@@ -118,13 +122,12 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     rememberedRef.current = remember && hasRememberedUnlock();
     setIsRemembered(rememberedRef.current);
     encryptionParamsRef.current = { kekSalt, encryptedMasterKey, kekWrapIv, kekIterations };
-    install(key);
+    await install(key);
   }, [install]);
 
   /** Clear all in-memory key material and decrypted secrets (this tab only). */
   const lockLocal = useCallback(() => {
     masterKeyRef.current = null;
-    extractableKeyRef.current = null;
     encryptionParamsRef.current = null;
     rememberedRef.current = false;
     setIsRemembered(false);
@@ -142,6 +145,9 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearReservedEntryIds();
     clearIssuedTopicIds();
     clearSealMarkers();
+    // Entry list titles are cached keyed by the decrypted entry HTML
+    clearEntryTitleCache();
+    setEgressAccount(null);
     setIsUnlocked(false);
   }, []);
 
@@ -161,7 +167,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const result = await encryptionService.setupEncryption(password);
     // A full install, like an unlock: without the record cipher a new account
     // couldn't seal (or seed) its topics until the next unlock
-    install(result.masterKey);
+    await install(result.masterKey);
     return result;
   }, [install]);
 
@@ -170,14 +176,25 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     return masterKeyRef.current;
   };
 
+  // An entry's creation time is sealed in its metadata (`_createdAt`), so the
+  // server — whose created_at is readable — can't re-date it; a save that
+  // rebuilds the metadata keeps the one the entry already has
   const encryptPost = useCallback(async (id: number, content: string, metadata: Record<string, unknown>) => {
-    return encryptionService.encryptPost(getKey(), id, content, metadata);
+    let meta = metadata;
+    if (typeof meta._createdAt !== 'string') {
+      const existing = useEntriesStore.getState().decryptedEntries.find(e => e.id === id);
+      const sealed = existing?.metadata?._createdAt;
+      const at = typeof sealed === 'string' ? sealed : existing ? new Date(existing.createdAt).toISOString() : null;
+      if (at) meta = { ...metadata, _createdAt: at };
+    }
+    return encryptionService.encryptPost(getKey(), id, content, meta);
   }, []);
 
   const encryptNewPost = useCallback(async (content: string, metadata: Record<string, unknown>) => {
     const key = getKey();
     const id = await reserveEntryId();
-    return { ...(await encryptionService.encryptPost(key, id, content, metadata)), id };
+    const meta = typeof metadata._createdAt === 'string' ? metadata : { ...metadata, _createdAt: new Date().toISOString() };
+    return { ...(await encryptionService.encryptPost(key, id, content, meta)), id };
   }, []);
 
   // Older entry formats open only until the account is past the move to v3
@@ -206,29 +223,6 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     return encryptionService.decryptRecord<T>(getKey(), kind, id, payload, iv);
   }, []) as EncryptionContextValue['decryptRecord'];
 
-  // During recovery, we need the extractable key for rewrapping with a new password.
-  // Store it separately so masterKeyRef always holds a non-extractable key.
-  const extractableKeyRef = useRef<CryptoKey | null>(null);
-
-  const unlockWithRecoveryKey = useCallback(async (
-    recoveryKey: string,
-    recoveryWrappedMK: string,
-    recoveryWrapIv: string
-  ) => {
-    const extractableKey = await encryptionService.unwrapWithRecoveryKey(recoveryKey, recoveryWrappedMK, recoveryWrapIv);
-    // Store extractable key in separate ref for rewrap only
-    extractableKeyRef.current = extractableKey;
-    // Convert to non-extractable immediately for encrypt/decrypt operations
-    const key = await toNonExtractable(extractableKey);
-    masterKeyRef.current = key;
-    encryptionParamsRef.current = null; // Recovery path — no stored params
-    void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
-    void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
-    // Topic names and dose records are sealed by the API layer itself
-    installRecordCipher(encryptionService, key);
-    setIsUnlocked(true);
-  }, []);
-
   const rewrapMasterKey = useCallback(async (newPassword: string, currentPassword?: string, externalParams?: EncryptionParams) => {
     const storedParams = encryptionParamsRef.current || externalParams;
     if (currentPassword && storedParams) {
@@ -251,13 +245,9 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       };
       return result;
     }
-    // Recovery flow: use the extractable key stored during unlockWithRecoveryKey
-    const extractableKey = extractableKeyRef.current;
-    if (!extractableKey) throw new Error('No extractable key available for rewrap');
-    const result = await encryptionService.rewrapMasterKey(extractableKey, newPassword);
-    // Clear the extractable key — no longer needed after rewrap
-    extractableKeyRef.current = null;
-    return result;
+    // Recovery has its own path (recoverAndRewrap), which never keeps an
+    // extractable copy of the master key around
+    throw new Error('Enter your current password to change it');
   }, []);
 
   const generateRecoveryKey = useCallback(async (currentPassword: string, externalParams?: EncryptionParams) => {
@@ -292,7 +282,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     };
     // A non-extractable copy for this session, installed like an unlock (the
     // record cipher seals topics and doses; R2 / AI credentials reopen)
-    install(await toNonExtractable(extractableKey));
+    await install(await toNonExtractable(extractableKey));
     return {
       ...rewrapped,
       newRecoveryKey: recovery.recoveryKey,
@@ -305,8 +295,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return () => {
       masterKeyRef.current = null;
-      extractableKeyRef.current = null;
-    };
+      };
   }, []);
 
   // Restore a remembered unlock on page load (new tab, reload, navigating back)
@@ -323,7 +312,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
             rememberedRef.current = true;
             setIsRemembered(true);
             markActivity();
-            install(key);
+            await install(key);
           }
         } catch {
           // Blob doesn't open with this secret (tampered or stale) — forget it
@@ -412,7 +401,6 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       decryptBytes,
       encryptRecord,
       decryptRecord,
-      unlockWithRecoveryKey,
       rewrapMasterKey,
       generateRecoveryKey,
       recoverAndRewrap,

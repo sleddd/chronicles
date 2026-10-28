@@ -26,3 +26,8 @@ export function entryTitleText(html: string): string {
   cache.set(html, title);
   return title;
 }
+
+/** Forget every cached title (they're decrypted text): called when the journal locks. */
+export function clearEntryTitleCache(): void {
+  cache.clear();
+}

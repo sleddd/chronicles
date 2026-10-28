@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import crypto from 'crypto';
 import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
-import { ENTRY_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
+import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
@@ -146,7 +146,7 @@ router.post('/ids', async (req, res) => {
   try {
     const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     res.json({ ids: await reservePostIds(req.auth!.tenantSchemaName, parsed.data.count) });
@@ -162,7 +162,7 @@ router.put('/reseal', async (req, res) => {
   try {
     const parsed = resealPostsSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const entries = parsed.data.entries.map(e => ({
@@ -177,7 +177,7 @@ router.put('/reseal', async (req, res) => {
       res.status(400).json({ error: 'Each entry once' });
       return;
     }
-    const size = entries.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length, 0);
+    const size = entries.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length + ROW_OVERHEAD_BYTES, 0);
     const schema = req.auth!.tenantSchemaName;
     // Check and write under the account's lock, so parallel writes can't both fit
     const resealed = await withTenantLock(schema, async (tx) => {
@@ -215,12 +215,12 @@ router.post('/', async (req, res) => {
   try {
     const parsed = createPostSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
 
     const input = toCreateInput(parsed.data);
-    const size = input.contentEncrypted.length + input.metadataEncrypted.length;
+    const size = input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES;
     const schema = req.auth!.tenantSchemaName;
     const post = await withTenantLock(schema, async (tx) => {
       if (await postStorageBytes(schema, [], tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
@@ -247,7 +247,7 @@ router.post('/batch', async (req, res) => {
   try {
     const parsed = createPostsBatchSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
     const inputs = parsed.data.entries.map(toCreateInput);
@@ -256,7 +256,7 @@ router.post('/batch', async (req, res) => {
       return;
     }
 
-    const size = inputs.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length, 0);
+    const size = inputs.reduce((n, e) => n + e.contentEncrypted.length + e.metadataEncrypted.length + ROW_OVERHEAD_BYTES, 0);
     const schema = req.auth!.tenantSchemaName;
     const posts = await withTenantLock(schema, async (tx) => {
       if (await postStorageBytes(schema, [], tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
@@ -303,7 +303,7 @@ router.put('/:id', async (req, res) => {
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
     const parsed = updatePostSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0].message });
+      res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
 
@@ -318,7 +318,7 @@ router.put('/:id', async (req, res) => {
     const schema = req.auth!.tenantSchemaName;
     const post = await withTenantLock(schema, async (tx) => {
       if (input.contentEncrypted && input.metadataEncrypted) {
-        const size = input.contentEncrypted.length + input.metadataEncrypted.length;
+        const size = input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES;
         if (await postStorageBytes(schema, id, tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
       }
       return updatePost(schema, id, input, tx);

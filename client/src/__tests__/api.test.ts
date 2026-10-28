@@ -670,13 +670,22 @@ describe('shares', () => {
     expect(init.method).toBe('POST');
   });
 
+  it('get refuses a token that could reach another API path', async () => {
+    fetchSpy = mockFetchResponse({});
+    vi.stubGlobal('fetch', fetchSpy);
+    for (const bad of ['../entries', '..%2Fentries', 'a/b/c/d/e/f/g/h', 'short']) {
+      await expect(shares.get(bad)).rejects.toThrow();
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('get fetches share by token', async () => {
-    fetchSpy = mockFetchResponse({ id: 1, token: 'tok123' });
+    fetchSpy = mockFetchResponse({ id: 1, token: 'tok123tok123tok123' });
     vi.stubGlobal('fetch', fetchSpy);
 
-    await shares.get('tok123');
+    await shares.get('tok123tok123tok123');
 
-    expect(fetchSpy.mock.calls[0][0]).toBe('/api/shares/tok123');
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/shares/tok123tok123tok123');
   });
 
   it('list fetches /shares', async () => {

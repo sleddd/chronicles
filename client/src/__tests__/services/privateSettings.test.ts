@@ -190,3 +190,49 @@ describe('private keys', () => {
     await expect(openForExport('timezone', { ciphertext: post.ciphertext, iv: post.iv, v: 2 }, decryptBytes)).rejects.toThrow();
   });
 });
+
+describe('rollback guard (aiConfig, imageStorageConfig)', () => {
+  it('refuses a value older than one this browser has opened', async () => {
+    setEgressAccount('tag-a');
+    const { openSetting } = await import('../../services/settingCipher.js');
+    const v1 = await sealSetting('aiConfig', { provider: 'anthropic', apiKey: 'old' }, encryptBytes);
+    expect(await openSetting('aiConfig', v1, decryptBytes)).toEqual({ provider: 'anthropic', apiKey: 'old' });
+    const v2 = await sealSetting('aiConfig', { provider: 'openai', apiKey: 'new' }, encryptBytes);
+    expect(await openSetting('aiConfig', v2, decryptBytes)).toEqual({ provider: 'openai', apiKey: 'new' });
+    // The server serves the one it kept from before
+    await expect(openSetting('aiConfig', v1, decryptBytes)).rejects.toThrow(/older/);
+    // Another account in this browser keeps its own count
+    setEgressAccount('tag-b');
+    expect(await openSetting('aiConfig', v1, decryptBytes)).toEqual({ provider: 'anthropic', apiKey: 'old' });
+  });
+
+  it('leaves other settings as they are', async () => {
+    setEgressAccount('tag-a');
+    const { openSetting } = await import('../../services/settingCipher.js');
+    const v = await sealSetting('dashboardConfig', { hidden: [] }, encryptBytes);
+    expect(await openSetting('dashboardConfig', v, decryptBytes)).toEqual({ hidden: [] });
+  });
+});
+
+describe('off-device switch records', () => {
+  it('move from the email-hash key to the master-key tag once both are known', async () => {
+    const { setEgressLegacyAccount, egressOn } = await import('../../services/deviceConsent.js');
+    setEgressAccount(null);
+    localStorage.setItem('chronicles.egress.v1', JSON.stringify({ 'emailhash|calendarSyncEnabled': true }));
+    setEgressLegacyAccount('emailhash');
+    setEgressAccount('tag-a');
+    expect(egressOn('calendarSyncEnabled', true)).toBe(true);
+    expect(localStorage.getItem('chronicles.egress.v1')).not.toContain('emailhash');
+    setEgressLegacyAccount(null);
+  });
+
+  it('are keyed by a tag only the master key can make', async () => {
+    const { encryptionService } = await import('@shared/crypto/encryptionService.js');
+    const other = await generateMasterKey();
+    const a = await encryptionService.accountTag(key, 'egress');
+    expect(await encryptionService.accountTag(key, 'egress')).toBe(a);
+    expect(await encryptionService.accountTag(other, 'egress')).not.toBe(a);
+    expect(await encryptionService.accountTag(key, 'other')).not.toBe(a);
+    expect(a).toMatch(/^[0-9a-f]{32}$/);
+  });
+});
