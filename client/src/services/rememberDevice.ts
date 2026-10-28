@@ -44,8 +44,21 @@ export function lastActivity(): number {
   try { return Number(localStorage.getItem(ACTIVITY_STORE_KEY)) || 0; } catch { return 0; }
 }
 
+// The server keeps its own idle clock on the grant (the localStorage one can
+// be wound back by anyone at the machine), so activity is reported to it too —
+// at most this often, and only while this browser is remembered
+const TOUCH_EVERY_MS = 5 * 60 * 1000;
+let lastTouch = 0;
+
 export function markActivity(now = Date.now()): void {
   try { localStorage.setItem(ACTIVITY_STORE_KEY, String(now)); } catch { /* storage unavailable */ }
+  if (now - lastTouch >= TOUCH_EVERY_MS && read() !== null) {
+    lastTouch = now;
+    void authApi.rememberTouch().catch((err: unknown) => {
+      // Gone on the server (idle there, revoked): stop pretending locally
+      if (err instanceof ApiError && [401, 403, 404].includes(err.status)) clearLocal();
+    });
+  }
 }
 
 /** A usable blob is stored: not past its lifetime, and used within the idle window. */
@@ -53,7 +66,9 @@ export function hasRememberedUnlock(now = Date.now()): boolean {
   const b = read();
   if (!b) return false;
   if (Date.parse(b.expiresAt) <= now || now - lastActivity() > REMEMBER_IDLE_MS) {
-    clearLocal();
+    // Ends the server grant too, so the blob can't be reopened by resetting
+    // the activity timestamp
+    forgetRemembered();
     return false;
   }
   return true;

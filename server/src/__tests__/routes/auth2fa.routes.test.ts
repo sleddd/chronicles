@@ -32,6 +32,7 @@ vi.mock('../../db/betaQueries.js', () => ({
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
+  revokeBrowserSession: vi.fn().mockResolvedValue(undefined),
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
     req.auth = { accountId: 1, tenantSchemaName: 'usr_1_a1b2c3', sessionId: 42, selector: 'aabbccddee11' };
     next();
@@ -189,7 +190,9 @@ describe('2FA hardening', () => {
       expect(res.body.backupCodes).toHaveLength(8);
       const data = (prisma.account.update as any).mock.calls[0][0].data;
       expect(data.totpSecret).not.toBe(secret);
-      expect(decryptToken(data.totpSecret)).toBe(secret);
+      // Bound to the account: it opens only as account 1's
+      expect(decryptToken(data.totpSecret, 'totp:1')).toBe(secret);
+      expect(() => decryptToken(data.totpSecret, 'totp:2')).toThrow();
       expect(data.totpBackupCodes).toHaveLength(8);
       for (const stored of data.totpBackupCodes) expect(stored).toMatch(/^scrypt\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
     });
@@ -318,6 +321,36 @@ describe('2FA hardening', () => {
       const open = await request(app).post('/api/auth/login/2fa')
         .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
       expect(open.status).toBe(200);
+    }, 30000);
+
+    it("a stranger's wrong codes can't lock the owner's known browser out (it still has to change the password)", async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const wrong = () => generateSync({ secret }) === '000000' ? '111111' : '000000';
+      const start = Date.now();
+
+      // The owner signed in through 2FA from this browser before
+      const first = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(first.status).toBe(200);
+      const deviceCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+
+      // Someone holding the phished password burns three locks: a day-long one
+      for (let round = 0; round < 3; round++) {
+        vi.setSystemTime(start + 60_000 + round * 16 * 60 * 1000);
+        for (let i = 0; i < 10; i++) {
+          await request(app).post('/api/auth/login/2fa').send({ pendingToken: await pendingTokenFor(app, account), code: wrong() });
+        }
+      }
+      vi.setSystemTime(start + 3 * 16 * 60 * 1000 + 60 * 60 * 1000);
+      const stranger = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(stranger.status).toBe(429);
+
+      // The owner's browser counts on its own and gets in
+      const owner = await request(app).post('/api/auth/login/2fa').set('Cookie', deviceCookie)
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(owner.status).toBe(200);
     }, 30000);
 
     it('accepts and consumes a legacy SHA-256 backup code', async () => {
@@ -482,6 +515,21 @@ describe('2FA hardening', () => {
       expect(locked.status).toBe(429);
       expect(prisma.account.findUnique).toHaveBeenCalledTimes(10);
     }, 30000);
+
+    it('locks for a day after the third lock in 24 hours', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(null);
+      const attempt = { email: 'patient@example.com', authSecret: SECRET };
+      const start = Date.now();
+      for (let round = 0; round < 3; round++) {
+        vi.setSystemTime(start + round * 16 * 60 * 1000);
+        for (let i = 0; i < 10; i++) expect((await request(app).post('/api/auth/login').send(attempt)).status).toBe(401);
+      }
+      // Past the 15-minute lock, still locked
+      vi.setSystemTime(start + 3 * 16 * 60 * 1000 + 60 * 60 * 1000);
+      expect((await request(app).post('/api/auth/login').send(attempt)).status).toBe(429);
+      vi.setSystemTime(start + 26 * 60 * 60 * 1000);
+      expect((await request(app).post('/api/auth/login').send(attempt)).status).toBe(401);
+    }, 60000);
 
     it("someone else's wrong guesses don't lock out the owner's known browser", async () => {
       const account = { ...twoFAAccount(generateSecret()), email: 'owner@example.com', totpEnabled: false, totpSecret: null };
@@ -672,7 +720,7 @@ describe('2FA hardening', () => {
 
   describe('sealStoredTotpSecrets (startup)', () => {
     it('seals authenticator secrets stored readable, conditionally', async () => {
-      (prisma.account.findMany as any).mockResolvedValueOnce([{ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' }]);
+      (prisma.account.findMany as any).mockResolvedValueOnce([{ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' }]).mockResolvedValueOnce([]);
       (prisma.account.updateMany as any).mockResolvedValue({ count: 1 });
       const r = await sealStoredTotpSecrets();
       expect(r).toEqual({ sealed: 1, readable: 0, unopenable: 0 });
@@ -680,6 +728,19 @@ describe('2FA hardening', () => {
       expect(call.where).toEqual({ id: 3, totpSecret: 'JBSWY3DPEHPK3PXP' });
       expect(call.data.totpSecret).toContain(':');
       expect(call.data.totpSecret).not.toContain('JBSWY3DPEHPK3PXP');
+      expect(decryptToken(call.data.totpSecret, 'totp:3')).toBe('JBSWY3DPEHPK3PXP');
+    });
+
+    it('binds secrets sealed before they were tied to their account', async () => {
+      const old = encryptToken('JBSWY3DPEHPK3PXP');
+      (prisma.account.findMany as any).mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 5, totpSecret: old }]);
+      (prisma.account.updateMany as any).mockResolvedValue({ count: 1 });
+      const r = await sealStoredTotpSecrets();
+      expect(r.sealed).toBe(1);
+      const call = (prisma.account.updateMany as any).mock.calls[0][0];
+      expect(call.where).toEqual({ id: 5, totpSecret: old });
+      expect(call.data.totpSecret.startsWith('b1:')).toBe(true);
+      expect(decryptToken(call.data.totpSecret, 'totp:5')).toBe('JBSWY3DPEHPK3PXP');
     });
   });
 });

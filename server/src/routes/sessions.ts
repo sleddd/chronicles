@@ -3,6 +3,8 @@ import { prisma } from '../db/prisma.js';
 import { revokeAllSessions, SESSION_IDLE_MS } from '../middleware/auth.js';
 import { revokeGrantsForSession } from '../services/rememberGrants.js';
 import { parseId } from '../middleware/parseId.js';
+import { sharedState } from '../services/sharedState.js';
+import { PENDING_2FA } from './authState.js';
 import type { SessionInfo } from '@chronicles/shared';
 
 const router = Router();
@@ -41,7 +43,7 @@ router.get('/', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('List sessions error:', err);
+    console.error('List sessions error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to list sessions' });
   }
 });
@@ -51,9 +53,11 @@ router.get('/', async (req, res) => {
 router.post('/revoke-all', async (req, res) => {
   try {
     await revokeAllSessions(req.auth!.accountId, req.auth!.selector, 'user_logout');
+    // A sign-in waiting on its 2FA code would otherwise still finish afterwards
+    await sharedState.deleteTokensForAccount(PENDING_2FA, req.auth!.accountId);
     res.json({ success: true });
   } catch (err) {
-    console.error('Revoke all error:', err);
+    console.error('Revoke all error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to revoke sessions' });
   }
 });
@@ -81,7 +85,7 @@ router.post('/:id/revoke', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Revoke session error:', err);
+    console.error('Revoke session error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to revoke session' });
   }
 });

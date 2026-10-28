@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
+import { ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 
 // =============================================================================
 // Tenant Query Helpers
@@ -364,6 +365,8 @@ function insertPostSql(s: string): string {
   return `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
      SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
      WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
+       -- a deleted entry's id stays spent, so it can't come back under sync
+       AND NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = $1)
      ON CONFLICT (id) DO NOTHING
      RETURNING ${POST_SELECT}`;
 }
@@ -374,7 +377,8 @@ const insertPostArgs = (input: CreatePostInput) => [
 
 /**
  * Create an encrypted entry under a reserved id. Returns null when the id was
- * never handed out (beyond the sequence) or is taken. Server and client both
+ * never handed out (beyond the sequence), is taken, or belonged to a deleted
+ * entry. Server and client both
  * refuse plaintext posts, so there is no plaintext path.
  */
 export async function createPost(schemaName: string, input: CreatePostInput, client?: TenantClient): Promise<TenantPost | null> {
@@ -525,12 +529,12 @@ export async function updatePost(
   return result[0];
 }
 
-/** Bytes of encrypted content + metadata over all entries (leaving out the ones being replaced). */
+/** Bytes of encrypted content + metadata (+ the per-row overhead) over all entries (leaving out the ones being replaced). */
 export async function postStorageBytes(schemaName: string, exclude: number | number[] = [], client?: TenantClient): Promise<number> {
   const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
-    `SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)), 0) AS n
+    `SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0) + ${ROW_OVERHEAD_BYTES}), 0) AS n
      FROM ${s}.posts WHERE NOT (id = ANY($1::int[]))`,
     Array.isArray(exclude) ? exclude : [exclude]
   );
@@ -752,12 +756,12 @@ export async function upsertFinanceRecord(
   return rows[0];
 }
 
-/** Bytes of encrypted payloads over every finance table (optionally leaving one row out). */
+/** Bytes of encrypted payloads (+ the per-row overhead) over every finance table (optionally leaving one row out). */
 export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }, client?: TenantClient): Promise<number> {
   const db = await clientFor(schemaName, client);
   const s = escapeSchema(schemaName);
   const parts = (Object.keys(FINANCE_TABLES) as FinanceTableKind[]).map(kind =>
-    `SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]}`
+    `SELECT COALESCE(SUM(octet_length(payload_encrypted) + ${ROW_OVERHEAD_BYTES}), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]}`
     + (exclude?.kind === kind ? ' WHERE id <> $1' : ''));
   const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
     `SELECT COALESCE(SUM(n), 0) AS n FROM (${parts.join(' UNION ALL ')}) t`,

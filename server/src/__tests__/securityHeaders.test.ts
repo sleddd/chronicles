@@ -33,16 +33,16 @@ describe('securityHeaders middleware', () => {
     expect(res.headers['Content-Security-Policy']).toContain("object-src 'none'");
   });
 
-  it('requires Trusted Types on pages, but not on script files (the service worker loads Workbox with importScripts)', () => {
-    const page = createMockRes() as any;
-    securityHeaders({ path: '/journal' } as any, page, vi.fn());
-    expect(page.headers['Content-Security-Policy']).toContain("require-trusted-types-for 'script'");
-    expect(page.headers['Content-Security-Policy']).toContain('trusted-types default dompurify');
-    for (const path of ['/sw.js', '/workbox-2fbc6a65.js', '/assets/index-abc.js']) {
-      const js = createMockRes() as any;
-      securityHeaders({ path } as any, js, vi.fn());
-      expect(js.headers['Content-Security-Policy']).not.toContain('trusted-types');
+  it('requires Trusted Types everywhere but the service worker (it loads Workbox with importScripts)', () => {
+    for (const path of ['/journal', '/x.js', '/assets/index-abc.js', '/anything.mjs']) {
+      const page = createMockRes() as any;
+      securityHeaders({ path } as any, page, vi.fn());
+      expect(page.headers['Content-Security-Policy']).toContain("require-trusted-types-for 'script'");
+      expect(page.headers['Content-Security-Policy']).toContain('trusted-types default dompurify');
     }
+    const sw = createMockRes() as any;
+    securityHeaders({ path: '/sw.js' } as any, sw, vi.fn());
+    expect(sw.headers['Content-Security-Policy']).not.toContain('trusted-types');
   });
 
   it('keeps API responses out of the browser cache, but not the app shell', () => {

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
 import { authMiddleware, isSessionIdle } from '../middleware/auth.js';
 import { apiLimiter, icsFeedLimiter } from '../middleware/rateLimiter.js';
-import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
+import { encryptToken, decryptToken, isTokenCryptoConfigured, isBoundToken, googleTokenAad } from '../services/tokenCrypto.js';
 
 const router = Router();
 
@@ -173,7 +173,7 @@ router.get('/google/callback', async (req, res) => {
       } catch { /* email is cosmetic — ignore decode failures */ }
     }
 
-    const encrypted = encryptToken(tokens.refresh_token);
+    const encrypted = encryptToken(tokens.refresh_token, googleTokenAad(session.accountId));
     await prisma.calendarIntegration.upsert({
       where: { accountId: session.accountId },
       create: { accountId: session.accountId, googleRefreshToken: encrypted, googleEmail: email },
@@ -203,7 +203,14 @@ router.post('/google/token', authMiddleware, apiLimiter, async (req, res) => {
       return;
     }
 
-    const refreshToken = decryptToken(integration.googleRefreshToken);
+    const refreshToken = decryptToken(integration.googleRefreshToken, googleTokenAad(req.auth!.accountId));
+    if (!isBoundToken(integration.googleRefreshToken)) {
+      // Sealed before tokens were bound to their account: bind it now
+      await prisma.calendarIntegration.updateMany({
+        where: { accountId: req.auth!.accountId, googleRefreshToken: integration.googleRefreshToken },
+        data: { googleRefreshToken: encryptToken(refreshToken, googleTokenAad(req.auth!.accountId)) },
+      });
+    }
     const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -266,7 +273,7 @@ router.delete('/google', authMiddleware, apiLimiter, async (req, res) => {
     if (integration?.googleRefreshToken) {
       // Best-effort revocation — disconnect locally even if Google is unreachable
       try {
-        const refreshToken = decryptToken(integration.googleRefreshToken);
+        const refreshToken = decryptToken(integration.googleRefreshToken, googleTokenAad(req.auth!.accountId));
         await fetch(GOOGLE_REVOKE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

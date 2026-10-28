@@ -40,6 +40,8 @@ export async function initBetaTable(): Promise<void> {
 
 const hashInvite = (code: string) => crypto.createHash('sha256').update(code).digest('hex');
 
+export const INVITE_VALID_DAYS = 30;
+
 /** The code's shape: 22 base64url characters (128 random bits). */
 export const INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 
@@ -49,8 +51,12 @@ export const INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
  */
 export async function isApproved(email: string, inviteCode: string | undefined): Promise<boolean> {
   if (!inviteCode || !INVITE_CODE_PATTERN.test(inviteCode)) return false;
+  // A sign-up link lasts INVITE_VALID_DAYS: one forwarded or left in an inbox
+  // doesn't stay good forever (approving again issues a fresh one)
   const rows = await prisma.$queryRaw<{ invite_hash: string | null }[]>`
-    SELECT invite_hash FROM public.beta_signups WHERE email = ${email} AND approved_at IS NOT NULL
+    SELECT invite_hash FROM public.beta_signups
+    WHERE email = ${email} AND approved_at IS NOT NULL
+      AND approved_at > NOW() - make_interval(days => ${INVITE_VALID_DAYS})
   `;
   const stored = rows[0]?.invite_hash;
   if (!stored) return false;
@@ -84,7 +90,7 @@ export async function approve(email: string): Promise<{ how: 'approved' | 'invit
   const inviteCode = crypto.randomBytes(16).toString('base64url');
   const hash = hashInvite(inviteCode);
   const updated = await prisma.$executeRaw`
-    UPDATE public.beta_signups SET approved_at = COALESCE(approved_at, NOW()), invite_hash = ${hash} WHERE email = ${e}
+    UPDATE public.beta_signups SET approved_at = NOW(), invite_hash = ${hash} WHERE email = ${e}
   `;
   if (updated) return { how: 'approved', inviteCode };
   await prisma.$executeRaw`

@@ -3,9 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { securityHeaders, corsOriginFor, trustProxySetting } from './middleware/security.js';
+import { securityHeaders, corsOriginFor, trustProxySetting, SERVICE_WORKER_PATH } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
-import { apiLimiter } from './middleware/rateLimiter.js';
+import { apiLimiter, writeGate } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes, { checkStoredCredentials, sealStoredTotpSecrets } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
@@ -70,6 +70,9 @@ if (process.env.CLIENT_URL) {
 if (process.env.NODE_ENV === 'production' && process.env.REGISTRATION_OPEN === 'true') {
   console.warn('WARNING: REGISTRATION_OPEN=true — anyone can create an account on this server');
 }
+if (process.env.NODE_ENV === 'production' && (process.env.REGISTRATION_WHITELIST ?? '').trim()) {
+  console.warn('REGISTRATION_WHITELIST is ignored in production (a listed email needs no code, so anyone could claim it): approve people with `npm run beta -- --approve <email>` instead');
+}
 
 // Behind a hosting proxy (Render etc.) every request arrives from the proxy's
 // address; without this, per-IP rate limits would see one shared IP — one
@@ -102,7 +105,7 @@ app.use(cookieParser());
 // big ones), so they get a larger body limit — read only after the session
 // (and the per-account limit) checks out, so no one signed out can make the
 // server buffer 5 MB bodies. Everything else stays at 1mb.
-app.use('/api/entries', authMiddleware, apiLimiter, express.json({ limit: '5mb' }), entriesRoutes);
+app.use('/api/entries', authMiddleware, apiLimiter, writeGate, express.json({ limit: '5mb' }), entriesRoutes);
 app.use(express.json({ limit: '1mb' }));
 
 // Health check
@@ -113,11 +116,11 @@ app.get('/api/health', (_req, res) => {
 // Routes
 app.use('/api/auth/remember', authMiddleware, apiLimiter, rememberRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/topics', authMiddleware, apiLimiter, topicsRoutes);
-app.use('/api/settings', authMiddleware, apiLimiter, settingsRoutes);
+app.use('/api/topics', authMiddleware, apiLimiter, writeGate, topicsRoutes);
+app.use('/api/settings', authMiddleware, apiLimiter, writeGate, settingsRoutes);
 app.use('/api/sessions', authMiddleware, apiLimiter, sessionsRoutes);
-app.use('/api/doses', authMiddleware, apiLimiter, dosesRoutes);
-app.use('/api/finance', authMiddleware, apiLimiter, financeRoutes);
+app.use('/api/doses', authMiddleware, apiLimiter, writeGate, dosesRoutes);
+app.use('/api/finance', authMiddleware, apiLimiter, writeGate, financeRoutes);
 app.use('/api/ai-chat', authMiddleware, apiLimiter, aiChatRoutes);
 app.use('/api/consent', authMiddleware, apiLimiter, consentRoutes);
 app.use('/api/notice', authMiddleware, apiLimiter, noticeRoutes);
@@ -137,7 +140,9 @@ const clientDist = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDist));
 
 // SPA fallback — serve index.html for non-API routes
-app.get('{/*path}', (_req, res) => {
+app.get('{/*path}', (req, res) => {
+  // A missing service worker is a 404, never the app under the worker's CSP
+  if (req.path.toLowerCase() === SERVICE_WORKER_PATH) { res.status(404).end(); return; }
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 

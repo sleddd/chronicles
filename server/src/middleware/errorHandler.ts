@@ -11,10 +11,12 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     res.status(status).json({ error: status === 413 ? 'Request too large' : 'Invalid request' });
     return;
   }
-  if (process.env.NODE_ENV === 'production') {
-    console.error('Unhandled error:', err.message);
-  } else {
+  // Whole error objects (stack, query details) only on a developer's machine:
+  // staging, or a deploy that forgot NODE_ENV, logs just the message
+  if (process.env.NODE_ENV === 'development') {
     console.error('Unhandled error:', err);
+  } else {
+    console.error('Unhandled error:', err.message);
   }
   res.status(500).json({ error: 'Internal server error' });
 }

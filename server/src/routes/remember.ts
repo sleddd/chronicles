@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express';
-import { createGrant, readGrant, revokeGrant, revokeGrantsForSession } from '../services/rememberGrants.js';
+import { createGrant, readGrant, revokeGrant, revokeGrantsForSession, touchGrant } from '../services/rememberGrants.js';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 
 /**
@@ -46,6 +46,18 @@ router.post('/key', async (req, res) => {
   }
   res.json({ secret: grant.secret.toString('base64'), expiresAt: new Date(grant.expiresAt).toISOString() });
   grant.secret.fill(0);
+});
+
+// POST /api/auth/remember/touch — the browser is in use (sent at most every
+// few minutes while remembered), so its grant doesn't go idle
+router.post('/touch', async (req, res) => {
+  const ok = await touchGrant(req.cookies?.[REMEMBER_COOKIE], req.auth!.accountId, req.auth!.selector);
+  if (!ok) {
+    clearRememberCookie(res);
+    res.status(404).json({ error: 'Not remembered' });
+    return;
+  }
+  res.json({ success: true });
 });
 
 // DELETE /api/auth/remember — forget this browser (lock, sign-out)

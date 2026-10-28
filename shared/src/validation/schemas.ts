@@ -124,30 +124,43 @@ export const saveRecoveryKeySchema = z.object({
 // user opts into that risk when creating a public link
 /** Shares never carry images: photos, drawings (SVG) or any embedded media.
  *  Checked by the server (createShareSchema) and stripped first by the client. */
-const SHARE_MEDIA = /<\s*(img|svg|picture|source|video|audio|iframe|object|embed|canvas|image)\b|data-type\s*=\s*["']?drawing|data:(image|video|audio)\/|url\(\s*["']?\s*(data|blob|https?):/i;
+// Every quantifier here is followed by a different class, so the match is
+// linear: an earlier `url\(\s*["']?\s*` backtracked quadratically, and a
+// share of "url(" + spaces stalled the server for seconds
+const SHARE_MEDIA = /<\s*(img|svg|picture|source|video|audio|iframe|object|embed|canvas|image|input)\b|data-type\s*=\s*["']?drawing|data:(image|video|audio)\/|url\(\s*(["']\s*)?(data|blob|https?):|image-set\(/i;
+
+export const SHARE_CONTENT_MAX = 100_000;
 
 export function shareContentHasMedia(content: string): boolean {
   return SHARE_MEDIA.test(content);
 }
 
 export const createShareSchema = z.object({
-  content: z.string().min(1, 'content is required').max(100_000, 'Content too large')
-    .refine(c => !shareContentHasMedia(c), 'Shared entries cannot include images or drawings'),
-  entryId: z.number().int().positive(),
+  content: z.string().min(1, 'content is required').max(SHARE_CONTENT_MAX, 'Content too large')
+    // zod still runs a refine after .max fails, so the length is checked
+    // here too: the media scan never sees more than the cap
+    .refine(c => c.length <= SHARE_CONTENT_MAX && !shareContentHasMedia(c), 'Shared entries cannot include images or drawings'),
+  entryId: z.number().int().positive().max(2_147_483_647),
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
 // Entries are always end-to-end encrypted: the server never accepts plaintext
 // content or metadata (the client also refuses to display plaintext posts).
-const ENCRYPTED_FIELD = z.string().min(1).max(2_000_000);
-const IV_FIELD = z.string().min(1).max(64);
+// Strict base64 (the encoding the client writes). A ciphertext holds at least
+// its 16-byte GCM tag; an IV is exactly 12 bytes. Without these, a value like
+// "@" decoded to 0 bytes and slipped past the storage caps as free rows
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+const ciphertext = (max: number, message?: string) => z.string().min(24).max(max, message)
+  .regex(BASE64, 'Invalid ciphertext');
+export const IV_FIELD = z.string().regex(/^[A-Za-z0-9+/]{16}$/, 'Invalid IV');
+const ENCRYPTED_FIELD = ciphertext(2_000_000);
 // One cap for metadata on create and update — when they differed, an entry
 // could be created that no later edit was allowed to save
-const METADATA_FIELD = z.string().min(1).max(200_000, 'Metadata too large');
+const METADATA_FIELD = ciphertext(200_000, 'Metadata too large');
 
 // An entry's ciphertext is bound to its id, so a new entry is created under
 // an id reserved first (POST /api/entries/ids)
-const ENTRY_ID = z.number().int().positive();
+const ENTRY_ID = z.number().int().positive().max(2_147_483_647);
 
 // `format: 3` = encrypted bound to the entry id. An older client (pair-bound
 // v2 ciphertext) is refused rather than saving an entry that would stop
@@ -162,7 +175,7 @@ export const createPostSchema = z.object({
   metadataEncrypted: METADATA_FIELD,
   metadataIv: IV_FIELD,
   isEncrypted: z.literal(true, { errorMap: () => ({ message: 'Entries must be encrypted' }) }),
-  taxonomyIds: z.array(z.number()).optional(),
+  taxonomyIds: z.array(z.number()).max(50).optional(),
   createdAt: z.string().datetime({ offset: true }).optional(),
 });
 
@@ -199,7 +212,7 @@ export const updatePostSchema = z.object({
   contentIv: IV_FIELD.optional(),
   metadataEncrypted: METADATA_FIELD.optional(),
   metadataIv: IV_FIELD.optional(),
-  taxonomyIds: z.array(z.number()).optional(),
+  taxonomyIds: z.array(z.number()).max(50).optional(),
 }).refine(
   (d) => {
     const n = [d.contentEncrypted, d.contentIv, d.metadataEncrypted, d.metadataIv].filter(v => v !== undefined).length;
@@ -219,7 +232,7 @@ export type FinanceKind = typeof FINANCE_KINDS[number];
 export const financeRecordIdSchema = z.string().uuid('Invalid record id');
 
 export const putFinanceRecordSchema = z.object({
-  payload: z.string().min(1).max(350_000, 'Record too large'),
+  payload: ciphertext(350_000, 'Record too large'),
   iv: IV_FIELD,
 });
 
@@ -232,14 +245,14 @@ const TOPIC_FORMAT_V2 = z.literal(2, { errorMap: () => ({ message: 'Update Chron
 export const createTaxonomySchema = z.object({
   id: z.number().int().positive(),
   format: TOPIC_FORMAT_V2,
-  payload: z.string().min(1).max(20_000),
+  payload: ciphertext(20_000),
   iv: IV_FIELD,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Invalid hex color').optional(),
 }).strict();
 
 export const updateTaxonomySchema = z.object({
   format: TOPIC_FORMAT_V2.optional(),
-  payload: z.string().min(1).max(20_000).optional(),
+  payload: ciphertext(20_000).optional(),
   iv: IV_FIELD.optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 }).strict()
@@ -258,7 +271,7 @@ export const doseRecordIdSchema = z.string().uuid('Invalid dose id');
 export const putDoseRecordSchema = z.object({
   format: z.literal(2, { errorMap: () => ({ message: 'Update Chronicles to save doses' }) }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
-  payload: z.string().min(1).max(10_000),
+  payload: ciphertext(10_000),
   iv: IV_FIELD,
 }).strict();
 
@@ -267,7 +280,7 @@ export const resealDoseRecordsSchema = z.object({
   records: z.array(z.object({
     id: z.string().uuid(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    payload: z.string().min(1).max(10_000),
+    payload: ciphertext(10_000),
     iv: IV_FIELD,
   })).min(1).max(200),
 });
@@ -288,9 +301,10 @@ export const imageStorageConfigSchema = z.object({
 export const settingKeySchema = z.string().min(1).max(100);
 export const upsertSettingSchema = z.object({
   key: settingKeySchema,
-  value: z.unknown(),
+  value: z.unknown().refine(v => v !== undefined, 'value is required'),
 }).refine(
-  (data) => JSON.stringify(data.value).length <= 65536,
+  // UTF-8 bytes, the unit the stored-settings cap counts in
+  (data) => data.value === undefined || new TextEncoder().encode(JSON.stringify(data.value) ?? '').length <= 65536,
   { message: 'Setting value too large (max 64KB)', path: ['value'] }
 );
 

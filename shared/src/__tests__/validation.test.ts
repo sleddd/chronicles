@@ -3,6 +3,12 @@
  * Tests for all Zod schemas in shared/src/validation/schemas.ts
  */
 import { describe, it, expect } from 'vitest';
+
+// Shaped like real ciphertext: base64 holding at least a GCM tag, and a 12-byte IV
+const CT = 'Y2lwaGVydGV4dC13aXRoLWEtdGFn';
+const CT2 = 'YW5vdGhlci1jaXBoZXJ0ZXh0LXRhZw==';
+const IV = 'aXZpdml2aXZpdml2';
+const IV2 = 'MTIzNDU2Nzg5MDEy';
 import {
   emailSchema,
   usernameSchema,
@@ -329,10 +335,10 @@ describe('createPostSchema', () => {
     id: 5,
     format: 3,
     isEncrypted: true,
-    contentEncrypted: 'enc-content',
-    contentIv: 'iv1',
-    metadataEncrypted: 'enc-meta',
-    metadataIv: 'iv2',
+    contentEncrypted: CT,
+    contentIv: IV,
+    metadataEncrypted: CT2,
+    metadataIv: IV2,
   };
 
   it('accepts a fully encrypted post', () => {
@@ -383,10 +389,10 @@ describe('createPostSchema', () => {
 describe('updatePostSchema', () => {
   const fields = {
     format: 3,
-    contentEncrypted: 'enc',
-    contentIv: 'iv',
-    metadataEncrypted: 'meta-enc',
-    metadataIv: 'meta-iv',
+    contentEncrypted: CT,
+    contentIv: IV,
+    metadataEncrypted: CT2,
+    metadataIv: IV2,
   };
 
   it('accepts empty object', () => {
@@ -434,7 +440,7 @@ describe('updatePostSchema', () => {
 // createTaxonomySchema
 // ============================================================================
 describe('createTaxonomySchema', () => {
-  const T = { id: 3, format: 2, payload: 'c2VhbGVk', iv: 'aXY=' };
+  const T = { id: 3, format: 2, payload: CT, iv: IV };
   it('accepts an encrypted payload under a reserved id, with an optional colour', () => {
     expect(createTaxonomySchema.safeParse(T).success).toBe(true);
     expect(createTaxonomySchema.safeParse({ ...T, color: '#AbCdEf' }).success).toBe(true);
@@ -458,24 +464,24 @@ describe('createTaxonomySchema', () => {
 
 describe('updateTaxonomySchema', () => {
   it('accepts a payload with its iv (format 2), or just a colour', () => {
-    expect(updateTaxonomySchema.safeParse({ format: 2, payload: 'x', iv: 'y' }).success).toBe(true);
+    expect(updateTaxonomySchema.safeParse({ format: 2, payload: CT, iv: IV }).success).toBe(true);
     expect(updateTaxonomySchema.safeParse({ color: '#123456' }).success).toBe(true);
   });
   it('needs payload and iv together, format 2 with a payload, and refuses plaintext', () => {
-    expect(updateTaxonomySchema.safeParse({ format: 2, payload: 'x' }).success).toBe(false);
-    expect(updateTaxonomySchema.safeParse({ payload: 'x', iv: 'y' }).success).toBe(false);
+    expect(updateTaxonomySchema.safeParse({ format: 2, payload: CT }).success).toBe(false);
+    expect(updateTaxonomySchema.safeParse({ payload: CT, iv: IV }).success).toBe(false);
     expect(updateTaxonomySchema.safeParse({ name: 'Work' }).success).toBe(false);
   });
 });
 
 describe('putDoseRecordSchema', () => {
   it('takes only the format, date, payload and iv', () => {
-    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: 'x', iv: 'y' }).success).toBe(true);
-    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: 'x', iv: 'y', status: 'taken' }).success).toBe(false);
-    expect(putDoseRecordSchema.safeParse({ format: 2, date: 'April 3', payload: 'x', iv: 'y' }).success).toBe(false);
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: CT, iv: IV }).success).toBe(true);
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: CT, iv: IV, status: 'taken' }).success).toBe(false);
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: 'April 3', payload: CT, iv: IV }).success).toBe(false);
   });
   it('refuses a dose from an older client (not sealed to its day)', () => {
-    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: 'x', iv: 'y' }).success).toBe(false);
+    expect(putDoseRecordSchema.safeParse({ date: '2026-04-03', payload: CT, iv: IV }).success).toBe(false);
   });
 });
 
@@ -578,5 +584,44 @@ describe('betaApplicationSchema — name', () => {
     for (const name of ['Ann\u001b[2J', 'a\nb', 'x\u0085y', 'evil‮gnp', 'a⁦b', 'del\u007f']) {
       expect(betaApplicationSchema.safeParse({ ...base, name }).success).toBe(false);
     }
+  });
+});
+
+describe('encrypted field shapes', () => {
+  it('refuses values that are not ciphertext or a 12-byte IV (they slipped past the storage caps as free rows)', () => {
+    const T = { id: 3, format: 2, payload: CT, iv: IV };
+    expect(createTaxonomySchema.safeParse({ ...T, payload: '@' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ ...T, payload: 'YQ==' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ ...T, iv: 'aXY=' }).success).toBe(false);
+    expect(createTaxonomySchema.safeParse({ ...T, iv: 'aXZpdml2aXZpdml2aXZp' }).success).toBe(false);
+    expect(putDoseRecordSchema.safeParse({ format: 2, date: '2026-04-03', payload: CT + '!', iv: IV }).success).toBe(false);
+  });
+  it('bounds ids to the database int range', () => {
+    const post = { id: 2_147_483_648, format: 3, isEncrypted: true, contentEncrypted: CT, contentIv: IV, metadataEncrypted: CT2, metadataIv: IV2 };
+    expect(createPostSchema.safeParse(post).success).toBe(false);
+    expect(createPostSchema.safeParse({ ...post, id: 2_147_483_647 }).success).toBe(true);
+  });
+});
+
+describe('createShareSchema media scan', () => {
+  it('stays linear on input built to backtrack', () => {
+    const evil = 'url(' + ' '.repeat(1_000_000);
+    const t = Date.now();
+    expect(createShareSchema.safeParse({ content: evil, entryId: 1 }).success).toBe(false);
+    expect(Date.now() - t).toBeLessThan(500);
+  });
+  it('still finds media inside url(), with or without quotes and spaces', () => {
+    for (const c of ['url(data:image/png;base64,AA)', 'url( "https://x/y.png")', "url(' blob:abc')", 'a { background: image-set("a.png" 1x) }', '<input type=image src=x>']) {
+      expect(createShareSchema.safeParse({ content: c, entryId: 1 }).success).toBe(false);
+    }
+    expect(createShareSchema.safeParse({ content: '<p>a url( to nowhere</p>', entryId: 1 }).success).toBe(true);
+  });
+});
+
+describe('upsertSettingSchema value', () => {
+  it('needs a value, and caps it in UTF-8 bytes', () => {
+    expect(upsertSettingSchema.safeParse({ key: 'k' }).success).toBe(false);
+    expect(upsertSettingSchema.safeParse({ key: 'k', value: 'é'.repeat(40_000) }).success).toBe(false);
+    expect(upsertSettingSchema.safeParse({ key: 'k', value: 'e'.repeat(40_000) }).success).toBe(true);
   });
 });

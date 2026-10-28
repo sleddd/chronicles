@@ -75,6 +75,14 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return;
   }
 
+  // Constant-time compare: SHA-256(verifier) === stored verifierHash. First,
+  // so a selector alone can't learn whether its session is revoked or expired
+  const verifierHash = crypto.createHash('sha256').update(verifier).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(verifierHash), Buffer.from(session.verifierHash))) {
+    res.status(401).json({ error: 'Invalid session' });
+    return;
+  }
+
   // Check revocation and expiry
   if (session.revokedAt) {
     res.status(401).json({ error: 'Session revoked' });
@@ -83,13 +91,6 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   if (session.expiresAt < new Date()) {
     res.status(401).json({ error: 'Session expired' });
-    return;
-  }
-
-  // Constant-time compare: SHA-256(verifier) === stored verifierHash
-  const verifierHash = crypto.createHash('sha256').update(verifier).digest('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(verifierHash), Buffer.from(session.verifierHash))) {
-    res.status(401).json({ error: 'Invalid session' });
     return;
   }
 
@@ -221,4 +222,20 @@ export async function cleanupSessions(): Promise<number> {
     },
   });
   return result.count;
+}
+
+/**
+ * Signing in again on a browser: the session its cookie still holds (if the
+ * verifier matches) ends now, instead of staying good until idle or expiry
+ * next to the new one.
+ */
+export async function revokeBrowserSession(req: Request): Promise<void> {
+  const token = sessionCookie(req);
+  if (!token || token.length < 44) return;
+  const selector = token.slice(0, 12);
+  const session = await prisma.session.findUnique({ where: { selector } });
+  if (!session || session.revokedAt) return;
+  const verifierHash = crypto.createHash('sha256').update(token.slice(12)).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(verifierHash), Buffer.from(session.verifierHash))) return;
+  await revokeSession(selector, 'replaced');
 }

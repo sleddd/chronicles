@@ -176,7 +176,9 @@ describe('Calendar Routes', () => {
       expect(upsert.create.googleEmail).toBe('user@gmail.com');
       // Refresh token is stored encrypted, not in plaintext
       expect(upsert.create.googleRefreshToken).not.toContain('refresh-123');
-      expect(upsert.create.googleRefreshToken.split(':')).toHaveLength(3);
+      // Sealed bound to the account (b1:iv:ciphertext:tag)
+      expect(upsert.create.googleRefreshToken.split(':')).toHaveLength(4);
+      expect(upsert.create.googleRefreshToken.startsWith('b1:')).toBe(true);
     });
 
     it('rejects a callback finished in a different browser (no nonce cookie)', async () => {

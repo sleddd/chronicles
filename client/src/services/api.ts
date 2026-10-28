@@ -132,6 +132,8 @@ export const auth = {
   rememberKey: () => request<{ secret: string; expiresAt: string }>('/auth/remember/key', { method: 'POST' }),
   /** Forget this browser. */
   rememberForget: () => request<{ success: boolean }>('/auth/remember', { method: 'DELETE' }),
+  /** This browser is in use: keeps its Remember me grant from going idle on the server. */
+  rememberTouch: () => request<{ success: boolean }>('/auth/remember/touch', { method: 'POST' }),
   register: (data: {
     email: string;
     username: string;

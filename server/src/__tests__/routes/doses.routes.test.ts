@@ -18,7 +18,7 @@ import { DOSE_RECORD_LIMIT, DOSE_STORAGE_LIMIT_BYTES } from '../../routes/doses.
 
 const app = createTestApp('/api/doses', dosesRouter);
 const ID = '0b6c6f1e-2f4a-4c1e-9a52-3f1d2b7c8e90';
-const row = { id: ID, date: '2025-06-15', payloadEncrypted: Buffer.from('sealed'), payloadIv: Buffer.from('iv'), createdAt: 'c', updatedAt: 'u' };
+const row = { id: ID, date: '2025-06-15', payloadEncrypted: Buffer.from('sealed-dose-ciphertext!!'), payloadIv: Buffer.from('dose-iv-12by'), createdAt: 'c', updatedAt: 'u' };
 
 describe('Dose routes (encrypted records)', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -27,7 +27,7 @@ describe('Dose routes (encrypted records)', () => {
     (getDoseRecords as any).mockResolvedValue([row]);
     const res = await request(app).get('/api/doses?date=2025-06-15');
     expect(res.status).toBe(200);
-    expect(res.body.records).toEqual([{ id: ID, date: '2025-06-15', payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64'), createdAt: 'c', updatedAt: 'u' }]);
+    expect(res.body.records).toEqual([{ id: ID, date: '2025-06-15', payload: Buffer.from('sealed-dose-ciphertext!!').toString('base64'), iv: Buffer.from('dose-iv-12by').toString('base64'), createdAt: 'c', updatedAt: 'u' }]);
     expect(getDoseRecords).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '2025-06-15');
   });
 
@@ -46,7 +46,7 @@ describe('Dose routes (encrypted records)', () => {
 
   it('upserts an encrypted record by UUID', async () => {
     (upsertDoseRecord as any).mockResolvedValue(row);
-    const res = await request(app).put(`/api/doses/${ID}`).send({ format: 2, date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
+    const res = await request(app).put(`/api/doses/${ID}`).send({ format: 2, date: '2025-06-15', payload: 'c2VhbGVkLWRvc2UtY2lwaGVydGV4dCEh', iv: 'ZG9zZS1pdi0xMmJ5' });
     expect(res.status).toBe(200);
     const [, id, date, payload] = (upsertDoseRecord as any).mock.calls[0];
     expect([id, date]).toEqual([ID, '2025-06-15']);
@@ -73,14 +73,14 @@ describe('Dose routes (encrypted records)', () => {
   });
 
   it('refuses a dose from an older client (not sealed to its day)', async () => {
-    const res = await request(app).put(`/api/doses/${ID}`).send({ date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
+    const res = await request(app).put(`/api/doses/${ID}`).send({ date: '2025-06-15', payload: 'c2VhbGVkLWRvc2UtY2lwaGVydGV4dCEh', iv: 'ZG9zZS1pdi0xMmJ5' });
     expect(res.status).toBe(400);
     expect(upsertDoseRecord).not.toHaveBeenCalled();
   });
 
   it('re-seals older records in batches, each once', async () => {
     (resealDoseRecords as any).mockResolvedValue(2);
-    const rec = (id: string) => ({ id, date: '2025-06-15', payload: 'cA==', iv: 'aQ==' });
+    const rec = (id: string) => ({ id, date: '2025-06-15', payload: 'b2xkZXItZG9zZS1jaXBoZXJ0ZXh0ISEh', iv: 'b2xkZXItaXYtMTJi' });
     const A = '11111111-1111-4111-8111-111111111111';
     const B = '22222222-2222-4222-8222-222222222222';
     const ok = await request(app).put('/api/doses/reseal').send({ records: [rec(A), rec(B)] });
@@ -91,9 +91,9 @@ describe('Dose routes (encrypted records)', () => {
   it('refuses dates that look right but are not real days (400, not a failed ::date cast)', async () => {
     for (const d of ['2026-13-45', '2026-02-30', '2025-02-29', '0000-01-01']) {
       expect((await request(app).get(`/api/doses?date=${d}`)).status).toBe(400);
-      expect((await request(app).put(`/api/doses/${ID}`).send({ format: 2, date: d, payload: 'c2VhbGVk', iv: 'aXY=' })).status).toBe(400);
+      expect((await request(app).put(`/api/doses/${ID}`).send({ format: 2, date: d, payload: 'c2VhbGVkLWRvc2UtY2lwaGVydGV4dCEh', iv: 'ZG9zZS1pdi0xMmJ5' })).status).toBe(400);
     }
-    const rec = { id: '11111111-1111-4111-8111-111111111111', date: '2026-13-45', payload: 'cA==', iv: 'aQ==' };
+    const rec = { id: '11111111-1111-4111-8111-111111111111', date: '2026-13-45', payload: 'b2xkZXItZG9zZS1jaXBoZXJ0ZXh0ISEh', iv: 'b2xkZXItaXYtMTJi' };
     expect((await request(app).put('/api/doses/reseal').send({ records: [rec] })).status).toBe(400);
     expect(getDoseRecords).not.toHaveBeenCalled();
     expect(upsertDoseRecord).not.toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe('Dose routes (encrypted records)', () => {
   });
 
   it('caps an account\'s dose records by count and bytes, checked under the account lock', async () => {
-    const put = () => request(app).put(`/api/doses/${ID}`).send({ format: 2, date: '2025-06-15', payload: 'c2VhbGVk', iv: 'aXY=' });
+    const put = () => request(app).put(`/api/doses/${ID}`).send({ format: 2, date: '2025-06-15', payload: 'c2VhbGVkLWRvc2UtY2lwaGVydGV4dCEh', iv: 'ZG9zZS1pdi0xMmJ5' });
     (doseRecordStorage as any).mockResolvedValueOnce({ count: DOSE_RECORD_LIMIT, bytes: 0 });
     expect((await put()).status).toBe(413);
     (doseRecordStorage as any).mockResolvedValueOnce({ count: 0, bytes: DOSE_STORAGE_LIMIT_BYTES - 2 });
@@ -118,7 +118,7 @@ describe('Dose routes (encrypted records)', () => {
 
   it('refuses a re-seal that would overfill dose storage', async () => {
     (doseRecordStorage as any).mockResolvedValueOnce({ count: 1, bytes: DOSE_STORAGE_LIMIT_BYTES });
-    const rec = { id: '11111111-1111-4111-8111-111111111111', date: '2025-06-15', payload: 'cA==', iv: 'aQ==' };
+    const rec = { id: '11111111-1111-4111-8111-111111111111', date: '2025-06-15', payload: 'b2xkZXItZG9zZS1jaXBoZXJ0ZXh0ISEh', iv: 'b2xkZXItaXYtMTJi' };
     expect((await request(app).put('/api/doses/reseal').send({ records: [rec] })).status).toBe(413);
     expect(resealDoseRecords).not.toHaveBeenCalled();
   });
