@@ -255,7 +255,9 @@ describe('GoalsView saved views', () => {
   it('renames the saved view that is showing, and never onto another view’s name', async () => {
     renderWithTheme(<GoalsView />);
     fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'title' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename view' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View options' }));
+    expect(screen.getByText('Saved view')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename view' }));
     const box = screen.getByLabelText('New name for this view');
     expect(box).toHaveValue('By title');
     fireEvent.change(box, { target: { value: 'other' } });
@@ -263,6 +265,22 @@ describe('GoalsView saved views', () => {
     fireEvent.change(box, { target: { value: 'A to Z' } });
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
     expect(savePrivateSetting).toHaveBeenCalledWith('planningViews', [{ ...view, name: 'A to Z' }, expect.objectContaining({ id: 'v2', name: 'Other' })]);
-    expect(screen.getByRole('button', { name: 'Rename view' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
+  });
+
+  it('deletes the saved view from the ⋯ menu after a second click', async () => {
+    renderWithTheme(<GoalsView />);
+    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'title' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'View options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete view…' }));
+    expect(savePrivateSetting).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete “By title”?' }));
+    expect(savePrivateSetting).toHaveBeenCalledWith('planningViews', [expect.objectContaining({ id: 'v2' })]);
+  });
+
+  it('shows filter pills as a name and the choice', async () => {
+    renderWithTheme(<GoalsView />);
+    const status = screen.getByLabelText('Status');
+    expect(status.closest('label')).toHaveTextContent('StatusAll');
   });
 });

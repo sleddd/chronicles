@@ -7,6 +7,8 @@ import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
+import { Icon } from '../components/atoms/core/Icon.jsx';
+import { ViewMenu, type ViewMenuItem } from '../components/molecules/ViewMenu.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import {
   searchAndSort, PLAN_SORTS, PLAN_TAB_PATHS, isSameView, parseSavedViews,
@@ -192,41 +194,97 @@ const SortBox = styled.label`
 `;
 
 /* Tasks / Todos filters: Goal, Milestone, Status pills + Clear, above the board/list */
+/* The filters in one card: pills on the left, Clear completed and ⋯ on the right */
 const FilterRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  /* Rows well apart, so wrapped actions sit clear of the pills above */
-  gap: 20px 10px;
-  padding-top: 16px;
+  gap: 12px 10px;
+  margin-top: 16px;
+  padding: 12px 14px 12px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  html[data-theme='light'] & { background: var(--bg-control, var(--bg-surface)); }
+  @media (max-width: 480px) { padding: 12px; }
 `;
 
-const FilterSelect = styled.label<{ $set: boolean }>`
+/* A filter pill: "Status  All ⌄" — the name muted, the choice in bold, the
+   real <select> invisible over it (a select is as wide as its longest option) */
+const PickPill = styled.label<{ $set: boolean }>`
+  position: relative;
   display: inline-flex;
   align-items: center;
-  height: 34px;
+  gap: 8px;
+  height: 38px;
   max-width: 100%;
-  /* Chosen = accent outline + accent text, no fill */
-  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-default)')};
-  background: transparent;
+  padding: 0 14px 0 18px;
+  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-card)')};
   border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  &:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
   &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  select {
-    height: 100%;
-    max-width: 260px;
-    padding: 0 14px;
-    border: none;
-    outline: none;
-    background: transparent;
-    appearance: none;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
+  b {
+    max-width: 200px;
+    overflow: hidden;
     text-overflow: ellipsis;
-    cursor: pointer;
+    white-space: nowrap;
+    font-weight: 600;
+    color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-primary)')};
   }
-  /* The open menu keeps normal colours */
+  & > span:last-of-type { display: inline-flex; color: var(--text-muted); }
+  select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 16px; /* no zoom on iOS */
+  }
   option { color: var(--text-primary); background: var(--bg-surface); }
+`;
+
+function FilterPick({ name, value, set, children }: { name: string; value: string; set: boolean; children: React.ReactNode }) {
+  return (
+    <PickPill $set={set}>
+      <span>{name}</span>
+      <b>{value}</b>
+      <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+      {children}
+    </PickPill>
+  );
+}
+
+/* Clear completed: an outlined button with a tick and a count; asks once */
+const ClearDone = styled.button<{ $confirm: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px 0 14px;
+  border: 1px solid ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--border-card)')};
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--text-primary)')};
+  cursor: pointer;
+  &:hover { border-color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--border-strong)')}; }
+  &:disabled { opacity: 0.6; cursor: default; }
+  em {
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--bg-active);
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
 `;
 
 /* Name a new saved view in place (no pop-up prompts) */
@@ -255,7 +313,7 @@ const RowEnd = styled.span`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 24px;
+  gap: 10px 12px;
 `;
 
 const ClearBtn = styled.button`
@@ -667,7 +725,6 @@ export function GoalsView() {
   const [savedViews, setSavedViews] = useState<SavedPlanView[]>([]);
   const [naming, setNaming] = useState(false);
   const [newName, setNewName] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
   // Renaming the saved view that's showing: its id while the name box is open
   const [renamingId, setRenamingId] = useState<string | null>(null);
   useEffect(() => {
@@ -708,7 +765,7 @@ export function GoalsView() {
   const openSaved = (id: string) => {
     const v = savedViews.find(x => x.id === id);
     if (!v) return;
-    setNaming(false); setConfirmDelete(false); setRenamingId(null);
+    setNaming(false); setRenamingId(null);
     if (v.tab === tab) applyView(v);
     else { pendingView.current = v; navigate(PLAN_TAB_PATHS[v.tab]); }
   };
@@ -724,7 +781,7 @@ export function GoalsView() {
   const nameTaken = (name: string, id: string) => savedViews.some(v => v.id !== id && v.name.toLowerCase() === name.trim().toLowerCase());
   const startRename = () => {
     if (!activeSaved) return;
-    setRenamingId(activeSaved.id); setNewName(activeSaved.name); setConfirmDelete(false);
+    setRenamingId(activeSaved.id); setNewName(activeSaved.name);
   };
   const cancelRename = () => { setRenamingId(null); setNewName(''); };
   const renameActive = (e: React.FormEvent) => {
@@ -733,12 +790,6 @@ export function GoalsView() {
     if (!renamingId || !name || nameTaken(name, renamingId)) return;
     persistViews(savedViews.map(v => (v.id === renamingId ? { ...v, name } : v)));
     cancelRename();
-  };
-  const deleteActive = () => {
-    if (!activeSaved) return;
-    if (!confirmDelete) { setConfirmDelete(true); return; }
-    persistViews(savedViews.filter(v => v.id !== activeSaved.id));
-    setConfirmDelete(false);
   };
 
   // Dragging to reorder only makes sense in the board's own order (filters
@@ -888,74 +939,76 @@ export function GoalsView() {
     </SortBox>
   );
   const showRow = savedViews.length > 0 || hasSetup || naming || showFilters;
+  const taskStatusLabel = TASK_COLUMNS.find(c => c.key === statusFilter)?.label;
+  const roadmapLabel = (tab === 'goals' ? GOAL_COLUMNS : ROADMAP_COLUMNS).find(c => c.key === roadmapStatus[tab as 'goals' | 'milestones'])?.label;
+  // The ⋯ menu: the saved view showing (rename / delete), else save what's set
+  const menuItems: ViewMenuItem[] = [];
+  if (activeSaved) menuItems.push({ label: 'Rename view', icon: 'pencil', onSelect: startRename });
+  else if (hasSetup) menuItems.push({ label: 'Save view', icon: 'bookmark', onSelect: () => setNaming(true) });
+  if (filtersSet) menuItems.push({ label: 'Clear filters', icon: 'x', onSelect: clearFilters });
+  if (activeSaved) menuItems.push({ label: 'Delete view…', icon: 'trash', danger: true, confirmLabel: `Delete “${activeSaved.name}”?`, onSelect: () => persistViews(savedViews.filter(v => v.id !== activeSaved.id)) });
+  const doneNoun = completedShown.length === 1 ? (tab === 'todos' ? 'todo' : 'task') : tab;
+
   const rowContent = (<>
               {savedViews.length > 0 && (
-                <FilterSelect $set={!!activeSaved}>
+                <FilterPick name="View" value={activeSaved?.name ?? 'None'} set={!!activeSaved}>
                   <select aria-label="Saved views" value={activeSaved?.id ?? ''} onChange={e => e.target.value && openSaved(e.target.value)}>
-                    <option value="">Saved views</option>
+                    <option value="">None</option>
                     {savedViews.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
-                </FilterSelect>
+                </FilterPick>
               )}
               {showFilters && (tab === 'goals' || tab === 'milestones') && (<>
               {tab === 'milestones' && (
-                <FilterSelect $set={!!goalFilter}>
+                <FilterPick name="Goal" value={goals.find(g => g.id === goalFilter)?.title ?? 'All'} set={!!goalFilter}>
                   <select aria-label="Goal" value={goalFilter ?? ''} onChange={e => pickGoal(e.target.value ? Number(e.target.value) : null)}>
-                    <option value="">Goal: All</option>
-                    {goals.map(g => <option key={g.id} value={g.id}>Goal: {g.title}</option>)}
+                    <option value="">All</option>
+                    {goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
                   </select>
-                </FilterSelect>
+                </FilterPick>
               )}
-              <FilterSelect $set={!!roadmapStatus[tab]}>
+              <FilterPick name="Status" value={roadmapLabel ?? 'All'} set={!!roadmapStatus[tab]}>
                 <select aria-label="Status" value={roadmapStatus[tab]} onChange={e => setPlanStatus(tab, e.target.value as RoadmapStatus | '')}>
-                  <option value="">Status: All</option>
-                  {(tab === 'goals' ? GOAL_COLUMNS : ROADMAP_COLUMNS).map(c => <option key={c.key} value={c.key}>Status: {c.label}</option>)}
+                  <option value="">All</option>
+                  {(tab === 'goals' ? GOAL_COLUMNS : ROADMAP_COLUMNS).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                 </select>
-              </FilterSelect>
-              {filtersSet && <ClearBtn type="button" style={{ marginLeft: 8 }} onClick={clearFilters}>Clear</ClearBtn>}
+              </FilterPick>
               </>)}
               {showFilters && isTaskTab && (<>
               {tab === 'tasks' && (
                 <>
-                  <FilterSelect $set={!!goalFilter}>
+                  <FilterPick name="Goal" value={goals.find(g => g.id === goalFilter)?.title ?? 'All'} set={!!goalFilter}>
                     <select aria-label="Goal" value={goalFilter ?? ''} onChange={e => pickGoal(e.target.value ? Number(e.target.value) : null)}>
-                      <option value="">Goal: All</option>
-                      {goals.map(g => <option key={g.id} value={g.id}>Goal: {g.title}</option>)}
+                      <option value="">All</option>
+                      {goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
                     </select>
-                  </FilterSelect>
-                  <FilterSelect $set={!!milestoneFilter}>
+                  </FilterPick>
+                  <FilterPick name="Milestone" value={milestoneChoices.find(m => m.id === milestoneFilter)?.title ?? 'All'} set={!!milestoneFilter}>
                     <select aria-label="Milestone" value={milestoneFilter ?? ''} onChange={e => setMilestoneFilter(e.target.value ? Number(e.target.value) : null)}>
-                      <option value="">Milestone: All</option>
-                      {milestoneChoices.map(m => <option key={m.id} value={m.id}>Milestone: {m.title}</option>)}
+                      <option value="">All</option>
+                      {milestoneChoices.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
                     </select>
-                  </FilterSelect>
+                  </FilterPick>
                 </>
               )}
-              <FilterSelect $set={!!statusFilter}>
+              <FilterPick name="Status" value={taskStatusLabel ?? 'All'} set={!!statusFilter}>
                 <select aria-label="Status" value={statusFilter} onChange={e => setStatusFilter(e.target.value as TaskStatus | '')}>
-                  <option value="">Status: All</option>
-                  {TASK_COLUMNS.map(c => <option key={c.key} value={c.key}>Status: {c.label}</option>)}
+                  <option value="">All</option>
+                  {TASK_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                 </select>
-              </FilterSelect>
-              <FilterSelect $set={!!typeFilter}>
+              </FilterPick>
+              <FilterPick name="Type" value={typeFilter || 'All'} set={!!typeFilter}>
                 <select aria-label="Type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                  <option value="">Type: All</option>
-                  {taskTypes.map(t => <option key={t} value={t}>Type: {t}</option>)}
+                  <option value="">All</option>
+                  {taskTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-              </FilterSelect>
-              {filtersSet && <ClearBtn type="button" style={{ marginLeft: 8 }} onClick={clearFilters}>Clear</ClearBtn>}
+              </FilterPick>
               </>)}
               <RowEnd>
-                {isTaskTab && completedShown.length > 0 && !naming && !renamingId && (
-                  <ClearBtn type="button" disabled={clearing} onClick={() => void clearCompleted()} onBlur={() => !clearing && setConfirmClear(false)}>
-                    {clearing ? 'Clearing…' : confirmClear
-                      ? `Delete ${completedShown.length} completed ${completedShown.length === 1 ? (tab === 'todos' ? 'todo' : 'task') : tab}?`
-                      : 'Clear completed'}
-                  </ClearBtn>
-                )}
                 {naming ? (
                   <SaveForm onSubmit={saveCurrent}>
                     <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }}
                       placeholder="Name this view" aria-label="Saved view name" maxLength={60} />
                     <ClearBtn type="submit" disabled={!newName.trim()}>Save</ClearBtn>
                     <ClearBtn type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</ClearBtn>
@@ -969,16 +1022,17 @@ export function GoalsView() {
                       title={nameTaken(newName, renamingId) ? 'Another view already has this name' : undefined}>Rename</ClearBtn>
                     <ClearBtn type="button" onClick={cancelRename}>Cancel</ClearBtn>
                   </SaveForm>
-                ) : activeSaved ? (
-                  <>
-                    <ClearBtn type="button" onClick={startRename}>Rename view</ClearBtn>
-                    <ClearBtn type="button" onClick={deleteActive} onBlur={() => setConfirmDelete(false)}>
-                      {confirmDelete ? `Delete “${activeSaved.name}”?` : 'Delete view'}
-                    </ClearBtn>
-                  </>
-                ) : hasSetup ? (
-                  <ClearBtn type="button" onClick={() => { setNaming(true); setConfirmDelete(false); }}>Save view</ClearBtn>
-                ) : null}
+                ) : (<>
+                  {isTaskTab && completedShown.length > 0 && (
+                    <ClearDone type="button" $confirm={confirmClear} disabled={clearing}
+                      onClick={() => void clearCompleted()} onBlur={() => !clearing && setConfirmClear(false)}>
+                      <Icon name="check-circle" size={16} strokeWidth={1.8} />
+                      {clearing ? 'Clearing…' : confirmClear ? `Delete ${completedShown.length} completed ${doneNoun}?` : 'Clear completed'}
+                      {!confirmClear && !clearing && <em>{completedShown.length}</em>}
+                    </ClearDone>
+                  )}
+                  <ViewMenu label="View options" heading={activeSaved ? 'Saved view' : undefined} items={menuItems} />
+                </>)}
               </RowEnd>
 </>);
 
