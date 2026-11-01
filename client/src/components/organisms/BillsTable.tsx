@@ -7,8 +7,8 @@ import {
   SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge,
 } from '../molecules/FinanceParts.js';
 import {
-  billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaid, primaryBillAction,
-  newId, nextUnpaidDue, parseMoney, todayStr, undoLastPayment, billPeriodSuffix,
+  billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
+  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, type BillMonthState,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
 
@@ -17,6 +17,8 @@ type BillRecord = FinanceRecord<'bills'>;
 interface BillsTableProps {
   bills: BillRecord[];
   categories: FinanceRecord<'budget'>[];
+  /** The month on screen (YYYY-MM): each row shows its bill for that month */
+  month: string;
   onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
   onDelete: (id: string) => void;
 }
@@ -230,24 +232,32 @@ export function BillEditor({ bill, categories, onSave, onCancel }: {
 
 /* ── Row actions: one main action that fits the bill's state, Edit, and a ⋯ menu ── */
 
-function BillActions({ bill, due, today, onSave, onEdit, onStatus, onDelete }: {
+function BillActions({ bill, state, today, onSave, onEdit, onStatus, onDelete }: {
   bill: BillRecord;
-  due: string | null;
+  state: BillMonthState;
   today: string;
   onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
   onEdit: () => void;
   onStatus: (status: BillStatus) => void;
   onDelete: () => void;
 }) {
-  const primary = primaryBillAction(bill, today);
-  const markPaid = () => void onSave(markBillPaid(bill, today, newId()));
-  const undoPaid = () => void onSave(undoLastPayment(bill));
+  const markPaid = (due: string) => void onSave(markBillPaidFor(bill, due, today, newId()));
+  const undoPaid = (due: string) => void onSave(undoPaymentFor(bill, due));
+  // Up front, only what's about the date the row shows: this month's bill
+  // paid → Undo paid; this month's bill to pay → Mark paid. A bill with
+  // nothing due this month offers Mark paid only once its next date is close
+  const primary: { label: string; run: () => void } | null =
+    state.kind === 'paid' ? { label: 'Undo paid', run: () => undoPaid(state.due) }
+      : state.kind === 'unpaid' ? { label: 'Mark paid', run: () => markPaid(state.due) }
+        : state.due && daysBetween(today, state.due) <= DUE_SOON_DAYS ? { label: 'Mark paid', run: () => markPaid(state.due!) }
+          : null;
   const paid = latestPayment(bill);
 
   const menu: RowMenuItem[] = [{ label: 'Edit', onSelect: onEdit }];
-  // Whichever payment action isn't up front
-  if (primary !== 'mark' && due) menu.push({ label: `Mark paid early (due ${formatDay(due)})`, onSelect: markPaid });
-  if (primary !== 'undo' && paid) menu.push({ label: `Undo last payment (${formatDay(paid.paidOn)})`, onSelect: undoPaid });
+  if (state.kind === 'none' && state.due && !primary) menu.push({ label: `Mark paid early (due ${formatDay(state.due)})`, onSelect: () => markPaid(state.due!) });
+  if (paid && !(state.kind === 'paid' && state.due === paid.forDue)) {
+    menu.push({ label: `Undo the ${formatDay(paid.forDue).replace(/, \d{4}$/, '')} payment`, onSelect: () => undoPaid(paid.forDue) });
+  }
   if (bill.status === 'active') menu.push({ label: 'Pause', onSelect: () => onStatus('paused') });
   if (bill.status === 'paused') menu.push({ label: 'Resume', onSelect: () => onStatus('active') });
   if (bill.status !== 'cancelled') menu.push({ label: 'Mark cancelled', onSelect: () => onStatus('cancelled') });
@@ -256,9 +266,7 @@ function BillActions({ bill, due, today, onSave, onEdit, onStatus, onDelete }: {
 
   return (
     <>
-      {primary === 'mark' ? <RowBtn type="button" onClick={markPaid}>Mark paid</RowBtn>
-        : primary === 'undo' ? <RowBtn type="button" onClick={undoPaid}>Undo paid</RowBtn>
-        : <span />}
+      {primary ? <RowBtn type="button" onClick={primary.run}>{primary.label}</RowBtn> : <span />}
       <RowMenu label={`More actions for ${bill.name}`} items={menu} />
     </>
   );
@@ -278,14 +286,14 @@ const FILTERS: { value: Filter; label: string }[] = [
  * next due, Mark paid (recorded on the bill only — nothing posts anywhere
  * else), and quick pause / cancel so you can decide what to keep.
  */
-export function BillsTable({ bills, categories, onSave, onDelete }: BillsTableProps) {
+export function BillsTable({ bills, categories, month, onSave, onDelete }: BillsTableProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const today = todayStr();
   const catName = (id?: string) => (id ? categories.find(c => c.id === id)?.name : undefined);
 
   const rows = useMemo(() => {
-    const withDue = bills.map(b => ({ bill: b, due: billCounts(b) ? nextUnpaidDue(b, today) : null }));
+    const withDue = bills.map(b => { const state = billMonthState(b, month, today); return { bill: b, state, due: state.due }; });
     const shown = withDue.filter(({ bill }) => {
       if (filter === 'subscriptions') return bill.kind === 'subscription' && bill.status !== 'cancelled';
       if (filter === 'paused') return bill.status === 'paused';
@@ -293,31 +301,31 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
       return bill.status !== 'cancelled';
     });
     return shown.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.bill.name.localeCompare(b.bill.name));
-  }, [bills, filter, today]);
+  }, [bills, filter, today, month]);
 
   const totals = useMemo(() => billTotals(bills), [bills]);
   const setStatus = (b: BillRecord, status: BillStatus) =>
     void onSave({ ...b, status, cancelledOn: status === 'cancelled' ? today : undefined });
 
-  const dueCell = (bill: BillRecord, due: string | null) => {
+  const dueCell = (bill: BillRecord, state: BillMonthState) => {
+    const due = state.due;
     if (!due) return billCounts(bill) ? <Due style={{ color: 'var(--text-muted)' }}>Paid</Due> : <Due style={{ color: 'var(--text-muted)' }}>—</Due>;
-    const days = daysBetween(today, due);
     const short = formatShort(due, today);
+    // This month's bill, paid: its date and when it was paid
+    if (state.kind === 'paid') return <Due>{short}<small>Paid {formatShort(state.payment.paidOn, today)}</small></Due>;
+    const days = daysBetween(today, due);
     if (days < 0) return <Due><DueBadge $tone="overdue">Overdue · {short}</DueBadge></Due>;
     if (days === 0) return <Due><DueBadge $tone="soon">Due today</DueBadge></Due>;
     if (days === 1) return <Due><DueBadge $tone="soon">Due tomorrow</DueBadge></Due>;
-    // Just paid: say it's the *next* date, and which bill the payment covered —
-    // otherwise "Nov 27 · Undo paid" reads as if November were paid already
+    if (state.kind === 'unpaid') return <Due>{short}</Due>;
+    // Nothing due this month: its next date, and the last bill paid if recent
     const last = latestPayment(bill);
-    if (last && last.forDue < due && daysBetween(last.paidOn, today) <= RECENT_PAYMENT_DAYS) {
-      return (
-        <Due>
-          Next due {short}
-          <small>{formatShort(last.forDue, today)} bill paid {formatShort(last.paidOn, today)}</small>
-        </Due>
-      );
-    }
-    return <Due>{short}</Due>;
+    return (
+      <Due>
+        Next due {short}
+        {last && daysBetween(last.paidOn, today) <= RECENT_PAYMENT_DAYS && <small>{formatShort(last.forDue, today)} bill paid {formatShort(last.paidOn, today)}</small>}
+      </Due>
+    );
   };
 
   return (
@@ -345,7 +353,7 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
               ? 'List your rent, utilities, phone, insurance and subscriptions here. They count in your budget right away; mark each one paid when you pay it.'
               : 'Nothing here for this filter.'}
           </EmptyNote>
-        ) : rows.map(({ bill, due }) => (editing === bill.id ? (
+        ) : rows.map(({ bill, state }) => (editing === bill.id ? (
           <div key={bill.id} style={{ padding: '4px 20px 4px 28px' }}>
             <BillEditor bill={bill} categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />
           </div>
@@ -360,10 +368,10 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
             <Amount $strike={!billCounts(bill)}>
               {formatCents(bill.amountCents)}<small>{billPeriodSuffix(bill.frequency)}</small>
             </Amount>
-            {dueCell(bill, due)}
+            {dueCell(bill, state)}
             <BillActions
               bill={bill}
-              due={due}
+              state={state}
               today={today}
               onSave={onSave}
               onEdit={() => setEditing(bill.id)}

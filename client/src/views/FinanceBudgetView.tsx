@@ -61,6 +61,7 @@ function BudgetAndBills({ month }: { month: string }) {
       <BillsTable
         bills={bills.records}
         categories={categories}
+        month={month}
         onSave={b => bills.save(b)}
         onDelete={id => void bills.remove(id)}
       />

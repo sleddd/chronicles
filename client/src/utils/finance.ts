@@ -4,7 +4,7 @@
  * UTC so no time zone can shift a day.
  */
 import type {
-  Bill, BillFrequency, BudgetCategory, FinanceExpense, FinanceMeta, FinanceGoal, SavingsPot,
+  Bill, BillFrequency, BillPayment, BudgetCategory, FinanceExpense, FinanceMeta, FinanceGoal, SavingsPot,
 } from '../types/finance.js';
 
 // ── Money ───────────────────────────────────────────────────────────────────
@@ -211,6 +211,43 @@ export function undoLastPayment<B extends Bill>(bill: B): B {
   const payments = [...(bill.payments ?? [])].sort((a, b) => a.forDue.localeCompare(b.forDue) || a.paidOn.localeCompare(b.paidOn));
   payments.pop();
   return { ...bill, payments };
+}
+
+/** Record a payment for one particular due date (the month on screen's) */
+export function markBillPaidFor<B extends Bill>(bill: B, forDue: string, today: string, id: string, paidAt = new Date().toISOString()): B {
+  if ((bill.payments ?? []).some(p => p.forDue === forDue)) return bill;
+  return { ...bill, payments: [...(bill.payments ?? []), { id, forDue, paidOn: today, paidAt, amountCents: bill.amountCents }] };
+}
+
+/** Remove the payment for one due date */
+export function undoPaymentFor<B extends Bill>(bill: B, forDue: string): B {
+  return { ...bill, payments: (bill.payments ?? []).filter(p => p.forDue !== forDue) };
+}
+
+/**
+ * A bill as seen from one month (YYYY-MM) on Budget & bills:
+ * - 'paid': its bill for that month is paid (the last one paid, if it's due
+ *   more than once that month and all are paid)
+ * - 'unpaid': its first unpaid bill that month
+ * - 'none': nothing due that month (a quarterly bill, a paused one) — then
+ *   `due` is its next unpaid date from today, if any
+ */
+export type BillMonthState =
+  | { kind: 'paid'; due: string; payment: BillPayment }
+  | { kind: 'unpaid'; due: string }
+  | { kind: 'none'; due: string | null };
+
+export function billMonthState(bill: Bill, month: string, today: string): BillMonthState {
+  if (billCounts(bill)) {
+    const start = `${month}-01`;
+    const end = addDays(addMonthsClamped(start, 1), -1);
+    const dues = billDueDates(bill, start, end);
+    const paidFor = new Map((bill.payments ?? []).map(p => [p.forDue, p]));
+    const unpaid = dues.find(d => !paidFor.has(d));
+    if (unpaid) return { kind: 'unpaid', due: unpaid };
+    if (dues.length) { const due = dues[dues.length - 1]; return { kind: 'paid', due, payment: paidFor.get(due)! }; }
+  }
+  return { kind: 'none', due: billCounts(bill) ? nextUnpaidDue(bill, today) : null };
 }
 
 /** The payment covering the latest due date, if any. */

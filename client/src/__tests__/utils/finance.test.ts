@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseMoney, formatCents, addMonthsClamped, billDueDates, nextDueDate, billOccurrences,
   monthlyEquivalent, billTotals, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
-  nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment,
+  nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment, billMonthState, markBillPaidFor, undoPaymentFor,
   billPaymentRecords, filterPayments, reportSummary, periodRange, averagePerMonth, primaryBillAction,
 } from '../../utils/finance.js';
 import type { Bill } from '../../types/finance.js';
@@ -278,5 +278,21 @@ describe('billPeriodSuffix', () => {
     expect(billPeriodSuffix('monthly')).toBe('/mo');
     expect(billPeriodSuffix('biweekly')).toBe('/2 wks');
     expect(billPeriodSuffix('once')).toBe(' once');
+  });
+});
+
+describe('billMonthState', () => {
+  const b = bill({ dueDate: '2026-01-15', payments: [{ id: 'p', forDue: '2026-10-15', paidOn: '2026-10-16', amountCents: 120000 }] });
+  it('reads the month on screen', () => {
+    expect(billMonthState(b, '2026-10', '2026-11-01')).toMatchObject({ kind: 'paid', due: '2026-10-15' });
+    expect(billMonthState(b, '2026-11', '2026-11-01')).toEqual({ kind: 'unpaid', due: '2026-11-15' });
+    expect(billMonthState(bill({ frequency: 'quarterly', dueDate: '2026-01-15' }), '2026-11', '2026-11-01')).toEqual({ kind: 'none', due: '2027-01-15' });
+    expect(billMonthState(bill({ status: 'paused' }), '2026-11', '2026-11-01')).toEqual({ kind: 'none', due: null });
+  });
+  it('pays and undoes one particular due date', () => {
+    const paid = markBillPaidFor(b, '2026-11-15', '2026-11-01', 'q', 'T');
+    expect(paid.payments!.map(p => p.forDue)).toEqual(['2026-10-15', '2026-11-15']);
+    expect(markBillPaidFor(paid, '2026-11-15', '2026-11-02', 'r')).toBe(paid);
+    expect(undoPaymentFor(paid, '2026-10-15').payments!.map(p => p.forDue)).toEqual(['2026-11-15']);
   });
 });
