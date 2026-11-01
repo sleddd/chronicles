@@ -196,7 +196,8 @@ const FilterRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  /* Rows well apart, so wrapped actions sit clear of the pills above */
+  gap: 20px 10px;
   padding-top: 16px;
 `;
 
@@ -252,11 +253,14 @@ const SaveForm = styled.form`
 const RowEnd = styled.span`
   margin-left: auto;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 8px 24px;
 `;
 
 const ClearBtn = styled.button`
+  /* A taller target than the text, so a near miss doesn't hit its neighbour */
+  min-height: 34px;
   padding: 0 4px;
   border: none;
   background: none;
@@ -908,7 +912,7 @@ export function GoalsView() {
                   {(tab === 'goals' ? GOAL_COLUMNS : ROADMAP_COLUMNS).map(c => <option key={c.key} value={c.key}>Status: {c.label}</option>)}
                 </select>
               </FilterSelect>
-              {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
+              {filtersSet && <ClearBtn type="button" style={{ marginLeft: 8 }} onClick={clearFilters}>Clear</ClearBtn>}
               </>)}
               {showFilters && isTaskTab && (<>
               {tab === 'tasks' && (
@@ -939,7 +943,7 @@ export function GoalsView() {
                   {taskTypes.map(t => <option key={t} value={t}>Type: {t}</option>)}
                 </select>
               </FilterSelect>
-              {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
+              {filtersSet && <ClearBtn type="button" style={{ marginLeft: 8 }} onClick={clearFilters}>Clear</ClearBtn>}
               </>)}
               <RowEnd>
                 {isTaskTab && completedShown.length > 0 && !naming && !renamingId && (

@@ -63,4 +63,13 @@ describe('BillsTable, by month', () => {
     expect(screen.getByText('$40.00 paid · $55.00 left')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark paid' })).toBeInTheDocument();
   });
+
+  it('undoes a part payment from the ⋯ menu', () => {
+    const onSave = vi.fn();
+    const part = { payments: [...paidOct.payments, { id: 'p2', forDue: '2026-11-15', paidOn: '2026-11-01', amountCents: 4000, partial: true }] };
+    renderWithTheme(<BillsTable categories={[]} month="2026-11" onSave={onSave} onDelete={vi.fn()} bills={[bill(part)]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Electric' }));
+    fireEvent.click(screen.getByText('Undo the $40.00 part payment'));
+    expect(onSave.mock.calls[0][0].payments.map((p: { id: string }) => p.id)).toEqual(['p1']);
+  });
 });

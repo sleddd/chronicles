@@ -324,6 +324,12 @@ function BillActions({ bill, state, today, onSave, onEdit, onPayPart, onStatus, 
   // Pay part of the bill the row shows (this month's, else the next one)
   const partDue = state.kind === 'unpaid' ? state.due : state.kind === 'none' ? state.due : null;
   if (partDue && !isDuePaid(bill, partDue)) menu.push({ label: `Pay part of the ${formatDay(partDue).replace(/, \d{4}$/, '')} bill`, onSelect: () => onPayPart(partDue) });
+  // A part paid toward that bill: take the latest part off again
+  const lastPart = partDue ? (bill.payments ?? []).filter(p => p.forDue === partDue && p.partial)
+    .sort((x, y) => (x.paidAt ?? x.paidOn).localeCompare(y.paidAt ?? y.paidOn)).at(-1) : undefined;
+  if (partDue && lastPart && !isDuePaid(bill, partDue)) {
+    menu.push({ label: `Undo the ${formatCents(lastPart.amountCents)} part payment`, onSelect: () => undoPaid(partDue) });
+  }
   if (state.kind === 'none' && state.due && !primary) menu.push({ label: `Mark paid early (due ${formatDay(state.due)})`, onSelect: () => markPaid(state.due!) });
   if (paid && !(state.kind === 'paid' && state.due === paid.forDue)) {
     menu.push({ label: `Undo the ${formatDay(paid.forDue).replace(/, \d{4}$/, '')} payment`, onSelect: () => undoPaid(paid.forDue) });
