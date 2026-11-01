@@ -30,7 +30,6 @@ describe('collectFinanceData', () => {
     const data = await collectFinanceData({ list, decryptRecord, now: () => new Date('2026-10-16T12:00:00Z') });
     expect(data.exportedAt).toBe('2026-10-16T12:00:00.000Z');
     expect(data.bills).toHaveLength(plan.bills.length);
-    expect(data.paydays).toHaveLength(2);
     expect(data.bills[0]).toMatchObject({ id: plan.bills[0].id, name: 'Rent', createdAt: '2026-10-01T00:00:00Z' });
     expect(data.unreadable).toEqual({ bills: 2 });
     expect(JSON.parse(financeExportJson(data)).kind).toBe('finance-export');
@@ -45,7 +44,7 @@ describe('financeMovementsCsv', () => {
     expect(lines[0]).toBe('Date,Type,Description,Category,Amount,Details');
     const rows = lines.slice(1).map(parseCsvRow);
     const types = new Set(rows.map(r => r[1]));
-    for (const t of ['Bill payment', 'Subscription payment', 'Spending', 'Savings deposit', 'Savings withdrawal', 'Payday — paying', 'Payday — coming in', 'Payday — spending']) {
+    for (const t of ['Bill payment', 'Subscription payment', 'Spending', 'Savings deposit', 'Savings withdrawal']) {
       expect(types.has(t)).toBe(true);
     }
     const dates = rows.map(r => r[0]);
@@ -53,7 +52,6 @@ describe('financeMovementsCsv', () => {
     const rent = rows.find(r => r[2] === 'Rent' && r[1] === 'Bill payment')!;
     expect(rent[3]).toBe('Housing');
     expect(rent[4]).toBe('-1450.00'); // a plain number, not guarded as text
-    expect(rows.find(r => r[1] === 'Payday — coming in')![4]).toBe('36.00');
   });
 
   it('guards free text against spreadsheet formulas', async () => {
@@ -72,7 +70,7 @@ describe('financeExportFiles', () => {
     const files = financeExportFiles(data, TODAY);
     expect(files.map(f => f.name)).toEqual([
       'transactions.csv', 'budget-categories.csv', 'bills.csv', 'bill-payments.csv', 'spending.csv',
-      'savings-funds.csv', 'savings-entries.csv', 'goals.csv', 'paydays.csv', 'payday-lines.csv', 'finance.json',
+      'savings-funds.csv', 'savings-entries.csv', 'goals.csv', 'finance.json',
     ]);
     const rows = (name: string) => splitCsvLines(files.find(f => f.name === name)!.text).filter(Boolean).map(parseCsvRow);
     expect(rows('budget-categories.csv')).toHaveLength(plan.budget.length + 1);
@@ -84,7 +82,6 @@ describe('financeExportFiles', () => {
     expect(rent.slice(1, 3)).toEqual(['Bill', '1450.00']);
     const emergency = rows('goals.csv').find(r => r[0] === 'Six-month emergency fund')!;
     expect(emergency[5]).toBe('Emergency fund');
-    expect(rows('paydays.csv')[1][0] < rows('paydays.csv')[2][0]).toBe(true);
     expect(JSON.parse(files.at(-1)!.text).bills).toHaveLength(plan.bills.length);
   });
 });

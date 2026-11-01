@@ -393,7 +393,7 @@ class EncryptionService {
   }
 
   /**
-   * Encrypt one Finance record (a payday, bill, budget category, goal or
+   * Encrypt one Finance record (a bill, budget category, goal or
    * savings pot) as JSON. The AAD names the record's kind and id, so the
    * server can't move a ciphertext to another row or another table.
    */

@@ -5,7 +5,9 @@ import { FinanceShell } from '../components/organisms/FinanceShell.js';
 import { BillsTable } from '../components/organisms/BillsTable.js';
 import { BudgetTable } from '../components/organisms/BudgetTable.js';
 import { SpendingLog } from '../components/organisms/SpendingLog.js';
-import { useEntriesStore } from '../stores/entriesStore.js';
+import { BalanceSummary } from '../components/organisms/BalanceSummary.js';
+import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
+import type { BalanceSnapshot } from '../utils/financeBalance.js';
 import { formatMonth, shiftMonth, todayStr } from '../utils/finance.js';
 import { MonthPill } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
@@ -16,7 +18,7 @@ const Center = styled.div`
   padding: 48px 0;
 `;
 
-/** Budget & Bills: the monthly budget by category, spending for the month, then every bill and subscription. */
+/** Budget & Bills: the current balance, the monthly budget by category, spending for the month, then every bill and subscription. */
 export function FinanceBudgetView() {
   const [month, setMonth] = useState(() => todayStr().slice(0, 7));
   return (
@@ -29,25 +31,22 @@ export function FinanceBudgetView() {
 }
 
 function BudgetAndBills({ month }: { month: string }) {
-  // Reconcile's paydays feed the budget only when it's switched on
-  const reconcileOn = useEntriesStore(s => s.featureFlags.reconcileEnabled === true);
   const bills = useFinance('bills');
   const budget = useFinance('budget');
   const expenses = useFinance('expenses');
-  const paydays = useFinance('paydays', { enabled: reconcileOn });
+  const [balance, saveBalance, balanceLoaded] = useEncryptedSetting<BalanceSnapshot | null>('financeBalance', null);
   const categories = useMemo(() => [...budget.records].sort((a, b) => a.order - b.order), [budget.records]);
-  const paydayRecords = reconcileOn ? paydays.records : NO_PAYDAYS;
 
-  const statuses = [bills.status, budget.status, expenses.status, ...(reconcileOn ? [paydays.status] : [])];
-  if (statuses.some(s => s === 'idle' || s === 'loading')) return <Center><Spinner size={32} /></Center>;
+  const statuses = [bills.status, budget.status, expenses.status];
+  if (!balanceLoaded || statuses.some(s => s === 'idle' || s === 'loading')) return <Center><Spinner size={32} /></Center>;
 
   return (
     <>
+      <BalanceSummary snapshot={balance} bills={bills.records} expenses={expenses.records} onSet={s => void saveBalance(s)} />
       <BudgetTable
         categories={categories}
         bills={bills.records}
         expenses={expenses.records}
-        paydays={paydayRecords}
         month={month}
         onSave={c => budget.save(c)}
         onDelete={id => void budget.remove(id)}
@@ -68,5 +67,3 @@ function BudgetAndBills({ month }: { month: string }) {
     </>
   );
 }
-
-const NO_PAYDAYS: never[] = [];

@@ -154,15 +154,20 @@ interface TopicSelectorProps {
   filled?: boolean;
   /** Hide the topic icon on the trigger (used when the picker renders as a breadcrumb). */
   hideIcon?: boolean;
+  /** Choices that aren't topics, listed A–Z among them (the Quick entry's Bill and Spending) */
+  extras?: { key: string; name: string; icon: string }[];
+  /** The extra chosen, shown on the trigger in place of the topic */
+  selectedExtra?: string | null;
+  onSelectExtra?: (key: string) => void;
 }
 
-type PickerTopic = { id: number | null; name: string; icon: string | null };
+type PickerTopic = { id: number | null; name: string; icon: string | null; extra?: string };
 const isJournal = (t: { name: string }) => t.name.toLowerCase() === 'journal';
 
 /** Topic picker. There is no "No topic": an entry without one is saved under
  *  Journal, so null shows — and is listed — as Journal (even before the
  *  Journal topic exists; picking it then keeps null). Always A–Z. */
-export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false }: TopicSelectorProps) {
+export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false, extras = [], selectedExtra = null, onSelectExtra }: TopicSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -170,7 +175,8 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
 
   const journalTopic = topics.find(isJournal);
   const journal: PickerTopic = journalTopic ?? { id: null, name: 'Journal', icon: 'book' };
-  const selected: PickerTopic | undefined = selectedId === null ? journal : topics.find(t => t.id === selectedId);
+  const extra = selectedExtra ? extras.find(x => x.key === selectedExtra) : undefined;
+  const selected: PickerTopic | undefined = extra ? { id: null, name: extra.name, icon: extra.icon, extra: extra.key } : (selectedId === null ? journal : topics.find(t => t.id === selectedId));
 
   // Close on click outside
   useEffect(() => {
@@ -186,7 +192,7 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
   }, [open]);
 
   // Always alphabetical (case-insensitive), whatever order the topics are kept in
-  const sorted: PickerTopic[] = [...topics, ...(journalTopic ? [] : [journal])]
+  const sorted: PickerTopic[] = [...topics, ...(journalTopic ? [] : [journal]), ...extras.map(x => ({ id: null, name: x.name, icon: x.icon, extra: x.key }))]
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   const filtered = search
     ? sorted.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
@@ -224,9 +230,9 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
             ) : (
               filtered.map(t => (
                 <Item
-                  key={t.id ?? 'journal'}
-                  $active={selectedId === t.id || (selectedId === null && isJournal(t))}
-                  onClick={() => { onSelect(t.id); setOpen(false); setSearch(''); }}
+                  key={t.extra ? `x:${t.extra}` : t.id ?? 'journal'}
+                  $active={t.extra ? selectedExtra === t.extra : !selectedExtra && (selectedId === t.id || (selectedId === null && isJournal(t)))}
+                  onClick={() => { if (t.extra) onSelectExtra?.(t.extra); else onSelect(t.id); setOpen(false); setSearch(''); }}
                 >
                   <TopicIcon $color={accentColor}><TopicGlyph name={t.icon} size={15} /></TopicIcon>
                   {t.name}

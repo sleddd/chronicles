@@ -143,7 +143,7 @@ function draftFrom(b?: Bill): Draft {
   };
 }
 
-function BillEditor({ bill, categories, onSave, onCancel }: {
+export function BillEditor({ bill, categories, onSave, onCancel }: {
   bill?: BillRecord;
   categories: FinanceRecord<'budget'>[];
   onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
@@ -306,6 +306,17 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
     if (days < 0) return <Due><DueBadge $tone="overdue">Overdue · {short}</DueBadge></Due>;
     if (days === 0) return <Due><DueBadge $tone="soon">Due today</DueBadge></Due>;
     if (days === 1) return <Due><DueBadge $tone="soon">Due tomorrow</DueBadge></Due>;
+    // Just paid: say it's the *next* date, and which bill the payment covered —
+    // otherwise "Nov 27 · Undo paid" reads as if November were paid already
+    const last = latestPayment(bill);
+    if (last && last.forDue < due && daysBetween(last.paidOn, today) <= RECENT_PAYMENT_DAYS) {
+      return (
+        <Due>
+          Next due {short}
+          <small>{formatShort(last.forDue, today)} bill paid {formatShort(last.paidOn, today)}</small>
+        </Due>
+      );
+    }
     return <Due>{short}</Due>;
   };
 
@@ -374,6 +385,9 @@ export function BillsTable({ bills, categories, onSave, onDelete }: BillsTablePr
 }
 
 /** "Oct 15" this year, "Apr 1, 2027" otherwise */
+/** How long after a payment the row still says which bill it covered */
+const RECENT_PAYMENT_DAYS = 31;
+
 function formatShort(day: string, today: string): string {
   return day.slice(0, 4) === today.slice(0, 4) ? formatDay(day).replace(/, \d{4}$/, '') : formatDay(day);
 }

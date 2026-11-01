@@ -1,13 +1,13 @@
 /**
  * Seed realistic Finance data for trying the feature: budget categories,
  * bills and subscriptions (with ~5 months of Mark-paid payments), spending,
- * savings funds, goals linked to them, and two Reconcile paydays.
+ * savings funds and goals linked to them.
  * Every record is encrypted in the browser like real data. Adds to what's
  * there — running it twice adds a second set.
  */
 import { addDays, addMonthsClamped, billDueDates, newId, todayStr } from './finance.js';
 import type {
-  Bill, BillPayment, BudgetCategory, FinanceExpense, FinanceGoal, FinanceKind, FinanceRecordMap, Payday, SavingsPot,
+  Bill, BillPayment, BudgetCategory, FinanceExpense, FinanceGoal, FinanceKind, FinanceRecordMap, SavingsPot,
 } from '../types/finance.js';
 
 export interface SeedFinanceDeps {
@@ -32,7 +32,6 @@ export interface SeedFinancePlan {
   expenses: (FinanceExpense & { id: string })[];
   savings: (SavingsPot & { id: string })[];
   goals: (FinanceGoal & { id: string })[];
-  paydays: (Payday & { id: string })[];
 }
 
 /** Build the seed records (pure — no network). */
@@ -128,46 +127,13 @@ export function planFinanceSeed(today = todayStr()): SeedFinancePlan {
     { id: newId(), name: 'Start a retirement IRA', targetCents: $(1000), currentCents: $(1000), status: 'achieved' },
   ];
 
-  // ── Reconcile paydays: last month's (closed, all cleared) and the latest (open) ──
-  const byName = (n: string) => bills.find(b => b.name === n)!;
-  const line = (name: string, clearedOn?: string) => {
-    const b = byName(name);
-    return { id: newId(), billId: b.id, description: b.name, amountCents: b.amountCents, direction: 'out' as const, categoryId: b.categoryId, clearedOn };
-  };
-  const prevDate = day(monthsAgo(1), 15);
-  const prev: Payday & { id: string } = {
-    id: newId(), date: prevDate, startingBalanceCents: $(3120.45), status: 'closed', closedOn: addDays(prevDate, 9),
-    items: [
-      line('Phone', addDays(prevDate, 2)),
-      line('Credit card', addDays(prevDate, 3)),
-      { id: newId(), description: 'Uber', amountCents: $(84.2), direction: 'out', combinedCount: 9, combinedPeriod: 'Last 2 weeks', categoryId: transport.id, clearedOn: addDays(prevDate, 4) },
-    ],
-    spending: [{ id: newId(), date: addDays(prevDate, 1), description: 'Groceries', amountCents: $(112.3), categoryId: groceries.id, clearedOn: addDays(prevDate, 2) }],
-    balanceChecks: [],
-  };
-  const prevPaid = prev.items.reduce((t, i) => t + i.amountCents, 0) + prev.spending.reduce((t, s) => t + s.amountCents, 0);
-  prev.balanceChecks = [{ at: `${addDays(prevDate, 8)}T18:00:00.000Z`, balanceCents: prev.startingBalanceCents - prevPaid }];
-
-  const lastDate = day(month, 1) <= today ? day(month, 1) : day(monthsAgo(1), 30);
-  const latest: Payday & { id: string } = {
-    id: newId(), date: lastDate, startingBalanceCents: $(3480.1), status: 'open',
-    items: [
-      line('Rent', addDays(lastDate, 1) <= today ? addDays(lastDate, 1) : undefined),
-      line('Gym'),
-      line('Car insurance'),
-      { id: newId(), description: 'Venmo — split dinner', amountCents: $(36), direction: 'in', categoryId: dining.id },
-    ],
-    spending: [{ id: newId(), date: lastDate, description: 'Groceries', amountCents: $(87.65), categoryId: groceries.id }],
-    balanceChecks: [],
-  };
-
-  return { budget, bills, expenses, savings, goals, paydays: [prev, latest] };
+  return { budget, bills, expenses, savings, goals };
 }
 
 /** Encrypt and upload the seed plan. Resolves with a short summary. */
 export async function seedFinanceData(deps: SeedFinanceDeps): Promise<string> {
   const plan = planFinanceSeed(deps.today);
-  const order: FinanceKind[] = ['budget', 'bills', 'expenses', 'savings', 'goals', 'paydays'];
+  const order: FinanceKind[] = ['budget', 'bills', 'expenses', 'savings', 'goals'];
   let total = 0;
   for (const kind of order) {
     const records = plan[kind as keyof SeedFinancePlan] as ({ id: string } & FinanceRecordMap[FinanceKind])[];
@@ -178,5 +144,5 @@ export async function seedFinanceData(deps: SeedFinanceDeps): Promise<string> {
       total++;
     }
   }
-  return `Added ${total} finance records (${plan.bills.length} bills, ${plan.expenses.length} spending lines, ${plan.savings.length} funds, ${plan.goals.length} goals, ${plan.paydays.length} paydays)`;
+  return `Added ${total} finance records (${plan.bills.length} bills, ${plan.expenses.length} spending lines, ${plan.savings.length} funds, ${plan.goals.length} goals)`;
 }

@@ -7,16 +7,21 @@ import { entries as entriesApi } from '../../services/api.js';
 import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { hasEntryData, prepareEntryForSave } from '../../utils/entrySave.js';
 import { nextReflectivePrompt } from '../../utils/journalPrompts.js';
+import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from './QuickFinance.js';
 
 /**
  * The dashboard's Quick entry: the journal's own editor and topic fields
  * (`EntryForm` in its quick layout), saved the same way as a journal save
  * (`utils/entrySave`). No topic = Journal. The form clears after each save.
+ * With Finance on, the topic picker also offers Bill and Spending, which swap
+ * in Budget & bills' own forms (`QuickFinance`).
  */
 export function QuickEntry() {
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
+  const financeOn = useEntriesStore(s => s.featureFlags.financeEnabled === true);
+  const [finance, setFinance] = useState<QuickFinanceKind | null>(null);
   const { encryptPost, encryptNewPost } = useEncryption();
   const [content, setContent] = useState('');
   const [topicId, setTopicId] = useState<number | null>(null);
@@ -67,7 +72,11 @@ export function QuickEntry() {
       content={content}
       onContentChange={setContent}
       topicId={topicId}
-      onTopicChange={setTopicId}
+      onTopicChange={id => { setFinance(null); setTopicId(id); }}
+      quickExtras={financeOn ? QUICK_FINANCE_CHOICES : undefined}
+      quickExtra={financeOn ? finance : null}
+      onQuickExtra={k => setFinance(k as QuickFinanceKind)}
+      quickExtraBody={financeOn && finance ? <QuickFinance kind={finance} /> : undefined}
       topics={topics}
       customFields={customFields}
       onCustomFieldsChange={setCustomFields}

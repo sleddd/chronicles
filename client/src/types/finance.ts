@@ -14,54 +14,6 @@ export interface FinanceMeta {
   updatedAt?: string;
 }
 
-// ── Reconcile: one payday at a time ─────────────────────────────────────────
-
-export interface PaydayItem {
-  id: string;
-  /** Bill this line was picked from (for budget figures and suggestions only). */
-  billId?: string;
-  description: string;
-  amountCents: number;
-  /** 'out' = a bill/payment leaving the account; 'in' = money still to arrive. */
-  direction: 'out' | 'in';
-  /** Several small charges rolled into one line ("Uber — 9 rides"). */
-  combinedCount?: number;
-  combinedPeriod?: string;
-  categoryId?: string;
-  /** Set when it went through the bank (the notepad X). */
-  clearedOn?: string;
-  /** Copied into a newer payday because it hadn't cleared yet. */
-  carriedOver?: boolean;
-}
-
-/** Spending from the leftover (food, gas…). */
-export interface PaydaySpend {
-  id: string;
-  date: string;
-  description: string;
-  amountCents: number;
-  categoryId?: string;
-  clearedOn?: string;
-}
-
-export interface BalanceCheckEntry {
-  /** ISO timestamp of the check. */
-  at: string;
-  balanceCents: number;
-}
-
-export interface Payday {
-  date: string;
-  /** Bank balance after everything posted (paycheck included). */
-  startingBalanceCents: number;
-  status: 'open' | 'closed';
-  closedOn?: string;
-  note?: string;
-  items: PaydayItem[];
-  spending: PaydaySpend[];
-  balanceChecks: BalanceCheckEntry[];
-}
-
 // ── Budget & Bills ──────────────────────────────────────────────────────────
 
 export type BillFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly' | 'once';
@@ -90,6 +42,8 @@ export interface BillPayment {
   forDue: string;
   /** When it was paid. */
   paidOn: string;
+  /** The moment it was marked paid (ISO) — what the current balance counts from; older payments have only paidOn */
+  paidAt?: string;
   amountCents: number;
 }
 
@@ -108,7 +62,7 @@ export interface Bill {
   payments?: BillPayment[];
 }
 
-/** A spending line on Budget & Bills (groceries, gas…) — for everyone, no Reconcile needed. */
+/** A spending line on Budget & Bills (groceries, gas…). */
 export interface FinanceExpense {
   date: string;
   description: string;
@@ -166,7 +120,6 @@ export interface FinanceGoal {
 
 /** Record shape per kind. */
 export interface FinanceRecordMap {
-  paydays: Payday;
   bills: Bill;
   budget: BudgetCategory;
   expenses: FinanceExpense;

@@ -75,14 +75,13 @@ const Center = styled.div`
 
 /**
  * Frame for every Finance tab: unlock / loading states, the title + tabs, and
- * a note when Finance (or, for Reconcile, its own switch) is off in Settings
+ * a note when Finance is off in Settings
  * — routes aren't gated, so a bookmarked link lands here. Children render
  * only when it's on.
  */
-export function FinanceShell({ children, requiresReconcile = false, headerAside }: { children: ReactNode; requiresReconcile?: boolean; headerAside?: ReactNode }) {
+export function FinanceShell({ children, headerAside }: { children: ReactNode; headerAside?: ReactNode }) {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const enabled = useEntriesStore(s => s.featureFlags.financeEnabled === true);
-  const reconcileOn = useEntriesStore(s => s.featureFlags.reconcileEnabled === true);
   const error = useFinanceStore(s => s.error);
   const navigate = useNavigate();
 
@@ -104,15 +103,10 @@ export function FinanceShell({ children, requiresReconcile = false, headerAside 
           <Head><Title>{FINANCE_TITLE}</Title>{enabled && headerAside}</Head>
           {enabled ? (
             <>
-              <FinanceTabBar showReconcile={reconcileOn} />
+              <FinanceTabBar />
               {error && <ErrorNote role="alert">{error}</ErrorNote>}
               <Body>
-                {requiresReconcile && !reconcileOn ? (
-                  <Off>
-                    <Note>Paycheck reconcile is off. Turn it on in Settings → Features (under Finance) to pay bills from each paycheck and tick them off as they clear.</Note>
-                    <PillButton type="button" onClick={() => navigate('/settings')}>Open Settings</PillButton>
-                  </Off>
-                ) : children}
+                {children}
               </Body>
             </>
           ) : (

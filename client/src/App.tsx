@@ -25,7 +25,6 @@ import { TopicsView } from './views/TopicsView.js';
 import { TopicDetailView } from './views/TopicDetailView.js';
 import { CalendarView } from './views/CalendarView.js';
 import { GoalsView } from './views/GoalsView.js';
-import { FinanceReconcileView } from './views/FinanceReconcileView.js';
 import { FinanceBudgetView } from './views/FinanceBudgetView.js';
 import { FinanceGoalsView } from './views/FinanceGoalsView.js';
 import { FinanceSavingsView } from './views/FinanceSavingsView.js';
@@ -554,7 +553,7 @@ export function App() {
               {/* Health */}
               <Route path="/finance" element={<R><FinanceBudgetView /></R>} />
               <Route path="/finance/budget" element={<Navigate to="/finance" replace />} />
-              <Route path="/finance/reconcile" element={<R><FinanceReconcileView /></R>} />
+              <Route path="/finance/reconcile" element={<Navigate to="/finance" replace />} />
               <Route path="/finance/reports" element={<R><FinanceReportsView /></R>} />
               <Route path="/finance/goals" element={<R><FinanceGoalsView /></R>} />
               <Route path="/finance/savings" element={<R><FinanceSavingsView /></R>} />

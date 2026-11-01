@@ -809,7 +809,7 @@ export const doses = {
 // Finance (opaque encrypted records — see stores/financeStore.ts)
 // =============================================================================
 
-export type FinanceKind = 'paydays' | 'bills' | 'budget' | 'expenses' | 'goals' | 'savings';
+export type FinanceKind = 'bills' | 'budget' | 'expenses' | 'goals' | 'savings';
 
 export interface FinanceRecordWire {
   id: string;

@@ -1,21 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseMoney, formatCents, addMonthsClamped, billDueDates, nextDueDate, billOccurrences,
-  monthlyEquivalent, billTotals, suggestBillsForPayday, paydaySummary, balanceCheck,
-  isReadyToSpend, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
+  monthlyEquivalent, billTotals, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
   nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment,
   billPaymentRecords, filterPayments, reportSummary, periodRange, averagePerMonth, primaryBillAction,
 } from '../../utils/finance.js';
-import type { Bill, Payday } from '../../types/finance.js';
+import type { Bill } from '../../types/finance.js';
 
 const bill = (over: Partial<Bill> & { id?: string } = {}): Bill & { id: string } => ({
   id: 'b1', name: 'Rent', kind: 'bill', amountCents: 120000, frequency: 'monthly',
   dueDate: '2026-01-31', status: 'active', ...over,
-});
-
-const payday = (over: Partial<Payday> = {}): Payday => ({
-  date: '2026-10-15', startingBalanceCents: 300000, status: 'open',
-  items: [], spending: [], balanceChecks: [], ...over,
 });
 
 describe('money', () => {
@@ -92,63 +86,6 @@ describe('bill schedules', () => {
     expect(t).toEqual({ monthly: 2599, yearly: 31188, subscriptionsMonthly: 1599 });
   });
 
-  it('suggests bills for a payday, flagging those due soon', () => {
-    const bills = [
-      bill({ id: 'rent', dueDate: '2026-01-01' }),
-      bill({ id: 'phone', name: 'Phone', dueDate: '2026-01-20' }),
-      bill({ id: 'gym', name: 'Gym', dueDate: '2026-01-12' }),
-      bill({ id: 'old', status: 'cancelled' }),
-    ];
-    const s = suggestBillsForPayday(bills, { date: '2026-10-15', items: [{ id: 'x', billId: 'gym', description: 'Gym', amountCents: 1, direction: 'out' }] });
-    expect(s.map(x => [x.bill.id, x.due, x.dueSoon])).toEqual([
-      ['phone', '2026-10-20', true],
-      ['rent', '2026-11-01', false],
-    ]);
-  });
-});
-
-describe('payday maths', () => {
-  const p = payday({
-    items: [
-      { id: '1', description: 'Rent', amountCents: 120000, direction: 'out', clearedOn: '2026-10-16' },
-      { id: '2', description: 'Phone', amountCents: 8000, direction: 'out' },
-      { id: '3', description: 'Uber', amountCents: 8420, direction: 'out', combinedCount: 9 },
-      { id: '4', description: 'Refund', amountCents: 2000, direction: 'in' },
-      { id: '5', description: 'Old', amountCents: 99999, direction: 'out', carriedOver: true },
-    ],
-    spending: [{ id: 's', date: '2026-10-16', description: 'Groceries', amountCents: 6000, clearedOn: '2026-10-17' }],
-  });
-
-  it('works out paying, leftover and what is still waiting', () => {
-    const s = paydaySummary(p);
-    expect(s.payingCents).toBe(136420);
-    expect(s.incomingCents).toBe(2000);
-    expect(s.spentCents).toBe(6000);
-    expect(s.leftoverCents).toBe(300000 - 136420 + 2000 - 6000);
-    // phone + uber still to leave, refund still to arrive
-    expect(s.waitingCents).toBe(8000 + 8420 - 2000);
-    expect(s.waitingCount).toBe(3);
-    expect(s.expectedBankCents).toBe(300000 - 120000 - 6000);
-  });
-
-  it('checks the bank balance', () => {
-    const ok = balanceCheck(p, 174000);
-    expect(ok.matches).toBe(true);
-    expect(ok.availableCents).toBe(174000 - 14420);
-    const off = balanceCheck(p, 172500);
-    expect(off.matches).toBe(false);
-    expect(off.differenceCents).toBe(-1500);
-  });
-
-  it('is ready to spend only when everything cleared and the balance matches', () => {
-    const cleared = payday({
-      items: [{ id: '1', description: 'Rent', amountCents: 1000, direction: 'out', clearedOn: '2026-10-16' }],
-    });
-    expect(isReadyToSpend(cleared)).toBe(false); // no balance check yet
-    expect(isReadyToSpend({ ...cleared, balanceChecks: [{ at: 'x', balanceCents: 299000 }] })).toBe(true);
-    expect(isReadyToSpend({ ...cleared, balanceChecks: [{ at: 'x', balanceCents: 298000 }] })).toBe(false);
-    expect(isReadyToSpend({ ...p, balanceChecks: [{ at: 'x', balanceCents: 174000 }] })).toBe(false);
-  });
 });
 
 describe('mark paid', () => {
@@ -158,8 +95,8 @@ describe('mark paid', () => {
     // No payments yet: a bill due in the last week shows (overdue)
     expect(nextUnpaidDue(rent, '2026-10-05')).toBe('2026-10-01');
     expect(nextUnpaidDue(rent, '2026-10-16')).toBe('2026-11-01');
-    const paid = markBillPaid(rent, '2026-10-05', 'p1');
-    expect(paid.payments).toEqual([{ id: 'p1', forDue: '2026-10-01', paidOn: '2026-10-05', amountCents: 120000 }]);
+    const paid = markBillPaid(rent, '2026-10-05', 'p1', undefined, '2026-10-05T12:00:00.000Z');
+    expect(paid.payments).toEqual([{ id: 'p1', forDue: '2026-10-01', paidOn: '2026-10-05', paidAt: '2026-10-05T12:00:00.000Z', amountCents: 120000 }]);
     expect(nextUnpaidDue(paid, '2026-10-05')).toBe('2026-11-01');
     // Paying early covers the next one
     const twice = markBillPaid(paid, '2026-10-20', 'p2');
@@ -225,23 +162,6 @@ describe('budgetSummary', () => {
     ]);
   });
 
-  it('adds Reconcile spending and one-off lines, but not bill lines, when paydays are given', () => {
-    const bills = [bill({ id: 'rent', categoryId: 'home', dueDate: '2026-01-01' })];
-    const p1 = payday({
-      date: '2026-10-01',
-      items: [
-        { id: '1', billId: 'rent', description: 'Rent', amountCents: 120000, direction: 'out' },
-        { id: '2', description: 'Misc', amountCents: 1500, direction: 'out' },
-        { id: '3', description: 'Refund', amountCents: 999, direction: 'in' },
-      ],
-      spending: [{ id: 's1', date: '2026-10-03', description: 'Store', amountCents: 5000, categoryId: 'food' }],
-    });
-    const s = budgetSummary(cats, bills, [], '2026-10', [p1]);
-    expect(s.rows.map(r => [r.categoryId, r.billsCents, r.spendingCents])).toEqual([
-      ['home', 120000, 0], ['food', 0, 5000], ['subs', 0, 0], [UNCATEGORIZED, 0, 1500],
-    ]);
-    expect(s.totals).toMatchObject({ plannedCents: 173000, billsCents: 120000, spendingCents: 6500, leftCents: 46500 });
-  });
 });
 
 describe('savings and goals', () => {
@@ -271,19 +191,12 @@ describe('reports', () => {
     { id: 'n1', forDue: '2026-10-15', paidOn: '2026-10-15', amountCents: 1599 },
   ] };
 
-  it('collects marked payments, and reconcile lines without double counting', () => {
-    const p = payday({ date: '2026-10-02', items: [
-      { id: 'i1', billId: 'rent', description: 'Rent', amountCents: 120000, direction: 'out' }, // rent already marked paid in Oct
-      { id: 'i2', billId: 'nf', description: 'Netflix', amountCents: 1599, direction: 'out' },  // Netflix marked in Oct too
-      { id: 'i3', billId: 'gone', description: 'Old', amountCents: 500, direction: 'out' },     // deleted bill
-    ] });
-    const p2 = payday({ date: '2026-11-01', items: [{ id: 'i4', billId: 'rent', description: 'Rent', amountCents: 125000, direction: 'out' }] });
-    const recs = billPaymentRecords([rent, netflix], [p, p2]);
-    expect(recs.map(r => [r.billId, r.date, r.amountCents, r.source])).toEqual([
-      ['rent', '2026-08-30', 120000, 'marked'],
-      ['rent', '2026-10-01', 120000, 'marked'],
-      ['nf', '2026-10-15', 1599, 'marked'],
-      ['rent', '2026-11-01', 125000, 'reconcile'],
+  it('collects marked payments, oldest first', () => {
+    const recs = billPaymentRecords([rent, netflix]);
+    expect(recs.map(r => [r.billId, r.date, r.amountCents])).toEqual([
+      ['rent', '2026-08-30', 120000],
+      ['rent', '2026-10-01', 120000],
+      ['nf', '2026-10-15', 1599],
     ]);
   });
 

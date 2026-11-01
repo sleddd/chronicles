@@ -134,7 +134,7 @@ const Total = styled(Line)`
   b { margin-left: 6px; font-weight: 500; font-size: 15px; color: var(--text-secondary); }
 `;
 
-function ExpenseForm({ initial, categories, submitLabel, onSubmit, onCancel }: {
+export function ExpenseForm({ initial, categories, submitLabel, onSubmit, onCancel }: {
   initial: { date: string; description: string; amount: string; categoryId: string };
   categories: FinanceRecord<'budget'>[];
   submitLabel: string;

@@ -25,6 +25,7 @@
     "migrate:phase2-status": "npm run -s migrate:phase2-status --workspace=server --",
     "check:backups": "npm run -s check:backups --workspace=server --",
     "clear:topic-links": "npm run -s clear:topic-links --workspace=server --",
+    "finance:drop-paydays": "npm run -s finance:drop-paydays --workspace=server --",
     "account:delete": "npm run -s account:delete --workspace=server --",
     "notice": "npm run -s notice --workspace=server --",
     "ai:block": "npm run -s ai:block --workspace=server --",

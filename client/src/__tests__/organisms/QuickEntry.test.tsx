@@ -9,7 +9,7 @@ vi.mock('@/contexts/EncryptionContext', () => ({
   useEncryption: () => ({ encryptPost: vi.fn(), encryptNewPost: vi.fn(async () => ({ id: 9, contentEncrypted: 'c', contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' })) }),
 }));
 vi.mock('@/stores/entriesStore', () => {
-  const state = { topics: [], allTopics: [{ id: 1, name: 'Journal' }], addDecryptedEntry: vi.fn() };
+  const state = { topics: [], allTopics: [{ id: 1, name: 'Journal' }], addDecryptedEntry: vi.fn(), featureFlags: {} };
   const useEntriesStore = (sel: (s: typeof state) => unknown) => sel(state);
   useEntriesStore.getState = () => state;
   return { useEntriesStore };

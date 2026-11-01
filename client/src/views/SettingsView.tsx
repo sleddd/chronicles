@@ -119,7 +119,6 @@ const FEATURES = [
   { key: 'entertainmentEnabled', title: 'Entertainment', description: 'Track music, books, and TV/movies' },
   { key: 'inspirationEnabled', title: 'Inspiration', description: 'Save research, ideas, and quotes' },
   { key: 'financeEnabled', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)' },
-  { key: 'reconcileEnabled', title: 'Paycheck reconcile', description: 'Adds a Reconcile tab to Finance: pay bills from each paycheck and tick them off as they clear' },
 ];
 
 /* Settings → Account → Welcome tour: plain text (no box) beside Show it again */
@@ -1056,7 +1055,7 @@ export function SettingsView() {
       <Section id="features" title="Features">
       <SectionDescription>Enable optional topics for specialized tracking</SectionDescription>
       <SettingsCard>
-        {FEATURES.filter(feat => feat.key !== 'reconcileEnabled' || features.financeEnabled).map(feat => (
+        {FEATURES.map(feat => (
           <Fragment key={feat.key}>
             <SettingsRow
               title={feat.title}
@@ -1419,7 +1418,7 @@ export function SettingsView() {
           <>
             <SettingsRow
               title="Seed Finance Data"
-              description="Add sample budget categories, bills and subscriptions with payments, spending, savings funds, goals and paydays — adds to existing data, does not delete anything"
+              description="Add sample budget categories, bills and subscriptions with payments, spending, savings funds and goals — adds to existing data, does not delete anything"
               action={
                 seedFinanceArmed ? (
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -1445,7 +1444,7 @@ export function SettingsView() {
         </>)}
         <SettingsRow
           title="Export Finance Data"
-          description="Download everything in Finance, decrypted, as one ZIP: a spreadsheet (CSV) each for budget categories, bills, bill payments, spending, savings funds and entries, goals, paydays and payday lines, one sheet of every transaction, and a complete JSON backup. The file is not encrypted — store it safely."
+          description="Download everything in Finance, decrypted, as one ZIP: a spreadsheet (CSV) each for budget categories, bills, bill payments, spending, savings funds and entries, and goals, one sheet of every transaction, and a complete JSON backup. The file is not encrypted — store it safely."
           action={
             <ActionButton onClick={() => void handleExportFinance()} disabled={exportingFinance}>
               {exportingFinance ? <Spinner size={14} /> : 'Export All'}

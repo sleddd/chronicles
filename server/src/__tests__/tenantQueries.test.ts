@@ -271,7 +271,7 @@ describe('Taxonomy queries', () => {
       mockQueryRawUnsafe.mockResolvedValue([{ n: 50 }]);
       expect(await financeStorageBytes(SCHEMA, { kind: 'bills', id: 'abc' })).toBe(50);
       const [sql, id] = mockQueryRawUnsafe.mock.calls[0];
-      expect(sql.match(/UNION ALL/g)).toHaveLength(5);
+      expect(sql.match(/UNION ALL/g)).toHaveLength(4);
       expect(sql).toContain('FROM usr_1_abc123.finance_bills WHERE id <> $1');
       expect(id).toBe('abc');
     });

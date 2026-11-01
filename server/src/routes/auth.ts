@@ -80,10 +80,22 @@ function openTotpSecret(stored: string, accountId: number): string {
   return stored.includes(':') ? decryptToken(stored, totpAad(accountId)) : stored;
 }
 
+/** Whether this server's key opens a sealed authenticator secret */
+function canOpenTotpSecret(stored: string, accountId: number): boolean {
+  if (!isTokenCryptoConfigured()) return false;
+  try { openTotpSecret(stored, accountId); return true; } catch { return false; }
+}
+
 // Replay protection: a TOTP code is accepted at most once (its time step must
 // be newer than the last one used — raised atomically, so two instances can't
 // both accept it). A day is far longer than any code's window.
 const TOTP_STEP_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Accept the code one 30-second step either side of now (RFC 6238's
+// recommended allowance), for a phone clock a little off or a code typed as
+// it rolled over. otplib's default is 0 — only the exact step — which refused
+// good codes. The step that matched is still the one replay protection raises.
+const TOTP_TOLERANCE_SECONDS = 30;
 
 // Per-account cap on wrong second-factor codes, on top of the per-IP limits,
 // so guesses spread across many IPs still run out
@@ -220,8 +232,10 @@ async function verifySecondFactor(
   // dev server on the live database): every authenticator code would fail, and
   // counting them would lock the owner out everywhere. Refuse as a server error
   // instead, uncounted. Backup codes don't need the key, so they still work.
-  if (/^\d{6}$/.test(code) && account.totpSecret.includes(':') && !isTokenCryptoConfigured()) {
-    throw new Error('SECRETS_ENCRYPTION_KEY is missing or invalid, so this server cannot open authenticator secrets');
+  // The same goes for a key that isn't the one that sealed it (a different
+  // SECRETS_ENCRYPTION_KEY): opening fails, and that is no wrong code either.
+  if (/^\d{6}$/.test(code) && account.totpSecret.includes(':') && !canOpenTotpSecret(account.totpSecret, account.id)) {
+    throw new Error('SECRETS_ENCRYPTION_KEY is missing or is not the key that sealed this authenticator secret');
   }
   const attempt = await sharedState.attempt(TWO_FA_FAILURES, bucket, TWO_FA_MAX_FAILURES, TWO_FA_LOCK_MS);
   if (attempt > TWO_FA_MAX_FAILURES) return null;
@@ -272,7 +286,7 @@ async function checkSecondFactor(
   if (/^\d{6}$/.test(code)) {
     let step: number | null = null;
     try {
-      const result = verifySync({ token: code, secret: openTotpSecret(account.totpSecret, account.id) });
+      const result = verifySync({ token: code, secret: openTotpSecret(account.totpSecret, account.id), epochTolerance: TOTP_TOLERANCE_SECONDS });
       // TOTP results carry timeStep (HOTP's don't — the union covers both)
       if (result.valid && 'timeStep' in result) step = result.timeStep;
     } catch {
@@ -1219,7 +1233,7 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
 
     let step: number | null = null;
     try {
-      const result = verifySync({ token: code, secret });
+      const result = verifySync({ token: code, secret, epochTolerance: TOTP_TOLERANCE_SECONDS });
       if (result.valid) step = 'timeStep' in result ? result.timeStep : 0;
     } catch {
       step = null;

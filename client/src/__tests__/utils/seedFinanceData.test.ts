@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { planFinanceSeed, seedFinanceData } from '../../utils/seedFinanceData.js';
-import { budgetSummary, billPaymentRecords, isReadyToSpend, nextUnpaidDue } from '../../utils/finance.js';
+import { budgetSummary, billPaymentRecords, nextUnpaidDue } from '../../utils/finance.js';
 
 const TODAY = '2026-10-16';
 
@@ -13,8 +13,6 @@ describe('planFinanceSeed', () => {
     for (const e of plan.expenses) expect(catIds.has(e.categoryId!)).toBe(true);
     const potIds = new Set(plan.savings.map(p => p.id));
     for (const g of plan.goals) if (g.savingsPotId) expect(potIds.has(g.savingsPotId)).toBe(true);
-    const billIds = new Set(plan.bills.map(b => b.id));
-    for (const p of plan.paydays) for (const i of p.items) if (i.billId) expect(billIds.has(i.billId)).toBe(true);
   });
 
   it('never records anything in the future', () => {
@@ -35,15 +33,7 @@ describe('planFinanceSeed', () => {
     expect(s.totals.plannedCents).toBeGreaterThan(0);
     expect(s.totals.billsCents).toBeGreaterThan(0);
     expect(s.totals.spendingCents).toBeGreaterThan(0);
-    expect(billPaymentRecords(plan.bills, plan.paydays).length).toBeGreaterThan(30);
-  });
-
-  it('has a closed, fully reconciled payday and an open one', () => {
-    const [prev, latest] = plan.paydays;
-    expect(prev.status).toBe('closed');
-    expect(isReadyToSpend(prev)).toBe(true);
-    expect(latest.status).toBe('open');
-    expect(isReadyToSpend(latest)).toBe(false);
+    expect(billPaymentRecords(plan.bills).length).toBeGreaterThan(30);
   });
 });
 
@@ -53,7 +43,7 @@ describe('seedFinanceData', () => {
     const put = vi.fn(async () => ({}));
     const msg = await seedFinanceData({ encryptRecord, put, today: TODAY });
     const kinds = new Set(put.mock.calls.map(c => (c as unknown[])[0]));
-    expect([...kinds].sort()).toEqual(['bills', 'budget', 'expenses', 'goals', 'paydays', 'savings']);
+    expect([...kinds].sort()).toEqual(['bills', 'budget', 'expenses', 'goals', 'savings']);
     expect(encryptRecord).toHaveBeenCalledTimes(put.mock.calls.length);
     // The row id is never inside the encrypted record
     for (const call of encryptRecord.mock.calls as unknown as [string, string, Record<string, unknown>][]) expect(call[2].id).toBeUndefined();

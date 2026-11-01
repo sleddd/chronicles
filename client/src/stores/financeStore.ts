@@ -11,9 +11,9 @@ export type FinanceLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type Records = { [K in FinanceKind]: FinanceRecord<K>[] };
 
-const KINDS: FinanceKind[] = ['paydays', 'bills', 'budget', 'expenses', 'goals', 'savings'];
+const KINDS: FinanceKind[] = ['bills', 'budget', 'expenses', 'goals', 'savings'];
 
-const emptyRecords = (): Records => ({ paydays: [], bills: [], budget: [], expenses: [], goals: [], savings: [] });
+const emptyRecords = (): Records => ({ bills: [], budget: [], expenses: [], goals: [], savings: [] });
 const noneUnreadable = (): Record<FinanceKind, number> =>
   Object.fromEntries(KINDS.map(k => [k, 0])) as Record<FinanceKind, number>;
 const idleStatus = (): Record<FinanceKind, FinanceLoadStatus> =>

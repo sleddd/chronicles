@@ -16,8 +16,6 @@ interface BudgetTableProps {
   categories: FinanceRecord<'budget'>[];
   bills: FinanceRecord<'bills'>[];
   expenses: FinanceRecord<'expenses'>[];
-  /** Reconcile's paydays (empty when it's off). */
-  paydays: FinanceRecord<'paydays'>[];
   month: string;
   onSave: (category: BudgetCategory & { id?: string }) => Promise<unknown>;
   onDelete: (id: string) => void;
@@ -236,13 +234,13 @@ function PlannedInput({ category, onSave }: { category: FinanceRecord<'budget'>;
  * month (straight from the bills list — paid ones are marked, not counted
  * twice) and what was spent.
  */
-export function BudgetTable({ categories, bills, expenses, paydays, month, onSave, onDelete }: BudgetTableProps) {
+export function BudgetTable({ categories, bills, expenses, month, onSave, onDelete }: BudgetTableProps) {
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [seeding, setSeeding] = useState(false);
 
   const sortedCats = useMemo(() => [...categories].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)), [categories]);
-  const summary = useMemo(() => budgetSummary(sortedCats, bills, expenses, month, paydays), [sortedCats, bills, expenses, month, paydays]);
+  const summary = useMemo(() => budgetSummary(sortedCats, bills, expenses, month), [sortedCats, bills, expenses, month]);
   const committed = useMemo(() => billTotals(bills).monthly, [bills]);
   const nextOrder = sortedCats.reduce((m, c) => Math.max(m, c.order), -1) + 1;
 

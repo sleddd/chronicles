@@ -7,7 +7,6 @@ import {
   Note, StatBoxRow, StatCell, SheetHead, SheetHeading, SheetBox, SHEET_RULE,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
-import { useEntriesStore } from '../stores/entriesStore.js';
 import {
   averagePerMonth, billPaymentRecords, filterPayments, formatCents, formatDay, formatMonth, periodRange, reportSummary,
   todayStr, UNCATEGORIZED, type ReportPeriod,
@@ -216,10 +215,8 @@ export function FinanceReportsView() {
 }
 
 function Reports() {
-  const reconcileOn = useEntriesStore(s => s.featureFlags.reconcileEnabled === true);
   const bills = useFinance('bills');
   const budget = useFinance('budget');
-  const paydays = useFinance('paydays', { enabled: reconcileOn });
 
   const today = todayStr();
   const [query, setQuery] = useState('');
@@ -236,8 +233,8 @@ function Reports() {
   const categories = useMemo(() => [...budget.records].sort((a, b) => a.order - b.order), [budget.records]);
   const catName = (id?: string) => (id ? categories.find(c => c.id === id)?.name : undefined);
   const records = useMemo(
-    () => billPaymentRecords(bills.records, reconcileOn ? paydays.records : []),
-    [bills.records, paydays.records, reconcileOn],
+    () => billPaymentRecords(bills.records),
+    [bills.records],
   );
   const matches = useMemo(
     () => filterPayments(records, { query, kind, categoryId, start: range.start, end: range.end }),
@@ -245,7 +242,7 @@ function Reports() {
   );
   const summary = useMemo(() => reportSummary(matches, range.start, range.end), [matches, range.start, range.end]);
 
-  const statuses = [bills.status, budget.status, ...(reconcileOn ? [paydays.status] : [])];
+  const statuses = [bills.status, budget.status];
   if (statuses.some(s => s === 'idle' || s === 'loading')) return <Center><Spinner size={32} /></Center>;
 
   // Months that have happened since tracking started (same rule wherever an average is shown)
@@ -314,7 +311,7 @@ function Reports() {
 
       {records.length === 0 ? (
         <Note style={{ marginTop: 32 }}>
-          Nothing paid yet. Use Mark paid on Budget &amp; bills{reconcileOn ? ' or add bills to a payday on Reconcile' : ''}, and your payments show up here.
+          Nothing paid yet. Use Mark paid on Budget &amp; bills, and your payments show up here.
         </Note>
       ) : (
         <>
@@ -365,7 +362,7 @@ function Reports() {
                   <DayHead>{formatDay(day)}</DayHead>
                   {rows.map(r => (
                     <PayGrid key={r.key}>
-                      <span>{r.name}{r.source === 'reconcile' && <em>Reconcile</em>}</span>
+                      <span>{r.name}</span>
                       <span>{catName(r.categoryId) ?? '—'}</span>
                       <span>{formatCents(r.amountCents)}</span>
                     </PayGrid>

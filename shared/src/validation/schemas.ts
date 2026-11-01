@@ -226,7 +226,7 @@ export const updatePostSchema = z.object({
 
 // Finance records: one encrypted JSON payload per row, keyed by a client UUID
 // (the UUID is bound into the payload's AAD)
-export const FINANCE_KINDS = ['paydays', 'bills', 'budget', 'expenses', 'goals', 'savings'] as const;
+export const FINANCE_KINDS = ['bills', 'budget', 'expenses', 'goals', 'savings'] as const;
 export type FinanceKind = typeof FINANCE_KINDS[number];
 
 export const financeRecordIdSchema = z.string().uuid('Invalid record id');

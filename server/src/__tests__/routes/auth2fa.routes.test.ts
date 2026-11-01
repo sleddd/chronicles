@@ -216,7 +216,8 @@ describe('2FA hardening', () => {
 
     it('marks the enabling code used, so it cannot then finish a sign-in', async () => {
       const secret = generateSecret();
-      const id = nextAccountId++;
+      // The signed-in account (req.auth): enable seals the secret to it
+      const id = 1;
       (prisma.account.findUnique as any).mockResolvedValue({ id, passwordHash: AUTH_HASH, totpEnabled: false });
       const code = generateSync({ secret });
 
@@ -244,6 +245,18 @@ describe('2FA hardening', () => {
       const replay = await request(app).post('/api/auth/login/2fa')
         .send({ pendingToken: await pendingTokenFor(app, account), code });
       expect(replay.status).toBe(401);
+    });
+
+    it('accepts a code from one step either side (clock drift), but not two', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const now = Math.floor(Date.now() / 1000);
+      const stale = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret, epoch: now - 90 }) });
+      expect(stale.status).toBe(401);
+      const previous = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret, epoch: now - 30 }) });
+      expect(previous.status).toBe(200);
     });
 
     it('keeps the pending token through a wrong code, then spends it on the right one', async () => {
@@ -712,6 +725,27 @@ describe('2FA hardening', () => {
         process.env.SECRETS_ENCRYPTION_KEY = key;
       }
       // With the key back, the right code signs in: nothing was counted
+      const ok = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+      expect(ok.status).toBe(200);
+    }, 30000);
+  });
+
+  describe('a sealed secret on a server with a different key', () => {
+    it('answers a server error and counts nothing, instead of "Invalid code"', async () => {
+      const secret = generateSecret();
+      const account = { ...twoFAAccount(secret), totpSecret: encryptToken(secret) };
+      const key = process.env.SECRETS_ENCRYPTION_KEY;
+      process.env.SECRETS_ENCRYPTION_KEY = crypto.randomBytes(32).toString('base64');
+      try {
+        for (let i = 0; i < 12; i++) {
+          const res = await request(app).post('/api/auth/login/2fa')
+            .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
+          expect(res.status).toBe(500);
+        }
+      } finally {
+        process.env.SECRETS_ENCRYPTION_KEY = key;
+      }
       const ok = await request(app).post('/api/auth/login/2fa')
         .send({ pendingToken: await pendingTokenFor(app, account), code: generateSync({ secret }) });
       expect(ok.status).toBe(200);

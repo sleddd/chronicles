@@ -1,5 +1,5 @@
 import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/ChangeFields.js';
-import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode } from 'react';
 import { PillButton } from '../atoms/PillButton.js';
 import styled from 'styled-components';
 import { cardLabel } from '../../styles/cardLabel.js';
@@ -558,6 +558,12 @@ interface EntryFormProps {
    *  card: the topic pill on top, Format / Draw / Dictate and
    *  Save entry under it (no top bar, images or Delete) */
   variant?: 'journal' | 'quick';
+  /** Quick entry: choices beside the topics (Bill, Spending), the one chosen,
+   *  and what shows in place of the writing area and Save while it's chosen */
+  quickExtras?: { key: string; name: string; icon: string }[];
+  quickExtra?: string | null;
+  onQuickExtra?: (key: string) => void;
+  quickExtraBody?: ReactNode;
 }
 
 export function EntryForm({
@@ -569,6 +575,7 @@ export function EntryForm({
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured, onImageFocus,
   imageUploading = false, imageError, imagesReady = false,
   variant = 'journal',
+  quickExtras, quickExtra = null, onQuickExtra, quickExtraBody,
 }: EntryFormProps) {
   const quick = variant === 'quick';
   // Phones (not tablets): Save / Discard / Delete sit in the page flow, not docked
@@ -1062,9 +1069,11 @@ export function EntryForm({
       <QuickHead>
         <QuickTitle>Quick entry</QuickTitle>
         <QuickTopic>
-          <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon />
+          <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
+            extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
         </QuickTopic>
       </QuickHead>
+      {quickExtra && quickExtraBody ? quickExtraBody : (<>
       {body}
       <QuickFoot>
         <QuickTools aria-label="Entry tools">
@@ -1087,6 +1096,7 @@ export function EntryForm({
         </QuickSaveSide>
       </QuickFoot>
       {saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
+      </>)}
     </QuickCard>
   );
 

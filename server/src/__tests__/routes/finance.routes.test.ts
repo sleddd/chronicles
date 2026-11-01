@@ -4,7 +4,6 @@ import { createTestApp, TEST_AUTH } from './testHelper.js';
 
 vi.mock('../../db/tenantQueries.js', () => ({
   FINANCE_TABLES: {
-    paydays: 'finance_paydays',
     bills: 'finance_bills',
     budget: 'finance_budget_categories',
     expenses: 'finance_expenses',
@@ -53,14 +52,14 @@ describe('Finance Routes', () => {
 
     it('serves every finance kind', async () => {
       (getFinanceRecords as any).mockResolvedValue([]);
-      for (const kind of ['paydays', 'bills', 'budget', 'expenses', 'goals', 'savings']) {
+      for (const kind of ['bills', 'budget', 'expenses', 'goals', 'savings']) {
         const res = await request(app).get(`/api/finance/${kind}`);
         expect(res.status).toBe(200);
       }
     });
 
     it('rejects unknown kinds without touching the DB', async () => {
-      for (const kind of ['posts', 'finance_bills', '__proto__', 'toString']) {
+      for (const kind of ['posts', 'finance_bills', 'paydays', '__proto__', 'toString']) {
         const res = await request(app).get(`/api/finance/${kind}`);
         expect(res.status).toBe(404);
       }
@@ -69,7 +68,7 @@ describe('Finance Routes', () => {
 
     it('returns 500 when the query fails', async () => {
       (getFinanceRecords as any).mockRejectedValue(new Error('db'));
-      const res = await request(app).get('/api/finance/paydays');
+      const res = await request(app).get('/api/finance/goals');
       expect(res.status).toBe(500);
     });
   });

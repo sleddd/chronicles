@@ -4,11 +4,11 @@
  * the server beyond reading the user's own (encrypted) records.
  */
 import { csvCell } from './csv.js';
-import { centsToInput, goalProgress, monthlyEquivalent, nextUnpaidDue, paydaySummary, potBalance, todayStr } from './finance.js';
+import { centsToInput, goalProgress, monthlyEquivalent, nextUnpaidDue, potBalance, todayStr } from './finance.js';
 import { zipTextFiles } from './zip.js';
 import type { FinanceKind, FinanceRecord } from '../types/finance.js';
 
-const KINDS: FinanceKind[] = ['budget', 'bills', 'expenses', 'savings', 'goals', 'paydays'];
+const KINDS: FinanceKind[] = ['budget', 'bills', 'expenses', 'savings', 'goals'];
 
 export interface FinanceExport {
   app: 'chronicles';
@@ -20,7 +20,6 @@ export interface FinanceExport {
   expenses: FinanceRecord<'expenses'>[];
   savings: FinanceRecord<'savings'>[];
   goals: FinanceRecord<'goals'>[];
-  paydays: FinanceRecord<'paydays'>[];
   /** Rows that couldn't be decrypted, per kind (left out of the export). */
   unreadable: Partial<Record<FinanceKind, number>>;
 }
@@ -36,7 +35,7 @@ export async function collectFinanceData(deps: CollectFinanceDeps): Promise<Fina
   const out = {
     app: 'chronicles', kind: 'finance-export', version: 1,
     exportedAt: (deps.now?.() ?? new Date()).toISOString(),
-    budget: [], bills: [], expenses: [], savings: [], goals: [], paydays: [],
+    budget: [], bills: [], expenses: [], savings: [], goals: [],
     unreadable: {},
   } as FinanceExport;
   for (const kind of KINDS) {
@@ -71,7 +70,6 @@ const money = (cents: number) => centsToInput(cents);
 export function financeMovementsCsv(data: FinanceExport): string {
   const catName = new Map(data.budget.map(c => [c.id, c.name]));
   const cat = (id?: string) => (id ? catName.get(id) ?? '' : '');
-  const billById = new Map(data.bills.map(b => [b.id, b]));
   const rows: { date: string; type: string; description: string; category: string; amount: string; details: string }[] = [];
 
   for (const b of data.bills) {
@@ -93,25 +91,6 @@ export function financeMovementsCsv(data: FinanceExport): string {
       });
     }
   }
-  for (const p of data.paydays) {
-    for (const i of p.items) {
-      if (i.carriedOver) continue;
-      const combined = i.combinedCount ? `${i.combinedCount} combined${i.combinedPeriod ? ` (${i.combinedPeriod})` : ''}` : i.combinedPeriod ?? '';
-      rows.push({
-        date: p.date, type: i.direction === 'in' ? 'Payday — coming in' : 'Payday — paying',
-        description: i.description, category: cat(i.categoryId ?? (i.billId ? billById.get(i.billId)?.categoryId : undefined)),
-        amount: money(i.direction === 'in' ? i.amountCents : -i.amountCents),
-        details: [i.clearedOn ? `Cleared ${i.clearedOn}` : 'Not cleared', combined].filter(Boolean).join(' · '),
-      });
-    }
-    for (const sp of p.spending) {
-      rows.push({
-        date: sp.date, type: 'Payday — spending', description: sp.description, category: cat(sp.categoryId),
-        amount: money(-sp.amountCents), details: sp.clearedOn ? `Cleared ${sp.clearedOn}` : 'Not cleared',
-      });
-    }
-  }
-
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type) || a.description.localeCompare(b.description));
   const header = ['Date', 'Type', 'Description', 'Category', 'Amount', 'Details'].join(',');
   // Amount is a number we generate, so it's written as-is (the formula guard
@@ -137,7 +116,6 @@ export function financeExportFiles(data: FinanceExport, today = todayStr()): { n
   const catName = new Map(data.budget.map(c => [c.id, c.name]));
   const cat = (id?: string) => (id ? catName.get(id) ?? '' : '');
   const fundName = new Map(data.savings.map(f => [f.id, f.name]));
-  const billById = new Map(data.bills.map(b => [b.id, b]));
 
   const budget = table(
     ['Category', 'Planned per month', 'Archived', 'Order'],
@@ -191,33 +169,6 @@ export function financeExportFiles(data: FinanceExport, today = todayStr()): { n
     [1, 3, 4],
   );
 
-  const sortedPaydays = [...data.paydays].sort((a, b) => a.date.localeCompare(b.date));
-  const paydays = table(
-    ['Payday', 'Starting balance', 'Paying', 'Coming in', 'Spent', 'Leftover', 'Still waiting', 'Status', 'Closed on', 'Last balance check', 'Note'],
-    sortedPaydays.map(p => {
-      const s = paydaySummary(p);
-      const last = p.balanceChecks[p.balanceChecks.length - 1];
-      return [p.date, money(p.startingBalanceCents), money(s.payingCents), money(s.incomingCents), money(s.spentCents),
-        money(s.leftoverCents), money(s.waitingCents), p.status, p.closedOn ?? '', last ? money(last.balanceCents) : '', p.note ?? ''];
-    }),
-    [1, 2, 3, 4, 5, 6, 9],
-  );
-
-  const paydayLines = table(
-    ['Payday', 'Kind', 'Description', 'Category', 'Amount', 'Cleared on', 'Combined', 'Carried to a later payday'],
-    sortedPaydays.flatMap(p => [
-      ...p.items.map(i => [
-        p.date, i.direction === 'in' ? 'Coming in' : 'Paying', i.description,
-        cat(i.categoryId ?? (i.billId ? billById.get(i.billId)?.categoryId : undefined)),
-        money(i.direction === 'in' ? i.amountCents : -i.amountCents), i.clearedOn ?? '',
-        i.combinedCount ? `${i.combinedCount}${i.combinedPeriod ? ` (${i.combinedPeriod})` : ''}` : i.combinedPeriod ?? '',
-        yesNo(i.carriedOver),
-      ]),
-      ...p.spending.map(sp => [p.date, 'Spending', sp.description, cat(sp.categoryId), money(-sp.amountCents), sp.clearedOn ?? '', '', '']),
-    ]),
-    [4],
-  );
-
   return [
     { name: 'transactions.csv', text: financeMovementsCsv(data) },
     { name: 'budget-categories.csv', text: budget },
@@ -227,8 +178,6 @@ export function financeExportFiles(data: FinanceExport, today = todayStr()): { n
     { name: 'savings-funds.csv', text: funds },
     { name: 'savings-entries.csv', text: fundEntries },
     { name: 'goals.csv', text: goals },
-    { name: 'paydays.csv', text: paydays },
-    { name: 'payday-lines.csv', text: paydayLines },
     { name: 'finance.json', text: financeExportJson(data) },
   ];
 }

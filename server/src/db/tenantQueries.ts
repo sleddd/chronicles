@@ -681,7 +681,6 @@ export async function getPostChanges(schemaName: string, since: string, limit = 
 
 /** Finance kind → table. Table names only ever come from this map. */
 export const FINANCE_TABLES = {
-  paydays: 'finance_paydays',
   bills: 'finance_bills',
   budget: 'finance_budget_categories',
   expenses: 'finance_expenses',

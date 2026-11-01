@@ -4,7 +4,7 @@
  * UTC so no time zone can shift a day.
  */
 import type {
-  Bill, BillFrequency, BudgetCategory, FinanceExpense, FinanceMeta, FinanceGoal, Payday, SavingsPot,
+  Bill, BillFrequency, BudgetCategory, FinanceExpense, FinanceMeta, FinanceGoal, SavingsPot,
 } from '../types/finance.js';
 
 // ── Money ───────────────────────────────────────────────────────────────────
@@ -200,10 +200,10 @@ export function nextUnpaidDue(bill: Bill, today: string): string | null {
 }
 
 /** Record a payment for the next unpaid due date (amount defaults to the bill's). */
-export function markBillPaid<B extends Bill>(bill: B, today: string, id: string, amountCents = bill.amountCents): B {
+export function markBillPaid<B extends Bill>(bill: B, today: string, id: string, amountCents = bill.amountCents, paidAt = new Date().toISOString()): B {
   const forDue = nextUnpaidDue(bill, today);
   if (!forDue) return bill;
-  return { ...bill, payments: [...(bill.payments ?? []), { id, forDue, paidOn: today, amountCents }] };
+  return { ...bill, payments: [...(bill.payments ?? []), { id, forDue, paidOn: today, paidAt, amountCents }] };
 }
 
 /** Remove the most recent payment (Undo). */
@@ -219,110 +219,6 @@ export function latestPayment(bill: Bill) {
   return last ? (bill.payments ?? []).find(p => p.forDue === last) : undefined;
 }
 
-export interface BillSuggestion<B> { bill: B; due: string; /** Due within the window (pre-ticked). */ dueSoon: boolean }
-
-/**
- * Bills to offer when filling a payday: every counting bill not already on it,
- * by next due date from the payday. Those due within `windowDays` are flagged.
- */
-export function suggestBillsForPayday<B extends Bill & FinanceMeta>(
-  bills: B[], payday: Pick<Payday, 'date' | 'items'>, windowDays = 16,
-): BillSuggestion<B>[] {
-  const onIt = new Set(payday.items.map(i => i.billId).filter(Boolean));
-  const out: BillSuggestion<B>[] = [];
-  for (const bill of bills) {
-    if (!billCounts(bill) || onIt.has(bill.id)) continue;
-    // A few days' grace so a bill due just before payday still shows
-    const due = nextDueDate(bill, addDays(payday.date, -5));
-    if (!due) continue;
-    out.push({ bill, due, dueSoon: daysBetween(payday.date, due) <= windowDays });
-  }
-  return out.sort((a, b) => a.due.localeCompare(b.due));
-}
-
-// ── Payday maths ────────────────────────────────────────────────────────────
-
-/** Signed effect on the bank balance (out = negative). */
-function effect(item: { amountCents: number; direction?: 'out' | 'in' }): number {
-  return item.direction === 'in' ? item.amountCents : -item.amountCents;
-}
-
-export interface PaydaySummary {
-  /** Total of the bill/payment lines going out. */
-  payingCents: number;
-  /** Total of lines still to come in. */
-  incomingCents: number;
-  spentCents: number;
-  /** Starting balance − paying + incoming − spending. */
-  leftoverCents: number;
-  /** Net amount that hasn't gone through the bank yet (positive = still to leave). */
-  waitingCents: number;
-  waitingCount: number;
-  /** Starting balance − everything that has cleared: what the bank should show now. */
-  expectedBankCents: number;
-}
-
-/** Lines that still belong to this payday (ones carried to a newer payday don't). */
-function liveItems(p: Payday) {
-  return p.items.filter(i => !i.carriedOver);
-}
-
-export function paydaySummary(p: Payday): PaydaySummary {
-  let paying = 0, incoming = 0, spent = 0, waiting = 0, waitingCount = 0, clearedNet = 0;
-  for (const i of liveItems(p)) {
-    if (i.direction === 'in') incoming += i.amountCents; else paying += i.amountCents;
-    if (i.clearedOn) clearedNet += effect(i);
-    else { waiting -= effect(i); waitingCount++; }
-  }
-  for (const s of p.spending) {
-    spent += s.amountCents;
-    if (s.clearedOn) clearedNet -= s.amountCents;
-    else { waiting += s.amountCents; waitingCount++; }
-  }
-  return {
-    payingCents: paying,
-    incomingCents: incoming,
-    spentCents: spent,
-    leftoverCents: p.startingBalanceCents - paying + incoming - spent,
-    waitingCents: waiting,
-    waitingCount,
-    expectedBankCents: p.startingBalanceCents + clearedNet,
-  };
-}
-
-export interface BalanceCheckResult {
-  expectedCents: number;
-  /** Current − expected: 0 = matches; ≠ 0 = something unlisted went through or an amount differs. */
-  differenceCents: number;
-  matches: boolean;
-  /** Current balance − what's still waiting to go through. */
-  availableCents: number;
-}
-
-export function balanceCheck(p: Payday, currentCents: number): BalanceCheckResult {
-  const s = paydaySummary(p);
-  const differenceCents = currentCents - s.expectedBankCents;
-  return {
-    expectedCents: s.expectedBankCents,
-    differenceCents,
-    matches: differenceCents === 0,
-    availableCents: currentCents - s.waitingCents,
-  };
-}
-
-/** Everything cleared and the latest balance check matches. */
-export function isReadyToSpend(p: Payday): boolean {
-  const s = paydaySummary(p);
-  if (s.waitingCount > 0) return false;
-  const last = p.balanceChecks[p.balanceChecks.length - 1];
-  return !!last && balanceCheck(p, last.balanceCents).matches;
-}
-
-/** Newest payday first. */
-export function sortPaydays<P extends Payday & FinanceMeta>(paydays: P[]): P[] {
-  return [...paydays].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-}
-
 // ── Budget ──────────────────────────────────────────────────────────────────
 
 export const UNCATEGORIZED = '__none__';
@@ -335,7 +231,7 @@ export interface BudgetRow {
   billsCents: number;
   /** Payments marked on those bills for this month's due dates (shown, not subtracted again). */
   paidCents: number;
-  /** Spending logged this month (plus Reconcile spending / one-off lines when it's on). */
+  /** Spending logged this month. */
   spendingCents: number;
   /** Planned − bills − spending. */
   leftCents: number;
@@ -351,18 +247,14 @@ export interface BudgetSummary {
  * - Bills: every due date of an active bill that falls in the month, counted
  *   as soon as the bill is entered (paused and cancelled bills don't count).
  * - Paid: payments marked on bills for those due dates — shown, not counted twice.
- * - Spending: spending lines dated in the month. When Reconcile is on, its
- *   paydays add their spending lines and one-off lines that aren't one of
- *   your bills (a bill line there is already in Bills).
+ * - Spending: spending lines dated in the month.
  */
 export function budgetSummary(
   categories: (BudgetCategory & FinanceMeta)[],
   bills: (Bill & FinanceMeta)[],
   expenses: FinanceExpense[],
   month: string,
-  paydays: Payday[] = [],
 ): BudgetSummary {
-  const billIds = new Set(bills.map(b => b.id));
   const known = new Set(categories.map(c => c.id));
   const bucket = (id: string | undefined) => (id && known.has(id) ? id : UNCATEGORIZED);
   const billsBy = new Map<string, number>();
@@ -383,16 +275,6 @@ export function budgetSummary(
   }
 
   for (const e of expenses) if (inMonth(e.date)) add(spendBy, bucket(e.categoryId), e.amountCents);
-
-  for (const p of paydays) {
-    if (inMonth(p.date)) {
-      for (const i of liveItems(p)) {
-        if (i.direction === 'in' || (i.billId && billIds.has(i.billId))) continue;
-        add(spendBy, bucket(i.categoryId), i.amountCents);
-      }
-    }
-    for (const s of p.spending) if (inMonth(s.date)) add(spendBy, bucket(s.categoryId), s.amountCents);
-  }
 
   const row = (categoryId: string, name: string, plannedCents: number): BudgetRow => {
     const billsCents = billsBy.get(categoryId) ?? 0;
@@ -442,39 +324,24 @@ export function newId(): string {
 
 // ── Reports ─────────────────────────────────────────────────────────────────
 
-/** One bill payment, from Mark paid or (when Reconcile is on) a payday's bill line. */
+/** One bill payment, from Mark paid. */
 export interface BillPaymentRecord {
   key: string;
   billId: string;
   name: string;
   kind: Bill['kind'];
   categoryId?: string;
-  /** The day it was paid (Mark paid: paidOn; Reconcile: the payday). */
+  /** The day it was paid */
   date: string;
   amountCents: number;
-  source: 'marked' | 'reconcile';
 }
 
-/**
- * Every recorded bill payment. Reconcile lines count only for bills that still
- * exist and only when that bill has no Mark-paid payment in the same month,
- * so a bill paid both ways isn't counted twice.
- */
-export function billPaymentRecords(bills: (Bill & FinanceMeta)[], paydays: Payday[] = []): BillPaymentRecord[] {
+/** Every recorded bill payment, oldest first */
+export function billPaymentRecords(bills: (Bill & FinanceMeta)[]): BillPaymentRecord[] {
   const out: BillPaymentRecord[] = [];
-  const markedMonths = new Set<string>();
   for (const b of bills) {
     for (const p of b.payments ?? []) {
-      out.push({ key: `m:${b.id}:${p.id}`, billId: b.id, name: b.name, kind: b.kind, categoryId: b.categoryId, date: p.paidOn, amountCents: p.amountCents, source: 'marked' });
-      markedMonths.add(`${b.id}|${p.paidOn.slice(0, 7)}`);
-    }
-  }
-  const byId = new Map(bills.map(b => [b.id, b]));
-  for (const p of paydays) {
-    for (const i of liveItems(p)) {
-      const b = i.billId ? byId.get(i.billId) : undefined;
-      if (!b || i.direction === 'in' || markedMonths.has(`${b.id}|${p.date.slice(0, 7)}`)) continue;
-      out.push({ key: `r:${i.id}`, billId: b.id, name: b.name, kind: b.kind, categoryId: i.categoryId ?? b.categoryId, date: p.date, amountCents: i.amountCents, source: 'reconcile' });
+      out.push({ key: `m:${b.id}:${p.id}`, billId: b.id, name: b.name, kind: b.kind, categoryId: b.categoryId, date: p.paidOn, amountCents: p.amountCents });
     }
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
