@@ -194,19 +194,13 @@ const SortBox = styled.label`
 `;
 
 /* Tasks / Todos filters: Goal, Milestone, Status pills + Clear, above the board/list */
-/* The filters in one card: pills on the left, Clear completed and ⋯ on the right */
+/* The filters on the page (no card): pills on the left, Clear completed and ⋯ on the right */
 const FilterRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 10px;
   margin-top: 16px;
-  padding: 12px 14px 12px 20px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: var(--bg-surface);
-  html[data-theme='light'] & { background: var(--bg-control, var(--bg-surface)); }
-  @media (max-width: 480px) { padding: 12px; }
 `;
 
 /* A filter pill: "Status  All ⌄" — the name muted, the choice in bold, the
@@ -258,33 +252,11 @@ function FilterPick({ name, value, set, children }: { name: string; value: strin
   );
 }
 
-/* Clear completed: an outlined button with a tick and a count; asks once */
-const ClearDone = styled.button<{ $confirm: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 38px;
-  padding: 0 10px 0 14px;
-  border: 1px solid ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--border-card)')};
-  border-radius: 8px;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--text-primary)')};
-  cursor: pointer;
-  &:hover { border-color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--border-strong)')}; }
-  &:disabled { opacity: 0.6; cursor: default; }
-  em {
-    min-width: 22px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    background: var(--bg-active);
-    font-style: normal;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
+/* Clear completed: the app's neutral outlined pill, with a count; asks once */
+const ClearCount = styled.em`
+  margin-left: 8px;
+  font-style: normal;
+  color: var(--text-muted);
 `;
 
 /* Name a new saved view in place (no pop-up prompts) */
@@ -1024,12 +996,11 @@ export function GoalsView() {
                   </SaveForm>
                 ) : (<>
                   {isTaskTab && completedShown.length > 0 && (
-                    <ClearDone type="button" $confirm={confirmClear} disabled={clearing}
+                    <PillButton type="button" $variant="neutral" disabled={clearing}
                       onClick={() => void clearCompleted()} onBlur={() => !clearing && setConfirmClear(false)}>
-                      <Icon name="check-circle" size={16} strokeWidth={1.8} />
                       {clearing ? 'Clearing…' : confirmClear ? `Delete ${completedShown.length} completed ${doneNoun}?` : 'Clear completed'}
-                      {!confirmClear && !clearing && <em>{completedShown.length}</em>}
-                    </ClearDone>
+                      {!confirmClear && !clearing && <ClearCount>{completedShown.length}</ClearCount>}
+                    </PillButton>
                   )}
                   <ViewMenu label="View options" heading={activeSaved ? 'Saved view' : undefined} items={menuItems} />
                 </>)}
