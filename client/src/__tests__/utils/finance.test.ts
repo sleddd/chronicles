@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseMoney, formatCents, addMonthsClamped, billDueDates, nextDueDate, billOccurrences,
   monthlyEquivalent, billTotals, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
-  nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment, billMonthState, markBillPaidFor, undoPaymentFor,
+  nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment, billMonthState, markBillPaidFor, undoPaymentFor, payPartFor, isDuePaid, leftToPay,
   billPaymentRecords, filterPayments, reportSummary, periodRange, averagePerMonth, primaryBillAction,
 } from '../../utils/finance.js';
 import type { Bill } from '../../types/finance.js';
@@ -95,7 +95,7 @@ describe('mark paid', () => {
     // No payments yet: a bill due in the last week shows (overdue)
     expect(nextUnpaidDue(rent, '2026-10-05')).toBe('2026-10-01');
     expect(nextUnpaidDue(rent, '2026-10-16')).toBe('2026-11-01');
-    const paid = markBillPaid(rent, '2026-10-05', 'p1', undefined, '2026-10-05T12:00:00.000Z');
+    const paid = markBillPaid(rent, '2026-10-05', 'p1', '2026-10-05T12:00:00.000Z');
     expect(paid.payments).toEqual([{ id: 'p1', forDue: '2026-10-01', paidOn: '2026-10-05', paidAt: '2026-10-05T12:00:00.000Z', amountCents: 120000 }]);
     expect(nextUnpaidDue(paid, '2026-10-05')).toBe('2026-11-01');
     // Paying early covers the next one
@@ -285,7 +285,7 @@ describe('billMonthState', () => {
   const b = bill({ dueDate: '2026-01-15', payments: [{ id: 'p', forDue: '2026-10-15', paidOn: '2026-10-16', amountCents: 120000 }] });
   it('reads the month on screen', () => {
     expect(billMonthState(b, '2026-10', '2026-11-01')).toMatchObject({ kind: 'paid', due: '2026-10-15' });
-    expect(billMonthState(b, '2026-11', '2026-11-01')).toEqual({ kind: 'unpaid', due: '2026-11-15' });
+    expect(billMonthState(b, '2026-11', '2026-11-01')).toEqual({ kind: 'unpaid', due: '2026-11-15', paidCents: 0, leftCents: 120000 });
     expect(billMonthState(bill({ frequency: 'quarterly', dueDate: '2026-01-15' }), '2026-11', '2026-11-01')).toEqual({ kind: 'none', due: '2027-01-15' });
     expect(billMonthState(bill({ status: 'paused' }), '2026-11', '2026-11-01')).toEqual({ kind: 'none', due: null });
   });
@@ -294,5 +294,33 @@ describe('billMonthState', () => {
     expect(paid.payments!.map(p => p.forDue)).toEqual(['2026-10-15', '2026-11-15']);
     expect(markBillPaidFor(paid, '2026-11-15', '2026-11-02', 'r')).toBe(paid);
     expect(undoPaymentFor(paid, '2026-10-15').payments!.map(p => p.forDue)).toEqual(['2026-11-15']);
+  });
+});
+
+describe('part payments', () => {
+  const b = bill({ amountCents: 10000, dueDate: '2026-01-15' });
+  it('counts parts toward one due date and pays it once they add up', () => {
+    const one = payPartFor(b, '2026-11-15', 4000, '2026-11-01', 'a', 'T1');
+    expect(one.payments![0].partial).toBe(true);
+    expect(isDuePaid(one, '2026-11-15')).toBe(false);
+    expect(leftToPay(one, '2026-11-15')).toBe(6000);
+    expect(billMonthState(one, '2026-11', '2026-11-01')).toEqual({ kind: 'unpaid', due: '2026-11-15', paidCents: 4000, leftCents: 6000 });
+    expect(nextUnpaidDue(one, '2026-11-01')).toBe('2026-11-15');
+    const two = payPartFor(one, '2026-11-15', 6000, '2026-11-03', 'b', 'T2');
+    expect(isDuePaid(two, '2026-11-15')).toBe(true);
+    expect(two.payments![1].partial).toBeUndefined();
+    expect(nextUnpaidDue(two, '2026-11-03')).toBe('2026-12-15');
+  });
+  it('Mark paid pays only the rest, and Undo takes off the latest payment', () => {
+    const part = payPartFor(b, '2026-11-15', 2500, '2026-11-01', 'a', 'T1');
+    const rest = markBillPaidFor(part, '2026-11-15', '2026-11-02', 'b', 'T2');
+    expect(rest.payments!.map(p => p.amountCents)).toEqual([2500, 7500]);
+    expect(isDuePaid(rest, '2026-11-15')).toBe(true);
+    const undone = undoPaymentFor(rest, '2026-11-15');
+    expect(undone.payments!.map(p => p.id)).toEqual(['a']);
+  });
+  it('a full payment stays paid when the bill amount goes up later', () => {
+    const paid = markBillPaidFor(b, '2026-10-15', '2026-10-15', 'a', 'T');
+    expect(isDuePaid({ ...paid, amountCents: 12000 }, '2026-10-15')).toBe(true);
   });
 });

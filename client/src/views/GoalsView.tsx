@@ -664,6 +664,8 @@ export function GoalsView() {
   const [naming, setNaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Renaming the saved view that's showing: its id while the name box is open
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   useEffect(() => {
     loadPrivateSettings().then(map => setSavedViews(parseSavedViews(map.planningViews))).catch(() => {});
   }, [loadPrivateSettings]);
@@ -702,7 +704,7 @@ export function GoalsView() {
   const openSaved = (id: string) => {
     const v = savedViews.find(x => x.id === id);
     if (!v) return;
-    setNaming(false); setConfirmDelete(false);
+    setNaming(false); setConfirmDelete(false); setRenamingId(null);
     if (v.tab === tab) applyView(v);
     else { pendingView.current = v; navigate(PLAN_TAB_PATHS[v.tab]); }
   };
@@ -713,6 +715,20 @@ export function GoalsView() {
     const others = savedViews.filter(v => v.name.toLowerCase() !== name.toLowerCase()); // same name = replace
     persistViews([...others, { id: crypto.randomUUID(), name, ...current }]);
     setNaming(false); setNewName('');
+  };
+  // Another saved view already called this (renaming never replaces one)
+  const nameTaken = (name: string, id: string) => savedViews.some(v => v.id !== id && v.name.toLowerCase() === name.trim().toLowerCase());
+  const startRename = () => {
+    if (!activeSaved) return;
+    setRenamingId(activeSaved.id); setNewName(activeSaved.name); setConfirmDelete(false);
+  };
+  const cancelRename = () => { setRenamingId(null); setNewName(''); };
+  const renameActive = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!renamingId || !name || nameTaken(name, renamingId)) return;
+    persistViews(savedViews.map(v => (v.id === renamingId ? { ...v, name } : v)));
+    cancelRename();
   };
   const deleteActive = () => {
     if (!activeSaved) return;
@@ -926,7 +942,7 @@ export function GoalsView() {
               {filtersSet && <ClearBtn type="button" onClick={clearFilters}>Clear</ClearBtn>}
               </>)}
               <RowEnd>
-                {isTaskTab && completedShown.length > 0 && !naming && (
+                {isTaskTab && completedShown.length > 0 && !naming && !renamingId && (
                   <ClearBtn type="button" disabled={clearing} onClick={() => void clearCompleted()} onBlur={() => !clearing && setConfirmClear(false)}>
                     {clearing ? 'Clearing…' : confirmClear
                       ? `Delete ${completedShown.length} completed ${completedShown.length === 1 ? (tab === 'todos' ? 'todo' : 'task') : tab}?`
@@ -940,10 +956,22 @@ export function GoalsView() {
                     <ClearBtn type="submit" disabled={!newName.trim()}>Save</ClearBtn>
                     <ClearBtn type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</ClearBtn>
                   </SaveForm>
+                ) : renamingId && activeSaved?.id === renamingId ? (
+                  <SaveForm onSubmit={renameActive}>
+                    <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Escape') cancelRename(); }}
+                      placeholder="Name this view" aria-label="New name for this view" maxLength={60} />
+                    <ClearBtn type="submit" disabled={!newName.trim() || nameTaken(newName, renamingId)}
+                      title={nameTaken(newName, renamingId) ? 'Another view already has this name' : undefined}>Rename</ClearBtn>
+                    <ClearBtn type="button" onClick={cancelRename}>Cancel</ClearBtn>
+                  </SaveForm>
                 ) : activeSaved ? (
-                  <ClearBtn type="button" onClick={deleteActive} onBlur={() => setConfirmDelete(false)}>
-                    {confirmDelete ? `Delete “${activeSaved.name}”?` : 'Delete view'}
-                  </ClearBtn>
+                  <>
+                    <ClearBtn type="button" onClick={startRename}>Rename view</ClearBtn>
+                    <ClearBtn type="button" onClick={deleteActive} onBlur={() => setConfirmDelete(false)}>
+                      {confirmDelete ? `Delete “${activeSaved.name}”?` : 'Delete view'}
+                    </ClearBtn>
+                  </>
                 ) : hasSetup ? (
                   <ClearBtn type="button" onClick={() => { setNaming(true); setConfirmDelete(false); }}>Save view</ClearBtn>
                 ) : null}

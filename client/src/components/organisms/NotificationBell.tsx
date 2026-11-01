@@ -17,7 +17,7 @@ import { useFinance } from '../../hooks/useFinance.js';
 import { useSaveFields } from '../../hooks/useSaveFields.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { occurrencesBetween, repeatRuleOf } from '../../utils/recurrence.js';
-import { billCounts, nextUnpaidDue, markBillPaid, formatCents, newId } from '../../utils/finance.js';
+import { billCounts, nextUnpaidDue, markBillPaid, formatCents, newId, leftToPay, paidToward } from '../../utils/finance.js';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import type { FinanceRecord } from '../../types/finance.js';
 import { toDateStr } from '../../utils/dateUtils.js';
@@ -281,7 +281,7 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar'; trigger?: (p: Bel
     .filter(b => billCounts(b))
     .flatMap(b => {
       const due = nextUnpaidDue(b, today);
-      return due ? [{ id: b.id, name: b.name, due, detail: formatCents(b.amountCents), bill: b }] : [];
+      return due ? [{ id: b.id, name: b.name, due, detail: paidToward(b, due) > 0 ? `${formatCents(leftToPay(b, due))} left` : formatCents(b.amountCents), bill: b }] : [];
     }), [bills.records, financeOn, today]);
 
   const all = isUnlocked

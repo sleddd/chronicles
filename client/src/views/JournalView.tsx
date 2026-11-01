@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { duplicateEntryFields } from '../utils/entryDuplicate.js';
 import { nextPrompt } from '../utils/journalPrompts.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
@@ -960,6 +961,28 @@ export function JournalView() {
   }, []);
 
   /** Toggle bookmark on the currently open entry (from EntryForm toolbar) */
+  // Duplicate (⋯ More): finish saving the original, then open a copy as a
+  // new entry — same topic, text and fields, a fresh start (utils/entryDuplicate)
+  const handleDuplicate = useCallback(async () => {
+    if (!entryIdRef.current) return;
+    const content = editorContent;
+    const topic = editorTopicId;
+    const fields = duplicateEntryFields(customFields);
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      const session = editSessionRef.current;
+      await runSave(async () => { if (editSessionRef.current === session) await autoSaveDoRef.current(); });
+    }
+    setSelectedEntryId(null);
+    setPendingEntryDate(null);
+    setPendingNewTopicId(topic);
+    setPendingNewFields(fields);
+    showBlankEntry(topic, fields);
+    setEditorContent(content);
+    setShowMobileEditor(true);
+  }, [editorContent, editorTopicId, customFields, runSave, setSelectedEntryId, showBlankEntry]);
+
   const handleBookmark = useCallback(async () => {
     if (!selectedEntryId) return;
     const entry = decryptedEntries.find(e => e.id === selectedEntryId);
@@ -1108,6 +1131,7 @@ export function JournalView() {
               onNew={handleNew}
               onBookmark={handleBookmark}
               onShare={entryImages.length > 0 && !isRecipeEntry ? undefined : () => setShareOpen(true)}
+              onDuplicate={() => void handleDuplicate()}
               onBack={handleMobileBack}
               // Plain journal: expand only on request; edit view (from another page) is already full screen
               expanded={editorExpanded}

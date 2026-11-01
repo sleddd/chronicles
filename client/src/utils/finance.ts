@@ -180,10 +180,27 @@ export function billTotals(bills: Bill[]): BillTotals {
 
 // ── Mark paid (payments recorded on the bill only) ──────────────────────────
 
-/** The latest due date a recorded payment covers. */
+/** What's been paid toward one due date */
+export function paidToward(bill: Bill, forDue: string): number {
+  return (bill.payments ?? []).reduce((t, p) => (p.forDue === forDue ? t + p.amountCents : t), 0);
+}
+
+/** Whether a due date is paid: a full payment, or parts adding up to the bill */
+export function isDuePaid(bill: Bill, forDue: string): boolean {
+  const mine = (bill.payments ?? []).filter(p => p.forDue === forDue);
+  if (!mine.length) return false;
+  return mine.some(p => !p.partial) || paidToward(bill, forDue) >= bill.amountCents;
+}
+
+/** What's still owed on a due date (0 once it's paid) */
+export function leftToPay(bill: Bill, forDue: string): number {
+  return isDuePaid(bill, forDue) ? 0 : Math.max(0, bill.amountCents - paidToward(bill, forDue));
+}
+
+/** The latest due date that's paid (part payments count once they add up). */
 export function lastPaidDue(bill: Bill): string | undefined {
   let last: string | undefined;
-  for (const p of bill.payments ?? []) if (!last || p.forDue > last) last = p.forDue;
+  for (const p of bill.payments ?? []) if ((!last || p.forDue > last) && isDuePaid(bill, p.forDue)) last = p.forDue;
   return last;
 }
 
@@ -199,11 +216,12 @@ export function nextUnpaidDue(bill: Bill, today: string): string | null {
   return last ? nextDueDate(bill, addDays(last, 1)) : nextDueDate(bill, addDays(today, -7));
 }
 
-/** Record a payment for the next unpaid due date (amount defaults to the bill's). */
-export function markBillPaid<B extends Bill>(bill: B, today: string, id: string, amountCents = bill.amountCents, paidAt = new Date().toISOString()): B {
+/** Record a payment for the next unpaid due date: what's left of it (all of
+ *  it, unless part was paid already). */
+export function markBillPaid<B extends Bill>(bill: B, today: string, id: string, paidAt = new Date().toISOString()): B {
   const forDue = nextUnpaidDue(bill, today);
   if (!forDue) return bill;
-  return { ...bill, payments: [...(bill.payments ?? []), { id, forDue, paidOn: today, paidAt, amountCents }] };
+  return markBillPaidFor(bill, forDue, today, id, paidAt);
 }
 
 /** Remove the most recent payment (Undo). */
@@ -215,13 +233,26 @@ export function undoLastPayment<B extends Bill>(bill: B): B {
 
 /** Record a payment for one particular due date (the month on screen's) */
 export function markBillPaidFor<B extends Bill>(bill: B, forDue: string, today: string, id: string, paidAt = new Date().toISOString()): B {
-  if ((bill.payments ?? []).some(p => p.forDue === forDue)) return bill;
-  return { ...bill, payments: [...(bill.payments ?? []), { id, forDue, paidOn: today, paidAt, amountCents: bill.amountCents }] };
+  if (isDuePaid(bill, forDue)) return bill;
+  const amountCents = bill.amountCents - paidToward(bill, forDue);
+  return { ...bill, payments: [...(bill.payments ?? []), { id, forDue, paidOn: today, paidAt, amountCents: Math.max(0, amountCents) }] };
 }
 
-/** Remove the payment for one due date */
+/** Pay part of one due date's bill (Pay part). Paying the rest or more pays it. */
+export function payPartFor<B extends Bill>(bill: B, forDue: string, amountCents: number, today: string, id: string, paidAt = new Date().toISOString()): B {
+  if (amountCents <= 0 || isDuePaid(bill, forDue)) return bill;
+  const payment = amountCents >= leftToPay(bill, forDue)
+    ? { id, forDue, paidOn: today, paidAt, amountCents }
+    : { id, forDue, paidOn: today, paidAt, amountCents, partial: true };
+  return { ...bill, payments: [...(bill.payments ?? []), payment] };
+}
+
+/** Undo the latest payment toward one due date (a part payment comes off one at a time) */
 export function undoPaymentFor<B extends Bill>(bill: B, forDue: string): B {
-  return { ...bill, payments: (bill.payments ?? []).filter(p => p.forDue !== forDue) };
+  const mine = (bill.payments ?? []).filter(p => p.forDue === forDue);
+  if (!mine.length) return bill;
+  const last = mine.reduce((a, b) => ((b.paidAt ?? b.paidOn) >= (a.paidAt ?? a.paidOn) ? b : a));
+  return { ...bill, payments: (bill.payments ?? []).filter(p => p !== last) };
 }
 
 /**
@@ -234,7 +265,8 @@ export function undoPaymentFor<B extends Bill>(bill: B, forDue: string): B {
  */
 export type BillMonthState =
   | { kind: 'paid'; due: string; payment: BillPayment }
-  | { kind: 'unpaid'; due: string }
+  /** paidCents: part paid so far, leftCents: what's still owed */
+  | { kind: 'unpaid'; due: string; paidCents: number; leftCents: number }
   | { kind: 'none'; due: string | null };
 
 export function billMonthState(bill: Bill, month: string, today: string): BillMonthState {
@@ -242,10 +274,9 @@ export function billMonthState(bill: Bill, month: string, today: string): BillMo
     const start = `${month}-01`;
     const end = addDays(addMonthsClamped(start, 1), -1);
     const dues = billDueDates(bill, start, end);
-    const paidFor = new Map((bill.payments ?? []).map(p => [p.forDue, p]));
-    const unpaid = dues.find(d => !paidFor.has(d));
-    if (unpaid) return { kind: 'unpaid', due: unpaid };
-    if (dues.length) { const due = dues[dues.length - 1]; return { kind: 'paid', due, payment: paidFor.get(due)! }; }
+    const unpaid = dues.find(d => !isDuePaid(bill, d));
+    if (unpaid) return { kind: 'unpaid', due: unpaid, paidCents: paidToward(bill, unpaid), leftCents: leftToPay(bill, unpaid) };
+    if (dues.length) { const due = dues[dues.length - 1]; return { kind: 'paid', due, payment: latestPaymentFor(bill, due)! }; }
   }
   return { kind: 'none', due: billCounts(bill) ? nextUnpaidDue(bill, today) : null };
 }
@@ -253,7 +284,14 @@ export function billMonthState(bill: Bill, month: string, today: string): BillMo
 /** The payment covering the latest due date, if any. */
 export function latestPayment(bill: Bill) {
   const last = lastPaidDue(bill);
-  return last ? (bill.payments ?? []).find(p => p.forDue === last) : undefined;
+  return last ? latestPaymentFor(bill, last) : undefined;
+}
+
+/** The most recent payment toward one due date */
+function latestPaymentFor(bill: Bill, forDue: string): BillPayment | undefined {
+  let latest: BillPayment | undefined;
+  for (const p of bill.payments ?? []) if (p.forDue === forDue && (!latest || (p.paidAt ?? p.paidOn) >= (latest.paidAt ?? latest.paidOn))) latest = p;
+  return latest;
 }
 
 // ── Budget ──────────────────────────────────────────────────────────────────

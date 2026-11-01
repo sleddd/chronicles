@@ -10,7 +10,7 @@ const bill = (over: Partial<Bill> = {}): Bill => ({
 
 describe('current balance', () => {
   it('takes off bills paid and spending logged after it was set', () => {
-    const paid = markBillPaid(bill(), '2026-11-01', 'p1', 9500, '2026-11-01T16:00:00.000Z');
+    const paid = markBillPaid(bill(), '2026-11-01', 'p1', '2026-11-01T16:00:00.000Z');
     const r = balanceNow(snap, [paid], [
       { date: '2026-11-01', description: 'Groceries', amountCents: 4200, createdAt: '2026-11-01T17:00:00.000Z' },
       { date: '2026-10-30', description: 'Before it was set', amountCents: 999, createdAt: '2026-10-30T12:00:00.000Z' },
@@ -19,7 +19,7 @@ describe('current balance', () => {
   });
 
   it('puts a payment back when it is undone (worked out from the records)', () => {
-    const paid = markBillPaid(bill(), '2026-11-01', 'p1', 9500, '2026-11-01T16:00:00.000Z');
+    const paid = markBillPaid(bill(), '2026-11-01', 'p1', '2026-11-01T16:00:00.000Z');
     expect(balanceNow(snap, [undoLastPayment(paid)], []).cents).toBe(200000);
   });
 

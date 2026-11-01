@@ -155,6 +155,14 @@ vi.mock('@dnd-kit/sortable', () => ({
   verticalListSortingStrategy: {},
 }));
 
+const { privateMap, savePrivateSetting } = vi.hoisted(() => ({
+  privateMap: { current: {} as Record<string, unknown> },
+  savePrivateSetting: vi.fn(async () => {}),
+}));
+vi.mock('@/services/privateSettings', () => ({
+  usePrivateSettings: () => ({ savePrivateSetting, loadPrivateSettings: async () => privateMap.current }),
+}));
+
 describe('GoalsView', () => {
   it('renders without crashing', () => {
     renderWithTheme(<GoalsView />);
@@ -230,5 +238,31 @@ describe('GoalsView (loading)', () => {
   it('shows loading spinner', () => {
     renderWithTheme(<GoalsView />);
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
+  });
+});
+
+describe('GoalsView saved views', () => {
+  const view = { id: 'v1', name: 'By title', tab: 'goals', view: 'list', query: '', sort: 'title', goalId: null, milestoneId: null, status: '' };
+  beforeEach(() => {
+    try { localStorage.clear(); sessionStorage.clear(); localStorage.setItem('planning-view-v1', JSON.stringify({ goals: 'list' })); } catch { /* none */ }
+    privateMap.current = { planningViews: [view, { ...view, id: 'v2', name: 'Other', sort: 'oldest' }] };
+    entriesState.decryptedEntries = [{ id: 10, content: 'Run a 10k', metadata: { _taxonomyId: 1, _customFields: { goalObjective: 'Run a 10k' } }, createdAt: new Date(), updatedAt: new Date() }];
+    savePrivateSetting.mockClear();
+    vi.mocked(useInitializeData).mockReturnValue({ isReady: true, isLoading: false, needsUnlock: false, handleUnlock: vi.fn() } as any);
+  });
+  afterEach(() => { entriesState.decryptedEntries = []; privateMap.current = {}; });
+
+  it('renames the saved view that is showing, and never onto another view’s name', async () => {
+    renderWithTheme(<GoalsView />);
+    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'title' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename view' }));
+    const box = screen.getByLabelText('New name for this view');
+    expect(box).toHaveValue('By title');
+    fireEvent.change(box, { target: { value: 'other' } });
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled();
+    fireEvent.change(box, { target: { value: 'A to Z' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    expect(savePrivateSetting).toHaveBeenCalledWith('planningViews', [{ ...view, name: 'A to Z' }, expect.objectContaining({ id: 'v2', name: 'Other' })]);
+    expect(screen.getByRole('button', { name: 'Rename view' })).toBeInTheDocument();
   });
 });

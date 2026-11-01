@@ -6,7 +6,7 @@
    month. The snapshot is the encrypted setting `financeBalance`. Pure. */
 
 import type { Bill, FinanceExpense, FinanceMeta } from '../types/finance.js';
-import { addDays, addMonthsClamped, billCounts, billDueDates, nextUnpaidDue } from './finance.js';
+import { addDays, addMonthsClamped, billCounts, billDueDates, leftToPay, nextUnpaidDue } from './finance.js';
 
 export interface BalanceSnapshot {
   amountCents: number;
@@ -60,7 +60,10 @@ export function billsStillDue<B extends Bill>(bills: B[], today: string): { cent
     if (!billCounts(bill)) continue;
     const first = nextUnpaidDue(bill, today);
     if (!first || first > through) continue;
-    for (const due of billDueDates(bill, first, through)) items.push({ bill, due, amountCents: bill.amountCents });
+    for (const due of billDueDates(bill, first, through)) {
+      const left = leftToPay(bill, due);
+      if (left > 0) items.push({ bill, due, amountCents: left });
+    }
   }
   items.sort((a, b) => a.due.localeCompare(b.due));
   return { cents: items.reduce((t, i) => t + i.amountCents, 0), items, through };

@@ -528,6 +528,8 @@ interface EntryFormProps {
   onNew: () => void;
   onBookmark?: () => void;
   onShare?: () => void;
+  /** Duplicate: open a copy as a new entry (⋯ More) */
+  onDuplicate?: () => void;
   onBack?: () => void;
   /** Recipe view actions (injected by JournalView) */
   /** Full-screen editor toggle in the toolbar (journal only — other views open expanded) */
@@ -569,7 +571,7 @@ interface EntryFormProps {
 export function EntryForm({
   entryId, content, onContentChange, topicId, onTopicChange, topics,
   customFields, onCustomFieldsChange, onSave, onAutoSave, onDelete, onNew,
-  onBookmark, onShare, onBack, expanded, onToggleExpand, onClose,
+  onBookmark, onShare, onDuplicate, onBack, expanded, onToggleExpand, onClose,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured, onImageFocus,
@@ -1174,7 +1176,7 @@ export function EntryForm({
               >
                 <Icon name="type" size={20} strokeWidth={1.8} />
               </IconBtn>
-              {/* ⋯ More: Dictate, Share and Draw */}
+              {/* ⋯ More: Dictate, Share, Duplicate and Draw */}
               <MoreWrap ref={moreRef}>
                 <IconBtn
                   type="button"
@@ -1205,6 +1207,16 @@ export function EntryForm({
                           : images.length > 0 && !isRecipe ? <MoreHint>Not for entries with images</MoreHint> : null}
                       </MoreText>
                     </MoreItem>
+                    {onDuplicate && (
+                      <MoreItem type="button" role="menuitem" disabled={!entryId}
+                        onClick={() => { setMoreOpen(false); if (entryId) onDuplicate(); }}>
+                        <Icon name="copy" size={16} strokeWidth={1.8} />
+                        <MoreText>
+                          Duplicate
+                          {!entryId && <MoreHint>Save the entry first</MoreHint>}
+                        </MoreText>
+                      </MoreItem>
+                    )}
                     <MoreItem type="button" role="menuitem"
                       onClick={() => { setMoreOpen(false); setNotesExpanded(true); drawingControlRef.current?.open(); }}>
                       <Icon name="pencil" size={16} strokeWidth={1.8} />

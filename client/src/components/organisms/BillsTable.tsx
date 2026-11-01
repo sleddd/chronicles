@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import { FormField } from '../molecules/FormField.js';
@@ -9,6 +9,7 @@ import {
 import {
   billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
   newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, type BillMonthState,
+  isDuePaid, leftToPay, payPartFor,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
 
@@ -40,21 +41,85 @@ const HeadRight = styled.div`
 /* name + "Bill · Category" | amount (its own: "/quarter") | due | Mark paid | ⋯ */
 const BillLine = styled.div<{ $muted?: boolean }>`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 130px 170px 96px 32px;
+  grid-template-columns: minmax(0, 1fr) 130px 170px 136px;
   align-items: center;
   gap: 16px;
   padding: 14px 20px 14px 28px;
   font-family: var(--font-sans);
   color: ${({ $muted }) => ($muted ? 'var(--text-muted)' : 'var(--text-secondary)')};
-  & + & { border-top: 1px solid ${SHEET_RULE}; }
+  & + &, form + & { border-top: 1px solid ${SHEET_RULE}; }
   @media (max-width: 760px) {
     grid-template-columns: minmax(0, 1fr) auto;
     padding: 12px 16px;
     & > :nth-child(3) { grid-column: 1; }
     & > :nth-child(4) { grid-column: 2; grid-row: 2; justify-self: end; }
-    & > :nth-child(5) { display: none; }
   }
 `;
+
+/* The main action and the ⋯ menu, together (so phones keep the menu too) */
+const ActionsCell = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+`;
+
+/* Pay part: one outlined row under the bill — what's left, $ amount, Pay, Cancel */
+const PartForm = styled.form`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 4px 20px 16px 28px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    width: 160px;
+    padding: 0 14px;
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    color: var(--text-muted);
+  }
+  label:focus-within { border-color: var(--color-accent-line); }
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font: inherit;
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+  @media (max-width: 760px) { padding: 4px 16px 14px; }
+`;
+
+function PayPartForm({ bill, due, today, onPay, onCancel }: {
+  bill: BillRecord;
+  due: string;
+  today: string;
+  onPay: (cents: number) => void;
+  onCancel: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const cents = parseMoney(amount);
+  const left = leftToPay(bill, due);
+  const valid = cents !== null && cents > 0;
+  return (
+    <PartForm aria-label={`Pay part of ${bill.name}`} onSubmit={e => { e.preventDefault(); if (valid) onPay(cents!); }}>
+      <span>Pay part of the {formatShort(due, today)} bill · {formatCents(left)} left</span>
+      <label>$<input autoFocus inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" aria-label="Amount paid"
+        onKeyDown={e => { if (e.key === 'Escape') onCancel(); }} /></label>
+      <PillButton type="submit" disabled={!valid}>Pay</PillButton>
+      <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>
+    </PartForm>
+  );
+}
 
 const BillName = styled.div`
   min-width: 0;
@@ -232,12 +297,14 @@ export function BillEditor({ bill, categories, onSave, onCancel }: {
 
 /* ── Row actions: one main action that fits the bill's state, Edit, and a ⋯ menu ── */
 
-function BillActions({ bill, state, today, onSave, onEdit, onStatus, onDelete }: {
+function BillActions({ bill, state, today, onSave, onEdit, onPayPart, onStatus, onDelete }: {
   bill: BillRecord;
   state: BillMonthState;
   today: string;
   onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
   onEdit: () => void;
+  /** Open Pay part for this due date */
+  onPayPart: (due: string) => void;
   onStatus: (status: BillStatus) => void;
   onDelete: () => void;
 }) {
@@ -254,6 +321,9 @@ function BillActions({ bill, state, today, onSave, onEdit, onStatus, onDelete }:
   const paid = latestPayment(bill);
 
   const menu: RowMenuItem[] = [{ label: 'Edit', onSelect: onEdit }];
+  // Pay part of the bill the row shows (this month's, else the next one)
+  const partDue = state.kind === 'unpaid' ? state.due : state.kind === 'none' ? state.due : null;
+  if (partDue && !isDuePaid(bill, partDue)) menu.push({ label: `Pay part of the ${formatDay(partDue).replace(/, \d{4}$/, '')} bill`, onSelect: () => onPayPart(partDue) });
   if (state.kind === 'none' && state.due && !primary) menu.push({ label: `Mark paid early (due ${formatDay(state.due)})`, onSelect: () => markPaid(state.due!) });
   if (paid && !(state.kind === 'paid' && state.due === paid.forDue)) {
     menu.push({ label: `Undo the ${formatDay(paid.forDue).replace(/, \d{4}$/, '')} payment`, onSelect: () => undoPaid(paid.forDue) });
@@ -265,10 +335,10 @@ function BillActions({ bill, state, today, onSave, onEdit, onStatus, onDelete }:
   menu.push({ label: 'Delete', danger: true, confirmLabel: 'Click again to delete', onSelect: onDelete });
 
   return (
-    <>
-      {primary ? <RowBtn type="button" onClick={primary.run}>{primary.label}</RowBtn> : <span />}
+    <ActionsCell>
+      {primary && <RowBtn type="button" onClick={primary.run}>{primary.label}</RowBtn>}
       <RowMenu label={`More actions for ${bill.name}`} items={menu} />
-    </>
+    </ActionsCell>
   );
 }
 
@@ -289,6 +359,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 export function BillsTable({ bills, categories, month, onSave, onDelete }: BillsTableProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const [payingPart, setPayingPart] = useState<{ billId: string; due: string } | null>(null);
   const today = todayStr();
   const catName = (id?: string) => (id ? categories.find(c => c.id === id)?.name : undefined);
 
@@ -314,10 +385,12 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
     // This month's bill, paid: its date and when it was paid
     if (state.kind === 'paid') return <Due>{short}<small>Paid {formatShort(state.payment.paidOn, today)}</small></Due>;
     const days = daysBetween(today, due);
-    if (days < 0) return <Due><DueBadge $tone="overdue">Overdue · {short}</DueBadge></Due>;
-    if (days === 0) return <Due><DueBadge $tone="soon">Due today</DueBadge></Due>;
-    if (days === 1) return <Due><DueBadge $tone="soon">Due tomorrow</DueBadge></Due>;
-    if (state.kind === 'unpaid') return <Due>{short}</Due>;
+    const part = state.kind === 'unpaid' && state.paidCents > 0
+      ? <small>{formatCents(state.paidCents)} paid · {formatCents(state.leftCents)} left</small> : null;
+    if (days < 0) return <Due><DueBadge $tone="overdue">Overdue · {short}</DueBadge>{part}</Due>;
+    if (days === 0) return <Due><DueBadge $tone="soon">Due today</DueBadge>{part}</Due>;
+    if (days === 1) return <Due><DueBadge $tone="soon">Due tomorrow</DueBadge>{part}</Due>;
+    if (state.kind === 'unpaid') return <Due>{short}{part}</Due>;
     // Nothing due this month: its next date, and the last bill paid if recent
     const last = latestPayment(bill);
     return (
@@ -358,7 +431,8 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
             <BillEditor bill={bill} categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />
           </div>
         ) : (
-          <BillLine key={bill.id} $muted={!billCounts(bill)}>
+          <Fragment key={bill.id}>
+          <BillLine $muted={!billCounts(bill)}>
             <BillName>
               {bill.name}
               {bill.status === 'paused' && <TagNote>Paused</TagNote>}
@@ -375,10 +449,16 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
               today={today}
               onSave={onSave}
               onEdit={() => setEditing(bill.id)}
+              onPayPart={due => setPayingPart({ billId: bill.id, due })}
               onStatus={status => setStatus(bill, status)}
               onDelete={() => onDelete(bill.id)}
             />
           </BillLine>
+          {payingPart?.billId === bill.id && (
+            <PayPartForm bill={bill} due={payingPart.due} today={today} onCancel={() => setPayingPart(null)}
+              onPay={cents => { void onSave(payPartFor(bill, payingPart.due, cents, today, newId())); setPayingPart(null); }} />
+          )}
+          </Fragment>
         )))}
         {bills.some(billCounts) && (
           <Totals>

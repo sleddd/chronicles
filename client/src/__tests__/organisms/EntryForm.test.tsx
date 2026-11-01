@@ -139,6 +139,16 @@ describe('EntryForm', () => {
     expect(screen.getByText('Saved')).toBeInTheDocument();
   });
 
+  it('offers Duplicate in ⋯ More once the entry is saved', () => {
+    const onDuplicate = vi.fn();
+    const { rerender } = renderWithTheme(<EntryForm {...defaultProps} onDuplicate={onDuplicate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(screen.getByRole('menuitem', { name: /Duplicate/ })).toBeDisabled();
+    rerender(<ThemeProvider theme={lightTheme}><EntryForm {...defaultProps} entryId={5} content="<p>Hi</p>" onDuplicate={onDuplicate} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('menuitem', { name: /Duplicate/ }));
+    expect(onDuplicate).toHaveBeenCalled();
+  });
+
   it('calls onSave when save button is clicked', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     renderWithTheme(

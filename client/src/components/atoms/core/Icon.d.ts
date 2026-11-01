@@ -3,7 +3,7 @@ export type IconName =
   | "chevron-right" | "chevron-left" | "chevron-down" | "chevron-up"
   | "arrow-right" | "arrow-left" | "arrow-up-right" | "star" | "circle"
   | "more-horizontal" | "more-vertical" | "trash" | "pencil" | "sun" | "moon"
-  | "book" | "bookmark" | "share" | "tag" | "bell" | "user" | "menu" | "sparkles"
+  | "book" | "bookmark" | "share" | "copy" | "tag" | "bell" | "user" | "menu" | "sparkles"
   | "clock" | "filter" | "archive" | "hash" | "target" | "flag" | "palette"
   | "layout-grid" | "list" | "command" | "inbox" | "panel-left" | "repeat" | "grip"
   | "quote" | "feather" | "trophy" | "utensils" | "coffee" | "heart" | "pill"

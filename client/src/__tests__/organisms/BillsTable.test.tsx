@@ -49,4 +49,18 @@ describe('BillsTable, by month', () => {
     expect(screen.getByText('Oct 15 bill paid Oct 16')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Undo paid' })).not.toBeInTheDocument();
   });
+
+  it('Pay part from the ⋯ menu records part of the bill, and the row shows what is left', () => {
+    const onSave = vi.fn();
+    const { rerender } = renderWithTheme(<BillsTable categories={[]} month="2026-11" onSave={onSave} onDelete={vi.fn()} bills={[bill(paidOct)]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Electric' }));
+    fireEvent.click(screen.getByText('Pay part of the Nov 15 bill'));
+    fireEvent.change(screen.getByLabelText('Amount paid'), { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pay' }));
+    const saved = onSave.mock.calls[0][0];
+    expect(saved.payments.at(-1)).toMatchObject({ forDue: '2026-11-15', amountCents: 4000, partial: true });
+    rerender(<BillsTable categories={[]} month="2026-11" onSave={onSave} onDelete={vi.fn()} bills={[saved]} />);
+    expect(screen.getByText('$40.00 paid · $55.00 left')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark paid' })).toBeInTheDocument();
+  });
 });

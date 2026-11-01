@@ -45,6 +45,9 @@ export interface BillPayment {
   /** The moment it was marked paid (ISO) — what the current balance counts from; older payments have only paidOn */
   paidAt?: string;
   amountCents: number;
+  /** Part of the bill (Pay part). Without it a payment pays its due date in
+   *  full, whatever the bill's amount is now; parts pay it once they add up. */
+  partial?: boolean;
 }
 
 export interface Bill {
