@@ -76,9 +76,13 @@ interface ChecklistSectionProps {
   items: CheckItem[];
   onChange: (items: CheckItem[]) => void;
   style?: CSSProperties;
+  /** false: a plain list with no tick circles (Wins) — "3 wins" by the label */
+  ticks?: boolean;
+  /** The plural, for the count without ticks (default noun + "s") */
+  plural?: string;
 }
 
-export function ChecklistSection({ label, noun, items, onChange, style }: ChecklistSectionProps) {
+export function ChecklistSection({ label, noun, items, onChange, style, ticks = true, plural = `${noun}s` }: ChecklistSectionProps) {
   const [draft, setDraft] = useState('');
   const Noun = noun.charAt(0).toUpperCase() + noun.slice(1);
 
@@ -98,14 +102,14 @@ export function ChecklistSection({ label, noun, items, onChange, style }: Checkl
     <Section aria-label={label} style={style}>
       <SectionHead>
         <SectionLabel>{label}</SectionLabel>
-        {items.length > 0 && <Count>{left} of {items.length} left</Count>}
+        {items.length > 0 && <Count>{ticks ? `${left} of ${items.length} left` : `${items.length} ${items.length === 1 ? noun : plural}`}</Count>}
       </SectionHead>
       {items.map((p, i) => (
-        <Item key={p.id} $done={p.done}>
-          <Tick type="button" $done={p.done} aria-pressed={p.done} aria-label={p.done ? `Mark ${noun} ${i + 1} not done` : `Mark ${noun} ${i + 1} done`}
+        <Item key={p.id} $done={ticks && p.done}>
+          {ticks && <Tick type="button" $done={p.done} aria-pressed={p.done} aria-label={p.done ? `Mark ${noun} ${i + 1} not done` : `Mark ${noun} ${i + 1} done`}
             onClick={() => update(p.id, { done: !p.done })}>
             <TickMark checked={p.done} />
-          </Tick>
+          </Tick>}
           <ItemInput value={p.text} placeholder={`${Noun} ${i + 1}`} aria-label={`${Noun} ${i + 1}`}
             onChange={e => update(p.id, { text: e.target.value })} />
           <Remove type="button" aria-label={`Remove ${noun} ${i + 1}`} onClick={() => remove(p.id)}>

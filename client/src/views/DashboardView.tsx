@@ -47,6 +47,7 @@ import { addDays, billOccurrences, formatCents } from '../utils/finance.js';
 import { MENU_SLOTS, defaultShoppingListTitle, latestOpenList, menuDays } from '../utils/kitchen.js';
 import { getOrCreateTopic } from '../utils/getOrCreateJournalTopic.js';
 import { prioritiesTitle } from '../utils/entrySave.js';
+import { winsContent, winsOf, winsTitle, type WinItem } from '../utils/wins.js';
 import type { ThemePreference } from '../utils/autoTheme.js';
 import { dailyQuote, greeting, parseQuoteText, type Quote } from '../utils/dailyQuote.js';
 import { shortDateLine } from '../utils/dateLine.js';
@@ -74,7 +75,7 @@ import { MANTRA_TOPIC, MANTRA_ICON, isMantraTopic, dailyMantraIndex, stepIndex }
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -83,6 +84,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
   { key: 'priorities', label: "Today's priorities" },
+  { key: 'wins', label: "Today's wins" },
   { key: 'tasks', label: 'Tasks & to-do lists' },
   { key: 'mantra', label: 'Mantra' },
   { key: 'comingUp', label: 'Coming up' },
@@ -115,7 +117,7 @@ interface DashboardConfig {
 
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['priorities', 'tasks', 'comingUp', 'quickLog', 'exercise'],
+  left: ['priorities', 'wins', 'tasks', 'comingUp', 'quickLog', 'exercise'],
   right: ['mantra', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
@@ -1139,6 +1141,90 @@ function Priorities() {
       ))}
       <AddBox style={items.length ? { marginTop: 12 } : undefined}>
         <BareInput value={draft} placeholder="Add a priority" aria-label="Add a priority"
+          onChange={e => setDraft(e.target.value)} onBlur={add}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+      </AddBox>
+    </section>
+  );
+}
+
+/* ── Today's wins: what you achieved today, one Wins entry a day ── */
+
+/** Today's Wins-topic entry (made today), if there is one */
+function useTodayWins() {
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const tid = topicIdByName(allTopics, 'wins');
+  const entry = useMemo(() => {
+    if (tid === undefined) return undefined;
+    const today = new Date().toDateString();
+    return entries.find(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid && new Date(e.createdAt).toDateString() === today);
+  }, [entries, tid]);
+  return { entry, items: entry ? winsOf(cfOf(entry)) : [], tid };
+}
+
+/* Laid out like Today's priorities: numbered rows, each win edited in place
+   with a quiet ×, and "Add a win" under them — no ticks (a win is done) */
+function Wins() {
+  const setTopics = useEntriesStore(s => s.setTopics);
+  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const { encryptNewPost } = useEncryption();
+  const save = useSaveFields();
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState('');
+  const { entry, items, tid } = useTodayWins();
+  const creating = useRef(false);
+
+  const write = async (next: WinItem[]) => {
+    if (entry) return save(entry, { ...cfOf(entry), wins: next }, winsContent(winsTitle(new Date(entry.createdAt)), next));
+    if (creating.current) return;
+    creating.current = true;
+    try {
+      let topicId = tid;
+      if (topicId === undefined) {
+        const t = await topicsApi.create({ name: 'Wins', icon: 'trophy' });
+        setTopics([...useEntriesStore.getState().allTopics, t]);
+        topicId = t.id;
+      }
+      const metadata = { _taxonomyId: topicId, _customFields: { wins: next } };
+      const content = winsContent(winsTitle(), next);
+      const enc = await encryptNewPost(content, metadata);
+      const res = await entriesApi.create({ id: enc.id,
+        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+        isEncrypted: true, taxonomyIds: [topicId],
+      });
+      addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
+        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+    } finally { creating.current = false; }
+  };
+
+  const add = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    write([...items, { id: crypto.randomUUID(), text }]).catch(err => console.error('Saving a win failed:', err));
+  };
+
+  return (
+    <section aria-label="Today's wins">
+      <SectionHead>
+        <h2>Today's wins</h2>
+        {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
+      </SectionHead>
+      {items.map((w, i) => (
+        <Row key={w.id}>
+          <PNum>{i + 1}</PNum>
+          <PriorityText item={{ ...w, done: false }} label="Win"
+            onCommit={text => void write(text ? items.map(x => (x.id === w.id ? { ...x, text } : x)) : items.filter(x => x.id !== w.id))} />
+          <PRemove type="button" aria-label={`Remove "${w.text}"`} title="Remove"
+            onClick={() => void write(items.filter(x => x.id !== w.id))}>
+            <Icon name="x" size={14} strokeWidth={2} />
+          </PRemove>
+        </Row>
+      ))}
+      <AddBox style={items.length ? { marginTop: 12 } : undefined}>
+        <BareInput value={draft} placeholder="Add a win" aria-label="Add a win"
           onChange={e => setDraft(e.target.value)} onBlur={add}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
       </AddBox>
@@ -2174,6 +2260,7 @@ export function DashboardView() {
   // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
   const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
     priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },
+    wins: { label: "today's wins", on: shown('wins'), node: <Wins /> },
     tasks: {
       label: 'tasks', on: shown('tasks'),
       node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => void saveConfig({ ...config, tasksShow: next })} />,

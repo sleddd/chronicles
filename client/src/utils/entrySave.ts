@@ -3,6 +3,7 @@ import { toDateStr } from './dateUtils.js';
 import { autoCaloriesOnSave } from '../services/aiAssistant.js';
 import { stripHtml, summarizeUserFields } from './stripHtml.js';
 import { defaultShoppingListTitle } from './kitchen.js';
+import { winsContent, winsOf, winsTitleOf } from './wins.js';
 import type { UserFieldDef } from '../types/userFields.js';
 
 function escapeHtml(text: string): string {
@@ -30,6 +31,7 @@ export function hasEntryData(content: string, customFields: Record<string, unkno
  * and the dashboard's Quick entry so both save the same way:
  * - a shopping list with no title gets a dated one
  * - a Priorities list with no text gets "Priorities: mm/dd/yyyy"
+ * - a day's Wins: its title over the wins as a list, written from the fields
  * - a fields-only entry gets its field summary as the text
  * - Meals / Exercise get blank (or stale AI) calories estimated; a failed
  *   estimate never blocks the save
@@ -50,6 +52,7 @@ export async function prepareEntryForSave(
   if (!hasText && topicName === 'shopping list') finalContent = `<p>${defaultShoppingListTitle()}</p>`;
   else if (!hasText && topicName === 'priorities') finalContent = `<p>${prioritiesTitle()}</p>`;
   else if (!hasText && fieldSummary) finalContent = `<p>${escapeHtml(fieldSummary)}</p>`;
+  if (topicName === 'wins') finalContent = winsContent(winsTitleOf(content), winsOf(customFields));
 
   let fields = customFields;
   const calorieKind = topicName === 'meals' ? 'food' : topicName === 'exercise' ? 'exercise' : null;

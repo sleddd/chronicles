@@ -33,6 +33,7 @@ import { AllergyFields, type AllergyFieldValues } from '../molecules/fields/Alle
 import { ShoppingListFields, type ShoppingListFieldValues } from '../molecules/fields/ShoppingListFields.js';
 import { RecipeFields, type RecipeFieldValues } from '../molecules/fields/RecipeFields.js';
 import { PrioritiesFields, type PrioritiesFieldValues } from '../molecules/fields/PrioritiesFields.js';
+import { WinsFields, type WinsFieldValues } from '../molecules/fields/WinsFields.js';
 import { WellnessFields, type WellnessFieldValues } from '../molecules/fields/WellnessFields.js';
 import { UserFieldsForm, titleFieldOf } from '../molecules/fields/UserFieldsForm.js';
 import { useUIStore } from '../../stores/uiStore.js';
@@ -491,7 +492,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   exercise: 'exercise', event: 'event', events: 'event', meeting: 'meeting',
   allergy: 'allergy', 'shopping list': 'shopping_list',
   recipe: 'recipe', recipes: 'recipe',
-  priorities: 'priorities', wellness: 'wellness', 'menu plan': 'menu_plan',
+  priorities: 'priorities', wins: 'wins', wellness: 'wellness', 'menu plan': 'menu_plan',
   changes: 'change', change: 'change',
   routine: 'routine', routines: 'routine', 'exercise schedule': 'routine', 'exercise routine': 'routine',
   'training plan': 'training_plan', 'training plans': 'training_plan',
@@ -775,7 +776,7 @@ export function EntryForm({
   const contentText = stripHtml(content).trim();
   // Menu plans too: their text is just "Menu: Oct 12 – Oct 18"; and Priorities
   // lists ("Priorities: 10/18/2026")
-  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || customType === 'priorities' || !!nameKey;
+  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || customType === 'priorities' || customType === 'wins' || !!nameKey;
   // Wellness is fields only: its auto-save writes a summary ("3/8 glasses · …")
   // as the text, which must not bring the text area back
   const editorCollapsed = !notesExpanded && (
@@ -1030,6 +1031,7 @@ export function EntryForm({
               {customType === 'menu_plan' && <MenuPlanFields values={{ weekStart: '', days: {}, ...(customFields as Partial<MenuPlanFieldValues>) } as MenuPlanFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
               {customType === 'shopping_list' && <ShoppingListFields values={{ items: [], notes: '', linkedRecipeIds: [], ...(customFields as Partial<ShoppingListFieldValues>) } as ShoppingListFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} recipeOptions={recipeOptions} />}
               {customType === 'recipe' && <RecipeFields values={{ servings: '', prepTime: '', cookTime: '', cuisine: '', ingredients: [], instructions: '', linkedShoppingListIds: [], ...(customFields as Partial<RecipeFieldValues>) } as RecipeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} shoppingListOptions={shoppingListOptions} />}
+              {customType === 'wins' && <WinsFields values={{ wins: [], ...(customFields as Partial<WinsFieldValues>) } as WinsFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
               </FieldRowLayoutContext.Provider>
