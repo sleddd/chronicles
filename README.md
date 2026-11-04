@@ -1,8 +1,7 @@
-# Chronicles - [mydailychronicles.com](https://mydailychronicles.com)
-
 <img width="1439" height="639" alt="Screenshot 2026-10-20 at 7 11 07 PM" src="https://github.com/user-attachments/assets/7241bf25-198b-45ad-9ce2-2444c3c8fe39" />
 
-## A Tour of Chronicles
+# Chronicles - [mydailychronicles.com](https://mydailychronicles.com)
+
 Chronicles is now available to sign up for beta testing at [mydailychronicles.com](https://mydailychronicles.com/#beta), with a native phone app via React Native planned.
 
 ### Dashboard
