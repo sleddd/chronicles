@@ -17,8 +17,8 @@ import { BETA_DETAILS } from '@shared/legal/index.js';
 
 const STEPS = [
   { title: 'Pick a topic', body: 'Start with the defaults or make your own with specialized custom fields.' },
-  { title: 'Write one line', body: 'A meal, a dose, a bill, a thought. Enter it as it happens in less than 15s.' },
-  { title: 'Views sort it', body: 'Your entry shows up everywhere you need it automatically.' },
+  { title: 'Draft a sentence', body: 'A meal, a dose, a bill, a thought. Enter it as it happens in less than 15s.' },
+  { title: 'Views auto-sort it', body: 'Your entry shows up everywhere you need it automatically.' },
 ];
 
 /** Stagger for revealed items: each later one starts a beat after */
@@ -153,14 +153,6 @@ const CenterLede = styled(Lede)`
   text-wrap: balance;
 `;
 
-/* Enter once, see it where you need it: 52px at 300, with room under it */
-const FeaturesTitle = styled(H2)`
-  margin-bottom: 24px;
-  font-size: 52px;
-  font-weight: 300;
-  @media (max-width: 768px) { font-size: 42px; margin-bottom: 16px; }
-`;
-
 /* A section heading in title case (every word capitalised), at 200 */
 const LightTitle = styled(H2)`
   margin: 0;
@@ -276,7 +268,7 @@ const Marker = styled.span`
   background: radial-gradient(circle, var(--color-accent-line) 0 5px, transparent 5.5px);
 `;
 
-/* Enter once, see it where you need it: a white band of staggered rows — the words on one
+/* Features: a white band of staggered rows — the words on one
    side, a real screenshot of that view on the other, swapping sides each row */
 const FeaturesBand = styled(Section)`
   padding: 136px 0 144px;
@@ -288,8 +280,7 @@ const FeatureRows = styled.div`
   display: flex;
   flex-direction: column;
   gap: 112px;
-  margin-top: 112px;
-  @media (max-width: 900px) { gap: 64px; margin-top: 64px; }
+  @media (max-width: 900px) { gap: 64px; }
 `;
 
 const FeatureRow = styled.article`
@@ -485,12 +476,8 @@ export function LandingView() {
         </Container>
       </HowBand>
 
-      <FeaturesBand id="features" aria-labelledby="features-title">
+      <FeaturesBand id="features" aria-label="Features">
         <Container>
-          <FeaturesTitle id="features-title">Enter once, see it<br /> where you need it</FeaturesTitle>
-          <Lede>
-            Custom views sort your entries, so you can track, plan and organize your day without filing a thing.
-          </Lede>
           <FeatureRows>
             {FEATURES.map(({ name, tag, body, shot, alt }) => (
               <FeatureRow key={name}>

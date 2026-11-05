@@ -47,6 +47,9 @@ import { downloadEntriesExample } from '../utils/importExamples.js';
 import { collectFinanceData, financeExportZip } from '../utils/financeExport.js';
 import { parseThemePreference, type ThemePreference } from '../utils/autoTheme.js';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
+import { WallpaperPicker } from '../components/molecules/WallpaperPicker.js';
+import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
+import { NO_WALLPAPER, wallpaperById } from '../utils/wallpapers.js';
 
 const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
@@ -211,6 +214,15 @@ export function SettingsView() {
   const setAccentColor = useUIStore(s => s.setAccentColor);
   const themeMode = useUIStore(s => s.themeMode);
   const themePreference = useUIStore(s => s.themePreference);
+  // Background: none by default, else a wallpaper (sealed setting `wallpaper`)
+  const wallpaper = useUIStore(s => s.wallpaper);
+  const setWallpaper = useUIStore(s => s.setWallpaper);
+  const [, saveWallpaper] = useEncryptedSetting<string | null>('wallpaper', null);
+  const chooseWallpaper = (id: string | null) => {
+    setWallpaper(id);
+    // None is saved as its own value: nothing saved means the default photo
+    saveWallpaper(id ?? NO_WALLPAPER).catch(err => console.error('Saving the background failed:', err));
+  };
   const setThemePreference = useUIStore(s => s.setThemePreference);
   const navigate = useNavigate();
 
@@ -1025,6 +1037,14 @@ export function SettingsView() {
               </Button>
             ))}
           </div>
+        </ColorSection>
+        <ColorSection>
+          <ColorSectionTitle>Background</ColorSectionTitle>
+          <ColorSectionDesc>
+            A photo across the top of every page. Pick another, or None for a plain page.
+            {wallpaperById(wallpaper) && <> Showing a photo by {wallpaperById(wallpaper)!.by} on Unsplash.</>}
+          </ColorSectionDesc>
+          <WallpaperPicker value={wallpaperById(wallpaper) ? wallpaper : null} onChange={chooseWallpaper} />
         </ColorSection>
         <ColorSection>
           <ColorSectionTitle>Accent Color</ColorSectionTitle>

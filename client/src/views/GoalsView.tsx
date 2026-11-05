@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
+import { glassControl } from '../styles/wallpaper.js';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
@@ -123,6 +124,7 @@ const SearchBox = styled.label<{ $wide?: boolean }>`
     color: var(--text-primary);
     &::placeholder { color: var(--text-disabled); }
   }
+  ${glassControl}
 `;
 
 /* Phones/tablets: search, sort, filters and saved views fold into one
@@ -191,6 +193,7 @@ const SortBox = styled.label`
     color: var(--text-primary);
     cursor: pointer;
   }
+  ${glassControl}
 `;
 
 /* Tasks / Todos filters: Goal, Milestone, Status pills + Clear, above the board/list */
@@ -239,6 +242,7 @@ const PickPill = styled.label<{ $set: boolean }>`
     font-size: 16px; /* no zoom on iOS */
   }
   option { color: var(--text-primary); background: var(--bg-surface); }
+  ${glassControl}
 `;
 
 function FilterPick({ name, value, set, children }: { name: string; value: string; set: boolean; children: React.ReactNode }) {
@@ -314,6 +318,7 @@ const ViewSwitch = styled.div`
   padding: 3px;
   border: 1px solid var(--border-default);
   border-radius: 999px;
+  ${glassControl}
 `;
 
 const ViewBtn = styled.button<{ $active: boolean }>`

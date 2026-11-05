@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { glassControl } from '../../../styles/wallpaper.js';
 import { AutoTextarea } from './AutoTextarea.js';
 
 /* Shared pieces for the mockup-style field forms (exercise, meals, …):
@@ -353,6 +354,7 @@ export const JoinedGroup = styled.div`
   border: 1px solid var(--border-card);
   border-radius: 8px;
   background: var(--bg-control, transparent);
+  ${glassControl}
 `;
 
 export const JoinedBtn = styled.button<{ $active: boolean; $fill?: boolean }>`

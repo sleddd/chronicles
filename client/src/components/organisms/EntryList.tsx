@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { glassBar, solidUnderPhoto } from '../../styles/wallpaper.js';
 import { memo, useMemo, useCallback, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -49,6 +50,7 @@ const ListContainer = styled.div`
   padding: 12px 0 0;
   flex-shrink: 0;
   background: transparent;
+  ${solidUnderPhoto}
 `;
 
 const EmptyState = styled.div`
@@ -72,6 +74,7 @@ const BulkBar = styled.div`
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-secondary);
+  ${glassBar}
 `;
 
 const BulkButton = styled.button<{ $danger?: boolean }>`

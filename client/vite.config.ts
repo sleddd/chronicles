@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'icons/*.png', 'backgrounds/*'],
+      includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
         name: 'Chronicles',
         short_name: 'Chronicles',
@@ -31,7 +31,13 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [],
+        // Wallpapers aren't precached (25 MB in all): the chosen one is kept
+        // once loaded, so it still shows offline
+        runtimeCaching: [{
+          urlPattern: ({ url }) => url.pathname.startsWith('/wallpapers/'),
+          handler: 'CacheFirst',
+          options: { cacheName: 'wallpapers', expiration: { maxEntries: 8 } },
+        }],
       },
     }),
   ],

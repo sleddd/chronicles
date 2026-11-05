@@ -47,8 +47,9 @@ const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: bo
 
 /** Journal list: rows unfilled; the open row sits on the page (editor) colour with a 3px accent bar; hover shows only the bar */
 export const entryRow = rowStyle('transparent', rowActive, true, rowHoverBar);
-/** Every other list (topic, health, goals, shopping, planner, Topics): page-colour rows, sunken active row, no bar */
-export const entryRowPlain = rowStyle('var(--bg-app)', rowActivePlain, false);
+/** Every other list (topic, health, goals, shopping, planner, Topics): page-colour rows, sunken active row, no bar.
+ *  On a wallpaper the rows go clear (--row-plain-bg, GlobalStyle), so the photo isn't striped by them */
+export const entryRowPlain = rowStyle('var(--row-plain-bg, var(--bg-app))', rowActivePlain, false);
 
 export const clearRowHover = () => { delete document.documentElement.dataset[HOVER_FLAG]; };
 

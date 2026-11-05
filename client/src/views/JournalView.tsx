@@ -3,6 +3,7 @@ import { duplicateEntryFields } from '../utils/entryDuplicate.js';
 import { nextPrompt } from '../utils/journalPrompts.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
+import { glassBar, glassPill } from '../styles/wallpaper.js';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
@@ -66,6 +67,7 @@ const DateFilterBar = styled.div`
   border: none;
   /* Just a hairline under it — the tabs above already draw the one on top */
   border-bottom: 1px solid var(--border-subtle);
+  ${glassBar}
   border-radius: 0;
   font-family: var(--mono, ${({ theme }) => theme.fontFamily.mono});
   font-size: 10.5px;
@@ -148,6 +150,8 @@ const NewEntryPill = styled.button`
   font-size: 13px;
   font-weight: 500;
   color: var(--color-accent);
+  /* On a wallpaper: a glass pill with white text */
+  ${glassPill}
   white-space: nowrap;
   cursor: pointer;
   transition: border-color 120ms, color 120ms;

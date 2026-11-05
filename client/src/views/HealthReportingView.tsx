@@ -4,6 +4,7 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import styled from 'styled-components';
+import { glassControl } from '../styles/wallpaper.js';
 import { DateInput } from '../components/atoms/DateInput.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthReport } from '../components/organisms/HealthReport.js';
@@ -83,6 +84,7 @@ const Periods = styled.div`
   border: 1px solid var(--border-card);
   border-radius: 10px;
   @media (max-width: 600px) { flex: none; padding: 3px; border-radius: 10px; }
+  ${glassControl}
 `;
 
 const PeriodBtn = styled.button<{ $active: boolean }>`

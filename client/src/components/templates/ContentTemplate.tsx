@@ -6,6 +6,7 @@ import { Sidebar } from '../organisms/Sidebar.js';
 import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { Wallpaper } from '../organisms/Wallpaper.js';
 
 const Layout = styled.div<{ $focusMode?: boolean }>`
   display: flex;
@@ -42,6 +43,9 @@ const Main = styled.main`
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   min-height: 0;
+  /* The wallpaper (when one's chosen) sits under the content, over this background */
+  position: relative;
+  isolation: isolate;
   /* The page colour token (was the old theme's near-white overlay, which hid
      the light page grey) */
   background: var(--bg-app, ${({ theme }) => theme.colors.background});
@@ -53,10 +57,12 @@ const Main = styled.main`
 interface ContentTemplateProps {
   children: ReactNode;
   hideSidebar?: boolean;
+  /** How far down the wallpaper reaches (default: just past the title and tabs) */
+  wallpaperHeight?: string;
 }
 
 /** Full-height template: left sidebar (full height) + main column (header bar + scrollable content). */
-export function ContentTemplate({ children, hideSidebar }: ContentTemplateProps) {
+export function ContentTemplate({ children, hideSidebar, wallpaperHeight }: ContentTemplateProps) {
   /* Same as AppTemplate: hide the mobile chrome while a full-view overlay
      (e.g. dashboard Quick Entry) is open so it can fill the whole viewport. */
   const focusMode = useUIStore(s => s.editorFocusMode);
@@ -68,7 +74,7 @@ export function ContentTemplate({ children, hideSidebar }: ContentTemplateProps)
         {!hideSidebar && <div data-print-hide><Sidebar /></div>}
         <MainColumn>
           <div data-print-hide><Header /></div>
-          <Main>{children}</Main>
+          <Main><Wallpaper height={wallpaperHeight} />{children}</Main>
         </MainColumn>
       </Layout>
     </>

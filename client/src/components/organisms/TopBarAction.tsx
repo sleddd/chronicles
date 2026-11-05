@@ -13,5 +13,6 @@ export function TopBarAction({ children }: { children: ReactNode }) {
   const compact = useMediaQuery(NAV_COMPACT_QUERY);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => { setSlot(compact ? document.getElementById(TOP_BAR_SLOT_ID) : null); }, [compact]);
-  return slot ? createPortal(children, slot) : <>{children}</>;
+  // Desktop: in place, marked so a wallpaper can turn its buttons to glass pills (GlobalStyle)
+  return slot ? createPortal(children, slot) : <span className="page-action" style={{ display: 'contents' }}>{children}</span>;
 }

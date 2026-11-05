@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { glassCard } from '../../styles/wallpaper.js';
 import { cardLabel } from '../../styles/cardLabel.js';
 import type { ReactNode } from 'react';
 
@@ -13,6 +14,7 @@ export const DashPanel = styled.section`
   background: var(--bg-panel);
   border-radius: 14px;
   @media (max-width: 480px) { padding: 22px 20px; }
+  ${glassCard}
 `;
 
 const Head = styled.div`

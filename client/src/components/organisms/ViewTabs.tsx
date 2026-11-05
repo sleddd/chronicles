@@ -1,5 +1,6 @@
 import { useCallback, useRef, type KeyboardEvent } from 'react';
 import styled from 'styled-components';
+import { glassBar, glassControl } from '../../styles/wallpaper.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 
@@ -32,6 +33,7 @@ const Container = styled.div`
   flex-shrink: 0;
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 var(--s-4, 16px);
+  ${glassBar}
 `;
 
 const SearchBox = styled.label<{ $active: boolean }>`
@@ -47,6 +49,7 @@ const SearchBox = styled.label<{ $active: boolean }>`
   background: transparent;
   color: var(--text-muted);
   &:focus-within { border-color: var(--color-accent); }
+  ${glassControl}
 `;
 
 const SearchInput = styled.input`
@@ -91,6 +94,7 @@ const Segments = styled.div`
   padding: 3px;
   border: 1px solid var(--border-card);
   border-radius: 8px;
+  ${glassControl}
 `;
 
 const Segment = styled.button<{ $active?: boolean }>`

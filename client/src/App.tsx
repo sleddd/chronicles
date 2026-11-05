@@ -49,6 +49,8 @@ import { MenuView } from './views/MenuView.js';
 import { ShoppingListsView } from './views/ShoppingListsView.js';
 import { autoThemeFor, PAGE_COLOR } from './utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
+import { useEncryptedSetting } from './hooks/useEncryptedSetting.js';
+import { resolveWallpaper } from './utils/wallpapers.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
    Chronicles design tokens (originally from the design-system package). Light = pure white canvas; dark =
@@ -411,6 +413,24 @@ function ChatGate() {
   return <AiChat />;
 }
 
+/** The saved wallpaper (the sealed `wallpaper` setting) into the store once
+ *  it's opened — the browser's remembered copy shows until then. */
+function WallpaperSync() {
+  const [saved, , loaded] = useEncryptedSetting<string | null>('wallpaper', null);
+  const setWallpaper = useUIStore(s => s.setWallpaper);
+  useEffect(() => {
+    if (loaded) setWallpaper(resolveWallpaper(saved));
+  }, [loaded, saved, setWallpaper]);
+  return null;
+}
+
+function WallpaperGate() {
+  const { isAuthenticated } = useAuth();
+  const { isUnlocked } = useEncryption();
+  if (!isAuthenticated || !isUnlocked) return null;
+  return <WallpaperSync />;
+}
+
 /** The server-controlled notice banner — signed-in pages only. */
 function NoticeGate() {
   const { isAuthenticated } = useAuth();
@@ -583,6 +603,7 @@ export function App() {
               <Route path="*" element={<NotFoundView />} />
             </Routes>
             <ChatGate />
+            <WallpaperGate />
             <NoticeGate />
             <UpdatePrompt />
             <FlashNotice />

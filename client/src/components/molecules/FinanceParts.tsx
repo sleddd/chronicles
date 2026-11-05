@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import styled, { css } from 'styled-components';
+import { glassControl } from '../../styles/wallpaper.js';
 import { filledInputs } from '../../styles/filledInputs.js';
 import { entryRowPlain } from '../../styles/entryRow.js';
 import { formatCents } from '../../utils/finance.js';
@@ -667,6 +668,7 @@ const MonthPillBox = styled.div`
     font-weight: 500;
     color: var(--text-secondary);
   }
+  ${glassControl}
 `;
 
 const MonthCaret = styled.button`

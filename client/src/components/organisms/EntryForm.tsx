@@ -2,6 +2,7 @@ import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/Change
 import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode } from 'react';
 import { PillButton } from '../atoms/PillButton.js';
 import styled from 'styled-components';
+import { glassBar, glassCard, solidUnderPhoto } from '../../styles/wallpaper.js';
 import { cardLabel } from '../../styles/cardLabel.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
@@ -79,6 +80,7 @@ const EdToolRow = styled.div`
   z-index: 5;
   padding: 0 20px 0 32px;
   border-bottom: 1px solid var(--border-subtle);
+  ${glassBar}
 `;
 
 const EdActions = styled.div`
@@ -175,6 +177,7 @@ const ScrollArea = styled.div`
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  ${solidUnderPhoto}
 `;
 
 /* Centered content column */
@@ -402,6 +405,7 @@ const QuickCard = styled.section`
   font-family: var(--font-sans);
   @media (max-width: 768px) { padding: 22px 24px 26px; }
   @media (max-width: 480px) { padding: 20px 18px 22px; }
+  ${glassCard}
 `;
 
 const QuickHead = styled.div`

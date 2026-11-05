@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { Wallpaper } from '../organisms/Wallpaper.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import type { ReactNode } from 'react';
 import { Header } from '../organisms/Header.js';
@@ -39,6 +40,9 @@ const Body = styled.div`
   flex: 1;
   overflow-y: auto;
   background: var(--paper);
+  /* The wallpaper (when one's chosen) sits under the content, over this background */
+  position: relative;
+  isolation: isolate;
 `;
 
 const Content = styled.div`
@@ -77,6 +81,7 @@ export function SettingsTemplate({ title, children }: SettingsTemplateProps) {
         <MainColumn>
           <Header />
           <Body>
+            <Wallpaper />
             <Content>
               {title && (
                 <PageTitleRow>

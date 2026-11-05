@@ -3,6 +3,8 @@ import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import type { ReactNode } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
+import { Wallpaper } from '../organisms/Wallpaper.js';
+import { onPhoto } from '../../styles/wallpaper.js';
 
 /* Page title on top, the two panels below it — edge to edge */
 const Page = styled.div`
@@ -10,6 +12,10 @@ const Page = styled.div`
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /* The wallpaper (when one's chosen) under the title row and the panels' tops */
+  position: relative;
+  isolation: isolate;
+  background: var(--bg-app);
 `;
 
 /* Title inset a little further than the list rows' 20px gutter */
@@ -77,6 +83,7 @@ const Title = styled.h1.attrs({ className: 'view-title' })`
   color: var(--text-primary);
   margin: 0;
   @media (max-width: 480px) { font-size: 34px; }
+  ${onPhoto}
 `;
 
 const ContentArea = styled.div`
@@ -94,6 +101,7 @@ const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean 
   flex-direction: column;
   overflow-y: auto;
   background: var(--bg-app);
+  html[data-wallpaper] & { background: transparent; }
   /* Hairline down its right edge, separating the list from the editor */
   border-right: 1px solid var(--border-subtle);
 
@@ -112,6 +120,7 @@ const StyledEditorPanel = styled.div<{ $visibleMobile?: boolean; $isDark?: boole
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-app);
+  html[data-wallpaper] & { background: transparent; }
 
   @media (max-width: 1024px) {
     display: ${({ $visibleMobile }) => $visibleMobile ? 'flex' : 'none'};
@@ -162,6 +171,8 @@ interface JournalTemplateProps {
 export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', titleAside, headerAside, onBack }: JournalTemplateProps) {
   return (
     <Page>
+      {/* Just the title row and the panels' top bars — the rows and the editor stay solid */}
+      <Wallpaper follow={false} />
       <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (

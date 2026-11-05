@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { glassControl } from '../../styles/wallpaper.js';
 import { useRef, useCallback, type KeyboardEvent } from 'react';
 
 /* Sub-sub tabs (All / Today / This week…): one outlined group; the chosen
@@ -12,6 +13,7 @@ const Row = styled.div<{ $flush?: boolean; $bordered?: boolean }>`
   padding: 4px;
   border: 1px solid var(--border-card);
   border-radius: 10px;
+  ${glassControl}
 `;
 
 const Label = styled.span`

@@ -16,6 +16,28 @@ export const GlobalStyle = createGlobalStyle`
     :has(> .view-title) { padding-top: 16px !important; padding-bottom: 8px !important; }
   }
 
+  /* A wallpaper behind the page top (Settings → Theme → Background): the page's
+     big title reads white on the photo */
+  /* …and list rows (entryRowPlain) go clear so they don't stripe the photo */
+  html[data-wallpaper] { --row-plain-bg: transparent; }
+
+  /* A page's main action beside its title (TopBarAction, desktop): a white glass
+     pill on the photo, whatever button it is */
+  html[data-wallpaper] .page-action button {
+    background: rgba(255, 255, 255, 0.16) !important;
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    color: #fff !important;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  html[data-wallpaper] .page-action button:hover { background: rgba(255, 255, 255, 0.26) !important; }
+
+  html[data-wallpaper] .view-title {
+    color: #fff !important;
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.3);
+  }
+
   *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;

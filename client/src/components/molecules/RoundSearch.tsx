@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { glassControl } from '../../styles/wallpaper.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 
 /* A rounded outlined search box ("Search books", "Search topics") — a search
@@ -14,6 +15,7 @@ const Box = styled.label`
   border-radius: 999px;
   color: var(--text-muted);
   &:focus-within { border-color: var(--control-border); }
+  ${glassControl}
   input {
     flex: 1;
     min-width: 0;

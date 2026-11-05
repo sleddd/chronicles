@@ -4,3 +4,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+
+# Wallpaper originals from Unsplash (~190 MB). The app serves the resized
+# copies in client/public/wallpapers; keep the originals locally only.
+client/src/assets/wallpaper/

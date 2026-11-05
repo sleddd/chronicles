@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { rememberWallpaper, startingWallpaper } from '../utils/wallpapers.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import { resolveTheme, rememberTheme, startingTheme, type ThemePreference } from '../utils/autoTheme.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
@@ -60,6 +61,9 @@ interface UIState {
   setThemeMode: (mode: 'light' | 'dark') => void;
   setThemePreference: (pref: ThemePreference) => void;
   setAccentColor: (color: string) => void;
+  /** Settings → Theme → Background: a wallpaper's id, or null (none, the default) */
+  wallpaper: string | null;
+  setWallpaper: (id: string | null) => void;
 
   // Profile
   displayName: string;
@@ -154,6 +158,8 @@ export const useUIStore = create<UIState>((set) => ({
   setThemeMode: (mode) => set({ themeMode: mode }),
   setThemePreference: (pref) => { rememberTheme(pref); set({ themePreference: pref, themeMode: resolveTheme(pref) }); },
   setAccentColor: (color) => set({ accentColor: color }),
+  wallpaper: startingWallpaper(),
+  setWallpaper: (id) => { rememberWallpaper(id); set({ wallpaper: id }); },
 
   displayName: '',
   setDisplayName: (name) => set({ displayName: name }),

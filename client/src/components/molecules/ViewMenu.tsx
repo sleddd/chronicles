@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
+import { glassControl } from '../../styles/wallpaper.js';
 import { Icon, type IconName } from '../atoms/core/Icon.jsx';
 
 /* Planning's ⋯ button at the end of the filter card: a square outlined button
@@ -36,6 +37,7 @@ const Trigger = styled.button<{ $open: boolean }>`
   cursor: pointer;
   &:hover { border-color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-strong)')}; color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  ${glassControl}
 `;
 
 const List = styled.div`

@@ -7,6 +7,7 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import styled, { css } from 'styled-components';
+import { glassCard, glassPill, onPhoto } from '../styles/wallpaper.js';
 import { cardLabel } from '../styles/cardLabel.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -173,6 +174,7 @@ const Eyebrow = styled.div`
   font-size: 15px;
   font-style: italic;
   color: var(--text-muted);
+  ${onPhoto}
   /* Phones get the short line ("Tues, Oct. 27th - 50° and cloudy") */
   & > .short { display: none; }
   @media (max-width: 640px) { margin-top: 10px; padding-left: 6px; & > .long { display: none; } & > .short { display: inline; } }
@@ -188,6 +190,7 @@ const Hello = styled.h1`
   text-wrap: balance;
   @media (max-width: 640px) { font-size: 38px; }
   @media (max-width: 400px) { font-size: 34px; }
+  ${onPhoto}
 `;
 
 /* Light | Dark (an outlined pair, the chosen one on the grey --bg-active) beside
@@ -220,6 +223,9 @@ const VoiceBtn = styled.button<{ $on: boolean }>`
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   @media (max-width: 640px) { position: relative; width: 44px; padding: 0; justify-content: center; }
+  /* On a wallpaper: a glass pill with white text (the accent while open) */
+  ${glassPill}
+  html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
 `;
 
 /* "Voice": the word beside the mic, left out on phones (the mic alone, named for screen readers) */
@@ -250,6 +256,8 @@ const ViewBtn = styled.button<{ $on: boolean }>`
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  ${glassPill}
+  html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
 `;
 
 /* Its card: THEME over the Light | Dark | Auto switch, a hairline, then Customize view › */
@@ -406,6 +414,7 @@ const NextCard = styled.section`
   background: var(--bg-panel);
   font-family: var(--font-sans);
   @media (max-width: 480px) { padding: 22px 20px; }
+  ${glassCard}
 `;
 
 const NextTop = styled.div<{ $plain?: boolean }>`
@@ -462,6 +471,7 @@ const ClocksSection = styled.section`
   border-radius: 14px;
   background: var(--bg-panel);
   @media (max-width: 480px) { padding: 0 16px; }
+  ${glassCard}
 `;
 
 const Strip = styled.div`
@@ -601,6 +611,7 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean }>`
   padding: 28px 92px 28px 32px;
   border-radius: 14px;
   background: var(--bg-panel);
+  ${glassCard}
   @media (max-width: 480px) { padding: 22px 76px 22px 20px; }
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
   & > section > :first-child { align-items: center; }
@@ -2300,7 +2311,7 @@ export function DashboardView() {
   right.push(...cols.right.map(card));
 
   return (
-    <ContentTemplate>
+    <ContentTemplate wallpaperHeight="min(520px, 60vh)">
       <Page>
         <Inner>
           <Head>

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import styled from 'styled-components';
+import { glassCard } from '../../styles/wallpaper.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 
 /* Lifted panel: a surface fill a step off the canvas (visible in dark) with a soft
@@ -12,6 +13,7 @@ const Card = styled.section<{ $outlined?: boolean }>`
   border-radius: var(--r-lg, 6px);
   padding: 20px 24px;
   @media (max-width: 480px) { padding: 16px; }
+  ${glassCard}
 `;
 
 const Heading = styled.h3`
