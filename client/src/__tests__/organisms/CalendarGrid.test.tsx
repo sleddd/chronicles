@@ -73,44 +73,26 @@ describe('CalendarGrid', () => {
     expect(onNext).toHaveBeenCalled();
   });
 
-  it('renders entry previews in day cells', () => {
-    const entriesByDate = new Map([
-      ['2024-06-15', [
-        { id: 1, content: '<p>My journal entry</p>', createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {} },
-      ]],
-    ]);
-    renderWithTheme(
-      <CalendarGrid {...defaultProps} entriesByDate={entriesByDate as never} />
-    );
-    expect(screen.getAllByText(/My journal entry/).length).toBeGreaterThanOrEqual(1);
+  const entry = (id: number, text: string) => ({ id, content: `<p>${text}</p>`, createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {} });
+
+  it('shows a day\'s items as dots, the title on hover, no words', () => {
+    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', [entry(1, 'My journal entry')]]]) as never} />);
+    expect(screen.queryByText(/My journal entry/)).not.toBeInTheDocument();
+    expect(screen.getAllByTitle('My journal entry').length).toBeGreaterThan(0);
+    expect(screen.getByRole('img', { name: '1 item' })).toBeInTheDocument();
   });
 
-  it('shows +N more label when more than 3 entries', () => {
-    const entries = Array.from({ length: 5 }, (_, i) => ({
-      id: i, content: `<p>Entry ${i}</p>`, createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {},
-    }));
-    const entriesByDate = new Map([['2024-06-15', entries]]);
-    renderWithTheme(
-      <CalendarGrid {...defaultProps} entriesByDate={entriesByDate as never} />
-    );
-    // A cell fits 3 lines: 2 entries + the "+N more" line
-    expect(screen.getByText('+3 more')).toBeInTheDocument();
-  });
-
-  it('shows all 3 when there are exactly 3, with no more label', () => {
-    const entries = Array.from({ length: 3 }, (_, i) => ({
-      id: i, content: `<p>Entry ${i}</p>`, createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {},
-    }));
-    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} />);
-    expect(screen.getAllByText('Entry 2').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/more$/)).not.toBeInTheDocument();
-  });
-
-  it('counts bills and entries together toward the 3 lines', () => {
-    const entries = [{ id: 1, content: '<p>Entry A</p>', createdAt: new Date(), updatedAt: new Date(), isEncrypted: true, metadata: {} }];
+  it('counts bills and entries together, a dot each', () => {
     const bill = (n: number) => ({ key: `b${n}`, billId: `b${n}`, name: `Bill ${n}`, amountCents: 1000, date: '2024-06-15' });
-    const billsByDate = new Map([['2024-06-15', [bill(1), bill(2), bill(3)]]]);
-    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} billsByDate={billsByDate} />);
-    expect(screen.getByText('+2 more')).toBeInTheDocument();
+    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', [entry(1, 'Entry A')]]]) as never} billsByDate={new Map([['2024-06-15', [bill(1), bill(2)]]])} />);
+    expect(screen.getByRole('img', { name: '3 items' })).toBeInTheDocument();
+    expect(screen.getByTitle('Bill 2 · $10.00 due')).toBeInTheDocument();
+    expect(screen.queryByText('Bill 2')).not.toBeInTheDocument();
+  });
+
+  it('shows "+N" past eight dots', () => {
+    const entries = Array.from({ length: 11 }, (_, i) => entry(i, `Entry ${i}`));
+    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} />);
+    expect(screen.getByText('+3')).toBeInTheDocument();
   });
 });

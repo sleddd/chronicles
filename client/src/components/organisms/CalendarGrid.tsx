@@ -112,63 +112,13 @@ const DayNumber = styled.div<{ $isToday?: boolean; $isSelected?: boolean; $accen
   margin: -4px 0 12px -2px; /* room under the day number / today's disc */
 `;
 
-const DayItems = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
-  flex: 1;
-  min-height: 0;
-`;
-
-/* "• AWS" — a dot (amber for bills, accent for entries) then the text */
+/* A dot — amber for bills, accent for events and meetings */
 const Dot = styled.i<{ $bill?: boolean }>`
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
-`;
-
-const DayItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--text-secondary);
-  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-`;
-
-const BillItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  width: 100%;
-  min-width: 0;
-  padding: 0;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  &:hover { color: var(--text-primary); }
-`;
-
-const MoreLabel = styled.div`
-  flex-shrink: 0;
-  padding-left: 14px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-muted);
 `;
 
 /* ── Mobile list view ── */
@@ -242,8 +192,19 @@ const MobileDots = styled.span`
   height: 6px;
 `;
 
-/** Lines that fit in a desktop month cell (items + the "+N more" line). */
-const MAX_LINES = 3;
+/* Desktop month: just the dots — accent for events and meetings, amber for
+   bills — wrapping in the cell; the words are in the day panel and day view */
+const DotRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  & > i { width: 7px; height: 7px; }
+  & > small { font-family: var(--font-sans); font-size: 12px; color: var(--text-muted); line-height: 1; }
+`;
+
+/** Dots shown in a desktop month cell before "+N" */
+const MAX_DOTS = 8;
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -307,12 +268,11 @@ export function CalendarGrid({
               const dateStr = toDateStr(date);
               const dayEntries = entriesByDate.get(dateStr) || [];
               const dayBills = billsByDate?.get(dateStr) || [];
-              // A cell fits 3 lines: show 3 items, or 2 plus "+N more" when there are more
-              const lines = dayEntries.length + dayBills.length > MAX_LINES ? MAX_LINES - 1 : MAX_LINES;
-              // Events and meetings take the lines first, then bills
-              const entrySlots = Math.min(dayEntries.length, lines);
-              const billSlots = Math.min(dayBills.length, lines - entrySlots);
-              const hidden = dayEntries.length + dayBills.length - entrySlots - billSlots;
+              // Events and meetings first, then bills; past MAX_DOTS a "+N"
+              const total = dayEntries.length + dayBills.length;
+              const entrySlots = Math.min(dayEntries.length, MAX_DOTS);
+              const billSlots = Math.min(dayBills.length, MAX_DOTS - entrySlots);
+              const hidden = total - entrySlots - billSlots;
               const isToday = isSameDay(date, today);
               const isSelected = selectedDate === dateStr;
 
@@ -330,19 +290,17 @@ export function CalendarGrid({
                       <DayNumber $isToday={isToday} $isSelected={isSelected} $accentColor={accentColor}>
                         {date.getDate()}
                       </DayNumber>
-                      <DayItems>
-                        {dayEntries.slice(0, entrySlots).map(entry => {
-                          const topicName = getTopicName(entry);
-                          const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 30) || topicName || 'Entry';
-                          return <DayItem key={entry.id}><Dot aria-hidden="true" /><span>{preview}</span></DayItem>;
-                        })}
-                        {dayBills.slice(0, billSlots).map(b => (
-                          <BillItem key={b.key} type="button" title={billLabel(b)} onClick={e => { e.stopPropagation(); onBillClick?.(b); }}>
-                            <Dot $bill aria-hidden="true" /><span>{b.name}</span>
-                          </BillItem>
-                        ))}
-                        {hidden > 0 && <MoreLabel>+{hidden} more</MoreLabel>}
-                      </DayItems>
+                      {total > 0 && (
+                        <DotRow role="img" aria-label={`${total} ${total === 1 ? 'item' : 'items'}`}>
+                          {dayEntries.slice(0, entrySlots).map(entry => {
+                            const topicName = getTopicName(entry);
+                            const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 60) || topicName || 'Entry';
+                            return <Dot key={entry.id} title={preview} />;
+                          })}
+                          {dayBills.slice(0, billSlots).map(b => <Dot key={b.key} $bill title={billLabel(b)} />)}
+                          {hidden > 0 && <small>+{hidden}</small>}
+                        </DotRow>
+                      )}
                     </>
                   )}
                 </DayCell>
