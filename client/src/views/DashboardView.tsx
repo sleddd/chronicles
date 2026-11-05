@@ -694,6 +694,12 @@ const SectionHead = styled.div`
   button:hover { text-decoration: underline; }
 `;
 
+/* Two links side by side in a SectionHead (Today's wins: New list · All wins) */
+const HeadLinks = styled.div`
+  display: flex;
+  gap: 18px;
+`;
+
 /* Hairlines between rows only — none under the last one */
 const Row = styled.div`
   display: flex;
@@ -1159,17 +1165,20 @@ function Priorities() {
   );
 }
 
-/* ── Today's wins: what you achieved today, one Wins entry a day ── */
+/* ── Today's wins: what you achieved, one Wins entry a list ── */
 
-/** Today's Wins-topic entry (made today), if there is one */
-function useTodayWins() {
+/** The newest Wins-topic entry, like Priorities — it carries over midnight
+ *  until New list starts another */
+function useWinsList() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const tid = topicIdByName(allTopics, 'wins');
   const entry = useMemo(() => {
     if (tid === undefined) return undefined;
-    const today = new Date().toDateString();
-    return entries.find(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid && new Date(e.createdAt).toDateString() === today);
+    const time = (e: DecryptedPost) => new Date(e.createdAt).getTime();
+    return entries
+      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid)
+      .reduce<DecryptedPost | undefined>((best, e) => (!best || time(e) > time(best) ? e : best), undefined);
   }, [entries, tid]);
   return { entry, items: entry ? winsOf(cfOf(entry)) : [], tid };
 }
@@ -1183,11 +1192,17 @@ function Wins() {
   const save = useSaveFields();
   const navigate = useNavigate();
   const [draft, setDraft] = useState('');
-  const { entry, items, tid } = useTodayWins();
+  const { entry, items, tid } = useWinsList();
   const creating = useRef(false);
+  const [starting, setStarting] = useState(false);
 
   const write = async (next: WinItem[]) => {
     if (entry) return save(entry, { ...cfOf(entry), wins: next }, winsContent(winsTitle(new Date(entry.createdAt)), next));
+    return create(next);
+  };
+
+  /** A new Wins entry — the newest, so the card shows it from now on */
+  const create = async (next: WinItem[]) => {
     if (creating.current) return;
     creating.current = true;
     try {
@@ -1210,6 +1225,13 @@ function Wins() {
     } finally { creating.current = false; }
   };
 
+  // New list: starts an empty one; the old list stays in the journal
+  const startNew = async () => {
+    setStarting(true);
+    try { await create([]); } catch (err) { console.error('New wins list failed:', err); }
+    finally { setStarting(false); }
+  };
+
   const add = () => {
     const text = draft.trim();
     if (!text) return;
@@ -1221,7 +1243,10 @@ function Wins() {
     <section aria-label="Today's wins">
       <SectionHead>
         <h2>Today's wins</h2>
-        {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
+        <HeadLinks>
+          {items.length > 0 && <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>}
+          {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
+        </HeadLinks>
       </SectionHead>
       {items.map((w, i) => (
         <Row key={w.id}>
