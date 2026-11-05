@@ -56,6 +56,7 @@ import { currentWeather, describeWeather, findPlace, hoursFromLocal, type Curren
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { ShoppingItem } from '../types/fields.js';
 import type { PriorityItem } from '../components/molecules/fields/PrioritiesFields.js';
+import { AutoTextarea } from '../components/molecules/fields/AutoTextarea.js';
 import { parseSavedViews, searchAndSort, type SavedPlanView, type PlanRow } from '../utils/planningView.js';
 import { taskTypeOf, taskTypeRank, taskTypeList } from '../utils/taskTypes.js';
 import {
@@ -991,18 +992,20 @@ const PNum = styled.span<{ $done?: boolean }>`
   color: ${({ $done }) => ($done ? 'var(--color-accent-link)' : 'var(--color-accent-link)')};
 `;
 
-/* A priority's text, edited in place (no box); done = muted + struck */
-const PText = styled.input<{ $done?: boolean }>`
+/* A priority's text, edited in place (no box); done = muted + struck. It
+   wraps and grows to show all of it (Enter adds no line break) */
+const PText = styled(AutoTextarea)<{ $done?: boolean }>`
   && {
     flex: 1;
     min-width: 0;
-    padding: 0;
+    padding: 14px 0;
+    line-height: 1.4;
+    min-height: 0;
     border: none !important;
     background: transparent !important;
     outline: none;
     font-family: var(--font-sans);
     font-size: 16px;
-    text-overflow: ellipsis;
     color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
     text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
   }
@@ -1035,8 +1038,8 @@ function PriorityText({ item, onCommit, label = 'Priority' }: { item: PriorityIt
       onChange={e => setText(e.target.value)} onBlur={commit}
       onKeyDown={e => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-        if (e.key === 'Escape') { setText(item.text); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); }
-      }} />
+        if (e.key === 'Escape') { setText(item.text); requestAnimationFrame(() => (e.target as HTMLTextAreaElement).blur()); }
+      }} rows={1} />
   );
 }
 
@@ -1045,8 +1048,8 @@ function PriorityText({ item, onCommit, label = 'Priority' }: { item: PriorityIt
 const AddBox = styled.label`
   display: flex;
   align-items: center;
-  height: 48px;
-  padding: 0 16px;
+  min-height: 48px;
+  padding: 12px 16px;
   border: 1px solid var(--border-card);
   border-radius: 10px;
   cursor: text;
@@ -1067,6 +1070,30 @@ const BareInput = styled.input`
   }
   &::placeholder { color: var(--text-hint); }
 `;
+
+/* The add boxes' text: wraps and grows to show everything typed; Enter adds
+   the item (no line break) */
+const BareAreaBox = styled(AutoTextarea)`
+  && {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
+function BareArea({ onEnter, ...rest }: Omit<React.ComponentProps<typeof AutoTextarea>, 'onKeyDown' | 'rows'> & { onEnter: (el: HTMLTextAreaElement) => void }) {
+  return <BareAreaBox rows={1} {...rest}
+    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter(e.currentTarget); } }} />;
+}
 
 /** The newest Priorities-topic entry and its items. Not tied to today — the
  *  list carries over midnight and stays until items are ticked or removed. */
@@ -1157,9 +1184,8 @@ function Priorities() {
         </Row>
       ))}
       <AddBox style={items.length ? { marginTop: 12 } : undefined}>
-        <BareInput value={draft} placeholder="Add a priority" aria-label="Add a priority"
-          onChange={e => setDraft(e.target.value)} onBlur={add}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+        <BareArea value={draft} placeholder="Add a priority" aria-label="Add a priority"
+          onChange={e => setDraft(e.target.value)} onBlur={add} onEnter={add} />
       </AddBox>
     </section>
   );
@@ -1260,9 +1286,8 @@ function Wins() {
         </Row>
       ))}
       <AddBox style={items.length ? { marginTop: 12 } : undefined}>
-        <BareInput value={draft} placeholder="Add a win" aria-label="Add a win"
-          onChange={e => setDraft(e.target.value)} onBlur={add}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+        <BareArea value={draft} placeholder="Add a win" aria-label="Add a win"
+          onChange={e => setDraft(e.target.value)} onBlur={add} onEnter={add} />
       </AddBox>
     </section>
   );
@@ -1547,8 +1572,8 @@ function Tasks({ show, onShow }: { show: string; onShow: (next: string) => void 
         ))}
         <AddItem onSubmit={e => { e.preventDefault(); addItem(); }}>
           <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
-          <BareInput value={draft} placeholder="Add a to-do" aria-label={`Add a to-do to ${titleOf(list)}`}
-            onChange={e => setDraft(e.target.value)} />
+          <BareArea value={draft} placeholder="Add a to-do" aria-label={`Add a to-do to ${titleOf(list)}`}
+            onChange={e => setDraft(e.target.value)} onEnter={el => el.form?.requestSubmit()} />
         </AddItem>
         <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>
       </>)}
@@ -1816,8 +1841,8 @@ function Mantra() {
       </>) : <Muted>No mantras yet. Write your first one below.</Muted>}
       <form onSubmit={e => void add(e)}>
         <AddBox style={{ marginTop: 20 }}>
-          <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
-            placeholder="Write a mantra" aria-label="Write a mantra" />
+          <BareArea value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
+            placeholder="Write a mantra" aria-label="Write a mantra" onEnter={el => el.form?.requestSubmit()} />
         </AddBox>
       </form>
       {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
@@ -1898,10 +1923,10 @@ const AddItem = styled.form`
   align-items: center;
   gap: 12px;
   margin-top: 20px;
-  height: 44px;
-  padding: 0 20px;
+  min-height: 44px;
+  padding: 10px 20px;
   border: 1px solid var(--border-pill, var(--border-card));
-  border-radius: var(--r-full, 999px);
+  border-radius: 22px; /* a pill at one line, rounded corners once it grows */
   color: var(--text-muted); /* the + */
   &:focus-within { border-color: var(--color-accent); }
 `;
@@ -2019,7 +2044,8 @@ function Shopping({ show, onShow }: { show: string; onShow: (next: string) => vo
       )}
       <AddItem onSubmit={e => void add(e)}>
         <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
-        <BareInput value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list" />
+        <BareArea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list"
+          onEnter={el => el.form?.requestSubmit()} />
       </AddItem>
       {/* The whole list in the journal editor: rename, remove items, notes… */}
       {list && <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>}
