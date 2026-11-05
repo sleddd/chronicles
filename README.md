@@ -6,14 +6,15 @@ Chronicles is now available to sign up for beta testing at [mydailychronicles.co
 
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
-<img width="1600" height="1000" alt="dashboard-dark" src="https://github.com/user-attachments/assets/553e4f1e-126a-46c5-8ae0-cedbc3c99034" />
-<img width="1268" height="1300" alt="dashboard" src="https://github.com/user-attachments/assets/4730ff94-ecf0-4fe6-82c5-cd69398f5411" />
+<img width="1600" height="1000" alt="The dashboard in light mode with a mountain photo behind the greeting and Quick entry" src="client/src/assets/landing/dashboard.jpg" />
+<img width="1600" height="1000" alt="The dashboard in dark mode" src="client/src/assets/landing/dashboard-dark.jpg" />
+<img width="1268" height="1300" alt="The top of the dashboard: the greeting, Quick entry, daily quote, wellness check-in and world clocks" src="client/src/assets/landing/features/dashboard.jpg" />
 <img width="1268" height="1300" alt="dashboard-2" src="https://github.com/user-attachments/assets/be1ce9b0-5700-4340-a0e2-94758b429036" />
 
 ### Journal
 The main view, and where the app opens. Pick a topic, write a line (or fill in the topic's fields) and save. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket( Bring your key), voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and saving takes you back there.
 
-<img width="1460" height="738" alt="Screenshot 2026-10-17 at 9 44 50 PM" src="https://github.com/user-attachments/assets/063bd93e-17e8-4b6b-9951-366ab3ef7b8c" />
+<img width="1268" height="1000" alt="The journal with entries by month and an entry open" src="client/src/assets/landing/features/journal.jpg" />
 
 ### Health
 A health dashboard with today's nutrition against your goals, a wellness check-in, quick meal and exercise logging and your medication schedule, plus tabs for Meals, Exercise, Symptoms, Med list and Allergies. Marking a dose taken adds its nutrients (a vitamin D supplement, say) to the day's totals. Reports chart water, mood and sleep over time, symptom frequency and severity, and the patterns between them, such as how water, foods or exercise relate to your symptoms. Medication lists, symptom logs and allergy records print for appointments.
@@ -33,14 +34,16 @@ Optional, and you bring your own key from OpenAI, Claude (Anthropic) or Amazon B
 ### Topics
 Entries are organized by topic — tasks, goals, meals, medication, recipes, books, quotes and more — or your own. Add, remove and reorder topics, choose their icons and give them custom fields (text, number, date, yes/no, link). Each topic's page lists its entries by month, with search. A topic can hide the text area so its entries are fields only, titled from what you filled in ("Piranesi — Susanna Clarke").
 
-<img width="1454" height="746" alt="Screenshot 2026-10-17 at 9 47 38 PM" src="https://github.com/user-attachments/assets/c7177ae8-6287-44d3-97d3-58ea72660437" />
+<img width="1268" height="1000" alt="The Topics list with an icon and entry count for each topic" src="client/src/assets/landing/features/topics.jpg" />
 <img width="1464" height="731" alt="Screenshot 2026-10-17 at 9 47 49 PM" src="https://github.com/user-attachments/assets/9dbbb374-3cd1-4ea6-bb44-382f754a276f" />
 
 ### Planning
 Goals, milestones, tasks and todos on Kanban boards or as lists. Drag a card to another column to change its status, or up and down to set its order. Milestones roll up into goals and tasks into milestones. Search, sort and filter by goal, milestone or status, and save the views you use often.
 
-<img width="1460" height="732" alt="Screenshot 2026-10-17 at 9 52 16 PM" src="https://github.com/user-attachments/assets/c3f87add-04a1-4e2b-afe0-4ad9d32a6ea5" />
-<img width="1455" height="734" alt="Screenshot 2026-10-17 at 9 52 02 PM" src="https://github.com/user-attachments/assets/bf3f6c0e-b0c3-4acb-9267-faffa85be020" />
+<img width="1268" height="900" alt="Tasks by status with priorities, deadlines and the milestone they roll up to" src="client/src/assets/landing/features/planning-tasks.jpg" />
+<img width="1268" height="900" alt="The goals board with columns from New to Achieved" src="client/src/assets/landing/features/planning.jpg" />
+<img width="1268" height="900" alt="Milestones on their own board, each under its goal" src="client/src/assets/landing/features/planning-milestones.jpg" />
+<img width="1268" height="900" alt="Todos as a list, with done ones struck through" src="client/src/assets/landing/features/planning-todos.jpg" />
 
 ### Calendar
 Day, week and month views of what's scheduled: events, meetings, task deadlines, goal target dates and bills due. Two-way sync with Google Calendar and a private subscription feed for Apple Calendar. Only titles, times and locations are synced, never your journal.
@@ -50,17 +53,17 @@ Day, week and month views of what's scheduled: events, meetings, task deadlines,
 ### From the Kitchen
 A kitchen dashboard with today's meals and your shopping list, a weekly menu planner, recipes and shopping lists. Recipes have checkable ingredients, numbered steps, a photo and a print view. Link recipes to menu slots and shopping lists, and turn a week's menu into a shopping list in one tap.
 
-<img width="1458" height="735" alt="Screenshot 2026-10-17 at 9 54 58 PM" src="https://github.com/user-attachments/assets/254e2ef1-d66c-4d53-b66e-b8d8fec047b9" />
+<img width="1600" height="1000" alt="The kitchen dashboard with today's meals and the shopping list" src="client/src/assets/landing/kitchen.jpg" />
 <img width="1450" height="740" alt="Screenshot 2026-10-17 at 9 55 07 PM" src="https://github.com/user-attachments/assets/0670fe02-87e2-422e-83fe-48a1da800f8c" />
 <img width="1120" height="743" alt="Screenshot 2026-10-17 at 9 56 35 PM" src="https://github.com/user-attachments/assets/f2934c16-c80b-410c-a2a7-08f794a5b4d7" />
 <img width="1455" height="726" alt="Screenshot 2026-10-17 at 9 55 39 PM" src="https://github.com/user-attachments/assets/af53e857-de29-423e-bebb-e1e696db768d" />
 
 ### Finance (optional)
-Off until you turn it on in Settings. A manual budget by category, bills and subscriptions (mark paid, pause, cancel), savings funds, money goals, and reports on what you've paid by bill, category, month or year, with an optional paycheck reconcile. It's all encrypted in your browser and there are no bank connections. Export everything as CSV spreadsheets plus a JSON backup. See the [Finance disclaimer](#finance).
+Off until you turn it on in Settings. A manual budget by category, bills and subscriptions (mark paid, pause, cancel), savings funds, money goals, a current balance that keeps itself up to date as you pay bills and log spending, and reports on what you've paid by bill, category, month or year. It's all encrypted in your browser and there are no bank connections. Export everything as CSV spreadsheets plus a JSON backup. See the [Finance disclaimer](#finance).
 
-<img width="1464" height="739" alt="Screenshot 2026-10-17 at 9 52 36 PM" src="https://github.com/user-attachments/assets/67bd72a4-63e2-4dbd-8748-890fd9ed1fda" />
-<img width="1448" height="743" alt="Screenshot 2026-10-17 at 9 52 47 PM" src="https://github.com/user-attachments/assets/dfa05480-7530-47ab-80c5-e4eac0ced4ad" />
-<img width="1460" height="739" alt="Screenshot 2026-10-17 at 9 52 58 PM" src="https://github.com/user-attachments/assets/ea31a2eb-9e5a-486a-9f21-04ed740edae1" />
+<img width="1268" height="1440" alt="The budget with the current balance, and planned, bills, spending and what's left by category" src="client/src/assets/landing/features/finance.jpg" />
+<img width="1268" height="1440" alt="Bills and subscriptions with what's due and overdue" src="client/src/assets/landing/features/finance-bills.jpg" />
+<img width="1268" height="1440" alt="Savings funds with their targets and entries" src="client/src/assets/landing/features/finance-savings.jpg" />
 <img width="1454" height="737" alt="Screenshot 2026-10-17 at 9 53 09 PM" src="https://github.com/user-attachments/assets/043bcf4c-5563-4dde-9af6-c1b55f2c12c0" />
 <img width="1461" height="724" alt="Screenshot 2026-10-17 at 9 53 24 PM" src="https://github.com/user-attachments/assets/614fc048-3aa9-4fcf-89c8-5bb58ef5f0dd" />
 <img width="1109" height="742" alt="Screenshot 2026-10-17 at 9 56 44 PM" src="https://github.com/user-attachments/assets/08c2d2f0-aff8-4c55-abef-bc7cd312eabd" />
@@ -68,7 +71,7 @@ Off until you turn it on in Settings. A manual budget by category, bills and sub
 ### Settings
 Your account, theme (light or dark and 30 accent colors), which features are on, calendar sync, entry images, In-App AI, security (two-factor authentication, Remember me, active sessions, recovery key) and data import and export. Every section folds away.
 
-<img width="1456" height="734" alt="Screenshot 2026-10-17 at 9 55 55 PM" src="https://github.com/user-attachments/assets/28b58f16-c629-446f-ac54-75acaaded3dd" />
+<img width="1600" height="1000" alt="Settings with the Theme section open: light, dark or auto, and the background photos" src="client/src/assets/landing/settings.jpg" />
 
 ## Privacy & Security
 

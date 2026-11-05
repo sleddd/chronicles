@@ -405,6 +405,9 @@ const QuickCard = styled.section`
   font-family: var(--font-sans);
   @media (max-width: 768px) { padding: 22px 24px 26px; }
   @media (max-width: 480px) { padding: 20px 18px 22px; }
+  /* On a wallpaper the photo shows through the Quick entry: a lighter fill and
+     only a slight blur (the other cards keep the usual frost) */
+  html[data-wallpaper] & { --glass-solid: 40%; --glass-blur: 3px; }
   ${glassCard}
 `;
 

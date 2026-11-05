@@ -5,12 +5,14 @@ import { css } from 'styled-components';
    a little see-through with the photo blurred behind them, controls a light
    glass pill, and the page's title text white. Nothing changes without one. */
 
-/** Cards: the panel colour, a little see-through, the photo blurred behind */
+/** Cards: the panel colour, a little see-through, the photo blurred behind.
+ *  --glass-solid / --glass-blur set how much (the Quick entry lowers both so
+ *  the photo shows through it) */
 export const glassCard = css`
   html[data-wallpaper] & {
-    background: color-mix(in srgb, var(--bg-panel) 76%, transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.15);
-    backdrop-filter: blur(22px) saturate(1.15);
+    background: color-mix(in srgb, var(--bg-panel) var(--glass-solid, 76%), transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.15);
+    backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.15);
   }
 `;
 
