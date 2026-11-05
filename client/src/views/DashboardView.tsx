@@ -1582,17 +1582,16 @@ function Menu() {
 }
 
 /* Coming up: events, meetings and bills over the next two weeks (doses live
-   in Next up and Medications, not here). The kind is a plain label in its colour
-   (no fill, no outline). */
+   in Next up and Medications, not here). The kind is a plain muted label — no
+   colour, fill or outline. */
 type UpKind = 'event' | 'meeting' | 'bill';
-const KindPill = styled.span<{ $kind: UpKind }>`
+const KindPill = styled.span`
   flex: none;
   padding: 3px 0 3px 10px;
   font-size: 13px;
   font-weight: 500;
-  color: ${({ $kind }) => `color-mix(in srgb, ${KIND_COLOR[$kind]} 62%, var(--text-primary))`};
+  color: var(--text-muted);
 `;
-const KIND_COLOR: Record<UpKind, string> = { event: 'var(--chart-blue)', meeting: 'var(--chart-violet)', bill: 'var(--chart-amber)' };
 const KIND_LABEL: Record<UpKind, string> = { event: 'Event', meeting: 'Meeting', bill: 'Bill' };
 
 const UpRow = styled(Row)`
@@ -1659,7 +1658,7 @@ function ComingUp({ financeOn }: { financeOn: boolean }) {
           <span className="what" role="button" tabIndex={0} onClick={it.open} onKeyDown={e => { if (e.key === 'Enter') it.open(); }}>
             {it.title}{it.sub && <small>{it.sub}</small>}
           </span>
-          <KindPill $kind={it.kind}>{KIND_LABEL[it.kind]}</KindPill>
+          <KindPill>{KIND_LABEL[it.kind]}</KindPill>
         </UpRow>
       ))}
     </section>
