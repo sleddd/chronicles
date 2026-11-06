@@ -211,8 +211,8 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  /* Phones: beside the greeting, tight together, Voice as just its mic */
-  @media (max-width: 640px) { flex-wrap: nowrap; gap: 0; margin-right: -10px; }
+  /* Phones: beside the greeting, Voice as just its mic, with room between the two round buttons */
+  @media (max-width: 640px) { flex-wrap: nowrap; gap: 12px; }
 `;
 
 /* Voice: a quiet button — the mic and the word, no outline, never a darker fill
