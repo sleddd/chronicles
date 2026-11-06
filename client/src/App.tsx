@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, darkTheme } from '@shared/theme/tokens';
@@ -51,6 +51,8 @@ import { autoThemeFor, PAGE_COLOR } from './utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 import { useEncryptedSetting } from './hooks/useEncryptedSetting.js';
 import { resolveWallpaper } from './utils/wallpapers.js';
+import { useTimeStore } from './stores/timeStore.js';
+import { RunningTimer } from './components/organisms/RunningTimer.js';
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
    Chronicles design tokens (originally from the design-system package). Light = pure white canvas; dark =
@@ -424,6 +426,28 @@ function WallpaperSync() {
   return null;
 }
 
+/** Time tracking: the sealed `timeLog` setting into the shared store once it's opened, and back on every change */
+function TimeSync() {
+  const [saved, save, loaded] = useEncryptedSetting<unknown>('timeLog', []);
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!loaded || hydrated.current) return;
+    hydrated.current = true;
+    useTimeStore.getState().hydrate(saved, sessions => save(sessions));
+  }, [loaded, saved, save]);
+  useEffect(() => () => useTimeStore.getState().reset(), []);
+  return null;
+}
+
+/** Time tracking for an unlocked journal: the store's sync and the floating timer */
+function TimeGate() {
+  const { isAuthenticated } = useAuth();
+  const { isUnlocked } = useEncryption();
+  const { pathname } = useLocation();
+  if (!isAuthenticated || !isUnlocked) return null;
+  return <><TimeSync />{!isPublicPage(pathname) && <RunningTimer />}</>;
+}
+
 function WallpaperGate() {
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
@@ -603,6 +627,7 @@ export function App() {
               <Route path="*" element={<NotFoundView />} />
             </Routes>
             <ChatGate />
+            <TimeGate />
             <WallpaperGate />
             <NoticeGate />
             <UpdatePrompt />

@@ -7,6 +7,8 @@ import { entries as entriesApi } from '../../services/api.js';
 import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { hasEntryData, prepareEntryForSave } from '../../utils/entrySave.js';
 import { nextReflectivePrompt } from '../../utils/journalPrompts.js';
+import { useTimeStore } from '../../stores/timeStore.js';
+import { startTimer } from '../../utils/timeTracking.js';
 import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from './QuickFinance.js';
 
 /**
@@ -23,9 +25,9 @@ export function QuickEntry() {
   const financeOn = useEntriesStore(s => s.featureFlags.financeEnabled === true);
   const [finance, setFinance] = useState<QuickFinanceKind | null>(null);
   const { encryptPost, encryptNewPost } = useEncryption();
-  const [content, setContent] = useState('');
+  const [typedContent, setContent] = useState('');
   const [topicId, setTopicId] = useState<number | null>(null);
-  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  const [typedFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
   // Set synchronously: two quick clicks (or ⌘+Enter twice) in one render would
   // both still see isSaving false and create the entry twice
@@ -36,9 +38,13 @@ export function QuickEntry() {
 
   const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); };
 
-  const handleSave = useCallback(async () => {
+  /** Saves the entry and clears the form; the new entry's id, or null when nothing was saved */
+  const saveEntry = useCallback(async (fill?: { content: string; fields: Record<string, unknown> }): Promise<number | null> => {
     const userFieldDefs = topicId != null ? (topicCustomFields[topicId] ?? []) : [];
-    if (savingRef.current || !hasEntryData(content, customFields, userFieldDefs)) return;
+    // A timer started before anything was typed saves a dated name in its place
+    const content = fill && !hasEntryData(typedContent, typedFields, userFieldDefs) ? fill.content : typedContent;
+    const customFields = fill && !hasEntryData(typedContent, typedFields, userFieldDefs) ? { ...typedFields, ...fill.fields } : typedFields;
+    if (savingRef.current || !hasEntryData(content, customFields, userFieldDefs)) return null;
     savingRef.current = true;
     setIsSaving(true); setStatus('');
     try {
@@ -56,20 +62,30 @@ export function QuickEntry() {
       addDecryptedEntry({ id: res.id as number, content: prepared.content, metadata, isEncrypted: true,
         createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
       reset();
+      return res.id as number;
     } catch (err) {
       console.error('Quick entry save failed:', err);
       setStatus('Save failed');
+      return null;
     } finally {
       savingRef.current = false;
       setIsSaving(false);
     }
-  }, [content, topicId, customFields, topicCustomFields, encryptNewPost, addDecryptedEntry]);
+  }, [typedContent, topicId, typedFields, topicCustomFields, encryptNewPost, addDecryptedEntry]);
+
+  const handleSave = useCallback(async () => { await saveEntry(); }, [saveEntry]);
+
+  // Time-tracked topics: save, then time it (the floating timer shows it running)
+  const handleSaveAndStartTimer = useCallback(async (fill?: { content: string; fields: Record<string, unknown> }) => {
+    const id = await saveEntry(fill);
+    if (id !== null) useTimeStore.getState().apply(list => startTimer(list, id, new Date(), crypto.randomUUID()));
+  }, [saveEntry]);
 
   return (
     <EntryForm
       variant="quick"
       entryId={null}
-      content={content}
+      content={typedContent}
       onContentChange={setContent}
       topicId={topicId}
       onTopicChange={id => { setFinance(null); setTopicId(id); }}
@@ -78,9 +94,10 @@ export function QuickEntry() {
       onQuickExtra={k => setFinance(k as QuickFinanceKind)}
       quickExtraBody={financeOn && finance ? <QuickFinance kind={finance} /> : undefined}
       topics={topics}
-      customFields={customFields}
+      customFields={typedFields}
       onCustomFieldsChange={setCustomFields}
       onSave={handleSave}
+      onSaveAndStartTimer={handleSaveAndStartTimer}
       onNew={reset}
       isEditing={false}
       isSaving={isSaving}

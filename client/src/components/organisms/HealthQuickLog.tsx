@@ -1,4 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
+import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { useTimeStore } from '../../stores/timeStore.js';
+import { startTimer } from '../../utils/timeTracking.js';
 import { Link } from 'react-router-dom';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
@@ -304,7 +308,7 @@ async function getOrCreateTopicId(name: string, icon: string): Promise<number> {
 function useCreateEntry() {
   const { encryptPost, encryptNewPost } = useEncryption();
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  return async (topicId: number, content: string, customFields: Record<string, unknown>) => {
+  return async (topicId: number, content: string, customFields: Record<string, unknown>): Promise<number> => {
     const metadata: Record<string, unknown> = { _taxonomyId: topicId, _customFields: customFields };
     const encrypted = await encryptNewPost(content, metadata);
     const result = await entriesApi.create({ id: encrypted.id,
@@ -317,6 +321,7 @@ function useCreateEntry() {
       createdAt: new Date(result.createdAt as string),
       updatedAt: new Date((result.updatedAt || result.createdAt) as string),
     });
+    return result.id as number;
   };
 }
 
@@ -400,21 +405,45 @@ function ExerciseQuick() {
   const aiReady = useAiReady();
   const createEntry = useCreateEntry();
   const openNew = useNewEntryInJournal();
-  const blank = () => ({ type: 'walking', date: today(), time: nowTime(), duration: '', notes: '' });
+  const blank = () => ({ type: 'walking', date: today(), time: nowTime(), duration: '', notes: '', routineId: null as number | null });
+  // Your exercise schedule's routines as chips beside the activities
+  const schedule = useRoutineChecklist();
+  const routines = schedule.routines;
   const [v, setV] = useState(blank);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const set = (patch: Partial<typeof v>) => setV(prev => ({ ...prev, ...patch }));
+  const timeLoaded = useTimeStore(st => st.loaded);
 
+  const routine = routines.find(r => r.id === v.routineId) ?? null;
   const fields = (): Record<string, unknown> => ({
     exerciseType: v.type, duration: v.duration.trim(), intensity: 'medium', distance: '', distanceUnit: 'miles',
     calories: '', performedDate: v.date || today(), performedTime: v.time || nowTime(), notes: v.notes.trim(),
+    ...(routine?.trainingCategory ? { trainingCategory: routine.trainingCategory } : {}),
   });
+  const pickRoutine = (id: number) => {
+    const r = routines.find(x => x.id === id);
+    if (!r) return;
+    if (v.routineId === id) { set({ routineId: null }); return; }
+    set({ routineId: id, type: r.exerciseType || v.type, duration: r.minutes ? String(r.minutes) : v.duration });
+  };
+  // Today's session of the chosen routine still to do, when logging it as scheduled (same day, its usual minutes)
+  const openSlot = () => (routine && (v.date || today()) === today() && v.duration.trim() === String(routine.minutes)
+    ? schedule.slots.find(sl => sl.routine.id === routine.id && !schedule.isDone(sl)) : undefined);
 
   const log = async () => {
     if (!v.duration.trim() || saving) return;
     setSaving(true); setStatus('');
     try {
+      // A scheduled routine logged today: tick its session, like the schedule does
+      const slot = openSlot();
+      if (slot) {
+        await schedule.setDone(slot, true);
+        setV(blank());
+        setStatus(`Logged ${slot.routine.name}`);
+        setTimeout(() => setStatus(''), 2600);
+        return;
+      }
       let f = fields();
       let note = '';
       if (aiReady) {
@@ -433,14 +462,42 @@ function ExerciseQuick() {
     } finally { setSaving(false); }
   };
 
+  // Log it now and time it: the session's minutes go in later ("Use N min as the duration")
+  const startTimed = async () => {
+    if (saving) return;
+    setSaving(true); setStatus('');
+    try {
+      // A routine is timed as itself (like its schedule row); anything else is logged now and timed
+      let id: number;
+      if (routine) id = routine.id;
+      else {
+        const f = { ...fields(), performedDate: today(), performedTime: nowTime() };
+        const topicId = await getOrCreateTopicId('Exercise', 'dumbbell');
+        id = await createEntry(topicId, `<p>${escapeHtml(exerciseSummary(f))}</p>`, f);
+      }
+      useTimeStore.getState().apply(list => startTimer(list, id, new Date(), crypto.randomUUID()));
+      setV(blank());
+      setStatus('Timing it — stop from the timer');
+      setTimeout(() => setStatus(''), 4000);
+    } catch (err) {
+      console.error('Failed to start the exercise timer:', err);
+      setStatus('That didn’t start — try again');
+    } finally { setSaving(false); }
+  };
+
   const more = async () => openNew(await getOrCreateTopicId('Exercise', 'dumbbell'), fields());
 
   return (
     <>
       <QChips role="radiogroup" aria-label="Activity">
+        {routines.map(r => (
+          <QChip key={`r${r.id}`} type="button" role="radio" aria-checked={v.routineId === r.id}
+            $active={v.routineId === r.id} title={r.minutes ? `${r.name} · ${r.minutes} min` : r.name}
+            onClick={() => pickRoutine(r.id)}>{r.name}</QChip>
+        ))}
         {EXERCISE_TYPES.map(t => (
-          <QChip key={t.value} type="button" role="radio" aria-checked={v.type === t.value}
-            $active={v.type === t.value} onClick={() => set({ type: t.value })}>{ACTIVITY_LABEL[t.value] ?? t.label}</QChip>
+          <QChip key={t.value} type="button" role="radio" aria-checked={v.routineId === null && v.type === t.value}
+            $active={v.routineId === null && v.type === t.value} onClick={() => set({ type: t.value, routineId: null })}>{ACTIVITY_LABEL[t.value] ?? t.label}</QChip>
         ))}
       </QChips>
       <Section style={{ marginTop: 20 }}>
@@ -459,6 +516,11 @@ function ExerciseQuick() {
       <Footer>
         <MoreLink type="button" onClick={() => void more()}>More details</MoreLink>
         <Status role="status" aria-live="polite">{status}</Status>
+        {(!v.duration.trim() || routine) && (
+          <PillButton type="button" $variant="neutral" onClick={() => void startTimed()} disabled={saving || !timeLoaded}>
+            <MaterialIcon $size={18} aria-hidden="true">play_arrow</MaterialIcon> Start timer
+          </PillButton>
+        )}
         <PillButton type="button" onClick={() => void log()} disabled={saving || !v.duration.trim()}>
           {saving ? 'Logging…' : 'Log exercise'}
         </PillButton>

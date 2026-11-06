@@ -103,6 +103,7 @@ export const TOPIC_ICONS: IconOption[] = [
   // More
   { name: 'checklist', glyph: 'checklist' },
   { name: 'clock', glyph: 'schedule' },
+  { name: 'stopwatch', glyph: 'timer' },
   { name: 'alarm', glyph: 'alarm' },
   { name: 'bookmark', glyph: 'bookmark' },
   { name: 'tag', glyph: 'sell' },

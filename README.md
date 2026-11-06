@@ -5,7 +5,7 @@
 Chronicles is now available to sign up for beta testing at [mydailychronicles.com](https://mydailychronicles.com/#beta), with a native phone app via React Native planned.
 
 ### Dashboard
-Your day at a glance, in light or dark mode: a greeting with the date and local weather, a daily quote or your next medications, a wellness check-in for water, sleep, mood and cycle, world clocks, today's priorities, what's coming up, today's menu, your medication doses and your open shopping list. Choose which sections show with **Customize view**.
+Your day at a glance, in light or dark mode: a greeting with the date and local weather, a Quick entry box, a daily quote or your next event, a wellness check-in for water, sleep, mood and cycle, and world clocks. Under them are cards you can drag between two columns and fold away: Stats (entries, meals, doses, exercise, symptoms and check-ins this week, this month or ever), Time tracked, today's priorities and wins, tasks and to-do lists, a daily mantra, what's coming up, recent entries, today's menu, your medications and exercise schedule, and your shopping list. Choose which cards show with **Customize view**.
 <img width="1600" height="1000" alt="The dashboard in light mode with a mountain photo behind the greeting and Quick entry" src="client/src/assets/landing/dashboard.jpg" />
 <img width="1600" height="1000" alt="The dashboard in dark mode" src="client/src/assets/landing/dashboard-dark.jpg" />
 <img width="1268" height="1300" alt="The top of the dashboard: the greeting, Quick entry, daily quote, wellness check-in and world clocks" src="client/src/assets/landing/features/dashboard.jpg" />
@@ -17,7 +17,7 @@ The main view, and where the app opens. Pick a topic, write a line (or fill in t
 <img width="1268" height="1000" alt="The journal with entries by month and an entry open" src="client/src/assets/landing/features/journal.jpg" />
 
 ### Health
-A health dashboard with today's nutrition against your goals, a wellness check-in, quick meal and exercise logging and your medication schedule, plus tabs for Meals, Exercise, Symptoms, Med list and Allergies. Marking a dose taken adds its nutrients (a vitamin D supplement, say) to the day's totals. Reports chart water, mood and sleep over time, symptom frequency and severity, and the patterns between them, such as how water, foods or exercise relate to your symptoms. Medication lists, symptom logs and allergy records print for appointments.
+A health dashboard with today's nutrition against your goals, a wellness check-in (with a notes box for anything the questions don't ask), quick meal and exercise logging and your medication schedule, plus tabs for Meals, Exercise, Symptoms, Med list and Allergies. Your exercise schedule shows on both dashboards with a timer beside each routine. Stopping it marks the session done. The quick exercise log offers your routines as one-tap chips. Marking a dose taken adds its nutrients (a vitamin D supplement, say) to the day's totals. Reports chart water, mood and sleep over time, symptom frequency and severity, and the patterns between them, such as how water, foods or exercise relate to your symptoms. Medication lists, symptom logs and allergy records print for appointments.
 
 <img width="1268" height="1300" alt="health-dashboard" src="https://github.com/user-attachments/assets/f56348ea-cfec-41c8-a77a-0b5b22549104" />
 <img width="1268" height="1300" alt="health-exercise" src="https://github.com/user-attachments/assets/f97909b2-053c-4b25-8e42-b5ba83b4a891" />
@@ -38,15 +38,18 @@ Entries are organized by topic — tasks, goals, meals, medication, recipes, boo
 <img width="1464" height="731" alt="Screenshot 2026-10-17 at 9 47 49 PM" src="https://github.com/user-attachments/assets/9dbbb374-3cd1-4ea6-bb44-382f754a276f" />
 
 ### Planning
-Goals, milestones, tasks and todos on Kanban boards or as lists. Drag a card to another column to change its status, or up and down to set its order. Milestones roll up into goals and tasks into milestones. Search, sort and filter by goal, milestone or status, and save the views you use often.
+Goals, milestones, tasks and todos on Kanban boards or as lists. Drag a card to another column to change its status, or up and down to set its order. Milestones roll up into goals and tasks into milestones. Search, sort and filter by goal, milestone or status, and save the views you use often. Every card has a timer chip, so you can time a task without opening it.
 
 <img width="1268" height="900" alt="Tasks by status with priorities, deadlines and the milestone they roll up to" src="client/src/assets/landing/features/planning-tasks.jpg" />
 <img width="1268" height="900" alt="The goals board with columns from New to Achieved" src="client/src/assets/landing/features/planning.jpg" />
 <img width="1268" height="900" alt="Milestones on their own board, each under its goal" src="client/src/assets/landing/features/planning-milestones.jpg" />
 <img width="1268" height="900" alt="Todos as a list, with done ones struck through" src="client/src/assets/landing/features/planning-todos.jpg" />
 
+### Time Tracking
+Time anything with a tap. Tasks, todos, goals, milestones, exercise and routines each have a timer, and the Time Tracking topic holds anything else you want to track time to ("Writing the novel", "Client: Acme"). One timer runs at a time, a floating timer shows it from any page, and you can add time by hand. The Time tracked card on the dashboard totals today, this week or this month and starts a timer for any activity by name. Your time is encrypted in your browser like everything else.
+
 ### Calendar
-Day, week and month views of what's scheduled: events, meetings, task deadlines, goal target dates and bills due. Two-way sync with Google Calendar and a private subscription feed for Apple Calendar. Only titles, times and locations are synced, never your journal.
+Day, week and month views of what's scheduled: events and meetings, including ones that repeat, and bills due. The month shows a dot for each kind of item, with the details in the day view. Two-way sync with Google Calendar and a private subscription feed for Apple Calendar. Only titles, times and locations are synced, never your journal.
 
 <img width="1458" height="734" alt="Screenshot 2026-10-17 at 9 52 26 PM" src="https://github.com/user-attachments/assets/af8680bb-0fad-4699-85a8-dca4f166affb" />
 
@@ -59,7 +62,7 @@ A kitchen dashboard with today's meals and your shopping list, a weekly menu pla
 <img width="1455" height="726" alt="Screenshot 2026-10-17 at 9 55 39 PM" src="https://github.com/user-attachments/assets/af53e857-de29-423e-bebb-e1e696db768d" />
 
 ### Finance (optional)
-Off until you turn it on in Settings. A manual budget by category, bills and subscriptions (mark paid, pause, cancel), savings funds, money goals, a current balance that keeps itself up to date as you pay bills and log spending, and reports on what you've paid by bill, category, month or year. It's all encrypted in your browser and there are no bank connections. Export everything as CSV spreadsheets plus a JSON backup. See the [Finance disclaimer](#finance).
+Off until you turn it on in Settings. A manual budget by category with a chart of where your money goes, bills and subscriptions (mark paid, pay part, mark cleared at the bank, pause, cancel), savings funds, money goals, a current balance that keeps itself up to date as you pay bills and log spending, and reports on what you've paid by bill, category, month or year. Filter bills by unpaid, paid or category with a total for each, sort them by due date, name or amount, and work things out with the built-in calculator. It's all encrypted in your browser and there are no bank connections. Export everything as CSV spreadsheets plus a JSON backup. See the [Finance disclaimer](#finance).
 
 <img width="1268" height="1440" alt="The budget with the current balance, and planned, bills, spending and what's left by category" src="client/src/assets/landing/features/finance.jpg" />
 <img width="1268" height="1440" alt="Bills and subscriptions with what's due and overdue" src="client/src/assets/landing/features/finance-bills.jpg" />
@@ -80,6 +83,8 @@ Your account, theme (light or dark and 30 accent colors), which features are on,
 - **Two-factor authentication** (TOTP) — no external services; secrets stored encrypted server-side
 - Recovery key system allows password reset without compromising zero-knowledge design
 - **Your password never leaves your browser** — sign-in sends a separate value derived from it, which can't unlock your data
+- **Strong passwords** — a strength meter as you type, and new passwords must be hard to guess (no common passwords, keyboard patterns, or your name or email)
+- **Shared computers** — every sign-in starts from a clean browser, so nothing of the last person carries over, and signing out always ends the session on the server
 - **Sharing and calendar sync are the deliberate exceptions**, and both are opt-in: a share link stores a plaintext copy of that entry on the server so anyone with the link can read it (revoking the link deletes it), and calendar sync sends event titles, times and locations to Google, or keeps an unencrypted copy of them on the server for the Apple Calendar feed
 - Schema-per-user database isolation (not row-level security)
 - Session management — view and revoke active sessions from any device
@@ -92,7 +97,7 @@ Your account, theme (light or dark and 30 accent colors), which features are on,
 ## Upcoming Features
 
 - **Text to Journal** - Add journal entries by sending a text message
-- **Recurring Calendar Events** - Events and meetings that repeat on a schedule
+- **Recurring Events in Calendar Sync** - Repeating events sent to Google and Apple Calendar as repeats
 - **Calorie Correlation Reporting** - How meals and calories relate to symptoms, mood, and sleep in Health Reports
 - **Phone App** - A native iOS/Android app built with React Native, sharing the same encrypted account
 

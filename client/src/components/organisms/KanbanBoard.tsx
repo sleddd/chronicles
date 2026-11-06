@@ -9,6 +9,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
 import { focusPosition } from './EntryImageGallery.js';
+import { useTimeTracking } from '../../hooks/useTimeTracking.js';
+import { formatClock, formatSpent, sessionMs } from '../../utils/timeTracking.js';
 
 /* Planning boards (goals, milestones, tasks, todos): one column per status —
    a toned panel with its name, "N cards" and a full-width + to start a new entry
@@ -235,6 +237,26 @@ const Foot = styled.div`
   &:empty { display: none; }
 `;
 
+/* The card's timer: quiet until it runs, then accent with the running clock */
+const TimerChip = styled.button<{ $running: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid ${({ $running }) => ($running ? 'var(--color-accent-line)' : 'var(--border-default)')};
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $running }) => ($running ? 'var(--color-accent-soft)' : 'var(--text-tertiary)')};
+  white-space: nowrap;
+  cursor: pointer;
+  &:hover { color: ${({ $running }) => ($running ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
 const Chip = styled.span`
   display: inline-flex;
   align-items: center;
@@ -261,10 +283,13 @@ function CardAvatar({ image }: { image: NonNullable<BoardItem['image']> }) {
   return url ? <Avatar src={url} alt="" style={{ objectPosition: focusPosition(image) }} /> : null;
 }
 
-function BoardCard({ item, onOpen }: { item: BoardItem; onOpen: (id: number) => void }) {
+function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (id: number) => void; timeTracking: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const hasFoot = !!item.date || !!item.progress;
+  // Time tracked on the card: a timer chip at the foot (start / stop without opening it)
+  const timer = useTimeTracking(timeTracking ? item.id : null);
+  const timed = timeTracking && timer.loaded;
   return (
     <Card
       ref={setNodeRef}
@@ -284,7 +309,7 @@ function BoardCard({ item, onOpen }: { item: BoardItem; onOpen: (id: number) => 
         {item.image && <CardAvatar image={item.image} />}
       </Top>
       {item.detail && <Detail>{item.detail}</Detail>}
-      {hasFoot && (
+      {(hasFoot || timed) && (
         <Foot>
           {item.date && <Chip><MaterialIcon $size={15} aria-hidden="true">flag</MaterialIcon>{item.date}</Chip>}
           {item.progress && (
@@ -292,6 +317,18 @@ function BoardCard({ item, onOpen }: { item: BoardItem; onOpen: (id: number) => 
               <MaterialIcon $size={15} aria-hidden="true">check_circle</MaterialIcon>
               {item.progress.done}/{item.progress.total}
             </Chip>
+          )}
+          {timed && (
+            <TimerChip type="button" $running={timer.running}
+              aria-label={timer.running ? `Stop the timer on ${item.title}` : `Start a timer on ${item.title}`}
+              title={timer.running ? 'Stop timer' : 'Start timer'}
+              onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); if (timer.running) timer.stop(); else timer.start(); }}>
+              <MaterialIcon $size={15} aria-hidden="true">{timer.running ? 'stop' : 'timer'}</MaterialIcon>
+              {timer.running
+                ? formatClock(timer.sessions.find(x => x.end === null) ? sessionMs(timer.sessions.find(x => x.end === null)!, timer.now) : 0)
+                : timer.totalMs >= 60_000 ? formatSpent(timer.totalMs) : null}
+            </TimerChip>
           )}
         </Foot>
       )}
@@ -312,9 +349,11 @@ interface KanbanBoardProps<K extends string> {
   onReorder?: (id: number, overId: number) => void;
   /** The column's + button; omitted = no button */
   onAdd?: (column: K) => void;
+  /** A timer chip on each card (time tracking); on by default */
+  timeTracking?: boolean;
 }
 
-export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, onReorder, onAdd }: KanbanBoardProps<K>) {
+export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, onReorder, onAdd, timeTracking = true }: KanbanBoardProps<K>) {
   // Mouse drags after a small move; on touch a card is picked up by a short
   // press-and-hold, so a quick swipe still scrolls the board sideways
   const sensors = useSensors(
@@ -367,7 +406,7 @@ export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, o
                     <Cards>
                       {col.items.length === 0
                         ? <Empty>Drop {noun}s here</Empty>
-                        : col.items.map(item => <BoardCard key={item.id} item={item} onOpen={open} />)}
+                        : col.items.map(item => <BoardCard key={item.id} item={item} onOpen={open} timeTracking={timeTracking} />)}
                     </Cards>
                   </SortableContext>
                 </Column>

@@ -22,6 +22,10 @@ import { FoodFields, type FoodFieldValues } from '../molecules/fields/FoodFields
 import { MedicationFields, type MedicationFieldValues } from '../molecules/fields/MedicationFields.js';
 import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/MenuPlanFields.js';
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
+import { TimeTracker } from '../molecules/fields/TimeTracker.js';
+import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
+import { useTimeTracking } from '../../hooks/useTimeTracking.js';
+import { TIME_TRACKED_TYPES, isTimeTrackingTopic, timerFill } from '../../utils/timeTracking.js';
 import { ExerciseFields, type ExerciseFieldValues } from '../molecules/fields/ExerciseFields.js';
 import { RoutineFields } from '../molecules/fields/RoutineFields.js';
 import { TrainingPlanFields } from '../molecules/fields/TrainingPlanFields.js';
@@ -503,6 +507,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   changes: 'change', change: 'change',
   routine: 'routine', routines: 'routine', 'exercise schedule': 'routine', 'exercise routine': 'routine',
   'training plan': 'training_plan', 'training plans': 'training_plan',
+  'time tracking': 'time_tracking',
 };
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
@@ -510,12 +515,15 @@ const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
   event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName', change: 'changeWhat',
-  routine: 'routineName', training_plan: 'planName',
+  routine: 'routineName', training_plan: 'planName', time_tracking: 'activityName',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
   if (!topicName) return null;
-  return TOPIC_TO_TYPE[topicName.toLowerCase()] || null;
+  const name = topicName.trim().toLowerCase();
+  // Time tracking under any of its usual names ("Time tracker", "Timesheet", "Time log"…)
+  if (isTimeTrackingTopic(name)) return 'time_tracking';
+  return TOPIC_TO_TYPE[name] || null;
 }
 
 
@@ -531,6 +539,9 @@ interface EntryFormProps {
   customFields: Record<string, unknown>;
   onCustomFieldsChange: (fields: Record<string, unknown>) => void;
   onSave: () => Promise<void>;
+  /** Save the entry, then start a timer on it (time-tracked topics). `fill` is what to save
+   *  when nothing has been typed yet (a dated name), so the timer never waits on a title */
+  onSaveAndStartTimer?: (fill?: { content: string; fields: Record<string, unknown> }) => Promise<void>;
   onAutoSave?: () => void;
   onDelete?: () => Promise<void>;
   onNew: () => void;
@@ -578,7 +589,7 @@ interface EntryFormProps {
 
 export function EntryForm({
   entryId, content, onContentChange, topicId, onTopicChange, topics,
-  customFields, onCustomFieldsChange, onSave, onAutoSave, onDelete, onNew,
+  customFields, onCustomFieldsChange, onSave, onSaveAndStartTimer, onAutoSave, onDelete, onNew,
   onBookmark, onShare, onDuplicate, onBack, expanded, onToggleExpand, onClose,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
@@ -588,6 +599,8 @@ export function EntryForm({
   quickExtras, quickExtra = null, onQuickExtra, quickExtraBody,
 }: EntryFormProps) {
   const quick = variant === 'quick';
+  // Time tracking on this entry (tasks, goals, milestones, exercise, Time Tracking activities)
+  const timer = useTimeTracking(entryId);
   // Phones (not tablets): Save / Discard / Delete sit in the page flow, not docked
   const phone = useMediaQuery('(max-width: 768px)');
   // Symptom chips: the built-in list plus the owner's own (encrypted setting)
@@ -1041,6 +1054,32 @@ export function EntryForm({
               {customType === 'wins' && <WinsFields values={{ wins: [], ...(customFields as Partial<WinsFieldValues>) } as WinsFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
+              {customType === 'time_tracking' && <TimeTrackingFields values={{ activityName: '', notes: '', ...customFields } as TimeTrackingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
+                <div style={{ marginTop: 32 }}>
+                  <TimeTracker
+                    sessions={[]} totalMs={0} running={false} otherRunning={timer.otherRunning} now={timer.now}
+                    disabled={isSaving || !timer.loaded}
+                    onStart={() => void onSaveAndStartTimer(canSave ? undefined : timerFill(customType, nameKey, new Date()))} onStop={timer.stop} onAdd={() => {}} onRemove={() => {}}
+                    noAdd
+                    note={timer.otherRunning ? 'Starting the timer saves this entry and stops the one running now.' : 'Starting the timer saves this entry.'}
+                  />
+                </div>
+              )}
+              {customType && TIME_TRACKED_TYPES.has(customType) && !quick && (
+                <div style={{ marginTop: 40 }}>
+                  <TimeTracker
+                    sessions={timer.sessions} totalMs={timer.totalMs} running={timer.running} otherRunning={timer.otherRunning} now={timer.now}
+                    disabled={(entryId === null && !onSaveAndStartTimer) || isSaving || !timer.loaded}
+                    onStart={entryId === null && onSaveAndStartTimer
+                      ? () => void onSaveAndStartTimer(canSave ? undefined : timerFill(customType, nameKey, new Date()))
+                      : timer.start}
+                    onStop={timer.stop} onAdd={timer.addManual} onRemove={timer.remove}
+                    note={entryId === null && onSaveAndStartTimer ? 'Starting the timer saves this entry.' : undefined}
+                    onUseAsDuration={customType === 'exercise' ? m => onCustomFieldsChange({ ...customFields, duration: String(m) }) : undefined}
+                  />
+                </div>
+              )}
               </FieldRowLayoutContext.Provider>
             </CustomFieldsBody>
         </CustomFieldsSection>

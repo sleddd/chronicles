@@ -43,6 +43,12 @@ import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi } from '../services/api.js';
 import { dashboardStats, type StatsPeriod, type StatsDose } from '../utils/dashboardStats.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
+import { useTimeStore } from '../stores/timeStore.js';
+import { useNow } from '../hooks/useTimeTracking.js';
+import {
+  TIME_TRACKING_TOPIC, formatClock, formatSpent, isTimeTrackingTopic, runningSession, sessionMs, startTimer, stopTimer,
+  timeByEntry, timePeriodStart, type TimePeriod,
+} from '../utils/timeTracking.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import { entryTitleText } from '../utils/entryTitle.js';
 import { toDateStr } from '../utils/dateUtils.js';
@@ -79,7 +85,7 @@ import { MANTRA_TOPIC, MANTRA_ICON, isMantraTopic, dailyMantraIndex, stepIndex }
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -99,6 +105,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'meds', label: 'Medications' },
   { key: 'recent', label: 'Recent entries' },
   { key: 'stats', label: 'Stats' },
+  { key: 'time', label: 'Time tracked' },
   { key: 'shopping', label: 'Shopping list' },
 ];
 
@@ -123,7 +130,7 @@ interface DashboardConfig {
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
   left: ['stats', 'priorities', 'wins', 'tasks', 'comingUp', 'quickLog', 'exercise'],
-  right: ['mantra', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
+  right: ['mantra', 'time', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
 /** The saved layout with any card it doesn't know put back in its default column, at its default place there */
@@ -639,6 +646,11 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean }>`
     && > section > :first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
     /* Grip and chevron centred on the folded card's one row */
     & > button { top: 50% !important; transform: translateY(-50%); }
+  ` : '')}
+  /* Folded, a picker card (Shopping list, Tasks) is just its title too — no picker or +, so it
+     reads as folded rather than as a list with nothing in it */
+  ${({ $tall, $collapsed }) => ($tall && $collapsed ? `
+    & > section > :first-child > :not(h2) { display: none; }
   ` : '')}
 `;
 
@@ -1418,7 +1430,16 @@ function shortDue(ymd: unknown): string {
   return new Date(`${ymd}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function Tasks({ show, onShow }: { show: string; onShow: (next: string) => void }) {
+/** A card's picker choice (which list, which view): shown at once, then saved — the card never
+ *  waits on the dashboard setting's save, and a save that's turned away doesn't undo the pick */
+function useCardChoice(saved: string, save: (next: string) => void): [string, (next: string) => void] {
+  const [local, setLocal] = useState(saved);
+  useEffect(() => { setLocal(saved); }, [saved]);
+  return [local, next => { setLocal(next); save(next); }];
+}
+
+function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (next: string) => void }) {
+  const [show, onShow] = useCardChoice(savedShow, saveShow);
   const navigate = useNavigate();
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -1965,6 +1986,149 @@ function Stats({ meals, meds, exercise }: { meals: boolean; meds: boolean; exerc
   );
 }
 
+/* Time tracked: what had time this period (and every Time Tracking activity), most first,
+   each with its own start / stop; a box under them starts a timer for a new or existing activity */
+const TIME_PERIODS: { value: TimePeriod; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+];
+
+const TimeTotal = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 18px;
+  b { font-family: var(--font-display); font-size: 34px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+`;
+
+const TimeRow = styled(Row)`
+  & > .title { flex: 1; min-width: 0; padding: 0; border: none; background: none; text-align: left; font: inherit; color: inherit;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  & > .title:hover { text-decoration: underline; }
+  & > .spent { flex: none; font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  & > .spent.on { color: var(--color-accent-soft); font-weight: 600; }
+`;
+
+const TimerBtn = styled.button<{ $on: boolean }>`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid ${({ $on }) => ($on ? 'var(--color-accent-line)' : 'var(--border-card)')};
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ $on }) => ($on ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const TIME_ROWS = 8;
+
+function TimeTracked() {
+  const openInJournal = useOpenInJournal();
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const { encryptNewPost } = useEncryption();
+  const sessions = useTimeStore(s => s.sessions);
+  const loaded = useTimeStore(s => s.loaded);
+  const apply = useTimeStore(s => s.apply);
+  const [period, setPeriod] = useState<TimePeriod>('today');
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  const running = runningSession(sessions);
+  const now = useNow(!!running);
+
+  const trackingTopics = useMemo(() => new Set(allTopics.filter(t => isTimeTrackingTopic(t.name)).map(t => t.id)), [allTopics]);
+  const byEntry = timeByEntry(sessions, timePeriodStart(period, now), now);
+  const nameOf = (e: DecryptedPost) => entryTitleText(e.content) || builtinEntryName(cfOf(e)) || 'Untitled';
+  const rows = entries
+    .filter(e => byEntry.has(e.id) || running?.entryId === e.id || trackingTopics.has((e.metadata as Record<string, unknown>)?._taxonomyId as number))
+    .map(e => ({ entry: e, ms: byEntry.get(e.id) ?? 0, name: nameOf(e) }))
+    .sort((a, b) => Number(running?.entryId === b.entry.id) - Number(running?.entryId === a.entry.id) || b.ms - a.ms || a.name.localeCompare(b.name));
+  const total = [...byEntry.values()].reduce((t, v) => t + v, 0);
+  const shown = showAll ? rows : rows.slice(0, TIME_ROWS);
+
+  const toggle = (id: number) => apply(list => (running?.entryId === id ? stopTimer(list, new Date()) : startTimer(list, id, new Date(), crypto.randomUUID())));
+
+  // A timer for an activity by name: an existing Time Tracking entry of that name, else a new one
+  const startFor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = draft.trim();
+    if (!name || !loaded) return;
+    setError('');
+    const existing = entries.find(x => trackingTopics.has((x.metadata as Record<string, unknown>)?._taxonomyId as number) && nameOf(x).toLowerCase() === name.toLowerCase());
+    try {
+      let id = existing?.id;
+      if (id === undefined) {
+        // The account's time-tracking topic, whatever it's called, else a new Time Tracking one
+        const topicId = [...trackingTopics][0] ?? await getOrCreateTopic(TIME_TRACKING_TOPIC, 'stopwatch');
+        const content = `<p>${escapeHtml(name)}</p>`;
+        const metadata = { _taxonomyId: topicId, _customFields: { activityName: name, notes: '' } };
+        const enc = await encryptNewPost(content, metadata);
+        const res = await entriesApi.create({ id: enc.id,
+          contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+          metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+          isEncrypted: true, taxonomyIds: [topicId],
+        });
+        id = res.id as number;
+        addDecryptedEntry({ id, content, metadata, isEncrypted: true,
+          createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+      }
+      const startId = id;
+      apply(list => startTimer(list, startId, new Date(), crypto.randomUUID()));
+      setDraft('');
+    } catch (err) {
+      console.error('Time tracking start failed:', err);
+      setError('That timer didn’t start. Try again.');
+    }
+  };
+
+  const periodWord = period === 'today' ? 'today' : period === 'week' ? 'in the last 7 days' : 'this month';
+  return (
+    <section aria-label="Time tracked">
+      <StatsHead>
+        <h2>Time tracked</h2>
+        <FilterTabs options={TIME_PERIODS} active={period} onChange={setPeriod} />
+      </StatsHead>
+      <TimeTotal><b>{formatSpent(total)}</b><span>{periodWord}</span></TimeTotal>
+      {rows.length === 0
+        ? <Muted>Nothing timed {periodWord}. Start a timer on a task, goal or exercise, or name an activity below.</Muted>
+        : <div style={{ marginTop: 10 }}>
+          {shown.map(({ entry, ms: spent, name }) => {
+            const on = running?.entryId === entry.id;
+            return (
+              <TimeRow key={entry.id}>
+                <button type="button" className="title" onClick={() => openInJournal(entry.id)}>{name}</button>
+                <span className={on ? 'spent on' : 'spent'}>{on ? formatClock(sessionMs(running!, now)) : spent ? formatSpent(spent) : '—'}</span>
+                <TimerBtn type="button" $on={on} disabled={!loaded} aria-label={on ? `Stop the timer on ${name}` : `Start a timer on ${name}`} title={on ? 'Stop' : 'Start timer'}
+                  onClick={() => toggle(entry.id)}>
+                  <MaterialIcon $size={18} aria-hidden="true">{on ? 'stop' : 'play_arrow'}</MaterialIcon>
+                </TimerBtn>
+              </TimeRow>
+            );
+          })}
+          {rows.length > TIME_ROWS && (
+            <MoreLink type="button" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</MoreLink>
+          )}
+        </div>}
+      <AddItem onSubmit={e => void startFor(e)}>
+        <MaterialIcon $size={18} aria-hidden="true">play_arrow</MaterialIcon>
+        <BareArea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Start a timer for…" aria-label="Start a timer for an activity"
+          onEnter={el => el.form?.requestSubmit()} />
+      </AddItem>
+      {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
+    </section>
+  );
+}
+
 /* Shopping list: the newest open list's items as outline pills (got = struck) */
 const Pills = styled.div`
   display: flex;
@@ -2011,7 +2175,8 @@ const AddItem = styled.form`
   &:focus-within { border-color: var(--color-accent); }
 `;
 
-function Shopping({ show, onShow }: { show: string; onShow: (next: string) => void }) {
+export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; onShow: (next: string) => void }) {
+  const [show, onShow] = useCardChoice(savedShow, saveShow);
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -2404,7 +2569,7 @@ export function DashboardView() {
     wins: { label: "today's wins", on: shown('wins'), node: <Wins /> },
     tasks: {
       label: 'tasks', on: shown('tasks'),
-      node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => void saveConfig({ ...config, tasksShow: next })} />,
+      node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => saveConfig({ ...config, tasksShow: next }).catch(err => console.warn('Couldn’t save the Tasks card’s choice:', err))} />,
     },
     comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} /> },
     exercise: { label: 'exercise schedule', on: shown('exercise') && ff.exerciseEnabled !== false, node: <ExerciseToday /> },
@@ -2414,6 +2579,7 @@ export function DashboardView() {
       node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} />,
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
+    time: { label: 'time tracked', on: shown('time'), node: <TimeTracked /> },
     stats: {
       label: 'stats', on: shown('stats'),
       node: <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} />,
@@ -2421,7 +2587,7 @@ export function DashboardView() {
     mantra: { label: 'mantra', on: shown('mantra'), node: <Mantra /> },
     shopping: {
       label: 'shopping list', on: shown('shopping'),
-      node: <Shopping show={config.shoppingShow ?? 'latest'} onShow={next => void saveConfig({ ...config, shoppingShow: next })} />,
+      node: <Shopping show={config.shoppingShow ?? 'latest'} onShow={next => saveConfig({ ...config, shoppingShow: next }).catch(err => console.warn('Couldn’t save the Shopping list card’s choice:', err))} />,
     },
     menu: { label: 'on the menu', on: shown('menu') && kitchenOn, node: <Menu /> },
     meds: { label: 'medications', on: shown('meds') && medsOn, node: <MedicationsToday doses={doses} /> },

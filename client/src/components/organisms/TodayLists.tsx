@@ -11,6 +11,10 @@ import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import type { RoutineSlot } from '../../utils/routines.js';
 import { useTodayDoses } from '../../hooks/useTodayDoses.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { useTimeStore } from '../../stores/timeStore.js';
+import { useNow } from '../../hooks/useTimeTracking.js';
+import { formatClock, runningSession, sessionMs, startTimer, stopTimer } from '../../utils/timeTracking.js';
 
 /* Today's medications and exercise schedule as flat sections — the home
    dashboard's look, shared with the Health dashboard: a thin Work Sans title
@@ -70,6 +74,24 @@ const ItemWhen = styled.span`
   flex: none;
   font-size: 14px;
   color: var(--text-muted);
+`;
+
+/* A schedule row's timer: times the routine; stopping it here ticks the session done */
+const RowTimer = styled.button<{ $on: boolean }>`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid ${({ $on }) => ($on ? 'var(--color-accent-line)' : 'var(--border-card)')};
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ $on }) => ($on ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 /* A schedule row's name and time: opens its routine in the journal, where
@@ -216,6 +238,20 @@ export function ExerciseToday({ panel = false }: { panel?: boolean }) {
   const openInJournal = useOpenInJournal();
   const list = useRoutineChecklist();
   const Frame = panel ? DashPanel : 'section';
+  const timeLoaded = useTimeStore(st => st.loaded);
+  const sessions = useTimeStore(st => st.sessions);
+  const apply = useTimeStore(st => st.apply);
+  const running = runningSession(sessions);
+  const now = useNow(!!running);
+  // The timer runs on the routine; stopping it from its row ticks that session done
+  const toggleTimer = (s: RoutineSlot, done: boolean) => {
+    if (running?.entryId === s.routine.id) {
+      apply(l => stopTimer(l, new Date()));
+      if (!done) void list.setDone(s, true);
+    } else {
+      apply(l => startTimer(l, s.routine.id, new Date(), crypto.randomUUID()));
+    }
+  };
   return (
     <Frame aria-label="Exercise schedule">
       <SectionHead>
@@ -227,7 +263,9 @@ export function ExerciseToday({ panel = false }: { panel?: boolean }) {
         const done = list.isDone(s);
         const items = list.doneItems(s);
         const at = list.doneAt(s);
-        const when = done && at
+        const timing = running?.entryId === s.routine.id;
+        const when = timing ? formatClock(sessionMs(running!, now))
+          : done && at
           ? `Done ${new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
           : items.length ? `${items.length} of ${s.routine.items.length}` : time12(s.time);
         return (
@@ -238,8 +276,15 @@ export function ExerciseToday({ panel = false }: { panel?: boolean }) {
             <OpenRoutine type="button" title="Edit routine" aria-label={`Edit ${s.routine.name}: times, days and exercises`}
               onClick={() => openInJournal(s.routine.id)}>
               <ItemName $done={done}>{s.routine.name}{s.routine.minutes ? <small> · {s.routine.minutes} min</small> : null}</ItemName>
-              <ItemWhen>{when}</ItemWhen>
+              <ItemWhen style={timing ? { color: 'var(--color-accent-soft)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' } : undefined}>{when}</ItemWhen>
             </OpenRoutine>
+            {timeLoaded && (
+              <RowTimer type="button" $on={timing} title={timing ? 'Stop and mark done' : 'Start timer'}
+                aria-label={timing ? `Stop the timer on ${s.routine.name} and mark it done` : `Start a timer on ${s.routine.name}`}
+                onClick={() => toggleTimer(s, done)}>
+                <MaterialIcon $size={18} aria-hidden="true">{timing ? 'stop' : 'play_arrow'}</MaterialIcon>
+              </RowTimer>
+            )}
           </Row>
         );
       })}

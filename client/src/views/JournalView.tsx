@@ -45,6 +45,8 @@ import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { useTimeStore } from '../stores/timeStore.js';
+import { startTimer } from '../utils/timeTracking.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -407,11 +409,14 @@ export function JournalView() {
   };
 
   // Auto-save: fires 3s after user stops editing, saves in place without closing the editor
-  const autoSaveDoRef = useRef<() => Promise<void>>(async () => {});
-  autoSaveDoRef.current = async () => {
+  const editorFields = customFields;
+  const autoSaveDoRef = useRef<(fill?: { content: string; fields: Record<string, unknown> }) => Promise<void>>(async () => {});
+  // `fill`: what a Start timer press saves when nothing was typed yet (a dated name)
+  autoSaveDoRef.current = async (fill) => {
+    const customFields = fill ? { ...editorFields, ...fill.fields } : editorFields;
     const session = editSessionRef.current;
     const selectedEntryId = entryIdRef.current;
-    const currentContent = editorContent;
+    const currentContent = fill ? fill.content : editorContent;
     const currentFields = JSON.stringify(customFields);
     const currentImages = imagesSig(entryImages, featuredKey);
     if (
@@ -967,6 +972,19 @@ export function JournalView() {
   /** Toggle bookmark on the currently open entry (from EntryForm toolbar) */
   // Duplicate (⋯ More): finish saving the original, then open a copy as a
   // new entry — same topic, text and fields, a fresh start (utils/entryDuplicate)
+  // A new entry's Start timer: save it in place (a dated name when nothing's typed), then time it
+  const handleSaveAndStartTimer = async (fill?: { content: string; fields: Record<string, unknown> }) => {
+    if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+    const session = editSessionRef.current;
+    if (fill) {
+      setEditorContent(fill.content);
+      setCustomFields(prev => ({ ...prev, ...fill.fields }));
+    }
+    await runSave(async () => { if (editSessionRef.current === session) await autoSaveDoRef.current(fill); });
+    const id = entryIdRef.current;
+    if (id && editSessionRef.current === session) useTimeStore.getState().apply(list => startTimer(list, id, new Date(), crypto.randomUUID()));
+  };
+
   const handleDuplicate = useCallback(async () => {
     if (!entryIdRef.current) return;
     const content = editorContent;
@@ -1131,6 +1149,7 @@ export function JournalView() {
               onCustomFieldsChange={setCustomFields}
               onSave={handleSave}
               onAutoSave={isWellnessEntry ? scheduleWellnessAutoSave : undefined}
+              onSaveAndStartTimer={handleSaveAndStartTimer}
               onDelete={selectedEntryId ? handleDelete : undefined}
               onNew={handleNew}
               onBookmark={handleBookmark}

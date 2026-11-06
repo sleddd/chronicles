@@ -13,6 +13,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { olderEntriesAllowed, reserveEntryId, clearReservedEntryIds } from '../services/entryReseal.js';
 import { clearSealMarkers, clearIssuedTopicIds } from '../services/api.js';
 import { useUIStore } from '../stores/uiStore.js';
+import { useTimeStore } from '../stores/timeStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
   hasRememberedUnlock, lastActivity, markActivity, startRemembering, storeRemembered,
@@ -147,6 +148,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearSealMarkers();
     // Entry list titles are cached keyed by the decrypted entry HTML
     clearEntryTitleCache();
+    // Time-tracking sessions (which entries, when) — TimeSync reopens them on unlock
+    useTimeStore.getState().reset();
     setEgressAccount(null);
     setIsUnlocked(false);
   }, []);

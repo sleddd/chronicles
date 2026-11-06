@@ -1,4 +1,5 @@
 import { entries as entriesApi, ApiError } from '../services/api.js';
+import { useTimeStore } from '../stores/timeStore.js';
 import { showFlash } from '../services/flashNotice.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { collectImageKeys, bestEffortDeleteImages } from '../services/imageStorage.js';
@@ -47,4 +48,6 @@ export async function deleteEntryWithImages(entryId: number): Promise<void> {
     }
   }
   if (imageKeys.length > 0) void bestEffortDeleteImages(imageKeys);
+  // Its tracked time goes with it
+  useTimeStore.getState().apply(list => (list.some(x => x.entryId === entryId) ? list.filter(x => x.entryId !== entryId) : list));
 }

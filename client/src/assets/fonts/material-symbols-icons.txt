@@ -123,6 +123,7 @@ pets
 photo_camera
 photo_library
 piano
+play_arrow
 pool
 potted_plant
 pregnant_woman
@@ -170,12 +171,14 @@ sports_volleyball
 star
 stethoscope
 sticky_note_2
+stop
 storefront
 stylus_fountain_pen
 surfing
 target
 theater_comedy
 thunderstorm
+timer
 train
 translate
 trophy
