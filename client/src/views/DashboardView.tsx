@@ -44,6 +44,7 @@ import { entries as entriesApi, topics as topicsApi, settings as settingsApi, do
 import { dashboardStats, type StatsPeriod, type StatsDose } from '../utils/dashboardStats.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { useTimeStore } from '../stores/timeStore.js';
+import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { useNow } from '../hooks/useTimeTracking.js';
 import {
   TIME_TRACKING_TOPIC, formatClock, formatSpent, isTimeTrackingTopic, runningSession, sessionMs, startTimer, stopTimer,
@@ -2009,6 +2010,7 @@ const TimeRow = styled(Row)`
   & > .title:hover { text-decoration: underline; }
   & > .spent { flex: none; font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   & > .spent.on { color: var(--color-accent-soft); font-weight: 600; }
+  &:hover .x, & .x:focus-visible { opacity: 1; }
 `;
 
 const TimerBtn = styled.button<{ $on: boolean }>`
@@ -2026,6 +2028,29 @@ const TimerBtn = styled.button<{ $on: boolean }>`
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* A row's quiet × (shown on hover, always on touch); a second click confirms */
+const TimeRemove = styled.button<{ $confirm?: boolean }>`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: ${({ $confirm }) => ($confirm ? '0 10px' : '0')};
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--text-muted)')};
+  cursor: pointer;
+  &:hover { color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &.x { opacity: 0; transition: opacity 120ms; }
+  @media (hover: none) { &.x { opacity: 1; } }
 `;
 
 const TIME_ROWS = 8;
@@ -2056,6 +2081,14 @@ function TimeTracked() {
   const total = [...byEntry.values()].reduce((t, v) => t + v, 0);
   const shown = showAll ? rows : rows.slice(0, TIME_ROWS);
 
+  const [confirming, setConfirming] = useState<number | null>(null);
+  const isActivity = (e: DecryptedPost) => trackingTopics.has((e.metadata as Record<string, unknown>)?._taxonomyId as number);
+  // A Time Tracking activity is deleted (its time goes with it); anything else just loses its tracked time
+  const removeRow = (e: DecryptedPost) => {
+    setConfirming(null);
+    if (isActivity(e)) void deleteEntryWithImages(e.id).catch(() => { /* the flash note says so */ });
+    else apply(list => list.filter(x => x.entryId !== e.id));
+  };
   const toggle = (id: number) => apply(list => (running?.entryId === id ? stopTimer(list, new Date()) : startTimer(list, id, new Date(), crypto.randomUUID())));
 
   // A timer for an activity by name: an existing Time Tracking entry of that name, else a new one
@@ -2112,6 +2145,18 @@ function TimeTracked() {
                   onClick={() => toggle(entry.id)}>
                   <MaterialIcon $size={18} aria-hidden="true">{on ? 'stop' : 'play_arrow'}</MaterialIcon>
                 </TimerBtn>
+                {confirming === entry.id ? (
+                  <TimeRemove type="button" $confirm autoFocus onBlur={() => setConfirming(null)} onClick={() => removeRow(entry)}
+                    aria-label={isActivity(entry) ? `Confirm deleting ${name}` : `Confirm clearing the time on ${name}`}>
+                    {isActivity(entry) ? 'Delete?' : 'Clear time?'}
+                  </TimeRemove>
+                ) : (
+                  <TimeRemove type="button" className="x" disabled={!loaded} onClick={() => setConfirming(entry.id)}
+                    aria-label={isActivity(entry) ? `Delete ${name}` : `Clear the time on ${name}`}
+                    title={isActivity(entry) ? 'Delete activity' : 'Clear its time'}>
+                    <Icon name="x" size={14} strokeWidth={2} />
+                  </TimeRemove>
+                )}
               </TimeRow>
             );
           })}
