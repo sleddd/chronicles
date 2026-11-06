@@ -795,15 +795,37 @@ router.post('/login', authLimiter, async (req, res) => {
 // =============================================================================
 // POST /api/auth/logout
 // =============================================================================
-router.post('/logout', authMiddleware, async (req, res) => {
+// Signing out always works and always clears the cookies — even when the
+// session is already expired, idle or revoked (it once needed a live session,
+// so a stale cookie stayed in the browser). Browser calls still need the CSRF
+// header; Bearer clients go through the usual check.
+const clearSessionCookies = (res: Response) => {
+  res.clearCookie(COOKIE_NAME, { path: '/', httpOnly: true, secure: IS_PRODUCTION, sameSite: 'strict' as const });
+  clearRememberCookie(res);
+};
+
+router.post('/logout', async (req, res, next) => {
+  if (req.headers.authorization) {
+    return authMiddleware(req, res, async () => {
+      try {
+        await revokeSession(req.auth!.selector, 'user_logout');
+        logSecurityEvent('logout', { accountId: req.auth!.accountId, ip: req.ip });
+        res.json({ success: true });
+      } catch (err) { next(err); }
+    });
+  }
+  if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
   try {
-    await revokeSession(req.auth!.selector, 'user_logout');
-    logSecurityEvent('logout', { accountId: req.auth!.accountId, ip: req.ip });
-    res.clearCookie(COOKIE_NAME, { path: '/', secure: IS_PRODUCTION, sameSite: 'strict' as const });
-    clearRememberCookie(res);
+    const accountId = await revokeBrowserSession(req, 'user_logout');
+    if (accountId !== null) logSecurityEvent('logout', { accountId, ip: req.ip });
+    clearSessionCookies(res);
     res.json({ success: true });
   } catch (err) {
     console.error('Logout error:', err instanceof Error ? err.message : 'Unknown error');
+    clearSessionCookies(res);
     res.status(500).json({ error: 'Logout failed' });
   }
 });

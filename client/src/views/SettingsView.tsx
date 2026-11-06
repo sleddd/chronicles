@@ -17,7 +17,8 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { FormField } from '../components/molecules/FormField.js';
 import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
-import { deriveAuthSecret, newRecoveryProof, passwordSchema } from '@chronicles/shared';
+import { deriveAuthSecret, newRecoveryProof, newPasswordProblem } from '@chronicles/shared';
+import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthMeter.js';
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
 import { AiSettings } from '../components/organisms/AiSettings.js';
@@ -401,8 +402,8 @@ export function SettingsView() {
   const handleChangePassword = async () => {
     setPwMessage(''); setPwError(false);
     if (newPw !== confirmPw) { setPwMessage('Passwords do not match'); setPwError(true); return; }
-    const rules = passwordSchema.safeParse(newPw);
-    if (!rules.success) { setPwMessage(rules.error.issues[0].message); setPwError(true); return; }
+    const pwProblem = newPasswordProblem(newPw, { email: user?.email, username: user?.username });
+    if (pwProblem) { setPwMessage(pwProblem); setPwError(true); return; }
     setPwLoading(true);
     try {
       const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPw, currentPw);
@@ -1142,6 +1143,7 @@ export function SettingsView() {
             </FormField>
             <FormField label="New Password">
               <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 12 characters" autoComplete="new-password" />
+              <PasswordStrengthMeter password={newPw} email={user?.email} username={user?.username} />
             </FormField>
             <FormField label="Confirm New Password">
               <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} autoComplete="new-password" />

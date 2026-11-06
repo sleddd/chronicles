@@ -13,7 +13,7 @@ describe('RegisterForm', () => {
     renderWithTheme(<RegisterForm onSubmit={vi.fn()} />);
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Choose a username')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Min 12 chars, uppercase, lowercase, number')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Re-enter password')).toBeInTheDocument();
   });
 
@@ -32,7 +32,7 @@ describe('RegisterForm', () => {
     fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Min 12 chars, uppercase, lowercase, number'), {
+    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
       target: { value: 'short' },
     });
     fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
@@ -55,7 +55,7 @@ describe('RegisterForm', () => {
     fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Min 12 chars, uppercase, lowercase, number'), {
+    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
@@ -79,7 +79,7 @@ describe('RegisterForm', () => {
     fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
       target: { value: 'ab' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Min 12 chars, uppercase, lowercase, number'), {
+    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
@@ -103,7 +103,7 @@ describe('RegisterForm', () => {
     fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Min 12 chars, uppercase, lowercase, number'), {
+    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
@@ -130,7 +130,7 @@ describe('RegisterForm', () => {
     fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Min 12 chars, uppercase, lowercase, number'), {
+    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
@@ -141,5 +141,18 @@ describe('RegisterForm', () => {
     await waitFor(() => {
       expect(screen.getByText('Email taken')).toBeInTheDocument();
     });
+  });
+
+  it('refuses a password that meets the rules but is easy to guess, with a strength meter', async () => {
+    const onSubmit = vi.fn();
+    renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByPlaceholderText('Choose a username'), { target: { value: 'testuser' } });
+    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), { target: { value: 'Password123!' } });
+    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), { target: { value: 'Password123!' } });
+    expect(screen.getByRole('status', { name: /Password strength: (Too weak|Weak|Fair)/ })).toBeInTheDocument();
+    fireEvent.submit(screen.getByPlaceholderText('you@example.com').closest('form')!);
+    expect(await screen.findByText(/too easy to guess/)).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

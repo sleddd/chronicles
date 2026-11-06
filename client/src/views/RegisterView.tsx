@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
@@ -21,7 +22,10 @@ export function RegisterView() {
   const inviteCode = params.get('invite')?.trim() || undefined;
   const invitedEmail = params.get('email')?.trim() ?? '';
 
+  const freshSignIn = useFreshSignIn();
   const handleRegister = async ({ email, username, password }: { email: string; username: string; password: string }) => {
+    // Nothing of whoever used this browser last may carry over into the new account
+    await freshSignIn();
     // Setup encryption — generates master key, wraps with password + recovery key
     const result = await setupEncryption(password);
 

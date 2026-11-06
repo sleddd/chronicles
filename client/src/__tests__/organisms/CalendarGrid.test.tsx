@@ -78,21 +78,18 @@ describe('CalendarGrid', () => {
   it('shows a day\'s items as dots, the title on hover, no words', () => {
     renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', [entry(1, 'My journal entry')]]]) as never} />);
     expect(screen.queryByText(/My journal entry/)).not.toBeInTheDocument();
-    expect(screen.getAllByTitle('My journal entry').length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle('My journal entry').length).toBeGreaterThan(0); // one entry: its title on the dot
     expect(screen.getByRole('img', { name: '1 item' })).toBeInTheDocument();
   });
 
-  it('counts bills and entries together, a dot each', () => {
+  it('shows one accent dot for entries and one amber dot for bills, whatever the count', () => {
     const bill = (n: number) => ({ key: `b${n}`, billId: `b${n}`, name: `Bill ${n}`, amountCents: 1000, date: '2024-06-15' });
-    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', [entry(1, 'Entry A')]]]) as never} billsByDate={new Map([['2024-06-15', [bill(1), bill(2)]]])} />);
-    expect(screen.getByRole('img', { name: '3 items' })).toBeInTheDocument();
-    expect(screen.getByTitle('Bill 2 · $10.00 due')).toBeInTheDocument();
+    const entries = Array.from({ length: 5 }, (_, i) => entry(i, `Entry ${i}`));
+    const { container } = renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} billsByDate={new Map([['2024-06-15', [bill(1), bill(2)]]])} />);
+    const row = screen.getByRole('img', { name: '7 items' });
+    expect(row.querySelectorAll('i')).toHaveLength(2);
+    expect(row.querySelector('i[title*="Bill 2"]')?.getAttribute('title')).toBe('Bill 1 · $10.00 due\nBill 2 · $10.00 due');
     expect(screen.queryByText('Bill 2')).not.toBeInTheDocument();
-  });
-
-  it('shows "+N" past eight dots', () => {
-    const entries = Array.from({ length: 11 }, (_, i) => entry(i, `Entry ${i}`));
-    renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} />);
-    expect(screen.getByText('+3')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\+\d/);
   });
 });

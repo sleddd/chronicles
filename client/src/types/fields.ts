@@ -327,4 +327,6 @@ export interface WellnessFieldValues {
   procrastination?: number;
   /** Stress level, 1 (very low) – 5 (very high), 0 = unset */
   stress?: number;
+  /** Anything else about the day the questions don't cover */
+  notes?: string;
 }

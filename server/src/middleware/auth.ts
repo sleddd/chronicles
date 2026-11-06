@@ -229,13 +229,15 @@ export async function cleanupSessions(): Promise<number> {
  * verifier matches) ends now, instead of staying good until idle or expiry
  * next to the new one.
  */
-export async function revokeBrowserSession(req: Request): Promise<void> {
+/** Ends the session this browser's cookie holds (only when its verifier matches); returns its account, if any */
+export async function revokeBrowserSession(req: Request, reason = 'replaced'): Promise<number | null> {
   const token = sessionCookie(req);
-  if (!token || token.length < 44) return;
+  if (!token || token.length < 44) return null;
   const selector = token.slice(0, 12);
   const session = await prisma.session.findUnique({ where: { selector } });
-  if (!session || session.revokedAt) return;
+  if (!session || session.revokedAt) return null;
   const verifierHash = crypto.createHash('sha256').update(token.slice(12)).digest('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(verifierHash), Buffer.from(session.verifierHash))) return;
-  await revokeSession(selector, 'replaced');
+  if (!crypto.timingSafeEqual(Buffer.from(verifierHash), Buffer.from(session.verifierHash))) return null;
+  await revokeSession(selector, reason);
+  return session.accountId;
 }

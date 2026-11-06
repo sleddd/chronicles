@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { deriveAuthSecret } from '@chronicles/shared';
@@ -223,11 +223,32 @@ describe('AuthProvider – logout', () => {
 
     expect(result.current.user).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
+    // The session may still be good on the server: the next load ends it first
+    expect(mockLogout).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem('chronicles.pending-sign-out')).toBe('1');
   });
 });
 
 describe('AuthProvider – session restore on mount', () => {
+  afterEach(() => localStorage.removeItem('chronicles.pending-sign-out'));
+
+  it('ends a session the last sign-out couldn’t reach before trusting /auth/me', async () => {
+    localStorage.setItem('chronicles.pending-sign-out', '1');
+    mockLogout.mockResolvedValue({ success: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ user: { email: 'olivia@b.com', username: 'olivia' }, encryption: {} }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(mockLogout).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+    expect(localStorage.getItem('chronicles.pending-sign-out')).toBeNull();
+  });
+
   it('restores user from /auth/me on mount', async () => {
+    localStorage.removeItem('chronicles.pending-sign-out');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,

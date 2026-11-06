@@ -2,6 +2,8 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { TextInput } from '../atoms/TextInput.js';
 import { PasswordInput } from '../atoms/PasswordInput.js';
+import { PasswordStrengthMeter } from '../molecules/PasswordStrengthMeter.js';
+import { newPasswordProblem } from '@chronicles/shared';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { FormField } from '../molecules/FormField.js';
@@ -95,13 +97,9 @@ export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail =
     // Username
     if (username.length < 3) errors.username = 'Minimum 3 characters';
 
-    // Password — collect all failures at once
-    const pwErrors: string[] = [];
-    if (password.length < 12) pwErrors.push('at least 12 characters');
-    if (!/[A-Z]/.test(password)) pwErrors.push('an uppercase letter');
-    if (!/[a-z]/.test(password)) pwErrors.push('a lowercase letter');
-    if (!/[0-9]/.test(password)) pwErrors.push('a number');
-    if (pwErrors.length > 0) errors.password = `Password must contain ${pwErrors.join(', ')}`;
+    // Password: the rules, then strength (checked here, since the server never sees it)
+    const pwProblem = newPasswordProblem(password, { email, username });
+    if (pwProblem) errors.password = pwProblem;
 
     if (password !== confirmPassword) errors.confirmPassword = 'Passwords do not match';
 
@@ -179,10 +177,11 @@ export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail =
           id="reg-password"
           value={password}
           onChange={e => setPassword(e.target.value)}
-          placeholder="Min 12 chars, uppercase, lowercase, number"
+          placeholder="12+ characters: upper and lower case, a number, a symbol"
           required
           autoComplete="new-password"
         />
+        <PasswordStrengthMeter password={password} email={email} username={username} />
       </FormField>
 
       <FormField label="Confirm Password" htmlFor="reg-confirm" error={fieldErrors.confirmPassword}>

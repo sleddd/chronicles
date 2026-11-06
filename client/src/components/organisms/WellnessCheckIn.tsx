@@ -70,8 +70,9 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
         social: Number(stored.social) || 0,
         procrastination: Number(stored.procrastination) || 0,
         stress: Number(stored.stress) || 0,
+        notes: typeof stored.notes === 'string' ? stored.notes : '',
       }
-    : { sleepQuality: 0, wokeAtNight: null, dreamed: null, eating: '', workDay: 0, social: 0, procrastination: 0, stress: 0, ...pendingDay };
+    : { sleepQuality: 0, wokeAtNight: null, dreamed: null, eating: '', workDay: 0, social: 0, procrastination: 0, stress: 0, notes: '', ...pendingDay };
 
   // Next period from every logged check-in, with today's live value overlaid
   const prediction = useMemo(() => {

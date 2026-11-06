@@ -128,7 +128,7 @@ const DesktopOnly = styled.div`
   @media (max-width: 768px) { display: none; }
 `;
 
-/* Phones: a compact month — S M T W T F S, centred numbers, up to three dots
+/* Phones: a compact month — S M T W T F S, centred numbers, a dot per kind
    per day (amber = bill, accent = entry); today a filled accent disc, the
    chosen day on --bg-panel. The day's list shows under it (CalendarView). */
 const MobileMonth = styled.div`
@@ -204,7 +204,6 @@ const DotRow = styled.div`
 `;
 
 /** Dots shown in a desktop month cell before "+N" */
-const MAX_DOTS = 8;
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -268,11 +267,8 @@ export function CalendarGrid({
               const dateStr = toDateStr(date);
               const dayEntries = entriesByDate.get(dateStr) || [];
               const dayBills = billsByDate?.get(dateStr) || [];
-              // Events and meetings first, then bills; past MAX_DOTS a "+N"
+              // One accent dot when the day has events / meetings, one amber dot when bills are due
               const total = dayEntries.length + dayBills.length;
-              const entrySlots = Math.min(dayEntries.length, MAX_DOTS);
-              const billSlots = Math.min(dayBills.length, MAX_DOTS - entrySlots);
-              const hidden = total - entrySlots - billSlots;
               const isToday = isSameDay(date, today);
               const isSelected = selectedDate === dateStr;
 
@@ -292,13 +288,13 @@ export function CalendarGrid({
                       </DayNumber>
                       {total > 0 && (
                         <DotRow role="img" aria-label={`${total} ${total === 1 ? 'item' : 'items'}`}>
-                          {dayEntries.slice(0, entrySlots).map(entry => {
-                            const topicName = getTopicName(entry);
-                            const preview = (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 60) || topicName || 'Entry';
-                            return <Dot key={entry.id} title={preview} />;
-                          })}
-                          {dayBills.slice(0, billSlots).map(b => <Dot key={b.key} $bill title={billLabel(b)} />)}
-                          {hidden > 0 && <small>+{hidden}</small>}
+                          {dayEntries.length > 0 && (
+                            <Dot title={dayEntries.map(entry => {
+                              const topicName = getTopicName(entry);
+                              return (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 60) || topicName || 'Entry';
+                            }).join('\n')} />
+                          )}
+                          {dayBills.length > 0 && <Dot $bill title={dayBills.map(billLabel).join('\n')} />}
                         </DotRow>
                       )}
                     </>
@@ -319,8 +315,8 @@ export function CalendarGrid({
             const dateStr = toDateStr(date);
             const nBills = billsByDate?.get(dateStr)?.length ?? 0;
             const nEntries = entriesByDate.get(dateStr)?.length ?? 0;
-            // Up to three dots: events and meetings first, then bills
-            const dots = [...Array(Math.min(nEntries, 3)).fill(false), ...Array(Math.max(0, Math.min(nBills, 3 - Math.min(nEntries, 3)))).fill(true)] as boolean[];
+            // One accent dot for events / meetings, one amber dot for bills
+            const dots = [...(nEntries ? [false] : []), ...(nBills ? [true] : [])];
             const isToday = isSameDay(date, today);
             const isSelected = selectedDate === dateStr;
             return (

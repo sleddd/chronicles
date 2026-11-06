@@ -25,6 +25,7 @@ vi.mock('@/contexts/AuthContext', () => ({
     user: { email: 'test@example.com' },
     logout: vi.fn(),
   })),
+  useOptionalAuth: vi.fn(() => null),
 }));
 
 vi.mock('@/contexts/EncryptionContext', () => ({

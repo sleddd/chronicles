@@ -9,6 +9,17 @@ import { SEEN_MARKERS_STORE } from '../services/sealedFormats.js';
 /** Kept through sign-out: they hold no data, and dropping them would weaken what they guard. */
 const KEPT_ON_SIGN_OUT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE];
 
+/** Set when sign-out couldn't reach the server: the session cookie may still be good, so the
+ *  next load ends it before trusting /me (never signs the last person back in) */
+const PENDING_SIGN_OUT = 'chronicles.pending-sign-out';
+
+const tryServerLogout = async (): Promise<boolean> => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { await authApi.logout(); return true; } catch { /* once more, then give up */ }
+  }
+  return false;
+};
+
 interface User {
   email: string;
   username: string;
@@ -54,6 +65,9 @@ interface AuthContextValue {
     recoveryKeySalt: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  /** Wipe everything this browser holds for whoever was signed in (memory, storage,
+   *  caches) without calling the server: run before any new sign-in */
+  resetLocal: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -80,8 +94,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEncryptionData(prev => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
-  // Check if we have a valid session on mount
+  // Check if we have a valid session on mount — unless the last sign-out didn't reach
+  // the server: then end that session first and start signed out
   useEffect(() => {
+    let pending = false;
+    try { pending = localStorage.getItem(PENDING_SIGN_OUT) === '1'; } catch { /* storage blocked */ }
+    if (pending) {
+      void tryServerLogout().then(ok => {
+        if (ok) { try { localStorage.removeItem(PENDING_SIGN_OUT); } catch { /* storage blocked */ } }
+        setIsLoading(false);
+      });
+      return;
+    }
     fetch('/api/auth/me', {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
@@ -129,12 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ ...result.user, totpEnabled: false });
   }, []);
 
-  const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // Even if server logout fails, clear client state
-    }
+  /** Everything this browser holds for the signed-in person, gone — the session itself is the server's */
+  const resetLocal = useCallback(async () => {
     setUser(null);
     setEncryptionData(null);
 
@@ -193,13 +213,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { useEntriesStore } = await import('../stores/entriesStore.js');
       const { useUIStore } = await import('../stores/uiStore.js');
       const { resetCalendarSyncSession } = await import('../services/calendarSync.js');
+      const { setAiConfig } = await import('../services/aiAssistant.js');
+      const { setImageStorageConfig, setImageStorageDraft, clearImageCache } = await import('../services/imageStorage.js');
+      // The AI and image-bucket settings (even their sealed copies and unsaved drafts) were the last person's
+      setAiConfig(null, null);
+      clearImageCache();
+      setImageStorageConfig(null, null);
+      setImageStorageDraft(null);
       useEntriesStore.getState().clearAll();
       useUIStore.getState().clearSearch();
+      useUIStore.getState().clearPrivateState();
       resetCalendarSyncSession();
     } catch {
       // Non-critical — stores may not be loaded
     }
   }, []);
+
+  const logout = useCallback(async () => {
+    // End the session on the server; if that can't be reached, remember to end it on the next load
+    const ended = await tryServerLogout();
+    await resetLocal();
+    if (!ended) { try { localStorage.setItem(PENDING_SIGN_OUT, '1'); } catch { /* storage blocked */ } }
+  }, [resetLocal]);
 
   return (
     <AuthContext.Provider value={{
@@ -214,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateEncryptionData,
       register,
       logout,
+      resetLocal,
     }}>
       {children}
     </AuthContext.Provider>

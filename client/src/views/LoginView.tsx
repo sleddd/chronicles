@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
@@ -83,6 +84,7 @@ export function LoginView() {
   const navigate = useNavigate();
   const { login, submitTotpCode, cancel2FA, pending2FA } = useAuth();
   const { unlock } = useEncryption();
+  const freshSignIn = useFreshSignIn();
 
   // The password, held for the unlock after 2FA completes: in a ref, not
   // state (no copies in React's render history or devtools), and dropped as
@@ -113,6 +115,8 @@ export function LoginView() {
   };
 
   const handleLogin = async (email: string, password: string, remember: boolean) => {
+    // Nothing of whoever used this browser last may carry over into this sign-in
+    await freshSignIn();
     const encryptionData = await login(email, password);
 
     if (encryptionData === null) {

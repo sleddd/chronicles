@@ -7,7 +7,8 @@ import { FormField } from '../molecules/FormField.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { auth as authApi } from '../../services/api.js';
-import { deriveAuthSecret, passwordSchema } from '@chronicles/shared';
+import { deriveAuthSecret, newPasswordProblem } from '@chronicles/shared';
+import { PasswordStrengthMeter } from '../molecules/PasswordStrengthMeter.js';
 
 const Section = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.xl}px;
@@ -67,9 +68,9 @@ export function ChangePassword() {
       return;
     }
 
-    const rules = passwordSchema.safeParse(newPassword);
-    if (!rules.success) {
-      setMessage(rules.error.issues[0].message);
+    const pwProblem = newPasswordProblem(newPassword, { email: user?.email, username: user?.username });
+    if (pwProblem) {
+      setMessage(pwProblem);
       setIsError(true);
       return;
     }
@@ -137,6 +138,7 @@ export function ChangePassword() {
               required
               autoComplete="new-password"
             />
+            <PasswordStrengthMeter password={newPassword} email={user?.email} username={user?.username} />
           </FormField>
           <FormField label="Confirm New Password">
             <PasswordInput

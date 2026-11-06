@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError } from '../services/api.js';
@@ -12,7 +13,8 @@ import { ErrorBanner } from '../components/atoms/ErrorBanner.js';
 import { FormField } from '../components/molecules/FormField.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import type { RecoverStep } from '../types/health.js';
-import { deriveAuthSecret, deriveRecoveryProof, newRecoveryProof, passwordSchema } from '@chronicles/shared';
+import { deriveAuthSecret, deriveRecoveryProof, newRecoveryProof, newPasswordProblem } from '@chronicles/shared';
+import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthMeter.js';
 
 export function RecoverView() {
   const navigate = useNavigate();
@@ -62,6 +64,7 @@ export function RecoverView() {
     setStep('newPassword');
   };
 
+  const freshSignIn = useFreshSignIn();
   const handleNewPasswordStep = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -70,14 +73,16 @@ export function RecoverView() {
       return;
     }
     // The server only sees a secret derived from the password, so the rules are checked here
-    const rules = passwordSchema.safeParse(newPassword);
-    if (!rules.success) {
-      setError(rules.error.issues[0].message);
+    const pwProblem = newPasswordProblem(newPassword, { email });
+    if (pwProblem) {
+      setError(pwProblem);
       return;
     }
 
     setLoading(true);
     try {
+      // Nothing of whoever used this browser last may carry over
+      await freshSignIn();
       // Unwrap with recovery key and rewrap with new password in one atomic step —
       // avoids the auto-lock race that cleared the key between separate steps.
       const cleanKey = recoveryKey.replace(/[-\s]/g, '');
@@ -173,7 +178,9 @@ export function RecoverView() {
               onChange={e => setNewPassword(e.target.value)}
               placeholder="Min 12 chars"
               required
+              autoComplete="new-password"
             />
+            <PasswordStrengthMeter password={newPassword} email={email} />
           </FormField>
           <FormField label="Confirm Password" htmlFor="recover-confirm">
             <PasswordInput

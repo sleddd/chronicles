@@ -5,6 +5,8 @@ import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { RememberMe } from '../molecules/RememberMe.js';
 import { useFocusTrap } from '../../hooks/useFocusTrap.js';
+import { useOptionalAuth } from '../../contexts/AuthContext.js';
+import { useSignOut } from '../../hooks/useSignOut.js';
 
 const Overlay = styled.div`
   position: fixed;
@@ -72,6 +74,26 @@ const ShowBtn = styled.button`
   &:hover { color: var(--text-primary); }
 `;
 
+/* Whose journal this is, and a way out for anyone else at this browser */
+const WhoLine = styled.p`
+  margin: 4px 0 0;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  button {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-weight: 500;
+    color: var(--color-accent-link);
+    cursor: pointer;
+  }
+  button:hover { text-decoration: underline; }
+`;
+
 const ErrorText = styled.div`
   font-size: 13px;
   color: var(--color-danger);
@@ -95,6 +117,7 @@ export function UnlockDialog({ onUnlock, onCancel }: UnlockDialogProps) {
   const errorId = useId();
 
   useFocusTrap(cardRef, true);
+  const auth = useOptionalAuth();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -141,9 +164,24 @@ export function UnlockDialog({ onUnlock, onCancel }: UnlockDialogProps) {
               Cancel
             </Button>
           )}
+          {!onCancel && auth?.user && <NotYou email={auth.user.email} />}
         </Form>
       </Card>
     </Overlay>,
     document.body,
+  );
+}
+
+/** "Signed in as … Not you? Sign out" — so someone else at this browser is never stuck behind it */
+function NotYou({ email }: { email: string }) {
+  const signOut = useSignOut();
+  const [busy, setBusy] = useState(false);
+  return (
+    <WhoLine>
+      Signed in as {email}. Not you?{' '}
+      <button type="button" disabled={busy} onClick={() => { setBusy(true); void signOut().finally(() => setBusy(false)); }}>
+        {busy ? 'Signing out…' : 'Sign out'}
+      </button>
+    </WhoLine>
   );
 }

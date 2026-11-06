@@ -79,7 +79,7 @@ import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { isApproved, hasPendingInvite, spendInvite } from '../../db/betaQueries.js';
-import { createSession, revokeSession } from '../../middleware/auth.js';
+import { createSession, revokeSession, revokeBrowserSession } from '../../middleware/auth.js';
 import bcrypt from '../../services/passwordHasher.js';
 import { createHash } from 'crypto';
 
@@ -483,7 +483,24 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(revokeSession).toHaveBeenCalledWith('aabbccddee11', 'user_logout');
+      expect(revokeBrowserSession).toHaveBeenCalledWith(expect.anything(), 'user_logout');
+      expect(String(res.headers['set-cookie'])).toMatch(/chronicle_session=;/);
+    });
+
+    it('clears the cookie even when the session is already gone', async () => {
+      (revokeBrowserSession as any).mockResolvedValueOnce(null);
+      const res = await request(app)
+        .post('/api/auth/logout')
+        .set('X-Requested-With', 'XMLHttpRequest')
+        .set('Cookie', 'chronicle_session=deadbeef0000expiredverifier12345678901234');
+      expect(res.status).toBe(200);
+      expect(String(res.headers['set-cookie'])).toMatch(/chronicle_session=;/);
+    });
+
+    it('needs the CSRF header from a browser', async () => {
+      const res = await request(app).post('/api/auth/logout').set('Cookie', 'chronicle_session=x');
+      expect(res.status).toBe(403);
+      expect(revokeBrowserSession).not.toHaveBeenCalledWith(expect.anything(), 'user_logout');
     });
   });
 

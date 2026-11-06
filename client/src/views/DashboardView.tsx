@@ -32,7 +32,7 @@ import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
-import { useTodayDoses } from '../hooks/useTodayDoses.js';
+import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { QuickLog } from '../components/organisms/HealthQuickLog.js';
 import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
@@ -40,7 +40,9 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
-import { entries as entriesApi, topics as topicsApi, settings as settingsApi } from '../services/api.js';
+import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi } from '../services/api.js';
+import { dashboardStats, type StatsPeriod, type StatsDose } from '../utils/dashboardStats.js';
+import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { stripHtml, builtinEntryName } from '../utils/stripHtml.js';
 import { entryTitleText } from '../utils/entryTitle.js';
 import { toDateStr } from '../utils/dateUtils.js';
@@ -77,7 +79,7 @@ import { MANTRA_TOPIC, MANTRA_ICON, isMantraTopic, dailyMantraIndex, stepIndex }
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -96,6 +98,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'menu', label: 'On the menu' },
   { key: 'meds', label: 'Medications' },
   { key: 'recent', label: 'Recent entries' },
+  { key: 'stats', label: 'Stats' },
   { key: 'shopping', label: 'Shopping list' },
 ];
 
@@ -119,17 +122,17 @@ interface DashboardConfig {
 
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['priorities', 'wins', 'tasks', 'comingUp', 'quickLog', 'exercise'],
+  left: ['stats', 'priorities', 'wins', 'tasks', 'comingUp', 'quickLog', 'exercise'],
   right: ['mantra', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
-/** The saved layout with any card it doesn't know put back in its default column */
+/** The saved layout with any card it doesn't know put back in its default column, at its default place there */
 function fullLayout(saved?: { left: SectionKey[]; right: SectionKey[] }): { left: SectionKey[]; right: SectionKey[] } {
   const all = [...DEFAULT_LAYOUT.left, ...DEFAULT_LAYOUT.right];
   const left = (saved?.left ?? DEFAULT_LAYOUT.left).filter(k => all.includes(k));
   const right = (saved?.right ?? DEFAULT_LAYOUT.right).filter(k => all.includes(k) && !left.includes(k));
-  for (const k of DEFAULT_LAYOUT.left) if (!left.includes(k) && !right.includes(k)) left.push(k);
-  for (const k of DEFAULT_LAYOUT.right) if (!left.includes(k) && !right.includes(k)) right.push(k);
+  DEFAULT_LAYOUT.left.forEach((k, i) => { if (!left.includes(k) && !right.includes(k)) left.splice(Math.min(i, left.length), 0, k); });
+  DEFAULT_LAYOUT.right.forEach((k, i) => { if (!left.includes(k) && !right.includes(k)) right.splice(Math.min(i, right.length), 0, k); });
   return { left, right };
 }
 
@@ -1885,6 +1888,83 @@ function RecentEntries() {
   );
 }
 
+/* Stats: how much was logged this week / month / ever — big thin figures, a label under each */
+/* The card head without SectionHead's link-button styling, so the period switch keeps its own look */
+const StatsHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  h2 { margin: 0; ${cardLabel} }
+`;
+
+const StatGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 16px;
+  margin-top: 18px;
+  @media (max-width: 400px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+`;
+
+const StatFig = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  b { font-family: var(--font-display); font-size: 34px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+`;
+
+const STAT_PERIODS: { value: StatsPeriod; label: string }[] = [
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'all', label: 'All' },
+];
+
+function Stats({ meals, meds, exercise }: { meals: boolean; meds: boolean; exercise: boolean }) {
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
+  const [period, setPeriod] = useState<StatsPeriod>('month');
+  const [doseRecords, setDoseRecords] = useState<StatsDose[]>([]);
+
+  // Every dose record (the in-memory copy Med history uses); again whenever a dose is ticked
+  useEffect(() => {
+    if (!meds) return;
+    let live = true;
+    const load = () => { dosesApi.getAll().then(r => { if (live) setDoseRecords(r.logs); }).catch(() => { /* leave the last count */ }); };
+    load();
+    window.addEventListener(DOSES_CHANGED, load);
+    return () => { live = false; window.removeEventListener(DOSES_CHANGED, load); };
+  }, [meds]);
+
+  const stats = useMemo(() => dashboardStats(entries, allTopics, doseRecords, period, new Date()), [entries, allTopics, doseRecords, period]);
+  const figures: { label: string; value: number; on: boolean }[] = [
+    { label: 'Entries', value: stats.entries, on: true },
+    { label: 'Journal entries', value: stats.journal, on: true },
+    { label: 'Meals logged', value: stats.meals, on: meals },
+    { label: 'Doses taken', value: stats.doses, on: meds },
+    { label: 'Exercise sessions', value: stats.exercise, on: exercise },
+    { label: 'Symptoms logged', value: stats.symptoms, on: true },
+    { label: 'Wellness check-ins', value: stats.checkIns, on: true },
+  ];
+
+  return (
+    <section aria-label="Stats">
+      <StatsHead>
+        <h2>Stats</h2>
+        <FilterTabs options={STAT_PERIODS} active={period} onChange={setPeriod} />
+      </StatsHead>
+      <StatGrid>
+        {figures.filter(f => f.on).map(f => (
+          <StatFig key={f.label}><b>{f.value.toLocaleString()}</b><span>{f.label}</span></StatFig>
+        ))}
+      </StatGrid>
+    </section>
+  );
+}
+
 /* Shopping list: the newest open list's items as outline pills (got = struck) */
 const Pills = styled.div`
   display: flex;
@@ -2334,6 +2414,10 @@ export function DashboardView() {
       node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} />,
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
+    stats: {
+      label: 'stats', on: shown('stats'),
+      node: <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} />,
+    },
     mantra: { label: 'mantra', on: shown('mantra'), node: <Mantra /> },
     shopping: {
       label: 'shopping list', on: shown('shopping'),

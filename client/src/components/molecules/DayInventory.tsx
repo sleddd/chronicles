@@ -1,12 +1,13 @@
 import { useId, useState } from 'react';
 import styled from 'styled-components';
 import type { WellnessFieldValues } from '../../types/fields.js';
-import { JoinedGroup, JoinedBtn } from './fields/formKit.js';
+import { JoinedGroup, JoinedBtn, BoxText } from './fields/formKit.js';
 import { QUALITY_WORDS, RESTED_WORDS, PROCRASTINATION_WORDS, STRESS_WORDS } from '../../utils/dailyInventory.js';
 
 /* "Your day" — the daily inventory questions the four-square check-in doesn't
    ask (Lifehacker's Daily Personal Inventory): Rested, Woke in the night,
-   Did you dream, Ate, Work day, Social time, Procrastinated and Stress, two
+   Did you dream, Ate, Work day, Social time, Procrastinated and Stress (plus
+   a Notes box under them for anything else), two
    columns of labelled rows with hairlines between, each answer a joined group
    of buttons (the chosen one on a light grey fill; tap it again to clear it), inside one outlined box whose bar —
    "Your day · 2 of 8" and "Tap to answer" ⌄ — opens them; closed by
@@ -14,7 +15,7 @@ import { QUALITY_WORDS, RESTED_WORDS, PROCRASTINATION_WORDS, STRESS_WORDS } from
    journal's Wellness entry. Props only (plus whether it's open). */
 
 export type DayInventoryValues = Pick<WellnessFieldValues,
-  'sleepQuality' | 'wokeAtNight' | 'dreamed' | 'eating' | 'workDay' | 'social' | 'procrastination' | 'stress'>;
+  'sleepQuality' | 'wokeAtNight' | 'dreamed' | 'eating' | 'workDay' | 'social' | 'procrastination' | 'stress' | 'notes'>;
 
 export { QUALITY_WORDS, RESTED_WORDS, PROCRASTINATION_WORDS, STRESS_WORDS, HEALTHY_WORDS } from '../../utils/dailyInventory.js';
 
@@ -108,6 +109,16 @@ export function RatingRow({ value, onChange, words, label }: {
   );
 }
 
+/* Notes: full width under the questions, for anything they don't ask */
+const NotesRow = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 18px;
+  border-top: 1px solid var(--border-subtle);
+  > span { font-family: var(--font-sans); font-size: 16px; color: var(--text-secondary); }
+`;
+
 const EATING: { value: NonNullable<DayInventoryValues['eating']>; label: string }[] = [
   { value: 'too_little', label: 'Too little' },
   { value: 'just_right', label: 'Just right' },
@@ -189,6 +200,11 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
               <RatingRow label="Stress level" value={values.stress || 0} words={STRESS_WORDS} onChange={v => onChange({ stress: v })} />
             </Item>
           </Grid>
+          <NotesRow>
+            <span>Notes</span>
+            <BoxText value={values.notes || ''} rows={2} placeholder="Anything else about today?"
+              onChange={e => onChange({ notes: e.target.value })} />
+          </NotesRow>
         </Body>
       )}
     </Box>
