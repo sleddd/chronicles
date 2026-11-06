@@ -815,3 +815,31 @@ export const FieldRow = styled.div<{ $cols: string }>`
   .pre { margin-right: 3px; font-family: var(--font-sans); font-size: 14px; color: var(--text-hint); }
 `;
 
+
+/* A picker pill — a 40px round outline holding a bare <select>, its chevron
+   drawn after it (Reports' Type / Category / Period, the bills' Sort) */
+export const PickerPill = styled.label`
+  display: flex;
+  align-items: center;
+  height: 40px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  &:focus-within { border-color: var(--control-border); }
+  position: relative;
+  flex: 0 0 auto;
+  select {
+    height: 100%;
+    padding: 0 38px 0 18px;
+    border: none !important;
+    background: transparent !important;
+    appearance: none;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  option { color: var(--text-primary); background: var(--bg-surface); }
+  & > span { position: absolute; right: 14px; display: inline-flex; color: var(--text-muted); pointer-events: none; }
+  ${glassControl}
+`;

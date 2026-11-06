@@ -4,7 +4,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import {
-  Note, StatBoxRow, StatCell, SheetHead, SheetHeading, SheetBox, SHEET_RULE,
+  Note, StatBoxRow, StatCell, SheetHead, SheetHeading, SheetBox, SHEET_RULE, PickerPill,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
 import {
@@ -57,27 +57,8 @@ const Search = styled.label`
   input::-webkit-search-cancel-button { display: none; }
 `;
 
-const Picker = styled.label`
-  ${pill}
-  position: relative;
-  flex: 0 0 auto;
-  select {
-    height: 100%;
-    padding: 0 38px 0 18px;
-    border: none !important;
-    background: transparent !important;
-    appearance: none;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-  option { color: var(--text-primary); background: var(--bg-surface); }
-  & > span { position: absolute; right: 14px; display: inline-flex; color: var(--text-muted); pointer-events: none; }
-`;
 
-const DateBox = styled(Picker)`
+const DateBox = styled(PickerPill)`
   input {
     height: 100%;
     padding: 0 14px;
@@ -264,28 +245,28 @@ function Reports() {
           <Icon name="search" size={16} strokeWidth={2} />
           <input type="search" aria-label="Search bills" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search bills, e.g. rent, Netflix" />
         </Search>
-        <Picker>
+        <PickerPill>
           <select aria-label="Type" value={kind} onChange={e => setKind(e.target.value as Bill['kind'] | 'all')}>
             <option value="all">All types</option>
             <option value="bill">Bills</option>
             <option value="subscription">Subscriptions</option>
           </select>
           <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
-        </Picker>
-        <Picker>
+        </PickerPill>
+        <PickerPill>
           <select aria-label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
             <option value="all">All categories</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             <option value={UNCATEGORIZED}>No category</option>
           </select>
           <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
-        </Picker>
-        <Picker>
+        </PickerPill>
+        <PickerPill>
           <select aria-label="Period" value={period} onChange={e => setPeriod(e.target.value as ReportPeriod)}>
             {PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
           <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
-        </Picker>
+        </PickerPill>
         {period === 'custom' && (
           <>
             <DateBox><input type="date" aria-label="From" value={from} onChange={e => e.target.value && setFrom(e.target.value)} /></DateBox>

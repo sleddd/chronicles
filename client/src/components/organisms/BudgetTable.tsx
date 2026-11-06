@@ -22,6 +22,26 @@ interface BudgetTableProps {
 }
 
 /* First block on the page: FinanceShell places it just under the tabs, no top rule. */
+const STATS_OPEN_KEY = 'finance-plan-stats-open-v1';
+
+/* "Show plan totals ⌄" — the accent link look, with the month's Left beside it */
+const StatsToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  small { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+  &:hover span { text-decoration: underline; }
+`;
+
 const Top = styled.section`
   &&& { margin-top: 32px; }
 `;
@@ -236,6 +256,12 @@ function PlannedInput({ category, onSave }: { category: FinanceRecord<'budget'>;
  */
 export function BudgetTable({ categories, bills, expenses, month, onSave, onDelete }: BudgetTableProps) {
   const [newName, setNewName] = useState('');
+  // The Planned · Bills · Spending · Left boxes fold away; closed until opened (remembered per browser)
+  const [statsOpen, setStatsOpen] = useState(() => { try { return localStorage.getItem(STATS_OPEN_KEY) === '1'; } catch { return false; } });
+  const toggleStats = () => setStatsOpen(o => {
+    try { localStorage.setItem(STATS_OPEN_KEY, o ? '0' : '1'); } catch { /* private mode */ }
+    return !o;
+  });
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [seeding, setSeeding] = useState(false);
 
@@ -272,13 +298,20 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
 
   return (
     <Top>
-      <StatBoxRow $cols={4}>
+      <StatsToggle type="button" aria-expanded={statsOpen} aria-controls="budget-stats" onClick={toggleStats}>
+        <span>{statsOpen ? 'Hide plan totals' : 'Show plan totals'}</span>
+        <small>{summary.totals.leftCents < 0
+          ? `${formatCents(-summary.totals.leftCents)} over plan`
+          : `${formatCents(summary.totals.leftCents)} left of ${formatCents(summary.totals.plannedCents)}`}</small>
+        <Icon name={statsOpen ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={2} />
+      </StatsToggle>
+      {statsOpen && <StatBoxRow id="budget-stats" $cols={4}>
         <StatCell label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
         <StatCell label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
         <StatCell label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
         <StatCell label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'accent'}
           sub={summary.totals.leftCents < 0 ? 'Over plan' : `${remaining}% of plan remaining`} />
-      </StatBoxRow>
+      </StatBoxRow>}
 
       <Section aria-label="By category">
         <SheetHead><SheetHeading>By category</SheetHeading></SheetHead>

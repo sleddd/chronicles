@@ -1,10 +1,11 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { FormField } from '../molecules/FormField.js';
 import {
   Actions, ErrorNote, RowMenu, type RowMenuItem,
-  SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge,
+  SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge, PickerPill,
 } from '../molecules/FinanceParts.js';
 import {
   billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
@@ -24,7 +25,14 @@ interface BillsTableProps {
   onDelete: (id: string) => void;
 }
 
-type Filter = 'all' | 'subscriptions' | 'paused' | 'cancelled';
+type Filter = 'all' | 'unpaid' | 'paid' | 'subscriptions' | 'paused' | 'cancelled';
+type Sort = 'due' | 'name' | 'amount';
+
+const SORTS: { value: Sort; label: string }[] = [
+  { value: 'due', label: 'Due date' },
+  { value: 'name', label: 'Name' },
+  { value: 'amount', label: 'Amount' },
+];
 
 const Wrap = styled.section`
   margin-top: 56px;
@@ -352,6 +360,8 @@ function BillActions({ bill, state, today, onSave, onEdit, onPayPart, onStatus, 
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'All' },
+  { value: 'unpaid', label: 'Unpaid' },
+  { value: 'paid', label: 'Paid' },
   { value: 'subscriptions', label: 'Subscriptions' },
   { value: 'paused', label: 'Paused' },
   { value: 'cancelled', label: 'Cancelled' },
@@ -364,6 +374,8 @@ const FILTERS: { value: Filter; label: string }[] = [
  */
 export function BillsTable({ bills, categories, month, onSave, onDelete }: BillsTableProps) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [sort, setSort] = useState<Sort>('due');
+  const [categoryId, setCategoryId] = useState('all');
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [payingPart, setPayingPart] = useState<{ billId: string; due: string } | null>(null);
   const today = todayStr();
@@ -371,14 +383,22 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
 
   const rows = useMemo(() => {
     const withDue = bills.map(b => { const state = billMonthState(b, month, today); return { bill: b, state, due: state.due }; });
-    const shown = withDue.filter(({ bill }) => {
+    const shown = withDue.filter(({ bill, state }) => {
+      if (categoryId === 'none' ? bill.categoryId : categoryId !== 'all' && bill.categoryId !== categoryId) return false;
+      // Unpaid / Paid: the bill for the month on screen
+      if (filter === 'unpaid') return bill.status === 'active' && state.kind === 'unpaid';
+      if (filter === 'paid') return state.kind === 'paid';
       if (filter === 'subscriptions') return bill.kind === 'subscription' && bill.status !== 'cancelled';
       if (filter === 'paused') return bill.status === 'paused';
       if (filter === 'cancelled') return bill.status === 'cancelled';
       return bill.status !== 'cancelled';
     });
-    return shown.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.bill.name.localeCompare(b.bill.name));
-  }, [bills, filter, today, month]);
+    const byName = (a: typeof shown[number], b: typeof shown[number]) => a.bill.name.localeCompare(b.bill.name);
+    if (sort === 'name') return shown.sort(byName);
+    if (sort === 'amount') return shown.sort((a, b) => b.bill.amountCents - a.bill.amountCents || byName(a, b));
+    // Due date: soonest first (overdue at the top), no date last
+    return shown.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || byName(a, b));
+  }, [bills, filter, sort, categoryId, today, month]);
 
   const totals = useMemo(() => billTotals(bills), [bills]);
   const setStatus = (b: BillRecord, status: BillStatus) =>
@@ -419,6 +439,20 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
               </SegBtn>
             ))}
           </Seg>
+          <PickerPill>
+            <select aria-label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+              <option value="all">All categories</option>
+              {categories.filter(c => !c.archived || c.id === categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="none">No category</option>
+            </select>
+            <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+          </PickerPill>
+          <PickerPill>
+            <select aria-label="Sort bills" value={sort} onChange={e => setSort(e.target.value as Sort)}>
+              {SORTS.map(o => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
+            </select>
+            <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+          </PickerPill>
           <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>+ Add bill</PillButton>
         </HeadRight>
       </SheetHead>
@@ -430,6 +464,8 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
           <EmptyNote>
             {bills.length === 0
               ? 'List your rent, utilities, phone, insurance and subscriptions here. They count in your budget right away; mark each one paid when you pay it.'
+              : filter === 'unpaid' ? 'Nothing left to pay this month.'
+              : filter === 'paid' ? 'No bills paid this month yet.'
               : 'Nothing here for this filter.'}
           </EmptyNote>
         ) : rows.map(({ bill, state }) => (editing === bill.id ? (
