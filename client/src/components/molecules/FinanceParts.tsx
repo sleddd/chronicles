@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ComponentProps, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { css } from 'styled-components';
 import { glassControl } from '../../styles/wallpaper.js';
 import { filledInputs } from '../../styles/filledInputs.js';
@@ -453,11 +454,11 @@ const MenuButton = styled(SmallBtn)`
 `;
 
 /* A floating overlay — the one place a shadow is allowed */
+/* Portalled to <body> and placed by the button (fixed), so a table's overflow
+   can't clip it; opens upward when there's no room below */
 const MenuList = styled.div`
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 20;
+  position: fixed;
+  z-index: 1000;
   min-width: 200px;
   padding: 6px;
   background: var(--bg-tile);
@@ -493,32 +494,58 @@ export interface RowMenuItem {
 export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [pos, setPos] = useState<CSSProperties>({});
   const wrap = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const close = () => { setOpen(false); setConfirming(null); };
+
+  // Place the menu under the button's right edge, or above it near the screen's foot
+  const place = () => {
+    const r = button.current?.getBoundingClientRect();
+    if (!r) return;
+    const height = list.current?.offsetHeight ?? 44 * items.length + 12;
+    const below = window.innerHeight - r.bottom;
+    const right = Math.max(8, window.innerWidth - r.right);
+    setPos(below < height + 12 && r.top > below
+      ? { bottom: window.innerHeight - r.top + 4, right }
+      : { top: r.bottom + 4, right });
+  };
 
   useEffect(() => {
     if (!open) return;
+    place();
+    const raf = requestAnimationFrame(place); // again once its real height is known
     const onDown = (e: MouseEvent | TouchEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) { setOpen(false); setConfirming(null); }
+      const t = e.target as Node;
+      if (!wrap.current?.contains(t) && !list.current?.contains(t)) close();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); setConfirming(null); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onMove = (e: Event) => { if (!list.current?.contains(e.target as Node)) close(); };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('touchstart', onDown);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', close);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('touchstart', onDown);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', close);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (items.length === 0) return null;
   return (
     <MenuWrap ref={wrap}>
-      <MenuButton type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(o => !o); setConfirming(null); }}>
+      <MenuButton ref={button} type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(o => !o); setConfirming(null); }}>
         ⋯
       </MenuButton>
-      {open && (
-        <MenuList role="menu">
+      {open && createPortal(
+        <MenuList ref={list} role="menu" style={pos}>
           {items.map(item => (
             <MenuItem
               key={item.label}
@@ -527,15 +554,15 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
               $danger={item.danger}
               onClick={() => {
                 if (item.confirmLabel && confirming !== item.label) { setConfirming(item.label); return; }
-                setOpen(false);
-                setConfirming(null);
+                close();
                 item.onSelect();
               }}
             >
               {confirming === item.label && item.confirmLabel ? item.confirmLabel : item.label}
             </MenuItem>
           ))}
-        </MenuList>
+        </MenuList>,
+        document.body,
       )}
     </MenuWrap>
   );
