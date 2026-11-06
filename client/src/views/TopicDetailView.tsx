@@ -337,6 +337,7 @@ export function TopicDetailView() {
               return (
                 <SwipeActions accentColor={accentColor} onDelete={() => handleDeleteEntry(entry.id)}>
                   <EntryListCard
+                    roomy
                     content={t ? `<p>${escapeHtml(t.title)}</p>` : entry.content}
                     preview={t?.sub || undefined}
                     createdAt={created}

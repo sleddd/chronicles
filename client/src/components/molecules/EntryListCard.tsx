@@ -20,6 +20,8 @@ interface EntryListCardProps {
   hint?: boolean;
   /** No side padding: titles line up with the list's edge (topic page) */
   flush?: boolean;
+  /** A little more room above and below (a topic's page) */
+  roomy?: boolean;
 }
 
 /* Spreadsheet row: [Topic] | Entry | DATE | chevron, with a hairline rule
@@ -30,21 +32,21 @@ function extractTitle(html: string, fallback?: string): string {
   return entryTitleText(html) || fallback || 'Untitled';
 }
 
-const Row = styled.div<{ $hasTopic: boolean; $hint?: boolean; $flush?: boolean }>`
+const Row = styled.div<{ $hasTopic: boolean; $hint?: boolean; $flush?: boolean; $roomy?: boolean }>`
   display: grid;
   grid-template-columns: ${({ $hasTopic }) =>
     $hasTopic ? 'minmax(0, 88px) minmax(0, 1fr) auto' : 'minmax(0, 1fr) auto'};
   gap: 12px;
   align-items: center;
   /* Flush: titles line up with the list's edge and its month headings */
-  padding: 15px 0;
+  padding: ${({ $roomy }) => ($roomy ? '21px 0' : '15px 0')};
   cursor: pointer;
   position: relative;
   border-bottom: 1px solid var(--border-subtle);
 
   ${entryRowPlain}
   ${EntryTitle} { color: var(--text-secondary); }
-  ${EntryPreview} { margin-top: 3px; font-size: 13px; color: var(--text-muted); }
+  ${EntryPreview} { margin-top: ${({ $roomy }) => ($roomy ? '7px' : '3px')}; font-size: 13px; color: var(--text-muted); }
 `;
 
 const ListDate = styled(DateCell)`
@@ -54,7 +56,7 @@ const ListDate = styled(DateCell)`
   text-align: right;
 `;
 
-export function EntryListCard({ content, createdAt, topicName, completed, onClick, fallbackTitle, preview, hint, flush }: EntryListCardProps) {
+export function EntryListCard({ content, createdAt, topicName, completed, onClick, fallbackTitle, preview, hint, flush, roomy }: EntryListCardProps) {
   const title = extractTitle(content, fallbackTitle);
 
   return (
@@ -62,6 +64,7 @@ export function EntryListCard({ content, createdAt, topicName, completed, onClic
       $hasTopic={!!topicName}
       $hint={hint}
       $flush={flush}
+      $roomy={roomy}
       onClick={() => { clearRowHover(); onClick?.(); }}
       {...rowHoverHandlers}
     >
