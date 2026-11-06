@@ -520,3 +520,22 @@ export function primaryBillAction(bill: Bill, today: string): 'mark' | 'undo' | 
   if (paid) return 'undo';
   return due ? 'mark' : null;
 }
+
+export interface SpendSlice { key: string; name: string; cents: number; share: number }
+
+/**
+ * Where the month's money goes: each category's bills due + spending, biggest
+ * first, the top `max` named and the rest folded into "Everything else".
+ */
+export function spendingBreakdown(rows: BudgetRow[], max = 4): SpendSlice[] {
+  const used = rows
+    .map(r => ({ key: r.categoryId, name: r.name, cents: r.billsCents + r.spendingCents }))
+    .filter(r => r.cents > 0)
+    .sort((a, b) => b.cents - a.cents || a.name.localeCompare(b.name));
+  const total = used.reduce((t, r) => t + r.cents, 0);
+  if (!total) return [];
+  const top = used.length > max + 1 ? used.slice(0, max) : used;
+  const restCents = used.slice(top.length).reduce((t, r) => t + r.cents, 0);
+  const slices = restCents ? [...top, { key: '__rest__', name: 'Everything else', cents: restCents }] : top;
+  return slices.map(s => ({ ...s, share: s.cents / total }));
+}

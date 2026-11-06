@@ -552,7 +552,6 @@ export const SheetHeading = styled.h2`
   line-height: 1.2;
   color: var(--text-secondary);
   @media (max-width: 480px) { font-size: 22px; }
-  padding-left: 16px;
 `;
 
 export const SheetHead = styled.div`

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
+import { spendingBreakdown,
   parseMoney, formatCents, addMonthsClamped, billDueDates, nextDueDate, billOccurrences,
   monthlyEquivalent, billTotals, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
   nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment, billMonthState, markBillPaidFor, undoPaymentFor, payPartFor, isDuePaid, leftToPay,
@@ -322,5 +322,25 @@ describe('part payments', () => {
   it('a full payment stays paid when the bill amount goes up later', () => {
     const paid = markBillPaidFor(b, '2026-10-15', '2026-10-15', 'a', 'T');
     expect(isDuePaid({ ...paid, amountCents: 12000 }, '2026-10-15')).toBe(true);
+  });
+});
+
+describe('spendingBreakdown', () => {
+  const row = (categoryId: string, billsCents: number, spendingCents: number) =>
+    ({ categoryId, name: categoryId, plannedCents: 0, billsCents, paidCents: 0, spendingCents, leftCents: 0 });
+
+  it('ranks categories by bills + spending and folds the rest', () => {
+    const s = spendingBreakdown([row('a', 100, 0), row('b', 0, 500), row('c', 200, 100), row('d', 50, 0), row('e', 30, 0), row('f', 20, 0), row('z', 0, 0)]);
+    expect(s.map(x => x.name)).toEqual(['b', 'c', 'a', 'd', 'Everything else']);
+    expect(s[4].cents).toBe(50);
+    expect(s.reduce((t, x) => t + x.share, 0)).toBeCloseTo(1);
+  });
+
+  it('names one extra category rather than folding it alone', () => {
+    expect(spendingBreakdown([row('a', 5, 0), row('b', 4, 0), row('c', 3, 0), row('d', 2, 0), row('e', 1, 0)]).map(x => x.name)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('is empty with nothing spent', () => {
+    expect(spendingBreakdown([row('a', 0, 0)])).toEqual([]);
   });
 });

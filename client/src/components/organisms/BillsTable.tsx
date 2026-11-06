@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
+import { PopCalculator } from '../molecules/PopCalculator.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { FormField } from '../molecules/FormField.js';
 import {
@@ -8,8 +9,8 @@ import {
   SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge, PickerPill,
 } from '../molecules/FinanceParts.js';
 import {
-  billCounts, billTotals, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
-  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, type BillMonthState,
+  billCounts, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
+  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, paidToward, type BillMonthState,
   isDuePaid, leftToPay, payPartFor,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
@@ -23,6 +24,8 @@ interface BillsTableProps {
   month: string;
   onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
   onDelete: (id: string) => void;
+  /** Adds a budget category from the bill editor's Category menu; resolves to its id */
+  onAddCategory?: (name: string) => Promise<string | null>;
 }
 
 type Filter = 'all' | 'unpaid' | 'paid' | 'subscriptions' | 'paused' | 'cancelled';
@@ -156,19 +159,28 @@ const TagNote = styled.em`
   color: var(--text-muted);
 `;
 
-/* Monthly · Yearly · Subscriptions, right-aligned on a --bg-panel footer */
-const Totals = styled.div`
+/* One total for what the filter shows, right under the filters */
+const MonthTotals = styled.div`
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 6px 28px;
-  padding: 16px 28px;
-  background: var(--bg-panel);
-  border-top: 1px solid ${SHEET_RULE};
+  margin: 0 0 16px;
+  padding: 14px 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-muted);
   b { margin-left: 6px; font-size: 16px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+`;
+
+/* The Category field's name box with Add / Cancel beside it */
+const NewCatRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  input { flex: 1; min-width: 0; }
+  button { flex: none; }
 `;
 
 const EmptyNote = styled.p`
@@ -218,9 +230,12 @@ function draftFrom(b?: Bill): Draft {
   };
 }
 
-export function BillEditor({ bill, categories, onSave, onCancel }: {
+const NEW_CATEGORY = '__new__';
+
+export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory }: {
   bill?: BillRecord;
   categories: FinanceRecord<'budget'>[];
+  onAddCategory?: (name: string) => Promise<string | null>;
   onSave: (bill: Bill & { id?: string }) => Promise<unknown>;
   onCancel: () => void;
 }) {
@@ -228,6 +243,19 @@ export function BillEditor({ bill, categories, onSave, onCancel }: {
   const [error, setError] = useState('');
   const set = (patch: Partial<Draft>) => setD(p => ({ ...p, ...patch }));
   const uid = bill?.id ?? 'new';
+  // "+ New category…" in the Category menu opens a name box in its place
+  const [newCat, setNewCat] = useState<string | null>(null);
+  const [addingCat, setAddingCat] = useState(false);
+  const addCategory = async () => {
+    const name = (newCat ?? '').trim();
+    if (!name || !onAddCategory) return;
+    const existing = categories.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) { set({ categoryId: existing.id }); setNewCat(null); return; }
+    setAddingCat(true);
+    const id = await onAddCategory(name);
+    setAddingCat(false);
+    if (id) { set({ categoryId: id }); setNewCat(null); } else setError('Couldn’t add that category. Try again.');
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -277,10 +305,25 @@ export function BillEditor({ bill, categories, onSave, onCancel }: {
           <input id={`bill-due-${uid}`} type="date" value={d.dueDate} onChange={e => set({ dueDate: e.target.value })} />
         </FormField>
         <FormField label="Category" htmlFor={`bill-cat-${uid}`}>
-          <select id={`bill-cat-${uid}`} value={d.categoryId} onChange={e => set({ categoryId: e.target.value })}>
-            <option value="">No category</option>
-            {categories.filter(c => !c.archived || c.id === d.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          {newCat !== null ? (
+            <NewCatRow>
+              <input id={`bill-cat-${uid}`} autoFocus value={newCat} placeholder="New category name" aria-label="New category name"
+                onChange={e => setNewCat(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); void addCategory(); }
+                  if (e.key === 'Escape') { e.preventDefault(); setNewCat(null); }
+                }} />
+              <PillButton type="button" disabled={!newCat.trim() || addingCat} onClick={() => void addCategory()}>Add</PillButton>
+              <PillButton type="button" $variant="neutral" onClick={() => setNewCat(null)}>Cancel</PillButton>
+            </NewCatRow>
+          ) : (
+            <select id={`bill-cat-${uid}`} value={d.categoryId}
+              onChange={e => (e.target.value === NEW_CATEGORY ? setNewCat('') : set({ categoryId: e.target.value }))}>
+              <option value="">No category</option>
+              {categories.filter(c => !c.archived || c.id === d.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {onAddCategory && <option value={NEW_CATEGORY}>+ New category…</option>}
+            </select>
+          )}
         </FormField>
         <FormField label="Autopay" htmlFor={`bill-auto-${uid}`}>
           <input id={`bill-auto-${uid}`} type="checkbox" checked={d.autopay} onChange={e => set({ autopay: e.target.checked })} />
@@ -372,7 +415,7 @@ const FILTERS: { value: Filter; label: string }[] = [
  * next due, Mark paid (recorded on the bill only — nothing posts anywhere
  * else), and quick pause / cancel so you can decide what to keep.
  */
-export function BillsTable({ bills, categories, month, onSave, onDelete }: BillsTableProps) {
+export function BillsTable({ bills, categories, month, onSave, onDelete, onAddCategory }: BillsTableProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('due');
   const [categoryId, setCategoryId] = useState('all');
@@ -400,7 +443,19 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
     return shown.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || byName(a, b));
   }, [bills, filter, sort, categoryId, today, month]);
 
-  const totals = useMemo(() => billTotals(bills), [bills]);
+  // Paid and still unpaid for the month on screen, over the bills shown (filters and category apply)
+  const monthTotals = useMemo(() => rows.reduce((t, { bill, state }) => {
+    if (state.kind === 'paid') t.paid += paidToward(bill, state.due);
+    if (state.kind === 'unpaid') {
+      t.paid += state.paidCents;
+      if (bill.status === 'active') t.unpaid += state.leftCents;
+    }
+    return t;
+  }, { paid: 0, unpaid: 0 }), [rows]);
+  // "Total unpaid", "Total Groceries", "Total unpaid · Groceries"
+  const catLabel = categoryId === 'all' ? '' : categoryId === 'none' ? 'No category' : (catName(categoryId) ?? '');
+  const filterLabel = filter === 'all' ? '' : FILTERS.find(f => f.value === filter)!.label.toLowerCase();
+  const totalLabel = ['Total', [filterLabel, catLabel].filter(Boolean).join(' · ')].filter(Boolean).join(' ');
   const setStatus = (b: BillRecord, status: BillStatus) =>
     void onSave({ ...b, status, cancelledOn: status === 'cancelled' ? today : undefined });
 
@@ -454,10 +509,18 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
             <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
           </PickerPill>
           <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>+ Add bill</PillButton>
+          <PopCalculator />
         </HeadRight>
       </SheetHead>
+      {(filter !== 'all' || categoryId !== 'all') && rows.length > 0 && (
+        <MonthTotals>
+          <span>{totalLabel}<b>{formatCents(
+            filter === 'paid' ? monthTotals.paid : filter === 'unpaid' ? monthTotals.unpaid : rows.reduce((t, r) => t + r.bill.amountCents, 0),
+          )}</b></span>
+        </MonthTotals>
+      )}
 
-      {editing === 'new' && <BillEditor categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />}
+      {editing === 'new' && <BillEditor categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />}
 
       <SheetBox>
         {rows.length === 0 ? (
@@ -470,7 +533,7 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
           </EmptyNote>
         ) : rows.map(({ bill, state }) => (editing === bill.id ? (
           <div key={bill.id} style={{ padding: '4px 20px 4px 28px' }}>
-            <BillEditor bill={bill} categories={categories} onSave={onSave} onCancel={() => setEditing(null)} />
+            <BillEditor bill={bill} categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />
           </div>
         ) : (
           <Fragment key={bill.id}>
@@ -502,13 +565,6 @@ export function BillsTable({ bills, categories, month, onSave, onDelete }: Bills
           )}
           </Fragment>
         )))}
-        {bills.some(billCounts) && (
-          <Totals>
-            <span>Monthly<b>{formatCents(totals.monthly)}</b></span>
-            <span>Yearly<b>{formatCents(totals.yearly)}</b></span>
-            <span>Subscriptions<b>{formatCents(totals.subscriptionsMonthly)}</b>/mo</span>
-          </Totals>
-        )}
       </SheetBox>
     </Wrap>
   );

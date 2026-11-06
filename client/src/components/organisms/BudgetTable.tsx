@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
+import { SpendDonut } from '../molecules/charts/SpendDonut.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import {
   Note, Actions, CellInput, StatBoxRow, StatCell,
-  SheetHead, SheetHeading, SheetBox, SheetLink, SHEET_RULE, UNPAID_COLOR,
+  SheetHead, SheetHeading, SheetBox, SHEET_RULE, UNPAID_COLOR,
 } from '../molecules/FinanceParts.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import {
-  budgetSummary, billTotals, centsToInput, formatCents, formatMonth, parseMoney, UNCATEGORIZED,
+  budgetSummary, billTotals, centsToInput, formatCents, formatMonth, parseMoney, spendingBreakdown, UNCATEGORIZED,
 } from '../../utils/finance.js';
 import { STARTER_CATEGORIES, type BudgetCategory, type FinanceRecord } from '../../types/finance.js';
 
@@ -22,28 +23,50 @@ interface BudgetTableProps {
 }
 
 /* First block on the page: FinanceShell places it just under the tabs, no top rule. */
-const STATS_OPEN_KEY = 'finance-plan-stats-open-v1';
+const CATS_OPEN_KEY = 'finance-by-category-open-v1';
 
 /* "Show plan totals ⌄" — the accent link look, with the month's Left beside it */
-const StatsToggle = styled.button`
+/* Hairline over the plan totals, under Current balance */
+const TopRule = styled.hr`
+  margin: 0 0 32px;
+  border: none;
+  border-top: 1px solid var(--border-default);
+`;
+
+/* "By category ⌄": the heading itself folds the table away */
+const FoldHeading = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 18px;
   padding: 0;
   border: none;
   background: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-accent-link);
+  color: var(--text-muted);
   cursor: pointer;
-  small { font-size: 13px; font-weight: 400; color: var(--text-muted); }
-  &:hover span { text-decoration: underline; }
+  &:hover h2 { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+`;
+
+/* Hairline closing the budget sections, before Log spending */
+const SectionRule = styled.hr`
+  margin: 40px 0 0;
+  border: none;
+  border-top: 1px solid var(--border-default);
 `;
 
 const Top = styled.section`
   &&& { margin-top: 32px; }
+`;
+
+/* Bills + spending by category for the month: a second panel under the plan totals */
+const BreakdownBox = styled.section`
+  margin-top: 12px;
+  padding: 18px 22px 22px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  h3 { margin: 0 0 16px; font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--text-soft); }
 `;
 
 const Section = styled.section`
@@ -256,17 +279,20 @@ function PlannedInput({ category, onSave }: { category: FinanceRecord<'budget'>;
  */
 export function BudgetTable({ categories, bills, expenses, month, onSave, onDelete }: BudgetTableProps) {
   const [newName, setNewName] = useState('');
-  // The Planned · Bills · Spending · Left boxes fold away; closed until opened (remembered per browser)
-  const [statsOpen, setStatsOpen] = useState(() => { try { return localStorage.getItem(STATS_OPEN_KEY) === '1'; } catch { return false; } });
-  const toggleStats = () => setStatsOpen(o => {
-    try { localStorage.setItem(STATS_OPEN_KEY, o ? '0' : '1'); } catch { /* private mode */ }
-    return !o;
-  });
+  // By category folds away too; closed until opened (remembered per browser)
+  const [catsOpen, setCatsOpen] = useState(() => { try { return localStorage.getItem(CATS_OPEN_KEY) === '1'; } catch { return false; } });
+  const toggleCats = () => {
+    const next = !catsOpen;
+    setCatsOpen(next);
+    if (!next) setManaging(false);
+    try { localStorage.setItem(CATS_OPEN_KEY, next ? '1' : '0'); } catch { /* private mode */ }
+  };
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [seeding, setSeeding] = useState(false);
 
   const sortedCats = useMemo(() => [...categories].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)), [categories]);
   const summary = useMemo(() => budgetSummary(sortedCats, bills, expenses, month), [sortedCats, bills, expenses, month]);
+  const breakdown = useMemo(() => spendingBreakdown(summary.rows), [summary]);
   const committed = useMemo(() => billTotals(bills).monthly, [bills]);
   const nextOrder = sortedCats.reduce((m, c) => Math.max(m, c.order), -1) + 1;
 
@@ -298,23 +324,32 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
 
   return (
     <Top>
-      <StatsToggle type="button" aria-expanded={statsOpen} aria-controls="budget-stats" onClick={toggleStats}>
-        <span>{statsOpen ? 'Hide plan totals' : 'Show plan totals'}</span>
-        <small>{summary.totals.leftCents < 0
-          ? `${formatCents(-summary.totals.leftCents)} over plan`
-          : `${formatCents(summary.totals.leftCents)} left of ${formatCents(summary.totals.plannedCents)}`}</small>
-        <Icon name={statsOpen ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={2} />
-      </StatsToggle>
-      {statsOpen && <StatBoxRow id="budget-stats" $cols={4}>
+      <TopRule />
+      <StatBoxRow $cols={4}>
         <StatCell label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
         <StatCell label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
         <StatCell label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
         <StatCell label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'accent'}
           sub={summary.totals.leftCents < 0 ? 'Over plan' : `${remaining}% of plan remaining`} />
-      </StatBoxRow>}
+      </StatBoxRow>
+      {breakdown.length > 0 && (
+        <BreakdownBox aria-label="Where it goes">
+          <h3>Where it goes</h3>
+          <SpendDonut slices={breakdown} totalCents={summary.totals.billsCents + summary.totals.spendingCents} />
+        </BreakdownBox>
+      )}
 
+      <SectionRule style={{ marginTop: 48 }} />
       <Section aria-label="By category">
-        <SheetHead><SheetHeading>By category</SheetHeading></SheetHead>
+        {sortedCats.length === 0 ? <SheetHead><SheetHeading>By category</SheetHeading></SheetHead> : (
+          <SheetHead style={catsOpen ? undefined : { marginBottom: 0 }}>
+            <FoldHeading type="button" aria-expanded={catsOpen} aria-controls="budget-by-category" onClick={toggleCats}>
+              <SheetHeading as="h2">By category</SheetHeading>
+              <Icon name={catsOpen ? 'chevron-up' : 'chevron-down'} size={18} strokeWidth={2} />
+              {!catsOpen && <small>{summary.rows.length} {summary.rows.length === 1 ? 'category' : 'categories'}</small>}
+            </FoldHeading>
+          </SheetHead>
+        )}
         {sortedCats.length === 0 ? (
           <>
             <Note>Set up categories with a planned amount each month — start with a set below, or add your own under Categories. Bills count in their category as soon as you add them, and spending you log fills in the rest.</Note>
@@ -322,8 +357,8 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
               <PillButton type="button" disabled={seeding} onClick={() => void addStarters()}>Add starter categories</PillButton>
             </Actions>
           </>
-        ) : (
-          <SheetBox role="table" aria-label={`Budget for ${formatMonth(month)}`}>
+        ) : catsOpen && (
+          <SheetBox id="budget-by-category" role="table" aria-label={`Budget for ${formatMonth(month)}`}>
             <HeadGrid role="row">
               <span>Category</span><span>Planned</span><span>Bills</span><span>Spent</span><span>Left</span>
             </HeadGrid>
@@ -358,9 +393,13 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
           </SheetBox>
         )}
         {/* The category editor stays folded away until asked for */}
-        <SheetLink type="button" style={{ marginTop: 18 }} aria-expanded={managing} onClick={() => setManaging(m => !m)}>
-          {managing ? 'Done managing categories' : 'Manage categories'}
-        </SheetLink>
+        {(catsOpen || sortedCats.length === 0) && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+            <PillButton type="button" $variant="neutral" aria-expanded={managing} onClick={() => setManaging(m => !m)}>
+              {managing ? 'Done managing categories' : 'Manage categories'}
+            </PillButton>
+          </div>
+        )}
       </Section>
 
       {managing && <Section aria-label="Categories">
@@ -426,6 +465,7 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
         </SheetBox>
         <Note style={{ marginTop: 12, color: 'var(--text-muted)' }}>Click a name to rename it. Archive keeps a category's history but hides it from new bills and spending; deleting leaves its lines uncategorized.</Note>
       </Section>}
+      <SectionRule />
     </Top>
   );
 }

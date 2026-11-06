@@ -59,6 +59,7 @@ export function QuickFinance({ kind }: { kind: QuickFinanceKind }) {
         <BillEditor
           key={`bill-${round}`}
           categories={categories}
+          onAddCategory={async name => (await budget.save({ name, monthlyPlannedCents: 0, order: categories.reduce((m, c) => Math.max(m, c.order), -1) + 1 }))?.id ?? null}
           onSave={async b => { if (await bills.save(b)) setSaved(`Saved ${b.name} to Bills.`); }}
           onCancel={() => setRound(r => r + 1)}
         />

@@ -64,6 +64,7 @@ function BudgetAndBills({ month }: { month: string }) {
         month={month}
         onSave={b => bills.save(b)}
         onDelete={id => void bills.remove(id)}
+        onAddCategory={async name => (await budget.save({ name, monthlyPlannedCents: 0, order: categories.reduce((m, c) => Math.max(m, c.order), -1) + 1 }))?.id ?? null}
       />
     </>
   );
