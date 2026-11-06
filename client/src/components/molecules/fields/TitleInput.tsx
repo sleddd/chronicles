@@ -1,8 +1,8 @@
 import { useId, useLayoutEffect, useRef, type ChangeEvent, type KeyboardEvent, type TextareaHTMLAttributes } from 'react';
 import styled from 'styled-components';
 
-/* The title field of an entry, edited in place ("What did you eat?"): a small
-   label above (the field's name, else "Title"), the text in thin Work Sans at
+/* The title field of an entry, edited in place ("What did you eat?"):
+   no label above — the field's name is its aria-label and, with no placeholder of its own, its placeholder — the text in thin Work Sans at
    a normal size and a faint rule under it that turns accent while editing, so
    it reads as a field like the rows below. A one-line title that wraps and
    grows to show all of its text instead of scrolling sideways: a textarea
@@ -12,17 +12,11 @@ import styled from 'styled-components';
 const Field = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 12px;
+  padding-bottom: 20px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--border-subtle);
   transition: border-color 120ms ease;
   &:focus-within { border-bottom-color: var(--color-accent-line); }
-`;
-
-const Label = styled.label`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
 `;
 
 const Area = styled.textarea`
@@ -41,17 +35,19 @@ const Area = styled.textarea`
     line-height: 1.32;
     color: var(--text-primary);
   }
-  &::placeholder { color: var(--text-hint); }
+  /* No label above: the placeholder names the field, so it reads a step firmer */
+  &::placeholder { color: var(--text-secondary); font-style: italic; opacity: 1; }
+  html[data-theme='light'] &::placeholder { color: var(--text-muted); }
 `;
 
 type TitleInputProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'rows'> & {
   /** The label shown above — defaults to the aria-label, else "Title" */
   label?: string;
-  /** No label above (the placeholder says it); the aria-label still names the field */
+  /** Kept for callers; no label is ever shown above now (the placeholder says it) */
   hideLabel?: boolean;
 };
 
-export function TitleInput({ value, onChange, onKeyDown, label, hideLabel = false, id, 'aria-label': ariaLabel, ...rest }: TitleInputProps) {
+export function TitleInput({ value, onChange, onKeyDown, label, hideLabel: _hideLabel, id, 'aria-label': ariaLabel, placeholder, style, className, ...rest }: TitleInputProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const autoId = useId();
   const fieldId = id ?? autoId;
@@ -78,10 +74,10 @@ export function TitleInput({ value, onChange, onKeyDown, label, hideLabel = fals
   };
 
   return (
-    <Field>
-      {!hideLabel && <Label htmlFor={fieldId}>{label ?? ariaLabel ?? 'Title'}</Label>}
+    // style / className place the whole field (its spacing), never the text box inside
+    <Field style={style} className={className}>
       <Area ref={ref} id={fieldId} rows={1} value={value} onChange={change} onKeyDown={keyDown}
-        aria-label={hideLabel ? (label ?? ariaLabel ?? 'Title') : undefined} {...rest} />
+        aria-label={label ?? ariaLabel ?? 'Title'} placeholder={placeholder ?? label ?? ariaLabel} {...rest} />
     </Field>
   );
 }

@@ -4,13 +4,15 @@ import { PillButton } from '../atoms/PillButton.js';
 import { PopCalculator } from '../molecules/PopCalculator.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { FormField } from '../molecules/FormField.js';
+import { Toggle } from '../atoms/Toggle.js';
+import { JoinedGroup, JoinedBtn } from '../molecules/fields/formKit.js';
 import {
   Actions, ErrorNote, RowMenu, type RowMenuItem,
   SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge, PickerPill,
 } from '../molecules/FinanceParts.js';
 import {
   billCounts, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
-  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, isDueCleared, setDueCleared, paidToward, type BillMonthState,
+  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, billRepeatNote, billSummaryLine, isDueCleared, setDueCleared, paidToward, type BillMonthState,
   isDuePaid, leftToPay, payPartFor,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
@@ -196,15 +198,125 @@ const EmptyNote = styled.p`
   color: var(--text-muted);
 `;
 
-const EditorBox = styled.div`
+const EditorBox = styled.div<{ $framed?: boolean }>`
   grid-column: 1 / -1;
   padding: 8px 0 16px;
-  input[type='checkbox'] { width: 18px; height: 18px; flex: 0 0 auto; }
+  /* Editing a row in the table: its own panel, so it stands apart from the rows around it */
+  ${({ $framed }) => ($framed ? `
+    margin: 12px 0 16px;
+    padding: 24px 28px 26px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    @media (max-width: 560px) { padding: 18px 16px 20px; }
+  ` : '')}
 `;
 
 const EditorActions = styled(Actions)`
-  justify-content: flex-start;
-  margin-top: 8px;
+  justify-content: flex-end;
+  margin: 0;
+`;
+
+const KINDS: { value: Bill['kind']; label: string }[] = [
+  { value: 'bill', label: 'Bill' },
+  { value: 'subscription', label: 'Subscription' },
+];
+
+/* "New bill" across from the Bill | Subscription switch */
+const EditorHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 14px;
+`;
+
+/* Amount | How often, Due date | Category: two a row, one on phones */
+const Pair = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+  align-items: start;
+  input[type='date'] { width: 100%; }
+  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
+`;
+
+/* "$" inside the amount box */
+const Money = styled.div`
+  position: relative;
+  span {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  && input { width: 100%; padding-left: 34px !important; }
+`;
+
+const FieldHint = styled.span`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
+/* Autopay and Status between hairlines */
+const Settings = styled.div`
+  margin: 14px 0 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+`;
+
+const SettingRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 14px 0;
+`;
+
+const SettingTitle = styled.div`
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-secondary);
+`;
+
+const SettingNote = styled.div`
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+`;
+
+/* "NOTES" with a muted "Optional" across */
+const LabelSplit = styled.span`
+  display: flex;
+  justify-content: space-between;
+  small { font-size: 13px; letter-spacing: normal; text-transform: none; color: var(--text-muted); }
+`;
+
+/* "$95.00 monthly · next due Nov 5 · autopay on" across from Cancel / Add bill */
+const EditorFoot = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  margin-top: 18px;
+`;
+
+const Summary = styled.p`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  b { font-weight: 600; color: var(--text-secondary); }
 `;
 
 /* ── Editor ── */
@@ -237,7 +349,9 @@ function draftFrom(b?: Bill): Draft {
 
 const NEW_CATEGORY = '__new__';
 
-export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory }: {
+export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory, framed }: {
+  /** In its own panel (editing a row inside the bills table) */
+  framed?: boolean;
   bill?: BillRecord;
   categories: FinanceRecord<'budget'>[];
   onAddCategory?: (name: string) => Promise<string | null>;
@@ -286,66 +400,94 @@ export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory }
     onCancel();
   };
 
+  const cents = parseMoney(d.amount) ?? 0;
+  const summary = billSummaryLine({ amountCents: cents, frequency: d.frequency, dueDate: d.dueDate, autopay: d.autopay }, todayStr());
+
   return (
-    <EditorBox>
+    <EditorBox $framed={framed}>
       <form onSubmit={e => void submit(e)}>
+        <EditorHead>
+          <SheetHeading as="h3">{bill ? 'Edit bill' : 'New bill'}</SheetHeading>
+          <JoinedGroup role="radiogroup" aria-label="Type">
+            {KINDS.map(k => (
+              <JoinedBtn key={k.value} type="button" role="radio" aria-checked={d.kind === k.value} $active={d.kind === k.value} $fill
+                onClick={() => set({ kind: k.value })}>{k.label}</JoinedBtn>
+            ))}
+          </JoinedGroup>
+        </EditorHead>
+
         <FormField label="Name" htmlFor={`bill-name-${uid}`}>
-          <input id={`bill-name-${uid}`} value={d.name} onChange={e => set({ name: e.target.value })} placeholder="Rent, Netflix, car insurance…" autoFocus />
+          <input id={`bill-name-${uid}`} value={d.name} onChange={e => set({ name: e.target.value })} placeholder="Rent, Netflix, phone…" autoFocus />
         </FormField>
-        <FormField label="Type" htmlFor={`bill-kind-${uid}`}>
-          <select id={`bill-kind-${uid}`} value={d.kind} onChange={e => set({ kind: e.target.value as Bill['kind'] })}>
-            <option value="bill">Bill</option>
-            <option value="subscription">Subscription</option>
-          </select>
-        </FormField>
-        <FormField label="Amount" htmlFor={`bill-amount-${uid}`}>
-          <input id={`bill-amount-${uid}`} inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" />
-        </FormField>
-        <FormField label="How often" htmlFor={`bill-freq-${uid}`}>
-          <select id={`bill-freq-${uid}`} value={d.frequency} onChange={e => set({ frequency: e.target.value as Bill['frequency'] })}>
-            {BILL_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
-        </FormField>
-        <FormField label={d.frequency === 'once' ? 'Due date' : 'A due date'} htmlFor={`bill-due-${uid}`}>
-          <input id={`bill-due-${uid}`} type="date" value={d.dueDate} onChange={e => set({ dueDate: e.target.value })} />
-        </FormField>
-        <FormField label="Category" htmlFor={`bill-cat-${uid}`}>
-          {newCat !== null ? (
-            <NewCatRow>
-              <input id={`bill-cat-${uid}`} autoFocus value={newCat} placeholder="New category name" aria-label="New category name"
-                onChange={e => setNewCat(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); void addCategory(); }
-                  if (e.key === 'Escape') { e.preventDefault(); setNewCat(null); }
-                }} />
-              <PillButton type="button" disabled={!newCat.trim() || addingCat} onClick={() => void addCategory()}>Add</PillButton>
-              <PillButton type="button" $variant="neutral" onClick={() => setNewCat(null)}>Cancel</PillButton>
-            </NewCatRow>
-          ) : (
-            <select id={`bill-cat-${uid}`} value={d.categoryId}
-              onChange={e => (e.target.value === NEW_CATEGORY ? setNewCat('') : set({ categoryId: e.target.value }))}>
-              <option value="">No category</option>
-              {categories.filter(c => !c.archived || c.id === d.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              {onAddCategory && <option value={NEW_CATEGORY}>+ New category…</option>}
+        <Pair>
+          <FormField label="Amount" htmlFor={`bill-amount-${uid}`}>
+            <Money>
+              <span aria-hidden="true">$</span>
+              <input id={`bill-amount-${uid}`} inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" />
+            </Money>
+          </FormField>
+          <FormField label="How often" htmlFor={`bill-freq-${uid}`}>
+            <select id={`bill-freq-${uid}`} value={d.frequency} onChange={e => set({ frequency: e.target.value as Bill['frequency'] })}>
+              {BILL_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
-          )}
-        </FormField>
-        <FormField label="Autopay" htmlFor={`bill-auto-${uid}`}>
-          <input id={`bill-auto-${uid}`} type="checkbox" checked={d.autopay} onChange={e => set({ autopay: e.target.checked })} />
-        </FormField>
-        <FormField label="Status" htmlFor={`bill-status-${uid}`}>
-          <select id={`bill-status-${uid}`} value={d.status} onChange={e => set({ status: e.target.value as BillStatus })}>
-            {BILL_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-        </FormField>
-        <FormField label="Notes" htmlFor={`bill-notes-${uid}`}>
-          <textarea id={`bill-notes-${uid}`} rows={2} value={d.notes} onChange={e => set({ notes: e.target.value })} placeholder="Account number hint, how to cancel…" />
+          </FormField>
+          <FormField label={d.frequency === 'once' || bill ? 'Due date' : 'Next due'} htmlFor={`bill-due-${uid}`}>
+            <input id={`bill-due-${uid}`} type="date" value={d.dueDate} onChange={e => set({ dueDate: e.target.value })} />
+            {d.dueDate && <FieldHint>{billRepeatNote(d.frequency, d.dueDate)}</FieldHint>}
+          </FormField>
+          <FormField label="Category" htmlFor={`bill-cat-${uid}`}>
+            {newCat !== null ? (
+              <NewCatRow>
+                <input id={`bill-cat-${uid}`} autoFocus value={newCat} placeholder="New category name" aria-label="New category name"
+                  onChange={e => setNewCat(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); void addCategory(); }
+                    if (e.key === 'Escape') { e.preventDefault(); setNewCat(null); }
+                  }} />
+                <PillButton type="button" disabled={!newCat.trim() || addingCat} onClick={() => void addCategory()}>Add</PillButton>
+                <PillButton type="button" $variant="neutral" onClick={() => setNewCat(null)}>Cancel</PillButton>
+              </NewCatRow>
+            ) : (
+              <select id={`bill-cat-${uid}`} value={d.categoryId}
+                onChange={e => (e.target.value === NEW_CATEGORY ? setNewCat('') : set({ categoryId: e.target.value }))}>
+                <option value="">No category</option>
+                {categories.filter(c => !c.archived || c.id === d.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {onAddCategory && <option value={NEW_CATEGORY}>+ New category…</option>}
+              </select>
+            )}
+          </FormField>
+        </Pair>
+
+        <Settings>
+          <SettingRow>
+            <div>
+              <SettingTitle id={`bill-auto-${uid}`}>Autopay</SettingTitle>
+              <SettingNote>Your bank pays it on the due date. Mark it paid when it goes through.</SettingNote>
+            </div>
+            <Toggle checked={d.autopay} aria-labelledby={`bill-auto-${uid}`} onChange={v => set({ autopay: v })} />
+          </SettingRow>
+          <SettingRow>
+            <SettingTitle id={`bill-status-${uid}`}>Status</SettingTitle>
+            <JoinedGroup role="radiogroup" aria-labelledby={`bill-status-${uid}`}>
+              {BILL_STATUSES.map(st => (
+                <JoinedBtn key={st.value} type="button" role="radio" aria-checked={d.status === st.value} $active={d.status === st.value} $fill
+                  onClick={() => set({ status: st.value })}>{st.label}</JoinedBtn>
+              ))}
+            </JoinedGroup>
+          </SettingRow>
+        </Settings>
+
+        <FormField label={<LabelSplit><span>Notes</span><small>Optional</small></LabelSplit>} htmlFor={`bill-notes-${uid}`}>
+          <textarea id={`bill-notes-${uid}`} rows={3} value={d.notes} onChange={e => set({ notes: e.target.value })} placeholder="Last 4 of the account, how to cancel…" />
         </FormField>
         {error && <ErrorNote>{error}</ErrorNote>}
-        <EditorActions>
-          <PillButton type="submit">{bill ? 'Save bill' : 'Add bill'}</PillButton>
-          <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>
-        </EditorActions>
+        <EditorFoot>
+          <Summary><b>{summary.split(' ')[0]}</b> {summary.slice(summary.indexOf(' ') + 1)}</Summary>
+          <EditorActions>
+            <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>
+            <PillButton type="submit">{bill ? 'Save bill' : <><Icon name="plus" size={15} strokeWidth={2.4} /> Add bill</>}</PillButton>
+          </EditorActions>
+        </EditorFoot>
       </form>
     </EditorBox>
   );
@@ -545,8 +687,8 @@ export function BillsTable({ bills, categories, month, onSave, onDelete, onAddCa
               : 'Nothing here for this filter.'}
           </EmptyNote>
         ) : rows.map(({ bill, state }) => (editing === bill.id ? (
-          <div key={bill.id} style={{ padding: '4px 20px 4px 28px' }}>
-            <BillEditor bill={bill} categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />
+          <div key={bill.id} style={{ padding: '4px 16px' }}>
+            <BillEditor framed bill={bill} categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />
           </div>
         ) : (
           <Fragment key={bill.id}>

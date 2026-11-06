@@ -558,3 +558,38 @@ export function spendingBreakdown(rows: BudgetRow[], max = 4): SpendSlice[] {
   const slices = restCents ? [...top, { key: '__rest__', name: 'Everything else', cents: restCents }] : top;
   return slices.map(s => ({ ...s, share: s.cents / total }));
 }
+
+const ORD = (n: number) => {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return `${n}${teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`;
+};
+
+/** The bill editor's note under its due date: "Repeats on the 5th of each month" */
+export function billRepeatNote(frequency: Bill['frequency'], dueDate: string): string {
+  if (!dueDate) return '';
+  const d = parseDay(dueDate);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+  const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const day = ORD(d.getUTCDate());
+  switch (frequency) {
+    case 'monthly': return `Repeats on the ${day} of each month`;
+    case 'weekly': return `Repeats every ${weekday}`;
+    case 'biweekly': return `Repeats every other ${weekday}`;
+    case 'quarterly': return `Repeats every 3 months on the ${day}`;
+    case 'yearly': return `Repeats every year on ${monthDay}`;
+    default: return `Just once, on ${monthDay}`;
+  }
+}
+
+const FREQUENCY_WORD: Record<Bill['frequency'], string> = {
+  monthly: 'monthly', weekly: 'weekly', biweekly: 'every 2 weeks', quarterly: 'quarterly', yearly: 'yearly', once: 'once',
+};
+
+/** The bill editor's footer line: "$95.00 monthly · next due Nov 5 · autopay on" */
+export function billSummaryLine(bill: Pick<Bill, 'amountCents' | 'frequency' | 'dueDate' | 'autopay'>, today: string): string {
+  const next = bill.dueDate ? nextDueDate(bill as Bill, today) : null;
+  const parts = [`${formatCents(bill.amountCents)} ${FREQUENCY_WORD[bill.frequency]}`];
+  if (next) parts.push(`next due ${parseDay(next).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`);
+  if (bill.autopay) parts.push('autopay on');
+  return parts.join(' · ');
+}

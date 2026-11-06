@@ -25,10 +25,14 @@ function muteColor(hex: string, amount = 0.45): string {
 /* ── Styled ── */
 
 /* Clip only sideways (the swipe); the vertical axis stays visible. */
+/* 14px of room each side (padding, undone by the margin) so a list row's
+   rounded hover outline, drawn a little wider than the row, isn't clipped */
 const Outer = styled.div`
   position: relative;
   overflow-x: clip;
   overflow-y: visible;
+  margin: 0 -14px;
+  padding: 0 14px;
 `;
 
 /*

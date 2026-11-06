@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import styled, { css } from 'styled-components';
 import { glassControl } from '../../styles/wallpaper.js';
 import { filledInputs } from '../../styles/filledInputs.js';
-import { entryRowPlain } from '../../styles/entryRow.js';
 import { formatCents } from '../../utils/finance.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { columnRules } from '../../styles/columnRules.js';
@@ -235,11 +234,11 @@ const subgridRow = css`
   }
 `;
 
-/** One list row: page-colour, sinks on hover (the shared plain-list style). */
+/** One table row: no fill at rest (rows sit on whatever card or page they're in); hover / active sink */
 export const Row = styled.div<{ $cols: string; $active?: boolean; $muted?: boolean }>`
-  ${entryRowPlain}
-  /* No fill at rest — rows sit on whatever card or page they're in; hover still sinks */
-  background: transparent;
+  background: ${({ $active }) => ($active ? 'var(--bg-sunken)' : 'transparent')};
+  transition: background 120ms;
+  &:hover { background: var(--bg-sunken); }
   display: grid;
   grid-template-columns: ${({ $cols }) => $cols};
   align-items: center;

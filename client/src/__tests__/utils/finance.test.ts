@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { spendingBreakdown, isDueCleared, setDueCleared,
+import { spendingBreakdown, billRepeatNote, billSummaryLine, isDueCleared, setDueCleared,
   parseMoney, formatCents, addMonthsClamped, billDueDates, nextDueDate, billOccurrences,
   monthlyEquivalent, billTotals, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
   nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment, billMonthState, markBillPaidFor, undoPaymentFor, payPartFor, isDuePaid, leftToPay,
@@ -367,5 +367,22 @@ describe('cleared at bank', () => {
 
   it('is never cleared with no payment', () => {
     expect(isDueCleared(bill, '2026-11-01')).toBe(false);
+  });
+});
+
+describe('bill editor notes', () => {
+  it('says how a bill repeats', () => {
+    expect(billRepeatNote('monthly', '2026-11-05')).toBe('Repeats on the 5th of each month');
+    expect(billRepeatNote('monthly', '2026-11-22')).toBe('Repeats on the 22nd of each month');
+    expect(billRepeatNote('weekly', '2026-11-05')).toBe('Repeats every Thursday');
+    expect(billRepeatNote('biweekly', '2026-11-05')).toBe('Repeats every other Thursday');
+    expect(billRepeatNote('yearly', '2026-11-05')).toBe('Repeats every year on Nov 5');
+    expect(billRepeatNote('once', '2026-11-05')).toBe('Just once, on Nov 5');
+  });
+
+  it('sums the bill up in one line', () => {
+    expect(billSummaryLine({ amountCents: 9500, frequency: 'monthly', dueDate: '2026-11-05', autopay: true }, '2026-11-05'))
+      .toBe('$95.00 monthly · next due Nov 5 · autopay on');
+    expect(billSummaryLine({ amountCents: 0, frequency: 'once', dueDate: '2026-10-01' }, '2026-11-05')).toBe('$0.00 once');
   });
 });

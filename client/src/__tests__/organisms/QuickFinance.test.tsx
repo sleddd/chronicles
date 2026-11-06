@@ -31,7 +31,7 @@ describe('QuickFinance', () => {
     renderWithTheme(<MemoryRouter><QuickFinance kind="bill" /></MemoryRouter>);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Internet' } });
     fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '60' } });
-    fireEvent.change(screen.getByLabelText('A due date'), { target: { value: '2026-11-20' } });
+    fireEvent.change(screen.getByLabelText('Next due'), { target: { value: '2026-11-20' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add bill' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved Internet to Bills.'));
     expect(saves.bills).toHaveBeenCalledWith(expect.objectContaining({ name: 'Internet', amountCents: 6000, dueDate: '2026-11-20' }));
