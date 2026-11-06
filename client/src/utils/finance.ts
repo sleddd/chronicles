@@ -255,6 +255,25 @@ export function undoPaymentFor<B extends Bill>(bill: B, forDue: string): B {
   return { ...bill, payments: (bill.payments ?? []).filter(p => p !== last) };
 }
 
+/** Whether every payment toward a due date has cleared at the bank */
+export function isDueCleared(bill: Bill, forDue: string): boolean {
+  const mine = (bill.payments ?? []).filter(p => p.forDue === forDue);
+  return mine.length > 0 && mine.every(p => !!p.clearedOn);
+}
+
+/** Marks the payments toward a due date cleared at the bank (a day), or not (null) */
+export function setDueCleared<B extends Bill>(bill: B, forDue: string, clearedOn: string | null): B {
+  return {
+    ...bill,
+    payments: (bill.payments ?? []).map(p => {
+      if (p.forDue !== forDue) return p;
+      if (clearedOn) return { ...p, clearedOn: p.clearedOn ?? clearedOn };
+      const { clearedOn: _drop, ...rest } = p;
+      return rest;
+    }),
+  };
+}
+
 /**
  * A bill as seen from one month (YYYY-MM) on Budget & bills:
  * - 'paid': its bill for that month is paid (the last one paid, if it's due

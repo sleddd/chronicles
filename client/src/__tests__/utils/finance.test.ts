@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { spendingBreakdown,
+import { spendingBreakdown, isDueCleared, setDueCleared,
   parseMoney, formatCents, addMonthsClamped, billDueDates, nextDueDate, billOccurrences,
   monthlyEquivalent, billTotals, budgetSummary, potBalance, goalProgress, UNCATEGORIZED, shiftMonth,
   nextUnpaidDue, markBillPaid, undoLastPayment, latestPayment, billMonthState, markBillPaidFor, undoPaymentFor, payPartFor, isDuePaid, leftToPay,
@@ -342,5 +342,30 @@ describe('spendingBreakdown', () => {
 
   it('is empty with nothing spent', () => {
     expect(spendingBreakdown([row('a', 0, 0)])).toEqual([]);
+  });
+});
+
+describe('cleared at bank', () => {
+  const bill = {
+    name: 'Rent', amountCents: 1000, frequency: 'monthly', dueDate: '2026-10-01', status: 'active', kind: 'bill',
+    payments: [
+      { id: 'a', forDue: '2026-10-01', paidOn: '2026-10-01', amountCents: 400, partial: true },
+      { id: 'b', forDue: '2026-10-01', paidOn: '2026-10-03', amountCents: 600, partial: true },
+      { id: 'c', forDue: '2026-09-01', paidOn: '2026-09-01', amountCents: 1000 },
+    ],
+  } as unknown as Bill;
+
+  it('marks every payment toward a due date cleared, and back', () => {
+    expect(isDueCleared(bill, '2026-10-01')).toBe(false);
+    const cleared = setDueCleared(bill, '2026-10-01', '2026-10-05');
+    expect(isDueCleared(cleared, '2026-10-01')).toBe(true);
+    expect(isDueCleared(cleared, '2026-09-01')).toBe(false);
+    const undone = setDueCleared(cleared, '2026-10-01', null);
+    expect(isDueCleared(undone, '2026-10-01')).toBe(false);
+    expect(undone.payments!.some(p => 'clearedOn' in p)).toBe(false);
+  });
+
+  it('is never cleared with no payment', () => {
+    expect(isDueCleared(bill, '2026-11-01')).toBe(false);
   });
 });

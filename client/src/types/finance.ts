@@ -48,6 +48,8 @@ export interface BillPayment {
   /** Part of the bill (Pay part). Without it a payment pays its due date in
    *  full, whatever the bill's amount is now; parts pay it once they add up. */
   partial?: boolean;
+  /** The day it cleared at the bank (ticked by hand); unset = not cleared yet */
+  clearedOn?: string;
 }
 
 export interface Bill {

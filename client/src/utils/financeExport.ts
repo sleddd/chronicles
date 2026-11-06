@@ -134,8 +134,8 @@ export function financeExportFiles(data: FinanceExport, today = todayStr()): { n
   );
 
   const payments = table(
-    ['Paid on', 'Bill', 'Type', 'Category', 'For due date', 'Amount'],
-    data.bills.flatMap(b => (b.payments ?? []).map(p => [p.paidOn, b.name, b.kind === 'subscription' ? 'Subscription' : 'Bill', cat(b.categoryId), p.forDue, money(p.amountCents)]))
+    ['Paid on', 'Bill', 'Type', 'Category', 'For due date', 'Amount', 'Cleared on'],
+    data.bills.flatMap(b => (b.payments ?? []).map(p => [p.paidOn, b.name, b.kind === 'subscription' ? 'Subscription' : 'Bill', cat(b.categoryId), p.forDue, money(p.amountCents), p.clearedOn ?? '']))
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
     [5],
   );

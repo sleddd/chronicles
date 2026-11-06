@@ -10,7 +10,7 @@ import {
 } from '../molecules/FinanceParts.js';
 import {
   billCounts, centsToInput, daysBetween, formatCents, formatDay, latestPayment, markBillPaidFor,
-  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, paidToward, type BillMonthState,
+  newId, parseMoney, todayStr, undoPaymentFor, billPeriodSuffix, billMonthState, DUE_SOON_DAYS, isDueCleared, setDueCleared, paidToward, type BillMonthState,
   isDuePaid, leftToPay, payPartFor,
 } from '../../utils/finance.js';
 import { BILL_FREQUENCIES, BILL_STATUSES, type Bill, type BillStatus, type FinanceRecord } from '../../types/finance.js';
@@ -150,6 +150,11 @@ const Due = styled.div`
   font-size: 14px;
   color: var(--text-secondary);
   small { display: block; margin-top: 2px; font-size: 12px; color: var(--text-muted); }
+`;
+
+/* "· Cleared" after the paid date once it's cleared at the bank */
+const Cleared = styled.span`
+  color: var(--color-accent-soft);
 `;
 
 const TagNote = styled.em`
@@ -385,6 +390,12 @@ function BillActions({ bill, state, today, onSave, onEdit, onPayPart, onStatus, 
   if (paid && !(state.kind === 'paid' && state.due === paid.forDue)) {
     menu.push({ label: `Undo the ${formatDay(paid.forDue).replace(/, \d{4}$/, '')} payment`, onSelect: () => undoPaid(paid.forDue) });
   }
+  // Paid: tick off when it clears at the bank
+  if (state.kind === 'paid') {
+    menu.splice(1, 0, isDueCleared(bill, state.due)
+      ? { label: 'Not cleared yet', onSelect: () => void onSave(setDueCleared(bill, state.due, null)) }
+      : { label: 'Mark cleared at bank', onSelect: () => void onSave(setDueCleared(bill, state.due, today)) });
+  }
   if (bill.status === 'active') menu.push({ label: 'Pause', onSelect: () => onStatus('paused') });
   if (bill.status === 'paused') menu.push({ label: 'Resume', onSelect: () => onStatus('active') });
   if (bill.status !== 'cancelled') menu.push({ label: 'Mark cancelled', onSelect: () => onStatus('cancelled') });
@@ -464,7 +475,9 @@ export function BillsTable({ bills, categories, month, onSave, onDelete, onAddCa
     if (!due) return billCounts(bill) ? <Due style={{ color: 'var(--text-muted)' }}>Paid</Due> : <Due style={{ color: 'var(--text-muted)' }}>—</Due>;
     const short = formatShort(due, today);
     // This month's bill, paid: its date and when it was paid
-    if (state.kind === 'paid') return <Due>{short}<small>Paid {formatShort(state.payment.paidOn, today)}</small></Due>;
+    if (state.kind === 'paid') return (
+      <Due>{short}<small>Paid {formatShort(state.payment.paidOn, today)}{isDueCleared(bill, state.due) && <Cleared> · Cleared</Cleared>}</small></Due>
+    );
     const days = daysBetween(today, due);
     const part = state.kind === 'unpaid' && state.paidCents > 0
       ? <small>{formatCents(state.paidCents)} paid · {formatCents(state.leftCents)} left</small> : null;
