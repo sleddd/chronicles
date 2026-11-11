@@ -41,30 +41,51 @@ describe('initPublicShelvesTable', () => {
 describe('getPublicShelfPage', () => {
   const head = { title: 'My shelf', total: 30, updatedAt: new Date('2026-11-10T10:00:00Z') };
 
-  it('reads the count first, then only the slice for the page', async () => {
-    mockQueryRaw.mockResolvedValueOnce([head]).mockResolvedValueOnce([{ items: [{ title: 'A' }] }]);
+  it('counts with the filters first, then reads one page of elements in order', async () => {
+    mockQueryRaw.mockResolvedValueOnce([head]).mockResolvedValueOnce([{ elem: { title: 'A' } }]);
     const page = await getPublicShelfPage('tok', 1);
     expect(page).toEqual({ title: 'My shelf', items: [{ title: 'A' }], page: 1, pages: 2, total: 30, updatedAt: head.updatedAt });
-    expect(callOf(0).sql).toContain('jsonb_array_length(items) AS total');
-    expect(callOf(0).values).toEqual(['tok']);
-    expect(callOf(1).sql).toContain('jsonb_path_query_array(items,');
-    expect(callOf(1).values).toEqual(['$[0 to 23]', 'tok']);
+    expect(callOf(0).sql).toContain('SELECT count(*) FROM jsonb_array_elements(s.items)');
+    expect(callOf(0).values).toContain('tok');
+    const { sql, values } = callOf(1);
+    expect(sql).toContain('jsonb_array_elements(s.items) WITH ORDINALITY AS t(elem, ord)');
+    expect(sql).toContain('OFFSET ? LIMIT ?');
+    expect(values.slice(-2)).toEqual([0, 24]);
+    // No filter: every filter value is null, the sort is newest (ordinality)
+    expect(values).toContain(null);
+    expect(values).toContain('newest');
+  });
+
+  it('binds the filters and the search words as values, never into the SQL text', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ...head, total: 3 }]).mockResolvedValueOnce([]);
+    await getPublicShelfPage('tok', 1, { type: 'book', shelf: 'done', minRating: 4, q: "Joni 50%_off", sort: 'rating' });
+    const { sql, values } = callOf(1);
+    // the shelf value and the search words never land in the SQL text (the type CASE names the types by design)
+    expect(sql).not.toContain("'done'");
+    expect(sql).not.toContain('Joni');
+    expect(sql).not.toContain('joni');
+    expect(values).toContain('book');
+    expect(values).toContain('done');
+    expect(values).toContain(4);
+    expect(values).toContain('rating');
+    // each word its own pattern, LIKE wildcards escaped
+    expect(values).toContainEqual(['%joni%', '%50\\%\\_off%']);
   });
 
   it('slices the third page and clamps a page past the end to the last one', async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ ...head, total: 60 }]).mockResolvedValueOnce([{ items: [] }]);
+    mockQueryRaw.mockResolvedValueOnce([{ ...head, total: 60 }]).mockResolvedValueOnce([]);
     await getPublicShelfPage('tok', 3);
-    expect(callOf(1).values[0]).toBe('$[48 to 71]');
+    expect(callOf(1).values.slice(-2)).toEqual([48, 24]);
 
     mockQueryRaw.mockReset();
-    mockQueryRaw.mockResolvedValueOnce([head]).mockResolvedValueOnce([{ items: [] }]);
+    mockQueryRaw.mockResolvedValueOnce([head]).mockResolvedValueOnce([]);
     const last = await getPublicShelfPage('tok', 99);
     expect(last?.page).toBe(2);
-    expect(callOf(1).values[0]).toBe('$[24 to 47]');
+    expect(callOf(1).values.slice(-2)).toEqual([24, 24]);
   });
 
   it('treats a bad page as the first and an empty shelf as one empty page', async () => {
-    mockQueryRaw.mockResolvedValueOnce([head]).mockResolvedValueOnce([{ items: [] }]);
+    mockQueryRaw.mockResolvedValueOnce([head]).mockResolvedValueOnce([]);
     const first = await getPublicShelfPage('tok', Number.NaN);
     expect(first?.page).toBe(1);
 
@@ -72,7 +93,7 @@ describe('getPublicShelfPage', () => {
     mockQueryRaw.mockResolvedValueOnce([{ ...head, total: 0 }]);
     const empty = await getPublicShelfPage('tok', 1);
     expect(empty).toEqual({ title: 'My shelf', items: [], page: 1, pages: 1, total: 0, updatedAt: head.updatedAt });
-    expect(mockQueryRaw).toHaveBeenCalledTimes(1); // no slice query for nothing
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1); // no page query for nothing
   });
 
   it('returns null when there is no such token', async () => {

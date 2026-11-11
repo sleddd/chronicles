@@ -43,31 +43,72 @@ export async function initPublicShelvesTable(): Promise<void> {
 
 const newToken = () => crypto.randomBytes(24).toString('base64url');
 
-/** The page a visitor asked for (1-based, clamped to what exists), or null when there's no such shelf */
-export async function getPublicShelfPage(token: string, page: number, pageSize = PUBLIC_SHELF_PAGE_SIZE): Promise<PublicShelfPage | null> {
+export const PUBLIC_SHELF_SORTS = ['newest', 'rating', 'title', 'type'] as const;
+export type PublicShelfSort = typeof PUBLIC_SHELF_SORTS[number];
+
+/** What a visitor may narrow a shelf page by — every value whitelisted by the route */
+export interface PublicShelfQuery {
+  type?: 'book' | 'movie' | 'tv' | 'music' | null;
+  shelf?: 'current' | 'want' | 'done' | 'paused' | 'dnf' | null;
+  minRating?: number | null;
+  /** Every word must appear in the title, maker or year */
+  q?: string | null;
+  sort?: PublicShelfSort | null;
+}
+
+/**
+ * The page a visitor asked for (1-based, clamped to what exists), narrowed
+ * and ordered in SQL — the list is unnested with jsonb_array_elements, the
+ * filters are WHERE clauses with bound values, the sort a CASE on the chosen
+ * key, and only one page of elements comes back. Null when there's no shelf.
+ */
+export async function getPublicShelfPage(token: string, page: number, query: PublicShelfQuery = {}, pageSize = PUBLIC_SHELF_PAGE_SIZE): Promise<PublicShelfPage | null> {
   const size = Math.max(1, Math.floor(pageSize));
   const wanted = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
-  // Clamp against the real count first, so a huge page number never asks for an empty slice
+  const type = query.type ?? null;
+  const shelf = query.shelf ?? null;
+  const minRating = query.minRating && query.minRating > 0 ? query.minRating : null;
+  // Each word of the search on its own, so "joni 1971" needs both somewhere in title · maker · year
+  const words = (query.q ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+  const pattern = words.length ? words.map(w => `%${w.replace(/[\\%_]/g, c => `\\${c}`)}%`) : null;
+  const sort: PublicShelfSort = query.sort && (PUBLIC_SHELF_SORTS as readonly string[]).includes(query.sort) ? query.sort : 'newest';
+
+  // Clamp against the real (filtered) count first, so a huge page number never asks for an empty slice
   const heads = await prisma.$queryRaw<{ title: string; total: number | bigint; updatedAt: Date }[]>`
-    SELECT title, jsonb_array_length(items) AS total, updated_at AS "updatedAt"
-    FROM public.public_shelves WHERE token = ${token}
+    SELECT s.title, s.updated_at AS "updatedAt",
+      (SELECT count(*) FROM jsonb_array_elements(s.items) AS t(elem)
+        WHERE (${type}::text IS NULL OR t.elem->>'type' = ${type}::text)
+          AND (${shelf}::text IS NULL OR t.elem->>'shelf' = ${shelf}::text)
+          AND (${minRating}::numeric IS NULL OR (t.elem->>'rating')::numeric >= ${minRating}::numeric)
+          AND (${pattern}::text[] IS NULL OR lower(concat_ws(' ', t.elem->>'title', t.elem->>'creator', t.elem->>'year')) LIKE ALL(${pattern}::text[]))
+      ) AS total
+    FROM public.public_shelves s WHERE s.token = ${token}
   `;
   const head = heads[0];
   if (!head) return null;
   const total = Number(head.total);
   const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.min(wanted, pages);
-  const start = (current - 1) * size;
-  const end = start + size - 1;
-  // Only the slice leaves the database: jsonb_path_query_array keeps the rest of the array there
+  const offset = (current - 1) * size;
   const rows = total > 0
-    ? await prisma.$queryRaw<{ items: PublicShelfItem[] }[]>`
-        SELECT jsonb_path_query_array(items, ${`$[${start} to ${end}]`}::jsonpath) AS items
-        FROM public.public_shelves WHERE token = ${token}
+    ? await prisma.$queryRaw<{ elem: PublicShelfItem }[]>`
+        SELECT t.elem
+        FROM public.public_shelves s, jsonb_array_elements(s.items) WITH ORDINALITY AS t(elem, ord)
+        WHERE s.token = ${token}
+          AND (${type}::text IS NULL OR t.elem->>'type' = ${type}::text)
+          AND (${shelf}::text IS NULL OR t.elem->>'shelf' = ${shelf}::text)
+          AND (${minRating}::numeric IS NULL OR (t.elem->>'rating')::numeric >= ${minRating}::numeric)
+          AND (${pattern}::text[] IS NULL OR lower(concat_ws(' ', t.elem->>'title', t.elem->>'creator', t.elem->>'year')) LIKE ALL(${pattern}::text[]))
+        ORDER BY
+          CASE WHEN ${sort}::text = 'rating' THEN (t.elem->>'rating')::numeric END DESC NULLS LAST,
+          CASE WHEN ${sort}::text = 'title' THEN lower(t.elem->>'title') END ASC NULLS LAST,
+          CASE WHEN ${sort}::text = 'type' THEN CASE t.elem->>'type' WHEN 'book' THEN 0 WHEN 'movie' THEN 1 WHEN 'tv' THEN 2 ELSE 3 END END ASC NULLS LAST,
+          CASE WHEN ${sort}::text = 'type' THEN lower(t.elem->>'title') END ASC NULLS LAST,
+          t.ord ASC
+        OFFSET ${offset} LIMIT ${size}
       `
     : [];
-  const items = rows[0]?.items ?? [];
-  return { title: head.title, items: Array.isArray(items) ? items : [], page: current, pages, total, updatedAt: head.updatedAt };
+  return { title: head.title, items: rows.map(r => r.elem), page: current, pages, total, updatedAt: head.updatedAt };
 }
 
 /** The owner's view of their shelf — never the items themselves */

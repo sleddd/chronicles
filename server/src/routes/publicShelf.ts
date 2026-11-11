@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { apiLimiter, publicShelfLimiter, writeGate } from '../middleware/rateLimiter.js';
 import {
   getPublicShelfPage, getPublicShelfByAccount, upsertPublicShelf, resetPublicShelfToken, deletePublicShelf,
-  type OwnedPublicShelf,
+  PUBLIC_SHELF_SORTS, type OwnedPublicShelf, type PublicShelfQuery,
 } from '../db/publicShelfQueries.js';
 import { PUBLIC_SHELF_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
 import { putPublicShelfSchema } from '@chronicles/shared';
@@ -22,6 +22,23 @@ const router = Router();
 
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,128}$/;
 const PUT_BODY_LIMIT = '8mb';
+const TYPES = ['book', 'movie', 'tv', 'music'] as const;
+const SHELVES = ['current', 'want', 'done', 'paused', 'dnf'] as const;
+const Q_MAX = 100;
+
+/** The visitor's filters, each value whitelisted; anything else is ignored */
+function readQuery(q: Record<string, unknown>): PublicShelfQuery {
+  const str = (v: unknown) => (typeof v === 'string' ? v : Array.isArray(v) && typeof v[0] === 'string' ? v[0] : '');
+  const type = str(q.type); const shelf = str(q.shelf); const sort = str(q.sort);
+  const rating = Number.parseFloat(str(q.rating));
+  return {
+    type: (TYPES as readonly string[]).includes(type) ? type as PublicShelfQuery['type'] : null,
+    shelf: (SHELVES as readonly string[]).includes(shelf) ? shelf as PublicShelfQuery['shelf'] : null,
+    minRating: Number.isFinite(rating) && rating > 0 && rating <= 5 ? Math.round(rating * 2) / 2 : null,
+    q: str(q.q).trim().slice(0, Q_MAX) || null,
+    sort: (PUBLIC_SHELF_SORTS as readonly string[]).includes(sort) ? sort as PublicShelfQuery['sort'] : null,
+  };
+}
 
 // Owner payload — never the items (the owner has them), never the account
 function owned(shelf: OwnedPublicShelf) {
@@ -37,14 +54,15 @@ router.get('/:token', publicShelfLimiter, async (req, res) => {
       return;
     }
     const page = Number.parseInt(String(req.query.page ?? '1'), 10);
-    const result = await getPublicShelfPage(token, Number.isFinite(page) ? page : 1);
+    const query = readQuery(req.query as Record<string, unknown>);
+    const result = await getPublicShelfPage(token, Number.isFinite(page) ? page : 1, query);
     if (!result) {
       res.status(404).json({ error: 'Public shelf not found' });
       return;
     }
     // A link opened by many people: a minute of shared cache and a 304 for a
     // page the browser already holds. Nothing private is in this response.
-    const etag = `"${crypto.createHash('sha256').update(`${result.updatedAt.toISOString()}|${result.page}|${result.total}`).digest('base64url').slice(0, 24)}"`;
+    const etag = `"${crypto.createHash('sha256').update(`${result.updatedAt.toISOString()}|${result.page}|${result.total}|${JSON.stringify(query)}`).digest('base64url').slice(0, 24)}"`;
     res.setHeader('Cache-Control', 'public, max-age=60');
     res.setHeader('ETag', etag);
     if (req.headers['if-none-match'] === etag) {

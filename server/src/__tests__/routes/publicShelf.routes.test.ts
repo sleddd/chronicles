@@ -4,6 +4,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 
 vi.mock('../../db/publicShelfQueries.js', () => ({
+  PUBLIC_SHELF_SORTS: ['newest', 'rating', 'title', 'type'],
   getPublicShelfPage: vi.fn(),
   getPublicShelfByAccount: vi.fn(),
   upsertPublicShelf: vi.fn(),
@@ -58,13 +59,30 @@ describe('Public shelf routes', () => {
       expect(res.body.items).toHaveLength(1);
       expect(res.headers['cache-control']).toBe('public, max-age=60');
       expect(res.headers['etag']).toMatch(/^"[A-Za-z0-9_-]+"$/);
-      expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 2);
+      expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 2, { type: null, shelf: null, minRating: null, q: null, sort: null });
+    });
+
+    it('passes whitelisted filters, a rounded rating and a trimmed search; junk is dropped', async () => {
+      vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'x', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date() });
+      await request(app).get(`/api/public-shelf/${TOKEN}?type=book&shelf=done&rating=4.3&q=%20joni%20&sort=rating`);
+      expect(getPublicShelfPage).toHaveBeenLastCalledWith(TOKEN, 1, { type: 'book', shelf: 'done', minRating: 4.5, q: 'joni', sort: 'rating' });
+      await request(app).get(`/api/public-shelf/${TOKEN}?type=game&shelf=maybe&rating=9&sort=random&q=${'x'.repeat(300)}`);
+      const [, , q] = vi.mocked(getPublicShelfPage).mock.calls.at(-1)!;
+      expect(q).toMatchObject({ type: null, shelf: null, minRating: null, sort: null });
+      expect(q.q).toHaveLength(100);
+    });
+
+    it('keys the ETag on the filters too', async () => {
+      vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'x', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date('2026-11-10T10:00:00Z') });
+      const a = await request(app).get(`/api/public-shelf/${TOKEN}`);
+      const b = await request(app).get(`/api/public-shelf/${TOKEN}?type=book`);
+      expect(a.headers['etag']).not.toBe(b.headers['etag']);
     });
 
     it('turns a non-numeric page into page 1', async () => {
       vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'x', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date() });
       await request(app).get(`/api/public-shelf/${TOKEN}?page=abc`);
-      expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 1);
+      expect(vi.mocked(getPublicShelfPage).mock.calls[0].slice(0, 2)).toEqual([TOKEN, 1]);
     });
 
     it('answers 304 when the browser already holds that page', async () => {

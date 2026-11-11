@@ -888,12 +888,27 @@ export interface PublicShelfPage {
   updatedAt: string;
 }
 
+export interface PublicShelfQuery {
+  type?: string;
+  shelf?: string;
+  /** At least this many stars */
+  rating?: number;
+  q?: string;
+  sort?: string;
+}
+
 export const publicShelf = {
-  /** One page of a public shelf — no sign-in */
-  getPage: (token: string, page = 1) =>
-    SHARE_TOKEN.test(token)
-      ? request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?page=${Math.max(1, Math.floor(page) || 1)}`)
-      : Promise.reject(new Error('Invalid public shelf link')),
+  /** One page of a public shelf, narrowed and ordered on the server — no sign-in */
+  getPage: (token: string, page = 1, query: PublicShelfQuery = {}) => {
+    if (!SHARE_TOKEN.test(token)) return Promise.reject(new Error('Invalid public shelf link'));
+    const p = new URLSearchParams({ page: String(Math.max(1, Math.floor(page) || 1)) });
+    if (query.type) p.set('type', query.type);
+    if (query.shelf) p.set('shelf', query.shelf);
+    if (query.rating) p.set('rating', String(query.rating));
+    if (query.q?.trim()) p.set('q', query.q.trim().slice(0, 100));
+    if (query.sort && query.sort !== 'newest') p.set('sort', query.sort);
+    return request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?${p.toString()}`);
+  },
   mine: () => request<{ publicShelf: OwnedPublicShelf | null }>('/public-shelf'),
   put: (data: PutPublicShelf) => request<OwnedPublicShelf>('/public-shelf', { method: 'PUT', body: data }),
   reset: () => request<OwnedPublicShelf>('/public-shelf/reset', { method: 'POST' }),

@@ -20,21 +20,33 @@ const page = (over: Record<string, unknown> = {}) => ({
 describe('PublicShelfView', () => {
   beforeEach(() => { mockGetPage.mockReset(); document.head.innerHTML = '<meta name="robots" content="index, follow">'; });
 
-  it('shows the title, the count, the posters read-only, then fetches the next page on Show more', async () => {
+  it('shows the title and the posters read-only, with the filters, then fetches the next page on Show more', async () => {
     mockGetPage.mockResolvedValueOnce(page()).mockResolvedValueOnce(page({ page: 2, items: [{ title: 'Blue', creator: 'Joni Mitchell', year: '1971', type: 'music', rating: 5, shelf: 'done' }] }));
     const { container } = renderWithTheme(<PublicShelfView />);
     expect(await screen.findByText('Claudette’s shelf')).toBeInTheDocument();
-    expect(screen.getByText('30 items')).toBeInTheDocument();
+    expect(screen.queryByText('30 items')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Dune · Frank Herbert · 1965' })).toBeInTheDocument();
-    expect(container.querySelectorAll('select, input')).toHaveLength(0);
-    expect(mockGetPage).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1);
+    // the grid itself has nothing to press; the filter bar is the only control set
+    expect(container.querySelectorAll('article select, article input, article button')).toHaveLength(0);
+    expect(screen.getByLabelText('Type')).toBeInTheDocument();
+    expect(mockGetPage).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1, expect.objectContaining({ sort: 'newest' }));
     expect(screen.getByText('Showing 1 of 30')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
-    await waitFor(() => expect(mockGetPage).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz012345', 2));
+    await waitFor(() => expect(mockGetPage).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz012345', 2, expect.anything()));
     expect(await screen.findByRole('img', { name: 'Blue · Joni Mitchell · 1971' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Dune · Frank Herbert · 1965' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex, nofollow');
+  });
+
+  it('refetches the first page with the filters when one changes', async () => {
+    mockGetPage.mockResolvedValue(page());
+    renderWithTheme(<PublicShelfView />);
+    await screen.findByText('Claudette’s shelf');
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'book' } });
+    await waitFor(() => expect(mockGetPage).toHaveBeenLastCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1, expect.objectContaining({ type: 'book' })));
+    fireEvent.change(screen.getByLabelText('Rating'), { target: { value: '4' } });
+    await waitFor(() => expect(mockGetPage).toHaveBeenLastCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1, expect.objectContaining({ type: 'book', rating: 4 })));
   });
 
   it('says when a shelf isn’t available, and when it’s empty', async () => {

@@ -11,8 +11,7 @@ import { PublicShelfControl } from '../components/organisms/PublicShelfControl.j
 import { publicShelfUrl } from '../services/publicShelf.js';
 import { showFlash } from '../services/flashNotice.js';
 import { copyText } from '../utils/clipboard.js';
-import { RoundSearch } from '../components/molecules/RoundSearch.js';
-import { FilterPick } from '../components/molecules/FilterPick.js';
+import { MediaFilterBar, EMPTY_MEDIA_FILTERS, type MediaFilters } from '../components/molecules/MediaFilterBar.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -30,7 +29,6 @@ import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
 import {
   EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds,
-  mediaTypeInfo, shelfFilterLabel, formatRating,
   type MediaFilter, type MediaItem, type MediaShelf, type MediaSort, type MediaType,
 } from '../utils/media.js';
 
@@ -42,12 +40,12 @@ import {
 
 const VIEW_KEY = 'media-view-v1';
 
-type Saved = { type: MediaType | ''; shelf: MediaShelf; minRating: number; sort: MediaSort };
+type Saved = MediaFilters;
 
 function loadSaved(): Saved {
   try {
     const raw = localStorage.getItem(VIEW_KEY);
-    if (!raw) return { type: '', shelf: '', minRating: 0, sort: 'newest' };
+    if (!raw) return EMPTY_MEDIA_FILTERS;
     const v = JSON.parse(raw) as Partial<Saved>;
     return {
       type: MEDIA_TYPES.some(t => t.value === v.type) ? v.type as MediaType : '',
@@ -55,7 +53,7 @@ function loadSaved(): Saved {
       minRating: typeof v.minRating === 'number' ? v.minRating : 0,
       sort: MEDIA_SORTS.some(s => s.value === v.sort) ? v.sort as MediaSort : 'newest',
     };
-  } catch { return { type: '', shelf: '', minRating: 0, sort: 'newest' }; }
+  } catch { return EMPTY_MEDIA_FILTERS; }
 }
 
 /* ── Layout (as the topic pages) ── */
@@ -158,46 +156,6 @@ const ShelfLink = styled.div`
   button[data-copied='true'] { color: var(--color-accent); }
 `;
 
-/* The controls share the row's full width: the search a little wider, the
-   pills even; phones wrap the search onto its own line */
-const Tools = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 10px;
-  margin-top: 8px;
-`;
-
-const Search = styled(RoundSearch)<{ $phone: boolean }>`
-  flex: ${({ $phone }) => ($phone ? '1 1 100%' : '1.6 1 220px')};
-  max-width: none;
-  min-width: 0;
-`;
-
-/* One pill's share of the row */
-const Slot = styled.div`
-  flex: 1 1 0;
-  min-width: 0;
-`;
-
-/* Phones: Type, Rating and Sort fold behind a square ⋯ (Planning's view-options look) */
-const MoreBtn = styled.button<{ $open: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: 1px solid ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-card)')};
-  border-radius: 8px;
-  background: ${({ $open }) => ($open ? 'var(--color-accent-subtle)' : 'transparent')};
-  color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--text-secondary)')};
-  cursor: pointer;
-  &:hover { border-color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-strong)')}; color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  ${glassControl}
-`;
-
 /* The public-shelf bookmark over a cover's corner: accent and solid while the
    item is on the shelf, a grey outline otherwise, on a soft disc so it reads
    over any cover */
@@ -264,7 +222,6 @@ export function MediaView() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const phone = useMediaQuery('(max-width: 768px)');
-  const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const shelfUrl = publicShelf ? publicShelfUrl(publicShelf.token) : '';
   const copyLink = async () => {
@@ -323,7 +280,6 @@ export function MediaView() {
     </ContentTemplate>
   );
 
-  const ratingLabel = saved.minRating ? `${formatRating(saved.minRating)}+ stars` : 'Any';
 
   return (
     <ContentTemplate>
@@ -348,57 +304,9 @@ export function MediaView() {
             )}
           </Head>
 
-          {items.length > 0 && (() => {
-            const typePick = (
-              <FilterPick grow name="Type" value={saved.type ? mediaTypeInfo(saved.type).label : 'All'} set={!!saved.type}>
-                <select aria-label="Type" value={saved.type} onChange={e => setSaved(s => ({ ...s, type: e.target.value as MediaType | '' }))}>
-                  <option value="">All</option>
-                  {MEDIA_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </FilterPick>
-            );
-            const shelfPick = (
-              <FilterPick grow name="Shelf" value={saved.shelf ? shelfFilterLabel(saved.shelf as Exclude<MediaShelf, ''>) : 'All'} set={!!saved.shelf}>
-                <select aria-label="Shelf" value={saved.shelf} onChange={e => setSaved(s => ({ ...s, shelf: e.target.value as MediaShelf }))}>
-                  <option value="">All</option>
-                  {SHELVES.map(s => <option key={s.value} value={s.value}>{shelfFilterLabel(s.value)}</option>)}
-                </select>
-              </FilterPick>
-            );
-            const ratingPick = (
-              <FilterPick grow name="Rating" value={ratingLabel} set={saved.minRating > 0}>
-                <select aria-label="Rating" value={saved.minRating} onChange={e => setSaved(s => ({ ...s, minRating: Number(e.target.value) }))}>
-                  <option value={0}>Any</option>
-                  {[5, 4.5, 4, 3.5, 3, 2].map(r => <option key={r} value={r}>{formatRating(r)}+ stars</option>)}
-                </select>
-              </FilterPick>
-            );
-            const sortPick = (
-              <FilterPick grow name="Sort" value={MEDIA_SORTS.find(s => s.value === saved.sort)?.label ?? 'Newest'} set={saved.sort !== 'newest'}>
-                <select aria-label="Sort" value={saved.sort} onChange={e => setSaved(s => ({ ...s, sort: e.target.value as MediaSort }))}>
-                  {MEDIA_SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </FilterPick>
-            );
-            const moreSet = (saved.type ? 1 : 0) + (saved.minRating ? 1 : 0) + (saved.sort !== 'newest' ? 1 : 0);
-            return phone ? (
-              <>
-                <Tools>
-                  <Search $phone value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
-                  <Slot>{shelfPick}</Slot>
-                  <MoreBtn type="button" $open={moreOpen || moreSet > 0} aria-expanded={moreOpen} aria-label={moreSet ? `More filters (${moreSet} set)` : 'More filters'} title="Type, rating and sort" onClick={() => setMoreOpen(o => !o)}>
-                    <Icon name="more-horizontal" size={18} strokeWidth={2} />
-                  </MoreBtn>
-                </Tools>
-                {moreOpen && <Tools><Slot>{typePick}</Slot><Slot>{ratingPick}</Slot><Slot>{sortPick}</Slot></Tools>}
-              </>
-            ) : (
-              <Tools>
-                <Search $phone={false} value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
-                <Slot>{typePick}</Slot><Slot>{shelfPick}</Slot><Slot>{ratingPick}</Slot><Slot>{sortPick}</Slot>
-              </Tools>
-            );
-          })()}
+          {items.length > 0 && (
+            <MediaFilterBar query={query} onQuery={setQuery} filters={saved} onFilters={setSaved} phone={phone} />
+          )}
           <PublicShelfControl open={panelOpen} onOpenChange={setPanel} anchor={anchor} pendingItem={pendingItem} onTurnedOn={turnedOn} />
 
           {items.length === 0 ? (
