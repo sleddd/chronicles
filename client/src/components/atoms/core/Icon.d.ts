@@ -5,7 +5,7 @@ export type IconName =
   | "more-horizontal" | "more-vertical" | "trash" | "pencil" | "sun" | "moon"
   | "book" | "bookmark" | "share" | "copy" | "tag" | "bell" | "user" | "menu" | "sparkles"
   | "clock" | "filter" | "archive" | "hash" | "target" | "flag" | "palette"
-  | "layout-grid" | "list" | "command" | "inbox" | "panel-left" | "repeat" | "grip"
+  | "layout-grid" | "list" | "globe" | "link" | "command" | "inbox" | "panel-left" | "repeat" | "grip"
   | "quote" | "feather" | "trophy" | "utensils" | "coffee" | "heart" | "pill"
   | "droplet" | "cloud" | "cloud-sun" | "mic" | "type" | "bold" | "italic"
   | "leaf" | "smile" | "activity" | "map-pin" | "check-circle" | "plus-circle" | "moon2"

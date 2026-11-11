@@ -13,7 +13,8 @@ import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
 import { publicShelfUrl } from '../services/publicShelf.js';
 import { showFlash } from '../services/flashNotice.js';
 import { copyText } from '../utils/clipboard.js';
-import { MediaFilterBar, EMPTY_MEDIA_FILTERS, type MediaFilters } from '../components/molecules/MediaFilterBar.js';
+import { MediaFilterBar, MediaViewSwitch, EMPTY_MEDIA_FILTERS, type MediaFilters, type MediaLayout } from '../components/molecules/MediaFilterBar.js';
+import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -25,37 +26,43 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
-import { glassControl, onPhoto } from '../styles/wallpaper.js';
+import { onPhoto } from '../styles/wallpaper.js';
 import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
 import {
-  EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds,
+  EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds, mediaSubtitle, shelfLabel, formatRating,
   type MediaFilter, type MediaItem, type MediaShelf, type MediaSort, type MediaType,
 } from '../utils/media.js';
 
 /* The media journal: books, movies, TV shows and music as posters on shelves —
    cover, the stars (tap to re-rate), the Shelf status (a picker) and, while
-   something is under way, its progress. Search, Type / Shelf / Rating filters
-   and Sort; 24 cards at a time, more as you scroll. A bookmark on each card puts it on the one
-   public shelf (PublicShelfControl); tapping a cover opens the entry. */
+   something is under way, its progress — or, with the list layout, the app's
+   flush list rows. Under the title a meta row: the public shelf's name (rename
+   it in place) · a Public shelf link, with Copy shelf link
+   and Add media across from it. Then the tool row (MediaFilterBar) and the
+   type chips; 24 cards at a time, more as you scroll. A bookmark on each card
+   puts it on the one public shelf (PublicShelfControl); tapping a cover opens
+   the entry. */
 
 const VIEW_KEY = 'media-view-v1';
 
-type Saved = MediaFilters;
+type Saved = MediaFilters & { layout: MediaLayout };
+const EMPTY_SAVED: Saved = { ...EMPTY_MEDIA_FILTERS, layout: 'grid' };
 
 function loadSaved(): Saved {
   try {
     const raw = localStorage.getItem(VIEW_KEY);
-    if (!raw) return EMPTY_MEDIA_FILTERS;
+    if (!raw) return EMPTY_SAVED;
     const v = JSON.parse(raw) as Partial<Saved>;
     return {
       type: MEDIA_TYPES.some(t => t.value === v.type) ? v.type as MediaType : '',
       shelf: SHELVES.some(s => s.value === v.shelf) ? v.shelf as MediaShelf : '',
       minRating: typeof v.minRating === 'number' ? v.minRating : 0,
       sort: MEDIA_SORTS.some(s => s.value === v.sort) ? v.sort as MediaSort : 'newest',
+      layout: v.layout === 'list' ? 'list' : 'grid',
     };
-  } catch { return EMPTY_MEDIA_FILTERS; }
+  } catch { return EMPTY_SAVED; }
 }
 
 /* ── Layout (as the topic pages) ── */
@@ -76,92 +83,75 @@ const Inner = styled.div`
 `;
 
 const Head = styled.div`
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
   padding: 53px 0 20px;
   ${NAV_COMPACT} { padding: 20px 0 16px; }
 `;
 
 /* The one page title that stays on phones (the top bar says "Media"; this
-   page's link field sits with it) — so no `view-title` class, and the
+   page's shelf row sits with it) — so no `view-title` class, and the
    wallpaper's white treatment applied here instead */
 const Title = styled.h1`
-  flex: none;
   ${onPhoto}
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
   line-height: 1;
   color: var(--text-primary);
-  padding-bottom: 0.2em;
-  margin: 0 0 -0.2em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0;
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* The title with, once the public shelf is on, its link field beside it */
-const TitleBlock = styled.div`
+/* Under the title: the shelf's name · Public shelf, with the actions across (no item count) */
+const MetaRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex: 1 1 auto;
-  min-width: 0;
-  @media (max-width: 640px) { flex-wrap: wrap; gap: 12px; }
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 18px;
 `;
 
-/* The public shelf's address in a filled read-only field with a copy button
-   inside — the app's filled input look, as the sign-in and settings fields */
-const ShelfLink = styled.div`
+const Meta = styled.div`
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex: 0 1 360px;
-  min-width: 180px;
-  height: 40px;
-  padding: 0 5px 0 18px;
-  border-radius: 999px;
-  /* A faded fill: the page (or the photo behind it) shows through */
-  background: color-mix(in srgb, var(--bg-sunken) 45%, transparent);
-  border: 1px solid var(--border-field);
-  ${glassControl}
-  html[data-wallpaper] & {
-    background: color-mix(in srgb, var(--bg-app) 38%, transparent);
-    -webkit-backdrop-filter: blur(8px) saturate(1.05);
-    backdrop-filter: blur(8px) saturate(1.05);
-  }
-  &:focus-within { border-color: var(--color-accent); }
-  input {
-    flex: 1;
-    min-width: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--text-secondary);
-    text-overflow: ellipsis;
-  }
-  button {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-  }
-  button:hover { color: var(--text-primary); background: var(--bg-hover); }
-  button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  button[data-copied='true'] { color: var(--color-accent); }
+  flex-wrap: wrap;
+  gap: 0 14px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-muted);
+  ${onPhoto}
+  /* The dots between the parts */
+  & > * + *::before { content: '·'; margin-right: 14px; color: var(--text-faint, var(--text-muted)); }
+`;
+
+/* The Public shelf link: the globe and the words in the accent, opening the public page */
+const PublicLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  color: var(--color-accent-link, var(--color-accent-soft));
+  text-decoration: none;
+  white-space: nowrap;
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
+/* The list layout: the app's flush rows (title, a muted line, the date), under a top rule */
+const ListBox = styled.div`
+  margin-top: 24px;
+  border-top: 1px solid var(--border-subtle);
+`;
+
+const Actions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  margin-left: auto;
+  /* On phones (Add media is up in the top bar) Copy shelf link sits on its own line, flush left */
+  @media (max-width: 768px) { margin-left: 0; flex: 1 1 100%; }
 `;
 
 /* The public-shelf bookmark over a cover's corner: accent and solid while the
@@ -183,41 +173,48 @@ const Bookmark = styled.button<{ $on: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-/* The shelf's name beside the link: a quiet button that turns into a pill
-   field to rename it (Enter / away saves, Escape cancels) */
+/* The shelf's name, first in the meta row — a quiet button in thin italic
+   Work Sans with a pencil, which turns into a field of the same face to rename
+   it in place (Enter / away saves, Escape cancels) */
+const nameFace = `
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  font-style: italic;
+  line-height: 32px;
+`;
+
 const NameBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 260px;
-  height: 40px;
-  padding: 0 4px;
+  gap: 10px;
+  max-width: min(360px, 100%);
+  height: 32px;
+  padding: 0;
   border: none;
   background: none;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-muted);
+  ${nameFace}
+  color: var(--text-primary);
   cursor: pointer;
-  ${onPhoto}
-  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 999px; }
+  & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  svg { flex: none; color: var(--text-muted); }
+  &:hover svg { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
 `;
 
 const NameInput = styled.input`
   && {
-    width: min(260px, 100%);
-    height: 40px;
-    padding: 0 18px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bg-sunken) 45%, transparent) !important;
-    border: 1px solid var(--color-accent) !important;
-    font-family: var(--font-sans);
-    font-size: 14px;
+    width: min(360px, 100%);
+    height: 32px;
+    padding: 0;
+    ${nameFace}
     color: var(--text-primary);
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid var(--color-accent-line) !important;
+    border-radius: 0;
     outline: none;
   }
-  html[data-wallpaper] && { background: color-mix(in srgb, var(--bg-app) 38%, transparent) !important; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 `;
 
 function ShelfName({ title }: { title: string }) {
@@ -301,6 +298,7 @@ export function MediaView() {
   const topicIds = useMemo(() => mediaTopicIds(allTopics), [allTopics]);
   const topicId = topicIds[0];
   const items = useMemo(() => mediaItems(entries, topicIds, stripHtml), [entries, topicIds]);
+  const { layout, ...filters } = saved;
   const filter: MediaFilter = { ...EMPTY_MEDIA_FILTER, type: saved.type, shelf: saved.shelf, minRating: saved.minRating, query };
   const shown = useMemo(() => sortMedia(filterMedia(items, filter), saved.sort), [items, filter.type, filter.shelf, filter.minRating, query, saved.sort]); // eslint-disable-line react-hooks/exhaustive-deps
   const visible = useMemo(() => shown.slice(0, shownCount), [shown, shownCount]);
@@ -352,29 +350,34 @@ export function MediaView() {
       <Page>
         <Inner>
           <Head>
-            <TitleBlock>
-              <Title>Media Journal</Title>
-              {publicShelf && (
-                <ShelfLink>
-                  <input readOnly value={shelfUrl} aria-label="Your public shelf link" onFocus={e => e.currentTarget.select()} />
-                  <button type="button" onClick={copyLink} data-copied={copied} aria-label={copied ? 'Copied' : 'Copy the public shelf link'} title={copied ? 'Copied' : 'Copy link'}>
-                    <Icon name={copied ? 'check' : 'copy'} size={16} strokeWidth={2} />
-                  </button>
-                </ShelfLink>
-              )}
-              {publicShelf && (
-                <ShelfName title={shelfTitle} />
-              )}
-            </TitleBlock>
-            {topicId != null && (
-              <TopBarAction>
-                <PillButton type="button" onClick={() => newEntry(topicId)}>Add media</PillButton>
-              </TopBarAction>
-            )}
+            <Title>Media Journal</Title>
+            <MetaRow>
+              <Meta>
+                {publicShelf && <ShelfName title={shelfTitle} />}
+                {publicShelf && (
+                  <PublicLink href={shelfUrl} target="_blank" rel="noopener noreferrer" title="Open your public shelf in a new tab">
+                    <Icon name="globe" size={15} strokeWidth={2} />Public shelf
+                  </PublicLink>
+                )}
+              </Meta>
+              <Actions>
+                {publicShelf && (
+                  <PillButton type="button" $variant="neutral" onClick={copyLink} data-copied={copied} aria-label={copied ? 'Copied' : 'Copy the public shelf link'}>
+                    <Icon name={copied ? 'check' : 'link'} size={14} strokeWidth={2.5} />{copied ? 'Copied' : 'Copy shelf link'}
+                  </PillButton>
+                )}
+                {topicId != null && (
+                  <TopBarAction>
+                    <PillButton type="button" onClick={() => newEntry(topicId)}><Icon name="plus" size={14} strokeWidth={2.5} />Add media</PillButton>
+                  </TopBarAction>
+                )}
+              </Actions>
+            </MetaRow>
           </Head>
 
           {items.length > 0 && (
-            <MediaFilterBar query={query} onQuery={setQuery} filters={saved} onFilters={setSaved} phone={phone} />
+            <MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone}
+              aside={<MediaViewSwitch value={layout} onChange={l => setSaved(v => ({ ...v, layout: l }))} />} />
           )}
           <PublicShelfControl open={panelOpen} onOpenChange={setPanel} anchor={anchor} pendingItem={pendingItem} onTurnedOn={turnedOn} />
 
@@ -384,6 +387,14 @@ export function MediaView() {
             <EmptyState message="Nothing matches those filters." />
           ) : (
             <>
+              {layout === 'list' ? (
+                <ListBox>
+                  {visible.map(item => (
+                    <EntryListCard key={item.id} flush content={item.title} createdAt={item.createdAt} onClick={() => openInJournal(item.id)}
+                      preview={[mediaSubtitle(item), item.rating ? `${formatRating(item.rating)} stars` : '', item.shelf ? shelfLabel(item.shelf, item.type) : ''].filter(Boolean).join(' · ')} />
+                  ))}
+                </ListBox>
+              ) : (
               <PosterGrid>
                 {visible.map(item => (
                   <OwnerCard
@@ -397,6 +408,7 @@ export function MediaView() {
                   />
                 ))}
               </PosterGrid>
+              )}
               <LoadMore shown={visible.length} total={shown.length} onMore={() => setShownCount(n => n + PUBLIC_SHELF_PAGE_SIZE)} />
             </>
           )}

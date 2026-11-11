@@ -28,7 +28,7 @@ describe('PublicShelfView', () => {
     expect(screen.getByRole('img', { name: 'Dune · Frank Herbert · 1965' })).toBeInTheDocument();
     // the grid itself has nothing to press; the filter bar is the only control set
     expect(container.querySelectorAll('article select, article input, article button')).toHaveLength(0);
-    expect(screen.getByLabelText('Type')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Type' })).toBeInTheDocument();
     expect(mockGetPage).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1, expect.objectContaining({ sort: 'newest' }));
     expect(screen.getByText('Showing 1 of 30')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
@@ -43,7 +43,7 @@ describe('PublicShelfView', () => {
     mockGetPage.mockResolvedValue(page());
     renderWithTheme(<PublicShelfView />);
     await screen.findByText('Claudette’s shelf');
-    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'book' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Books' }));
     await waitFor(() => expect(mockGetPage).toHaveBeenLastCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1, expect.objectContaining({ type: 'book' })));
     fireEvent.change(screen.getByLabelText('Rating'), { target: { value: '4' } });
     await waitFor(() => expect(mockGetPage).toHaveBeenLastCalledWith('abcdefghijklmnopqrstuvwxyz012345', 1, expect.objectContaining({ type: 'book', rating: 4 })));

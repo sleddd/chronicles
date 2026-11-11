@@ -51,6 +51,25 @@ describe('MediaView', () => {
     expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'title' } });
     expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(24);
+    // The type chips narrow the grid; the list layout shows the same items as rows
+    fireEvent.click(screen.getByRole('button', { name: 'Movies' }));
+    expect(screen.getByText('Nothing matches those filters.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.queryAllByRole('button', { name: /^Open Title/ })).toHaveLength(0);
+    expect(screen.getAllByText(/^Title \d+$/)).toHaveLength(24);
+    expect(JSON.parse(localStorage.getItem('media-view-v1') ?? '{}').layout).toBe('list');
+    fireEvent.click(screen.getByRole('button', { name: 'Grid' }));
+    expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(24);
+  });
+
+  it('with a public shelf on, the meta row names it with a Public shelf link, and Copy shelf link copies it', async () => {
+    usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My Media List', itemCount: 1, createdAt: '', updatedAt: '' });
+    renderWithTheme(<MediaView />);
+    expect(screen.queryByText(/items$/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Public shelf/ })).toHaveAttribute('href', expect.stringContaining('/public-shelf/' + 't'.repeat(32)));
+    expect(screen.getByRole('button', { name: /Rename your public shelf, now “My Media List”/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the public shelf link' })).toBeInTheDocument();
   });
 
   it('with no public shelf yet, the bookmark opens the confirmation and saves nothing', () => {
