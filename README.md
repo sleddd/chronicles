@@ -1,4 +1,4 @@
-<img width="1439" height="639" alt="Screenshot 2026-10-20 at 7 11 07 PM" src="https://github.com/user-attachments/assets/7241bf25-198b-45ad-9ce2-2444c3c8fe39" />
+<img width="1352" height="700" alt="Screenshot 2026-11-10 at 8 52 33 PM" src="https://github.com/user-attachments/assets/a1e86bc8-e641-4087-b7a0-0e40cd497be6" />
 
 # Chronicles - [mydailychronicles.com](https://mydailychronicles.com)
 
