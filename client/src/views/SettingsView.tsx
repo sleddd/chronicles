@@ -45,7 +45,7 @@ import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
-import { parseCsvRow, splitCsvLines, csvCell } from '../utils/csv.js';
+import { parseCsvRow, splitCsvLines, csvCell, isReservedImportColumn } from '../utils/csv.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
 import { collectFinanceData, financeExportZip } from '../utils/financeExport.js';
 import { parseThemePreference, type ThemePreference } from '../utils/autoTheme.js';
@@ -800,9 +800,12 @@ export function SettingsView() {
           customFields._isFavorite = true;
         }
 
-        // Custom fields from extra columns
+        // Custom fields from extra columns — never the app's own keys: a file
+        // from someone else must not be able to put its rows on the public
+        // shelf, or link them to doses, schedules and the like
         for (let h = 0; h < headers.length; h++) {
           if (skipHeaders.has(headers[h].toLowerCase()) || h >= fields.length) continue;
+          if (isReservedImportColumn(headers[h])) continue;
           const val = fields[h]?.trim();
           if (!val) continue;
           if (val.toLowerCase() === 'yes') customFields[headers[h]] = true;

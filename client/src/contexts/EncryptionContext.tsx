@@ -13,6 +13,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { olderEntriesAllowed, reserveEntryId, clearReservedEntryIds } from '../services/entryReseal.js';
 import { clearSealMarkers, clearIssuedTopicIds } from '../services/api.js';
 import { useUIStore } from '../stores/uiStore.js';
+import { forgetPlannerKeyword, forgetPlanningTypeFilter } from '../types/planner.js';
 import { useTimeStore } from '../stores/timeStore.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
@@ -150,6 +151,10 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearEntryTitleCache();
     // Time-tracking sessions (which entries, when) — TimeSync reopens them on unlock
     useTimeStore.getState().reset();
+    // Words typed into the planner's search, and the name of a task type
+    // picked as a filter, wait in sessionStorage: they're from decrypted data
+    forgetPlannerKeyword();
+    forgetPlanningTypeFilter();
     setEgressAccount(null);
     setIsUnlocked(false);
   }, []);

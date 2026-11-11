@@ -436,6 +436,29 @@ describe('Auth Routes', () => {
       expect(prisma.account.findUnique).not.toHaveBeenCalled();
     });
 
+    it('locks for a day once a day’s wrong passwords add up, even when each window stops one short of its cap', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+      (bcrypt.compare as any).mockResolvedValue(false);
+      const realNow = Date.now.bind(Date);
+      let shift = 0;
+      const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + shift);
+      try {
+        // 9 wrong passwords, then wait out the 15-minute window: never a 429, never a strike
+        for (let round = 0; round < 3; round++) {
+          const statuses = await Promise.all(Array.from({ length: 9 }, () => request(app).post('/api/auth/login').send(validLoginBody).then(r => r.status)));
+          expect(statuses.every(st => st === 401)).toBe(true);
+          shift += 16 * 60 * 1000;
+        }
+        // The 30th wrong password of the day locks the email for a day
+        for (let i = 0; i < 3; i++) expect((await request(app).post('/api/auth/login').send(validLoginBody)).status).toBe(401);
+        shift += 16 * 60 * 1000;
+        (bcrypt.compare as any).mockResolvedValue(true);
+        expect((await request(app).post('/api/auth/login').send(validLoginBody)).status).toBe(429);
+      } finally {
+        clock.mockRestore();
+      }
+    }, 20000);
+
     it('counts parallel wrong passwords before checking them, so a burst cannot pass the cap', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
       (bcrypt.compare as any).mockImplementation(() => new Promise(r => setTimeout(() => r(false), 20)));

@@ -545,6 +545,51 @@ export async function deletePost(schemaName: string, id: number): Promise<void> 
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   await db.$executeRawUnsafe(`DELETE FROM ${s}.posts WHERE id = $1`, id);
+  // Never fails the delete: the list is trimmed again at the next one
+  await pruneDeletedPosts(schemaName).catch(err => {
+    console.error('Deleted-entries trim failed:', err instanceof Error ? err.message : 'Unknown error');
+  });
+}
+
+// The list of deleted ids (deleted_posts) only ever grew: a row per deletion,
+// counted by no storage cap. It is trimmed to the newest DELETED_POSTS_KEEP
+// once it passes that by DELETED_POSTS_SLACK (so a trim is one statement every
+// couple of thousand deletions, not one per delete). Sync never needs more:
+// past 5,000 changes a browser is told to load everything anyway.
+//
+// What was trimmed is remembered as one row with id 0 (no entry has it)
+// holding the newest transaction id trimmed. A browser whose cursor is at or
+// below it may have missed a deletion, so it is told to load everything
+// (getPostChanges) — a full load shows what's gone by what's left.
+//
+// A trimmed id is no longer "spent": after 10,000 later deletions the server
+// would accept an entry under it again. Every browser at or below the mark
+// reloads, so none can hold the old entry under that id.
+export const DELETED_POSTS_KEEP = 10_000;
+export const DELETED_POSTS_SLACK = 2_000;
+const TRIM_MARK_ID = 0;
+
+/** Trim the deleted-ids list when it has outgrown what sync uses. Returns whether it trimmed. */
+export async function pruneDeletedPosts(schemaName: string): Promise<boolean> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const [{ n }] = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
+    `SELECT count(*) AS n FROM ${s}.deleted_posts WHERE id > ${TRIM_MARK_ID}`
+  );
+  if (Number(n) <= DELETED_POSTS_KEEP + DELETED_POSTS_SLACK) return false;
+  // One statement: the newest row past the ones kept is the cut; it and every
+  // older row go (the old mark with them), and the cut becomes the mark
+  await db.$executeRawUnsafe(
+    `WITH cut AS (
+       SELECT change_xid FROM ${s}.deleted_posts WHERE id > ${TRIM_MARK_ID}
+       ORDER BY change_xid DESC OFFSET $1 LIMIT 1
+     ), gone AS (
+       DELETE FROM ${s}.deleted_posts d USING cut WHERE d.change_xid <= cut.change_xid
+     )
+     INSERT INTO ${s}.deleted_posts (id, change_xid) SELECT ${TRIM_MARK_ID}, change_xid FROM cut`,
+    DELETED_POSTS_KEEP
+  );
+  return true;
 }
 
 // =============================================================================
@@ -584,6 +629,10 @@ export async function ensurePostSyncFunction(db: { $queryRawUnsafe: <T>(sql: str
 const deletedPostsIndex = (s: string) => `idx_${s}_deleted_change`;
 // /changes reads deletions by change_xid; without it every sync scans them all
 const deletedPostsIndexSql = (s: string) => `CREATE INDEX IF NOT EXISTS ${deletedPostsIndex(s)} ON ${s}.deleted_posts (change_xid)`;
+// Every insert checks its id was never deleted; without this one that check
+// scans the whole table, which only grows
+const deletedPostsIdIndex = (s: string) => `idx_${s}_deleted_id`;
+const deletedPostsIdIndexSql = (s: string) => `CREATE INDEX IF NOT EXISTS ${deletedPostsIdIndex(s)} ON ${s}.deleted_posts (id)`;
 
 /** Change tracking for a schema's posts (new schemas get these at creation). */
 export function postSyncStatements(s: string): string[] {
@@ -593,6 +642,7 @@ export function postSyncStatements(s: string): string[] {
     `CREATE INDEX IF NOT EXISTS idx_${s}_posts_change ON ${s}.posts (change_xid)`,
     `CREATE TABLE IF NOT EXISTS ${s}.deleted_posts (id INTEGER NOT NULL, change_xid xid8 NOT NULL)`,
     deletedPostsIndexSql(s),
+    deletedPostsIdIndexSql(s),
     `DROP TRIGGER IF EXISTS posts_sync_write ON ${s}.posts`,
     `CREATE TRIGGER posts_sync_write BEFORE INSERT OR UPDATE ON ${s}.posts FOR EACH ROW EXECUTE FUNCTION public.chronicles_post_changed()`,
     `DROP TRIGGER IF EXISTS posts_sync_delete ON ${s}.posts`,
@@ -613,16 +663,17 @@ export async function ensurePostSync(schemaName: string): Promise<void> {
         AND EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace WHERE n.nspname = $1 AND t.relname = 'deleted_posts')
         AND (SELECT count(*) FROM pg_trigger g JOIN pg_class t ON t.oid = g.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace
               WHERE n.nspname = $1 AND g.tgname IN ('posts_sync_write', 'posts_sync_delete')) = 2 AS ready,
-            EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS indexed`,
-    s, deletedPostsIndex(s)
+            (SELECT count(*) FROM pg_indexes WHERE schemaname = $1 AND indexname IN ($2, $3)) = 2 AS indexed`,
+    s, deletedPostsIndex(s), deletedPostsIdIndex(s)
   );
   if (!ready) {
     await ensurePostSyncFunction(db);
     await db.$transaction(postSyncStatements(s).map(sql => db.$executeRawUnsafe(sql)));
   } else if (!indexed) {
-    // Tracking from before the deletions index: add just that (a CREATE INDEX
-    // IF NOT EXISTS still locks the table, hence the catalog read first)
+    // Tracking from before the deletions indexes: add just those (a CREATE
+    // INDEX IF NOT EXISTS still locks the table, hence the catalog read first)
     await db.$executeRawUnsafe(deletedPostsIndexSql(s));
+    await db.$executeRawUnsafe(deletedPostsIdIndexSql(s));
   }
   postSyncReady.add(s);
 }
@@ -669,9 +720,13 @@ export async function getPostChanges(schemaName: string, since: string, limit = 
   );
   if (entries.length > limit) return { reset: true };
   const deleted = await db.$queryRawUnsafe<{ id: number }[]>(
-    `SELECT DISTINCT id FROM ${s}.deleted_posts WHERE change_xid >= $1::xid8`,
-    since
+    `SELECT DISTINCT id FROM ${s}.deleted_posts WHERE change_xid >= $1::xid8 LIMIT $2`,
+    since, limit + 1
   );
+  // Too many deletions to list: a full load shows what's gone by what's left.
+  // The same when the list was trimmed at or past this cursor (the mark, id 0,
+  // comes back with the rest): a deletion it never heard of may be gone from it
+  if (deleted.length > limit || deleted.some(d => d.id === TRIM_MARK_ID)) return { reset: true };
   return { reset: false, cursor, entries, deleted: deleted.map(d => d.id) };
 }
 
@@ -722,15 +777,40 @@ export async function ensureFinanceTables(schemaName: string): Promise<void> {
   financeReady.add(s);
 }
 
-export async function getFinanceRecords(schemaName: string, kind: FinanceTableKind): Promise<FinanceRecordRow[]> {
+/**
+ * One page of a kind's records, oldest first, holding at most `maxBytes` of
+ * ciphertext (always at least one record). Sizes are read first, so a kind at
+ * the storage cap is never loaded whole for one answer.
+ */
+export async function getFinancePage(
+  schemaName: string,
+  kind: FinanceTableKind,
+  options: { offset: number; limit: number; maxBytes: number },
+): Promise<{ records: FinanceRecordRow[]; more: boolean }> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  return db.$queryRawUnsafe<FinanceRecordRow[]>(
+  const table = `${s}.${FINANCE_TABLES[kind]}`;
+  const sizes = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
+    `SELECT octet_length(payload_encrypted) AS n FROM ${table} ORDER BY created_at ASC, id ASC LIMIT $1 OFFSET $2`,
+    options.limit, options.offset
+  );
+  let take = 0;
+  let bytes = 0;
+  for (const row of sizes) {
+    const n = Number(row.n);
+    if (take > 0 && bytes + n > options.maxBytes) break;
+    bytes += n;
+    take++;
+  }
+  if (take === 0) return { records: [], more: false };
+  const records = await db.$queryRawUnsafe<FinanceRecordRow[]>(
     `SELECT id, payload_encrypted as "payloadEncrypted", payload_iv as "payloadIv",
             created_at as "createdAt", updated_at as "updatedAt"
-     FROM ${s}.${FINANCE_TABLES[kind]}
-     ORDER BY created_at ASC`
+     FROM ${table}
+     ORDER BY created_at ASC, id ASC LIMIT $1 OFFSET $2`,
+    take, options.offset
   );
+  return { records, more: take < sizes.length || sizes.length === options.limit };
 }
 
 export async function upsertFinanceRecord(

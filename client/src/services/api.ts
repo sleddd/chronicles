@@ -56,11 +56,30 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const pending = inflight.get(key) as Promise<T> | undefined;
     // Followers get their own copy so no caller can mutate another's data
     if (pending) return pending.then(v => structuredClone(v));
-    const p = send<T>(path, options).finally(() => inflight.delete(key));
+    const p = sendWhenFree<T>(path, options).finally(() => inflight.delete(key));
     inflight.set(key, p);
     return p;
   }
   return send<T>(path, options);
+}
+
+/**
+ * A read the server put off for a moment (429 with a short Retry-After: this
+ * account's other list requests are still being answered) is asked again, a
+ * few times. Longer waits — the rate limits — go to the caller as before.
+ */
+const BUSY_RETRIES = 3;
+const BUSY_MAX_WAIT_SEC = 5;
+async function sendWhenFree<T>(path: string, options: RequestOptions): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await send<T>(path, options);
+    } catch (err) {
+      const wait = err instanceof ApiError && err.status === 429 ? err.retryAfterSec : undefined;
+      if (wait === undefined || wait > BUSY_MAX_WAIT_SEC || attempt >= BUSY_RETRIES) throw err;
+      await new Promise(resolve => setTimeout(resolve, Math.max(wait, 1) * 1000));
+    }
+  }
 }
 
 /**
@@ -476,7 +495,17 @@ export function clearIssuedTopicIds(): void {
 }
 
 async function loadTopics(seed: boolean): Promise<TopicRecord[]> {
-  const [wires, migrated] = await Promise.all([request<TopicWire[]>('/topics'), sealMarkerPresent(TOPICS_SEAL_MARKER)]);
+  const [rows, migrated] = await Promise.all([request<TopicWire[]>('/topics'), sealMarkerPresent(TOPICS_SEAL_MARKER)]);
+  // Only rows with a real id, each once. The id goes into the payload's AAD
+  // as text, so an id sent as "v1" would open a payload from before topics
+  // were bound to their id, and one sent as "12" would slip past the check
+  // that a new topic never takes an id already in use
+  const ids = new Set<number>();
+  const wires = (Array.isArray(rows) ? rows : []).filter(w => {
+    if (!w || !Number.isSafeInteger(w.id) || w.id <= 0 || ids.has(w.id)) return false;
+    ids.add(w.id);
+    return true;
+  });
   const opened = await Promise.all(wires.map(w => openTopic(w, !migrated)));
   if (!migrated) {
     // Re-seal topics still in the older form, then mark the account done
@@ -820,8 +849,17 @@ export interface FinanceRecordWire {
 }
 
 export const finance = {
-  list: (kind: FinanceKind) =>
-    request<{ records: FinanceRecordWire[] }>(`/finance/${kind}`),
+  /** Every record of a kind. The server answers a page at a time (capped by size), so this pages while there's more. */
+  list: async (kind: FinanceKind): Promise<{ records: FinanceRecordWire[] }> => {
+    const records: FinanceRecordWire[] = [];
+    const seen = new Set<string>();
+    for (let offset = 0; ; ) {
+      const page = await request<{ records: FinanceRecordWire[]; more?: boolean }>(`/finance/${kind}`, { params: { v: '2', offset: String(offset) } });
+      for (const r of page.records) if (!seen.has(r.id)) { seen.add(r.id); records.push(r); }
+      if (!page.more || page.records.length === 0) return { records };
+      offset += page.records.length;
+    }
+  },
 
   put: (kind: FinanceKind, id: string, payload: string, iv: string) =>
     request<{ record: FinanceRecordWire }>(`/finance/${kind}/${id}`, { method: 'PUT', body: { payload, iv } }),

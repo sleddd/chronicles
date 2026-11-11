@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { auth as authApi, ApiError } from '../services/api.js';
 import { deriveAuthSecret } from '@chronicles/shared';
 import { clearEntryCache } from '../services/entryCache.js';
-import { setEgressAccount, setEgressLegacyAccount, EGRESS_STORE } from '../services/deviceConsent.js';
+import { setEgressAccount, EGRESS_STORE } from '../services/deviceConsent.js';
 import { SETTING_REVS_STORE } from '../services/settingCipher.js';
 import { SEEN_MARKERS_STORE } from '../services/sealedFormats.js';
 
@@ -75,16 +75,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   // The off-device switches are recorded per account in this browser under a
-  // master-key tag (set on unlock, deviceConsent.ts); records from before were
-  // kept under a hash of the email, so that's given once for the move
+  // master-key tag (set on unlock, deviceConsent.ts); signed out, there is none
   useEffect(() => {
-    const email = user?.email?.trim().toLowerCase();
-    if (!email) { setEgressLegacyAccount(null); setEgressAccount(null); return; }
-    let live = true;
-    void crypto.subtle.digest('SHA-256', new TextEncoder().encode(email)).then(d => {
-      if (live) setEgressLegacyAccount(Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, '0')).join(''));
-    });
-    return () => { live = false; };
+    if (!user?.email) setEgressAccount(null);
   }, [user?.email]);
   const [encryptionData, setEncryptionData] = useState<EncryptionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

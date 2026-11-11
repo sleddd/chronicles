@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { rememberWallpaper, startingWallpaper } from '../utils/wallpapers.js';
-import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { DEFAULT_ACCENT_COLOR, safeAccent } from '../styles/accent.js';
 import { resolveTheme, rememberTheme, startingTheme, type ThemePreference } from '../utils/autoTheme.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
 
@@ -157,13 +157,22 @@ export const useUIStore = create<UIState>((set) => ({
   accentColor: DEFAULT_ACCENT_COLOR,
   setThemeMode: (mode) => set({ themeMode: mode }),
   setThemePreference: (pref) => { rememberTheme(pref); set({ themePreference: pref, themeMode: resolveTheme(pref) }); },
-  setAccentColor: (color) => set({ accentColor: color }),
+  setAccentColor: (color) => set({ accentColor: safeAccent(color) }),
   wallpaper: startingWallpaper(),
   setWallpaper: (id) => { rememberWallpaper(id); set({ wallpaper: id }); },
 
   displayName: '',
   setDisplayName: (name) => set({ displayName: name }),
-  clearPrivateState: () => set({ displayName: '', topicCustomFields: {}, topicHideText: {}, googleCalendarId: '' }),
+  // Everything read from the account's settings goes back to its starting
+  // value — the switches too: the load only sets one that's present, so a
+  // switch left from the last person (same tab, no reload) would stay on for
+  // the next when their settings leave it out
+  clearPrivateState: () => set({
+    displayName: '', topicCustomFields: {}, topicHideText: {},
+    calendarSyncEnabled: false, googleCalendarId: '', googleSyncToken: '', calendarImportMode: 'chroniclesOnly',
+    icsIncludeDetails: false, icsFeedEnabled: false,
+    cycleTrackingEnabled: true, imagesEnabled: false, imagesConfigured: false,
+  }),
 
   topicCustomFields: {},
   setTopicCustomFields: (fields) => set({ topicCustomFields: fields }),

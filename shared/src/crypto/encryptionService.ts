@@ -428,7 +428,11 @@ class EncryptionService {
    * accounts never share one. (The zero IV is never used for anything else:
    * every other encryption takes 12 random bytes, a 2^-96 chance of meeting it.)
    */
-  async accountTag(masterKey: CryptoKey, label: string): Promise<string> {
+  async accountTag(masterKey: CryptoKey, label: 'egress'): Promise<string> {
+    // One label only, ever: two tags made under this fixed IV would give away
+    // the key's GCM authentication subkey to anyone who saw both. A second
+    // kind of tag needs its own derivation (HMAC / HKDF), not a new label here
+    if (label !== 'egress') throw new Error('accountTag supports only the "egress" label');
     const out = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: new Uint8Array(12), additionalData: new TextEncoder().encode(`chronicles:tag:v1:${label}`), tagLength: 128 },
       masterKey,

@@ -36,7 +36,14 @@ function ownedShare(share: Share) {
 // GET /api/shares/:token — Public, no auth required
 router.get('/:token', shareLimiter, async (req, res) => {
   try {
-    const share = await getShareByToken(String(req.params.token));
+    const token = String(req.params.token);
+    // A token is base64url, at most the column's 64 characters: anything else
+    // (a NUL byte fails the query outright) is no share, without a lookup
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(token)) {
+      res.status(404).json({ error: 'Share not found or expired' });
+      return;
+    }
+    const share = await getShareByToken(token);
     // Shares from the retired encrypted-share scheme have no plaintext content
     // and were never viewable — treat them as gone
     if (!share || !share.content) {

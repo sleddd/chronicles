@@ -72,6 +72,24 @@ export const apiLimiter = rateLimit({
 });
 
 /**
+ * Requests answered 401, per IP, in this process. Checking a session is a
+ * database lookup that ran before any limit (the per-account limit above only
+ * starts once a session checks out), so a flood of made-up tokens could keep
+ * the small connection pool busy. Only refused requests count: someone signed
+ * in never adds to it, and an expired session or a few mistyped passwords stay
+ * far below it. Past it, the address is answered 429 before any lookup.
+ */
+export const failedAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+  message: { error: 'Too many requests, please try again later' },
+});
+
+/**
  * ICS feed rate limiter — public calendar feed fetches
  * 60 requests per 15-minute window per IP (calendar apps poll periodically)
  */

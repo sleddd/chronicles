@@ -215,15 +215,12 @@ describe('rollback guard (aiConfig, imageStorageConfig)', () => {
 });
 
 describe('off-device switch records', () => {
-  it('move from the email-hash key to the master-key tag once both are known', async () => {
-    const { setEgressLegacyAccount, egressOn } = await import('../../services/deviceConsent.js');
+  it('kept under the older email-hash key are not moved to the account (the email comes from the server)', async () => {
+    const { egressOn } = await import('../../services/deviceConsent.js');
     setEgressAccount(null);
     localStorage.setItem('chronicles.egress.v1', JSON.stringify({ 'emailhash|calendarSyncEnabled': true }));
-    setEgressLegacyAccount('emailhash');
     setEgressAccount('tag-a');
-    expect(egressOn('calendarSyncEnabled', true)).toBe(true);
-    expect(localStorage.getItem('chronicles.egress.v1')).not.toContain('emailhash');
-    setEgressLegacyAccount(null);
+    expect(egressOn('calendarSyncEnabled', true)).toBe(false);
   });
 
   it('are keyed by a tag only the master key can make', async () => {
@@ -232,7 +229,8 @@ describe('off-device switch records', () => {
     const a = await encryptionService.accountTag(key, 'egress');
     expect(await encryptionService.accountTag(key, 'egress')).toBe(a);
     expect(await encryptionService.accountTag(other, 'egress')).not.toBe(a);
-    expect(await encryptionService.accountTag(key, 'other')).not.toBe(a);
+    // One label only: a second tag under the same fixed IV would expose the key's GCM subkey
+    await expect(encryptionService.accountTag(key, 'other' as 'egress')).rejects.toThrow();
     expect(a).toMatch(/^[0-9a-f]{32}$/);
   });
 });

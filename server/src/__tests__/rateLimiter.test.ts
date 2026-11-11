@@ -129,3 +129,41 @@ describe('writeGate', () => {
     for (const r of open) r.finish();
   });
 });
+
+describe('readGate', () => {
+  const run = async (lane: string, max: number, accountId = 7) => {
+    const { readGate } = await import('../middleware/readGate.js');
+    const handlers: Record<string, () => void> = {};
+    const res: any = {
+      statusCode: 200,
+      headers: {} as Record<string, string>,
+      set(k: string, v: string) { this.headers[k] = v; return this; },
+      status(c: number) { this.statusCode = c; return this; },
+      json() { return this; },
+      on(ev: string, fn: () => void) { handlers[ev] = fn; },
+    };
+    let passed = false;
+    readGate(lane, max)({ method: 'GET', auth: { accountId } } as any, res, () => { passed = true; });
+    return { passed, res, sent: () => handlers.finish?.(), closed: () => handlers.close?.() };
+  };
+
+  it('caps one account’s list reads per lane, and frees a slot only once the answer was sent', async () => {
+    const a = await run('finance', 2);
+    const b = await run('finance', 2);
+    expect(a.passed && b.passed).toBe(true);
+    const refused = await run('finance', 2);
+    expect(refused.passed).toBe(false);
+    expect(refused.res.statusCode).toBe(429);
+    expect(refused.res.headers['Retry-After']).toBe('2');
+    // Another lane and another account aren't held back
+    const other = await run('topics', 2);
+    const someone = await run('finance', 2, 8);
+    expect(other.passed && someone.passed).toBe(true);
+    // The handler returning frees nothing: the response finishing does (once)
+    a.sent(); a.closed();
+    const c = await run('finance', 2);
+    expect(c.passed).toBe(true);
+    expect((await run('finance', 2)).passed).toBe(false);
+    for (const r of [b, c, other, someone]) r.closed();
+  });
+});

@@ -72,3 +72,14 @@ export function splitCsvLines(text: string): string[] {
   if (current.trim()) lines.push(current);
   return lines;
 }
+
+/**
+ * Column names an imported file may not set as an entry's custom fields: the
+ * app's own keys (they start with "_": dose and schedule links, import keys,
+ * the bookmark…), the public-shelf flag — which would publish the row without
+ * the owner's tap — and names that mean something to JavaScript objects.
+ */
+export function isReservedImportColumn(header: string): boolean {
+  const name = header.trim();
+  return name.startsWith('_') || ['onpublicshelf', 'constructor', 'prototype'].includes(name.toLowerCase());
+}

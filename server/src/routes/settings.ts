@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { readGate } from '../middleware/readGate.js';
 import { getAllSettings, upsertSetting, countSettings, settingExists, settingsStorageBytes, deleteSetting, withTenantLock } from '../db/tenantQueries.js';
 import { upsertSettingSchema, settingKeySchema, SEALED_SETTING_KEYS, isBoundSealedValue } from '@chronicles/shared';
 
@@ -13,7 +14,7 @@ const MAX_SETTING_KEYS = 500;
 const MAX_SETTINGS_BYTES = 8 * 1024 * 1024;
 
 // GET /api/settings
-router.get('/', async (req, res) => {
+router.get('/', readGate('settings', 3), async (req, res) => {
   try {
     const settings = await getAllSettings(req.auth!.tenantSchemaName);
     res.json(settings);

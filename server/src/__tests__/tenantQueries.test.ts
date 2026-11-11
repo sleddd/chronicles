@@ -40,6 +40,10 @@ import {
   createPosts,
   updatePost,
   deletePost,
+  pruneDeletedPosts,
+  getPostChanges,
+  DELETED_POSTS_KEEP,
+  DELETED_POSTS_SLACK,
   setPostTaxonomies,
   getPostTaxonomies,
   addTaxonomyToPost,
@@ -496,6 +500,7 @@ describe('Post queries', () => {
   describe('deletePost', () => {
     it('deletes a post by id', async () => {
       mockExecuteRawUnsafe.mockResolvedValue(1);
+      mockQueryRawUnsafe.mockResolvedValue([{ n: 3 }]);
 
       await deletePost(SCHEMA, 7);
 
@@ -715,13 +720,19 @@ describe('ensurePostSync — deletions index', () => {
       'CREATE INDEX IF NOT EXISTS idx_usr_1_abc123_deleted_change ON usr_1_abc123.deleted_posts (change_xid)');
   });
 
-  it('an account already tracked but missing the index gets just the index, after a catalog read', async () => {
+  it('new schemas get an index on deleted_posts.id (every insert checks its id was never deleted)', () => {
+    expect(postSyncStatements(SCHEMA)).toContain(
+      'CREATE INDEX IF NOT EXISTS idx_usr_1_abc123_deleted_id ON usr_1_abc123.deleted_posts (id)');
+  });
+
+  it('an account already tracked but missing an index gets just the indexes, after a catalog read', async () => {
     const schema = 'usr_2_abc123';
     mockQueryRawUnsafe.mockResolvedValue([{ ready: true, indexed: false }]);
     await ensurePostSync(schema);
     expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('pg_indexes');
-    expect(mockQueryRawUnsafe.mock.calls[0].slice(1)).toEqual([schema, 'idx_usr_2_abc123_deleted_change']);
-    expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(1);
+    expect(mockQueryRawUnsafe.mock.calls[0].slice(1)).toEqual([schema, 'idx_usr_2_abc123_deleted_change', 'idx_usr_2_abc123_deleted_id']);
+    expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(mockExecuteRawUnsafe.mock.calls[1][0]).toBe('CREATE INDEX IF NOT EXISTS idx_usr_2_abc123_deleted_id ON usr_2_abc123.deleted_posts (id)');
     expect(mockExecuteRawUnsafe.mock.calls[0][0]).toBe('CREATE INDEX IF NOT EXISTS idx_usr_2_abc123_deleted_change ON usr_2_abc123.deleted_posts (change_xid)');
     expect(mockTransaction).not.toHaveBeenCalled();
   });
@@ -731,5 +742,47 @@ describe('ensurePostSync — deletions index', () => {
     await ensurePostSync('usr_3_abc123');
     expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
     expect(mockTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleted-ids list — trimmed, and a cursor it no longer covers reloads', () => {
+  it('leaves the list alone until it has outgrown what sync uses', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ n: DELETED_POSTS_KEEP + DELETED_POSTS_SLACK }]);
+    expect(await pruneDeletedPosts(SCHEMA)).toBe(false);
+    expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it('past that, keeps the newest and leaves a mark (id 0) at the newest one trimmed, in one statement', async () => {
+    mockQueryRawUnsafe.mockResolvedValue([{ n: DELETED_POSTS_KEEP + DELETED_POSTS_SLACK + 1 }]);
+    mockExecuteRawUnsafe.mockResolvedValue(1);
+    expect(await pruneDeletedPosts(SCHEMA)).toBe(true);
+    expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(1);
+    const [sql, keep] = mockExecuteRawUnsafe.mock.calls[0];
+    expect(keep).toBe(DELETED_POSTS_KEEP);
+    expect(sql).toContain('ORDER BY change_xid DESC OFFSET $1 LIMIT 1');
+    expect(sql).toContain('DELETE FROM usr_1_abc123.deleted_posts d USING cut WHERE d.change_xid <= cut.change_xid');
+    expect(sql).toContain('INSERT INTO usr_1_abc123.deleted_posts (id, change_xid) SELECT 0, change_xid FROM cut');
+  });
+
+  it('a delete still succeeds when the trim fails', async () => {
+    mockExecuteRawUnsafe.mockResolvedValue(1);
+    mockQueryRawUnsafe.mockRejectedValue(new Error('db'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(deletePost(SCHEMA, 7)).resolves.toBeUndefined();
+    log.mockRestore();
+  });
+
+  it('a cursor at or below the mark is told to load everything; one above it gets its deletions', async () => {
+    const answers = (deleted: { id: number }[]) => {
+      mockQueryRawUnsafe.mockReset();
+      mockQueryRawUnsafe
+        .mockResolvedValueOnce([{ cursor: '900', future: false }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(deleted);
+    };
+    answers([{ id: 0 }, { id: 41 }]);
+    expect(await getPostChanges(SCHEMA, '100')).toEqual({ reset: true });
+    answers([{ id: 41 }, { id: 42 }]);
+    expect(await getPostChanges(SCHEMA, '500')).toEqual({ reset: false, cursor: '900', entries: [], deleted: [41, 42] });
   });
 });

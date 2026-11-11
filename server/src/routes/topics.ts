@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { readGate } from '../middleware/readGate.js';
 import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, reserveTaxonomyIds, taxonomyCount, withTenantLock } from '../db/tenantQueries.js';
 import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite, reservePostIdsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
@@ -21,7 +22,7 @@ const FULL = Symbol('full');
 const router = Router();
 
 // GET /api/topics
-router.get('/', async (req, res) => {
+router.get('/', readGate('topics', 3), async (req, res) => {
   try {
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
     const taxonomies = await getAllTaxonomies(req.auth!.tenantSchemaName);
@@ -35,7 +36,7 @@ router.get('/', async (req, res) => {
 // POST /api/topics/reorder
 router.post('/reorder', async (req, res) => {
   try {
-    const { topicIds } = req.body;
+    const topicIds: unknown = req.body?.topicIds;
     if (!Array.isArray(topicIds) || !topicIds.every((id: unknown) => typeof id === 'number')) {
       res.status(400).json({ error: 'topicIds must be an array of numbers' });
       return;

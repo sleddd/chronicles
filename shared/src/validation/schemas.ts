@@ -276,7 +276,7 @@ export const putFinanceRecordSchema = z.object({
 const TOPIC_FORMAT_V2 = z.literal(2, { message: 'Update Chronicles to save topics' });
 
 export const createTaxonomySchema = z.object({
-  id: z.number().int().positive(),
+  id: z.number().int().positive().max(2_147_483_647),
   format: TOPIC_FORMAT_V2,
   payload: ciphertext(20_000),
   iv: IV_FIELD,

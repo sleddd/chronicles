@@ -18,9 +18,12 @@ export function RegisterView() {
   const [consent, setConsent] = useState<ConsentValue>(EMPTY_CONSENT);
   const agree = useConsentStore(s => s.agree);
   // The sign-up link from a beta approval carries the email and its invite code
-  const [params] = useSearchParams();
-  const inviteCode = params.get('invite')?.trim() || undefined;
-  const invitedEmail = params.get('email')?.trim() ?? '';
+  // — after the # (never sent to the server, so it stays out of access logs);
+  // links sent before that carry them in the query
+  const [query] = useSearchParams();
+  const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const inviteCode = (fragment.get('invite') ?? query.get('invite'))?.trim() || undefined;
+  const invitedEmail = (fragment.get('email') ?? query.get('email'))?.trim() ?? '';
 
   const freshSignIn = useFreshSignIn();
   const handleRegister = async ({ email, username, password }: { email: string; username: string; password: string }) => {

@@ -10,7 +10,7 @@ import type { EncryptedPost } from '@shared/crypto/types';
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
-import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { safeAccent } from '../styles/accent.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
 
 /**
@@ -70,7 +70,7 @@ export function useInitializeData() {
         const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         step('settings opened');
         // No saved accent → Teal (never the previous account's colour)
-        const accent = typeof settingsMap.accentColor === 'string' && settingsMap.accentColor ? settingsMap.accentColor : DEFAULT_ACCENT_COLOR;
+        const accent = safeAccent(settingsMap.accentColor);
         setAccentColor(accent);
         document.documentElement.style.setProperty('--color-accent', accent);
         // No saved theme = the account default, dark

@@ -5,7 +5,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { securityHeaders, corsOriginFor, trustProxySetting, SERVICE_WORKER_PATH } from './middleware/security.js';
 import { authMiddleware, cleanupSessions } from './middleware/auth.js';
-import { apiLimiter, writeGate } from './middleware/rateLimiter.js';
+import { apiLimiter, writeGate, failedAuthLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes, { checkStoredCredentials, sealStoredTotpSecrets } from './routes/auth.js';
 import rememberRoutes from './routes/remember.js';
@@ -103,6 +103,9 @@ if (corsOrigin === false && process.env.NODE_ENV !== 'development') {
 }
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(cookieParser());
+// Before any session lookup: an address that keeps sending bad sessions is
+// refused without one
+app.use('/api', failedAuthLimiter);
 // Entries carry two encrypted fields of up to 2M chars each (drawings make
 // big ones), so they get a larger body limit — read only after the session
 // (and the per-account limit) checks out, so no one signed out can make the
@@ -137,8 +140,6 @@ app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; r
 // An unknown /api path is a 404, never the SPA's index.html
 app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found' }); });
 
-app.use(errorHandler);
-
 // Serve client static files in production
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../../client/dist');
@@ -150,6 +151,11 @@ app.get('{/*path}', (req, res) => {
   if (req.path.toLowerCase() === SERVICE_WORKER_PATH) { res.status(404).end(); return; }
   res.sendFile(path.join(clientDist, 'index.html'));
 });
+
+// Last, so an error from the static files or the fallback above (a malformed
+// address, a missing index.html) gets the same plain answer as an API error —
+// never Express's own page, which shows a stack trace outside production
+app.use(errorHandler);
 
 // Init + periodic cleanup + listen. The shard column comes first: every
 // account query reads it, so nothing may run before it exists

@@ -26,10 +26,12 @@ const TOTP_STEP = 'totp_step';
 const TWO_FA_FAILURES = 'fail_2fa';
 const TWO_FA_STRIKES = 'strike_2fa';
 const TWO_FA_LONG_LOCK = 'lock_2fa';
+const TWO_FA_DAILY = 'day_2fa';
 const LOGIN_FAILURES = 'fail_login';
 const CONFIRM_FAILURES = 'fail_confirm';
 const PASSWORD_STRIKES = 'strike_pw';
 const PASSWORD_LONG_LOCK = 'lock_pw';
+const PASSWORD_DAILY = 'day_pw';
 const EMAIL_CHANGES = 'email_change';
 
 /** Drop an account's pending 2FA sign-ins (after a password change, recovery or 2FA change). */
@@ -106,6 +108,20 @@ const TWO_FA_LOCK_MS = 15 * 60 * 1000;
 const TWO_FA_MAX_STRIKES = 3;
 const TWO_FA_STRIKE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const TWO_FA_LONG_LOCK_MS = 24 * 60 * 60 * 1000;
+// …and every wrong code counts toward the day's total too. Strikes alone are
+// earned only by the attempt that fills a window: stopping one short of the
+// cap and waiting for the window to lapse never struck, which left ~860 codes
+// a day. As many wrong codes in a day as three locks' worth lock it for a day.
+const TWO_FA_MAX_DAILY_FAILURES = TWO_FA_MAX_FAILURES * TWO_FA_MAX_STRIKES;
+
+/** A wrong code: count it toward the day's total, and lock for a day once that's reached. */
+async function countTwoFAFailure(accountId: number, bucket: string): Promise<void> {
+  const { count } = await sharedState.hit(TWO_FA_DAILY, bucket, TWO_FA_STRIKE_WINDOW_MS);
+  if (count >= TWO_FA_MAX_DAILY_FAILURES) {
+    await sharedState.hit(TWO_FA_LONG_LOCK, bucket, TWO_FA_LONG_LOCK_MS);
+    logSecurityEvent('2fa_locked_long', { accountId, details: { failuresToday: count } });
+  }
+}
 
 /**
  * Wrong codes count per bucket, like wrong passwords at sign-in: a signed-in
@@ -153,6 +169,7 @@ async function clearTwoFAState(accountId: number): Promise<void> {
     sharedState.clear(TOTP_STEP, id),
     sharedState.clear(TWO_FA_STRIKES, id),
     sharedState.clear(TWO_FA_LONG_LOCK, id),
+    sharedState.clear(TWO_FA_DAILY, id),
   ]);
 }
 
@@ -190,8 +207,13 @@ async function claimPasswordAttempt(failures: string, key: string, max: number, 
 
 /** A wrong password on attempt `n`: when it was the one that locked the bucket, count a strike. */
 async function passwordFailed(failures: string, key: string, n: number, max: number): Promise<void> {
-  if (n !== max) return;
   const id = `${failures}:${key}`;
+  // Every wrong password counts toward the day's total: strikes alone are
+  // earned only by the attempt that fills a window, so stopping one short of
+  // the cap and waiting for the window to lapse never struck
+  const today = await sharedState.hit(PASSWORD_DAILY, id, PASSWORD_STRIKE_WINDOW_MS);
+  if (today.count >= max * PASSWORD_MAX_STRIKES) await sharedState.hit(PASSWORD_LONG_LOCK, id, PASSWORD_LONG_LOCK_MS);
+  if (n !== max) return;
   const { count } = await sharedState.hit(PASSWORD_STRIKES, id, PASSWORD_STRIKE_WINDOW_MS);
   if (count >= PASSWORD_MAX_STRIKES) await sharedState.hit(PASSWORD_LONG_LOCK, id, PASSWORD_LONG_LOCK_MS);
 }
@@ -241,7 +263,10 @@ async function verifySecondFactor(
   if (attempt > TWO_FA_MAX_FAILURES) return null;
   const factor = await checkSecondFactor(account, code);
   if (factor) await sharedState.clear(TWO_FA_FAILURES, bucket);
-  else if (attempt === TWO_FA_MAX_FAILURES) await strikeTwoFALock(account.id, bucket);
+  else {
+    await countTwoFAFailure(account.id, bucket);
+    if (attempt === TWO_FA_MAX_FAILURES) await strikeTwoFALock(account.id, bucket);
+  }
   return factor;
 }
 
@@ -1133,7 +1158,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     }
 
     // The pending token survives a wrong code so the user can retry (the
-    // 5-wrong-codes lock, the 5-minute expiry and authLimiter bound guessing);
+    // 10-wrong-codes lock, the 5-minute expiry and authLimiter bound guessing);
     // it's single-use once a code is accepted.
     const account = await prisma.account.findUnique({
       where: { id: pendingAccountId },

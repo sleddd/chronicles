@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { readGate } from '../middleware/readGate.js';
 import { doseRecordIdSchema, putDoseRecordSchema, resealDoseRecordsSchema } from '@chronicles/shared';
 import {
   ensureDoseRecordsTable, getDoseRecords, upsertDoseRecord, deleteDoseRecord, resealDoseRecords, doseRecordStorage, withTenantLock,
@@ -62,7 +63,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/doses/all — every record (for the full data export)
-router.get('/all', async (req, res) => {
+router.get('/all', readGate('doses', 2), async (req, res) => {
   try {
     await ensureDoseRecordsTable(req.auth!.tenantSchemaName);
     res.json({ records: (await getDoseRecords(req.auth!.tenantSchemaName)).map(serialize) });

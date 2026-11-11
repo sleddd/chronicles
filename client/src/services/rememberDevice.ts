@@ -65,7 +65,9 @@ export function markActivity(now = Date.now()): void {
 export function hasRememberedUnlock(now = Date.now()): boolean {
   const b = read();
   if (!b) return false;
-  if (Date.parse(b.expiresAt) <= now || now - lastActivity() > REMEMBER_IDLE_MS) {
+  const expires = Date.parse(b.expiresAt);
+  // A date that doesn't parse counts as past
+  if (!(expires > now) || now - lastActivity() > REMEMBER_IDLE_MS) {
     // Ends the server grant too, so the blob can't be reopened by resetting
     // the activity timestamp
     forgetRemembered();

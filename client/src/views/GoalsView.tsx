@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { PLANNING_FILTERS_STORE } from '../types/planner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
@@ -322,7 +323,7 @@ function avatarImage(meta: Record<string, unknown> | undefined): BoardItem['imag
 }
 
 /* Planning's sort and Tasks/Todos filters survive leaving the page (this tab only) */
-const FILTERS_KEY = 'planning-filters-v1';
+const FILTERS_KEY = PLANNING_FILTERS_STORE;
 const NO_TASK_TYPES: string[] = [];
 /* Status filters on the Goals and Milestones boards ('' = all) */
 type RoadmapFilters = { goals: RoadmapStatus | ''; milestones: RoadmapStatus | '' };

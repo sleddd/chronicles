@@ -22,7 +22,10 @@ function mockOpenAI(calories: number) {
 
 /** Mock the OpenAI endpoint to answer with a JSON object (fresh Response per call). */
 function mockOpenAIJson(payload: Record<string, number>) {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(
+  // Spying again on fetch hands back the same spy, calls and all: start its count afresh
+  const spy = vi.spyOn(globalThis, 'fetch');
+  spy.mockClear();
+  return spy.mockImplementation(async () => new Response(
     JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   ));

@@ -45,7 +45,9 @@ async function main(): Promise<void> {
     const { how, inviteCode } = await approve(toApprove);
     const email = toApprove.trim().toLowerCase();
     const base = (process.env.APP_URL || process.env.CLIENT_URL || '').replace(/\/$/, '');
-    const link = `${base}/sign-up?${new URLSearchParams({ email, invite: inviteCode }).toString()}`;
+    // After the #: a browser never sends that part, so the code stays out of
+    // the host's access logs (the sign-up page still reads older ?… links)
+    const link = `${base}/sign-up#${new URLSearchParams({ email, invite: inviteCode }).toString()}`;
     console.log(how === 'invited'
       ? `Approved ${email} (added as an invite — they hadn't applied).`
       : `Approved ${email}.`);

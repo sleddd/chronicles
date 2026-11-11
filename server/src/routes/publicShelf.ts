@@ -45,6 +45,13 @@ function owned(shelf: OwnedPublicShelf) {
   return { token: shelf.token, title: shelf.title, itemCount: shelf.itemCount, createdAt: shelf.createdAt, updatedAt: shelf.updatedAt };
 }
 
+// Page reads running at once per shelf, in this process. Each one has the
+// database open the shelf's whole list (covers included) to pick a page, and a
+// new search skips the cache — so one shelf could otherwise keep every pooled
+// connection busy. Past the cap the page is asked again in a moment.
+const SHELF_READS_AT_ONCE = 2;
+const shelfReads = new Map<string, number>();
+
 // GET /api/public-shelf/:token?page=N — public, one page at a time
 router.get('/:token', publicShelfLimiter, async (req, res) => {
   try {
@@ -53,6 +60,23 @@ router.get('/:token', publicShelfLimiter, async (req, res) => {
       res.status(404).json({ error: 'Public shelf not found' });
       return;
     }
+    const reading = shelfReads.get(token) ?? 0;
+    if (reading >= SHELF_READS_AT_ONCE) {
+      res.set('Retry-After', '1');
+      res.status(429).json({ error: 'This shelf is busy. Try again in a moment.' });
+      return;
+    }
+    shelfReads.set(token, reading + 1);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      const left = (shelfReads.get(token) ?? 1) - 1;
+      if (left <= 0) shelfReads.delete(token);
+      else shelfReads.set(token, left);
+    };
+    res.on('finish', release);
+    res.on('close', release);
     const page = Number.parseInt(String(req.query.page ?? '1'), 10);
     const query = readQuery(req.query as Record<string, unknown>);
     const result = await getPublicShelfPage(token, Number.isFinite(page) ? page : 1, query);

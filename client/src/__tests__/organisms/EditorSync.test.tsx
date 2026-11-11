@@ -6,7 +6,7 @@ import { lightTheme } from '@shared/theme/tokens';
 /* A TipTap stand-in that keeps its own HTML, so the content sync can be
    followed: onUpdate = the person typing, setContent = the parent loading. */
 const { fake } = vi.hoisted(() => {
-  const fake = { html: '', editor: null as unknown, onUpdate: null as null | ((a: { editor: unknown }) => void), setContent: null as unknown as ReturnType<typeof import('vitest').vi.fn> };
+  const fake = { html: '', editor: null as unknown, onUpdate: null as null | ((a: { editor: unknown }) => void), setContent: null as unknown as import('vitest').Mock<(html: string) => void> };
   return { fake };
 });
 vi.mock('@tiptap/react', async () => {

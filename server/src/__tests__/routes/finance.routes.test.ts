@@ -11,7 +11,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
     savings: 'finance_savings',
   },
   ensureFinanceTables: vi.fn().mockResolvedValue(undefined),
-  getFinanceRecords: vi.fn(),
+  getFinancePage: vi.fn(),
   upsertFinanceRecord: vi.fn(),
   deleteFinanceRecord: vi.fn(),
   financeStorageBytes: vi.fn().mockResolvedValue(0),
@@ -19,7 +19,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
 }));
 
 import financeRouter from '../../routes/finance.js';
-import { ensureFinanceTables, getFinanceRecords, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes, withTenantLock } from '../../db/tenantQueries.js';
+import { ensureFinanceTables, getFinancePage, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes, withTenantLock } from '../../db/tenantQueries.js';
 import { FINANCE_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 
 const app = createTestApp('/api/finance', financeRouter);
@@ -40,18 +40,33 @@ describe('Finance Routes', () => {
 
   describe('GET /api/finance/:kind', () => {
     it('returns records as base64', async () => {
-      (getFinanceRecords as any).mockResolvedValue([row]);
+      (getFinancePage as any).mockResolvedValue({ records: [row], more: false });
       const res = await request(app).get('/api/finance/bills');
       expect(res.status).toBe(200);
       expect(res.body.records).toHaveLength(1);
       expect(res.body.records[0].payload).toBe(Buffer.from('finance-cipher-with-tag!').toString('base64'));
       expect(res.body.records[0].iv).toBe(Buffer.from('iv-bytes-12b').toString('base64'));
       expect(ensureFinanceTables).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
-      expect(getFinanceRecords).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'bills');
+      expect(getFinancePage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'bills', { offset: 0, limit: 5000, maxBytes: 8 * 1024 * 1024 });
+    });
+
+    it('pages: v=2 answers a page and whether there is more, from the offset asked for', async () => {
+      (getFinancePage as any).mockResolvedValue({ records: [row], more: true });
+      const res = await request(app).get('/api/finance/bills?v=2&offset=40');
+      expect(res.status).toBe(200);
+      expect(res.body.more).toBe(true);
+      expect((getFinancePage as any).mock.calls[0][2].offset).toBe(40);
+    });
+
+    it('an older client (no v=2) is told to update rather than shown part of a kind', async () => {
+      (getFinancePage as any).mockResolvedValue({ records: [row], more: true });
+      const res = await request(app).get('/api/finance/bills');
+      expect(res.status).toBe(409);
+      expect(res.body.records).toBeUndefined();
     });
 
     it('serves every finance kind', async () => {
-      (getFinanceRecords as any).mockResolvedValue([]);
+      (getFinancePage as any).mockResolvedValue({ records: [], more: false });
       for (const kind of ['bills', 'budget', 'expenses', 'goals', 'savings']) {
         const res = await request(app).get(`/api/finance/${kind}`);
         expect(res.status).toBe(200);
@@ -63,11 +78,11 @@ describe('Finance Routes', () => {
         const res = await request(app).get(`/api/finance/${kind}`);
         expect(res.status).toBe(404);
       }
-      expect(getFinanceRecords).not.toHaveBeenCalled();
+      expect(getFinancePage).not.toHaveBeenCalled();
     });
 
     it('returns 500 when the query fails', async () => {
-      (getFinanceRecords as any).mockRejectedValue(new Error('db'));
+      (getFinancePage as any).mockRejectedValue(new Error('db'));
       const res = await request(app).get('/api/finance/goals');
       expect(res.status).toBe(500);
     });

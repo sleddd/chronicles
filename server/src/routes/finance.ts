@@ -1,7 +1,8 @@
 import { Router } from 'express';
+import { readGate } from '../middleware/readGate.js';
 import {
   ensureFinanceTables,
-  getFinanceRecords,
+  getFinancePage,
   upsertFinanceRecord,
   financeStorageBytes,
   deleteFinanceRecord,
@@ -31,17 +32,32 @@ function serialize(row: FinanceRecordRow) {
   };
 }
 
-// GET /api/finance/:kind — every record of one kind
-router.get('/:kind', async (req, res) => {
-  const kind = parseKind(req.params.kind);
+// One list answer holds at most this much ciphertext (sent as base64 in JSON,
+// so ~1.4× it), and a few run at once per account: a kind at the storage cap
+// is read a page at a time instead of all 50 MB in one answer
+const FINANCE_PAGE_BYTES = 8 * 1024 * 1024;
+const FINANCE_PAGE_ROWS = 5000;
+const listGate = readGate('finance', 6);
+
+// GET /api/finance/:kind?v=2&offset=N — one kind's records, a page at a time
+// (oldest first): { records, more }, and the client pages while `more`.
+// Without v=2 (older clients, which read one answer as everything) a kind that
+// doesn't fit one page is refused rather than shown with records missing.
+router.get('/:kind', listGate, async (req, res) => {
+  const kind = parseKind(String(req.params.kind));
   if (!kind) {
     res.status(404).json({ error: 'Unknown finance kind' });
     return;
   }
   try {
     await ensureFinanceTables(req.auth!.tenantSchemaName);
-    const rows = await getFinanceRecords(req.auth!.tenantSchemaName, kind);
-    res.json({ records: rows.map(serialize) });
+    const offset = Math.min(Math.max(parseInt(req.query.offset as string) || 0, 0), 2_000_000_000);
+    const page = await getFinancePage(req.auth!.tenantSchemaName, kind, { offset, limit: FINANCE_PAGE_ROWS, maxBytes: FINANCE_PAGE_BYTES });
+    if (req.query.v !== '2' && page.more) {
+      res.status(409).json({ error: 'Update Chronicles to continue. Reload the page.' });
+      return;
+    }
+    res.json({ records: page.records.map(serialize), more: page.more });
   } catch (err) {
     console.error('Get finance records error:', err);
     res.status(500).json({ error: 'Failed to fetch records' });

@@ -186,7 +186,10 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
     }
   };
 
-  const chosenUrl = values.cover?.dataUrl;
+  // Only an image kept inside the entry: anything else here (an address, say)
+  // would make the page call out when the entry opens
+  const savedCover = values.cover?.dataUrl;
+  const chosenUrl = typeof savedCover === 'string' && savedCover.startsWith('data:image/') ? savedCover : undefined;
 
   return (
     <FormWrap>
