@@ -10,6 +10,7 @@ import { usePublicShelfStore } from '../../stores/publicShelfStore.js';
 import { enablePublicShelf, disablePublicShelf, resetPublicShelfLink, renamePublicShelf } from '../../hooks/usePublicShelfSync.js';
 import { publicShelfUrl } from '../../services/publicShelf.js';
 import { showFlash } from '../../services/flashNotice.js';
+import { copyText } from '../../utils/clipboard.js';
 import type { MediaItem } from '../../utils/media.js';
 import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
 
@@ -242,8 +243,8 @@ export function PublicShelfControl({ count, open, onOpenChange, pendingItem, onT
   };
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { showFlash('Couldn’t copy the link — select it and copy by hand.'); }
+    if (await copyText(url)) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    else showFlash('Couldn’t copy the link — select it and copy by hand.');
   };
 
   const reset = async () => {

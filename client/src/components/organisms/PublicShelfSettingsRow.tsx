@@ -6,6 +6,7 @@ import { usePublicShelfStore } from '../../stores/publicShelfStore.js';
 import { disablePublicShelf } from '../../hooks/usePublicShelfSync.js';
 import { publicShelfUrl } from '../../services/publicShelf.js';
 import { showFlash } from '../../services/flashNotice.js';
+import { copyText } from '../../utils/clipboard.js';
 
 /* Settings → Data: whether the public shelf is on, how many items it holds,
    Copy link, and Turn off (second click confirms). Always shown, so a shelf
@@ -25,8 +26,8 @@ export function PublicShelfSettingsRow() {
   };
   const copy = async () => {
     if (!shelf) return;
-    try { await navigator.clipboard.writeText(publicShelfUrl(shelf.token)); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { showFlash('Couldn’t copy the link.'); }
+    if (await copyText(publicShelfUrl(shelf.token))) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    else showFlash('Couldn’t copy the link.');
   };
 
   const description = !loaded ? 'Checking…'

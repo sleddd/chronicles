@@ -8,9 +8,9 @@ import { Icon } from '../components/atoms/core/Icon.jsx';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
-import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { publicShelfUrl } from '../services/publicShelf.js';
 import { showFlash } from '../services/flashNotice.js';
+import { copyText } from '../utils/clipboard.js';
 import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { FilterPick } from '../components/molecules/FilterPick.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
@@ -23,7 +23,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
-import { onPhoto } from '../styles/wallpaper.js';
+import { glassControl, onPhoto } from '../styles/wallpaper.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
 import {
@@ -82,6 +82,7 @@ const Head = styled.div`
 `;
 
 const Title = styled.h1.attrs({ className: 'view-title' })`
+  flex: none;
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
@@ -95,47 +96,59 @@ const Title = styled.h1.attrs({ className: 'view-title' })`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* The title with, once the public shelf is on, its link and Copy under it */
+/* The title with, once the public shelf is on, its link field beside it */
 const TitleBlock = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 20px;
+  flex: 1 1 auto;
   min-width: 0;
+  @media (max-width: 640px) { flex-wrap: wrap; gap: 12px; }
 `;
 
+/* The public shelf's address in a filled read-only field with a copy button
+   inside — the app's filled input look, as the sign-in and settings fields */
 const ShelfLink = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
-  ${onPhoto}
-  a {
+  gap: 4px;
+  flex: 0 1 360px;
+  min-width: 180px;
+  height: 40px;
+  padding: 0 4px 0 14px;
+  border-radius: var(--r-lg);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-field);
+  ${glassControl}
+  &:focus-within { border-color: var(--color-accent); }
+  input {
+    flex: 1;
     min-width: 0;
-    overflow: hidden;
+    padding: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-secondary);
     text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--color-accent-link);
-    text-decoration: none;
   }
-  a:hover { text-decoration: underline; }
   button {
     flex: none;
-    height: 26px;
-    padding: 0 10px;
-    border: 1px solid var(--border-pill, var(--border-card));
-    border-radius: 999px;
-    background: var(--bg-control, transparent);
-    font-family: var(--font-sans);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
     cursor: pointer;
   }
-  button:hover { border-color: var(--control-border); color: var(--text-primary); }
+  button:hover { color: var(--text-primary); background: var(--bg-hover); }
   button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  button[data-copied='true'] { color: var(--color-accent); }
 `;
 
 const Tools = styled.div`
@@ -226,8 +239,8 @@ export function MediaView() {
   const [copied, setCopied] = useState(false);
   const shelfUrl = publicShelf ? publicShelfUrl(publicShelf.token) : '';
   const copyLink = async () => {
-    try { await navigator.clipboard.writeText(shelfUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { showFlash('Couldn’t copy the link — select it and copy by hand.'); }
+    if (await copyText(shelfUrl)) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    else showFlash('Couldn’t copy the link — select it and copy by hand.');
   };
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ } }, [saved]);
   // A new search, filter or sort starts from the top again
@@ -293,9 +306,10 @@ export function MediaView() {
               <Title>Media Journal</Title>
               {publicShelf && (
                 <ShelfLink>
-                  <MaterialIcon $size={16} aria-hidden="true">link</MaterialIcon>
-                  <a href={shelfUrl} target="_blank" rel="noopener noreferrer" title="Open your public shelf">{shelfUrl}</a>
-                  <button type="button" onClick={copyLink} aria-label="Copy the public shelf link">{copied ? 'Copied' : 'Copy'}</button>
+                  <input readOnly value={shelfUrl} aria-label="Your public shelf link" onFocus={e => e.currentTarget.select()} />
+                  <button type="button" onClick={copyLink} data-copied={copied} aria-label={copied ? 'Copied' : 'Copy the public shelf link'} title={copied ? 'Copied' : 'Copy link'}>
+                    <Icon name={copied ? 'check' : 'copy'} size={16} strokeWidth={2} />
+                  </button>
                 </ShelfLink>
               )}
             </TitleBlock>
