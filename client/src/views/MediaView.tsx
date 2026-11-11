@@ -24,6 +24,7 @@ import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
 import { glassControl, onPhoto } from '../styles/wallpaper.js';
+import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
 import {
@@ -79,10 +80,15 @@ const Head = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 53px 0 20px;
+  ${NAV_COMPACT} { padding: 20px 0 16px; }
 `;
 
-const Title = styled.h1.attrs({ className: 'view-title' })`
+/* The one page title that stays on phones (the top bar says "Media"; this
+   page's link field sits with it) — so no `view-title` class, and the
+   wallpaper's white treatment applied here instead */
+const Title = styled.h1`
   flex: none;
+  ${onPhoto}
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
