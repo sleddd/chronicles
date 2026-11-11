@@ -45,7 +45,8 @@ describe('shelves and types', () => {
     expect(shelfLabel('paused', 'book')).toBe('Paused');
     expect(shelfLabel('dnf', 'movie')).toBe('Didn’t finish');
     expect(shelfFilterLabel('dnf')).toBe('Didn’t finish');
-    expect(shelfFilterLabel('current')).toBe('Reading / watching / listening');
+    expect(shelfFilterLabel('current')).toBe('Active');
+    expect(shelfFilterLabel('want')).toBe('Saved');
   });
 
   it('knows the Media topic and the old ones', () => {

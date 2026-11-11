@@ -82,10 +82,10 @@ export function shelfLabel(shelf: MediaShelf, type: MediaType = 'book'): string 
   return 'No shelf';
 }
 
-/** The shelf's name across every type, for the filter: "Reading / watching / listening" */
+/** The shelf's name across every type, for the filter: Active / Saved / Finished / Paused / Didn’t finish */
 export function shelfFilterLabel(shelf: Exclude<MediaShelf, ''>): string {
-  if (shelf === 'current') return 'Reading / watching / listening';
-  if (shelf === 'want') return 'Want to read / watch / listen';
+  if (shelf === 'current') return 'Active';
+  if (shelf === 'want') return 'Saved';
   if (shelf === 'paused') return 'Paused';
   if (shelf === 'dnf') return 'Didn’t finish';
   return 'Finished';

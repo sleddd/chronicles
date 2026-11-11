@@ -322,10 +322,10 @@ export function MediaView() {
                   {MEDIA_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </FilterPick>
-              <FilterPick name="Shelf" value={saved.shelf ? (saved.type ? shelfLabel(saved.shelf, saved.type) : shelfFilterLabel(saved.shelf as Exclude<MediaShelf, ''>)) : 'All'} set={!!saved.shelf}>
+              <FilterPick name="Shelf" value={saved.shelf ? shelfFilterLabel(saved.shelf as Exclude<MediaShelf, ''>) : 'All'} set={!!saved.shelf}>
                 <select aria-label="Shelf" value={saved.shelf} onChange={e => setSaved(s => ({ ...s, shelf: e.target.value as MediaShelf }))}>
                   <option value="">All</option>
-                  {SHELVES.map(s => <option key={s.value} value={s.value}>{saved.type ? shelfLabel(s.value, saved.type) : shelfFilterLabel(s.value)}</option>)}
+                  {SHELVES.map(s => <option key={s.value} value={s.value}>{shelfFilterLabel(s.value)}</option>)}
                 </select>
               </FilterPick>
               <FilterPick name="Rating" value={ratingLabel} set={saved.minRating > 0}>
