@@ -39,7 +39,7 @@ import {
    cover, the stars (tap to re-rate), the Shelf status (a picker) and, while
    something is under way, its progress — or, with the list layout, the app's
    flush list rows. Under the title a meta row: the public shelf's name (rename
-   it in place) · a Public shelf link, with Copy shelf link
+   it in place) · a grey Public shelf link, with Copy shelf link
    and Add media across from it. Then the tool row (MediaFilterBar) and the
    type chips; 24 cards at a time, more as you scroll. A bookmark on each card
    puts it on the one public shelf (PublicShelfControl); tapping a cover opens
@@ -125,16 +125,16 @@ const Meta = styled.div`
   & > * + *::before { content: '·'; margin-right: 14px; color: var(--text-faint, var(--text-muted)); }
 `;
 
-/* The Public shelf link: the globe and the words in the accent, opening the public page */
+/* The Public shelf link: the globe and the words in the muted grey (never the accent), opening the public page */
 const PublicLink = styled.a`
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
-  color: var(--color-accent-link, var(--color-accent-soft));
+  color: var(--text-muted);
   text-decoration: none;
   white-space: nowrap;
-  &:hover { text-decoration: underline; }
+  &:hover { color: var(--text-primary); text-decoration: underline; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
