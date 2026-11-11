@@ -42,6 +42,9 @@ describe('shelves and types', () => {
     expect(shelfLabel('want', 'movie')).toBe('Want to watch');
     expect(shelfLabel('done', 'music')).toBe('Listened');
     expect(shelfLabel('', 'tv')).toBe('No shelf');
+    expect(shelfLabel('paused', 'book')).toBe('Paused');
+    expect(shelfLabel('dnf', 'movie')).toBe('Didn’t finish');
+    expect(shelfFilterLabel('dnf')).toBe('Didn’t finish');
     expect(shelfFilterLabel('current')).toBe('Reading / watching / listening');
   });
 
@@ -66,6 +69,11 @@ describe('shelves and types', () => {
     expect(parseLegacyShelf('want to watch')).toBe('want');
     expect(parseLegacyShelf('Finished')).toBe('done');
     expect(parseLegacyShelf('Watched')).toBe('done');
+    expect(parseLegacyShelf('Paused')).toBe('paused');
+    expect(parseLegacyShelf('On hold')).toBe('paused');
+    expect(parseLegacyShelf('DNF')).toBe('dnf');
+    expect(parseLegacyShelf("Didn't finish")).toBe('dnf');
+    expect(parseLegacyShelf('Abandoned')).toBe('dnf');
     expect(parseLegacyShelf('')).toBe('');
   });
 });

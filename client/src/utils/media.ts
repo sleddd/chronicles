@@ -9,7 +9,7 @@ import type { UserFieldDef } from '../types/userFields.js';
 
 export type MediaType = 'book' | 'movie' | 'tv' | 'music';
 /** '' = on no shelf */
-export type MediaShelf = 'current' | 'want' | 'done' | '';
+export type MediaShelf = 'current' | 'want' | 'done' | 'paused' | 'dnf' | '';
 
 /** A cover found for the entry — a small JPEG kept inside the encrypted entry */
 export interface MediaCover {
@@ -62,7 +62,8 @@ export const MEDIA_TYPES: MediaTypeInfo[] = [
   { value: 'music', label: 'Music', glyph: 'headphones', creatorLabel: 'Artist', titlePlaceholder: 'Album or song', verb: 'listen' },
 ];
 
-export const SHELVES: { value: Exclude<MediaShelf, ''>; }[] = [{ value: 'current' }, { value: 'want' }, { value: 'done' }];
+export const SHELVES: { value: Exclude<MediaShelf, ''>; }[] = [{ value: 'current' }, { value: 'want' }, { value: 'done' }, { value: 'paused' }, { value: 'dnf' }];
+const SHELF_VALUES = new Set<string>(SHELVES.map(s => s.value));
 
 export function mediaTypeInfo(type: string | undefined): MediaTypeInfo {
   return MEDIA_TYPES.find(t => t.value === type) ?? MEDIA_TYPES[0];
@@ -76,6 +77,8 @@ export function shelfLabel(shelf: MediaShelf, type: MediaType = 'book'): string 
   if (shelf === 'current') return ing;
   if (shelf === 'want') return `Want to ${verb}`;
   if (shelf === 'done') return past;
+  if (shelf === 'paused') return 'Paused';
+  if (shelf === 'dnf') return 'Didn’t finish';
   return 'No shelf';
 }
 
@@ -83,6 +86,8 @@ export function shelfLabel(shelf: MediaShelf, type: MediaType = 'book'): string 
 export function shelfFilterLabel(shelf: Exclude<MediaShelf, ''>): string {
   if (shelf === 'current') return 'Reading / watching / listening';
   if (shelf === 'want') return 'Want to read / watch / listen';
+  if (shelf === 'paused') return 'Paused';
+  if (shelf === 'dnf') return 'Didn’t finish';
   return 'Finished';
 }
 
@@ -178,7 +183,7 @@ export function mediaItems(entries: EntryLike[], topicIds: number[], stripHtml: 
     if (typeof tid !== 'number' || !ids.has(tid)) continue;
     const cf = (meta._customFields as Record<string, unknown> | undefined) ?? {};
     const type = MEDIA_TYPES.some(t => t.value === cf.mediaType) ? cf.mediaType as MediaType : 'book';
-    const shelf = (['current', 'want', 'done'] as const).includes(cf.shelf as never) ? cf.shelf as MediaShelf : '';
+    const shelf = typeof cf.shelf === 'string' && SHELF_VALUES.has(cf.shelf) ? cf.shelf as MediaShelf : '';
     const cover = cf.cover && typeof cf.cover === 'object' ? (cf.cover as MediaCover).dataUrl : undefined;
     items.push({
       id: e.id,
@@ -294,10 +299,12 @@ export function parseLegacyRating(v: unknown): number {
   return clampRating(outOf > 0 ? (n / outOf) * 5 : n);
 }
 
-/** "reading" / "want to watch" / "finished" / "watched" → a shelf */
+/** "reading" / "want to watch" / "finished" / "paused" / "dnf" → a shelf */
 export function parseLegacyShelf(v: unknown): MediaShelf {
   if (typeof v !== 'string') return '';
   const s = v.toLowerCase();
+  if (/\bdnf\b|did ?n[o']t finish|abandon|gave up|dropped|quit/.test(s)) return 'dnf';
+  if (/paus|on hold|shelved|stalled|taking a break/.test(s)) return 'paused';
   if (/want|to[- ]?read|to[- ]?watch|to[- ]?listen|wishlist|queue|planned/.test(s)) return 'want';
   if (/currently|reading|watching|listening|in progress|started/.test(s)) return 'current';
   if (/finished|done|read|watched|listened|complete/.test(s)) return 'done';
