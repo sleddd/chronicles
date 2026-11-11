@@ -8,6 +8,8 @@ import { Icon } from '../components/atoms/core/Icon.jsx';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
+import { renamePublicShelf } from '../hooks/usePublicShelfSync.js';
+import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
 import { publicShelfUrl } from '../services/publicShelf.js';
 import { showFlash } from '../services/flashNotice.js';
 import { copyText } from '../utils/clipboard.js';
@@ -181,6 +183,63 @@ const Bookmark = styled.button<{ $on: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* The shelf's name beside the link: a quiet button that turns into a pill
+   field to rename it (Enter / away saves, Escape cancels) */
+const NameBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  height: 40px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  ${onPhoto}
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 999px; }
+`;
+
+const NameInput = styled.input`
+  && {
+    width: min(260px, 100%);
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg-sunken) 45%, transparent) !important;
+    border: 1px solid var(--color-accent) !important;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    outline: none;
+  }
+  html[data-wallpaper] && { background: color-mix(in srgb, var(--bg-app) 38%, transparent) !important; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+`;
+
+function ShelfName({ title }: { title: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  useEffect(() => { if (!editing) setDraft(title); }, [title, editing]);
+  const save = () => { renamePublicShelf(draft); setEditing(false); };
+  if (!editing) {
+    return (
+      <NameBtn type="button" onClick={() => setEditing(true)} title="Rename your public shelf" aria-label={`Rename your public shelf, now “${title}”`}>
+        <span>{title}</span>
+        <Icon name="pencil" size={14} strokeWidth={2} />
+      </NameBtn>
+    );
+  }
+  return (
+    <NameInput autoFocus value={draft} maxLength={PUBLIC_SHELF_TITLE_MAX} aria-label="Public shelf name"
+      onChange={e => setDraft(e.target.value)} onBlur={save}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { setDraft(title); setEditing(false); } }} />
+  );
+}
+
 /* ── Pieces ── */
 
 /** The owner's card: resolves the entry's own photo (else the found cover) and passes the rest through */
@@ -216,6 +275,7 @@ export function MediaView() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const publicShelf = usePublicShelfStore(s => s.publicShelf);
+  const shelfTitle = usePublicShelfStore(s => s.title);
   const pendingItemId = usePublicShelfStore(s => s.pendingItemId);
   const setPendingItemId = usePublicShelfStore(s => s.setPendingItemId);
   const openInJournal = useOpenInJournal();
@@ -301,6 +361,9 @@ export function MediaView() {
                     <Icon name={copied ? 'check' : 'copy'} size={16} strokeWidth={2} />
                   </button>
                 </ShelfLink>
+              )}
+              {publicShelf && (
+                <ShelfName title={shelfTitle} />
               )}
             </TitleBlock>
             {topicId != null && (
