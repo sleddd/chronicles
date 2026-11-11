@@ -6,8 +6,9 @@ import {
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { Spinner } from '../../atoms/Spinner.js';
 import { StarRating } from '../StarRating.js';
+import { ProgressSlider } from '../ProgressSlider.js';
 import {
-  MEDIA_TYPES, SHELVES, mediaTypeInfo, shelfLabel, clampRating,
+  MEDIA_TYPES, SHELVES, mediaTypeInfo, shelfLabel, clampRating, clampProgress, progressLabel,
   type MediaFieldValues, type MediaType, type MediaShelf, type MediaCover,
 } from '../../../utils/media.js';
 import { searchCovers, fetchCover, type CoverCandidate } from '../../../services/coverLookup.js';
@@ -94,6 +95,12 @@ const Candidate = styled.button<{ $chosen: boolean }>`
     overflow: hidden;
   }
   &:focus-visible img { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const ProgressWord = styled.span`
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
 `;
 
 type Found = CoverCandidate & { cover: MediaCover };
@@ -281,6 +288,15 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
             );
           })}
         </Chips>
+      </Section>
+
+      <Section style={{ marginTop: 30 }}>
+        <SectionHead>
+          <SectionLabel>Progress</SectionLabel>
+          <ProgressWord>{progressLabel(clampProgress(values.progress), type)}</ProgressWord>
+        </SectionHead>
+        <ProgressSlider tall value={clampProgress(values.progress)} onChange={p => set({ progress: p })}
+          label="Progress" valueText={progressLabel(clampProgress(values.progress), type)} />
       </Section>
 
       <Section style={{ marginTop: 30 }}>

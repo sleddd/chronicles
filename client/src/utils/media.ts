@@ -35,13 +35,15 @@ export interface MediaFieldValues {
   /** 0 = unrated, else 0.5 … 5 in halves */
   rating: number;
   shelf: MediaShelf;
+  /** How far through it: 0–100 (% read / watched / listened) */
+  progress?: number;
   notes: string;
   cover?: MediaCover | null;
 }
 
 export const MEDIA_DEFAULTS: MediaFieldValues = {
   mediaTitle: '', mediaType: 'book', creator: '', album: '', season: '', year: '', genre: '',
-  rating: 0, shelf: '', notes: '', cover: null,
+  rating: 0, shelf: '', progress: 0, notes: '', cover: null,
 };
 
 export interface MediaTypeInfo {
@@ -98,6 +100,25 @@ export function clampRating(r: unknown): number {
   return Math.min(5, Math.round(n * 2) / 2);
 }
 
+/** Progress kept to whole percent within 0–100 */
+export function clampProgress(p: unknown): number {
+  const n = typeof p === 'number' ? p : typeof p === 'string' ? parseFloat(p) : 0;
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(100, Math.round(n));
+}
+
+/** "45% read" / "45% watched" / "45% listened" */
+export function progressLabel(progress: number, type: MediaType = 'book'): string {
+  const past = { read: 'read', watch: 'watched', listen: 'listened' }[mediaTypeInfo(type).verb];
+  return `${clampProgress(progress)}% ${past}`;
+}
+
+/** Whether a card shows its progress rule: something under way or paused, or any progress short of Finished */
+export function showsProgress(item: Pick<MediaItem, 'shelf' | 'progress'>): boolean {
+  if (item.shelf === 'done') return false;
+  return item.shelf === 'current' || item.shelf === 'paused' || item.progress > 0;
+}
+
 /** "4.5" / "4" — no trailing .0 */
 export function formatRating(r: number): string {
   const n = clampRating(r);
@@ -143,6 +164,8 @@ export interface MediaItem {
   genre: string;
   rating: number;
   shelf: MediaShelf;
+  /** 0–100 */
+  progress: number;
   /** The entry's own photo (encrypted thumbnail), which wins over a found cover */
   image?: MediaImageRef;
   /** A found cover, as a data URL */
@@ -196,6 +219,7 @@ export function mediaItems(entries: EntryLike[], topicIds: number[], stripHtml: 
       genre: str(cf.genre),
       rating: clampRating(cf.rating),
       shelf,
+      progress: clampProgress(cf.progress),
       image: entryImageRef(meta),
       cover: typeof cover === 'string' && cover.startsWith('data:image/') ? cover : undefined,
       createdAt: e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt),
@@ -283,7 +307,8 @@ function legacyFieldKey(label: string): keyof MediaFieldValues | null {
   if (/^(year|released|release year|published|publication year)$/.test(l)) return 'year';
   if (/^(genre|genres|category)$/.test(l)) return 'genre';
   if (/^(rating|stars|score|my rating)$/.test(l)) return 'rating';
-  if (/^(status|shelf|progress)$/.test(l)) return 'shelf';
+  if (/^(status|shelf)$/.test(l)) return 'shelf';
+  if (/^(progress|percent|percentage|% done|% read|% watched|percent done)$/.test(l)) return 'progress';
   if (/^(notes|review|thoughts|comments|summary)$/.test(l)) return 'notes';
   return null;
 }
@@ -370,6 +395,7 @@ export function legacyMediaFields(
     const key = legacyFieldKey(d.label);
     if (key === 'rating') fields.rating = parseLegacyRating(v);
     else if (key === 'shelf') fields.shelf = parseLegacyShelf(v);
+    else if (key === 'progress') fields.progress = clampProgress(v);
     else if (key === 'notes') fields.notes = [fields.notes, String(v)].filter(Boolean).join('\n');
     else if (key && !fields[key]) (fields as unknown as Record<string, unknown>)[key] = String(v).trim();
     else if (d.type !== 'boolean') leftover.push(`${d.label}: ${String(v)}`);

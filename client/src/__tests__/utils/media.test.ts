@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  clampRating, formatRating, shelfLabel, shelfFilterLabel, isMediaTopic, mediaTopicIds, legacyMediaType,
+  clampRating, formatRating, clampProgress, progressLabel, showsProgress, shelfLabel, shelfFilterLabel, isMediaTopic, mediaTopicIds, legacyMediaType,
   mediaItems, mediaSubtitle, filterMedia, sortMedia, EMPTY_MEDIA_FILTER, mediaFilterCount,
   parseLegacyRating, parseLegacyShelf, titleFromText, titleFromTextParts, looksLikeTv, legacyMediaFields, entryImageRef,
 } from '@/utils/media';
@@ -20,6 +20,22 @@ describe('ratings', () => {
     expect(clampRating(-1)).toBe(0);
     expect(clampRating('3.5')).toBe(3.5);
     expect(clampRating(undefined)).toBe(0);
+  });
+
+  it('keeps progress to whole percent and words it by type', () => {
+    expect(clampProgress(45.6)).toBe(46);
+    expect(clampProgress('120')).toBe(100);
+    expect(clampProgress(-3)).toBe(0);
+    expect(clampProgress(undefined)).toBe(0);
+    expect(progressLabel(45, 'book')).toBe('45% read');
+    expect(progressLabel(45, 'tv')).toBe('45% watched');
+    expect(progressLabel(45, 'music')).toBe('45% listened');
+    // The rule shows for anything under way or paused, or part-done, never once finished
+    expect(showsProgress({ shelf: 'current', progress: 0 })).toBe(true);
+    expect(showsProgress({ shelf: 'paused', progress: 0 })).toBe(true);
+    expect(showsProgress({ shelf: '', progress: 30 })).toBe(true);
+    expect(showsProgress({ shelf: 'want', progress: 0 })).toBe(false);
+    expect(showsProgress({ shelf: 'done', progress: 80 })).toBe(false);
   });
 
   it('formats without a trailing .0', () => {
@@ -152,15 +168,17 @@ describe('moving the old topics', () => {
       { id: 'f3', label: 'Rating', type: 'text' as const },
       { id: 'f4', label: 'Status', type: 'text' as const },
       { id: 'f5', label: 'Pages', type: 'number' as const },
+      { id: 'f6', label: 'Progress', type: 'text' as const },
     ];
     const e = { id: 1, content: '<p>Tomorrow, and Tomorrow, and Tomorrow — Gabrielle Zevin · 4/5</p>', createdAt: new Date(),
-      metadata: { _taxonomyId: 3, _customFields: { _userFields: { f1: 'Tomorrow, and Tomorrow, and Tomorrow', f2: 'Gabrielle Zevin', f3: '4/5', f4: 'Finished', f5: 400 }, _importKey: 'k' } } };
+      metadata: { _taxonomyId: 3, _customFields: { _userFields: { f1: 'Tomorrow, and Tomorrow, and Tomorrow', f2: 'Gabrielle Zevin', f3: '4/5', f4: 'Finished', f5: 400, f6: '80%' }, _importKey: 'k' } } };
     const moved = legacyMediaFields(e, 'Books', defs, strip)!;
     expect(moved.fields.mediaType).toBe('book');
     expect(moved.fields.mediaTitle).toBe('Tomorrow, and Tomorrow, and Tomorrow');
     expect(moved.fields.creator).toBe('Gabrielle Zevin');
     expect(moved.fields.rating).toBe(4);
     expect(moved.fields.shelf).toBe('done');
+    expect(moved.fields.progress).toBe(80);
     // A fields-only summary isn't notes; an unmapped field is kept there
     expect(moved.fields.notes).toBe('Pages: 400');
     expect((moved.fields as unknown as Record<string, unknown>)._importKey).toBe('k');

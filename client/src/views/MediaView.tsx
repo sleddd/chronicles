@@ -11,6 +11,7 @@ import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { FilterPick } from '../components/molecules/FilterPick.js';
 import { StarRating } from '../components/molecules/StarRating.js';
+import { ProgressSlider } from '../components/molecules/ProgressSlider.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { useDecryptedImage } from '../hooks/useDecryptedImage.js';
@@ -21,7 +22,7 @@ import { focusPosition } from '../components/organisms/EntryImageGallery.js';
 import { glassCard, glassControl, onPhoto } from '../styles/wallpaper.js';
 import {
   EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds, mediaSubtitle,
-  mediaTypeInfo, shelfLabel, shelfFilterLabel, formatRating,
+  mediaTypeInfo, shelfLabel, shelfFilterLabel, formatRating, progressLabel, showsProgress,
   type MediaFilter, type MediaItem, type MediaShelf, type MediaSort, type MediaType,
 } from '../utils/media.js';
 
@@ -179,6 +180,19 @@ const TileSub = styled.span`
   overflow: hidden;
 `;
 
+/* How far through it: the rule under the cover, dragged to update; the figure on its right */
+const ProgressRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 2px 2px 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+`;
+
 /* Stars over the shelf pill, centred under the cover, with air around them */
 const Foot = styled.div`
   display: flex;
@@ -235,12 +249,26 @@ function CardCover({ item, onOpen }: { item: MediaItem; onOpen: () => void }) {
   );
 }
 
-function MediaCard({ item, onOpen, onRate, onShelve }: {
-  item: MediaItem; onOpen: () => void; onRate: (r: number) => void; onShelve: (s: MediaShelf) => void;
+function CardProgress({ item, onProgress }: { item: MediaItem; onProgress: (p: number) => void }) {
+  // The rule follows the drag at once; the entry is saved when the drag (or key press) ends
+  const [shown, setShown] = useState(item.progress);
+  useEffect(() => { setShown(item.progress); }, [item.progress]);
+  return (
+    <ProgressRow>
+      <ProgressSlider value={shown} onChange={setShown} onCommit={p => { if (p !== item.progress) onProgress(p); }}
+        label={`Progress for ${item.title}`} valueText={progressLabel(shown, item.type)} />
+      <span>{progressLabel(shown, item.type)}</span>
+    </ProgressRow>
+  );
+}
+
+function MediaCard({ item, onOpen, onRate, onShelve, onProgress }: {
+  item: MediaItem; onOpen: () => void; onRate: (r: number) => void; onShelve: (s: MediaShelf) => void; onProgress: (p: number) => void;
 }) {
   return (
     <Card>
       <CardCover item={item} onOpen={onOpen} />
+      {showsProgress(item) && <CardProgress item={item} onProgress={onProgress} />}
       <Foot>
         <StarRating value={item.rating} onChange={onRate} size={18} label={`Rating for ${item.title}`} />
         <ShelfPill $set={!!item.shelf}>
@@ -356,6 +384,7 @@ export function MediaView() {
                   onOpen={() => openInJournal(item.id)}
                   onRate={r => { void patch(item, { rating: r }); }}
                   onShelve={s => { void patch(item, { shelf: s }); }}
+                  onProgress={p => { void patch(item, { progress: p }); }}
                 />
               ))}
             </Grid>
