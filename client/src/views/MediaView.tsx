@@ -189,14 +189,6 @@ const MoreBtn = styled.button<{ $open: boolean }>`
   ${glassControl}
 `;
 
-const Count = styled.span`
-  margin-left: auto;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-muted);
-  ${onPhoto}
-`;
-
 /* The public-shelf bookmark over a cover's corner: accent and solid while the
    item is on the shelf, a grey outline otherwise, on a soft disc so it reads
    over any cover */
@@ -322,7 +314,6 @@ export function MediaView() {
     </ContentTemplate>
   );
 
-  const filtering = !!(saved.type || saved.shelf || saved.minRating || query.trim());
   const ratingLabel = saved.minRating ? `${formatRating(saved.minRating)}+ stars` : 'Any';
 
   return (
@@ -380,7 +371,6 @@ export function MediaView() {
                 </select>
               </FilterPick>
             );
-            const count = <Count>{filtering ? `${shown.length} of ${items.length}` : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</Count>;
             const moreSet = (saved.type ? 1 : 0) + (saved.minRating ? 1 : 0) + (saved.sort !== 'newest' ? 1 : 0);
             return phone ? (
               <>
@@ -397,7 +387,6 @@ export function MediaView() {
               <Tools>
                 <Search $phone={false} value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
                 {typePick}{shelfPick}{ratingPick}{sortPick}
-                {count}
               </Tools>
             );
           })()}
