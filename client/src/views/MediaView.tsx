@@ -140,7 +140,7 @@ const PublicLink = styled.a`
 
 /* The list layout: the app's flush rows (title, a muted line, the date), under a top rule */
 const ListBox = styled.div`
-  margin-top: 24px;
+  margin-top: 40px;
   border-top: 1px solid var(--border-subtle);
 `;
 

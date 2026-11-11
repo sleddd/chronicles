@@ -22,7 +22,7 @@ const Title = styled.h1`
   font-weight: 200;
   line-height: 1;
   color: var(--text-primary);
-  margin: 40px 0 32px;
+  margin: 40px 0 48px;
   overflow-wrap: anywhere;
   @media (max-width: 480px) { font-size: 34px; }
 `;

@@ -33,7 +33,7 @@ export const PosterGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 24px;
-  margin-top: 28px;
+  margin-top: 40px;
   @media (max-width: 1100px) { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
   @media (max-width: 860px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 560px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
