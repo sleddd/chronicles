@@ -197,22 +197,21 @@ const Count = styled.span`
   ${onPhoto}
 `;
 
-/* The public-shelf bookmark over a cover's corner: accent and solid while the
-   item is on the shelf, a grey outline otherwise, on a soft disc so it reads
-   over any cover */
+/* The public-shelf bookmark: a ribbon tucked over the cover's top edge with
+   the classic notched tail — the accent while the item is on the shelf, a
+   quiet translucent ribbon otherwise (brighter on hover) */
 const Bookmark = styled.button<{ $on: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
+  display: block;
+  width: 22px;
+  height: 36px;
+  padding: 0;
   border: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
-  color: ${({ $on }) => ($on ? 'var(--color-accent)' : 'var(--text-muted)')};
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+  background: ${({ $on }) => ($on ? 'var(--color-accent)' : 'color-mix(in srgb, var(--text-muted) 55%, transparent)')};
   cursor: pointer;
-  svg { fill: ${({ $on }) => ($on ? 'currentColor' : 'none')}; }
-  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent)' : 'var(--text-primary)')}; }
+  transition: background 120ms;
+  &:hover { background: ${({ $on }) => ($on ? 'var(--color-accent-hover)' : 'color-mix(in srgb, var(--text-primary) 70%, transparent)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -236,9 +235,7 @@ function OwnerCard({ item, onOpen, onRate, onShelve, onProgress, onBookmark }: {
         <Bookmark type="button" $on={onShelf} aria-pressed={onShelf}
           aria-label={onShelf ? `Take ${item.title} off your public shelf` : `Add ${item.title} to your public shelf`}
           title={onShelf ? 'On your public shelf' : 'Add to your public shelf'}
-          onClick={e => onBookmark(e.currentTarget)}>
-          <Icon name="bookmark" size={15} strokeWidth={2} />
-        </Bookmark>
+          onClick={e => onBookmark(e.currentTarget)} />
       )}
     />
   );
@@ -387,10 +384,9 @@ export function MediaView() {
                 <Tools>
                   <Search $phone value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
                   {shelfPick}
-                  <MoreBtn type="button" $open={moreOpen || moreSet > 0} aria-expanded={moreOpen} aria-label={moreSet ? `More filters (${moreSet} set)` : 'More filters'} title="Type, rating and sort" onClick={() => setMoreOpen(o => !o)}>
+                  <MoreBtn type="button" style={{ marginLeft: 'auto' }} $open={moreOpen || moreSet > 0} aria-expanded={moreOpen} aria-label={moreSet ? `More filters (${moreSet} set)` : 'More filters'} title="Type, rating and sort" onClick={() => setMoreOpen(o => !o)}>
                     <Icon name="more-horizontal" size={18} strokeWidth={2} />
                   </MoreBtn>
-                  {count}
                 </Tools>
                 {moreOpen && <Tools>{typePick}{ratingPick}{sortPick}</Tools>}
               </>

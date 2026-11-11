@@ -108,11 +108,13 @@ const TileSub = styled.span`
   overflow: hidden;
 `;
 
-/* Whatever sits over the cover's top-right corner (the public-shelf bookmark) */
+/* Whatever hangs over the cover's top edge, near its right corner (the
+   public-shelf bookmark ribbon): it starts above the cover's top so it reads
+   as tucked over the edge */
 const Corner = styled.div`
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 6px;
+  right: 26px;
   z-index: 1;
 `;
 
