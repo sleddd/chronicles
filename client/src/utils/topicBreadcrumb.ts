@@ -16,6 +16,7 @@ export interface TrailCrumb {
 const JOURNAL_CRUMB: TrailCrumb = { label: 'Journal', path: '/journal' };
 const PLANNING_TRAIL: TrailCrumb[] = [{ label: 'Planning', path: '/goals' }];
 const HEALTH_TRAIL: TrailCrumb[] = [{ label: 'Health', path: '/health' }];
+const MEDIA_TRAIL = [{ label: 'Media', path: '/media' }];
 const MEALS_TRAIL: TrailCrumb[] = [{ label: 'From the Kitchen', path: '/kitchen' }];
 const CALENDAR_TRAIL: TrailCrumb[] = [{ label: 'Calendar', path: '/calendar' }];
 
@@ -44,9 +45,10 @@ const TRAILS: Record<string, TrailCrumb[]> = {
   event: CALENDAR_TRAIL,
   meeting: CALENDAR_TRAIL,
 
-  music: [{ label: 'Entertainment', path: '/entertainment/music' }],
-  books: [{ label: 'Entertainment', path: '/entertainment/books' }],
-  'tv/movies': [{ label: 'Entertainment', path: '/entertainment/tv' }],
+  media: MEDIA_TRAIL,
+  music: MEDIA_TRAIL,
+  books: MEDIA_TRAIL,
+  'tv/movies': MEDIA_TRAIL,
 
   research: [{ label: 'Inspiration', path: '/inspiration/research' }],
   quote: [{ label: 'Inspiration', path: '/inspiration/quotes' }],
@@ -90,9 +92,7 @@ const VIEW_TRAILS: Record<string, TrailCrumb[]> = {
   '/goals/tasks': [PLANNING, { label: 'Tasks', path: '/goals/tasks' }],
   '/goals/todos': [PLANNING, { label: 'Todos', path: '/goals/todos' }],
   '/goals/filter': [PLANNING, { label: 'Filters', path: '/goals/filter' }],
-  '/entertainment/music': [{ label: 'Entertainment', path: '/entertainment/music' }, { label: 'Music', path: '/entertainment/music' }],
-  '/entertainment/books': [{ label: 'Entertainment', path: '/entertainment/music' }, { label: 'Books', path: '/entertainment/books' }],
-  '/entertainment/tv': [{ label: 'Entertainment', path: '/entertainment/music' }, { label: 'TV/Movies', path: '/entertainment/tv' }],
+  '/media': MEDIA_TRAIL,
   '/inspiration/research': [{ label: 'Inspiration', path: '/inspiration/research' }, { label: 'Research', path: '/inspiration/research' }],
   '/inspiration/quotes': [{ label: 'Inspiration', path: '/inspiration/research' }, { label: 'Quotes', path: '/inspiration/quotes' }],
 };

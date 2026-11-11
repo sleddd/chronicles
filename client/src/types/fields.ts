@@ -330,3 +330,6 @@ export interface WellnessFieldValues {
   /** Anything else about the day the questions don't cover */
   notes?: string;
 }
+
+/** Media (books, movies, TV, music) — utils/media owns the shape */
+export type { MediaFieldValues } from '../utils/media.js';

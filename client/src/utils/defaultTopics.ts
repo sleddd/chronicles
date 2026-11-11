@@ -19,6 +19,7 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Music', icon: 'music', color: '#EC4899' },
   { name: 'Books', icon: 'book', color: '#8B5CF6' },
   { name: 'TV/Movies', icon: 'film', color: '#F59E0B' },
+  { name: 'Media', icon: 'media', color: '#EC4899' },
   { name: 'Quote', icon: 'quote-left', color: '#6366F1' },
   { name: 'Allergy', icon: 'triangle-exclamation', color: '#F97316' },
   { name: 'Shopping List', icon: 'cart-shopping', color: '#22C55E' },

@@ -14,6 +14,19 @@ const CONNECT_SRC = [
   'https://api.anthropic.com',
   'https://api.openai.com',
   ...bedrockOrigins(),
+  // Media covers (client/src/services/coverLookup.ts): Open Library (its cover
+  // files redirect to archive.org), Apple's iTunes Search (artwork on
+  // mzstatic.com), TVmaze and Wikipedia — fixed catalogues, never a typed address
+  'https://openlibrary.org',
+  'https://covers.openlibrary.org',
+  'https://archive.org',
+  'https://*.archive.org',
+  'https://itunes.apple.com',
+  'https://*.mzstatic.com',
+  'https://api.tvmaze.com',
+  'https://static.tvmaze.com',
+  'https://en.wikipedia.org',
+  'https://upload.wikimedia.org',
 ].join(' ');
 
 /**

@@ -11,6 +11,7 @@ import { LandingView } from './views/LandingView.js';
 import { BugReportView } from './views/BugReportView.js';
 import { NotFoundView } from './views/NotFoundView.js';
 import { MedHistoryView } from './views/MedHistoryView.js';
+import { MediaView } from './views/MediaView.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
@@ -615,10 +616,9 @@ export function App() {
               <Route path="/health/allergies" element={<R><HealthView topicNames={['Allergy']} metaFields={[{ key: 'severity', label: 'Severity' }, { key: 'allergen', label: 'Allergen' }, { key: 'reaction', label: 'Reaction' }]} printable printTitle="Allergies" /></R>} />
               <Route path="/health/reporting" element={<R><HealthReportingView /></R>} />
 
-              {/* Entertainment */}
-              <Route path="/entertainment/music" element={<R><TopicEntriesView title="Music" topicNames={['Music']} showDateFilter={false} /></R>} />
-              <Route path="/entertainment/books" element={<R><TopicEntriesView title="Books" topicNames={['Books']} showDateFilter={false} /></R>} />
-              <Route path="/entertainment/tv" element={<R><TopicEntriesView title="TV/Movies" topicNames={['TV/Movies']} showDateFilter={false} /></R>} />
+              {/* Media (the old Entertainment lists redirect here) */}
+              <Route path="/media" element={<R><MediaView /></R>} />
+              <Route path="/entertainment/*" element={<Navigate to="/media" replace />} />
 
               {/* Inspiration */}
               <Route path="/inspiration/research" element={<R><TopicEntriesView title="Research" topicNames={['Research']} showDateFilter={false} /></R>} />

@@ -3,12 +3,12 @@ import { PillButton } from '../components/atoms/PillButton.js';
 import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
 import { glassControl } from '../styles/wallpaper.js';
+import { FilterPick } from '../components/molecules/FilterPick.js';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
-import { Icon } from '../components/atoms/core/Icon.jsx';
 import { ViewMenu, type ViewMenuItem } from '../components/molecules/ViewMenu.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import {
@@ -205,56 +205,6 @@ const FilterRow = styled.div`
   gap: 12px 10px;
   margin-top: 16px;
 `;
-
-/* A filter pill: "Status  All ⌄" — the name muted, the choice in bold, the
-   real <select> invisible over it (a select is as wide as its longest option) */
-const PickPill = styled.label<{ $set: boolean }>`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  max-width: 100%;
-  padding: 0 14px 0 18px;
-  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-card)')};
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  &:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  b {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 600;
-    color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-primary)')};
-  }
-  & > span:last-of-type { display: inline-flex; color: var(--text-muted); }
-  select {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    opacity: 0;
-    cursor: pointer;
-    font-size: 16px; /* no zoom on iOS */
-  }
-  option { color: var(--text-primary); background: var(--bg-surface); }
-  ${glassControl}
-`;
-
-function FilterPick({ name, value, set, children }: { name: string; value: string; set: boolean; children: React.ReactNode }) {
-  return (
-    <PickPill $set={set}>
-      <span>{name}</span>
-      <b>{value}</b>
-      <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
-      {children}
-    </PickPill>
-  );
-}
 
 /* Clear completed: the app's neutral outlined pill, with a count; asks once */
 const ClearCount = styled.em`

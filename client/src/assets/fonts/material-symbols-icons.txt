@@ -124,6 +124,7 @@ photo_camera
 photo_library
 piano
 play_arrow
+play_lesson
 pool
 potted_plant
 pregnant_woman

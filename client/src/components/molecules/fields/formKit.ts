@@ -308,6 +308,23 @@ export const BareDate = styled.input`
   &::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; margin-left: 24px; }
 `;
 
+/* A one-line text field sitting bare in a labelled row (Media's Author, Year…) */
+export const BareInput = styled.input`
+  && {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--text-secondary);
+  }
+  &::placeholder { color: var(--text-hint); }
+`;
+
 /* A picker in a row: an outlined pill holding the select and its chevron
    ("No goal ⌄"). Capped in width — a native select is as wide as its
    longest option otherwise. */

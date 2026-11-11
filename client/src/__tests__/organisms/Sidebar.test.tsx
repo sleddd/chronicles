@@ -49,7 +49,7 @@ describe('Sidebar', () => {
   it('renders every nav destination', () => {
     renderAt();
     expect(screen.queryByTitle('Today')).not.toBeInTheDocument();
-    for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen']) {
+    for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Media']) {
       expect(screen.getByTitle(title)).toBeInTheDocument();
     }
     // Settings lives in the ⋯ menu
@@ -65,7 +65,7 @@ describe('Sidebar', () => {
   it('ends with expand / collapse, then ⋯ (Settings, Lock, Sign out)', () => {
     renderAt();
     const titles = Array.from(document.querySelectorAll('aside button[title]')).map(b => b.getAttribute('title'));
-    expect(titles.slice(-3)).toEqual(['Kitchen', 'Show names', 'Settings, lock and sign out']);
+    expect(titles.slice(-3)).toEqual(['Media', 'Show names', 'Settings, lock and sign out']);
     const more = screen.getByRole('button', { name: 'More' });
     expect(more).toHaveAttribute('aria-haspopup', 'menu');
     fireEvent.click(more);

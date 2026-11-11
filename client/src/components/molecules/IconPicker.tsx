@@ -58,6 +58,7 @@ export const TOPIC_ICONS: IconOption[] = [
   { name: 'paint-brush', glyph: 'brush' },
   { name: 'gamepad', glyph: 'sports_esports' },
   { name: 'film', glyph: 'movie' },
+  { name: 'media', glyph: 'play_lesson' },
   { name: 'tv', glyph: 'tv' },
   // Sports
   { name: 'basketball', glyph: 'sports_basketball' },

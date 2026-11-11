@@ -24,6 +24,7 @@ import { ImageStorageSettings } from '../components/organisms/ImageStorageSettin
 import { AiSettings } from '../components/organisms/AiSettings.js';
 import { DailyLogImport } from '../components/organisms/DailyLogImport.js';
 import { TrainingImport } from '../components/organisms/TrainingImport.js';
+import { MediaMigration } from '../components/organisms/MediaMigration.js';
 import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
@@ -120,7 +121,7 @@ const FEATURES = [
   { key: 'milestonesEnabled', title: 'Milestone', description: 'Break goals into milestones' },
   { key: 'exerciseEnabled', title: 'Exercise', description: 'Log workouts and fitness' },
   { key: 'allergiesEnabled', title: 'Allergy and Sensitivities', description: 'Track allergies and reactions' },
-  { key: 'entertainmentEnabled', title: 'Entertainment', description: 'Track music, books, and TV/movies' },
+  { key: 'entertainmentEnabled', title: 'Media', description: 'Books, movies, TV shows and music on shelves, with ratings' },
   { key: 'inspirationEnabled', title: 'Inspiration', description: 'Save research, ideas, and quotes' },
   { key: 'financeEnabled', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)' },
 ];
@@ -1509,6 +1510,7 @@ export function SettingsView() {
         {importResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: importResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{importResult}</div>}
         <DailyLogImport />
         <TrainingImport />
+        <MediaMigration />
       </SettingsCard>
       </Section>
 

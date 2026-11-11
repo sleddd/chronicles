@@ -24,6 +24,10 @@ import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/Me
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
 import { TimeTracker } from '../molecules/fields/TimeTracker.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
+import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
+import { MEDIA_DEFAULTS } from '../../utils/media.js';
+import { aiMediaDetails } from '../../services/mediaDetails.js';
+import { useAiReady } from '../../hooks/useAiReady.js';
 import { useTimeTracking } from '../../hooks/useTimeTracking.js';
 import { TIME_TRACKED_TYPES, isTimeTrackingTopic, timerFill } from '../../utils/timeTracking.js';
 import { ExerciseFields, type ExerciseFieldValues } from '../molecules/fields/ExerciseFields.js';
@@ -508,6 +512,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   routine: 'routine', routines: 'routine', 'exercise schedule': 'routine', 'exercise routine': 'routine',
   'training plan': 'training_plan', 'training plans': 'training_plan',
   'time tracking': 'time_tracking',
+  media: 'media', 'media journal': 'media', 'media library': 'media',
 };
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
@@ -515,7 +520,7 @@ const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
   event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName', change: 'changeWhat',
-  routine: 'routineName', training_plan: 'planName', time_tracking: 'activityName',
+  routine: 'routineName', training_plan: 'planName', time_tracking: 'activityName', media: 'mediaTitle',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -654,6 +659,7 @@ export function EntryForm({
 
   const selectedTopic = topics.find(t => t.id === topicId);
   const customType = getCustomType(selectedTopic?.name);
+  const aiReady = useAiReady();
   const calorieEstimate = useCalorieEstimate(
     customType === 'food' || customType === 'exercise' ? customType : null,
     content, customFields, onCustomFieldsChange,
@@ -1054,6 +1060,7 @@ export function EntryForm({
               {customType === 'wins' && <WinsFields values={{ wins: [], ...(customFields as Partial<WinsFieldValues>) } as WinsFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
+              {customType === 'media' && <MediaFields values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady ? aiMediaDetails : undefined} />}
               {customType === 'time_tracking' && <TimeTrackingFields values={{ activityName: '', notes: '', ...customFields } as TimeTrackingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
                 <div style={{ marginTop: 32 }}>

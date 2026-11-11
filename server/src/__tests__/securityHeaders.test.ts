@@ -27,6 +27,12 @@ describe('securityHeaders middleware', () => {
     expect(res.headers['Content-Security-Policy']).toContain("style-src 'self' 'unsafe-inline'");
     expect(res.headers['Content-Security-Policy']).toContain("img-src 'self' data: blob:");
     expect(res.headers['Content-Security-Policy']).toContain("connect-src 'self'");
+    // Media cover catalogues — fixed hosts, no wildcard beyond their own CDNs
+    const connect = res.headers['Content-Security-Policy'].match(/connect-src ([^;]+)/)![1];
+    for (const host of ['https://openlibrary.org', 'https://covers.openlibrary.org', 'https://*.archive.org', 'https://itunes.apple.com', 'https://*.mzstatic.com', 'https://api.tvmaze.com', 'https://static.tvmaze.com', 'https://en.wikipedia.org', 'https://upload.wikimedia.org']) {
+      expect(connect.split(' ')).toContain(host);
+    }
+    expect(connect).not.toContain('*.amazonaws.com');
     expect(res.headers['Content-Security-Policy']).toContain("frame-ancestors 'none'");
     expect(res.headers['Content-Security-Policy']).toContain("base-uri 'self'");
     expect(res.headers['Content-Security-Policy']).toContain("form-action 'self'");

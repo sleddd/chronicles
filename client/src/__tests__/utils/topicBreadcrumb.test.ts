@@ -40,10 +40,12 @@ describe('getTopicTrail', () => {
     expect(getTopicTrail('Meeting')).toEqual([JOURNAL, { label: 'Calendar', path: '/calendar' }]);
   });
 
-  it('maps entertainment topics to their own views', () => {
-    expect(getTopicTrail('Music')).toEqual([JOURNAL, { label: 'Entertainment', path: '/entertainment/music' }]);
-    expect(getTopicTrail('Books')).toEqual([JOURNAL, { label: 'Entertainment', path: '/entertainment/books' }]);
-    expect(getTopicTrail('TV/Movies')).toEqual([JOURNAL, { label: 'Entertainment', path: '/entertainment/tv' }]);
+  it('maps Media and the old entertainment topics to the Media shelf', () => {
+    const MEDIA = { label: 'Media', path: '/media' };
+    expect(getTopicTrail('Media')).toEqual([JOURNAL, MEDIA]);
+    expect(getTopicTrail('Music')).toEqual([JOURNAL, MEDIA]);
+    expect(getTopicTrail('Books')).toEqual([JOURNAL, MEDIA]);
+    expect(getTopicTrail('TV/Movies')).toEqual([JOURNAL, MEDIA]);
   });
 
   it('maps inspiration topics, with Idea non-clickable (no route)', () => {
