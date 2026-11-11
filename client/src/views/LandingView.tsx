@@ -444,7 +444,7 @@ export function LandingView() {
           <Hero>
             <H1 id="hero-title">A life dashboard for people <em>too busy to plan.</em></H1>
             <HeroText>
-              Zero-knowledge encrypted and quick enough to actually use. Write a single line, and it automatically sorts your
+              Zero-knowledge encrypted and quick enough to actually use. A single entry automatically sorts your
               entries into events, meetings, health, goals, meals, or whatever else you choose.
             </HeroText>
             <BigPill as="a" href="#beta">Sign Up for Beta</BigPill>
