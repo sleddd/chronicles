@@ -122,9 +122,15 @@ const ShelfLink = styled.div`
   height: 40px;
   padding: 0 4px 0 14px;
   border-radius: var(--r-lg);
-  background: var(--bg-sunken);
+  /* A faded fill: the page (or the photo behind it) shows through */
+  background: color-mix(in srgb, var(--bg-sunken) 45%, transparent);
   border: 1px solid var(--border-field);
   ${glassControl}
+  html[data-wallpaper] & {
+    background: color-mix(in srgb, var(--bg-app) 38%, transparent);
+    -webkit-backdrop-filter: blur(8px) saturate(1.05);
+    backdrop-filter: blur(8px) saturate(1.05);
+  }
   &:focus-within { border-color: var(--color-accent); }
   input {
     flex: 1;
