@@ -16,6 +16,7 @@ import { FilterPick } from '../components/molecules/FilterPick.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { useDecryptedImage } from '../hooks/useDecryptedImage.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
@@ -165,9 +166,27 @@ const Tools = styled.div`
   margin-top: 8px;
 `;
 
-const Search = styled(RoundSearch)`
-  flex: 1 1 220px;
-  max-width: 360px;
+const Search = styled(RoundSearch)<{ $phone: boolean }>`
+  flex: ${({ $phone }) => ($phone ? '1 1 100%' : '1 1 220px')};
+  max-width: ${({ $phone }) => ($phone ? 'none' : '360px')};
+`;
+
+/* Phones: Type, Rating and Sort fold behind a square ⋯ (Planning's view-options look) */
+const MoreBtn = styled.button<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-card)')};
+  border-radius: 8px;
+  background: ${({ $open }) => ($open ? 'var(--color-accent-subtle)' : 'transparent')};
+  color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:hover { border-color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-strong)')}; color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  ${glassControl}
 `;
 
 const Count = styled.span`
@@ -202,7 +221,7 @@ const Bookmark = styled.button<{ $on: boolean }>`
 /** The owner's card: resolves the entry's own photo (else the found cover) and passes the rest through */
 function OwnerCard({ item, onOpen, onRate, onShelve, onProgress, onBookmark }: {
   item: MediaItem; onOpen: () => void; onRate: (r: number) => void; onShelve: (s: MediaShelf) => void;
-  onProgress: (p: number) => void; onBookmark: () => void;
+  onProgress: (p: number) => void; onBookmark: (el: HTMLElement | null) => void;
 }) {
   const img = item.image;
   const { url } = useDecryptedImage(img?.key ?? null, img?.iv ?? null, img?.mimeType ?? null);
@@ -217,7 +236,7 @@ function OwnerCard({ item, onOpen, onRate, onShelve, onProgress, onBookmark }: {
         <Bookmark type="button" $on={onShelf} aria-pressed={onShelf}
           aria-label={onShelf ? `Take ${item.title} off your public shelf` : `Add ${item.title} to your public shelf`}
           title={onShelf ? 'On your public shelf' : 'Add to your public shelf'}
-          onClick={onBookmark}>
+          onClick={e => onBookmark(e.currentTarget)}>
           <Icon name="bookmark" size={15} strokeWidth={2} />
         </Bookmark>
       )}
@@ -242,6 +261,9 @@ export function MediaView() {
   const [query, setQuery] = useState('');
   const [shownCount, setShownCount] = useState(PUBLIC_SHELF_PAGE_SIZE);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const phone = useMediaQuery('(max-width: 768px)');
+  const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const shelfUrl = publicShelf ? publicShelfUrl(publicShelf.token) : '';
   const copyLink = async () => {
@@ -258,7 +280,6 @@ export function MediaView() {
   const filter: MediaFilter = { ...EMPTY_MEDIA_FILTER, type: saved.type, shelf: saved.shelf, minRating: saved.minRating, query };
   const shown = useMemo(() => sortMedia(filterMedia(items, filter), saved.sort), [items, filter.type, filter.shelf, filter.minRating, query, saved.sort]); // eslint-disable-line react-hooks/exhaustive-deps
   const visible = useMemo(() => shown.slice(0, shownCount), [shown, shownCount]);
-  const onShelfCount = useMemo(() => items.filter(isOnPublicShelf).length, [items]);
   const pendingItem = useMemo(() => items.find(i => i.id === pendingItemId) ?? null, [items, pendingItemId]);
 
   const patch = useCallback(async (item: MediaItem, fields: Record<string, unknown>) => {
@@ -268,10 +289,11 @@ export function MediaView() {
   }, [saveFields]);
 
   // The bookmark: off the shelf → on it (the first one asks, in the panel); on → off
-  const toggleBookmark = useCallback((item: MediaItem) => {
+  const toggleBookmark = useCallback((item: MediaItem, el: HTMLElement | null) => {
     if (isOnPublicShelf(item)) { void patch(item, { [ON_PUBLIC_SHELF]: false }); return; }
     if (publicShelf) { void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
     setPendingItemId(item.id);
+    setAnchor(el);
     setPanelOpen(true);
   }, [patch, publicShelf, setPendingItemId]);
 
@@ -326,36 +348,61 @@ export function MediaView() {
             )}
           </Head>
 
-          {items.length > 0 && (
-            <Tools>
-              <Search value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
+          {items.length > 0 && (() => {
+            const typePick = (
               <FilterPick name="Type" value={saved.type ? mediaTypeInfo(saved.type).label : 'All'} set={!!saved.type}>
                 <select aria-label="Type" value={saved.type} onChange={e => setSaved(s => ({ ...s, type: e.target.value as MediaType | '' }))}>
                   <option value="">All</option>
                   {MEDIA_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </FilterPick>
+            );
+            const shelfPick = (
               <FilterPick name="Shelf" value={saved.shelf ? shelfFilterLabel(saved.shelf as Exclude<MediaShelf, ''>) : 'All'} set={!!saved.shelf}>
                 <select aria-label="Shelf" value={saved.shelf} onChange={e => setSaved(s => ({ ...s, shelf: e.target.value as MediaShelf }))}>
                   <option value="">All</option>
                   {SHELVES.map(s => <option key={s.value} value={s.value}>{shelfFilterLabel(s.value)}</option>)}
                 </select>
               </FilterPick>
+            );
+            const ratingPick = (
               <FilterPick name="Rating" value={ratingLabel} set={saved.minRating > 0}>
                 <select aria-label="Rating" value={saved.minRating} onChange={e => setSaved(s => ({ ...s, minRating: Number(e.target.value) }))}>
                   <option value={0}>Any</option>
                   {[5, 4.5, 4, 3.5, 3, 2].map(r => <option key={r} value={r}>{formatRating(r)}+ stars</option>)}
                 </select>
               </FilterPick>
+            );
+            const sortPick = (
               <FilterPick name="Sort" value={MEDIA_SORTS.find(s => s.value === saved.sort)?.label ?? 'Newest'} set={saved.sort !== 'newest'}>
                 <select aria-label="Sort" value={saved.sort} onChange={e => setSaved(s => ({ ...s, sort: e.target.value as MediaSort }))}>
                   {MEDIA_SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </FilterPick>
-              <PublicShelfControl count={onShelfCount} open={panelOpen} onOpenChange={setPanel} pendingItem={pendingItem} onTurnedOn={turnedOn} />
-              <Count>{filtering ? `${shown.length} of ${items.length}` : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</Count>
-            </Tools>
-          )}
+            );
+            const count = <Count>{filtering ? `${shown.length} of ${items.length}` : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</Count>;
+            const moreSet = (saved.type ? 1 : 0) + (saved.minRating ? 1 : 0) + (saved.sort !== 'newest' ? 1 : 0);
+            return phone ? (
+              <>
+                <Tools>
+                  <Search $phone value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
+                  {shelfPick}
+                  <MoreBtn type="button" $open={moreOpen || moreSet > 0} aria-expanded={moreOpen} aria-label={moreSet ? `More filters (${moreSet} set)` : 'More filters'} title="Type, rating and sort" onClick={() => setMoreOpen(o => !o)}>
+                    <Icon name="more-horizontal" size={18} strokeWidth={2} />
+                  </MoreBtn>
+                  {count}
+                </Tools>
+                {moreOpen && <Tools>{typePick}{ratingPick}{sortPick}</Tools>}
+              </>
+            ) : (
+              <Tools>
+                <Search $phone={false} value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
+                {typePick}{shelfPick}{ratingPick}{sortPick}
+                {count}
+              </Tools>
+            );
+          })()}
+          <PublicShelfControl open={panelOpen} onOpenChange={setPanel} anchor={anchor} pendingItem={pendingItem} onTurnedOn={turnedOn} />
 
           {items.length === 0 ? (
             <EmptyState message="Nothing on your shelves yet." submessage="Add a book, movie, TV show or album and it shows up here." />
@@ -372,7 +419,7 @@ export function MediaView() {
                     onRate={r => { void patch(item, { rating: r }); }}
                     onShelve={s => { void patch(item, { shelf: s }); }}
                     onProgress={p => { void patch(item, { progress: p }); }}
-                    onBookmark={() => toggleBookmark(item)}
+                    onBookmark={el => toggleBookmark(item, el)}
                   />
                 ))}
               </PosterGrid>

@@ -72,6 +72,6 @@ describe('MediaView', () => {
     expect(fields.mediaTitle).toBe('Title 1');
     fireEvent.click(screen.getByRole('button', { name: 'Take Title 2 off your public shelf' }));
     expect(mockSave.mock.calls[1][1][ON_PUBLIC_SHELF]).toBe(false);
-    expect(screen.getByRole('button', { name: /Public shelf · 1/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Public shelf/ })).not.toBeInTheDocument();
   });
 });
