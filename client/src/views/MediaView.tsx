@@ -125,16 +125,19 @@ const Meta = styled.div`
   & > * + *::before { content: '·'; margin-right: 14px; color: var(--text-faint, var(--text-muted)); }
 `;
 
-/* The Public shelf link: the globe and the words in the muted grey (never the accent), opening the public page */
+/* The Public shelf link: the globe and the words in grey (never the accent; white on a wallpaper), opening the public page */
 const PublicLink = styled.a`
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  &:hover { color: var(--text-primary); text-decoration: underline; }
+  /* On the wallpaper it reads in white like the rest of the row, a touch see-through */
+  ${onPhoto}
+  html[data-wallpaper] & { opacity: 0.88; }
+  &:hover { color: var(--text-primary); text-decoration: underline; opacity: 1; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
