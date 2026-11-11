@@ -158,6 +158,8 @@ const ShelfLink = styled.div`
   button[data-copied='true'] { color: var(--color-accent); }
 `;
 
+/* The controls share the row's full width: the search a little wider, the
+   pills even; phones wrap the search onto its own line */
 const Tools = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -167,8 +169,15 @@ const Tools = styled.div`
 `;
 
 const Search = styled(RoundSearch)<{ $phone: boolean }>`
-  flex: ${({ $phone }) => ($phone ? '1 1 100%' : '1 1 220px')};
-  max-width: ${({ $phone }) => ($phone ? 'none' : '360px')};
+  flex: ${({ $phone }) => ($phone ? '1 1 100%' : '1.6 1 220px')};
+  max-width: none;
+  min-width: 0;
+`;
+
+/* One pill's share of the row */
+const Slot = styled.div`
+  flex: 1 1 0;
+  min-width: 0;
 `;
 
 /* Phones: Type, Rating and Sort fold behind a square ⋯ (Planning's view-options look) */
@@ -341,7 +350,7 @@ export function MediaView() {
 
           {items.length > 0 && (() => {
             const typePick = (
-              <FilterPick name="Type" value={saved.type ? mediaTypeInfo(saved.type).label : 'All'} set={!!saved.type}>
+              <FilterPick grow name="Type" value={saved.type ? mediaTypeInfo(saved.type).label : 'All'} set={!!saved.type}>
                 <select aria-label="Type" value={saved.type} onChange={e => setSaved(s => ({ ...s, type: e.target.value as MediaType | '' }))}>
                   <option value="">All</option>
                   {MEDIA_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -349,7 +358,7 @@ export function MediaView() {
               </FilterPick>
             );
             const shelfPick = (
-              <FilterPick name="Shelf" value={saved.shelf ? shelfFilterLabel(saved.shelf as Exclude<MediaShelf, ''>) : 'All'} set={!!saved.shelf}>
+              <FilterPick grow name="Shelf" value={saved.shelf ? shelfFilterLabel(saved.shelf as Exclude<MediaShelf, ''>) : 'All'} set={!!saved.shelf}>
                 <select aria-label="Shelf" value={saved.shelf} onChange={e => setSaved(s => ({ ...s, shelf: e.target.value as MediaShelf }))}>
                   <option value="">All</option>
                   {SHELVES.map(s => <option key={s.value} value={s.value}>{shelfFilterLabel(s.value)}</option>)}
@@ -357,7 +366,7 @@ export function MediaView() {
               </FilterPick>
             );
             const ratingPick = (
-              <FilterPick name="Rating" value={ratingLabel} set={saved.minRating > 0}>
+              <FilterPick grow name="Rating" value={ratingLabel} set={saved.minRating > 0}>
                 <select aria-label="Rating" value={saved.minRating} onChange={e => setSaved(s => ({ ...s, minRating: Number(e.target.value) }))}>
                   <option value={0}>Any</option>
                   {[5, 4.5, 4, 3.5, 3, 2].map(r => <option key={r} value={r}>{formatRating(r)}+ stars</option>)}
@@ -365,7 +374,7 @@ export function MediaView() {
               </FilterPick>
             );
             const sortPick = (
-              <FilterPick name="Sort" value={MEDIA_SORTS.find(s => s.value === saved.sort)?.label ?? 'Newest'} set={saved.sort !== 'newest'}>
+              <FilterPick grow name="Sort" value={MEDIA_SORTS.find(s => s.value === saved.sort)?.label ?? 'Newest'} set={saved.sort !== 'newest'}>
                 <select aria-label="Sort" value={saved.sort} onChange={e => setSaved(s => ({ ...s, sort: e.target.value as MediaSort }))}>
                   {MEDIA_SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
@@ -376,17 +385,17 @@ export function MediaView() {
               <>
                 <Tools>
                   <Search $phone value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
-                  {shelfPick}
-                  <MoreBtn type="button" style={{ marginLeft: 'auto' }} $open={moreOpen || moreSet > 0} aria-expanded={moreOpen} aria-label={moreSet ? `More filters (${moreSet} set)` : 'More filters'} title="Type, rating and sort" onClick={() => setMoreOpen(o => !o)}>
+                  <Slot>{shelfPick}</Slot>
+                  <MoreBtn type="button" $open={moreOpen || moreSet > 0} aria-expanded={moreOpen} aria-label={moreSet ? `More filters (${moreSet} set)` : 'More filters'} title="Type, rating and sort" onClick={() => setMoreOpen(o => !o)}>
                     <Icon name="more-horizontal" size={18} strokeWidth={2} />
                   </MoreBtn>
                 </Tools>
-                {moreOpen && <Tools>{typePick}{ratingPick}{sortPick}</Tools>}
+                {moreOpen && <Tools><Slot>{typePick}</Slot><Slot>{ratingPick}</Slot><Slot>{sortPick}</Slot></Tools>}
               </>
             ) : (
               <Tools>
                 <Search $phone={false} value={query} onChange={setQuery} placeholder="Search your shelves" ariaLabel="Search media" />
-                {typePick}{shelfPick}{ratingPick}{sortPick}
+                <Slot>{typePick}</Slot><Slot>{shelfPick}</Slot><Slot>{ratingPick}</Slot><Slot>{sortPick}</Slot>
               </Tools>
             );
           })()}

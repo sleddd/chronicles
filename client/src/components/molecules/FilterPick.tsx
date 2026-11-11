@@ -8,13 +8,14 @@ import { glassControl } from '../../styles/wallpaper.js';
    option). A set filter gets an accent outline and its choice in the soft
    accent. Shared by Planning's filter row and the Media shelf. Props only. */
 
-export const PickPill = styled.label<{ $set: boolean }>`
+export const PickPill = styled.label<{ $set: boolean; $grow?: boolean }>`
   position: relative;
-  display: inline-flex;
+  display: ${({ $grow }) => ($grow ? 'flex' : 'inline-flex')};
   align-items: center;
   gap: 8px;
   height: 38px;
   max-width: 100%;
+  ${({ $grow }) => ($grow ? 'width: 100%; min-width: 0;' : '')}
   padding: 0 14px 0 18px;
   border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-card)')};
   border-radius: 999px;
@@ -32,7 +33,7 @@ export const PickPill = styled.label<{ $set: boolean }>`
     font-weight: 600;
     color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-primary)')};
   }
-  & > span:last-of-type { display: inline-flex; color: var(--text-muted); }
+  & > span:last-of-type { display: inline-flex; color: var(--text-muted); ${({ $grow }) => ($grow ? 'margin-left: auto;' : '')} }
   select {
     position: absolute;
     inset: 0;
@@ -45,9 +46,9 @@ export const PickPill = styled.label<{ $set: boolean }>`
   ${glassControl}
 `;
 
-export function FilterPick({ name, value, set, children }: { name: string; value: string; set: boolean; children: ReactNode }) {
+export function FilterPick({ name, value, set, grow, children }: { name: string; value: string; set: boolean; grow?: boolean; children: ReactNode }) {
   return (
-    <PickPill $set={set}>
+    <PickPill $set={set} $grow={grow}>
       <span>{name}</span>
       <b>{value}</b>
       <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
