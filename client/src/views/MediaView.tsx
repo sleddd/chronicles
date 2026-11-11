@@ -120,8 +120,8 @@ const ShelfLink = styled.div`
   flex: 0 1 360px;
   min-width: 180px;
   height: 40px;
-  padding: 0 4px 0 14px;
-  border-radius: var(--r-lg);
+  padding: 0 5px 0 18px;
+  border-radius: 999px;
   /* A faded fill: the page (or the photo behind it) shows through */
   background: color-mix(in srgb, var(--bg-sunken) 45%, transparent);
   border: 1px solid var(--border-field);
@@ -152,7 +152,7 @@ const ShelfLink = styled.div`
     width: 32px;
     height: 32px;
     border: none;
-    border-radius: 6px;
+    border-radius: 50%;
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
