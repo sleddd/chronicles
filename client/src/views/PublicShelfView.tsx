@@ -5,7 +5,7 @@ import { PublicTemplate } from '../components/templates/PublicTemplate.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
-import { MediaFilterBar, EMPTY_MEDIA_FILTERS, type MediaFilters } from '../components/molecules/MediaFilterBar.js';
+import { MediaFilterBar, MediaToolBox, EMPTY_MEDIA_FILTERS, type MediaFilters } from '../components/molecules/MediaFilterBar.js';
 import { Chip } from '../components/molecules/fields/formKit.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { publicShelf as publicShelfApi, type PublicShelfPage, type PublicShelfQuery } from '../services/api.js';
@@ -40,6 +40,8 @@ const Message = styled.p`
 /* The visitor's type chips: the chosen one in the bright accent, the rest a
    soft grey outline — no fill on any of them */
 const Filters = styled.div`
+  /* The box keeps the light hairline whatever theme the visitor's browser remembers */
+  ${MediaToolBox} { border-color: var(--border-subtle) !important; }
   ${Chip} { background: transparent; border-color: var(--border-subtle); color: var(--text-muted); }
   ${Chip}:hover { border-color: var(--border-default); color: var(--text-secondary); }
   ${Chip}[aria-pressed='true'], ${Chip}[aria-pressed='true']:hover { border-color: var(--color-accent); color: var(--color-accent); }

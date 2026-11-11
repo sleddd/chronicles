@@ -32,7 +32,7 @@ const TYPE_CHIPS: { value: MediaType; label: string }[] = [
 const SORT_WORDS: Record<MediaSort, string> = { newest: 'Newest first', rating: 'Highest rated', title: 'Title A–Z', type: 'By type' };
 const RATINGS = [5, 4.5, 4, 3.5, 3, 2];
 
-const Box = styled.div<{ $phone: boolean }>`
+export const MediaToolBox = styled.div<{ $phone: boolean }>`
   display: flex;
   flex-wrap: ${({ $phone }) => ($phone ? 'wrap' : 'nowrap')};
   align-items: center;
@@ -41,7 +41,7 @@ const Box = styled.div<{ $phone: boolean }>`
   /* A light outline: the faintest hairline on white, a brighter grey in dark
      (dark hairlines sink into the canvas) */
   border: 1px solid var(--border-faint);
-  html[data-theme='dark'] & { border-color: var(--border-strong); }
+  html[data-theme='dark'] & { border-color: var(--control-border); }
   border-radius: 10px;
   ${glassControl}
 `;
@@ -193,7 +193,7 @@ export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, sear
   const chevron = <Icon name="chevron-down" size={14} strokeWidth={2} />;
   return (
     <>
-      <Box $phone={phone}>
+      <MediaToolBox $phone={phone}>
         <Search $phone={phone}>
           <Icon name="search" size={16} strokeWidth={2} />
           <input type="search" aria-label="Search media" value={query} placeholder={searchPlaceholder}
@@ -224,7 +224,7 @@ export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, sear
           </Pick>
           {aside && !phone && <Aside $phone={false}>{aside}</Aside>}
         </Picks>
-      </Box>
+      </MediaToolBox>
       <TypeRow $phone={phone} role="group" aria-label="Type">
         <Chip type="button" $active={!filters.type} aria-pressed={!filters.type} onClick={() => set({ type: '' })}>All</Chip>
         {TYPE_CHIPS.map(t => (
