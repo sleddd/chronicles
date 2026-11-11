@@ -44,6 +44,9 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
   html[data-theme='dark'] & { border-color: var(--border-subtle); }
   border-radius: 10px;
   ${glassControl}
+  /* The glass mixin brings its own firmer outline on the photo; this box keeps a soft one */
+  html[data-wallpaper] & { border-color: rgba(255, 255, 255, 0.5); }
+  html[data-wallpaper][data-theme='dark'] & { border-color: rgba(255, 255, 255, 0.14); }
 `;
 
 /* The search: bare inside the box — the icon and the input, no fill of its own */

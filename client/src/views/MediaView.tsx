@@ -200,8 +200,8 @@ const NameBtn = styled.button`
   color: var(--text-primary);
   cursor: pointer;
   & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  svg { flex: none; color: var(--text-muted); }
-  &:hover svg { color: var(--text-primary); }
+  /* The pencil in the same colour as the name (it inherits, white on a wallpaper too) */
+  svg { flex: none; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
 `;
 
