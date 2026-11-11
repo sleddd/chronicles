@@ -6,6 +6,7 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
 import { MediaFilterBar, EMPTY_MEDIA_FILTERS, type MediaFilters } from '../components/molecules/MediaFilterBar.js';
+import { Chip } from '../components/molecules/fields/formKit.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { publicShelf as publicShelfApi, type PublicShelfPage, type PublicShelfQuery } from '../services/api.js';
 
@@ -34,6 +35,14 @@ const Message = styled.p`
   font-size: 22px;
   font-weight: 300;
   color: var(--text-secondary);
+`;
+
+/* The visitor's type chips: the chosen one in the bright accent, the rest a
+   soft grey outline — no fill on any of them */
+const Filters = styled.div`
+  ${Chip} { background: transparent; border-color: var(--border-subtle); color: var(--text-muted); }
+  ${Chip}:hover { border-color: var(--border-default); color: var(--text-secondary); }
+  ${Chip}[aria-pressed='true'], ${Chip}[aria-pressed='true']:hover { border-color: var(--color-accent); color: var(--color-accent); }
 `;
 
 const Centre = styled.div`
@@ -118,7 +127,7 @@ export function PublicShelfView() {
       {state.status === 'error' && <Message>This shelf isn’t available.</Message>}
       {state.status !== 'error' && knownTitle && <Title>{knownTitle}</Title>}
       {state.status !== 'error' && hasAny && (
-        <MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} phone={phone} searchPlaceholder="Search this shelf" />
+        <Filters><MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} phone={phone} searchPlaceholder="Search this shelf" /></Filters>
       )}
       {state.status === 'loading' && <Centre><Spinner size={36} /></Centre>}
       {state.status === 'done' && (
