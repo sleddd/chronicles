@@ -8,10 +8,13 @@ import { Icon } from '../components/atoms/core/Icon.jsx';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
+import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
+import { publicShelfUrl } from '../services/publicShelf.js';
+import { showFlash } from '../services/flashNotice.js';
 import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { FilterPick } from '../components/molecules/FilterPick.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
-import { PagerBar } from '../components/molecules/PagerBar.js';
+import { LoadMore } from '../components/molecules/LoadMore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { useDecryptedImage } from '../hooks/useDecryptedImage.js';
@@ -21,7 +24,8 @@ import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
 import { onPhoto } from '../styles/wallpaper.js';
-import { ON_PUBLIC_SHELF, isOnPublicShelf, pageOf } from '../services/publicShelf.js';
+import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
+import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
 import {
   EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds,
   mediaTypeInfo, shelfFilterLabel, formatRating,
@@ -31,7 +35,7 @@ import {
 /* The media journal: books, movies, TV shows and music as posters on shelves —
    cover, the stars (tap to re-rate), the Shelf status (a picker) and, while
    something is under way, its progress. Search, Type / Shelf / Rating filters
-   and Sort; 24 cards a page. A bookmark on each card puts it on the one
+   and Sort; 24 cards at a time, more as you scroll. A bookmark on each card puts it on the one
    public shelf (PublicShelfControl); tapping a cover opens the entry. */
 
 const VIEW_KEY = 'media-view-v1';
@@ -89,6 +93,49 @@ const Title = styled.h1.attrs({ className: 'view-title' })`
   text-overflow: ellipsis;
   white-space: nowrap;
   @media (max-width: 480px) { font-size: 34px; }
+`;
+
+/* The title with, once the public shelf is on, its link and Copy under it */
+const TitleBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+`;
+
+const ShelfLink = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  ${onPhoto}
+  a {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-accent-link);
+    text-decoration: none;
+  }
+  a:hover { text-decoration: underline; }
+  button {
+    flex: none;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--border-pill, var(--border-card));
+    border-radius: 999px;
+    background: var(--bg-control, transparent);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--control-border); color: var(--text-primary); }
+  button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 const Tools = styled.div`
@@ -174,18 +221,24 @@ export function MediaView() {
 
   const [saved, setSaved] = useState<Saved>(loadSaved);
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+  const [shownCount, setShownCount] = useState(PUBLIC_SHELF_PAGE_SIZE);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const shelfUrl = publicShelf ? publicShelfUrl(publicShelf.token) : '';
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(shelfUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    catch { showFlash('Couldn’t copy the link — select it and copy by hand.'); }
+  };
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ } }, [saved]);
-  // A new search, filter or sort starts at the first page
-  useEffect(() => { setPage(1); }, [query, saved.type, saved.shelf, saved.minRating, saved.sort]);
+  // A new search, filter or sort starts from the top again
+  useEffect(() => { setShownCount(PUBLIC_SHELF_PAGE_SIZE); }, [query, saved.type, saved.shelf, saved.minRating, saved.sort]);
 
   const topicIds = useMemo(() => mediaTopicIds(allTopics), [allTopics]);
   const topicId = topicIds[0];
   const items = useMemo(() => mediaItems(entries, topicIds, stripHtml), [entries, topicIds]);
   const filter: MediaFilter = { ...EMPTY_MEDIA_FILTER, type: saved.type, shelf: saved.shelf, minRating: saved.minRating, query };
   const shown = useMemo(() => sortMedia(filterMedia(items, filter), saved.sort), [items, filter.type, filter.shelf, filter.minRating, query, saved.sort]); // eslint-disable-line react-hooks/exhaustive-deps
-  const paged = useMemo(() => pageOf(shown, page), [shown, page]);
+  const visible = useMemo(() => shown.slice(0, shownCount), [shown, shownCount]);
   const onShelfCount = useMemo(() => items.filter(isOnPublicShelf).length, [items]);
   const pendingItem = useMemo(() => items.find(i => i.id === pendingItemId) ?? null, [items, pendingItemId]);
 
@@ -236,7 +289,16 @@ export function MediaView() {
       <Page>
         <Inner>
           <Head>
-            <Title>Media Journal</Title>
+            <TitleBlock>
+              <Title>Media Journal</Title>
+              {publicShelf && (
+                <ShelfLink>
+                  <MaterialIcon $size={16} aria-hidden="true">link</MaterialIcon>
+                  <a href={shelfUrl} target="_blank" rel="noopener noreferrer" title="Open your public shelf">{shelfUrl}</a>
+                  <button type="button" onClick={copyLink} aria-label="Copy the public shelf link">{copied ? 'Copied' : 'Copy'}</button>
+                </ShelfLink>
+              )}
+            </TitleBlock>
             {topicId != null && (
               <TopBarAction>
                 <PillButton type="button" onClick={() => newEntry(topicId)}>Add media</PillButton>
@@ -282,7 +344,7 @@ export function MediaView() {
           ) : (
             <>
               <PosterGrid>
-                {paged.items.map(item => (
+                {visible.map(item => (
                   <OwnerCard
                     key={item.id}
                     item={item}
@@ -294,7 +356,7 @@ export function MediaView() {
                   />
                 ))}
               </PosterGrid>
-              <PagerBar page={paged.page} pages={paged.pages} onChange={setPage} />
+              <LoadMore shown={visible.length} total={shown.length} onMore={() => setShownCount(n => n + PUBLIC_SHELF_PAGE_SIZE)} />
             </>
           )}
         </Inner>

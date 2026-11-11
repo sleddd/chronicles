@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { PublicTemplate } from '../components/templates/PublicTemplate.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
-import { PagerBar } from '../components/molecules/PagerBar.js';
+import { LoadMore } from '../components/molecules/LoadMore.js';
 import { publicShelf as publicShelfApi, type PublicShelfPage } from '../services/api.js';
 
 /* Someone's public shelf, opened from its link: the title, how many items,
-   and the posters 24 a page — covers, stars and the Shelf status, nothing to
-   press. Always the light theme (PublicTemplate). One request per page; the
-   server caches each for a minute. No sign-in, no stores. */
+   and the posters — covers, stars and the Shelf status, nothing to press —
+   24 at a time, the next 24 fetched as the foot scrolls into view. Always the
+   light theme (PublicTemplate). One request per page; the server caches each
+   for a minute. No sign-in, no stores. */
 
 const Title = styled.h1`
   font-family: var(--font-display);
@@ -61,23 +62,30 @@ function useNoIndex(title: string | null) {
 
 export function PublicShelfView() {
   const { token = '' } = useParams<{ token: string }>();
-  const [params, setParams] = useSearchParams();
-  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
-  const [state, setState] = useState<{ status: 'loading' } | { status: 'error' } | { status: 'done'; data: PublicShelfPage }>({ status: 'loading' });
+  const [state, setState] = useState<{ status: 'loading' } | { status: 'error' } | { status: 'done'; data: PublicShelfPage; items: PublicShelfPage['items']; loadingMore: boolean }>({ status: 'loading' });
   useNoIndex(state.status === 'done' ? state.data.title : null);
+  // The observer can fire twice before React re-renders: one request at a time
+  const inFlight = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    inFlight.current = false;
     setState({ status: 'loading' });
-    publicShelfApi.getPage(token, page)
-      .then(data => { if (!cancelled) setState({ status: 'done', data }); })
+    publicShelfApi.getPage(token, 1)
+      .then(data => { if (!cancelled) setState({ status: 'done', data, items: data.items, loadingMore: false }); })
       .catch(() => { if (!cancelled) setState({ status: 'error' }); });
     return () => { cancelled = true; };
-  }, [token, page]);
+  }, [token]);
 
-  const goTo = (next: number) => {
-    setParams(next <= 1 ? {} : { page: String(next) });
-    window.scrollTo({ top: 0 });
+  const loadMore = () => {
+    if (state.status !== 'done' || inFlight.current || state.data.page >= state.data.pages) return;
+    const next = state.data.page + 1;
+    inFlight.current = true;
+    setState({ ...state, loadingMore: true });
+    publicShelfApi.getPage(token, next)
+      .then(data => setState(s => (s.status === 'done' ? { status: 'done', data, items: [...s.items, ...data.items], loadingMore: false } : s)))
+      .catch(() => setState(s => (s.status === 'done' ? { ...s, loadingMore: false } : s)))
+      .finally(() => { inFlight.current = false; });
   };
 
   return (
@@ -93,16 +101,16 @@ export function PublicShelfView() {
           ) : (
             <>
               <PosterGrid>
-                {state.data.items.map((item, i) => (
+                {state.items.map((item, i) => (
                   <MediaPosterCard
-                    key={`${state.data.page}-${i}`}
+                    key={i}
                     readOnly
                     item={{ title: item.title, type: item.type, creator: item.creator, year: item.year, rating: item.rating, shelf: item.shelf }}
                     coverSrc={item.cover ?? null}
                   />
                 ))}
               </PosterGrid>
-              <PagerBar page={state.data.page} pages={state.data.pages} onChange={goTo} />
+              <LoadMore shown={state.items.length} total={state.data.total} hasMore={state.data.page < state.data.pages} loading={state.loadingMore} onMore={loadMore} />
             </>
           )}
         </>

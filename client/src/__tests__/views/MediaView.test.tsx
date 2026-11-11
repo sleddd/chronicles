@@ -41,15 +41,16 @@ describe('MediaView', () => {
     state.decryptedEntries = [entry(1, {}), entry(2, { [ON_PUBLIC_SHELF]: true })];
   });
 
-  it('shows 24 cards a page with the pager, and a filter returns to page 1', () => {
+  it('shows 24 cards, more on Show more, and a filter starts over from the top', () => {
     state.decryptedEntries = Array.from({ length: 30 }, (_, i) => entry(i + 1, {}));
     renderWithTheme(<MediaView />);
     expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(24);
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(6);
+    expect(screen.getByText('Showing 24 of 30')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(30);
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'title' } });
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(24);
   });
 
   it('with no public shelf yet, the bookmark opens the confirmation and saves nothing', () => {
