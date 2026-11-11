@@ -144,6 +144,39 @@ export const createShareSchema = z.object({
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
+// Public shelf — the media items a user bookmarks for one public page, stored
+// as plaintext by the user's choice (like a share link). Only what the page
+// shows is accepted: zod's default strip drops notes, progress, genre, the
+// entry id or anything else a client sends. Covers are JPEG data URLs only
+// (never SVG), one at most `PUBLIC_SHELF_COVER_MAX` chars; the list is served
+// `PUBLIC_SHELF_PAGE_SIZE` items a page.
+export const PUBLIC_SHELF_ITEMS_MAX = 1000;  // a sanity bound for the array — the per-account storage cap is the real limit
+export const PUBLIC_SHELF_PAGE_SIZE = 24;
+export const PUBLIC_SHELF_TITLE_MAX = 200;
+export const PUBLIC_SHELF_COVER_MAX = 120_000;
+export const PUBLIC_SHELF_TITLE_DEFAULT = 'My shelf';
+// Linear: one base64 class, then up to two '=' of padding
+const PUBLIC_SHELF_COVER = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
+
+export const publicShelfItemSchema = z.object({
+  title: z.string().trim().min(1, 'An item needs a title').max(200),
+  creator: z.string().trim().max(200).default(''),
+  year: z.string().trim().max(12).default(''),
+  type: z.enum(['book', 'movie', 'tv', 'music']),
+  rating: z.number().min(0).max(5).refine(r => Number.isInteger(r * 2), 'Rating must be in halves'),
+  /** The Shelf status (Reading / Want to / Finished / Paused / Didn’t finish), not the feature */
+  shelf: z.enum(['current', 'want', 'done', 'paused', 'dnf', '']),
+  cover: z.string().max(PUBLIC_SHELF_COVER_MAX, 'Cover too large').regex(PUBLIC_SHELF_COVER, 'Cover must be a JPEG').optional(),
+});
+
+export const putPublicShelfSchema = z.object({
+  title: z.string().trim().min(1, 'A title is required').max(PUBLIC_SHELF_TITLE_MAX),
+  items: z.array(publicShelfItemSchema).max(PUBLIC_SHELF_ITEMS_MAX, 'Too many items'),
+});
+
+export type PublicShelfItem = z.infer<typeof publicShelfItemSchema>;
+export type PutPublicShelf = z.infer<typeof putPublicShelfSchema>;
+
 // Entries are always end-to-end encrypted: the server never accepts plaintext
 // content or metadata (the client also refuses to display plaintext posts).
 // Strict base64 (the encoding the client writes). A ciphertext holds at least

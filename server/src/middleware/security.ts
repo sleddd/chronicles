@@ -53,6 +53,9 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // entries and settings — keep them out of the browser's disk cache, where they
   // would outlive sign-out on a shared computer. Routes may override (ICS feed).
   if (req.path?.toLowerCase().startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
+  // Public share and public shelf pages open without signing in; keep search
+  // engines from indexing them (index.html says index, follow for the rest)
+  if (/^\/(share|public-shelf)\//i.test(req.path ?? '')) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   // Prevent XSS from stealing in-memory key
   // This runs on every response, including the SPA (index.html and the built
   // assets from client/dist, served after this middleware), so the CSP below

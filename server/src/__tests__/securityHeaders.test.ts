@@ -12,6 +12,17 @@ function createMockRes() {
 }
 
 describe('securityHeaders middleware', () => {
+  it('tells search engines not to index public share and public shelf pages, and nothing else', () => {
+    for (const path of ['/share/abc', '/public-shelf/abc123']) {
+      const res = createMockRes() as any;
+      securityHeaders({ path } as any, res, vi.fn());
+      expect(res.headers['X-Robots-Tag']).toBe('noindex, nofollow');
+    }
+    const res = createMockRes() as any;
+    securityHeaders({ path: '/media' } as any, res, vi.fn());
+    expect(res.headers['X-Robots-Tag']).toBeUndefined();
+  });
+
   it('sets Content-Security-Policy header', () => {
     const req = {} as any;
     const res = createMockRes() as any;

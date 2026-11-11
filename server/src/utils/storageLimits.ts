@@ -15,6 +15,9 @@ export const ENTRY_STORAGE_LIMIT_BYTES = mb('ENTRY_STORAGE_LIMIT_MB', 200);
 /** Encrypted finance payloads, all tables of one account */
 export const FINANCE_STORAGE_LIMIT_BYTES = mb('FINANCE_STORAGE_LIMIT_MB', 50);
 
+/** One account's public shelf (plaintext items with small JPEG covers) */
+export const PUBLIC_SHELF_STORAGE_LIMIT_BYTES = mb('PUBLIC_SHELF_LIMIT_MB', 6);
+
 /**
  * Each stored row counts this much on top of its ciphertext toward the caps,
  * so the caps also bound how many rows an account can make (tiny rows used to

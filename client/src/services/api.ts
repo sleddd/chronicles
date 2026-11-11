@@ -3,7 +3,7 @@
  * Always sends X-Requested-With header for CSRF protection on cookie-based auth
  */
 
-import type { CrisisRating, RiskKind } from '@shared/validation/schemas.js';
+import type { CrisisRating, RiskKind, PublicShelfItem, PutPublicShelf } from '@shared/validation/schemas.js';
 import { entryCacheAvailable, readCache, replaceCache, applyToCache, type WireEntry } from './entryCache.js';
 import { recordCipher } from './recordCipher.js';
 import { sealSetting } from './settingCipher.js';
@@ -845,6 +845,7 @@ export interface ShareRecord {
 }
 
 /** Share tokens are base64url (24 random bytes today). */
+/** The shape of a share or public-shelf token (base64url), checked before it goes into a path */
 const SHARE_TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 
 export const shares = {
@@ -866,6 +867,37 @@ export const shares = {
   /** Revoke a share (protected) */
   revoke: (token: string) =>
     request<{ success: boolean }>(`/shares/${token}`, { method: 'DELETE' }),
+};
+
+/* ── Public shelf: the media items bookmarked for one public page (plaintext by the user's choice) ── */
+
+export interface OwnedPublicShelf {
+  token: string;
+  title: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicShelfPage {
+  title: string;
+  items: PublicShelfItem[];
+  page: number;
+  pages: number;
+  total: number;
+  updatedAt: string;
+}
+
+export const publicShelf = {
+  /** One page of a public shelf — no sign-in */
+  getPage: (token: string, page = 1) =>
+    SHARE_TOKEN.test(token)
+      ? request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?page=${Math.max(1, Math.floor(page) || 1)}`)
+      : Promise.reject(new Error('Invalid public shelf link')),
+  mine: () => request<{ publicShelf: OwnedPublicShelf | null }>('/public-shelf'),
+  put: (data: PutPublicShelf) => request<OwnedPublicShelf>('/public-shelf', { method: 'PUT', body: data }),
+  reset: () => request<OwnedPublicShelf>('/public-shelf/reset', { method: 'POST' }),
+  remove: () => request<{ success: boolean }>('/public-shelf', { method: 'DELETE' }),
 };
 
 // =============================================================================
@@ -900,7 +932,7 @@ export const calendar = {
 };
 
 export { ApiError };
-export default { auth, entries, topics, settings, sessions, doses, finance, shares, calendar, aiChat, analytics };
+export default { auth, entries, topics, settings, sessions, doses, finance, shares, publicShelf, calendar, aiChat, analytics };
 
 /**
  * How long to wait before retrying a failed initial load: the server's

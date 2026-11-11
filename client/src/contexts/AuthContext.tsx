@@ -211,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear in-memory stores
     try {
       const { useEntriesStore } = await import('../stores/entriesStore.js');
+      const { usePublicShelfStore } = await import('../stores/publicShelfStore.js');
       const { useUIStore } = await import('../stores/uiStore.js');
       const { resetCalendarSyncSession } = await import('../services/calendarSync.js');
       const { setAiConfig } = await import('../services/aiAssistant.js');
@@ -223,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       useEntriesStore.getState().clearAll();
       useUIStore.getState().clearSearch();
       useUIStore.getState().clearPrivateState();
+      usePublicShelfStore.getState().reset();
       resetCalendarSyncSession();
     } catch {
       // Non-critical — stores may not be loaded

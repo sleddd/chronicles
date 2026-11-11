@@ -59,6 +59,7 @@ export function HealthPrivacyView() {
         <li>Your consent record: when you agreed, which versions of this policy and our terms, and how you want security notices sent. If you choose mailed notices, your postal address, used only for that.</li>
         <li>Your Apple Calendar feed, if you turn it on. The titles, times and locations of your event and meeting entries are stored readable so your calendar app can fetch them through your private link. Descriptions are included only if you turn on Include event details.</li>
         <li>Entries you choose to share. A shared entry is stored readable so anyone with the link can open it, until it expires or you revoke it. Photos and drawings are never included.</li>
+        <li>Your public shelf, if you turn it on. The covers, titles, makers, years, types, ratings and shelves of the media items you bookmark for it are stored readable so anyone with the link can see them, until you take an item off or turn the shelf off, which deletes it. Notes, progress and your own photos are never included.</li>
         <li>If you haven’t opened Chronicles since our October 2026 update: medication dose times with their taken or skipped status, and the names and icons of your topics. They move inside your encryption the next time you open the app.</li>
         <li>Whether you turned on the In-App AI chat and confirmed you are 18 or older, with the date.</li>
       </ul>
@@ -155,7 +156,7 @@ export function HealthPrivacyView() {
       <h2>How long we keep it</h2>
       <p>
         We keep your data while your account is open. Sessions expire after 7 days and are purged the following day.
-        Share links stop working when they expire and are then purged. Our database host’s automatic backups are kept
+        Share links stop working when they expire and are then purged. A public shelf is deleted the moment you turn it off. Our database host’s automatic backups are kept
         for up to {D.backupDays} days. Security logs,
         which record sign-in events with an IP address, are kept only in our host’s log stream, which deletes them
         automatically on a rolling basis. The counts of when the AI chat showed crisis resources or paused for a likely

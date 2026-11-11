@@ -13,7 +13,8 @@ import { BETA_DETAILS } from '@shared/legal/index.js';
    white text and pills),
    and the privacy band re-pins them dark (`DarkBand`). */
 
-const LIGHT = `
+/** The light theme's tokens, pinned on a page root — the landing page and the public shelf use them */
+export const LIGHT_TOKENS = `
   --bg-app: #f4f5f7;
   --bg-panel: #fbfbfc;
   --bg-surface: #fbfbfc;
@@ -97,7 +98,7 @@ export const DarkBand = styled.section`
 `;
 
 const Page = styled.div`
-  ${LIGHT}
+  ${LIGHT_TOKENS}
   min-height: 100vh;
   background: var(--bg-app);
   color: var(--text-secondary);

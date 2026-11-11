@@ -14,6 +14,8 @@ import topicsRoutes from './routes/topics.js';
 import settingsRoutes from './routes/settings.js';
 import sessionsRoutes from './routes/sessions.js';
 import sharesRoutes from './routes/shares.js';
+import publicShelfRoutes from './routes/publicShelf.js';
+import { initPublicShelvesTable } from './db/publicShelfQueries.js';
 import dosesRoutes from './routes/doses.js';
 import financeRoutes from './routes/finance.js';
 import calendarRoutes from './routes/calendar.js';
@@ -106,6 +108,9 @@ app.use(cookieParser());
 // (and the per-account limit) checks out, so no one signed out can make the
 // server buffer 5 MB bodies. Everything else stays at 1mb.
 app.use('/api/entries', authMiddleware, apiLimiter, writeGate, express.json({ limit: '5mb' }), entriesRoutes);
+// The public shelf's PUT carries up to 1,000 items with small JPEG covers:
+// its own 8 MB parser, mounted inside the route after the session check
+app.use('/api/public-shelf', publicShelfRoutes); // public GET by token; the rest use authMiddleware inline
 app.use(express.json({ limit: '1mb' }));
 
 // Health check
@@ -162,6 +167,7 @@ initSharesTable()
   .then(() => purgeDeadShares())
   .then(count => { if (count > 0) console.log(`Deleted ${count} revoked/expired share(s)`); })
   .catch(err => console.error('Failed to init shares table:', err));
+initPublicShelvesTable().catch(err => console.error('Failed to init public shelves table:', err));
 initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err));
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err));
 initConsentTable().catch(err => console.error('Failed to init consent table:', err));

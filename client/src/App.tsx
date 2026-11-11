@@ -12,6 +12,8 @@ import { BugReportView } from './views/BugReportView.js';
 import { NotFoundView } from './views/NotFoundView.js';
 import { MedHistoryView } from './views/MedHistoryView.js';
 import { MediaView } from './views/MediaView.js';
+import { PublicShelfView } from './views/PublicShelfView.js';
+import { usePublicShelfSync } from './hooks/usePublicShelfSync.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
@@ -401,9 +403,18 @@ function deriveAccentScale(base: string): Record<string, string> {
 }
 
 /** The landing page, sign-in screens, shares and legal pages — no chat or notice banner there */
-const PUBLIC_PREFIXES = ['/login', '/sign-up', '/register', '/recover', '/share', '/health-privacy', '/terms', '/report-a-bug'];
+const PUBLIC_PREFIXES = ['/login', '/sign-up', '/register', '/recover', '/share', '/public-shelf', '/health-privacy', '/terms', '/report-a-bug'];
 function isPublicPage(pathname: string): boolean {
   return pathname === '/' || PUBLIC_PREFIXES.some(p => pathname.startsWith(p));
+}
+
+/** Keeps the owner's public shelf in step with the journal — signed in, unlocked, not on a public page */
+function PublicShelfSync() {
+  const { isAuthenticated } = useAuth();
+  const { isUnlocked } = useEncryption();
+  const { pathname } = useLocation();
+  usePublicShelfSync(isAuthenticated && isUnlocked && !isPublicPage(pathname));
+  return null;
 }
 
 /** The floating AI chat — only for a signed-in, unlocked journal, never on public pages. */
@@ -573,6 +584,7 @@ export function App() {
               <Route path="/register" element={<Navigate to="/sign-up" replace />} />
               <Route path="/recover" element={<RecoverView />} />
               <Route path="/share/:token" element={<SharedEntryView />} />
+              <Route path="/public-shelf/:token" element={<PublicShelfView />} />
               <Route path="/health-privacy" element={<HealthPrivacyView />} />
               <Route path="/terms" element={<TermsView />} />
               <Route path="/report-a-bug" element={<BugReportView />} />
@@ -627,6 +639,7 @@ export function App() {
               <Route path="*" element={<NotFoundView />} />
             </Routes>
             <ChatGate />
+            <PublicShelfSync />
             <TimeGate />
             <WallpaperGate />
             <NoticeGate />

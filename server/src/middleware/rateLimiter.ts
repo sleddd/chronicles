@@ -85,6 +85,21 @@ export const icsFeedLimiter = rateLimit({
 });
 
 /**
+ * Public shelf page lookups — a shelf is meant to be opened by many people
+ * and each page of it is one request, so this is far roomier than the share
+ * limiter (a token is 192 random bits; guessing one isn't the concern). The
+ * route also answers repeat visits from cache (public, max-age=60 + ETag).
+ */
+export const publicShelfLimiter = rateLimit({
+  store: sharedRateLimitStore('public-shelf'),
+  windowMs: 15 * 60 * 1000,
+  max: 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+
+/**
  * Share lookup rate limiter — public share token lookups
  * 30 requests per 15-minute window per IP to prevent brute-force
  */

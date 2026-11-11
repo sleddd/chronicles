@@ -25,6 +25,7 @@ import { AiSettings } from '../components/organisms/AiSettings.js';
 import { DailyLogImport } from '../components/organisms/DailyLogImport.js';
 import { TrainingImport } from '../components/organisms/TrainingImport.js';
 import { MediaMigration } from '../components/organisms/MediaMigration.js';
+import { PublicShelfSettingsRow } from '../components/organisms/PublicShelfSettingsRow.js';
 import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
@@ -1382,6 +1383,7 @@ export function SettingsView() {
           }
         />
         {exportAllResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: exportAllResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{exportAllResult}</div>}
+        <PublicShelfSettingsRow />
         <SettingsRow
           title="Default Topics"
           description="Create default journal topics if missing"

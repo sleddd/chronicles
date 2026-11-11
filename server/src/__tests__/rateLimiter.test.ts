@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { authLimiter, strictLimiter, apiLimiter, shareLimiter } from '../middleware/rateLimiter.js';
+import { authLimiter, strictLimiter, apiLimiter, shareLimiter, publicShelfLimiter } from '../middleware/rateLimiter.js';
 
 describe('rateLimiter exports', () => {
   it('authLimiter exists and is a function', () => {
@@ -15,6 +15,11 @@ describe('rateLimiter exports', () => {
   it('apiLimiter exists and is a function', () => {
     expect(apiLimiter).toBeDefined();
     expect(typeof apiLimiter).toBe('function');
+  });
+
+  it('publicShelfLimiter exists and is its own limiter', () => {
+    expect(typeof publicShelfLimiter).toBe('function');
+    expect(publicShelfLimiter).not.toBe(shareLimiter);
   });
 
   it('shareLimiter exists and is a function', () => {

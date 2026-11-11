@@ -4,32 +4,35 @@ import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
-import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
 import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { FilterPick } from '../components/molecules/FilterPick.js';
-import { StarRating } from '../components/molecules/StarRating.js';
-import { ProgressSlider } from '../components/molecules/ProgressSlider.js';
+import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
+import { PagerBar } from '../components/molecules/PagerBar.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { useDecryptedImage } from '../hooks/useDecryptedImage.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
-import { glassCard, glassControl, onPhoto } from '../styles/wallpaper.js';
+import { onPhoto } from '../styles/wallpaper.js';
+import { ON_PUBLIC_SHELF, isOnPublicShelf, pageOf } from '../services/publicShelf.js';
 import {
-  EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds, mediaSubtitle,
-  mediaTypeInfo, shelfLabel, shelfFilterLabel, formatRating, progressLabel, showsProgress,
+  EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds,
+  mediaTypeInfo, shelfFilterLabel, formatRating,
   type MediaFilter, type MediaItem, type MediaShelf, type MediaSort, type MediaType,
 } from '../utils/media.js';
 
-/* The media journal: books, movies, TV shows and music as cards on shelves —
-   cover, title, who made it, the stars (tap to re-rate) and the shelf (a
-   picker). Search, Type / Shelf / Rating filters and Sort; tapping the cover
-   or title opens the entry in the journal. */
+/* The media journal: books, movies, TV shows and music as posters on shelves —
+   cover, the stars (tap to re-rate), the Shelf status (a picker) and, while
+   something is under way, its progress. Search, Type / Shelf / Rating filters
+   and Sort; 24 cards a page. A bookmark on each card puts it on the one
+   public shelf (PublicShelfControl); tapping a cover opens the entry. */
 
 const VIEW_KEY = 'media-view-v1';
 
@@ -109,178 +112,50 @@ const Count = styled.span`
   ${onPhoto}
 `;
 
-/* A poster grid: five across on desktop, fewer as the screen narrows */
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 24px;
-  margin-top: 28px;
-  @media (max-width: 1100px) { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
-  @media (max-width: 860px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  @media (max-width: 560px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-`;
-
-/* A shelf card: a lifted panel holding the cover, the stars and the shelf */
-const Card = styled.article`
-  container-type: inline-size;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg);
-  background: var(--bg-panel);
-  ${glassCard}
-`;
-
-/* The cover fills the card's width, 2:3; with none, the title is written on the tile */
-const CoverBtn = styled.button`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  padding: 14px 12px;
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-tile);
-  color: var(--text-muted);
-  text-align: center;
-  cursor: pointer;
-  img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-  &:hover { border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-`;
-
-/* The title on a cover-less tile */
-const TileTitle = styled.span`
-  font-family: var(--font-display);
-  font-size: clamp(15px, 1.6cqi, 19px);
-  font-weight: 300;
-  line-height: 1.25;
-  color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-`;
-
-const TileSub = styled.span`
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-`;
-
-/* How far through it: the rule under the cover, dragged to update; the figure on its right */
-const ProgressRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 2px 2px 0;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-`;
-
-/* Stars over the shelf pill, centred under the cover, with air around them */
-const Foot = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 8px 0 6px;
-`;
-
-/* The shelf as a small outlined pill: "Reading ⌄", the select invisible over it */
-const ShelfPill = styled.label<{ $set: boolean }>`
-  position: relative;
+/* The public-shelf bookmark over a cover's corner: accent and solid while the
+   item is on the shelf, a grey outline otherwise, on a soft disc so it reads
+   over any cover */
+const Bookmark = styled.button<{ $on: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 28px;
   height: 28px;
-  max-width: 100%;
-  padding: 0 8px 0 10px;
-  & > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-pill, var(--border-card))')};
-  border-radius: 999px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-soft)')};
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
+  color: ${({ $on }) => ($on ? 'var(--color-accent)' : 'var(--text-muted)')};
   cursor: pointer;
-  &:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  & > span:last-of-type { display: inline-flex; }
-  select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
-  option { color: var(--text-primary); background: var(--bg-surface); }
-  ${glassControl}
+  svg { fill: ${({ $on }) => ($on ? 'currentColor' : 'none')}; }
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 /* ── Pieces ── */
 
-function CardCover({ item, onOpen }: { item: MediaItem; onOpen: () => void }) {
+/** The owner's card: resolves the entry's own photo (else the found cover) and passes the rest through */
+function OwnerCard({ item, onOpen, onRate, onShelve, onProgress, onBookmark }: {
+  item: MediaItem; onOpen: () => void; onRate: (r: number) => void; onShelve: (s: MediaShelf) => void;
+  onProgress: (p: number) => void; onBookmark: () => void;
+}) {
   const img = item.image;
   const { url } = useDecryptedImage(img?.key ?? null, img?.iv ?? null, img?.mimeType ?? null);
-  const src = url ?? item.cover;
-  const sub = mediaSubtitle(item);
-  const tip = sub ? `${item.title} · ${sub}` : item.title;
+  const onShelf = isOnPublicShelf(item);
   return (
-    <CoverBtn type="button" onClick={onOpen} aria-label={`Open ${item.title}`} title={tip}>
-      {src ? (
-        <img src={src} alt="" style={img && url ? { objectPosition: focusPosition(img) } : undefined} />
-      ) : (
-        <>
-          <MaterialIcon $size={28} aria-hidden="true">{mediaTypeInfo(item.type).glyph}</MaterialIcon>
-          <TileTitle>{item.title}</TileTitle>
-          {sub && <TileSub>{sub}</TileSub>}
-        </>
+    <MediaPosterCard
+      item={item}
+      coverSrc={url ?? item.cover ?? null}
+      coverStyle={img && url ? { objectPosition: focusPosition(img) } : undefined}
+      onOpen={onOpen} onRate={onRate} onShelve={onShelve} onProgress={onProgress}
+      corner={(
+        <Bookmark type="button" $on={onShelf} aria-pressed={onShelf}
+          aria-label={onShelf ? `Take ${item.title} off your public shelf` : `Add ${item.title} to your public shelf`}
+          title={onShelf ? 'On your public shelf' : 'Add to your public shelf'}
+          onClick={onBookmark}>
+          <Icon name="bookmark" size={15} strokeWidth={2} />
+        </Bookmark>
       )}
-    </CoverBtn>
-  );
-}
-
-function CardProgress({ item, onProgress }: { item: MediaItem; onProgress: (p: number) => void }) {
-  // The rule follows the drag at once; the entry is saved when the drag (or key press) ends
-  const [shown, setShown] = useState(item.progress);
-  useEffect(() => { setShown(item.progress); }, [item.progress]);
-  return (
-    <ProgressRow>
-      <ProgressSlider value={shown} onChange={setShown} onCommit={p => { if (p !== item.progress) onProgress(p); }}
-        label={`Progress for ${item.title}`} valueText={progressLabel(shown, item.type)} />
-      <span>{progressLabel(shown, item.type)}</span>
-    </ProgressRow>
-  );
-}
-
-function MediaCard({ item, onOpen, onRate, onShelve, onProgress }: {
-  item: MediaItem; onOpen: () => void; onRate: (r: number) => void; onShelve: (s: MediaShelf) => void; onProgress: (p: number) => void;
-}) {
-  return (
-    <Card>
-      <CardCover item={item} onOpen={onOpen} />
-      {showsProgress(item) && <CardProgress item={item} onProgress={onProgress} />}
-      <Foot>
-        <StarRating value={item.rating} onChange={onRate} size={18} label={`Rating for ${item.title}`} />
-        <ShelfPill $set={!!item.shelf}>
-          <span>{shelfLabel(item.shelf, item.type)}</span>
-          <span aria-hidden="true"><Icon name="chevron-down" size={13} strokeWidth={2} /></span>
-          <select aria-label={`Shelf for ${item.title}`} value={item.shelf} onChange={e => onShelve(e.target.value as MediaShelf)}>
-            <option value="">No shelf</option>
-            {SHELVES.map(s => <option key={s.value} value={s.value}>{shelfLabel(s.value, item.type)}</option>)}
-          </select>
-        </ShelfPill>
-      </Foot>
-    </Card>
+    />
   );
 }
 
@@ -290,25 +165,53 @@ export function MediaView() {
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
+  const publicShelf = usePublicShelfStore(s => s.publicShelf);
+  const pendingItemId = usePublicShelfStore(s => s.pendingItemId);
+  const setPendingItemId = usePublicShelfStore(s => s.setPendingItemId);
   const openInJournal = useOpenInJournal();
   const newEntry = useNewEntryInJournal();
   const saveFields = useSaveFields();
 
   const [saved, setSaved] = useState<Saved>(loadSaved);
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [panelOpen, setPanelOpen] = useState(false);
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ } }, [saved]);
+  // A new search, filter or sort starts at the first page
+  useEffect(() => { setPage(1); }, [query, saved.type, saved.shelf, saved.minRating, saved.sort]);
 
   const topicIds = useMemo(() => mediaTopicIds(allTopics), [allTopics]);
   const topicId = topicIds[0];
   const items = useMemo(() => mediaItems(entries, topicIds, stripHtml), [entries, topicIds]);
   const filter: MediaFilter = { ...EMPTY_MEDIA_FILTER, type: saved.type, shelf: saved.shelf, minRating: saved.minRating, query };
   const shown = useMemo(() => sortMedia(filterMedia(items, filter), saved.sort), [items, filter.type, filter.shelf, filter.minRating, query, saved.sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  const paged = useMemo(() => pageOf(shown, page), [shown, page]);
+  const onShelfCount = useMemo(() => items.filter(isOnPublicShelf).length, [items]);
+  const pendingItem = useMemo(() => items.find(i => i.id === pendingItemId) ?? null, [items, pendingItemId]);
 
   const patch = useCallback(async (item: MediaItem, fields: Record<string, unknown>) => {
     const entry = useEntriesStore.getState().decryptedEntries.find(e => e.id === item.id);
     if (!entry) return;
     await saveFields(entry, { ...item.fields, ...fields });
   }, [saveFields]);
+
+  // The bookmark: off the shelf → on it (the first one asks, in the panel); on → off
+  const toggleBookmark = useCallback((item: MediaItem) => {
+    if (isOnPublicShelf(item)) { void patch(item, { [ON_PUBLIC_SHELF]: false }); return; }
+    if (publicShelf) { void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
+    setPendingItemId(item.id);
+    setPanelOpen(true);
+  }, [patch, publicShelf, setPendingItemId]);
+
+  const setPanel = useCallback((open: boolean) => {
+    setPanelOpen(open);
+    if (!open) setPendingItemId(null);
+  }, [setPendingItemId]);
+
+  const turnedOn = useCallback((item: MediaItem | null) => {
+    if (item) void patch(item, { [ON_PUBLIC_SHELF]: true });
+    setPendingItemId(null);
+  }, [patch, setPendingItemId]);
 
   if (needsUnlock) return (
     <>
@@ -367,6 +270,7 @@ export function MediaView() {
                   {MEDIA_SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </FilterPick>
+              <PublicShelfControl count={onShelfCount} open={panelOpen} onOpenChange={setPanel} pendingItem={pendingItem} onTurnedOn={turnedOn} />
               <Count>{filtering ? `${shown.length} of ${items.length}` : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</Count>
             </Tools>
           )}
@@ -376,18 +280,22 @@ export function MediaView() {
           ) : shown.length === 0 ? (
             <EmptyState message="Nothing matches those filters." />
           ) : (
-            <Grid>
-              {shown.map(item => (
-                <MediaCard
-                  key={item.id}
-                  item={item}
-                  onOpen={() => openInJournal(item.id)}
-                  onRate={r => { void patch(item, { rating: r }); }}
-                  onShelve={s => { void patch(item, { shelf: s }); }}
-                  onProgress={p => { void patch(item, { progress: p }); }}
-                />
-              ))}
-            </Grid>
+            <>
+              <PosterGrid>
+                {paged.items.map(item => (
+                  <OwnerCard
+                    key={item.id}
+                    item={item}
+                    onOpen={() => openInJournal(item.id)}
+                    onRate={r => { void patch(item, { rating: r }); }}
+                    onShelve={s => { void patch(item, { shelf: s }); }}
+                    onProgress={p => { void patch(item, { progress: p }); }}
+                    onBookmark={() => toggleBookmark(item)}
+                  />
+                ))}
+              </PosterGrid>
+              <PagerBar page={paged.page} pages={paged.pages} onChange={setPage} />
+            </>
           )}
         </Inner>
       </Page>
