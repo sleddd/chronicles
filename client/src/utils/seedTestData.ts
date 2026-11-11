@@ -6,6 +6,9 @@ import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '.
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { routineLinkKey, SCHEDULE_TOPIC } from './routines.js';
 import { mountaineeringTemplate } from './training.js';
+import { searchCovers, fetchCover } from '../services/coverLookup.js';
+import { ON_PUBLIC_SHELF } from '../services/publicShelf.js';
+import type { MediaShelf, MediaType } from './media.js';
 
 type EncryptPost = (content: string, metadata: Record<string, unknown>) => Promise<{
   id: number;
@@ -158,6 +161,9 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
   try {
     onProgress?.('Creating goals, milestones, tasks and todos...');
     count += await seedPlanning(deps);
+
+    onProgress?.('Filling the media journal...');
+    count += await seedMedia(deps, { covers: false });
 
     onProgress?.('Creating medications...');
 
@@ -641,6 +647,90 @@ async function seedExerciseSchedule(deps: SeedDeps): Promise<number> {
 export async function seedWellnessOnly(deps: SeedDeps): Promise<string> {
   const n = await seedWellness(deps);
   return n ? `Done — added ${n} wellness check-ins.` : 'Every day already has a check-in — nothing added.';
+}
+
+/* ── Media journal ── */
+
+interface SeedMedia {
+  type: MediaType; title: string; creator: string; year: string; genre: string;
+  album?: string; season?: string; rating: number; shelf: MediaShelf; progress?: number; notes?: string;
+  /** Days ago it was added */
+  ago: number; publicShelf?: boolean;
+}
+
+/** A shelf's worth across the four types: finished, under way, saved for later, paused and abandoned */
+export const SEED_MEDIA: SeedMedia[] = [
+  { type: 'book', title: 'Dune', creator: 'Frank Herbert', year: '1965', genre: 'Science fiction', rating: 5, shelf: 'done', progress: 100, ago: 140, publicShelf: true, notes: 'Slow start, then it would not let go. The ecology is the real main character.' },
+  { type: 'book', title: 'Project Hail Mary', creator: 'Andy Weir', year: '2021', genre: 'Science fiction', rating: 4.5, shelf: 'done', progress: 100, ago: 96, publicShelf: true },
+  { type: 'book', title: 'The Remains of the Day', creator: 'Kazuo Ishiguro', year: '1989', genre: 'Literary fiction', rating: 4.5, shelf: 'done', progress: 100, ago: 70, notes: 'Quiet and devastating.' },
+  { type: 'book', title: 'Piranesi', creator: 'Susanna Clarke', year: '2020', genre: 'Fantasy', rating: 4, shelf: 'done', progress: 100, ago: 52, publicShelf: true },
+  { type: 'book', title: 'The Overstory', creator: 'Richard Powers', year: '2018', genre: 'Literary fiction', rating: 0, shelf: 'current', progress: 45, ago: 12, notes: 'Halfway. The Patricia Westerford chapters are the best thing I have read this year.' },
+  { type: 'book', title: 'Braiding Sweetgrass', creator: 'Robin Wall Kimmerer', year: '2013', genre: 'Nonfiction', rating: 0, shelf: 'current', progress: 20, ago: 6 },
+  { type: 'book', title: 'The Name of the Rose', creator: 'Umberto Eco', year: '1980', genre: 'Historical fiction', rating: 0, shelf: 'paused', progress: 30, ago: 60, notes: 'Parked at the long theology debate. Will come back.' },
+  { type: 'book', title: 'Infinite Jest', creator: 'David Foster Wallace', year: '1996', genre: 'Literary fiction', rating: 2, shelf: 'dnf', progress: 15, ago: 200 },
+  { type: 'book', title: 'Tomorrow, and Tomorrow, and Tomorrow', creator: 'Gabrielle Zevin', year: '2022', genre: 'Fiction', rating: 0, shelf: 'want', ago: 3 },
+  { type: 'book', title: 'The Left Hand of Darkness', creator: 'Ursula K. Le Guin', year: '1969', genre: 'Science fiction', rating: 0, shelf: 'want', ago: 9 },
+  { type: 'movie', title: 'Inception', creator: 'Christopher Nolan', year: '2010', genre: 'Science fiction', rating: 4.5, shelf: 'done', progress: 100, ago: 120, publicShelf: true },
+  { type: 'movie', title: 'Everything Everywhere All at Once', creator: 'Daniel Kwan, Daniel Scheinert', year: '2022', genre: 'Comedy drama', rating: 5, shelf: 'done', progress: 100, ago: 80, publicShelf: true, notes: 'Laughed, cried, thought about my mother. Rocks.' },
+  { type: 'movie', title: 'Spirited Away', creator: 'Hayao Miyazaki', year: '2001', genre: 'Animation', rating: 5, shelf: 'done', progress: 100, ago: 45 },
+  { type: 'movie', title: 'Arrival', creator: 'Denis Villeneuve', year: '2016', genre: 'Science fiction', rating: 4, shelf: 'done', progress: 100, ago: 30 },
+  { type: 'movie', title: 'Past Lives', creator: 'Celine Song', year: '2023', genre: 'Drama', rating: 0, shelf: 'want', ago: 2 },
+  { type: 'movie', title: 'The Zone of Interest', creator: 'Jonathan Glazer', year: '2023', genre: 'Drama', rating: 0, shelf: 'want', ago: 14 },
+  { type: 'tv', title: 'Severance', creator: 'Dan Erickson', year: '2022', genre: 'Science fiction', season: 'Season 2', rating: 4.5, shelf: 'current', progress: 60, ago: 10, publicShelf: true, notes: 'Episode 6. Nobody spoil the goats.' },
+  { type: 'tv', title: 'The Bear', creator: 'Christopher Storer', year: '2022', genre: 'Drama', season: 'Season 1', rating: 4.5, shelf: 'done', progress: 100, ago: 75, publicShelf: true },
+  { type: 'tv', title: 'Fleabag', creator: 'Phoebe Waller-Bridge', year: '2016', genre: 'Comedy', season: 'S1–2', rating: 5, shelf: 'done', progress: 100, ago: 160 },
+  { type: 'tv', title: 'Slow Horses', creator: 'Will Smith', year: '2022', genre: 'Spy thriller', season: 'Season 3', rating: 4, shelf: 'paused', progress: 40, ago: 40 },
+  { type: 'tv', title: 'Shōgun', creator: 'Rachel Kondo, Justin Marks', year: '2024', genre: 'Historical drama', rating: 0, shelf: 'want', ago: 5 },
+  { type: 'music', title: 'Blue', creator: 'Joni Mitchell', year: '1971', genre: 'Folk', rating: 5, shelf: 'done', progress: 100, ago: 110, publicShelf: true, notes: 'A River, every November.' },
+  { type: 'music', title: 'Kind of Blue', creator: 'Miles Davis', year: '1959', genre: 'Jazz', rating: 5, shelf: 'done', progress: 100, ago: 90, publicShelf: true },
+  { type: 'music', title: 'Rumours', creator: 'Fleetwood Mac', year: '1977', genre: 'Rock', rating: 4.5, shelf: 'done', progress: 100, ago: 65 },
+  { type: 'music', title: 'Hounds of Love', creator: 'Kate Bush', year: '1985', genre: 'Art pop', rating: 4, shelf: 'current', progress: 50, ago: 8 },
+  { type: 'music', title: 'Both Sides, Now', creator: 'Joni Mitchell', year: '1969', genre: 'Folk', album: 'Clouds', rating: 4.5, shelf: 'done', progress: 100, ago: 20 },
+  { type: 'music', title: 'Chromakopia', creator: 'Tyler, the Creator', year: '2024', genre: 'Hip hop', rating: 0, shelf: 'want', ago: 1 },
+];
+
+/**
+ * The media journal's entries (SEED_MEDIA), each with its type, maker, year,
+ * genre, rating, Shelf status and progress; some bookmarked for the public
+ * shelf. With `covers`, each one's cover is looked up in the fixed catalogues
+ * first (Open Library, iTunes, TVmaze, Wikipedia — the same lookup as Find
+ * cover; a miss or a failed fetch just leaves a title tile). Titles already on
+ * the shelf are skipped, so it can run again.
+ */
+async function seedMedia(deps: SeedDeps, { covers = true } = {}): Promise<number> {
+  await ensureTopic(deps, 'Media', 'media');
+  const have = new Set(
+    useEntriesStore.getState().decryptedEntries
+      .map(e => String((e.metadata as { _customFields?: { mediaTitle?: unknown } })._customFields?.mediaTitle ?? '').toLowerCase())
+      .filter(Boolean),
+  );
+  let n = 0;
+  for (const m of SEED_MEDIA) {
+    if (have.has(m.title.toLowerCase())) continue;
+    let cover: unknown = null;
+    if (covers) {
+      deps.onProgress?.(`Finding a cover for ${m.title}…`);
+      try {
+        const found = await searchCovers(m.type, m.title, m.creator, m.year);
+        if (found[0]) cover = await fetchCover(found[0]);
+      } catch { /* no cover — a title tile */ }
+    }
+    const fields: Record<string, unknown> = {
+      mediaTitle: m.title, mediaType: m.type, creator: m.creator, year: m.year, genre: m.genre,
+      album: m.album ?? '', season: m.season ?? '', rating: m.rating, shelf: m.shelf, progress: m.progress ?? 0,
+      notes: m.notes ?? '', cover,
+    };
+    if (m.publicShelf) fields[ON_PUBLIC_SHELF] = true;
+    await createEntry(deps, m.title, 'Media', fields, { day: dayFromToday(-m.ago) });
+    n++;
+  }
+  return n;
+}
+
+/** Just the media journal — for an account that already has data; covers come from the catalogues */
+export async function seedMediaOnly(deps: SeedDeps): Promise<string> {
+  const n = await seedMedia(deps);
+  return n ? `Done — added ${n} books, films, shows and albums to the Media Journal.` : 'Every seeded title is already on your shelves — nothing added.';
 }
 
 /** Just the exercise schedule (and a training plan if there isn't one) — for an account that already has data */

@@ -7,23 +7,23 @@ import { useSwipe } from '../../../hooks/useSwipe.js';
    dark shot only ever follows the same view's light one (dashboard, then dashboard in dark).
    Screenshots live in src/assets/landing/<key>.jpg (JPEG on purpose: the PWA
    precaches png/svg, and these shouldn't ride along to every signed-in user).
-   A slide whose file is missing is skipped. Sits straight on the teal hero. Advances every 6s; pauses while
+   Every view in dark (`<key>-dark.jpg`); only the dashboard is followed by its light twin. A slide whose file is missing is skipped. Sits straight on the teal hero. Advances every 6s; pauses while
    pointed at or focused, and doesn't advance at all for reduced motion. Swipe sideways, the ‹ › arrows or the arrow keys move it by hand. */
 
 export const SLIDES = [
-  { key: 'dashboard', name: 'Dashboard', caption: 'Your day at a glance' },
-  { key: 'dashboard-dark', name: 'Dashboard', caption: 'Your day at a glance, in dark mode' },
-  { key: 'journal', name: 'Journal', caption: 'Every entry, with fields for each topic' },
-  { key: 'health', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
-  { key: 'reports', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
-  { key: 'meals', name: 'Meals', caption: 'Daily nutrition against your goals' },
-  { key: 'med-history', name: 'Med history', caption: 'What you took this month and how often' },
-  { key: 'tasks', name: 'Tasks', caption: 'Drag tasks from to do to done' },
-  { key: 'calendar', name: 'Calendar', caption: 'Events, deadlines and bills due' },
-  { key: 'kitchen', name: 'Kitchen', caption: 'The week’s menu, linked to your recipes' },
-  { key: 'shopping', name: 'Shopping list', caption: 'Today’s meals and a list to take to the store' },
-  { key: 'finance', name: 'Finance', caption: 'Budget, bills and subscriptions' },
-  { key: 'settings', name: 'Settings', caption: 'Light or dark, and an accent of your own' },
+  { key: 'dashboard-dark', name: 'Dashboard', caption: 'Your day at a glance' },
+  { key: 'dashboard', name: 'Dashboard', caption: 'Your day at a glance, in light mode' },
+  { key: 'journal-dark', name: 'Journal', caption: 'Every entry, with fields for each topic' },
+  { key: 'health-dark', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
+  { key: 'reports-dark', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
+  { key: 'meals-dark', name: 'Meals', caption: 'Daily nutrition against your goals' },
+  { key: 'med-history-dark', name: 'Med history', caption: 'What you took this month and how often' },
+  { key: 'tasks-dark', name: 'Tasks', caption: 'Drag tasks from to do to done' },
+  { key: 'calendar-dark', name: 'Calendar', caption: 'Events, deadlines and bills due' },
+  { key: 'kitchen-dark', name: 'Kitchen', caption: 'The week’s menu, linked to your recipes' },
+  { key: 'shopping-dark', name: 'Shopping list', caption: 'Today’s meals and a list to take to the store' },
+  { key: 'finance-dark', name: 'Finance', caption: 'Budget, bills and subscriptions' },
+  { key: 'settings-dark', name: 'Settings', caption: 'Light or dark, and an accent of your own' },
 ] as const;
 
 const FILES = import.meta.glob<string>('../../../assets/landing/*.jpg', { eager: true, query: '?url', import: 'default' });

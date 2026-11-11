@@ -23,7 +23,7 @@ const SIZES: Record<string, [number, number]> = {
   'health-med-history': [1268, 1300], 'health-reports-symptoms': [1268, 1300], 'health-reports': [1268, 1300],
   'health-exercise': [1268, 1300], 'health-exercise-history': [1268, 1300], 'health-symptoms': [1268, 1300],
   'journal': [1268, 1000], 'kitchen-menu': [1268, 1400], 'kitchen-recipe': [1268, 1400],
-  'kitchen-shopping': [1268, 1400], 'kitchen': [1268, 1400], 'planning-milestones': [1268, 900],
+  'kitchen-shopping': [1268, 1400], 'kitchen': [1268, 1400], 'media': [1268, 855], 'media-public': [1268, 1140], 'planning-milestones': [1268, 900],
   'planning-tasks': [1268, 900], 'planning-todos': [1268, 900], 'planning': [1268, 900], 'topics': [1268, 1000],
 };
 
@@ -114,11 +114,21 @@ interface FeatureShotProps {
   /** One screenshot key, or several for a small slideshow */
   shot: string | string[];
   alt: string | string[];
+  /** Also show the same shots in light after the dark ones (the Dashboard row) */
+  lightToo?: boolean;
 }
 
-export function FeatureShot({ shot, alt }: FeatureShotProps) {
-  const keys = (Array.isArray(shot) ? shot : [shot]).filter(k => FILES[`../../../assets/landing/features/${k}.jpg`]);
-  const alts = Array.isArray(alt) ? alt : [alt];
+export function FeatureShot({ shot, alt, lightToo = false }: FeatureShotProps) {
+  // The dark shots (`<key>-dark`); with `lightToo` the same ones in light after them. A shot with no
+  // dark file (the AI one) shows its light file instead, so a key and its alt always travel together
+  const lightKeys = Array.isArray(shot) ? shot : [shot];
+  const lightAlts = Array.isArray(alt) ? alt : [alt];
+  const has = (k: string) => !!FILES[`../../../assets/landing/features/${k}.jpg`];
+  const darkPairs = lightKeys.map((k, i) => (has(`${k}-dark`) ? [`${k}-dark`, `${lightAlts[i] ?? lightAlts[0]} (dark mode)`] as const : [k, lightAlts[i] ?? lightAlts[0]] as const));
+  const lightPairs = lightToo ? lightKeys.map((k, i) => [k, lightAlts[i] ?? lightAlts[0]] as const) : [];
+  const pairs = [...darkPairs, ...lightPairs].filter(([k]) => has(k));
+  const keys = pairs.map(([k]) => k);
+  const alts = pairs.map(([, a]) => a);
   const [index, setIndex] = useState(0);
   const count = keys.length;
   const go = (i: number) => setIndex(((i % count) + count) % count);
@@ -127,7 +137,7 @@ export function FeatureShot({ shot, alt }: FeatureShotProps) {
 
   if (count === 0) return null;
   const src = (k: string) => FILES[`../../../assets/landing/features/${k}.jpg`];
-  const size = (k: string) => SIZES[k] ?? [1188, 800];
+  const size = (k: string) => SIZES[k] ?? SIZES[k.replace(/-dark$/, '')] ?? [1188, 800];
 
   if (count === 1) {
     const [width, height] = size(keys[0]);

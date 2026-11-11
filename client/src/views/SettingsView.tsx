@@ -41,7 +41,7 @@ import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topi
 import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
 import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
 import { BugReportForm } from '../components/organisms/BugReportForm.js';
-import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly } from '../utils/seedTestData.js';
+import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
@@ -621,6 +621,25 @@ export function SettingsView() {
       setSeedWellnessResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSeedingWellness(false);
+    }
+  };
+
+  const [seedingMedia, setSeedingMedia] = useState(false);
+  const [seedMediaResult, setSeedMediaResult] = useState('');
+  const handleSeedMedia = async () => {
+    setSeedingMedia(true); setSeedMediaResult('');
+    try {
+      const freshTopics = await topicsApi.getAll();
+      setSeedMediaResult(await seedMediaOnly({
+        encryptPost: encryptNewPost,
+        topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
+        addDecryptedEntry,
+        onProgress: (msg) => setSeedMediaResult(msg),
+      }));
+    } catch (err) {
+      setSeedMediaResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingMedia(false);
     }
   };
 
@@ -1439,6 +1458,16 @@ export function SettingsView() {
           }
         />
         {seedScheduleResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedScheduleResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedScheduleResult}</div>}
+        <SettingsRow
+          title="Seed Media"
+          description="Add 27 books, films, shows and albums to the Media Journal — finished, under way, saved, paused and abandoned, rated, some bookmarked for the public shelf — with covers looked up in the usual catalogues. Titles already on your shelves are skipped"
+          action={
+            <ActionButton onClick={() => void handleSeedMedia()} disabled={seedingMedia}>
+              {seedingMedia ? <Spinner size={14} /> : 'Seed Media'}
+            </ActionButton>
+          }
+        />
+        {seedMediaResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedMediaResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedMediaResult}</div>}
         {features.financeEnabled && (
           <>
             <SettingsRow

@@ -144,3 +144,21 @@ describe('nutritionFor', () => {
     expect(nutritionFor('Something new')).toEqual({});
   });
 });
+
+describe('SEED_MEDIA', () => {
+  it('covers every type and Shelf status with unique titles, half-star ratings and sane progress', async () => {
+    const { SEED_MEDIA } = await import('@/utils/seedTestData');
+    const { MEDIA_TYPES, SHELVES } = await import('@/utils/media');
+    for (const t of MEDIA_TYPES) expect(SEED_MEDIA.some(m => m.type === t.value)).toBe(true);
+    for (const s of SHELVES) expect(SEED_MEDIA.some(m => m.shelf === s.value)).toBe(true);
+    expect(new Set(SEED_MEDIA.map(m => m.title.toLowerCase())).size).toBe(SEED_MEDIA.length);
+    for (const m of SEED_MEDIA) {
+      expect(m.rating * 2).toBe(Math.round(m.rating * 2));
+      expect(m.rating).toBeLessThanOrEqual(5);
+      expect(m.progress ?? 0).toBeLessThanOrEqual(100);
+      if (m.shelf === 'done') expect(m.progress).toBe(100);
+      if (m.shelf === 'want') expect(m.progress ?? 0).toBe(0);
+    }
+    expect(SEED_MEDIA.filter(m => m.publicShelf).length).toBeGreaterThanOrEqual(6);
+  });
+});

@@ -35,6 +35,7 @@ const FEATURES: { name: string; tag?: string; body: string; shot: string | strin
   { name: 'Planning', body: 'Goals, milestones, and tasks on Kanban boards or lists. Drag a card to change its status or its order. Tasks roll up into milestones, and milestones into goals.', shot: ['planning-tasks', 'planning-todos', 'planning', 'planning-milestones'], alt: ['Tasks by status with priorities, deadlines and the milestone they roll up to', 'Todos as a list, with done ones struck through', 'The goals board with columns from New to Achieved', 'Milestones on their own board, each under its goal'] },
   { name: 'Calendar', body: 'Day, week, and month views of events, deadlines, goal dates and bills due. Syncs both ways with Google Calendar, with a private feed for Apple Calendar. Only titles, times and locations are synced, never your journal.', shot: ['calendar', 'calendar-week', 'calendar-day'], alt: ['The month calendar with bills, tasks and events on their days', 'The week, one row per day', 'A single day with what’s due'] },
   { name: 'Shopping List, Meal Planning & Recipe Management', body: 'A weekly menu and recipes with checkable ingredients. One tap turns the menu into a shopping list. Check it off from your phone while you shop.', shot: ['kitchen', 'kitchen-recipe', 'kitchen-shopping', 'kitchen-menu'], alt: ['The kitchen dashboard with today’s meals and the shopping list', 'A recipe with its ingredients and method', 'A shopping list by category, with items ticked off', 'The week’s menu, each meal linked to its recipe'] },
+  { name: 'Media Journal', body: 'Books, movies, TV shows and music on one shelf. Covers and details are found for you, with half-star ratings, how far you are and your notes. Bookmark the ones you want to share and they appear on a public shelf anyone can open from a link.', shot: ['media', 'media-public'], alt: ['The media journal: a row of book covers with how far along each one is, the stars, and the search, shelf and type filters above', 'A public shelf as a visitor sees it, with covers, ratings and what was read or listened to'] },
   { name: 'Budget & Personal Finance Tracking', body: 'Off by default. Tracks a manual budget, bills and subscriptions, savings funds, money goals, and reports. Nothing connects to your bank.', shot: ['finance', 'finance-bills', 'finance-savings'], alt: ['The budget with planned, bills, spending and what’s left by category', 'Bills and subscriptions with what’s due and overdue', 'Savings funds with their targets and entries'] },
   { name: 'In-App AI assistance', tag: 'Optional, your own key', body: 'Estimates calories and nutrients for meals and exercise, and helps with the app. Bring your own key from Anthropic, OpenAI or Amazon Bedrock. It never sees your journal.', shot: 'ai', alt: 'The In-App AI chat offering to estimate a meal’s calories and save it' },
 ];
@@ -441,7 +442,7 @@ export function LandingView() {
       hero={(
         <section aria-labelledby="hero-title">
           <Hero>
-            <H1 id="hero-title">A day planner for people <em>too busy to plan.</em></H1>
+            <H1 id="hero-title">A life dashboard for people <em>too busy to plan.</em></H1>
             <HeroText>
               Zero-knowledge encrypted and quick enough to actually use. Write a single line, and it automatically sorts your
               entries into events, meetings, health, goals, meals, or whatever else you choose.
@@ -486,7 +487,7 @@ export function LandingView() {
                   {tag && <small>{tag}</small>}
                   <p>{body}</p>
                 </div>
-                <div data-reveal style={delay(1.2)}><FeatureShot shot={shot} alt={alt} /></div>
+                <div data-reveal style={delay(1.2)}><FeatureShot shot={shot} alt={alt} lightToo={name === 'Dashboard'} /></div>
               </FeatureRow>
             ))}
           </FeatureRows>
