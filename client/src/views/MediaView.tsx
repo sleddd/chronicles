@@ -390,7 +390,7 @@ export function MediaView() {
               {layout === 'list' ? (
                 <ListBox>
                   {visible.map(item => (
-                    <EntryListCard key={item.id} flush content={item.title} createdAt={item.createdAt} onClick={() => openInJournal(item.id)}
+                    <EntryListCard key={item.id} flush roomy content={item.title} createdAt={item.createdAt} onClick={() => openInJournal(item.id)}
                       preview={[mediaSubtitle(item), item.rating ? `${formatRating(item.rating)} stars` : '', item.shelf ? shelfLabel(item.shelf, item.type) : ''].filter(Boolean).join(' · ')} />
                   ))}
                 </ListBox>
