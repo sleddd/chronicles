@@ -44,7 +44,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string }>`
  *  own (a full-height overflow box), not the element the photo sits in, so the
  *  photo follows that panel's scroll (smaller scrolling boxes — tables, the
  *  menu grid — are ignored). The journal passes false: its title row stays put. */
-export function Wallpaper({ height = 'min(300px, 38vh)', follow = true }: { height?: string; follow?: boolean } = {}) {
+export function Wallpaper({ height = 'min(520px, 60vh)', follow = true }: { height?: string; follow?: boolean } = {}) {
   const id = useUIStore(s => s.wallpaper);
   const paper = wallpaperById(id);
   const src = paper ? wallpaperSrc(paper.id) : '';

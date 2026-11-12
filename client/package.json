@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "fonts:icons": "node scripts/fetch-icon-font.mjs"
+    "fonts:icons": "node scripts/fetch-icon-font.mjs",
+    "wallpapers": "node scripts/build-wallpapers.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

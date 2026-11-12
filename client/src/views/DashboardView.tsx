@@ -2656,7 +2656,7 @@ export function DashboardView() {
   right.push(...cols.right.map(card));
 
   return (
-    <ContentTemplate wallpaperHeight="min(520px, 60vh)">
+    <ContentTemplate>
       <Page>
         <Inner>
           <Head>

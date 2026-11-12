@@ -172,7 +172,7 @@ export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', tit
   return (
     <Page>
       {/* Just the title row and the panels' top bars — the rows and the editor stay solid */}
-      <Wallpaper follow={false} />
+      <Wallpaper height="min(300px, 38vh)" follow={false} />
       <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (

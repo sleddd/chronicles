@@ -57,7 +57,7 @@ const Main = styled.main`
 interface ContentTemplateProps {
   children: ReactNode;
   hideSidebar?: boolean;
-  /** How far down the wallpaper reaches (default: just past the title and tabs) */
+  /** How far down the wallpaper reaches (default: the dashboard's, down behind the top of the content) */
   wallpaperHeight?: string;
 }
 

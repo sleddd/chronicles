@@ -15,10 +15,10 @@ describe('wallpapers', () => {
   });
 
   it('credits each photo to its photographer and links its Unsplash page', () => {
-    const w = wallpaperById('damian-patkowski-T-LfvX-7IVg')!;
-    expect(w.by).toBe('Damian Patkowski');
-    expect(wallpaperLink(w)).toBe('https://unsplash.com/photos/T-LfvX-7IVg?utm_source=chronicles&utm_medium=referral');
-    expect(wallpaperById('damian-patkowski-T-LfvX-7IVg')?.url).toBe('https://unsplash.com/photos/T-LfvX-7IVg');
+    const w = wallpaperById('benjamin-voros-phIFdC6lA4E')!;
+    expect(w.by).toBe('Benjamin Voros');
+    expect(wallpaperLink(w)).toBe('https://unsplash.com/photos/phIFdC6lA4E?utm_source=chronicles&utm_medium=referral');
+    expect(wallpaperById('benjamin-voros-phIFdC6lA4E')?.url).toBe('https://unsplash.com/photos/phIFdC6lA4E');
   });
 
   it('starts on the mountains, keeps None as None, and falls back from a removed photo', () => {
@@ -27,14 +27,14 @@ describe('wallpapers', () => {
     expect(resolveWallpaper(undefined)).toBe(DEFAULT_WALLPAPER);
     expect(resolveWallpaper('none')).toBeNull();
     expect(resolveWallpaper('a-photo-since-removed')).toBe(DEFAULT_WALLPAPER);
-    expect(resolveWallpaper('damian-patkowski-T-LfvX-7IVg')).toBe('damian-patkowski-T-LfvX-7IVg');
+    expect(resolveWallpaper('benjamin-voros-phIFdC6lA4E')).toBe('benjamin-voros-phIFdC6lA4E');
   });
 
   it('remembers the choice per browser, None included', () => {
     localStorage.removeItem('chronicles.wallpaper-v1');
     expect(startingWallpaper()).toBe(DEFAULT_WALLPAPER);
-    rememberWallpaper('damian-patkowski-T-LfvX-7IVg');
-    expect(startingWallpaper()).toBe('damian-patkowski-T-LfvX-7IVg');
+    rememberWallpaper('benjamin-voros-phIFdC6lA4E');
+    expect(startingWallpaper()).toBe('benjamin-voros-phIFdC6lA4E');
     rememberWallpaper(null);
     expect(startingWallpaper()).toBeNull();
   });

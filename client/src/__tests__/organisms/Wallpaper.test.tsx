@@ -17,15 +17,15 @@ describe('Wallpaper', () => {
   });
 
   it('marks the page while a photo shows, and clears it when taken away', () => {
-    act(() => useUIStore.getState().setWallpaper('damian-patkowski-T-LfvX-7IVg'));
+    act(() => useUIStore.getState().setWallpaper('benjamin-voros-phIFdC6lA4E'));
     const { unmount } = renderWithTheme(<MemoryRouter><Wallpaper /></MemoryRouter>);
-    expect(document.documentElement.getAttribute('data-wallpaper')).toBe('damian-patkowski-T-LfvX-7IVg');
+    expect(document.documentElement.getAttribute('data-wallpaper')).toBe('benjamin-voros-phIFdC6lA4E');
     unmount();
     expect(document.documentElement.hasAttribute('data-wallpaper')).toBe(false);
   });
 
   it('scrolls away with the page\'s own scrolling panel, not with a small box', () => {
-    act(() => useUIStore.getState().setWallpaper('damian-patkowski-T-LfvX-7IVg'));
+    act(() => useUIStore.getState().setWallpaper('benjamin-voros-phIFdC6lA4E'));
     const { container } = renderWithTheme(
       <MemoryRouter><div data-testid="host"><Wallpaper /><div data-testid="panel"><div data-testid="table" /></div></div></MemoryRouter>,
     );
@@ -52,8 +52,8 @@ describe('WallpaperPicker', () => {
     const radios = screen.getAllByRole('radio');
     expect(radios[0]).toHaveTextContent('None');
     expect(radios[0]).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getAllByText('Damian Patkowski')[0].closest('a')).toHaveAttribute('href', expect.stringContaining('unsplash.com/photos/T-LfvX-7IVg'));
-    fireEvent.click(screen.getByRole('radio', { name: 'Photo by Damian Patkowski' }));
-    expect(onChange).toHaveBeenCalledWith('damian-patkowski-T-LfvX-7IVg');
+    expect(screen.getAllByText('Benjamin Voros')[0].closest('a')).toHaveAttribute('href', expect.stringContaining('unsplash.com/photos/phIFdC6lA4E'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Photo by Benjamin Voros' }));
+    expect(onChange).toHaveBeenCalledWith('benjamin-voros-phIFdC6lA4E');
   });
 });
