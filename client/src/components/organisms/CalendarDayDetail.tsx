@@ -43,6 +43,8 @@ const DayHeader = styled.div`
   padding: 24px 0 18px;
   border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
+  /* Wide screens: the Add pill keeps clear of the reminders bell in the top-right corner */
+  @media (min-width: 1025px) and (hover: hover) { padding-right: 52px; }
   @media (max-width: 900px) { margin: 0; }
 `;
 

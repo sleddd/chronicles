@@ -307,13 +307,13 @@ const QuadWrapper = styled(CompactWrapper)`
 
 /* Home dashboard: the card is narrower there, so slightly smaller faces keep
    all five on one line — 32px, shrinking with the cell if it's narrower still
-   (17% of the row each, the rest as gaps) */
+   (15.5% of the row each, the rest as gaps, with room for the glyph's overhang) */
 const SmallFacesQuad = styled(QuadWrapper)`
-  &&& ${Faces} { container-type: inline-size; flex-wrap: nowrap; gap: min(16px, 3.75cqi); }
+  &&& ${Faces} { container-type: inline-size; flex-wrap: nowrap; gap: min(16px, 4cqi); }
   &&& ${FaceBtn} {
-    width: min(32px, 17cqi);
-    height: min(32px, 17cqi);
-    & > span { font-size: min(38px, 20.4cqi); }
+    width: min(32px, 15.5cqi);
+    height: min(32px, 15.5cqi);
+    & > span { font-size: min(38px, 18.6cqi); }
   }
 `;
 
@@ -390,7 +390,9 @@ const Quad = styled.div`
     padding: 24px var(--cell-x);
     box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
   }
-  @container (max-width: 480px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
+  /* Two by two down to a narrow card (a dashboard column); stacked only below that */
+  @container (max-width: 560px) { --cell-x: 18px; & > * { padding: 20px var(--cell-x); } }
+  @container (max-width: 360px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
 `;
 
 interface MeterProps {

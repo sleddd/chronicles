@@ -4,17 +4,18 @@
    window is whole months and everything is placed as a fraction of it (0–1),
    so the track can be any width. Dates are YYYY-MM-DD. Pure. */
 
-export type TimelineScale = 'quarter' | 'year' | 'years3';
+export type TimelineScale = 'month' | 'quarter' | 'year' | 'years5';
 
 export const TIMELINE_SCALES: { value: TimelineScale; label: string }[] = [
+  { value: 'month', label: 'Month' },
   { value: 'quarter', label: 'Quarter' },
   { value: 'year', label: 'Year' },
-  { value: 'years3', label: '3 years' },
+  { value: 'years5', label: '5 years' },
 ];
 
-export const SCALE_MONTHS: Record<TimelineScale, number> = { quarter: 3, year: 12, years3: 36 };
+export const SCALE_MONTHS: Record<TimelineScale, number> = { month: 1, quarter: 3, year: 12, years5: 60 };
 /** How far ‹ › move the window, in months */
-export const SCALE_STEP: Record<TimelineScale, number> = { quarter: 1, year: 3, years3: 12 };
+export const SCALE_STEP: Record<TimelineScale, number> = { month: 1, quarter: 1, year: 3, years5: 12 };
 
 const DAY = 86_400_000;
 /* A real calendar day: the text must survive a round trip (Feb 31 rolls over to March) */
@@ -49,9 +50,9 @@ export function timelineWindow(scale: TimelineScale, start: string): TimelineWin
   return { from, to, days: dayNumber(to) - dayNumber(from) };
 }
 
-/** Where the window opens: this month for a quarter, a month back for a year, January for three years */
+/** Where the window opens: this month for a month or a quarter, a month back for a year, January for five years */
 export function defaultStart(scale: TimelineScale, today: string): string {
-  if (scale === 'quarter') return addMonths(today, 0);
+  if (scale === 'month' || scale === 'quarter') return addMonths(today, 0);
   if (scale === 'year') return addMonths(today, -1);
   return `${today.slice(0, 4)}-01-01`;
 }
@@ -59,13 +60,26 @@ export function defaultStart(scale: TimelineScale, today: string): string {
 /** A day's place across the window: 0 at its start, 1 at its end (outside = below 0 / above 1) */
 export const fractionOf = (day: string, w: TimelineWindow): number => (dayNumber(day) - dayNumber(w.from)) / w.days;
 
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export interface TimelineTick { day: string; left: number; width: number; label: string; /** A year starts here */ year: boolean }
 
-/** One column per month (per quarter on the three-year scale), labelled "Oct" — "Jan 2027" where a year starts or the window opens */
+/** One column per month (per half year on the five-year scale), labelled "Oct" — "Jan 2027" where a year starts or the window opens.
+ *  A month's window has a column a week from the 1st: "Nov 1", "8", "15", "22", "29" */
 export function timelineTicks(scale: TimelineScale, w: TimelineWindow): TimelineTick[] {
-  const step = scale === 'years3' ? 3 : 1;
+  if (scale === 'month') {
+    const month = MONTHS[Number(w.from.slice(5, 7)) - 1];
+    const weeks: TimelineTick[] = [];
+    for (let i = 0; i < w.days; i += 7) {
+      const day = addDays(w.from, i);
+      const next = i + 7 < w.days ? addDays(w.from, i + 7) : w.to;
+      weeks.push({ day, left: fractionOf(day, w), width: fractionOf(next, w) - fractionOf(day, w),
+        label: i === 0 ? `${month} 1` : String(Number(day.slice(8, 10))), year: false });
+    }
+    return weeks;
+  }
+  const step = scale === 'years5' ? 6 : 1;
   const ticks: TimelineTick[] = [];
   for (let i = 0; i < SCALE_MONTHS[scale]; i += step) {
     const day = addMonths(w.from, i);
@@ -80,9 +94,10 @@ export function timelineTicks(scale: TimelineScale, w: TimelineWindow): Timeline
   return ticks;
 }
 
-/** "Oct – Dec 2026" / "Nov 2026 – Oct 2027" */
+/** "November 2026" / "Oct – Dec 2026" / "Nov 2026 – Oct 2027" */
 export function windowLabel(w: TimelineWindow): string {
   const last = addDays(w.to, -1);
+  if (w.from.slice(0, 7) === last.slice(0, 7)) return `${FULL_MONTHS[Number(w.from.slice(5, 7)) - 1]} ${w.from.slice(0, 4)}`;
   const a = `${MONTHS[Number(w.from.slice(5, 7)) - 1]}`;
   const b = `${MONTHS[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)}`;
   return w.from.slice(0, 4) === last.slice(0, 4) ? `${a} – ${b}` : `${a} ${w.from.slice(0, 4)} – ${b}`;
@@ -98,8 +113,8 @@ export function barDates(cf: Record<string, unknown> | undefined, createdDay: st
   return { start, end };
 }
 
-/** How long an open bar is drawn: about a sixteenth of the window, two weeks at least */
-export const openBarDays = (w: TimelineWindow): number => Math.max(14, Math.round(w.days / 16));
+/** How long an open bar is drawn: about a sixteenth of the window, two weeks at least (four days on a month) */
+export const openBarDays = (w: TimelineWindow): number => Math.max(w.days <= 31 ? 4 : 14, Math.round(w.days / 16));
 
 export interface BarSpan { left: number; width: number; /** Runs past the window's start / end */ cutLeft: boolean; cutRight: boolean; open: boolean }
 

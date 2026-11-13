@@ -59,6 +59,7 @@ import { useEncryptedSetting } from './hooks/useEncryptedSetting.js';
 import { resolveWallpaper } from './utils/wallpapers.js';
 import { useTimeStore } from './stores/timeStore.js';
 import { RunningTimer } from './components/organisms/RunningTimer.js';
+import { NotificationBell } from './components/organisms/NotificationBell.js';
 
 /* The public home page is its own chunk, loaded only in a browser tab: the
    installed app (display-mode: standalone) goes straight to the dashboard and
@@ -488,7 +489,8 @@ function TimeGate() {
   const { isUnlocked } = useEncryption();
   const { pathname } = useLocation();
   if (!isAuthenticated || !isUnlocked) return null;
-  return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <RunningTimer />}</>;
+  // The reminders bell sits in the top-right corner on wide screens (phones / tablets: their top bar)
+  return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <><RunningTimer /><NotificationBell variant="corner" /></>}</>;
 }
 
 function WallpaperGate() {

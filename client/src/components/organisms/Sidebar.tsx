@@ -7,7 +7,6 @@ import { useNavItems } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { BrandMark } from '../atoms/BrandMark.js';
-import { NotificationBell, BellBadge } from './NotificationBell.js';
 
 /* Collapsed: icons only (92px). Expanded: each item's name beside its icon.
    The icons keep a 92px column either way, so they never move. */
@@ -106,7 +105,7 @@ const NavScroll = styled.nav`
 
 /* Rail row — no dividers; the active row is lifted onto --bg-rail-active
    with the accent tab. Under the last item: expand / collapse, then ⋯, whose
-   menu holds Settings, Lock (asks for the password again) and Sign out. */
+   menu holds Lock (asks for the password again) and Sign out; Settings is its own row above Collapse. */
 const NavIconBtn = styled.button<{ $active?: boolean }>`
   position: relative;
   flex: 0 0 auto;
@@ -167,7 +166,7 @@ const Wordmark = styled.span`
   white-space: nowrap;
 `;
 
-/* Expand / collapse, then ⋯ (Settings, Lock, Sign out), under the last item */
+/* Settings, then expand / collapse, then ⋯ (Lock, Sign out), under the last item */
 const ToggleBtn = styled(NavIconBtn)`
   height: 44px;
   color: var(--text-muted);
@@ -294,19 +293,6 @@ export const Sidebar = memo(function Sidebar() {
         {open && <Wordmark aria-hidden="true">Chronicles</Wordmark>}
       </LogoBtn>
 
-      {/* Reminders, first under the logo: today's doses and exercise that are due (the badge counts them) */}
-      <NotificationBell variant="rail" trigger={p => (
-        <NavIconBtn ref={p.ref} onClick={p.onClick} aria-expanded={p['aria-expanded']} aria-haspopup={p['aria-haspopup']}
-          aria-label={p['aria-label']} title={open ? undefined : p['aria-label']}>
-          <IconCell>
-            <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <MaterialIcon aria-hidden="true">notifications</MaterialIcon>
-              {p.count > 0 && <BellBadge aria-hidden="true">{p.count}</BellBadge>}
-            </span>
-          </IconCell>
-          {open && <Label aria-hidden="true">Reminders</Label>}
-        </NavIconBtn>
-      )} />
       <NavScroll>
         {mainItems.map(item => (
           <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}>
@@ -314,23 +300,25 @@ export const Sidebar = memo(function Sidebar() {
             {name(item.label)}
           </NavIconBtn>
         ))}
+        {/* Settings: its own row, last before Collapse */}
+        {settingsItem && (
+          <NavIconBtn $active={settingsItem.active} onClick={() => navigate(settingsItem.path)} title={open ? undefined : settingsItem.label}>
+            <IconCell><MaterialIcon aria-hidden="true">{settingsItem.icon}</MaterialIcon></IconCell>
+            {name(settingsItem.label)}
+          </NavIconBtn>
+        )}
         <ToggleBtn onClick={toggle} aria-expanded={open} title={open ? undefined : 'Show names'}>
           <IconCell><MaterialIcon aria-hidden="true">{open ? 'chevron_left' : 'chevron_right'}</MaterialIcon></IconCell>
           {open ? <Label>Collapse</Label> : <SrOnly>Show names</SrOnly>}
         </ToggleBtn>
-        <ToggleBtn ref={moreRef} $active={!!settingsItem?.active} onClick={() => (menuAt ? closeMenu() : openMenu())}
-          aria-haspopup="menu" aria-expanded={!!menuAt} title={open ? undefined : 'Settings, lock and sign out'}>
+        <ToggleBtn ref={moreRef} onClick={() => (menuAt ? closeMenu() : openMenu())}
+          aria-haspopup="menu" aria-expanded={!!menuAt} title={open ? undefined : 'Lock and sign out'}>
           <IconCell><Dots aria-hidden="true">⋯</Dots></IconCell>
           {open ? <Label>More</Label> : <SrOnly>More</SrOnly>}
         </ToggleBtn>
       </NavScroll>
       {menuAt && createPortal(
         <Flyout ref={menuRef} role="menu" aria-label="More" style={{ left: menuAt.left, top: menuAt.top }}>
-          {settingsItem && (
-            <FlyoutItem role="menuitem" $active={settingsItem.active} onClick={choose(() => navigate(settingsItem.path))}>
-              <MaterialIcon aria-hidden="true">settings</MaterialIcon>Settings
-            </FlyoutItem>
-          )}
           <FlyoutItem role="menuitem" title="Your password opens it again" onClick={choose(lock)}>
             <MaterialIcon aria-hidden="true">lock</MaterialIcon>Lock
           </FlyoutItem>

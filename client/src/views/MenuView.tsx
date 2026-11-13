@@ -179,15 +179,60 @@ const ScrollArea = styled.div`
   @media (max-width: 640px) { display: none; }
 `;
 
-const PlannerGrid = styled.div`
+/* The slot names fold away to a slim strip (`$labels` false) holding the button that brings them back */
+const PlannerGrid = styled.div<{ $labels: boolean }>`
   display: grid;
-  grid-template-columns: 110px repeat(7, minmax(118px, 1fr));
+  grid-template-columns: ${({ $labels }) => ($labels ? '110px' : '36px')} repeat(7, minmax(118px, 1fr));
   column-gap: 16px;
   row-gap: 22px;
   min-width: 1048px;
 `;
 
-const CornerCell = styled.div``;
+/* Over the slot names: the button that folds them away (or brings them back) */
+const CornerCell = styled.div`
+  display: flex;
+  align-items: flex-start;
+`;
+
+const FoldBtn = styled.button`
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+/* Hidden from sight, still read out */
+const SrOnly = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+`;
+
+/* Folded rows and the folded names column, remembered per browser */
+const FOLDED_SLOTS_KEY = 'menu-slots-folded-v1';
+const LABELS_FOLDED_KEY = 'menu-labels-folded-v1';
+function loadFoldedSlots(): MealSlotType[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOLDED_SLOTS_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((v): v is MealSlotType => MEAL_SLOTS.some(m => m.key === v)) : [];
+  } catch { return []; }
+}
+function loadLabelsFolded(): boolean {
+  try { return localStorage.getItem(LABELS_FOLDED_KEY) === '1'; } catch { return false; }
+}
+const remember = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* storage refused */ } };
 
 /* "Mon 12" over a 2px rule; today's in the soft accent over an accent rule */
 const HeaderCell = styled.div<{ $isToday?: boolean }>`
@@ -214,13 +259,42 @@ const DayDate = styled.span<{ $isToday?: boolean }>`
   color: var(--text-muted);
 `;
 
-const MealLabelCell = styled.div`
-  /* Level with the first line of the tiles' meal names */
-  padding-top: 16px;
+/* The slot's name, level with the first line of the tiles' meal names — a
+   button that folds its row (a chevron before the name, turned down while open) */
+const MealLabelCell = styled.button`
+  position: relative;
+  display: flex;
+  align-items: center;
+  align-self: start;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 0 0;
+  border: none;
+  background: transparent;
+  text-align: left;
   font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 400;
   color: var(--text-muted);
+  cursor: pointer;
+  > span:first-child { transition: transform 150ms ease; }
+  &[aria-expanded='true'] > span:first-child { transform: rotate(90deg); }
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { > span:first-child { transition: none; } }
+`;
+
+/* A folded row's day: the planned meal's name in a line, muted (nothing when empty) */
+const FoldedSlot = styled.div`
+  min-height: 36px;
+  padding: 8px 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 /* A day's slot: every cell is the same box — a tile fills it, or an empty
@@ -229,7 +303,7 @@ const MealCell = styled.div<{ $isToday?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 210px;
+  min-height: 150px;
 `;
 
 /* Empty slot: just a quiet + to add a meal */
@@ -393,6 +467,13 @@ const MobileSlotInputs = styled.div`
 /* ── Component ── */
 
 export function MenuView() {
+  const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
+  const [foldedSlots, setFoldedSlots] = useState<MealSlotType[]>(loadFoldedSlots);
+  const toggleSlot = (slot: MealSlotType) => setFoldedSlots(prev => {
+    const next = prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot];
+    remember(FOLDED_SLOTS_KEY, JSON.stringify(next));
+    return next;
+  });
   const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
   const entries              = useEntriesStore(s => s.decryptedEntries);
   const allTopics            = useEntriesStore(s => s.allTopics);
@@ -793,8 +874,15 @@ export function MenuView() {
 
         {/* Grid breaks out of Inner to fill full page width */}
         <ScrollArea>
-          <PlannerGrid>
-            <CornerCell />
+          <PlannerGrid $labels={!labelsFolded}>
+            <CornerCell>
+              <FoldBtn type="button" aria-expanded={!labelsFolded}
+                aria-label={labelsFolded ? 'Show the meal names' : 'Hide the meal names'}
+                title={labelsFolded ? 'Show the meal names' : 'Hide the meal names'}
+                onClick={() => setLabelsFolded(v => { remember(LABELS_FOLDED_KEY, v ? '0' : '1'); return !v; })}>
+                <MaterialIcon $size={20} aria-hidden="true">{labelsFolded ? 'chevron_right' : 'chevron_left'}</MaterialIcon>
+              </FoldBtn>
+            </CornerCell>
             {weekDays.map(day => {
               const ds = toDateStr(day);
               const isToday = ds === todayStr;
@@ -807,9 +895,21 @@ export function MenuView() {
             })}
             {MEAL_SLOTS.map(({ key, label }) => (
               <Fragment key={key}>
-                <MealLabelCell>{label}</MealLabelCell>
+                {labelsFolded
+                  ? <div><SrOnly>{label}</SrOnly></div>
+                  : (
+                    <MealLabelCell type="button" aria-expanded={!foldedSlots.includes(key)}
+                      title={`${foldedSlots.includes(key) ? 'Show' : 'Hide'} ${label.toLowerCase()}`}
+                      onClick={() => toggleSlot(key)}>
+                      <MaterialIcon $size={18} aria-hidden="true">chevron_right</MaterialIcon>{label}
+                    </MealLabelCell>
+                  )}
                 {weekDays.map(day => {
                   const dateStr = toDateStr(day);
+                  if (foldedSlots.includes(key)) {
+                    const name = meals[dateStr]?.[key]?.mealName ?? '';
+                    return <FoldedSlot key={`${dateStr}-${key}`} title={name || undefined}>{name}</FoldedSlot>;
+                  }
                   return (
                     <MealCell key={`${dateStr}-${key}`} $isToday={dateStr === todayStr}>
                       {renderSlot(dateStr, key)}

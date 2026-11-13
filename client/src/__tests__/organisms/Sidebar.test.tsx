@@ -52,8 +52,8 @@ describe('Sidebar', () => {
     for (const title of ['Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Media']) {
       expect(screen.getByTitle(title)).toBeInTheDocument();
     }
-    // Settings lives in the ⋯ menu
-    expect(screen.queryByTitle('Settings')).toBeNull();
+    // Settings is its own row, above Collapse
+    expect(screen.getByTitle('Settings')).toBeTruthy();
   });
 
   it('the logo opens the dashboard (there is no dashboard item)', () => {
@@ -62,18 +62,19 @@ describe('Sidebar', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('ends with expand / collapse, then ⋯ (Settings, Lock, Sign out)', () => {
+  it('ends with Settings, expand / collapse, then ⋯ (Lock, Sign out)', () => {
     renderAt();
     const titles = Array.from(document.querySelectorAll('aside button[title]')).map(b => b.getAttribute('title'));
-    expect(titles.slice(-3)).toEqual(['Media', 'Show names', 'Settings, lock and sign out']);
+    expect(titles.slice(-4)).toEqual(['Kitchen', 'Settings', 'Show names', 'Lock and sign out']);
+    // Media sits right under Journal
+    expect(titles.indexOf('Media')).toBe(titles.indexOf('Journal') + 1);
     const more = screen.getByRole('button', { name: 'More' });
     expect(more).toHaveAttribute('aria-haspopup', 'menu');
     fireEvent.click(more);
     const menu = screen.getByRole('menu', { name: 'More' });
-    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent?.replace(/^(settings|lock|logout)/, ''))).toEqual(['Settings', 'Lock', 'Sign out']);
-    fireEvent.click(within(menu).getByRole('menuitem', { name: /Settings/ }));
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent?.replace(/^(lock|logout)/, ''))).toEqual(['Lock', 'Sign out']);
+    fireEvent.click(screen.getByTitle('Settings'));
     expect(mockNavigate).toHaveBeenCalledWith('/settings');
-    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('signs out from the ⋯ menu', () => {
@@ -107,11 +108,9 @@ describe('Sidebar', () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  it('shows ⋯ as active while in Settings', () => {
+  it('lifts the Settings row while in Settings', () => {
     renderAt('/settings');
-    const more = screen.getByRole('button', { name: 'More' });
-    const kitchen = screen.getByTitle('Kitchen');
-    expect(more.className).not.toBe(kitchen.className);
+    expect(screen.getByTitle('Settings').className).not.toBe(screen.getByTitle('Kitchen').className);
   });
 
   it('navigates when a nav item is clicked', () => {

@@ -93,7 +93,7 @@ type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'p
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
-  { key: 'nextUp', label: 'Next event or meeting (when the quote is off)' },
+  { key: 'nextUp', label: 'Next event or meeting' },
   { key: 'wellness', label: 'Wellness check-in' },
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
@@ -134,8 +134,8 @@ interface DashboardConfig {
 
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['stats', 'priorities', 'wins', 'tasks', 'habits', 'comingUp', 'quickLog', 'exercise'],
-  right: ['mantra', 'time', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
+  left: ['quote', 'nextUp', 'stats', 'priorities', 'wins', 'tasks', 'habits', 'comingUp', 'quickLog', 'exercise'],
+  right: ['wellness', 'mantra', 'time', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
 /** The saved layout with any card it doesn't know put back in its default column, at its default place there */
@@ -276,47 +276,10 @@ const ViewBtn = styled.button<{ $on: boolean }>`
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
 `;
 
-/* Its card: THEME over the Light | Dark | Auto switch, a hairline, then Customize view › */
-const ViewMenu = styled.div`
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  z-index: 40;
-  width: min(300px, calc(100vw - 32px));
-  padding: 18px 16px 10px;
-  background: var(--bg-tile);
-  html[data-theme='light'] & { background: var(--bg-control, var(--bg-panel)); }
-  border: 1px solid var(--border-pop);
-  border-radius: 14px;
-  box-shadow: var(--shadow-xl);
-  font-family: var(--font-sans);
-  h2 { margin: 0 0 10px; ${cardLabel} }
-  hr { margin: 14px 0 6px; border: none; border-top: 1px solid var(--border-subtle); }
-`;
-
-const MenuRow = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  height: 44px;
-  padding: 0 6px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: pointer;
-  & > span:last-child { margin-left: auto; color: var(--text-muted); }
-  /* No darker fill — the chevron firms up */
-  &:hover > span:last-child { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-`;
-
-const ViewWrap = styled.div`
-  position: relative;
+/* The theme switch at the top of the Theme and layout panel, at most 380px wide */
+const ThemeRow = styled.div`
+  max-width: 380px;
+  margin-bottom: 28px;
 `;
 
 /* Light | Dark | Auto: one rounded pill, an icon before each, the chosen one on
@@ -410,42 +373,16 @@ const EntryGuide = styled.div`
   button:hover { text-decoration: underline; }
 `;
 
-const Hero = styled.div<{ $single: boolean; $afterQuick?: boolean }>`
-  display: grid;
-  grid-template-columns: ${({ $single }) => ($single ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))')};
-  gap: 24px;
-  margin-top: ${({ $afterQuick }) => ($afterQuick ? '40px' : '56px')};
-  /* A little air before the world clocks / the columns */
-  margin-bottom: 28px;
-  @media (max-width: 640px) { margin-top: ${({ $afterQuick }) => ($afterQuick ? '32px' : '36px')}; }
-  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
-`;
-
+/* Next up and the daily quote: their words inside a widget card (the card is the panel) */
 const NextCard = styled.section`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 28px 32px;
-  border-radius: 14px;
-  background: var(--bg-panel);
   font-family: var(--font-sans);
-  @media (max-width: 480px) { padding: 22px 20px; }
-  ${glassCard}
-`;
-
-const NextTop = styled.div<{ $plain?: boolean }>`
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 15px;
-  /* $plain (Daily quote): the card label instead of the bold accent */
-  b { font-weight: 600; color: var(--color-accent-link); }
-  ${({ $plain }) => ($plain ? css`b { ${cardLabel} }` : '')}
-  span { color: var(--text-muted); }
 `;
 
 const NextTitle = styled.h2`
-  margin: 22px 0 0;
+  margin: 4px 0 0;
   font-family: var(--font-display);
   font-size: 30px;
   font-weight: 300;
@@ -566,11 +503,7 @@ const ClockWeather = styled.div`
    left-aligned */
 /* The daily quote's card: roomier top and a narrower right side so the
    quote isn't squeezed; a wider right side on desktop */
-const QuoteCard = styled(NextCard)`
-  padding-top: 36px;
-  padding-right: 24px;
-  @media (min-width: 901px) { padding-right: 40px; }
-`;
+const QuoteCard = styled(NextCard)``;
 
 const QuoteBody = styled.div`
   flex: 1;
@@ -580,8 +513,7 @@ const QuoteBody = styled.div`
   justify-content: flex-start;
   align-items: flex-start;
   text-align: left;
-  padding: 36px 0 8px;
-  @media (min-width: 901px) { padding-top: 44px; }
+  padding: 8px 0 4px;
 `;
 
 const QuoteText = styled.blockquote`
@@ -621,7 +553,7 @@ const Col = styled.div`
 
 /* Each section in the two columns sits in its own grey card, like Next up and the
    quote, with a chevron on the right that folds it down to its title row */
-const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean }>`
+const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean; $plain?: boolean }>`
   position: relative;
   min-width: 0;
   padding: 28px 92px 28px 32px;
@@ -639,6 +571,17 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean }>`
     line-height: 30px;
     ${cardLabel}
   }
+  /* $plain (Wellness check-in): no panel, title or fold — the four-square card as
+     it is, with only the grip, tucked into its top-right corner */
+  ${({ $plain }) => ($plain ? `
+    padding: 0 !important;
+    background: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    & > section > :first-child { margin-bottom: 0 !important; }
+    & > button { top: 10px; right: 10px; }
+    @media (max-width: 480px) { & > button { top: 8px; right: 8px; } }
+  ` : '')}
   /* A title over a picker (Shopping list, Tasks): the grip and chevron sit on its middle */
   ${({ $tall, $collapsed }) => ($tall && !$collapsed ? `
     & > button { top: 47px; }
@@ -957,7 +900,7 @@ function NextUp({ now }: { now: Date }) {
 
   if (!next) return (
     <NextCard aria-label="Next up">
-      <NextTop><b>Next up</b></NextTop>
+      <SectionHead><h2>Next up</h2></SectionHead>
       <NextTitle>Nothing coming up</NextTitle>
       <NextList>No events or meetings in the next three months.</NextList>
       <NextActions><PillButton type="button" $variant="neutral" onClick={() => navigate('/calendar')}>Calendar</PillButton></NextActions>
@@ -976,7 +919,7 @@ function NextUp({ now }: { now: Date }) {
   }
   return (
     <NextCard aria-label="Next up">
-      <NextTop><b>{when}</b><span>{next.time ? time12(next.time) : 'All day'}</span></NextTop>
+      <SectionHead><h2>{when}</h2><span>{next.time ? time12(next.time) : 'All day'}</span></SectionHead>
       <NextTitle>{next.title}</NextTitle>
       <NextList>{next.detail}</NextList>
       <NextActions>
@@ -2371,10 +2314,10 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
-function SortableCard({ id, collapsed, label, tall, children }: { id: SectionKey; collapsed: boolean; label: string; tall?: boolean; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, tall, plain, children }: { id: SectionKey; collapsed: boolean; label: string; tall?: boolean; plain?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
-    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $tall={tall}
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $tall={tall} $plain={plain}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
@@ -2446,17 +2389,6 @@ export function DashboardView() {
     if (next.left.join() !== saved.left.join() || next.right.join() !== saved.right.join()) void saveConfig({ ...config, layout: next });
   };
   const [customizing, setCustomizing] = useState(false);
-  // The sliders button's card (theme + Customize view); a click outside or Escape closes it
-  const [viewOpen, setViewOpen] = useState(false);
-  const viewRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!viewOpen) return;
-    const onDown = (e: MouseEvent) => { if (!viewRef.current?.contains(e.target as Node)) setViewOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [viewOpen]);
   // Voice commands: only where the browser can do speech (not Firefox). One
   // tap opens the panel and starts listening (the session lives here so the
   // mic starts inside the tap)
@@ -2607,16 +2539,16 @@ export function DashboardView() {
     }
   };
 
-  // The card beside the wellness check-in: the daily quote when it's on, else Next up (medications)
-  const lead = shown('quote') ? (
+  // The daily quote's card
+  const quoteCard = (
     <QuoteCard aria-label="Daily quote">
-      <NextTop $plain><b>Daily quote</b></NextTop>
+      <SectionHead><h2>Daily quote</h2></SectionHead>
       <QuoteBody>
         <QuoteText>{quote.text}</QuoteText>
         {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
       </QuoteBody>
     </QuoteCard>
-  ) : shown('nextUp') ? <NextUp now={now} /> : null;
+  );
 
   const left: ReactNode[] = [];
   const right: ReactNode[] = [];
@@ -2633,6 +2565,9 @@ export function DashboardView() {
   };
   // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
   const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
+    quote: { label: 'daily quote', on: shown('quote'), node: quoteCard },
+    nextUp: { label: 'next up', on: shown('nextUp'), node: <NextUp now={now} /> },
+    wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" quad bare /> },
     priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },
     wins: { label: "today's wins", on: shown('wins'), node: <Wins /> },
     tasks: {
@@ -2666,6 +2601,8 @@ export function DashboardView() {
   const cols = { left: layout.left.filter(visible), right: layout.right.filter(visible) };
   const card = (k: SectionKey) => {
     const w = widgets[k]!;
+    // The wellness check-in keeps its own look: moved by its grip, never folded
+    if (k === 'wellness') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain>{w.node}</SortableCard>;
     return (
       <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} tall={k === 'shopping' || k === 'tasks'}>
         {w.node}
@@ -2694,32 +2631,10 @@ export function DashboardView() {
                     <MaterialIcon $size={20} aria-hidden="true">mic</MaterialIcon><VoiceWord>Voice</VoiceWord>
                   </VoiceBtn>
                 )}
-                <ViewWrap ref={viewRef}>
-                  <ViewBtn type="button" $on={viewOpen} aria-label="Theme and layout" title="Theme and layout"
-                    aria-haspopup="dialog" aria-expanded={viewOpen} onClick={() => setViewOpen(o => !o)}>
-                    <MaterialIcon $size={22} aria-hidden="true">tune</MaterialIcon>
-                  </ViewBtn>
-                  {viewOpen && (
-                    <ViewMenu role="dialog" aria-label="Theme and layout">
-                      <h2>Theme</h2>
-                      <ThemeSwitch role="group" aria-label="Theme">
-                        {(['light', 'dark', 'auto'] as const).map(m => (
-                          <ThemeOpt key={m} type="button" $on={themePreference === m} aria-pressed={themePreference === m} onClick={() => changeTheme(m)}
-                            title={m === 'auto' ? 'Light from 7 AM, dark from 7 PM' : undefined}>
-                            <MaterialIcon $size={16} aria-hidden="true">{THEME_ICON[m]}</MaterialIcon>
-                            {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'Auto'}
-                          </ThemeOpt>
-                        ))}
-                      </ThemeSwitch>
-                      <hr />
-                      <MenuRow type="button" aria-expanded={customizing} onClick={() => { setViewOpen(false); setCustomizing(true); }}>
-                        <MaterialIcon $size={20} aria-hidden="true">grid_view</MaterialIcon>
-                        <span>Customize view</span>
-                        <MaterialIcon $size={20} aria-hidden="true">chevron_right</MaterialIcon>
-                      </MenuRow>
-                    </ViewMenu>
-                  )}
-                </ViewWrap>
+                <ViewBtn type="button" $on={customizing} aria-label="Theme and layout" title="Theme and layout"
+                  aria-expanded={customizing} onClick={() => setCustomizing(o => !o)}>
+                  <MaterialIcon $size={22} aria-hidden="true">tune</MaterialIcon>
+                </ViewBtn>
             </HeadActions>
           </Head>
 
@@ -2730,11 +2645,23 @@ export function DashboardView() {
           )}
 
           {customizing && (
-            <Customize aria-label="Customize view">
+            <Customize aria-label="Theme and layout">
               <CustomizeHead>
-                <h3>Show on this page</h3>
+                <h3>Theme</h3>
                 <OutlineBtn type="button" onClick={() => setCustomizing(false)}>Done</OutlineBtn>
               </CustomizeHead>
+              <ThemeRow>
+                <ThemeSwitch role="group" aria-label="Theme">
+                  {(['light', 'dark', 'auto'] as const).map(m => (
+                    <ThemeOpt key={m} type="button" $on={themePreference === m} aria-pressed={themePreference === m} onClick={() => changeTheme(m)}
+                      title={m === 'auto' ? 'Light from 7 AM, dark from 7 PM' : undefined}>
+                      <MaterialIcon $size={16} aria-hidden="true">{THEME_ICON[m]}</MaterialIcon>
+                      {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'Auto'}
+                    </ThemeOpt>
+                  ))}
+                </ThemeSwitch>
+              </ThemeRow>
+              <h3>Show on this page</h3>
               <ToggleGrid>
                 {SECTIONS.map(s => (
                   <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>
@@ -2782,13 +2709,6 @@ export function DashboardView() {
           )}
           {showChecklist(onboarding) && (
             <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
-          )}
-
-          {(lead || shown('wellness')) && (
-            <Hero $single={!(lead && shown('wellness'))} $afterQuick={shown('quickEntry')}>
-              {lead}
-              {shown('wellness') && <WellnessCheckIn title="Wellness check-in" quad bare />}
-            </Hero>
           )}
 
           {shown('clocks') && places.length > 0 && <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />}

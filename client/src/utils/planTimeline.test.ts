@@ -19,7 +19,7 @@ describe('planTimeline', () => {
     expect(timelineWindow('year', '2026-01-01').days).toBe(365);
     expect(defaultStart('quarter', '2026-11-12')).toBe('2026-11-01');
     expect(defaultStart('year', '2026-11-12')).toBe('2026-10-01');
-    expect(defaultStart('years3', '2026-11-12')).toBe('2026-01-01');
+    expect(defaultStart('years5', '2026-11-12')).toBe('2026-01-01');
   });
 
   it('places days as a fraction of the window', () => {
@@ -29,12 +29,12 @@ describe('planTimeline', () => {
     expect(fractionOf('2026-09-30', w)).toBeLessThan(0);
   });
 
-  it('labels a column per month, quarters on three years', () => {
+  it('labels a column per month, half years on five years', () => {
     const q = timelineTicks('quarter', timelineWindow('quarter', '2026-11-01'));
     expect(q.map(t => t.label)).toEqual(['Nov 2026', 'Dec', 'Jan 2027']);
     expect(q[2].year).toBe(true);
     expect(q.reduce((n, t) => n + t.width, 0)).toBeCloseTo(1);
-    expect(timelineTicks('years3', timelineWindow('years3', '2026-01-01'))).toHaveLength(12);
+    expect(timelineTicks('years5', timelineWindow('years5', '2026-01-01'))).toHaveLength(10);
   });
 
   it('names the window', () => {
@@ -81,5 +81,14 @@ describe('planTimeline', () => {
     expect(shortDay('2026-03-14', '2026-11-12')).toBe('Mar 14');
     expect(shortDay('2027-03-04', '2026-11-12')).toBe('Mar 4, 2027');
     expect(shortDay('', '2026-11-12')).toBe('');
+  });
+
+  it('shows one month a week at a time', () => {
+    const w = timelineWindow('month', defaultStart('month', '2026-11-12'));
+    expect(w).toEqual({ from: '2026-11-01', to: '2026-12-01', days: 30 });
+    expect(windowLabel(w)).toBe('November 2026');
+    expect(timelineTicks('month', w).map(t => t.label)).toEqual(['Nov 1', '8', '15', '22', '29']);
+    const last = timelineTicks('month', w).at(-1)!;
+    expect(last.left + last.width).toBeCloseTo(1);
   });
 });

@@ -85,7 +85,20 @@ describe('PlannerBoard', () => {
     expect(screen.queryByText(/of \d+ done/)).toBeNull();
     expect(screen.getByText('Standup')).toBeTruthy();
     // A ruled grid: a row per part of the day, each task and event in its own
-    expect(screen.getAllByRole('rowheader').map(r => r.textContent)).toEqual(['MorningBefore 12 PM', 'Noon12 – 5 PM', 'NightAfter 5 PM']);
+    expect(screen.getAllByRole('rowheader').map(r => r.textContent?.replace('chevron_right', ''))).toEqual(['MorningBefore 12 PM', 'Noon12 – 5 PM', 'NightAfter 5 PM']);
+    // A part of the day folds from its name (each day shows a count instead) and opens again
+    const noon = screen.getAllByRole('rowheader')[1];
+    fireEvent.click(noon);
+    expect(noon.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getAllByRole('cell', { name: /, Noon, folded$/ })).toHaveLength(2);
+    fireEvent.click(noon);
+    expect(screen.queryAllByRole('cell', { name: /, Noon, folded$/ })).toHaveLength(0);
+    // The names fold away to a slim strip (still read out), and come back
+    fireEvent.click(screen.getByRole('button', { name: 'Hide morning, noon and night' }));
+    expect(screen.getAllByRole('rowheader').map(r => r.textContent)).toEqual(['Morning', 'Noon', 'Night']);
+    expect(screen.queryByText('Before 12 PM')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show morning, noon and night' }));
+    expect(screen.getByText('Before 12 PM')).toBeTruthy();
     const morning = screen.getByRole('cell', { name: 'Thu 12, Morning' });
     expect(morning.textContent).toContain('Write the FAQ');
     expect(morning.textContent).toContain('Standup');

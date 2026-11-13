@@ -151,18 +151,41 @@ const Scroll = styled.div`
   -webkit-overflow-scrolling: touch;
 `;
 
-/* The grid: a narrow column naming the parts of the day, then a column per day */
-const Grid = styled.div<{ $cols: number }>`
+/* The grid: a narrow column naming the parts of the day, then a column per day.
+   The names fold away (`$labels` false) to a slim strip holding the button that
+   brings them back */
+const Grid = styled.div<{ $cols: number; $labels: boolean }>`
   display: grid;
-  grid-template-columns: 120px repeat(${({ $cols }) => $cols}, minmax(${({ $cols }) => ($cols > 1 ? '150px' : '0')}, 1fr));
+  grid-template-columns: ${({ $labels }) => ($labels ? '120px' : '40px')} repeat(${({ $cols }) => $cols}, minmax(${({ $cols }) => ($cols > 1 ? '150px' : '0')}, 1fr));
   @media (max-width: 768px) {
-    grid-template-columns: 96px repeat(${({ $cols }) => $cols}, ${({ $cols }) => ($cols > 1 ? 'min(72vw, 260px)' : 'minmax(0, 1fr)')});
+    grid-template-columns: ${({ $labels }) => ($labels ? '96px' : '36px')} repeat(${({ $cols }) => $cols}, ${({ $cols }) => ($cols > 1 ? 'min(72vw, 260px)' : 'minmax(0, 1fr)')});
   }
 `;
 
-const Corner = styled.span`
+/* Over the names: the button that folds them away (or brings them back) */
+const Corner = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 2px 4px 0 0;
   border-bottom: 1px solid var(--border-default);
 `;
+
+/* Hidden from sight, still read out (a folded row keeps its name for screen readers) */
+const SrOnly = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+`;
+
+/* Whether the names of the parts of the day show, remembered per browser */
+const LABELS_FOLDED_KEY = 'planner-labels-folded-v1';
+function loadLabelsFolded(): boolean {
+  try { return localStorage.getItem(LABELS_FOLDED_KEY) === '1'; } catch { return false; }
+}
 
 /* A day's name over the firmer rule; today's in the soft accent over an accent rule */
 const DayHead = styled.div<{ $today: boolean }>`
@@ -193,13 +216,29 @@ const DayName = styled.button<{ $today: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-/* "Morning" over "Before 12 PM" at the start of its row */
-const PartLabel = styled.div<{ $first: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* "Morning" over "Before 12 PM" at the start of its row — a button that folds
+   the row (a chevron before the name, turned down while open) */
+const PartLabel = styled.button<{ $first: boolean }>`
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-content: start;
+  column-gap: 4px;
+  row-gap: 2px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  > span:first-child { color: var(--text-muted); transition: transform 150ms ease; }
+  &[aria-expanded='true'] > span:first-child { transform: rotate(90deg); }
+  > small { grid-column: 2; }
+  &:hover, &:hover > span:first-child { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) { > span:first-child { transition: none; } }
   /* Room on the left, so the names don't sit against the rule beside Unscheduled */
-  padding: 12px 10px 0 16px;
+  padding: 12px 10px 0 10px;
   border-top: ${({ $first }) => ($first ? 'none' : '1px solid var(--border-subtle)')};
   font-family: var(--font-sans);
   font-size: 15px;
@@ -215,19 +254,38 @@ const PartLabel = styled.div<{ $first: boolean }>`
   }
 `;
 
-/* One part of one day: where cards are dropped */
-const Cell = styled.div<{ $first: boolean; $over: boolean }>`
+/* One part of one day: where cards are dropped (still a drop target while its
+   row is folded, just short, with a muted count of what's in it) */
+const Cell = styled.div<{ $first: boolean; $over: boolean; $folded?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  min-height: 92px;
-  padding: 10px 8px 12px;
+  min-height: ${({ $folded }) => ($folded ? '48px' : '92px')};
+  padding: ${({ $folded }) => ($folded ? '14px 10px' : '10px 8px 12px')};
   border-top: ${({ $first }) => ($first ? 'none' : '1px solid var(--border-subtle)')};
   border-left: 1px solid var(--border-subtle);
   background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'transparent')};
   transition: background 120ms ease;
 `;
+
+/* A folded row's cell: what it holds, muted ("2 tasks · 1 event") */
+const FoldedNote = styled.span`
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+`;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/* Folded rows, remembered per browser */
+const FOLDED_PARTS_KEY = 'planner-parts-folded-v1';
+function loadFoldedParts(): DayPart[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOLDED_PARTS_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((v): v is DayPart => PLANNER_ROWS.some(r => r.value === v)) : [];
+  } catch { return []; }
+}
 
 /* An empty space says what it is ("Morning"), so a blank week still reads */
 const Blank = styled.span`
@@ -489,6 +547,17 @@ interface PlannerBoardProps extends CardActions {
 }
 
 export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, onOpenEvent, onAdd, onPickDay, folded = false, onFold }: PlannerBoardProps) {
+  const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
+  const [foldedParts, setFoldedParts] = useState<DayPart[]>(loadFoldedParts);
+  const toggleFoldedPart = (part: DayPart) => setFoldedParts(prev => {
+    const next = prev.includes(part) ? prev.filter(p => p !== part) : [...prev, part];
+    try { localStorage.setItem(FOLDED_PARTS_KEY, JSON.stringify(next)); } catch { /* storage refused */ }
+    return next;
+  });
+  const toggleLabels = () => setLabelsFolded(prev => {
+    try { localStorage.setItem(LABELS_FOLDED_KEY, prev ? '0' : '1'); } catch { /* storage refused */ }
+    return !prev;
+  });
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
@@ -575,8 +644,15 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
 
         <div>
           <Scroll>
-            <Grid $cols={lanes.length} role="table" aria-label="Planner">
-              <Corner aria-hidden="true" />
+            <Grid $cols={lanes.length} $labels={!labelsFolded} role="table" aria-label="Planner">
+              <Corner>
+                <FoldBtn type="button" aria-expanded={!labelsFolded}
+                  aria-label={labelsFolded ? 'Show morning, noon and night' : 'Hide morning, noon and night'}
+                  title={labelsFolded ? 'Show morning, noon and night' : 'Hide morning, noon and night'}
+                  onClick={toggleLabels}>
+                  <MaterialIcon $size={20} aria-hidden="true">{labelsFolded ? 'chevron_right' : 'chevron_left'}</MaterialIcon>
+                </FoldBtn>
+              </Corner>
               {lanes.map(lane => (
                 <DayHead key={lane.day} $today={lane.today} role="columnheader">
                   <DayName type="button" $today={lane.today} disabled={!onPickDay} onClick={() => onPickDay?.(lane.day)}
@@ -589,10 +665,31 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
 
               {PLANNER_ROWS.map((row, r) => (
                 <Fragment key={row.value}>
-                  <PartLabel $first={r === 0} role="rowheader">{row.label}<small>{row.hours}</small></PartLabel>
+                  {labelsFolded
+                    ? <PartLabel as="div" $first={r === 0} role="rowheader"><SrOnly>{row.label}</SrOnly></PartLabel>
+                    : (
+                      <PartLabel type="button" $first={r === 0} role="rowheader" aria-expanded={!foldedParts.includes(row.value)}
+                        title={`${foldedParts.includes(row.value) ? 'Show' : 'Hide'} ${row.label.toLowerCase()}`}
+                        onClick={() => toggleFoldedPart(row.value)}>
+                        <MaterialIcon $size={18} aria-hidden="true">chevron_right</MaterialIcon>
+                        {row.label}<small>{row.hours}</small>
+                      </PartLabel>
+                    )}
                   {lanes.map(lane => {
                     const cards = lane.cards.filter(c => (c.part || DEFAULT_PART) === row.value);
                     const events = lane.events.filter(ev => (ev.part || DEFAULT_PART) === row.value);
+                    if (foldedParts.includes(row.value)) {
+                      const summary = [cards.length && plural(cards.length, 'task'), events.length && plural(events.length, 'event')].filter(Boolean).join(' · ');
+                      return (
+                        <DropZone key={lane.day} id={cellId(lane.day, row.value)}>
+                          {(over, ref) => (
+                            <Cell ref={ref} $first={r === 0} $over={over} $folded role="cell" aria-label={`${lane.label}, ${row.label}, folded`}>
+                              {summary && <FoldedNote>{summary}</FoldedNote>}
+                            </Cell>
+                          )}
+                        </DropZone>
+                      );
+                    }
                     return (
                       <DropZone key={lane.day} id={cellId(lane.day, row.value)}>
                         {(over, ref) => (

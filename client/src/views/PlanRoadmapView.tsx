@@ -27,7 +27,7 @@ import {
 /* Planning → Roadmap: every goal as a bar from its start date to its target
    date, under its category, opening to its milestones. Drag a bar (or its
    ends) to reschedule; the dates are saved on the entry (`startOn`,
-   `targetDate`). The window is a quarter, a year or three years. */
+   `targetDate`). The window is a month, a quarter, a year or five years. */
 
 const Tools = styled.div`
   display: flex;

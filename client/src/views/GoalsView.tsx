@@ -761,13 +761,12 @@ export function GoalsView() {
   /* ── Board cards ── */
   const milestoneTitles = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
 
+  // Goal cards carry no milestone count, just the target date
   const goalItem = (g: GoalEntry): BoardItem => {
-    const ms = milestones.filter(m => m.parentGoalId === g.id);
     return {
       id: g.id, title: g.title,
       image: avatarImage(entries.find(e => e.id === g.id)?.metadata as Record<string, unknown> | undefined),
       date: shortDate(g.targetDate),
-      progress: ms.length ? { done: ms.filter(m => m.isCompleted).length, total: ms.length } : undefined,
       completed: normalizeRoadmapStatus(g.goalStatus) === 'completed',
     };
   };
@@ -1072,7 +1071,7 @@ export function GoalsView() {
             {tab === 'goals' && (orderedGoals.length === 0
               ? <EmptyState message="No goals found." submessage="Create a journal entry with the Goal topic to get started." />
               : view === 'board'
-                ? <KanbanBoard columns={goalColumns} noun="goal" onOpen={openInJournal}
+                ? <KanbanBoard columns={goalColumns} noun="goal" onOpen={openInJournal} timeTracking={false}
                     onMove={persistGoalStatus} onReorder={refined ? undefined : reorder('goals', orderedGoals)}
                     onAdd={key => addIn({ goalStatus: key })()} />
                 : goalGroups.length > 1 || (goalGroups.length === 1 && goalGroups[0].category)
@@ -1087,7 +1086,7 @@ export function GoalsView() {
             {tab === 'milestones' && (orderedMilestones.length === 0
               ? <EmptyState message="No milestones found." submessage="Create a journal entry with the Milestone topic to get started." />
               : view === 'board'
-                ? <KanbanBoard columns={milestoneColumns} noun="milestone" onOpen={openInJournal}
+                ? <KanbanBoard columns={milestoneColumns} noun="milestone" onOpen={openInJournal} timeTracking={false}
                     onMove={persistMilestoneStatus} onReorder={refined ? undefined : reorder('milestones', orderedMilestones)}
                     onAdd={key => addIn({ ...milestoneFieldsForStatus(key), ...(goalFilter ? { parentGoalId: goalFilter } : {}) })()} />
                 : renderRows(shownMilestones, false))}

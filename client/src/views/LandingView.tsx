@@ -66,7 +66,7 @@ const FEATURES: Feature[] = [
     body: 'Drop tasks into your week, see how they fit around your calendar, and watch the roadmap show where it all leads. Goals, milestones and tasks stay linked, so every day you plan moves something forward.',
     points: [
       'Weekly planner: Place tasks into morning, noon and night, right beside your calendar events.',
-      'Roadmap timeline: See your goals on a Gantt-style timeline by quarter, year or three years, with a marker for today.',
+      'Roadmap timeline: See your goals on a Gantt-style timeline by month, quarter, year or five years, with a marker for today.',
       'Kanban boards or lists: Drag to change status.',
       'Priorities, deadlines and todos: Keep what’s due in front of you.',
       'Time tracking: Track time on tasks and focus sessions.',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Link } from 'react-router-dom';
 import { PillButton } from '../atoms/PillButton.js';
@@ -135,6 +135,7 @@ const Header = styled.header`
 `;
 
 const HeaderRow = styled(Container)`
+  position: relative;
   display: flex;
   align-items: center;
   gap: 32px;
@@ -173,7 +174,78 @@ const Nav = styled.nav`
     gap: 16px;
     [data-section-link] { display: none; }
   }
-  @media (max-width: 480px) { gap: 12px; a:not([data-button]) { font-size: 14px; } }
+  /* Phones: Sign in moves into the menu, so the pill and the menu button fit */
+  @media (max-width: 480px) { gap: 10px; a:not([data-button]) { font-size: 14px; } [data-sign-in] { display: none; } }
+`;
+
+/* Phones and tablets (≤1000px): a round menu button — three lines, a × while
+   open — drawn in CSS (the bundled icon font has no menu glyph) */
+const MenuBtn = styled.button`
+  display: none;
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  &:hover { background: rgba(255, 255, 255, 0.24); }
+  &:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  span {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: currentColor;
+    transition: transform 160ms ease, opacity 160ms ease, top 160ms ease;
+  }
+  span:nth-child(1) { top: 14px; }
+  span:nth-child(2) { top: 20px; }
+  span:nth-child(3) { top: 26px; }
+  &[aria-expanded='true'] span:nth-child(1) { top: 20px; transform: rotate(45deg); }
+  &[aria-expanded='true'] span:nth-child(2) { opacity: 0; }
+  &[aria-expanded='true'] span:nth-child(3) { top: 20px; transform: rotate(-45deg); }
+  @media (prefers-reduced-motion: reduce) { span { transition: none; } }
+  @media (max-width: 1000px) { display: inline-block; }
+  @media (max-width: 480px) { width: 38px; height: 38px; span { left: 11px; right: 11px; } span:nth-child(1) { top: 12px; } span:nth-child(2), &[aria-expanded='true'] span:nth-child(1), &[aria-expanded='true'] span:nth-child(3) { top: 18px; } span:nth-child(3) { top: 24px; } }
+`;
+
+/* The menu it opens: a dark glass card under the header, a row per link */
+const MenuPanel = styled.nav`
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 24px;
+  left: 24px;
+  z-index: 50;
+  display: grid;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(13, 22, 48, 0.94);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  a {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    &:hover { background: rgba(255, 255, 255, 0.1); }
+    &:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+  }
+  @media (min-width: 1001px) { display: none; }
+  @media (max-width: 480px) { right: 16px; left: 16px; }
 `;
 
 /** Join the beta in the header: the white pill, a step smaller than the hero's */
@@ -247,6 +319,21 @@ interface LandingTemplateProps {
 
 export function LandingTemplate({ signedIn, hero, children }: LandingTemplateProps) {
   const year = new Date().getFullYear();
+  // Phones / tablets: the menu button's panel; a link, a click outside or Escape closes it
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !menuBtnRef.current?.contains(t)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setMenuOpen(false); menuBtnRef.current?.focus(); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [menuOpen]);
   // Smooth scrolling (Lenis) on #root, the app's scroller — loaded only here,
   // and not for visitors who prefer less motion. It also glides the section
   // links (#how, #beta…). Gone again when the page unmounts.
@@ -275,9 +362,22 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <a href="#features" data-section-link>Features</a>
             <a href="#privacy" data-section-link>Privacy</a>
             <a href="#faq" data-section-link>FAQ</a>
-            {signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}
+            {signedIn ? <Link to="/dashboard" data-sign-in>Open Chronicles</Link> : <Link to="/login" data-sign-in>Sign in</Link>}
             {!signedIn && <HeaderPill as="a" href="#beta" $primary data-button>Join the beta</HeaderPill>}
+            <MenuBtn ref={menuBtnRef} type="button" aria-expanded={menuOpen} aria-controls="landing-menu"
+              aria-label={menuOpen ? 'Close the menu' : 'Open the menu'} onClick={() => setMenuOpen(o => !o)}>
+              <span /><span /><span />
+            </MenuBtn>
           </Nav>
+          {menuOpen && (
+            <MenuPanel id="landing-menu" ref={menuRef} aria-label="Menu" onClick={e => { if ((e.target as HTMLElement).closest('a')) setMenuOpen(false); }}>
+              <a href="#how">How it works</a>
+              <a href="#features">Features</a>
+              <a href="#privacy">Privacy</a>
+              <a href="#faq">FAQ</a>
+              {signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}
+            </MenuPanel>
+          )}
         </HeaderRow>
       </Header>
       {hero}

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { glassPill } from '../../styles/wallpaper.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
@@ -189,6 +190,22 @@ const BarBell = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* Wide screens: the bell in the app's top-right corner, over every signed-in
+   page — a round button, white glass on the background photo */
+const CornerBell = styled(BarBell)`
+  position: fixed;
+  top: 17px;
+  right: 20px;
+  z-index: 30;
+  width: 42px;
+  height: 42px;
+  border: 1px solid transparent;
+  background: var(--bg-panel);
+  box-shadow: 0 1px 3px rgba(20, 24, 32, 0.08);
+  ${glassPill}
+  html[data-wallpaper] &:hover { background: rgba(255, 255, 255, 0.26); }
+`;
+
 export interface BellTriggerProps {
   ref: Ref<HTMLButtonElement>;
   onClick: () => void;
@@ -206,14 +223,14 @@ const ICON: Record<Item['kind'], string> = {
 };
 const ACTION: Partial<Record<Item['kind'], string>> = { med: 'Take', exercise: 'Done', task: 'Done', bill: 'Paid', event: 'Open', meeting: 'Open' };
 
-export function NotificationBell({ variant, trigger }: { variant: 'rail' | 'bar'; trigger?: (p: BellTriggerProps) => ReactNode }) {
+export function NotificationBell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigger?: (p: BellTriggerProps) => ReactNode }) {
   const compact = useMediaQuery(NAV_COMPACT_QUERY);
-  // One bell at a time: the rail's on wide screens, the top bar's on phones / tablets
+  // One bell at a time: the top-right corner's on wide screens, the top bar's on phones / tablets
   const active = variant === 'bar' ? compact : !compact;
   return active ? <Bell variant={variant} trigger={trigger} /> : null;
 }
 
-function Bell({ variant, trigger }: { variant: 'rail' | 'bar'; trigger?: (p: BellTriggerProps) => ReactNode }) {
+function Bell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigger?: (p: BellTriggerProps) => ReactNode }) {
   const navigate = useNavigate();
   const { isUnlocked } = useEncryption();
   const ff = useEntriesStore(s => s.featureFlags);
@@ -367,14 +384,19 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar'; trigger?: (p: Bel
 
   return (
     <>
-      {trigger ? trigger(props) : (
+      {trigger ? trigger(props) : variant === 'corner' ? (
+        <CornerBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
+          <MaterialIcon $size={22} aria-hidden="true">notifications</MaterialIcon>
+          {due.length > 0 && <BellBadge aria-hidden="true" style={{ top: 0, right: -2 }}>{due.length}</BellBadge>}
+        </CornerBell>
+      ) : (
         <BarBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
           <MaterialIcon $size={24} aria-hidden="true">notifications</MaterialIcon>
           {due.length > 0 && <BellBadge aria-hidden="true" style={{ top: 2, right: 0 }}>{due.length}</BellBadge>}
         </BarBell>
       )}
       {open && createPortal(
-        <Panel ref={panelRef} $bar={variant === 'bar'} role="dialog" aria-label="Reminders"
+        <Panel ref={panelRef} $bar={variant !== 'rail'} role="dialog" aria-label="Reminders"
           style={{ left: open.left, right: open.right, top: open.top }}>
           <Head>
             <h2>Reminders</h2>

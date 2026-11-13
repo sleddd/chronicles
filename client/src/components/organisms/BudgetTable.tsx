@@ -6,7 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
 import {
   Note, Actions, CellInput, StatBoxRow, StatCell,
   SheetHead, SheetHeading, SheetBox, SHEET_RULE, UNPAID_COLOR,
-} from '../molecules/FinanceParts.js';
+FoldHeading, } from '../molecules/FinanceParts.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import {
   budgetSummary, billTotals, centsToInput, formatCents, formatMonth, parseMoney, spendingBreakdown, UNCATEGORIZED,
@@ -31,21 +31,6 @@ const TopRule = styled.hr`
   margin: 0 0 32px;
   border: none;
   border-top: 1px solid var(--border-default);
-`;
-
-/* "By category ⌄": the heading itself folds the table away */
-const FoldHeading = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  &:hover h2 { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
-  small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
 `;
 
 /* Hairline closing the budget sections, before Log spending */

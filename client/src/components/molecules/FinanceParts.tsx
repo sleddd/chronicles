@@ -868,3 +868,19 @@ export const PickerPill = styled.label`
   & > span { position: absolute; right: 14px; display: inline-flex; color: var(--text-muted); pointer-events: none; }
   ${glassControl}
 `;
+
+/* A section heading that folds its section away ("By category ⌄", "Log spending ⌄") */
+export const FoldHeading = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover h2 { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+`;
+

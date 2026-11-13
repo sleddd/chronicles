@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import {
-  Actions, ConfirmDelete, SmallBtn, SheetHead, SheetHeading, SheetBox, SHEET_RULE,
+  Actions, ConfirmDelete, SmallBtn, SheetHead, SheetHeading, SheetBox, SHEET_RULE, FoldHeading,
 } from '../molecules/FinanceParts.js';
 import { centsToInput, formatCents, formatDay, formatMonth, parseMoney, todayStr } from '../../utils/finance.js';
 import type { FinanceExpense, FinanceRecord } from '../../types/finance.js';
@@ -173,6 +173,18 @@ export function ExpenseForm({ initial, categories, submitLabel, onSubmit, onCanc
  * Spending for the month the budget shows: a quick add row and the month's
  * lines. Counts toward each category's Spending in the budget above.
  */
+const SPENDING_OPEN_KEY = 'finance-spending-open-v1';
+
+/* "Spent in November ⌃" over the month's lines: folds just the list (the entry row stays) */
+const TableFold = styled(FoldHeading)`
+  margin-top: 24px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-soft);
+  &:hover { color: var(--text-primary); }
+`;
+
 export function SpendingLog({ expenses, categories, month, onSave, onDelete }: SpendingLogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const catName = (id?: string) => (id ? categories.find(c => c.id === id)?.name : undefined);
@@ -184,6 +196,12 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
     [expenses, month],
   );
   const total = rows.reduce((s, e) => s + e.amountCents, 0);
+  // The month's list folds away (open by default; remembered per browser)
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(SPENDING_OPEN_KEY) !== '0'; } catch { return true; } });
+  const toggle = () => setOpen(o => {
+    try { localStorage.setItem(SPENDING_OPEN_KEY, o ? '0' : '1'); } catch { /* private mode */ }
+    return !o;
+  });
 
   return (
     <Wrap aria-label="Log spending">
@@ -201,7 +219,14 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
       <Hint>Log what you spend outside your bills (groceries, gas, eating out) and it counts against that category's budget.</Hint>
 
       {rows.length > 0 && (
-        <ListBox>
+        <TableFold type="button" aria-expanded={open} aria-controls="finance-spending-list" onClick={toggle}>
+          <span>Spent in {formatMonth(month)}</span>
+          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={2} />
+          {!open && <small>{rows.length} {rows.length === 1 ? 'line' : 'lines'} · {formatCents(total)}</small>}
+        </TableFold>
+      )}
+      {rows.length > 0 && open && (
+        <ListBox id="finance-spending-list">
           {rows.map(e => (editingId === e.id ? (
             <div key={e.id} style={{ padding: 12 }}>
               <ExpenseForm

@@ -68,9 +68,9 @@ export const UNSPLASH_LINK = `https://unsplash.com/${UTM}`;
    sealed `wallpaper` setting is the record; this is only a head start) */
 const KEY = 'chronicles.wallpaper-v1';
 
-/** The background everyone starts with: Luca Micheli's Vestrahorn mountain
- *  reflected on the beach at dusk */
-export const DEFAULT_WALLPAPER = 'luca-micheli-ruWkmt3nU58';
+/** The background everyone starts with: Daniel Seßler's green lake under a
+ *  mountain and a blue sky */
+export const DEFAULT_WALLPAPER = 'daniel-sessler-BurTAJlbsRo';
 
 /** What's saved when someone picks None — kept apart from "never chosen",
  *  which means the default */
