@@ -11,8 +11,8 @@ import { useScrollReveal } from '../hooks/useScrollReveal.js';
 import { BETA_DETAILS } from '@shared/legal/index.js';
 
 /* The public home page at `/`: the hero on a night-sky photo with the
-   dashboard in a frame, how it works, the four questions a dashboard should
-   answer, the feature rows, everything else, a comparison, privacy, the beta
+   dashboard in a frame, how it works, the features heading ("Less to tend. More to
+   see."), the feature rows, everything else, a comparison, privacy, the beta
    sign-up and questions. The app itself starts at /dashboard. Installed copies
    (the PWA, standalone) skip this page and open the app. */
 
@@ -619,7 +619,7 @@ export function LandingView() {
         <Band $tone="white" id="features" aria-labelledby="four-title">
           <Container>
             <div data-reveal>
-              <H2 id="four-title">A good dashboard answers four questions.</H2>
+              <H2 id="four-title">Less to tend. More to see.</H2>
               <Lede>
                 The best life dashboard isn’t the one with the most charts. It’s the one you need every day and barely
                 have to touch.
