@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { publishableCover } from '../services/publicShelf.js';
 import styled from 'styled-components';
 import { useParams } from 'react-router-dom';
 import { PublicTemplate } from '../components/templates/PublicTemplate.js';
@@ -143,7 +144,7 @@ export function PublicShelfView() {
                   key={i}
                   readOnly
                   item={{ title: item.title, type: item.type, creator: item.creator, year: item.year, rating: item.rating, shelf: item.shelf }}
-                  coverSrc={item.cover ?? null}
+                  coverSrc={publishableCover(item.cover) ?? null}
                 />
               ))}
             </PosterGrid>

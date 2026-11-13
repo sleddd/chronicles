@@ -10,6 +10,7 @@ import { usePrivateSettings } from '../../services/privateSettings.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
 import { showFlash } from '../../services/flashNotice.js';
+import { trackGuardedSave, noteSettingRemoved } from '../../services/settingCipher.js';
 import { imageStorageConfigSchema } from '@shared/validation/schemas.js';
 import {
   testR2Connection,
@@ -90,6 +91,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
 
     // All fields cleared → forget the stored credentials
     if (!cfg.accountId && !cfg.bucket && !cfg.accessKeyId && !cfg.secretAccessKey) {
+      noteSettingRemoved('imageStorageConfig');
       await settingsApi.remove('imageStorageConfig').catch(() => showFlash('Couldn’t remove your R2 credentials from the server. Try again.'));
       setImageStorageConfig(null, null);
       setImagesConfigured(false);
@@ -110,7 +112,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
     setSaveError('');
     try {
       const encrypted = await encryptImageStorageConfig(cfg, encryptBytes);
-      await settingsApi.upsert('imageStorageConfig', encrypted);
+      await trackGuardedSave('imageStorageConfig', () => settingsApi.upsert('imageStorageConfig', encrypted));
       setImageStorageConfig(cfg, encrypted);
       setImagesConfigured(complete && parsed.success);
       setSaveState('saved');
@@ -169,6 +171,7 @@ export function ImageStorageSettings({ themeMode }: { themeMode: 'light' | 'dark
     setAccountId(''); setBucket(''); setAccessKeyId(''); setSecretAccessKey('');
     setTestState('idle'); setTestMessage(''); setSaveState('idle'); setHint('');
     setImageStorageDraft(null);
+    noteSettingRemoved('imageStorageConfig');
     await settingsApi.remove('imageStorageConfig').catch(() => showFlash('Couldn’t remove your R2 credentials from the server. Try again.'));
     setImageStorageConfig(null, null);
     setImagesConfigured(false);

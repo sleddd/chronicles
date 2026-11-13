@@ -414,6 +414,7 @@ export function legacyMediaFields(
   if (leftover.length) fields.notes = [fields.notes, ...leftover].filter(Boolean).join('\n');
   // Keep anything else the entry carried (links, imported keys…)
   const rest: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(cf)) if (k !== '_userFields' && !(k in fields)) rest[k] = v;
+  // …but never a place on the public shelf: only a bookmark tap publishes an item
+  for (const [k, v] of Object.entries(cf)) if (k !== '_userFields' && k !== 'onPublicShelf' && !(k in fields)) rest[k] = v;
   return { fields: { ...rest, ...fields } as MediaFieldValues };
 }

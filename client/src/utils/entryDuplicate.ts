@@ -4,13 +4,15 @@
  * (`_userFields`), items — but the copy starts fresh: a task back to To do,
  * a finished goal or milestone without its status, every ticked item
  * unticked (to-dos, priorities, shopping). What ties the original to
- * something else stays behind: its bookmark, calendar-sync link, medication
+ * something else stays behind: its bookmark, its place on the public shelf, calendar-sync link, medication
  * change history and dose / schedule / import links.
  */
 
 /** Keys that belong to the original only */
 const LEFT_BEHIND = new Set([
   '_isFavorite', '_sync', '_changes', '_doseLink', '_routineLink', '_importKey',
+  // A copy never goes on the public shelf by itself: only the owner's bookmark tap publishes
+  'onPublicShelf',
   'isCompleted', 'isInProgress', 'isInReview', 'isBacklog', 'completedAt', 'completedOn',
 ]);
 

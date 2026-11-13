@@ -32,6 +32,8 @@ export interface SharedState {
   /** Whether the key is locked, without counting. */
   locked(bucket: string, key: string, max: number): Promise<boolean>;
   clear(bucket: string, key: string): Promise<void>;
+  /** Clear an account's key and every per-session / per-device key under it (`<id>` and `<id>:…`). */
+  clearForAccount(bucket: string, accountId: number): Promise<void>;
   /** Remember a short-lived token (kept by its hash) for an account. */
   putToken(bucket: string, token: string, accountId: number, ttlMs: number): Promise<void>;
   /** The token's account, if it exists and hasn't expired. */
@@ -77,6 +79,10 @@ export function memoryState(): SharedState & { reset(): void } {
     async claim(bucket, key, max, windowMs) { return (await attempt(bucket, key, max, windowMs)) <= max; },
     async locked(bucket, key, max) { return (live(bucket, key)?.count ?? 0) >= max; },
     async clear(bucket, key) { rows.delete(k(bucket, key)); },
+    async clearForAccount(bucket, accountId) {
+      const own = k(bucket, String(accountId));
+      for (const key of [...rows.keys()]) if (key === own || key.startsWith(`${own}:`)) rows.delete(key);
+    },
     async putToken(bucket, token, accountId, ttlMs) { rows.set(k(bucket, tokenKey(token)), { count: 0, accountId, expiresAt: Date.now() + ttlMs }); },
     async getToken(bucket, token) { return live(bucket, tokenKey(token))?.accountId ?? null; },
     async deleteToken(bucket, token) { rows.delete(k(bucket, tokenKey(token))); },
@@ -144,6 +150,12 @@ export function postgresState(): SharedState {
     },
     async clear(bucket, key) {
       await (await db()).$executeRawUnsafe(`DELETE FROM public.auth_state WHERE bucket = $1 AND key = $2`, bucket, key);
+    },
+    async clearForAccount(bucket, accountId) {
+      // The id is a number, so the pattern holds no wildcard of its own
+      await (await db()).$executeRawUnsafe(
+        `DELETE FROM public.auth_state WHERE bucket = $1 AND (key = $2 OR key LIKE $3)`, bucket, String(accountId), `${accountId}:%`
+      );
     },
     async putToken(bucket, token, accountId, ttlMs) {
       await (await db()).$executeRawUnsafe(

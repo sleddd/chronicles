@@ -18,6 +18,16 @@ describe('shared sign-in state (memory store)', () => {
     expect(await s.claim('fail', 'k', 3, 60_000)).toBe(true);
   });
 
+  it('clears an account\'s own key and its per-session / per-device keys, and nobody else\'s', async () => {
+    const s = memoryState();
+    for (const key of ['12', '12:s:abc', '12:d:xyz', '123', '123:s:abc', '1']) await s.hit('fail', key, 60_000);
+    await s.hit('other', '12', 60_000);
+    await s.clearForAccount('fail', 12);
+    for (const key of ['12', '12:s:abc', '12:d:xyz']) expect(await s.locked('fail', key, 1)).toBe(false);
+    for (const key of ['123', '123:s:abc', '1']) expect(await s.locked('fail', key, 1)).toBe(true);
+    expect(await s.locked('other', '12', 1)).toBe(true);
+  });
+
   it('forgets a count once its window has passed', async () => {
     const s = memoryState();
     expect(await s.claim('fail', 'k', 1, 1)).toBe(true);

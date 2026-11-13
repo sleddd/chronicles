@@ -275,6 +275,7 @@ export function MediaView() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const publicShelf = usePublicShelfStore(s => s.publicShelf);
+  const shelfOnHere = usePublicShelfStore(s => s.enabledHere);
   const shelfTitle = usePublicShelfStore(s => s.title);
   const pendingItemId = usePublicShelfStore(s => s.pendingItemId);
   const setPendingItemId = usePublicShelfStore(s => s.setPendingItemId);
@@ -315,12 +316,19 @@ export function MediaView() {
 
   // The bookmark: off the shelf → on it (the first one asks, in the panel); on → off
   const toggleBookmark = useCallback((item: MediaItem, el: HTMLElement | null) => {
-    if (isOnPublicShelf(item)) { void patch(item, { [ON_PUBLIC_SHELF]: false }); return; }
-    if (publicShelf) { void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
+    if (isOnPublicShelf(item)) {
+      void patch(item, { [ON_PUBLIC_SHELF]: false });
+      // A shelf this browser doesn't publish to keeps the item until it's turned on here
+      if (publicShelf && !shelfOnHere) showFlash('Taken off here. Turn your public shelf on in this browser (Settings → Data) to update the public page.');
+      return;
+    }
+    // Only a browser the owner turned the shelf on in skips the prompt: the
+    // server saying a shelf exists is never enough to publish
+    if (publicShelf && shelfOnHere) { void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
     setPendingItemId(item.id);
     setAnchor(el);
     setPanelOpen(true);
-  }, [patch, publicShelf, setPendingItemId]);
+  }, [patch, publicShelf, shelfOnHere, setPendingItemId]);
 
   const setPanel = useCallback((open: boolean) => {
     setPanelOpen(open);

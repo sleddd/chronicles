@@ -13,6 +13,7 @@ import { useAiChatStore } from '../../stores/aiChatStore.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
 import { showFlash } from '../../services/flashNotice.js';
+import { trackGuardedSave, noteSettingRemoved } from '../../services/settingCipher.js';
 import {
   AI_MODEL_PRESETS,
   AI_PROVIDER_LABELS,
@@ -77,7 +78,7 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     setSaveError('');
     try {
       const encrypted = await encryptAiConfig(next, encryptBytes);
-      await settingsApi.upsert('aiConfig', encrypted);
+      await trackGuardedSave('aiConfig', () => settingsApi.upsert('aiConfig', encrypted));
       setAiConfig(next, encrypted);
       setSaveState('saved');
     } catch (err) {
@@ -170,6 +171,8 @@ export function AiSettings({ themeMode }: { themeMode: 'light' | 'dark' }) {
     setCustomModel(false);
     setBedrockModels(null);
     setTestState('idle'); setTestMessage(''); setSaveState('idle');
+    // Whatever the server answers, an AI config from before this never opens here again
+    noteSettingRemoved('aiConfig');
     await settingsApi.remove('aiConfig').catch(() => showFlash('Couldn’t remove your AI keys from the server. Try again.'));
     setAiConfig(null, null);
   };

@@ -45,7 +45,7 @@ function records(): Record<string, true> {
   }
 }
 
-const recordKey = (key: EgressKey) => `${account}|${key}`;
+const recordKey = (key: EgressKey | typeof PUBLIC_SHELF_RECORD) => `${account}|${key}`;
 
 /** The user switched it on or off in this browser. */
 export function recordEgressChoice(key: EgressKey, on: boolean): void {
@@ -57,6 +57,29 @@ export function recordEgressChoice(key: EgressKey, on: boolean): void {
 }
 
 /** The saved value as honoured here: on only if saved on and switched on in this browser. */
+/*
+ * The public shelf publishes plaintext too, and whether one exists is the
+ * server's word: without a record here a server (or anyone able to write its
+ * database) could say "a shelf exists" and have this browser upload every
+ * bookmarked item. So a browser publishes only after its own Turn on. It has
+ * no sealed setting — the record alone decides, and it can't be replayed.
+ */
+const PUBLIC_SHELF_RECORD = 'publicShelf';
+
+/** The owner turned the public shelf on (Turn on) or off in this browser. */
+export function recordPublicShelfChoice(on: boolean): void {
+  if (!account) return;
+  const all = records();
+  if (on) all[recordKey(PUBLIC_SHELF_RECORD)] = true;
+  else delete all[recordKey(PUBLIC_SHELF_RECORD)];
+  try { localStorage.setItem(EGRESS_STORE, JSON.stringify(all)); } catch { /* private mode */ }
+}
+
+/** Whether this browser may publish the shelf: only after its own Turn on. */
+export function publicShelfOnHere(): boolean {
+  return account !== null && records()[recordKey(PUBLIC_SHELF_RECORD)] === true;
+}
+
 export function egressOn(key: EgressKey, saved: unknown): boolean {
   return saved === true && account !== null && records()[recordKey(key)] === true;
 }

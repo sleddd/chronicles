@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { OwnedPublicShelf } from '../services/api.js';
 import { PUBLIC_SHELF_TITLE_DEFAULT } from '@shared/validation/schemas';
+import { publicShelfOnHere } from '../services/deviceConsent.js';
 
 /*
  * The owner's view of their public shelf: whether one exists (its token,
@@ -17,6 +18,12 @@ interface PublicShelfState {
   /** The server has been asked whether this account has a shelf */
   loaded: boolean;
   publicShelf: OwnedPublicShelf | null;
+  /**
+   * This browser may publish: the owner pressed Turn on here (a per-browser
+   * record, services/deviceConsent). The server saying a shelf exists is never
+   * enough — nothing is uploaded, and no bookmark skips the prompt, without it.
+   */
+  enabledHere: boolean;
   title: string;
   status: PublicShelfStatus;
   /** The last body the server accepted — nothing identical is sent again */
@@ -25,6 +32,7 @@ interface PublicShelfState {
   pendingItemId: number | null;
   setLoaded: (publicShelf: OwnedPublicShelf | null) => void;
   setPublicShelf: (publicShelf: OwnedPublicShelf | null) => void;
+  setEnabledHere: (enabledHere: boolean) => void;
   setTitle: (title: string) => void;
   setStatus: (status: PublicShelfStatus) => void;
   setLastSentBody: (body: string | null) => void;
@@ -35,6 +43,7 @@ interface PublicShelfState {
 const initial = {
   loaded: false,
   publicShelf: null,
+  enabledHere: false,
   title: PUBLIC_SHELF_TITLE_DEFAULT,
   status: 'idle' as PublicShelfStatus,
   lastSentBody: null,
@@ -43,8 +52,9 @@ const initial = {
 
 export const usePublicShelfStore = create<PublicShelfState>((set) => ({
   ...initial,
-  setLoaded: (publicShelf) => set({ loaded: true, publicShelf, title: publicShelf?.title ?? PUBLIC_SHELF_TITLE_DEFAULT }),
+  setLoaded: (publicShelf) => set({ loaded: true, publicShelf, enabledHere: publicShelfOnHere(), title: publicShelf?.title ?? PUBLIC_SHELF_TITLE_DEFAULT }),
   setPublicShelf: (publicShelf) => set({ publicShelf }),
+  setEnabledHere: (enabledHere) => set({ enabledHere }),
   setTitle: (title) => set({ title }),
   setStatus: (status) => set({ status }),
   setLastSentBody: (lastSentBody) => set({ lastSentBody }),

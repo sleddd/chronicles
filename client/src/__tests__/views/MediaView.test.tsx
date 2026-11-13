@@ -80,8 +80,17 @@ describe('MediaView', () => {
     expect(mockSave).not.toHaveBeenCalled();
   });
 
-  it('with a shelf on, the bookmark flags the entry and leaves the journal bookmark alone; again takes it off', () => {
+  it('a shelf the server reports but this browser never turned on still asks first, and saves nothing', () => {
     usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My shelf', itemCount: 1, createdAt: '', updatedAt: '' });
+    renderWithTheme(<MediaView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Title 1 to your public shelf' }));
+    expect(screen.getByRole('dialog', { name: 'Public shelf' })).toBeInTheDocument();
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('with a shelf turned on here, the bookmark flags the entry and leaves the journal bookmark alone; again takes it off', () => {
+    usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My shelf', itemCount: 1, createdAt: '', updatedAt: '' });
+    usePublicShelfStore.getState().setEnabledHere(true);
     renderWithTheme(<MediaView />);
     fireEvent.click(screen.getByRole('button', { name: 'Add Title 1 to your public shelf' }));
     expect(mockSave).toHaveBeenCalledTimes(1);

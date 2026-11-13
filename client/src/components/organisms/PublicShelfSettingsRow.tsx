@@ -4,7 +4,7 @@ import { SettingsRow } from '../molecules/SettingsCard.js';
 import { ActionButton, RowLink } from '../atoms/SettingsAtoms.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { usePublicShelfStore } from '../../stores/publicShelfStore.js';
-import { disablePublicShelf, renamePublicShelf, resetPublicShelfLink } from '../../hooks/usePublicShelfSync.js';
+import { disablePublicShelf, enablePublicShelf, renamePublicShelf, resetPublicShelfLink } from '../../hooks/usePublicShelfSync.js';
 import { publicShelfUrl } from '../../services/publicShelf.js';
 import { showFlash } from '../../services/flashNotice.js';
 import { copyText } from '../../utils/clipboard.js';
@@ -46,6 +46,7 @@ const Danger = styled(RowLink)`
 export function PublicShelfSettingsRow() {
   const shelf = usePublicShelfStore(s => s.publicShelf);
   const loaded = usePublicShelfStore(s => s.loaded);
+  const enabledHere = usePublicShelfStore(s => s.enabledHere);
   const title = usePublicShelfStore(s => s.title);
   const [draft, setDraft] = useState(title);
   const [armed, setArmed] = useState<'reset' | 'off' | null>(null);
@@ -63,6 +64,11 @@ export function PublicShelfSettingsRow() {
     setArmed(null); setBusy(true);
     try { await resetPublicShelfLink(); showFlash('New link made — the old one no longer works.'); } catch { showFlash('Couldn’t reset the link. Try again.'); } finally { setBusy(false); }
   };
+  // A shelf turned on elsewhere: this browser publishes only once it's turned on here too
+  const turnOnHere = async () => {
+    setBusy(true);
+    try { await enablePublicShelf(draft); } catch { showFlash('Couldn’t turn on your public shelf. Try again.'); } finally { setBusy(false); }
+  };
   const copy = async () => {
     if (!shelf) return;
     if (await copyText(publicShelfUrl(shelf.token))) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -70,6 +76,7 @@ export function PublicShelfSettingsRow() {
   };
 
   const description = !loaded ? 'Checking…'
+    : shelf && !enabledHere ? `On, but not updated from this browser. Turn it on here to publish the changes you make here. ${PUBLIC_SHELF_PRIVACY_LINE}`
     : shelf ? `On — ${shelf.itemCount} ${shelf.itemCount === 1 ? 'item' : 'items'}. ${PUBLIC_SHELF_PRIVACY_LINE}`
     : 'Off. Bookmark an item on the Media Journal to start one.';
 
@@ -93,6 +100,7 @@ export function PublicShelfSettingsRow() {
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); renamePublicShelf(draft); } }} />
           </TitleRow>
           <Links>
+            {!enabledHere && <RowLink type="button" onClick={turnOnHere} disabled={busy}>Turn on here</RowLink>}
             <RowLink type="button" onClick={copy}>{copied ? 'Copied' : 'Copy link'}</RowLink>
             <RowLink type="button" onClick={reset} disabled={busy} onBlur={() => setArmed(a => (a === 'reset' ? null : a))}>
               {armed === 'reset' ? 'Reset? The old link stops working' : 'Reset link'}

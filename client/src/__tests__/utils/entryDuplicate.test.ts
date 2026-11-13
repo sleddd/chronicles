@@ -31,6 +31,10 @@ describe('duplicateEntryFields', () => {
     expect(duplicateEntryFields({ milestoneStatus: 'completed', isCompleted: true })).toEqual({});
   });
 
+  it('a copy of an item on the public shelf is not on it', () => {
+    expect(duplicateEntryFields({ mediaTitle: 'Dune', rating: 4.5, onPublicShelf: true })).toEqual({ mediaTitle: 'Dune', rating: 4.5 });
+  });
+
   it('never changes the original', () => {
     const original = { items: [{ id: '1', name: 'Milk', checked: true }] };
     duplicateEntryFields(original);

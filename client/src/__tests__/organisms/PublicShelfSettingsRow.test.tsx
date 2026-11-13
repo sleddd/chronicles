@@ -25,8 +25,21 @@ describe('PublicShelfSettingsRow', () => {
     expect(screen.queryByRole('button', { name: /Turn off/ })).not.toBeInTheDocument();
   });
 
+  it('a shelf this browser never turned on says so and offers Turn on here, which publishes and records it', async () => {
+    usePublicShelfStore.getState().setLoaded(shelf);
+    api.put.mockResolvedValue(shelf);
+    renderWithTheme(<PublicShelfSettingsRow />);
+    expect(screen.getByText(/^On, but not updated from this browser/)).toBeInTheDocument();
+    expect(api.put).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on here' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalled());
+    await waitFor(() => expect(usePublicShelfStore.getState().enabledHere).toBe(true));
+    expect(screen.queryByRole('button', { name: 'Turn on here' })).not.toBeInTheDocument();
+  });
+
   it('once on: the title, Copy link, and Reset / Turn off that ask twice', async () => {
     usePublicShelfStore.getState().setLoaded(shelf);
+    usePublicShelfStore.getState().setEnabledHere(true);
     api.reset.mockResolvedValue({ ...shelf, token: 'n'.repeat(32) });
     api.remove.mockResolvedValue({ success: true });
     renderWithTheme(<PublicShelfSettingsRow />);

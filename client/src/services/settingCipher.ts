@@ -33,11 +33,16 @@ export const isBound = (v: SealedValue) => v.v === 2;
  * a server could serve an older one it kept — an AI key or provider, or an
  * image bucket, the user has since moved away from. For these settings each
  * write carries a revision (`_rev`, inside the sealed value) one past the
- * newest this browser has opened, and this browser refuses anything older
- * than the newest it has seen (kept per account under its master-key tag, so
- * through sign-out). A value from before revisions opens until a revised one
- * has been seen. It can't stop a server hiding another device's newer write
- * altogether — nothing passing only through the server can.
+ * newest this browser has opened or written, and this browser refuses anything
+ * older than the newest it has seen (kept per account under its master-key
+ * tag, so through sign-out). "Seen" moves on when a value is opened and when
+ * the server has taken a save (`trackGuardedSave`) — so the value just
+ * replaced is refused from then on, not only once the new one was read back —
+ * and removing the setting (`noteSettingRemoved`) leaves a mark one past
+ * everything written, so nothing from before the removal opens here again.
+ * A value from before revisions opens until a revised one has been seen. It
+ * can't stop a server hiding another device's newer write altogether —
+ * nothing passing only through the server can.
  */
 export const SETTING_REVS_STORE = 'chronicles.setting-rev.v1';
 const ROLLBACK_GUARDED = new Set(['aiConfig', 'imageStorageConfig']);
@@ -68,12 +73,67 @@ function noteRev(key: string, rev: number): void {
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
+// This session's writes, per account + key: the newest revision handed out
+// (so each save gets its own), the lowest handed out since no save was in
+// flight, and how many saves are on their way to the server
+const written = new Map<string, { issued: number; burstMin: number | null; inFlight: number; landed: boolean }>();
+
+function writes(key: string) {
+  const id = `${accountTagForRecords() ?? ''}|${key}`;
+  let w = written.get(id);
+  if (!w) { w = { issued: 0, burstMin: null, inFlight: 0, landed: false }; written.set(id, w); }
+  return w;
+}
+
+function nextRev(key: string): number {
+  const w = writes(key);
+  const rev = Math.max(seenRev(key), w.issued) + 1;
+  w.issued = rev;
+  if (w.burstMin === null) w.burstMin = rev;
+  return rev;
+}
+
+/**
+ * Send a rollback-guarded setting's save. Once no save is in flight and one
+ * has landed, everything older than this burst of saves is refused here. (The
+ * burst's lowest revision, not its highest: two saves can reach the server in
+ * either order, and the one it kept must still open.) A failed save changes
+ * nothing — the value the server still holds keeps opening.
+ */
+export async function trackGuardedSave<T>(key: string, send: () => Promise<T>): Promise<T> {
+  if (!ROLLBACK_GUARDED.has(key)) return send();
+  const w = writes(key);
+  w.inFlight++;
+  try {
+    const result = await send();
+    w.landed = true;
+    return result;
+  } finally {
+    w.inFlight--;
+    if (w.inFlight <= 0) {
+      if (w.landed && w.burstMin !== null) noteRev(key, w.burstMin);
+      w.inFlight = 0; w.burstMin = null; w.landed = false;
+    }
+  }
+}
+
+/** The setting was removed: nothing written before now opens in this browser again. */
+export function noteSettingRemoved(key: string): void {
+  if (!ROLLBACK_GUARDED.has(key)) return;
+  const w = writes(key);
+  const mark = Math.max(seenRev(key), w.issued) + 1;
+  w.issued = mark;
+  w.burstMin = null;
+  noteRev(key, mark);
+}
+
 /** Seal a setting's value for `key`. */
 export async function sealSetting(key: string, value: unknown, encryptBytes: EncryptBytes): Promise<SealedValue> {
   if (ROLLBACK_GUARDED.has(key) && isPlainObject(value)) {
-    // Noted as seen when it's next opened, not now: if this write never
-    // reaches the server, the value it still holds keeps opening
-    value = { ...value, _rev: seenRev(key) + 1 };
+    // Noted as seen once the server has taken it (trackGuardedSave) or when
+    // it's next opened, not now: if this write never reaches the server, the
+    // value it still holds keeps opening
+    value = { ...value, _rev: nextRev(key) };
   }
   const data = new TextEncoder().encode(JSON.stringify(value));
   const { ciphertext, iv } = await encryptBytes(data.buffer as ArrayBuffer, settingAad(key));

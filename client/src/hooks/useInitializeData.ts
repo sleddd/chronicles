@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react';
+import { validEntryRows } from '../utils/entryRows.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -102,7 +103,7 @@ export function useInitializeData() {
         setFeatureFlags(featureFlagsFrom(settingsMap));
         setTopics(topicsData);
 
-        const encrypted: EncryptedPost[] = rawEntries.map(e => ({
+        const encrypted: EncryptedPost[] = validEntryRows(rawEntries).map(e => ({
           id: e.id as number,
           contentEncrypted: (e.contentEncrypted as string) || null,
           contentIv: (e.contentIv as string) || null,

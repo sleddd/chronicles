@@ -23,18 +23,19 @@ import { EGRESS_KEYS, egressOn, type EgressKey } from './deviceConsent.js';
  * once by `migrateSettings`, which then writes the sealed marker
  * `settingsSealV2`. Once the marker exists no unbound value is accepted, so an
  * old ciphertext the server kept can't be replayed under another key.
- * Plaintext values of private keys are refused — except the few harmless
- * keys that only became private with v2 (`NEWLY_PRIVATE`), which are sealed by
- * that same one-time migration, before the marker. The switches that send data
- * off the device (`EGRESS_KEYS`) open only bound, never unbound or plaintext,
- * and count only where this browser turned them on (`deviceConsent.ts`); the
- * marker itself is backed by `sealedFormats.ts`.
+ * Plaintext values of private keys are always refused (a browser with no
+ * remembered marker would otherwise take whatever the server wrote there). The
+ * switches that send data off the device (`EGRESS_KEYS`) and the AI / R2
+ * credentials (`CREDENTIALS`) open only bound, never unbound or plaintext: an
+ * unbound value carries no key, so the server could file any old one under
+ * `aiConfig`. The switches also count only where this browser turned them on
+ * (`deviceConsent.ts`); the marker itself is backed by `sealedFormats.ts`.
  */
 export { PRIVATE_SETTING_KEYS };
 export type PrivateSettingKey = typeof PRIVATE_SETTING_KEYS[number];
 
 const PRIVATE = new Set<string>(PRIVATE_SETTING_KEYS);
-const NEWLY_PRIVATE = new Set<string>(['imagesEnabled', 'topicHideText']);
+const CREDENTIALS = new Set<string>(['aiConfig', 'imageStorageConfig']);
 const EGRESS = new Set<string>(EGRESS_KEYS);
 
 /** Sealed marker: present once every setting of the account is on the v2 format. */
@@ -76,15 +77,16 @@ export async function openSettingsMap(map: Record<string, unknown>, decryptBytes
       if (isBound(v)) {
         try { map[key] = await openSetting(key, v, decryptBytes); }
         catch { delete map[key]; }
-      } else if (!migrated && !EGRESS.has(key)) {
+      } else if (!migrated && !EGRESS.has(key) && !CREDENTIALS.has(key)) {
         try { map[key] = await openUnbound(v, decryptBytes); toReseal.push(key); }
         catch { delete map[key]; }
       } else {
         delete map[key];
       }
     } else if (PRIVATE.has(key)) {
-      if (!migrated && NEWLY_PRIVATE.has(key)) toReseal.push(key);
-      else delete map[key];
+      // A private key is never taken readable — not even the ones that were
+      // plaintext before v2: the server could write any value there
+      delete map[key];
     }
   }));
   return { toReseal, migrated };

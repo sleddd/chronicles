@@ -161,15 +161,19 @@ async function strikeTwoFALock(accountId: number, bucket: string): Promise<void>
   }
 }
 
-/** When 2FA is turned on or off, or the account is deleted: a fresh count, replay guard and locks. */
+/**
+ * When 2FA is turned on or off, or the account is deleted: a fresh count,
+ * replay guard and locks — in every bucket the account has (its own, and each
+ * session's and known device's, `<id>:s:…` / `<id>:d:…`), so a lock earned
+ * against the old authenticator doesn't outlive it.
+ */
 async function clearTwoFAState(accountId: number): Promise<void> {
-  const id = String(accountId);
   await Promise.all([
-    sharedState.clear(TWO_FA_FAILURES, id),
-    sharedState.clear(TOTP_STEP, id),
-    sharedState.clear(TWO_FA_STRIKES, id),
-    sharedState.clear(TWO_FA_LONG_LOCK, id),
-    sharedState.clear(TWO_FA_DAILY, id),
+    sharedState.clearForAccount(TWO_FA_FAILURES, accountId),
+    sharedState.clear(TOTP_STEP, String(accountId)),
+    sharedState.clearForAccount(TWO_FA_STRIKES, accountId),
+    sharedState.clearForAccount(TWO_FA_LONG_LOCK, accountId),
+    sharedState.clearForAccount(TWO_FA_DAILY, accountId),
   ]);
 }
 
@@ -222,19 +226,26 @@ function claimLoginAttempt(key: string): Promise<number | null> {
   return claimPasswordAttempt(LOGIN_FAILURES, key, LOGIN_MAX_FAILURES, LOGIN_LOCK_MS);
 }
 
-// Per-account cap on wrong passwords at the password-confirmed actions (change
-// password or email, recovery key, key wrap, 2FA, delete account), on top of
-// the per-IP limit, so a stolen session can't be used to guess the password
-// from many IPs. Counted before the check, like sign-in.
+// Cap on wrong passwords at the password-confirmed actions (change password or
+// email, recovery key, key wrap, 2FA, delete account), on top of the per-IP
+// limit, so a stolen session can't be used to guess the password from many
+// IPs. Counted before the check, like sign-in — and per session, like wrong
+// 2FA codes: counted per account, someone holding a stolen session could lock
+// the owner out of changing the password (the way to end that session's use)
+// with 30 wrong guesses a day. A session can only be had with the password, so
+// separate buckets don't give a guesser more tries.
 const CONFIRM_MAX_FAILURES = 10;
 const CONFIRM_LOCK_MS = 15 * 60 * 1000;
+
+/** The password-confirm bucket of the session making this request. */
+const confirmKey = (req: Request): string => `${req.auth!.accountId}:s:${req.auth!.selector}`;
 
 // Per-account cap on email changes, counting every try
 const EMAIL_CHANGE_MAX = 5;
 const EMAIL_CHANGE_WINDOW_MS = 60 * 60 * 1000;
 
-function claimConfirmAttempt(accountId: number): Promise<number | null> {
-  return claimPasswordAttempt(CONFIRM_FAILURES, String(accountId), CONFIRM_MAX_FAILURES, CONFIRM_LOCK_MS);
+function claimConfirmAttempt(key: string): Promise<number | null> {
+  return claimPasswordAttempt(CONFIRM_FAILURES, key, CONFIRM_MAX_FAILURES, CONFIRM_LOCK_MS);
 }
 
 /**
@@ -486,16 +497,15 @@ async function checkAuthSecret(stored: string, authSecret: string): Promise<bool
   return current && matched;
 }
 
-async function confirmLocked(accountId: number): Promise<boolean> {
-  const id = String(accountId);
-  return (await sharedState.locked(PASSWORD_LONG_LOCK, `${CONFIRM_FAILURES}:${id}`, 1))
-    || sharedState.locked(CONFIRM_FAILURES, id, CONFIRM_MAX_FAILURES);
+async function confirmLocked(key: string): Promise<boolean> {
+  return (await sharedState.locked(PASSWORD_LONG_LOCK, `${CONFIRM_FAILURES}:${key}`, 1))
+    || sharedState.locked(CONFIRM_FAILURES, key, CONFIRM_MAX_FAILURES);
 }
 
-/** Route guard for the password-confirmed actions: 429 once the account is locked. */
+/** Route guard for the password-confirmed actions: 429 once this session is locked. */
 async function confirmGate(req: Request, res: Response, next: (err?: unknown) => void): Promise<void> {
   try {
-    if (req.auth && (await confirmLocked(req.auth.accountId))) {
+    if (req.auth && (await confirmLocked(confirmKey(req)))) {
       res.status(429).json({ error: 'Too many incorrect passwords. Try again later.' });
       return;
     }
@@ -505,13 +515,13 @@ async function confirmGate(req: Request, res: Response, next: (err?: unknown) =>
   }
 }
 
-/** Check the current password at a password-confirmed action (counted per account). */
-async function checkConfirmSecret(account: { id: number; passwordHash: string }, authSecret: string): Promise<boolean> {
-  const n = await claimConfirmAttempt(account.id);
+/** Check the current password at a password-confirmed action (counted per session). */
+async function checkConfirmSecret(account: { id: number; passwordHash: string }, authSecret: string, key: string): Promise<boolean> {
+  const n = await claimConfirmAttempt(key);
   if (n === null) return false;
   const ok = await checkAuthSecret(account.passwordHash, authSecret);
-  if (ok) await sharedState.clear(CONFIRM_FAILURES, String(account.id));
-  else await passwordFailed(CONFIRM_FAILURES, String(account.id), n, CONFIRM_MAX_FAILURES);
+  if (ok) await sharedState.clear(CONFIRM_FAILURES, key);
+  else await passwordFailed(CONFIRM_FAILURES, key, n, CONFIRM_MAX_FAILURES);
   return ok;
 }
 
@@ -879,7 +889,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       return;
     }
 
-    const valid = await checkConfirmSecret(account, currentAuthSecret);
+    const valid = await checkConfirmSecret(account, currentAuthSecret, confirmKey(req));
     if (!valid) {
       logSecurityEvent('password_change_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
@@ -962,7 +972,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
       where: { id: req.auth!.accountId },
       select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
-    if (!account || !(await checkConfirmSecret(account, parsed.data.currentAuthSecret))) {
+    if (!account || !(await checkConfirmSecret(account, parsed.data.currentAuthSecret, confirmKey(req)))) {
       logSecurityEvent('email_change_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -1267,7 +1277,7 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
       where: { id: req.auth!.accountId },
       select: { id: true, passwordHash: true, totpEnabled: true },
     });
-    if (!account || !(await checkConfirmSecret(account, currentAuthSecret))) {
+    if (!account || !(await checkConfirmSecret(account, currentAuthSecret, confirmKey(req)))) {
       logSecurityEvent('2fa_enable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
@@ -1342,7 +1352,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
       return;
     }
 
-    const valid = await checkConfirmSecret(account, parsed.data.authSecret);
+    const valid = await checkConfirmSecret(account, parsed.data.authSecret, confirmKey(req));
     if (!valid) {
       logSecurityEvent('2fa_disable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
@@ -1402,7 +1412,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       res.status(404).json({ error: 'Account not found' });
       return;
     }
-    if (!(await checkConfirmSecret(account, parsed.data.authSecret))) {
+    if (!(await checkConfirmSecret(account, parsed.data.authSecret, confirmKey(req)))) {
       logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip });
       res.status(401).json({ error: 'Incorrect password' });
       return;
@@ -1497,7 +1507,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
       where: { id: req.auth!.accountId },
       select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
-    if (!account || !(await checkConfirmSecret(account, currentAuthSecret))) {
+    if (!account || !(await checkConfirmSecret(account, currentAuthSecret, confirmKey(req)))) {
       logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;

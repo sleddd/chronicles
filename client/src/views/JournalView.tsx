@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { validEntryRows } from '../utils/entryRows.js';
 import { duplicateEntryFields } from '../utils/entryDuplicate.js';
 import { nextPrompt } from '../utils/journalPrompts.js';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -584,7 +585,7 @@ export function JournalView() {
         // never-saved flags default to enabled, same as useInitializeData
         setFeatureFlags(featureFlagsFrom(settingsMap));
         setTopics(topicsData);
-        const encrypted: EncryptedPost[] = rawEntries.map(e => ({
+        const encrypted: EncryptedPost[] = validEntryRows(rawEntries).map(e => ({
           id: e.id as number,
           contentEncrypted: (e.contentEncrypted as string) || null,
           contentIv: (e.contentIv as string) || null,

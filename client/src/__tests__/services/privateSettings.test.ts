@@ -69,17 +69,18 @@ describe('the one-time move to v2', () => {
     getStatus.mockResolvedValue({ icsEnabled: true });
     const map: Record<string, unknown> = {
       nutritionGoals: await unbound({ iron: 18 }),
-      imagesEnabled: true, // private since v2: its plaintext is sealed this once
+      imagesEnabled: true, // private: its plaintext is never taken, even before the marker
       themeMode: 'dark',
     };
     const opened = await openSettingsMap(map, decryptBytes);
     expect(opened.migrated).toBe(false);
-    expect(opened.toReseal.sort()).toEqual(['imagesEnabled', 'nutritionGoals']);
+    expect(opened.toReseal.sort()).toEqual(['nutritionGoals']);
+    expect(map.imagesEnabled).toBeUndefined();
     expect(map.nutritionGoals).toEqual({ iron: 18 });
 
     const resealed = await migrateSettings(map, opened, encryptBytes);
     const written = Object.fromEntries(upsert.mock.calls);
-    expect(Object.keys(written).sort()).toEqual(['icsFeedEnabled', 'imagesEnabled', 'nutritionGoals', SEAL_MARKER_KEY].sort());
+    expect(Object.keys(written).sort()).toEqual(['icsFeedEnabled', 'nutritionGoals', SEAL_MARKER_KEY].sort());
     for (const v of Object.values(written)) expect((v as { v?: number }).v).toBe(2);
     expect(resealed.nutritionGoals).toBe(written.nutritionGoals);
     // What the server reports about the feed never switches it on
@@ -162,10 +163,19 @@ describe('the one-time move to v2', () => {
   });
 
   it('startup hands the loaders the freshly re-sealed blob', async () => {
-    const old = await unbound({ provider: 'claude' });
-    const { map, sealed } = await openStartupSettings([{ key: 'aiConfig', value: old }], decryptBytes, encryptBytes);
-    expect(map.aiConfig).toEqual({ provider: 'claude' });
-    expect((sealed('aiConfig') as { v?: number }).v).toBe(2);
+    const old = await unbound({ hidden: [] });
+    const { map, sealed } = await openStartupSettings([{ key: 'dashboardConfig', value: old }], decryptBytes, encryptBytes);
+    expect(map.dashboardConfig).toEqual({ hidden: [] });
+    expect((sealed('dashboardConfig') as { v?: number }).v).toBe(2);
+  });
+
+  it('never takes the AI or image-bucket credentials unbound: an old ciphertext filed under them stays shut', async () => {
+    for (const key of ['aiConfig', 'imageStorageConfig']) {
+      const { map, sealed } = await openStartupSettings([{ key, value: await unbound({ provider: 'claude' }) }], decryptBytes, encryptBytes);
+      expect(map[key]).toBeUndefined();
+      expect(upsert.mock.calls.map(c => c[0])).not.toContain(key);
+      expect((sealed(key) as { v?: number } | undefined)?.v).not.toBe(2);
+    }
   });
 });
 
