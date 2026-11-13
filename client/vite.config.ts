@@ -26,9 +26,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        // The installed app is only the app: the public home page (its own lazy
-        // chunk and Lenis) is never precached
-        globIgnores: ['**/LandingView-*.js', '**/lenis-*.js'],
+        // The landing page's lazy chunk (and Lenis) are precached with the rest:
+        // a worker still serving an older index.html must also hold the chunks
+        // that index names, or the page fails to load after a deploy. The
+        // installed app never opens the landing page (HomeRoute sends it to
+        // the dashboard), so this only costs it the download
         // The main bundle passed workbox's 2 MiB default, which fails the
         // build; it has to be precached for the app to open offline
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,

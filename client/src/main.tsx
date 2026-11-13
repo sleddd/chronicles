@@ -16,6 +16,19 @@ import { setUpdateAvailable } from './services/appUpdate.js';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', PAGE_COLOR[mode]);
 }
 
+// After a deploy, a page still running the previous build can ask for a chunk
+// that no longer exists (its hash changed). Load the new build instead —
+// once: a second failure within a minute is left to show its error
+window.addEventListener('vite:preloadError', event => {
+  try {
+    const last = Number(sessionStorage.getItem('chronicles.chunk-reload') ?? 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem('chronicles.chunk-reload', String(Date.now()));
+  } catch { /* storage refused: still try one reload */ }
+  event.preventDefault();
+  window.location.reload();
+});
+
 // index.html carries the home page's SEO title; everywhere else the tab just says Chronicles
 if (window.location.pathname !== '/') document.title = 'Chronicles';
 

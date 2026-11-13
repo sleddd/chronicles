@@ -149,6 +149,9 @@ app.use(express.static(clientDist));
 app.get('{/*path}', (req, res) => {
   // A missing service worker is a 404, never the app under the worker's CSP
   if (req.path.toLowerCase() === SERVICE_WORKER_PATH) { res.status(404).end(); return; }
+  // A missing build file (an old chunk after a deploy) is a 404 too, never the
+  // app's HTML — a browser refuses HTML as a script, and the app reloads instead
+  if (req.path.startsWith('/assets/')) { res.status(404).end(); return; }
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
