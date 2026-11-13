@@ -6,6 +6,7 @@ import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '.
 import { useHabitStore } from '../stores/habitStore.js';
 import { withCount } from './habits.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { entryTitleText } from './entryTitle.js';
 import { routineLinkKey, SCHEDULE_TOPIC } from './routines.js';
 import { mountaineeringTemplate } from './training.js';
 import { searchCovers, fetchCover } from '../services/coverLookup.js';
@@ -739,6 +740,66 @@ export async function seedMediaOnly(deps: SeedDeps): Promise<string> {
 export async function seedExerciseScheduleOnly(deps: SeedDeps): Promise<string> {
   const n = await seedExerciseSchedule(deps);
   return `Done — added ${n} entries: the exercise schedule, a week of sessions and a training plan if there wasn’t one.`;
+}
+
+/** Every goal, milestone, task and habit the planning seed writes (by title), so a re-seed replaces them */
+const PLANNING_SEED_TITLES = new Set([
+  'Add the GitHub Actions workflow',
+  'Assemble the desk',
+  'Back up the laptop',
+  'Balance board',
+  'Book a Spanish tutor',
+  'Buy proper running shoes',
+  'CI/CD pipeline and deploys',
+  'Call the dentist to reschedule',
+  'Clear out the garage',
+  'Conversational Spanish',
+  'Desk, chair and lighting',
+  'Exercises 1–20 on conditional types',
+  'Finish the generics chapter',
+  'Fix the iPad keyboard overlap',
+  'Invite the first ten testers',
+  'Learn TypeScript deeply',
+  'Offline mode for the mobile app',
+  'Order a birthday gift for Mum',
+  'Pay the electricity bill',
+  'Phase 1 foundation: auth, entries, topics, search',
+  'Pick up the dry cleaning',
+  'Plan the weekend hike',
+  'Port the TipTap editor with its full toolbar',
+  'Private beta with 30 testers',
+  'Read 20 pages',
+  'Read the mapped types chapter',
+  'Renew car registration',
+  'Return the library books',
+  'Review the auth routes PR',
+  'Run 10K without stopping',
+  'Run a half marathon',
+  'Set up the feedback channel',
+  'Set up the home office',
+  'Ship the Chronicles rebuild',
+  'Spanish flashcards',
+  'Staging environment on Render',
+  'Three easy 3K runs this week',
+  'Try a standing desk converter',
+  'Write encryption unit tests for shared/crypto',
+  'Write the beta FAQ',
+]);
+const PLANNING_TOPICS = ['Goal', 'Milestone', 'Task', 'Habit'];
+
+/** Just planning — goals with categories and start dates (the Roadmap), milestones, tasks on the Planner,
+ *  todos, ideas and habits — for an account that already has data. Earlier seeded copies (same titles,
+ *  in the planning topics) are removed first; anything else is left alone. */
+export async function seedPlanningOnly(deps: SeedDeps): Promise<string> {
+  const topicIds = new Set(PLANNING_TOPICS.map(t => findTopic(deps.topics, t)).filter((id): id is number => id != null));
+  const old = useEntriesStore.getState().decryptedEntries.filter(e =>
+    topicIds.has(Number(e.metadata?._taxonomyId)) && PLANNING_SEED_TITLES.has(entryTitleText(e.content)));
+  for (const e of old) {
+    useEntriesStore.getState().removeEntry(e.id);
+    await entriesApi.delete(e.id);
+  }
+  const n = await seedPlanning(deps);
+  return `Done — replaced ${old.length} seeded planning entries with ${n} new ones (roadmap dates, categories, the week planner and habits).`;
 }
 
 async function seedPlanning(deps: SeedDeps): Promise<number> {

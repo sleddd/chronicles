@@ -41,7 +41,7 @@ import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topi
 import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
 import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
 import { BugReportForm } from '../components/organisms/BugReportForm.js';
-import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly } from '../utils/seedTestData.js';
+import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly, seedPlanningOnly } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
@@ -640,6 +640,25 @@ export function SettingsView() {
       setSeedMediaResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSeedingMedia(false);
+    }
+  };
+
+  const [seedingPlanning, setSeedingPlanning] = useState(false);
+  const [seedPlanningResult, setSeedPlanningResult] = useState('');
+  const handleSeedPlanning = async () => {
+    setSeedingPlanning(true); setSeedPlanningResult('');
+    try {
+      const freshTopics = await topicsApi.getAll();
+      setSeedPlanningResult(await seedPlanningOnly({
+        encryptPost: encryptNewPost,
+        topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
+        addDecryptedEntry,
+        onProgress: (msg) => setSeedPlanningResult(msg),
+      }));
+    } catch (err) {
+      setSeedPlanningResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingPlanning(false);
     }
   };
 
@@ -1461,6 +1480,16 @@ export function SettingsView() {
           }
         />
         {seedScheduleResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedScheduleResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedScheduleResult}</div>}
+        <SettingsRow
+          title="Seed Planning"
+          description="Goals with categories and start dates for the Roadmap, milestones, tasks spread over this week's Planner, todos, ideas and habits with two months of check-ins. Earlier seeded planning entries are replaced; your own are left alone"
+          action={
+            <ActionButton onClick={() => void handleSeedPlanning()} disabled={seedingPlanning}>
+              {seedingPlanning ? <Spinner size={14} /> : 'Seed Planning'}
+            </ActionButton>
+          }
+        />
+        {seedPlanningResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedPlanningResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedPlanningResult}</div>}
         <SettingsRow
           title="Seed Media"
           description="Add 27 books, films, shows and albums to the Media Journal — finished, under way, saved, paused and abandoned, rated, some bookmarked for the public shelf — with covers looked up in the usual catalogues. Titles already on your shelves are skipped"

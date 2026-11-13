@@ -4,7 +4,7 @@
  *
  *   node scripts/build-wallpapers.mjs            (npm run wallpapers)
  *
- * Originals: src/assets/wallpaper/wallpapers/<name>-<11-char id>-unsplash.jpg
+ * Originals: src/assets/wallpaper/<name>-<11-char id>-unsplash.jpg
  * (not committed), with Unsplash's metadata.txt beside them for the credits.
  * Each one missing from public/wallpapers gets a 2,400px copy and a
  * 480 × 300 thumbnail. A photo already in public/wallpapers stays, whether or
@@ -21,7 +21,7 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = join(root, 'src/assets/wallpaper/wallpapers');
+const SRC = join(root, 'src/assets/wallpaper');
 const OUT = join(root, 'public/wallpapers');
 const THUMBS = join(OUT, 'thumbs');
 const LIST = join(root, 'src/utils/wallpapers.ts');

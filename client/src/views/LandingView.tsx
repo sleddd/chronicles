@@ -4,11 +4,11 @@ import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
 import { LandingTemplate, Container, ActionPill, DarkBand, TEAL_GRADIENT } from '../components/templates/LandingTemplate.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
-import { Chip } from '../components/molecules/fields/formKit.js';
+import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlides.js';
+import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
 import { BetaSignup } from '../components/organisms/landing/BetaSignup.js';
 import { useScrollReveal } from '../hooks/useScrollReveal.js';
 import { BETA_DETAILS } from '@shared/legal/index.js';
-import heroShot from '../assets/landing/dashboard-dark.jpg';
 
 /* The public home page at `/`: the hero on a night-sky photo with the
    dashboard in a frame, how it works, the four questions a dashboard should
@@ -23,22 +23,27 @@ export const SEO_TITLE = 'Chronicles — Zero-Knowledge Encrypted Journal & Digi
 const SHOTS = import.meta.glob<string>('../assets/landing/features/*.jpg', { eager: true, query: '?url', import: 'default' });
 const shotUrl = (key: string) => SHOTS[`../assets/landing/features/${key}.jpg`];
 
+/** A row's slides: each light screen, then its dark version right after it when there is one */
+function slidesFor(f: Feature): Slide[] {
+  const keys = Array.isArray(f.shot) ? f.shot : [f.shot];
+  const alts = Array.isArray(f.alt) ? f.alt : [f.alt];
+  return keys.flatMap((k, i) => {
+    const alt = alts[i] ?? alts[0];
+    return [
+      { src: shotUrl(k), alt, size: f.size },
+      ...(f.lightOnly ? [] : [{ src: shotUrl(`${k}-dark`), alt: `${alt} (dark mode)`, size: f.size }]),
+    ].filter(sl => !!sl.src) as Slide[];
+  });
+}
+
 /** Stagger for revealed items: each later one starts a beat after */
 const delay = (i: number) => ({ '--reveal-delay': `${i * 0.1}s` }) as CSSProperties;
 
-const TRUST = [
-  { icon: 'lock', text: 'Zero-knowledge encryption' },
-  { icon: 'visibility_off', text: 'No analytics or tracking' },
-  { icon: 'link', text: 'Nothing connects to your bank' },
-  { icon: 'key', text: 'AI optional, with your own key' },
-  { icon: 'download', text: 'Export your data any time' },
-];
-
 const QUESTIONS_FOUR = [
-  { title: 'What matters now?', body: 'Today’s priorities, active goals, medication doses, the day’s menu and what’s coming up, on one dashboard you arrange yourself.' },
-  { title: 'What am I doing about it?', body: 'Goals hold their milestones and tasks. Exercise and medication schedules you check off. A timer for anything you want to track.' },
-  { title: 'What changed?', body: 'Mood, sleep, stress, exercise, symptoms and spending over time, with patterns in what goes with your better days.' },
-  { title: 'What should change next?', body: 'Your journal sits beside the evidence, so a weekly review ends with a decision instead of another chart.' },
+  { title: 'What matters now?', body: 'Today’s priorities, active goals and what’s due, all in one glance.' },
+  { title: 'What am I doing about it?', body: 'Your goals, milestones and tasks sit together, so progress shows right next to the work.' },
+  { title: 'What changed?', body: 'Mood, sleep, symptoms and spending trend over time, so patterns show up without any digging.' },
+  { title: 'What should change next?', body: 'Reports show what’s helping and what isn’t, so the next adjustment is easy to see.' },
 ];
 
 interface Feature {
@@ -47,9 +52,12 @@ interface Feature {
   body: string;
   points: string[];
   note?: string;
-  shot: string;
+  /** One screenshot key, or several for a slideshow */
+  shot: string | string[];
   size: [number, number];
-  alt: string;
+  alt: string | string[];
+  /** A slideshow of light screens only, no dark versions */
+  lightOnly?: boolean;
 }
 
 const FEATURES: Feature[] = [
@@ -57,8 +65,11 @@ const FEATURES: Feature[] = [
     label: 'Life dashboard', title: 'Your whole day at a glance.',
     body: 'Weather, priorities, doses, the day’s menu, your shopping list and what’s ahead, under your own wallpaper. Choose what shows with Customize view.',
     points: ['Quick entry from the top of the page', 'Wellness check-in for water, sleep and mood', 'World clocks, daily quote, light and dark themes'],
-    shot: 'dashboard-2', size: [1268, 1300],
-    alt: 'The dashboard with today’s priorities, what’s coming up, the shopping list, medications, a quick meal log and a symptom log',
+    shot: ['dashboard', 'dashboard-2'], size: [1268, 1300],
+    alt: [
+      'The dashboard with the greeting and weather, quick entry, the daily quote, the wellness check-in and world clocks',
+      'Further down the dashboard, today’s priorities, what’s coming up, the shopping list, medications, a quick meal log and a symptom log',
+    ],
   },
   {
     label: 'Journal', title: 'A journal that keeps up with you.',
@@ -69,25 +80,49 @@ const FEATURES: Feature[] = [
   },
   {
     label: 'Goals and planning', title: 'Goals that hold everything they need.',
-    body: 'A personal operating system without the setup. A goal is a container for its milestones, tasks, people, supplies and savings. Tasks roll up into milestones, and milestones into goals.',
-    points: ['Kanban boards or lists, drag to change status', 'Priorities, deadlines and todos', 'Time tracking for tasks and focus sessions'],
-    shot: 'planning-tasks', size: [1268, 900],
-    alt: 'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
+    body: 'A goal gathers its milestones and tasks in one place. Tasks roll up into milestones, milestones roll up into goals, and the roadmap shows where it all lands. Then plan your week around it.',
+    points: [
+      'Roadmap timeline: See every goal on a Gantt-style timeline by quarter, year or three years, with a marker for today.',
+      'Weekly planner: Drop tasks into morning, noon and night, right beside your calendar events.',
+      'Kanban boards or lists: Drag to change status.',
+      'Priorities, deadlines and todos: Keep what’s due in front of you.',
+      'Time tracking: Track time on tasks and focus sessions.',
+    ],
+    shot: ['planning-tasks', 'planning-roadmap', 'planning-planner'], size: [1268, 900],
+    alt: [
+      'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
+      'The roadmap: goals and their milestones as bars across the year, grouped by category',
+      'The week planner with tasks and events in each day, and the unscheduled tasks beside it',
+    ],
   },
   {
     label: 'Health and wellness', title: 'Health, wellness and symptom tracking.',
     body: 'Track nutrition against your goals, log wellness, and run medication and exercise schedules with doses you check off. Allergy, symptom and medication lists print for appointments.',
     points: ['Meals, calories, macros and vitamins', 'Mood tracker, sleep, water and stress', 'Exercise history and symptom logs'],
-    shot: 'health-dashboard', size: [1268, 1300],
-    alt: 'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs and today’s doses',
+    shot: ['health-dashboard', 'health-meals', 'health-exercise-history', 'health-reports'],
+    size: [1268, 1300], lightOnly: true,
+    alt: [
+      'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs, today’s doses and a quick symptom log',
+      'The meals log with the day’s calories and vitamins against goals beside the protein, carbs and fat split, and what was eaten',
+      'Exercise history showing each exercise’s sessions, days, time and distance this month',
+      'Health reports with mood, sleep, social time, exercise and stress over time, and what goes with better days',
+    ],
   },
   {
-    label: 'Reports and patterns', title: 'See what goes with your better days.',
-    body: 'Personal analytics from the life you already logged. Mood, sleep, social time, exercise and stress over time, and which symptoms tend to happen together.',
-    points: ['Possible correlations you confirm or dismiss', 'A square per day for every symptom', 'No wearable needed: built from your entries'],
-    note: 'A pattern is a lead worth looking into, not a diagnosis.',
-    shot: 'health-reports', size: [1268, 1300],
-    alt: 'Health reports with mood, sleep, social time, exercise and stress over time, and what goes with better days',
+    label: 'Budget and finance', title: 'Know where your money goes.',
+    body: 'Set your budget, track bills and subscriptions, and watch your savings targets fill up. Reports show planned against actual, so you can adjust before the month ends.',
+    points: [
+      'Budget vs. actual: See spending by category next to what you planned.',
+      'Bills and subscriptions: Everything recurring, in one place.',
+      'Savings targets: Track progress toward each one.',
+      'Built from your entries: No bank connection needed.',
+    ],
+    shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440], lightOnly: true,
+    alt: [
+      'The budget with planned, bills, spending and what’s left, and where the money goes by category',
+      'Bills and subscriptions with what’s due, paid and overdue this month',
+      'Savings funds with each balance and its progress toward a target',
+    ],
   },
 ];
 
@@ -103,16 +138,6 @@ const EXTRAS = [
   { title: 'Time tracking', body: 'Time any task, workout or session, right from its entry.' },
   { title: 'Works on any device', body: 'Runs in the browser and installs to your phone’s home screen.' },
   { title: 'Optional AI', body: 'Calorie and nutrient estimates with your own Anthropic, OpenAI or Bedrock key. It never sees your journal.' },
-];
-
-const COMPARE_COLUMNS = ['Chronicles', 'Build-your-own workspace', 'Health data dashboard', 'Separate apps for each job'];
-const COMPARE_ROWS: [string, string, string, string, string][] = [
-  ['Useful from day one', 'Yes, with default topics and views', 'After you design the databases', 'After you connect devices', 'Yes, one app at a time'],
-  ['Journal, goals and health together', 'Yes', 'If you build the links', 'Health only', 'Spread across apps'],
-  ['Enter it once, see it everywhere', 'Yes', 'With relations and formulas', 'For synced data', 'No, re-entered in each'],
-  ['Upkeep each month', 'None', 'Schema, filters and cleanup', 'Low', 'Several subscriptions'],
-  ['Zero-knowledge encryption', 'Yes', 'Varies', 'Varies', 'Varies'],
-  ['Automatic wearable data', 'No, you enter it', 'Through add-ons', 'Yes, its core job', 'In health apps'],
 ];
 
 const PRIVACY = [
@@ -206,7 +231,7 @@ const Hero = styled.div`
   margin: 0 auto;
   padding: 88px 24px 72px;
   text-align: center;
-  text-shadow: 0 1px 14px rgba(8, 12, 28, 0.4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 18px rgba(0, 0, 0, 0.55);
   @media (max-width: 768px) { padding: 48px 32px 48px; }
 `;
 
@@ -253,208 +278,117 @@ const BigPill = styled(ActionPill)`
   && { min-height: 48px; padding: 10px 26px; font-size: 16px; font-weight: 600; }
 `;
 
-const HeroNote = styled.p`
-  margin: 22px 0 0;
-  font-size: 14px;
-  font-style: italic;
-  color: var(--text-muted);
-`;
-
-/* The dashboard in a pale glass frame, with three floating cards lifted
-   off it like the app's own (Water, Quick entry, Mood) */
+/* The hero's slideshow of the app, no frame */
 const Showcase = styled.div`
-  position: relative;
   max-width: 1184px;
   margin: 0 auto;
   padding: 0 24px 8px;
   @media (max-width: 768px) { padding: 0 20px; }
 `;
 
-const Frame = styled.div`
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 18px;
-  background: rgba(236, 238, 244, 0.55);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 30px 80px rgba(16, 20, 40, 0.28);
-  img { display: block; width: 100%; height: auto; border-radius: 10px; }
-  @media (max-width: 768px) { padding: 6px; border-radius: 12px; img { border-radius: 7px; } }
+/* ——— How it works (the original timeline) ——— */
+
+const STEPS = [
+  { title: 'Pick a topic', body: 'Start with the defaults or make your own with specialized custom fields.' },
+  { title: 'Draft a sentence', body: 'A meal, a dose, a bill, a thought. Enter it as it happens in less than 15s.' },
+  { title: 'Views auto-sort it', body: 'Your entry shows up everywhere you need it automatically.' },
+];
+
+/* More room above and below than the other bands */
+const HowBand = styled(Band)`
+  && { padding: 136px 0 144px; }
+  @media (max-width: 768px) { && { padding: 88px 0 96px; } }
 `;
 
-/* A floating card: the light panel, a hairline and an overlay shadow */
-const Float = styled.div`
-  position: absolute;
-  padding: 20px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 12px;
-  background: rgba(244, 245, 248, 0.94);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 18px 48px rgba(16, 20, 40, 0.22);
-  color: var(--text-primary);
-  text-align: left;
-  text-shadow: none;
-  --text-primary: #1f2128;
-  --text-soft: #4a505b;
-  /* the card label, as on the dashboards */
-  > b {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-soft);
-  }
-  @media (max-width: 1000px) { display: none; }
+/* The heading: title case, a touch heavier, more room under it */
+const HowTitle = styled(H2)`
+  margin: 0 0 30px;
+  font-size: 60px;
+  font-weight: 300;
+  text-align: center;
+  text-transform: capitalize;
+  max-width: none;
+  @media (max-width: 768px) { font-size: 42px; }
 `;
 
-const WaterCard = styled(Float)`
-  top: 13%;
-  right: -16px;
-  width: 250px;
-  strong { font-family: var(--font-display); font-size: 38px; font-weight: 300; margin-right: 10px; }
-  p { display: flex; align-items: baseline; margin: 6px 0 12px; font-size: 15px; color: var(--text-soft); }
-  /* the wellness rule: 4 of 8, an accent dot at the end */
-  i {
-    position: relative;
-    display: block;
-    height: 4px;
-    border-radius: 2px;
-    background: linear-gradient(90deg, var(--color-accent) 0 52%, #d3d7dd 52%);
-    &::after { content: ''; position: absolute; left: 52%; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: var(--color-accent); transform: translate(-50%, -50%); }
-  }
+/* The intro: centred, at most 860px wide */
+const WideLede = styled(Lede)`
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
 `;
 
-const EntryCard = styled(Float)`
-  bottom: 9%;
-  left: -24px;
-  width: 320px;
-  p { margin: 14px 0 18px; font-size: 16px; font-style: italic; }
-  div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 12px;
-    border-top: 1px solid #d3d7dd;
-    font-size: 14px;
-    color: var(--text-soft);
-  }
-  div > span { display: inline-flex; align-items: center; height: 30px; }
-`;
-
-const MoodCard = styled(Float)`
-  bottom: -26px;
-  right: -8px;
-  width: 250px;
-  > b { display: flex; justify-content: space-between; em { font-style: normal; letter-spacing: normal; text-transform: none; font-size: 14px; color: var(--color-accent-line); } }
-  div { display: flex; justify-content: space-between; margin-top: 12px; }
-  span { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #80868f; }
-  span[data-on] { border-color: var(--color-accent-line); background: var(--color-accent-subtle); }
-`;
-
-/* ——— Trust strip ——— */
-
-const Trust = styled.ul`
-  list-style: none;
-  margin: 0;
-  padding: 72px 0 36px;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  li { display: flex; align-items: center; gap: 14px; font-size: 15px; color: var(--text-primary); line-height: 1.45; }
-  li > span { flex: none; color: var(--color-accent-line); }
-  @media (max-width: 1000px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; padding-top: 56px; }
-  @media (max-width: 520px) { grid-template-columns: minmax(0, 1fr); }
-`;
-
-/* ——— How it works ——— */
-
+/* A timeline: a teal ring with a centre dot above each step, a hairline
+   joining the rings, the title and text centred underneath */
 const Steps = styled.ol`
+  --gap: 40px;
   list-style: none;
   margin: 72px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 28px;
-  > li {
-    display: flex;
-    flex-direction: column;
-    padding: 36px 32px 32px;
-    border: 1px solid var(--border-card);
-    border-radius: 12px;
-    background: var(--bg-panel);
+  gap: var(--gap);
+  li { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  /* The line to the next ring: from this ring's edge to the next ring's edge */
+  li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 17px;
+    left: calc(50% + 30px);
+    width: calc(100% + var(--gap) - 60px);
+    height: 1px;
+    background: var(--border-default);
   }
-  > li > small { font-size: 14px; letter-spacing: 0.14em; color: var(--color-accent-line); }
-  > li > h3 { margin: 18px 0 14px; font-family: var(--font-display); font-size: 30px; font-weight: 300; color: var(--text-primary); }
-  > li > p { margin: 0 0 28px; font-size: 16px; line-height: 1.6; color: var(--text-soft); }
-  @media (max-width: 960px) { grid-template-columns: minmax(0, 1fr); gap: 20px; margin-top: 48px; }
-`;
-
-/* The step's picture, at the foot of its card under a hairline */
-const StepArt = styled.div`
-  margin-top: auto;
-  padding-top: 22px;
-  border-top: 1px solid var(--border-subtle);
-`;
-
-const Chips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  > span { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; font-size: 13px; cursor: default; }
-`;
-
-const SampleEntry = styled.p`
-  margin: 0 0 10px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 15px;
-  font-style: italic;
-  color: var(--text-primary);
-`;
-
-const FillsIn = styled.ul`
-  list-style: none;
-  margin: -6px 0 0;
-  padding: 0;
-  li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 11px 0;
-    font-size: 14px;
-    color: var(--text-primary);
+  h3 { margin: 32px 0 10px; font-family: var(--font-display); font-size: 26px; font-weight: 300; color: var(--text-primary); }
+  p { margin: 0; max-width: 300px; font-size: 16px; line-height: 1.65; color: var(--text-soft); text-wrap: balance; }
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 44px;
+    margin-top: 48px;
+    li::after { display: none; }
+    h3 { margin-top: 18px; }
   }
-  li + li { border-top: 1px dashed var(--border-subtle); }
-  li > span { color: var(--color-accent-line); }
+`;
+
+/* The step marker: a teal ring with a dot in the middle */
+const Marker = styled.span`
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 2px solid var(--color-accent-line);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-accent-line) 0 5px, transparent 5.5px);
 `;
 
 /* ——— Four questions ——— */
 
 const Four = styled.ol`
+  --gap: 56px;
   list-style: none;
   margin: 72px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--gap);
   border-top: 1px solid var(--border-subtle);
-  li { padding: 44px 28px 8px; }
-  li:first-child { padding-left: 0; }
-  li + li { border-left: 1px solid var(--border-subtle); }
-  li > small { font-size: 14px; letter-spacing: 0.14em; color: var(--color-accent-line); }
-  h3 { margin: 16px 0 14px; font-family: var(--font-display); font-size: 28px; font-weight: 300; line-height: 1.2; color: var(--text-primary); }
+  /* Each question spans two shared rows (title, text), so every title takes the
+     tallest title's room and the descriptions start on one line. Equal columns,
+     the rule between them drawn in the middle of the gap */
+  li { position: relative; display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 0; padding: 44px 0 8px; }
+  li + li::before { content: ''; position: absolute; top: 0; bottom: 0; left: calc(var(--gap) / -2); border-left: 1px solid var(--border-subtle); }
+  h3 { margin: 0 0 14px; font-family: var(--font-display); font-size: 28px; font-weight: 300; line-height: 1.2; color: var(--text-primary); }
   p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text-soft); }
   @media (max-width: 960px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    li:nth-child(3) { padding-left: 0; border-left: none; }
+    li:nth-child(3)::before { display: none; }
     li:nth-child(n + 3) { border-top: 1px solid var(--border-subtle); }
   }
   @media (max-width: 560px) {
     grid-template-columns: minmax(0, 1fr);
     li { padding: 32px 0 28px; }
-    li + li { border-left: none; border-top: 1px solid var(--border-subtle); }
+    li + li::before { display: none; }
+    li + li { border-top: 1px solid var(--border-subtle); }
   }
 `;
 
@@ -491,14 +425,6 @@ const RowLabel = styled.p`
 `;
 
 /* A screenshot in a light device bezel, lifted off the page */
-const Device = styled.div`
-  padding: 8px;
-  border: 1px solid var(--border-card);
-  border-radius: 16px;
-  background: var(--bg-app);
-  box-shadow: 0 2px 6px rgba(20, 24, 32, 0.04), 0 28px 60px rgba(20, 24, 32, 0.12);
-  img { display: block; width: 100%; height: auto; border-radius: 10px; }
-`;
 
 /* ——— Everything else ——— */
 
@@ -509,8 +435,8 @@ const Modules = styled.ul`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 24px;
-  li { overflow: hidden; border: 1px solid var(--border-card); border-radius: 12px; background: var(--bg-panel); }
-  img { display: block; width: 100%; height: 190px; object-fit: cover; object-position: top left; border-bottom: 1px solid var(--border-subtle); }
+  li { overflow: hidden; border-radius: 12px; background: var(--bg-panel); box-shadow: 0 1px 3px rgba(20, 24, 32, 0.06), 0 10px 28px rgba(20, 24, 32, 0.08); }
+  img { display: block; width: 100%; height: 190px; object-fit: cover; object-position: top left; }
   li > div { padding: 24px 22px 28px; }
   h3 { margin: 0 0 12px; font-family: var(--font-display); font-size: 22px; font-weight: 400; color: var(--text-primary); }
   p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--text-soft); }
@@ -530,39 +456,6 @@ const Extras = styled.ul`
   p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--text-soft); }
   @media (max-width: 1000px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 40px; }
   @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
-`;
-
-/* ——— Compare ——— */
-
-/* The table scrolls sideways inside its own box on narrow screens */
-const TableBox = styled.div`
-  margin-top: 64px;
-  overflow-x: auto;
-  border: 1px solid var(--border-card);
-  border-radius: 12px;
-  background: var(--bg-panel);
-`;
-
-const Table = styled.table`
-  width: 100%;
-  min-width: 860px;
-  border-collapse: collapse;
-  font-size: 15px;
-  th, td { padding: 22px 22px; text-align: left; vertical-align: top; line-height: 1.6; }
-  thead th { font-family: var(--font-display); font-size: 18px; font-weight: 400; color: var(--text-primary); background: #ffffff; }
-  tbody tr { border-top: 1px solid var(--border-subtle); }
-  tbody th { font-weight: 500; color: var(--text-primary); width: 26%; }
-  td { color: var(--text-soft); }
-  /* The Chronicles column: a deep teal head over faintly tinted cells */
-  thead th:nth-child(2) { background: var(--color-accent-line); color: #ffffff; }
-  td:nth-child(2) { background: var(--color-accent-subtle); color: var(--text-primary); font-weight: 600; }
-`;
-
-const TableNote = styled.p`
-  margin: 18px 0 0;
-  font-size: 14px;
-  font-style: italic;
-  color: var(--text-soft);
 `;
 
 /* ——— Privacy (the teal band) ——— */
@@ -709,7 +602,6 @@ function isInstalledApp(): boolean {
     && window.matchMedia('(display-mode: standalone)').matches;
 }
 
-const pad = (n: number) => String(n).padStart(2, '0');
 
 export function LandingView() {
   const { isAuthenticated } = useAuth();
@@ -732,112 +624,56 @@ export function LandingView() {
             <HeroEyebrow>Life dashboard · Journal · Day planner</HeroEyebrow>
             <H1 id="hero-title">A life dashboard for people <em>too busy to plan.</em></H1>
             <HeroText>
-              Chronicles is a zero-knowledge encrypted journal, life tracker and digital day planner in one app. Write one
-              line and it lands where it belongs: goals, tasks, meals, medications, moods, bills and your calendar.
+              Chronicles is a zero-knowledge encrypted journal, life tracker and digital day planner in one app. Enter your
+              data in one place and it gets sorted into views for planning, health tracking, finance &amp; budgeting, and
+              much more.
             </HeroText>
             <HeroActions>
               <BigPill as="a" href="#beta" $primary>Join the private beta</BigPill>
               <BigPill as="a" href="#how">See how it works</BigPill>
             </HeroActions>
-            <HeroNote>{BETA_DETAILS.seats} beta seats. Free during the beta.</HeroNote>
           </Hero>
           <Showcase>
-            <Frame>
-              <img src={heroShot} width={1600} height={1000} alt="The Chronicles dashboard in dark mode: a greeting with the weather, the quick entry, the daily quote, the wellness check-in and world clocks" />
-            </Frame>
-            <WaterCard aria-hidden>
-              <b>Water</b>
-              <p><strong>4</strong> of 8 glasses</p>
-              <i />
-            </WaterCard>
-            <EntryCard aria-hidden>
-              <b>Quick entry</b>
-              <p>Took my iron with breakfast</p>
-              <div><Chip as="span" $active>Medication</Chip> Logged to today</div>
-            </EntryCard>
-            <MoodCard aria-hidden>
-              <b>Mood <em>Good</em></b>
-              <div><span /><span /><span /><span data-on /><span /></div>
-            </MoodCard>
+            <ScreenSlideshow />
           </Showcase>
         </section>
       )}
     >
       <div ref={revealRef}>
-        <Container>
-          <Trust aria-label="At a glance">
-            {TRUST.map(t => (
-              <li key={t.text}><MaterialIcon aria-hidden $size={22}>{t.icon}</MaterialIcon>{t.text}</li>
-            ))}
-          </Trust>
-        </Container>
-
-        <Band $tone="page" id="how" aria-labelledby="how-title">
+        <HowBand $tone="page" id="how" aria-labelledby="how-title">
           <Container>
             <div data-reveal>
-              <Eyebrow $center>How it works</Eyebrow>
-              <H2 $center id="how-title">One line in. Every view sorted for you.</H2>
-              <Lede $center>
-                Chronicles is inspired by bullet journaling, without the notebook. Every entry carries a topic, whether
-                it’s a task, a meal or an event, and the views do the sorting. It’s a life tracker you’ll keep using
-                because entering a day takes seconds.
-              </Lede>
+              <HowTitle id="how-title">How it works</HowTitle>
+              <WideLede>
+                Chronicles is inspired by bullet journaling where every entry carries a topic, whether
+                it’s a task, a meal, or an event, and the views do the sorting for you.
+              </WideLede>
             </div>
             <Steps>
-              <li data-reveal style={delay(0)}>
-                <small>01</small>
-                <h3>Pick a topic</h3>
-                <p>Start with the defaults or make your own, with custom fields, so a book asks for a title and author and a dose asks for an amount.</p>
-                <StepArt aria-hidden>
-                  <Chips>
-                    {['Journal', 'Medication', 'Meals', 'Tasks', 'Bills', 'Books', '+ Your own'].map(t => (
-                      <Chip key={t} as="span" $active={t === 'Medication'}>{t}</Chip>
-                    ))}
-                  </Chips>
-                </StepArt>
-              </li>
-              <li data-reveal style={delay(1)}>
-                <small>02</small>
-                <h3>Write a sentence</h3>
-                <p>A meal, a dose, a bill, a thought. Enter it as it happens in under fifteen seconds, by typing, voice or Apple Pencil.</p>
-                <StepArt aria-hidden>
-                  <SampleEntry>Lunch: salmon salad, about 520 calories</SampleEntry>
-                  <Chips>
-                    <Chip as="span" $active>Meals</Chip>
-                    <Chip as="span" $active={false}>Today, 12:40</Chip>
-                  </Chips>
-                </StepArt>
-              </li>
-              <li data-reveal style={delay(2)}>
-                <small>03</small>
-                <h3>Your views fill in</h3>
-                <p>The entry shows up everywhere it’s needed. No copying the same fact into five apps, and no dashboard to maintain.</p>
-                <StepArt aria-hidden>
-                  <FillsIn>
-                    {['Dashboard · today’s meals', 'Health · calories and macros', 'Reports · nutrition over time'].map(t => (
-                      <li key={t}>{t}<MaterialIcon $size={18}>check</MaterialIcon></li>
-                    ))}
-                  </FillsIn>
-                </StepArt>
-              </li>
+              {STEPS.map((st, i) => (
+                <li key={st.title} data-reveal style={delay(i)}>
+                  <Marker aria-hidden />
+                  <h3>{st.title}</h3>
+                  <p>{st.body}</p>
+                </li>
+              ))}
             </Steps>
           </Container>
-        </Band>
+        </HowBand>
 
         <Band $tone="white" id="features" aria-labelledby="four-title">
           <Container>
             <div data-reveal>
               <Eyebrow>A dashboard that leads to decisions</Eyebrow>
-              <H2 id="four-title">A personal dashboard should answer four questions.</H2>
+              <H2 id="four-title">A good dashboard answers four questions.</H2>
               <Lede>
-                The best life dashboard isn’t the one with the most charts. It’s the one that shortens the trip from
-                seeing what changed to deciding what to do next.
+                The best life dashboard isn’t the one with the most charts. It’s the one you barely need, but always
+                count on.
               </Lede>
             </div>
             <Four>
               {QUESTIONS_FOUR.map((f, i) => (
                 <li key={f.title} data-reveal style={delay(i)}>
-                  <small>{pad(i + 1)}</small>
                   <h3>{f.title}</h3>
                   <p>{f.body}</p>
                 </li>
@@ -848,18 +684,14 @@ export function LandingView() {
               {FEATURES.map((f, i) => (
                 <FeatureRow key={f.label}>
                   <div data-reveal>
-                    <RowLabel>{pad(i + 1)} · {f.label}</RowLabel>
+                    <RowLabel>{f.label}</RowLabel>
                     <h3>{f.title}</h3>
                     <p>{f.body}</p>
                     <TickList items={f.points} />
                     {f.note && <em>{f.note}</em>}
                   </div>
                   <div data-reveal style={delay(1.5)}>
-                    {shotUrl(f.shot) && (
-                      <Device>
-                        <img src={shotUrl(f.shot)} width={f.size[0]} height={f.size[1]} alt={f.alt} loading="lazy" decoding="async" />
-                      </Device>
-                    )}
+                    <ShotSlides slides={slidesFor(f).filter((sl, i) => Array.isArray(f.shot) || i === 0)} />
                   </div>
                 </FeatureRow>
               ))}
@@ -893,42 +725,6 @@ export function LandingView() {
                 </li>
               ))}
             </Extras>
-          </Container>
-        </Band>
-
-        <Band $tone="white" id="compare" aria-labelledby="compare-title">
-          <Container>
-            <div data-reveal>
-              <Eyebrow>Compare</Eyebrow>
-              <H2 id="compare-title">All in one, without becoming a project.</H2>
-              <Lede>
-                Most life dashboard apps pick one job. Health dashboards read your wearables. Build-your-own workspaces
-                hand you databases and formulas. A stack of single-purpose apps means entering the same day five times.
-                Chronicles keeps the journal, the planner and the tracker behind one entry line.
-              </Lede>
-            </div>
-            <TableBox data-reveal tabIndex={0} role="region" aria-label="Chronicles compared with other approaches">
-              <Table>
-                <thead>
-                  <tr>
-                    <td aria-hidden style={{ background: '#ffffff' }} />
-                    {COMPARE_COLUMNS.map(c => <th key={c} scope="col">{c}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARE_ROWS.map(([label, ...cells]) => (
-                    <tr key={label}>
-                      <th scope="row">{label}</th>
-                      {cells.map((c, i) => <td key={i}>{c}</td>)}
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableBox>
-            <TableNote>
-              If wearable data is your main input, keep a dedicated health platform as its source of truth. Chronicles
-              holds the context around it: goals, routines, symptoms and how the days felt.
-            </TableNote>
           </Container>
         </Band>
 

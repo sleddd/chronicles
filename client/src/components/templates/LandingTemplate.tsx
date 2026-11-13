@@ -73,7 +73,7 @@ const HeroBand = styled.div`
   isolation: isolate;
   background:
     linear-gradient(180deg, transparent 78%, var(--bg-app) 98%),
-    linear-gradient(180deg, rgba(7, 10, 20, 0.86) 0%, rgba(7, 10, 20, 0.62) 30%, rgba(7, 10, 20, 0.7) 55%, rgba(7, 10, 20, 0.94) 78%),
+    linear-gradient(rgba(10, 12, 17, 0.5), rgba(10, 12, 17, 0.5)),
     #141a2e url(${HERO_PHOTO}) center 28% / cover no-repeat;
   color: var(--text-secondary);
 
@@ -301,7 +301,6 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
           <Nav aria-label="Main">
             <a href="#how" data-section-link>How it works</a>
             <a href="#features" data-section-link>Features</a>
-            <a href="#compare" data-section-link>Compare</a>
             <a href="#privacy" data-section-link>Privacy</a>
             <a href="#faq" data-section-link>FAQ</a>
             {signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}
@@ -323,7 +322,6 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <ul>
               <li><a href="#features">Features</a></li>
               <li><a href="#how">How it works</a></li>
-              <li><a href="#compare">Compare</a></li>
               <li><a href="#beta">Join the beta</a></li>
             </ul>
           </nav>
