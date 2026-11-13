@@ -356,7 +356,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <HeroBand>
       <Header>
         <HeaderRow>
-          <Brand to="/"><img src="/chronicles-logo-sky.svg" alt="" /> Chronicles</Brand>
+          <Brand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</Brand>
           <Nav aria-label="Main">
             <a href="#how" data-section-link>How it works</a>
             <a href="#features" data-section-link>Features</a>
@@ -386,7 +386,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <Footer>
         <FooterTop>
           <div>
-            <FooterBrand to="/"><img src="/chronicles-logo-sky.svg" alt="" /> Chronicles</FooterBrand>
+            <FooterBrand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</FooterBrand>
             <p>A zero-knowledge encrypted life dashboard, journal and digital day planner.</p>
           </div>
           <nav aria-labelledby="foot-product">

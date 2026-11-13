@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <!-- Chronicles app icon: the book_5 mark (Material Symbols, Apache 2.0) in a white to
-       pale-teal gradient on the landing page's teal gradient (TEAL_GRADIENT). -->
+       pale-lavender gradient on the landing page's night-sky gradient (SKY_GRADIENT). -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#123c3b"/><stop offset="0.38" stop-color="#1b5a58"/>
-      <stop offset="0.62" stop-color="#23706e"/><stop offset="1" stop-color="#2f9895"/>
+      <stop offset="0" stop-color="#0d2249"/><stop offset="0.36" stop-color="#183e6e"/>
+      <stop offset="0.66" stop-color="#3b4580"/><stop offset="1" stop-color="#64598f"/>
     </linearGradient>
     <radialGradient id="glow" cx="0.88" cy="0" r="0.45">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="book" gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">
-      <stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#d3f1ed"/><stop offset="1" stop-color="#9adbd4"/>
+      <stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#e6e0f7"/><stop offset="1" stop-color="#cbbfeb"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
