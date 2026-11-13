@@ -45,7 +45,7 @@ const HeroBand = styled.div`
   isolation: isolate;
   background:
     linear-gradient(180deg, transparent 78%, var(--bg-app) 98%),
-    linear-gradient(rgba(10, 12, 17, 0.5), rgba(10, 12, 17, 0.5)),
+    linear-gradient(rgba(10, 12, 17, 0.65), rgba(10, 12, 17, 0.65)),
     #141a2e url(${HERO_PHOTO}) center 28% / cover no-repeat;
   color: var(--text-secondary);
 
