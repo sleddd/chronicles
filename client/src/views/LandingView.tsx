@@ -471,8 +471,9 @@ const BetaLayout = styled(Container)`
 const FaqBand = styled(DarkBand)`
   --border-default: rgba(255, 255, 255, 0.22);
   --border-subtle: rgba(255, 255, 255, 0.12);
-  --color-accent-line: #7cc4c2;
-  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.5);
+  /* The night sky's light blue (the hero's "too busy to plan."), not teal */
+  --color-accent-line: #a9c8f0;
+  --shadow-ring: 0 0 0 3px rgba(169, 200, 240, 0.5);
   padding: 120px 0 120px;
   @media (max-width: 768px) { padding: 72px 0 80px; }
 `;
