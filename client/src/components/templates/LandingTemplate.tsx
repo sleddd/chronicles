@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Link } from 'react-router-dom';
 import { PillButton } from '../atoms/PillButton.js';
 import { BETA_DETAILS } from '@shared/legal/index.js';
+import { LIGHT_TOKENS } from '../../styles/lightTokens.js';
 
 /* The public landing page at `/` (layout only), in the app's own type, colours
    and controls: thin Work Sans headings, Open Sans text, round accent pills.
@@ -11,50 +12,21 @@ import { BETA_DETAILS } from '@shared/legal/index.js';
    root. The header and hero sit on a night-sky photo (`HeroBand`: Benjamin
    Voros's Milky Way over mountains, one of the app's wallpapers) with white
    text and pills, fading into the page colour at its foot. The privacy band
-   uses the teal gradient (`TEAL_GRADIENT`) and dark bands re-pin dark text
+   uses the night-sky gradient (`SKY_GRADIENT`, colours taken from the hero photo) and dark bands re-pin dark text
    tones (`DarkBand`). */
 
 /** The light theme's tokens, pinned on a page root — the landing page and the public shelf use them */
-export const LIGHT_TOKENS = `
-  --bg-app: #f4f5f7;
-  --bg-panel: #fbfbfc;
-  --bg-surface: #fbfbfc;
-  --bg-sunken: #dcdfe4;
-  --bg-band: #dcdfe4;
-  --bg-hover: #eef0f3;
-  --bg-active: #d3d7dd;
-  --bg-control: #fefefe;
-  --text-primary: #1f2128;
-  --text-secondary: #1f2128;
-  --text-soft: #4a505b;
-  --text-muted: #575d68;
-  --text-disabled: #6b7079;
-  --border-subtle: #d3d7dd;
-  --border-default: #bfc4cc;
-  --border-card: #cdd1d8;
-  --border-field: #cdd1d8;
-  --border-pill: #80868f;
-  --control-border: #80868f;
-  --color-danger: #d8483f;
-  --color-accent: #34a5a2;
-  --color-accent-line: #23706e;
-  --color-accent-soft: #23706e;
-  --color-accent-hover: #2c8c8a;
-  --color-accent-subtle: rgba(52, 165, 162, 0.10);
-  --on-accent: #ffffff;
-  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.35);
-  --logo-top: rgb(23, 74, 73);
-  --logo-mid: rgb(34, 107, 105);
-  --logo-low: rgb(44, 140, 138);
-  --logo-end: #34a5a2;
-  color-scheme: light;
-`;
+export { LIGHT_TOKENS };
 
 /** The page's teal gradient: deep teal on the left easing to the accent on the
     right, with a soft light at the top right. The hero and the privacy band. */
-export const TEAL_GRADIENT = `
-  radial-gradient(circle at 88% 0%, rgba(255, 255, 255, 0.14), transparent 45%),
-  linear-gradient(135deg, #123c3b 0%, #1b5a58 38%, #23706e 62%, #2f9895 100%)
+/** The night sky's indigo (from the hero photo), for the form button and the page's icons */
+export const SKY_INK = '#3b4580';
+export const SKY_INK_HOVER = '#2c3566';
+
+export const SKY_GRADIENT = `
+  radial-gradient(circle at 88% 0%, rgba(255, 255, 255, 0.12), transparent 45%),
+  linear-gradient(135deg, #0d2249 0%, #183e6e 36%, #3b4580 66%, #64598f 100%)
 `;
 
 /** The hero's photo (served from public/wallpapers, like the app's backgrounds) */
@@ -297,7 +269,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <HeroBand>
       <Header>
         <HeaderRow>
-          <Brand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</Brand>
+          <Brand to="/"><img src="/chronicles-logo-sky.svg" alt="" /> Chronicles</Brand>
           <Nav aria-label="Main">
             <a href="#how" data-section-link>How it works</a>
             <a href="#features" data-section-link>Features</a>
@@ -314,7 +286,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <Footer>
         <FooterTop>
           <div>
-            <FooterBrand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</FooterBrand>
+            <FooterBrand to="/"><img src="/chronicles-logo-sky.svg" alt="" /> Chronicles</FooterBrand>
             <p>A zero-knowledge encrypted life dashboard, journal and digital day planner.</p>
           </div>
           <nav aria-labelledby="foot-product">

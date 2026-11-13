@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
-import { LandingTemplate, Container, ActionPill, DarkBand, TEAL_GRADIENT } from '../components/templates/LandingTemplate.js';
+import { LandingTemplate, Container, ActionPill, DarkBand, SKY_GRADIENT, SKY_INK } from '../components/templates/LandingTemplate.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlides.js';
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
@@ -207,7 +207,7 @@ const Ticks = styled.ul`
   display: grid;
   gap: 12px;
   li { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; color: var(--text-primary); }
-  li > span { flex: none; margin-top: 2px; color: var(--color-accent-line); }
+  li > span { flex: none; margin-top: 2px; color: ${SKY_INK}; }
 `;
 
 function TickList({ items }: { items: string[] }) {
@@ -252,8 +252,8 @@ const H1 = styled.h1`
   font-weight: 200;
   line-height: 1.04;
   color: var(--text-primary);
-  /* The second half in a pale teal, the page's one coloured phrase */
-  em { font-style: normal; color: #acdcd9; }
+  /* The second half in a light sky blue, the page's one coloured phrase */
+  em { font-style: normal; color: #a9c8f0; }
   @media (max-width: 768px) { font-size: 44px; }
 `;
 
@@ -356,9 +356,9 @@ const Marker = styled.span`
   width: 34px;
   height: 34px;
   flex: none;
-  border: 2px solid var(--color-accent-line);
+  border: 2px solid ${SKY_INK};
   border-radius: 50%;
-  background: radial-gradient(circle, var(--color-accent-line) 0 5px, transparent 5.5px);
+  background: radial-gradient(circle, ${SKY_INK} 0 5px, transparent 5.5px);
 `;
 
 /* ——— Four questions ——— */
@@ -458,10 +458,10 @@ const Extras = styled.ul`
   @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
-/* ——— Privacy (the teal band) ——— */
+/* ——— Privacy (the night-sky band) ——— */
 
 const PrivacyBand = styled(DarkBand)`
-  background: ${TEAL_GRADIENT};
+  background: ${SKY_GRADIENT};
   --text-secondary: rgba(255, 255, 255, 0.88);
   --text-muted: rgba(255, 255, 255, 0.7);
   padding: 128px 0 96px;
@@ -485,8 +485,8 @@ const PrivacyGrid = styled.ul`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 56px 64px;
-  li { padding-top: 36px; border-top: 1px solid rgba(124, 196, 194, 0.32); }
-  li > span { display: block; margin-bottom: 22px; color: #8fd1cd; }
+  li { padding-top: 36px; border-top: 1px solid rgba(196, 188, 232, 0.3); }
+  li > span { display: block; margin-bottom: 22px; color: #cbbfeb; }
   h3 { margin: 0 0 12px; font-family: var(--font-display); font-size: 24px; font-weight: 300; color: var(--text-primary); }
   p { margin: 0; font-size: 16px; line-height: 1.7; color: var(--text-secondary); }
   @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 44px 40px; }

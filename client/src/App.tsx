@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, darkTheme } from '@shared/theme/tokens';
@@ -7,7 +7,6 @@ import { GlobalStyle } from './styles/GlobalStyle.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.js';
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
-import { LandingView } from './views/LandingView.js';
 import { BugReportView } from './views/BugReportView.js';
 import { NotFoundView } from './views/NotFoundView.js';
 import { MedHistoryView } from './views/MedHistoryView.js';
@@ -60,6 +59,21 @@ import { useEncryptedSetting } from './hooks/useEncryptedSetting.js';
 import { resolveWallpaper } from './utils/wallpapers.js';
 import { useTimeStore } from './stores/timeStore.js';
 import { RunningTimer } from './components/organisms/RunningTimer.js';
+
+/* The public home page is its own chunk, loaded only in a browser tab: the
+   installed app (display-mode: standalone) goes straight to the dashboard and
+   never downloads it, and the service worker doesn't precache it */
+const LandingView = lazy(() => import('./views/LandingView.js').then(m => ({ default: m.LandingView })));
+
+function isInstalledApp(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(display-mode: standalone)').matches;
+}
+
+function HomeRoute() {
+  if (isInstalledApp()) return <Navigate to="/dashboard" replace />;
+  return <Suspense fallback={null}><LandingView /></Suspense>;
+}
 
 /* ── Design token CSS variable sets ─────────────────────────────────────────
    Chronicles design tokens (originally from the design-system package). Light = pure white canvas; dark =
@@ -596,7 +610,7 @@ export function App() {
             <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginView />} />
-              <Route path="/" element={<LandingView />} />
+              <Route path="/" element={<HomeRoute />} />
               <Route path="/sign-up" element={<RegisterView />} />
               <Route path="/register" element={<Navigate to="/sign-up" replace />} />
               <Route path="/recover" element={<RecoverView />} />

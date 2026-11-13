@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
+import { SKY_INK, SKY_INK_HOVER } from '../../templates/LandingTemplate.js';
 
 /* The landing page's beta form: name and email in a lifted card. An
    application takes a beta seat while one is open (the server decides, in
@@ -85,15 +86,15 @@ const SubmitButton = styled.button`
   height: 50px;
   border: none;
   border-radius: 999px;
-  background: var(--color-accent-line);
+  background: ${SKY_INK};
   color: #ffffff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: background 150ms;
-  &:hover:not(:disabled) { background: var(--color-accent-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  &:hover:not(:disabled) { background: ${SKY_INK_HOVER}; }
+  &:focus-visible { outline: 2px solid ${SKY_INK}; outline-offset: 3px; }
   &:disabled { opacity: 0.6; cursor: default; }
 `;
 

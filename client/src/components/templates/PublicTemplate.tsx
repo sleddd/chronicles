@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import styled from 'styled-components';
 import { Link } from 'react-router-dom';
 import { BrandMark } from '../atoms/BrandMark.js';
-import { LIGHT_TOKENS } from './LandingTemplate.js';
+import { LIGHT_TOKENS } from '../../styles/lightTokens.js';
 
 /* A public page someone opens from a link (the public shelf): always the
    app's light theme, whatever the visitor's device or a signed-in copy on
