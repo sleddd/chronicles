@@ -71,13 +71,13 @@ describe('taskPassesFilter', () => {
   });
 });
 
-describe('In review status', () => {
-  it('sits between in progress and done', async () => {
+describe('the old In review status', () => {
+  it('is gone: its tasks count as In progress and a status change clears the flag', async () => {
     const { taskStatusOf, taskFieldsForStatus, TASK_COLUMNS } = await import('@/types/goals');
-    expect(TASK_COLUMNS.map(c => c.key)).toEqual(['todo', 'in_progress', 'in_review', 'done']);
-    expect(taskStatusOf({ isInProgress: true, isInReview: true })).toBe('in_review');
+    expect(TASK_COLUMNS.map(c => c.key)).toEqual(['backlog', 'todo', 'in_progress', 'done']);
+    expect(taskStatusOf({ isInReview: true })).toBe('in_progress');
     expect(taskStatusOf({ isInReview: true, isCompleted: true })).toBe('done');
-    expect(taskFieldsForStatus('in_review')).toEqual({ isInProgress: false, isInReview: true, isCompleted: false });
-    expect(taskPassesFilter({ isInReview: true }, { scope: 'todos', status: 'in_review' }, new Map())).toBe(true);
+    expect(taskFieldsForStatus('in_progress').isInReview).toBe(false);
+    expect(taskPassesFilter({ isInReview: true }, { scope: 'todos', status: 'in_progress' }, new Map())).toBe(true);
   });
 });

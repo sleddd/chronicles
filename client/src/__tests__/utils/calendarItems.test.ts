@@ -14,8 +14,16 @@ describe('calendarDayFor', () => {
     expect(calendarDayFor(entry({}), 'Event')).toBe('2026-10-03');
   });
 
-  it('leaves tasks, goals, milestones and journal entries off the calendar', () => {
+  it('puts a task on the day it is planned for, and only then', () => {
+    expect(calendarDayFor(entry({ scheduledDate: '2026-10-20' }), 'Task', '2026-10-10')).toBe('2026-10-20');
     expect(calendarDayFor(entry({ deadline: '2026-10-20' }), 'Task')).toBeNull();
+    // An unfinished one set to move on shows under today once its day has passed
+    expect(calendarDayFor(entry({ scheduledDate: '2026-10-05', isAutoMigrating: true }), 'Task', '2026-10-10')).toBe('2026-10-10');
+    expect(calendarDayFor(entry({ scheduledDate: '2026-10-05', isAutoMigrating: true, isCompleted: true }), 'Task', '2026-10-10')).toBe('2026-10-05');
+    expect(calendarDayFor(entry({ scheduledDate: '2026-10-05' }), 'Task', '2026-10-10')).toBe('2026-10-05');
+  });
+
+  it('leaves goals, milestones and journal entries off the calendar', () => {
     expect(calendarDayFor(entry({ targetDate: '2026-10-20' }), 'Goal')).toBeNull();
     expect(calendarDayFor(entry({ targetDate: '2026-10-20' }), 'Milestone')).toBeNull();
     expect(calendarDayFor(entry({}), 'Journal')).toBeNull();

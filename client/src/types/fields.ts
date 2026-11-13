@@ -80,13 +80,19 @@ export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 export interface TaskFieldValues {
   /** Primary label — shown when the entry has no text content. */
   taskDescription?: string;
+  /** An idea kept for later, not yet something to do (the "Idea / Backlog" status) */
+  isBacklog?: boolean;
   isInProgress: boolean;
-  /** Done, waiting on a review (between In progress and Completed) */
+  /** Left from the old "In review" status: read as In progress, cleared by any status change */
   isInReview?: boolean;
   isCompleted: boolean;
   isAutoMigrating: boolean;
   parentGoalId: number | null;
   parentMilestoneId: number | null;
+  /** YYYY-MM-DD the task is planned for (Planning → Planner, the calendar); unset = no day */
+  scheduledDate?: string;
+  /** The part of that day: 'morning' | 'noon' | 'night'; unset = any time */
+  scheduledPart?: string;
   deadline: string;
   priority: TaskPriority;
   /** "Regular task", "Small victory" or one of the person's own; '' = none */
@@ -97,11 +103,31 @@ export interface TaskFieldValues {
   notes?: string;
 }
 
+export interface HabitFieldValues {
+  /** Primary label — shown when the entry has no text content. */
+  habitName?: string;
+  /** How many times each `targetPeriod` */
+  targetCount: number;
+  targetPeriod: 'day' | 'week';
+  /** Weekdays it's due (0 = Sunday); none = any day */
+  days: number[];
+  /** One of the person's goal categories; '' = its goal's, else none */
+  habitCategory?: string;
+  parentGoalId: number | null;
+  isActive: boolean;
+  notes?: string;
+}
+
 export interface GoalFieldValues {
   /** Primary label — shown when the entry has no text content. */
   goalObjective?: string;
   goalType: 'short_term' | 'long_term';
   goalStatus: 'new' | 'planned' | 'in_progress' | 'paused' | 'completed';
+  /** One of the person's goal categories (Health, Career…); '' = none */
+  goalCategory?: string;
+  /** YYYY-MM-DD the goal's roadmap bar starts; unset = the day it was created.
+      (Not `startDate`, which puts an entry on the calendar.) */
+  startOn?: string;
   targetDate: string;
   notes?: string;
 }
@@ -110,6 +136,8 @@ export interface MilestoneFieldValues {
   /** Primary label — shown when the entry has no text content. */
   milestoneObjective?: string;
   milestoneStatus: 'not_started' | 'in_progress' | 'completed';
+  /** YYYY-MM-DD its roadmap bar starts; unset = the day it was created */
+  startOn?: string;
   targetDate: string;
   isCompleted: boolean;
   parentGoalId: number | null;

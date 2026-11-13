@@ -28,6 +28,9 @@ import { firstRun, gettingStarted, showChecklist, toggleTicked, type OnboardingS
 import { usePrivateSettings, type PrivateSettingKey } from '../services/privateSettings.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
+import { goalCategoryOf } from '../utils/goalCategories.js';
+import { HabitsToday } from '../components/organisms/HabitsToday.js';
+import { plannerFacts, tasksByDay, parsePlannerOrder, type PlannerOrder } from '../utils/planner.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
@@ -86,7 +89,7 @@ import { MANTRA_TOPIC, MANTRA_ICON, isMantraTopic, dailyMantraIndex, stepIndex }
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time';
+type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickEntry', label: 'Quick entry' },
@@ -99,6 +102,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'tasks', label: 'Tasks & to-do lists' },
   { key: 'mantra', label: 'Mantra' },
   { key: 'comingUp', label: 'Coming up' },
+  { key: 'habits', label: 'Habits' },
   { key: 'exercise', label: 'Exercise schedule' },
   { key: 'quickLog', label: 'Quick meal log' },
   { key: 'symptom', label: 'Log a symptom' },
@@ -130,7 +134,7 @@ interface DashboardConfig {
 
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['stats', 'priorities', 'wins', 'tasks', 'comingUp', 'quickLog', 'exercise'],
+  left: ['stats', 'priorities', 'wins', 'tasks', 'habits', 'comingUp', 'quickLog', 'exercise'],
   right: ['mantra', 'time', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
 };
 
@@ -805,6 +809,7 @@ const AddPlace = styled.form`
 /* ── Helpers ── */
 
 const NO_TASK_TYPES: string[] = [];
+const NO_PLANNER_ORDER: PlannerOrder = {};
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1450,6 +1455,7 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
   const save = useSaveFields();
   const { loadPrivateSettings } = usePrivateSettings();
   const [savedTaskTypes] = useEncryptedSetting<string[]>('taskTypes', NO_TASK_TYPES);
+  const [plannerOrder] = useEncryptedSetting<PlannerOrder>('plannerOrder', NO_PLANNER_ORDER);
   const [views, setViews] = useState<SavedPlanView[]>([]);
   const [draft, setDraft] = useState('');
   const [naming, setNaming] = useState(false);
@@ -1472,13 +1478,21 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
       .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === mid)
       .map(e => [e.id, (cfOf(e).parentGoalId as number) || null] as [number, number | null]));
   }, [entries, allTopics]);
+  // A saved view's Category filter: a task takes its goal's category
+  const goalCategory = useMemo(() => {
+    const gid = topicIdByName(allTopics, 'goal');
+    return new Map(entries
+      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === gid)
+      .map(e => [e.id, goalCategoryOf(cfOf(e))] as [number, string]));
+  }, [entries, allTopics]);
   const lists = tasks.filter(t => isTodoList(cfOf(t)));
   const titleOf = (e: DecryptedPost) => entryTitleText(e.content) || builtinEntryName(cfOf(e)) || 'Untitled';
 
   // What's chosen — a missing view or list falls back to open tasks
   const view = show.startsWith('view:') ? views.find(v => v.id === show.slice(5)) : undefined;
   const list = show.startsWith('list:') ? lists.find(l => String(l.id) === show.slice(5)) : undefined;
-  const mode: 'open' | 'view' | 'list' = list ? 'list' : view ? 'view' : 'open';
+  // 'today' = what the planner has on today (Planning → Planner), done ones included
+  const mode: 'open' | 'view' | 'list' | 'today' = list ? 'list' : view ? 'view' : show === 'today' ? 'today' : 'open';
 
   const rows = useMemo(() => {
     if (mode === 'list') return [];
@@ -1490,14 +1504,19 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
         priority: (cf.priority as string) || 'none', typeRank: taskTypeRank(taskTypeOf(cf), types),
         created: new Date(e.createdAt).getTime() };
     };
+    if (mode === 'today') {
+      const day = toDateStr(new Date());
+      const facts = tasks.map(t => ({ ...plannerFacts(t.id, cfOf(t), new Date(t.createdAt).getTime()), entry: t }));
+      return (tasksByDay(facts, [day], day, parsePlannerOrder(plannerOrder)).get(day) ?? []).map(f => f.entry);
+    }
     if (view) {
       // Done ones only when the view asks for them
-      const passing = tasks.filter(t => taskPassesFilter(cfOf(t), filterOfView(view), milestoneGoal)
+      const passing = tasks.filter(t => taskPassesFilter(cfOf(t), filterOfView(view), milestoneGoal, goalCategory)
         && (view.status === 'done' || !cfOf(t).isCompleted));
       return searchAndSort(passing, row, view.query, view.sort);
     }
     return searchAndSort(tasks.filter(t => !cfOf(t).isCompleted), row, '', 'due');
-  }, [mode, view, tasks, milestoneGoal, savedTaskTypes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, view, tasks, milestoneGoal, goalCategory, savedTaskTypes, plannerOrder]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = list ? checklistOf(cfOf(list)) : [];
   const writeItems = (next: ChecklistItem[]) => list && save(list, { ...cfOf(list), checklist: next });
@@ -1539,9 +1558,9 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
     const cf = cfOf(e);
     void save(e, { ...cf, isCompleted: !cf.isCompleted, isInProgress: false, isInReview: false });
   };
-  const pickValue = mode === 'list' ? `list:${list!.id}` : mode === 'view' ? `view:${view!.id}` : 'open';
-  const pickLabel = mode === 'list' ? titleOf(list!) : mode === 'view' ? view!.name : 'Open tasks';
-  const morePath = view ? PLAN_TAB_PATHS[view.tab] : '/goals/todos';
+  const pickValue = mode === 'list' ? `list:${list!.id}` : mode === 'view' ? `view:${view!.id}` : mode;
+  const pickLabel = mode === 'list' ? titleOf(list!) : mode === 'view' ? view!.name : mode === 'today' ? 'Today’s plan' : 'Open tasks';
+  const morePath = view ? PLAN_TAB_PATHS[view.tab] : mode === 'today' ? '/goals/planner' : '/goals/tasks';
 
   return (
     <section aria-label="Tasks">
@@ -1552,6 +1571,7 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
             <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
             <select aria-label="Show" value={pickValue} onChange={e => onShow(e.target.value)}>
               <option value="open">Open tasks</option>
+              <option value="today">Today’s plan</option>
               {views.length > 0 && (
                 <optgroup label="Saved views">
                   {views.map(v => <option key={v.id} value={`view:${v.id}`}>{v.name}</option>)}
@@ -1604,7 +1624,7 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
       </>)}
 
       {!naming && mode !== 'list' && (<>
-        {rows.length === 0 && <Muted>{mode === 'view' ? 'Nothing matches this view.' : 'No open tasks.'}</Muted>}
+        {rows.length === 0 && <Muted>{mode === 'view' ? 'Nothing matches this view.' : mode === 'today' ? 'Nothing planned for today.' : 'No open tasks.'}</Muted>}
         {rows.slice(0, TASKS_SHOWN).map(t => {
           const cf = cfOf(t);
           const progress = checklistProgress(cf);
@@ -1623,6 +1643,9 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
         })}
         {rows.length > TASKS_SHOWN && (
           <MoreLink type="button" onClick={() => navigate(morePath)}>{rows.length - TASKS_SHOWN} more in Planning</MoreLink>
+        )}
+        {mode === 'today' && rows.length <= TASKS_SHOWN && (
+          <MoreLink type="button" onClick={() => navigate(morePath)}>Open planner<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>
         )}
       </>)}
     </section>
@@ -2617,6 +2640,7 @@ export function DashboardView() {
       node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => saveConfig({ ...config, tasksShow: next }).catch(err => console.warn('Couldn’t save the Tasks card’s choice:', err))} />,
     },
     comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} /> },
+    habits: { label: 'habits', on: shown('habits'), node: <HabitsToday /> },
     exercise: { label: 'exercise schedule', on: shown('exercise') && ff.exerciseEnabled !== false, node: <ExerciseToday /> },
     quickLog: {
       label: 'quick meal log',

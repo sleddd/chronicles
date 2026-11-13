@@ -113,12 +113,12 @@ const DayNumber = styled.div<{ $isToday?: boolean; $isSelected?: boolean; $accen
 `;
 
 /* A dot — amber for bills, accent for events and meetings */
-const Dot = styled.i<{ $bill?: boolean }>`
+const Dot = styled.i<{ $bill?: boolean; $task?: boolean }>`
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
+  background: ${({ $bill, $task }) => ($bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
 `;
 
 /* ── Mobile list view ── */
@@ -215,6 +215,8 @@ interface CalendarGridProps {
   entriesByDate: Map<string, DecryptedPost[]>;
   accentColor: string;
   eventTopicIds: Set<number>;
+  /** Topics whose entries are tasks planned for a day (their own dot) */
+  taskTopicIds?: Set<number>;
   viewMode: CalendarViewMode;
   currentDate: Date;
   onPrev: () => void;
@@ -229,10 +231,11 @@ interface CalendarGridProps {
   onBillClick?: (bill: CalendarBillItem) => void;
 }
 
+const NO_TASK_TOPICS = new Set<number>();
 const billLabel = (b: CalendarBillItem) => `${b.name} · ${formatCents(b.amountCents)} due`;
 
 export function CalendarGrid({
-  currentMonth, selectedDate, entriesByDate, accentColor, eventTopicIds,
+  currentMonth, selectedDate, entriesByDate, accentColor, eventTopicIds, taskTopicIds = NO_TASK_TOPICS,
   viewMode, onPrev, onNext, onToday, onViewMode, onDayClick, onDayDoubleClick, getTopicName,
   billsByDate, onBillClick,
 }: CalendarGridProps) {
@@ -242,6 +245,12 @@ export function CalendarGrid({
   const year = currentMonth.getFullYear();
 
   const title = <>{monthName} <span>{year}</span></>;
+  // Tasks planned for a day get a dot of their own, beside the events' and the bills'
+  const isTask = (entry: DecryptedPost) => taskTopicIds.has((entry.metadata as Record<string, unknown>)?._taxonomyId as number);
+  const titlesOf = (list: DecryptedPost[]) => list.map(entry => {
+    const topicName = getTopicName(entry);
+    return (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 60) || topicName || 'Entry';
+  }).join('\n');
 
   return (
     <Wrapper>
@@ -288,12 +297,8 @@ export function CalendarGrid({
                       </DayNumber>
                       {total > 0 && (
                         <DotRow role="img" aria-label={`${total} ${total === 1 ? 'item' : 'items'}`}>
-                          {dayEntries.length > 0 && (
-                            <Dot title={dayEntries.map(entry => {
-                              const topicName = getTopicName(entry);
-                              return (stripHtml(entry.content).trim() || builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)).slice(0, 60) || topicName || 'Entry';
-                            }).join('\n')} />
-                          )}
+                          {dayEntries.some(e => !isTask(e)) && <Dot title={titlesOf(dayEntries.filter(e => !isTask(e)))} />}
+                          {dayEntries.some(isTask) && <Dot $task title={titlesOf(dayEntries.filter(isTask))} />}
                           {dayBills.length > 0 && <Dot $bill title={dayBills.map(billLabel).join('\n')} />}
                         </DotRow>
                       )}
@@ -314,9 +319,12 @@ export function CalendarGrid({
             if (isOutside) return <span key={i} />;
             const dateStr = toDateStr(date);
             const nBills = billsByDate?.get(dateStr)?.length ?? 0;
-            const nEntries = entriesByDate.get(dateStr)?.length ?? 0;
-            // One accent dot for events / meetings, one amber dot for bills
-            const dots = [...(nEntries ? [false] : []), ...(nBills ? [true] : [])];
+            const list = entriesByDate.get(dateStr) ?? [];
+            const nEntries = list.length;
+            // One accent dot for events / meetings, one blue dot for planned tasks, one amber dot for bills
+            const dots: ('entry' | 'task' | 'bill')[] = [
+              ...(list.some(e => !isTask(e)) ? ['entry' as const] : []), ...(list.some(isTask) ? ['task' as const] : []), ...(nBills ? ['bill' as const] : []),
+            ];
             const isToday = isSameDay(date, today);
             const isSelected = selectedDate === dateStr;
             return (
@@ -324,7 +332,7 @@ export function CalendarGrid({
                 aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${nBills + nEntries ? `, ${nBills + nEntries} item${nBills + nEntries === 1 ? '' : 's'}` : ''}`}
                 aria-pressed={isSelected}>
                 <MobileNum $today={isToday} $selected={isSelected}>{date.getDate()}</MobileNum>
-                <MobileDots aria-hidden="true">{dots.map((bill, k) => <Dot key={k} $bill={bill} />)}</MobileDots>
+                <MobileDots aria-hidden="true">{dots.map(kind => <Dot key={kind} $bill={kind === 'bill'} $task={kind === 'task'} />)}</MobileDots>
               </MobileDay>
             );
           })}

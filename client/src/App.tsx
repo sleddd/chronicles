@@ -33,6 +33,10 @@ import { FinanceGoalsView } from './views/FinanceGoalsView.js';
 import { FinanceSavingsView } from './views/FinanceSavingsView.js';
 import { FinanceReportsView } from './views/FinanceReportsView.js';
 import { PlannerFilterView } from './views/PlannerFilterView.js';
+import { PlanRoadmapView } from './views/PlanRoadmapView.js';
+import { PlannerView } from './views/PlannerView.js';
+import { HabitsView } from './views/HabitsView.js';
+import { useHabitStore } from './stores/habitStore.js';
 import { TopicEntriesView } from './views/TopicEntriesView.js';
 import { HealthView } from './views/HealthView.js';
 import { TrainingView } from './views/TrainingView.js';
@@ -451,13 +455,26 @@ function TimeSync() {
   return null;
 }
 
+/** Habit check-ins: the sealed `habitLog` setting into the shared store once it's opened, and back on every change */
+function HabitSync() {
+  const [saved, save, loaded] = useEncryptedSetting<unknown>('habitLog', {});
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!loaded || hydrated.current) return;
+    hydrated.current = true;
+    useHabitStore.getState().hydrate(saved, log => save(log));
+  }, [loaded, saved, save]);
+  useEffect(() => () => useHabitStore.getState().reset(), []);
+  return null;
+}
+
 /** Time tracking for an unlocked journal: the store's sync and the floating timer */
 function TimeGate() {
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
   const { pathname } = useLocation();
   if (!isAuthenticated || !isUnlocked) return null;
-  return <><TimeSync />{!isPublicPage(pathname) && <RunningTimer />}</>;
+  return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <RunningTimer />}</>;
 }
 
 function WallpaperGate() {
@@ -600,6 +617,9 @@ export function App() {
               <Route path="/goals/milestones" element={<R><GoalsView /></R>} />
               <Route path="/goals/tasks" element={<R><GoalsView /></R>} />
               <Route path="/goals/todos" element={<R><GoalsView /></R>} />
+              <Route path="/goals/roadmap" element={<R><PlanRoadmapView /></R>} />
+              <Route path="/goals/planner" element={<R><PlannerView /></R>} />
+              <Route path="/goals/habits" element={<Navigate to="/health/habits" replace />} />
               <Route path="/goals/filter" element={<R><PlannerFilterView /></R>} />
               <Route path="/menu" element={<R><MenuView /></R>} />
               <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title={KITCHEN_TITLE} tabBar={<MealsTabBar />} /></R>} />
@@ -619,6 +639,7 @@ export function App() {
               <Route path="/health/med-history" element={<R><MedHistoryView /></R>} />
               <Route path="/health/schedule" element={<Navigate to="/health" replace />} />
               <Route path="/health/food" element={<R><MealsLogView /></R>} />
+              <Route path="/health/habits" element={<R><HabitsView /></R>} />
               <Route path="/health/symptoms" element={<R><SymptomHistoryView /></R>} />
               <Route path="/health/exercise" element={<Navigate to="/health/exercise/schedule" replace />} />
               <Route path="/health/exercise/schedule" element={<R><ExerciseScheduleView /></R>} />

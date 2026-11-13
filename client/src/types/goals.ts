@@ -98,25 +98,28 @@ export interface TaskEntryData {
   createdAt: Date;
 }
 
-/* Task (and todo) board columns. A task stores isInProgress, isInReview and
-   isCompleted; isCompleted wins, then isInReview. */
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
+/* Task (and todo) board columns. A task stores isBacklog, isInProgress and
+   isCompleted; isCompleted wins, then isInProgress, then isBacklog. (There
+   was an "In review" status once: a task still carrying `isInReview` counts
+   as In progress, and any status change clears the flag.) "Idea / Backlog" is something kept for later,
+   not yet something to do: the planner leaves it out of Unscheduled. */
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 
 export const TASK_COLUMNS: { key: TaskStatus; label: string }[] = [
+  { key: 'backlog', label: 'Idea / Backlog' },
   { key: 'todo', label: 'To Do' },
   { key: 'in_progress', label: 'In Progress' },
-  { key: 'in_review', label: 'In Review' },
   { key: 'done', label: 'Done' },
 ];
 
 export function taskStatusOf(cf: Record<string, unknown>): TaskStatus {
   if (cf.isCompleted) return 'done';
-  if (cf.isInReview) return 'in_review';
-  if (cf.isInProgress) return 'in_progress';
+  if (cf.isInProgress || cf.isInReview) return 'in_progress';
+  if (cf.isBacklog) return 'backlog';
   return 'todo';
 }
 
 /* Convert a chosen task column back into the task's stored fields. */
-export function taskFieldsForStatus(status: TaskStatus): { isInProgress: boolean; isInReview: boolean; isCompleted: boolean } {
-  return { isInProgress: status === 'in_progress', isInReview: status === 'in_review', isCompleted: status === 'done' };
+export function taskFieldsForStatus(status: TaskStatus): { isBacklog: boolean; isInProgress: boolean; isInReview: boolean; isCompleted: boolean } {
+  return { isBacklog: status === 'backlog', isInProgress: status === 'in_progress', isInReview: false, isCompleted: status === 'done' };
 }

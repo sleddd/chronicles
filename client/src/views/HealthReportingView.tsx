@@ -14,7 +14,10 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { doses as dosesApi } from '../services/api.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { setTriggerReview, triggerEvents, type TriggerReviews, type TriggerVerdict, type SymptomTrigger } from '../utils/foodSymptoms.js';
-import { addDays, shortDay, symptomDays, type ReportScope } from '../utils/healthReport.js';
+import { addDays, shortDay, symptomDays, type ReportScope, type ReportHabit } from '../utils/healthReport.js';
+import { useHabits } from '../hooks/useHabits.js';
+import { useHabitStore } from '../stores/habitStore.js';
+import { firstLoggedDay } from '../utils/habits.js';
 import { splitSymptoms } from '../utils/symptomChips.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
@@ -254,15 +257,15 @@ export function HealthReportingView() {
     symptoms: symptomDays(symptomList.filter(x => inData(x.occurredAt.slice(0, 10)))),
   }), [today, range, inventory, symptomList, inData]);
 
+  // Habits (Health → Habits) with their check-ins, for the report's Habits section; paused ones keep their history
+  const { habits: activeHabits, paused: pausedHabits, count: habitCount } = useHabits();
+  const habitLog = useHabitStore(s => s.log);
+  const reportHabits: ReportHabit[] = useMemo(() => [...activeHabits, ...pausedHabits].map(h => ({
+    id: h.id, name: h.name, since: firstLoggedDay(habitLog, h.id), count: (day: string) => habitCount(h, day),
+  })), [activeHabits, pausedHabits, habitCount, habitLog]);
+
   const events = useMemo(() => triggerEvents(foods, medLogs, exercises), [foods, medLogs, exercises]);
   const sessions = useMemo(() => exercises.map(x => ({ day: x.performedAt.slice(0, 10), minutes: x.duration, type: x.exerciseType })), [exercises]);
-  // Medications set to "As needed" are taken for symptoms — Medication Impact says so instead of comparing them
-  const asNeededNames = useMemo(() => new Set(entries.filter(e => inTopic(e, 'medication') && fields(e).frequency === 'as_needed')
-    .map(e => (((fields(e).medicationName as string) || stripHtml(e.content)).trim().toLowerCase()))), [entries, inTopic]);
-  const doses = useMemo(() => [
-    ...medLogs.map(m => ({ name: m.medicationName, day: m.takenAt.slice(0, 10), asNeeded: asNeededNames.has(m.medicationName.trim().toLowerCase()) })),
-    ...foods.filter(f => f.mealType === 'medication' || f.mealType === 'supplement').map(f => ({ name: f.name, day: f.consumedAt.slice(0, 10), asNeeded: asNeededNames.has(f.name.trim().toLowerCase()) })),
-  ], [medLogs, foods, asNeededNames]);
 
   const rangeLabel = period === 'today' ? 'Today' : period === 'week' ? 'This week' : period === 'year' ? 'Last 12 months'
     : period === 'custom' && customFrom && customTo ? `${shortDay(range.from)} – ${shortDay(range.to)}`
@@ -333,7 +336,7 @@ export function HealthReportingView() {
             rangeLabel={rangeLabel}
             events={events}
             sessions={sessions}
-            doses={doses}
+            habits={reportHabits}
             triggerReviews={triggerReviews}
             onReviewTrigger={reviewsLoaded ? reviewTrigger : undefined}
           />

@@ -54,20 +54,25 @@ export interface TaskFilter {
   milestoneId?: number | null;
   status?: TaskStatus | '' | string;
   taskType?: string;
+  /** A goal category ('' = all): the task's goal (direct or through its milestone) must carry it */
+  category?: string;
 }
 
 export function filterOfView(v: SavedPlanView): TaskFilter {
   return {
-    scope: v.tab === 'todos' ? 'todos' : 'tasks',
-    goalId: v.goalId, milestoneId: v.milestoneId, status: v.status, taskType: v.taskType,
+    // A Tasks view covers every task; its Todos view only the ones with no goal or milestone
+    scope: v.tab === 'todos' ? 'todos' : 'all',
+    goalId: v.goalId, milestoneId: v.milestoneId, status: v.status, taskType: v.taskType, category: v.category,
   };
 }
 
 /**
  * Whether a task's fields pass the filter. A task counts under a goal directly
- * or through its milestone (`milestoneGoal`: milestone id → its goal id).
+ * or through its milestone (`milestoneGoal`: milestone id → its goal id), and
+ * takes that goal's category (`goalCategory`: goal id → category; without the
+ * map a category filter is not applied).
  */
-export function taskPassesFilter(cf: Fields, f: TaskFilter, milestoneGoal: Map<number, number | null>): boolean {
+export function taskPassesFilter(cf: Fields, f: TaskFilter, milestoneGoal: Map<number, number | null>, goalCategory?: Map<number, string>): boolean {
   const goal = (cf?.parentGoalId as number) || null;
   const milestone = (cf?.parentMilestoneId as number) || null;
   const linked = !!(goal || milestone);
@@ -77,9 +82,11 @@ export function taskPassesFilter(cf: Fields, f: TaskFilter, milestoneGoal: Map<n
   if (f.taskType && !sameTaskType(taskTypeOf(cf), f.taskType)) return false;
   if (f.scope === 'todos') return true;
   if (f.milestoneId && milestone !== f.milestoneId) return false;
-  if (f.goalId) {
-    const goalOf = goal ?? (milestone ? milestoneGoal.get(milestone) ?? null : null);
-    if (goalOf !== f.goalId) return false;
+  const goalOf = goal ?? (milestone ? milestoneGoal.get(milestone) ?? null : null);
+  if (f.goalId && goalOf !== f.goalId) return false;
+  if (f.category && goalCategory) {
+    const mine = goalOf ? goalCategory.get(goalOf) ?? '' : '';
+    if (mine.trim().toLowerCase() !== f.category.trim().toLowerCase()) return false;
   }
   return true;
 }

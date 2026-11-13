@@ -3,6 +3,8 @@
  * Must run in the browser with encryption unlocked.
  */
 import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '../services/api.js';
+import { useHabitStore } from '../stores/habitStore.js';
+import { withCount } from './habits.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { routineLinkKey, SCHEDULE_TOPIC } from './routines.js';
 import { mountaineeringTemplate } from './training.js';
@@ -742,61 +744,88 @@ export async function seedExerciseScheduleOnly(deps: SeedDeps): Promise<string> 
 async function seedPlanning(deps: SeedDeps): Promise<number> {
   let n = 0;
   const d = dayFromToday;
-  const goal = async (name: string, goalType: string, goalStatus: string, targetDate: string, notes = '') => {
+  // A category and a start date put each goal on the roadmap as a bar under its heading
+  const goal = async (name: string, goalType: string, goalStatus: string, targetDate: string, notes = '', goalCategory = '', startOn = '') => {
     n++;
-    return createEntry(deps, name, 'Goal', { goalObjective: name, goalType, goalStatus, targetDate, notes });
+    return createEntry(deps, name, 'Goal', { goalObjective: name, goalType, goalStatus, goalCategory, startOn, targetDate, notes });
   };
-  const milestone = async (name: string, parentGoalId: number, milestoneStatus: string, targetDate: string) => {
+  const milestone = async (name: string, parentGoalId: number, milestoneStatus: string, targetDate: string, startOn = '') => {
     n++;
     return createEntry(deps, name, 'Milestone', {
-      milestoneObjective: name, milestoneStatus, targetDate, isCompleted: milestoneStatus === 'completed', parentGoalId,
+      milestoneObjective: name, milestoneStatus, startOn, targetDate, isCompleted: milestoneStatus === 'completed', parentGoalId,
     });
   };
+  // `scheduledDate` puts a task on a day in the planner (and the calendar); '' leaves it unscheduled
   const task = async (name: string, status: 'todo' | 'in_progress' | 'done', priority: string, deadline: string,
-    parentGoalId: number | null = null, parentMilestoneId: number | null = null, notes = '') => {
+    parentGoalId: number | null = null, parentMilestoneId: number | null = null, notes = '', scheduledDate = '') => {
     n++;
     return createEntry(deps, name, 'Task', {
       taskDescription: name, isInProgress: status === 'in_progress', isCompleted: status === 'done',
-      isAutoMigrating: status !== 'done', parentGoalId, parentMilestoneId, deadline, priority, notes,
+      isAutoMigrating: status !== 'done', parentGoalId, parentMilestoneId, scheduledDate, deadline, priority, notes,
     });
   };
 
   // Goals: New, Planned, In progress, Paused, Achieved
-  const ship = await goal('Ship the Chronicles rebuild', 'long_term', 'in_progress', d(60), 'Phase 1 parity, then the beta.');
-  const ts = await goal('Learn TypeScript deeply', 'short_term', 'planned', d(30), 'Generics, conditional and mapped types.');
-  const run = await goal('Run a half marathon', 'long_term', 'new', d(120));
-  const spanish = await goal('Conversational Spanish', 'long_term', 'paused', d(200), 'Paused while the beta ships.');
-  const home = await goal('Set up the home office', 'short_term', 'completed', d(-10));
+  const ship = await goal('Ship the Chronicles rebuild', 'long_term', 'in_progress', d(60), 'Phase 1 parity, then the beta.', 'Career', d(-45));
+  const ts = await goal('Learn TypeScript deeply', 'short_term', 'planned', d(30), 'Generics, conditional and mapped types.', 'Growth', d(-10));
+  const run = await goal('Run a half marathon', 'long_term', 'new', d(120), '', 'Health', d(7));
+  const spanish = await goal('Conversational Spanish', 'long_term', 'paused', d(200), 'Paused while the beta ships.', 'Growth', d(-60));
+  const home = await goal('Set up the home office', 'short_term', 'completed', d(-10), '', 'Home', d(-40));
 
   // Milestones: Not started, Planned, In progress, Completed
-  const foundation = await milestone('Phase 1 foundation: auth, entries, topics, search', ship, 'completed', d(-14));
-  const beta = await milestone('Private beta with 30 testers', ship, 'in_progress', d(21));
-  const ci = await milestone('CI/CD pipeline and deploys', ship, 'planned', d(35));
-  const generics = await milestone('Finish the generics chapter', ts, 'in_progress', d(7));
-  const tenK = await milestone('Run 10K without stopping', run, 'not_started', d(45));
-  const desk = await milestone('Desk, chair and lighting', home, 'completed', d(-12));
+  const foundation = await milestone('Phase 1 foundation: auth, entries, topics, search', ship, 'completed', d(-14), d(-45));
+  const beta = await milestone('Private beta with 30 testers', ship, 'in_progress', d(21), d(-14));
+  const ci = await milestone('CI/CD pipeline and deploys', ship, 'planned', d(35), d(14));
+  const generics = await milestone('Finish the generics chapter', ts, 'in_progress', d(7), d(-10));
+  const tenK = await milestone('Run 10K without stopping', run, 'not_started', d(45), d(7));
+  const desk = await milestone('Desk, chair and lighting', home, 'completed', d(-12), d(-30));
 
   // Tasks (linked): To do, In progress, Done — every priority
-  await task('Write encryption unit tests for shared/crypto', 'in_progress', 'high', d(2), ship, foundation);
+  await task('Write encryption unit tests for shared/crypto', 'in_progress', 'high', d(2), ship, foundation, '', d(0));
   await task('Port the TipTap editor with its full toolbar', 'done', 'medium', d(-15), ship, foundation);
-  await task('Review the auth routes PR', 'done', 'high', d(-16), ship, foundation);
-  await task('Invite the first ten testers', 'in_progress', 'urgent', d(0), ship, beta, 'Send the welcome email with the sign-up link.');
-  await task('Write the beta FAQ', 'todo', 'medium', d(3), ship, beta);
-  await task('Set up the feedback channel', 'todo', 'low', d(5), ship, beta);
-  await task('Fix the iPad keyboard overlap', 'todo', 'urgent', d(-1), ship, beta, 'Overdue: testers hit it on day one.');
+  await task('Review the auth routes PR', 'done', 'high', d(-16), ship, foundation, '', d(-1));
+  await task('Invite the first ten testers', 'in_progress', 'urgent', d(0), ship, beta, 'Send the welcome email with the sign-up link.', d(0));
+  await task('Write the beta FAQ', 'todo', 'medium', d(3), ship, beta, '', d(1));
+  await task('Set up the feedback channel', 'todo', 'low', d(5), ship, beta, '', d(2));
+  await task('Fix the iPad keyboard overlap', 'todo', 'urgent', d(-1), ship, beta, 'Overdue: testers hit it on day one.', d(-2));
   await task('Add the GitHub Actions workflow', 'todo', 'high', d(10), ship, ci);
   await task('Staging environment on Render', 'todo', 'medium', d(14), ship, ci);
-  await task('Exercises 1–20 on conditional types', 'in_progress', 'medium', d(4), ts, generics);
+  await task('Exercises 1–20 on conditional types', 'in_progress', 'medium', d(4), ts, generics, '', d(1));
   await task('Read the mapped types chapter', 'done', 'low', d(-3), ts, generics);
-  await task('Buy proper running shoes', 'todo', 'medium', d(6), run, tenK);
+  await task('Buy proper running shoes', 'todo', 'medium', d(6), run, tenK, '', d(3));
   await task('Three easy 3K runs this week', 'in_progress', 'low', d(5), run, tenK);
   await task('Assemble the desk', 'done', 'none', d(-12), home, desk);
   await task('Book a Spanish tutor', 'todo', 'low', d(30), spanish, null);
 
+  // Habits: a weekly target, a daily one and a twice-a-day one, with two months of check-ins
+  // (most weeks met, a few thin ones) so the Habits table, streaks and charts fill in
+  const habit = async (name: string, targetCount: number, targetPeriod: 'day' | 'week', days: number[], habitCategory: string,
+    parentGoalId: number | null, doneOn: (daysAgo: number, weekday: number) => number) => {
+    n++;
+    const id = await createEntry(deps, name, 'Habit', { habitName: name, targetCount, targetPeriod, days, habitCategory, parentGoalId, isActive: true, notes: '' });
+    useHabitStore.getState().apply(log => {
+      let next = log;
+      for (let ago = 60; ago >= 0; ago--) {
+        const day = d(-ago);
+        const count = doneOn(ago, new Date(`${day}T12:00:00`).getDay());
+        if (count > 0) next = withCount(next, id, day, count);
+      }
+      return next;
+    });
+  };
+  await ensureTopic(deps, 'Habit', 'calendar-check');
+  await habit('Balance board', 3, 'week', [], 'Health', run, (ago, wd) => ([1, 3, 5].includes(wd) && ago % 13 !== 0 ? 1 : 0));
+  await habit('Read 20 pages', 1, 'day', [], 'Growth', ts, ago => (ago % 6 === 4 ? 0 : 1));
+  await habit('Spanish flashcards', 2, 'day', [1, 2, 3, 4, 5], 'Growth', spanish, (ago, wd) => (wd === 0 || wd === 6 ? 0 : ago % 5 === 0 ? 1 : 2));
+
   // Todos (no goal or milestone)
+  // Ideas kept for later (Idea / Backlog): off the planner's Unscheduled list
+  n += 2;
+  await createEntry(deps, 'Try a standing desk converter', 'Task', { taskDescription: 'Try a standing desk converter', isBacklog: true, isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, deadline: '', priority: 'low' });
+  await createEntry(deps, 'Offline mode for the mobile app', 'Task', { taskDescription: 'Offline mode for the mobile app', isBacklog: true, isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: ship, parentMilestoneId: null, deadline: '', priority: 'none' });
   await task('Renew car registration', 'todo', 'urgent', d(-2), null, null, 'Overdue.');
-  await task('Call the dentist to reschedule', 'todo', 'high', d(0));
-  await task('Pick up the dry cleaning', 'todo', 'low', d(1));
+  await task('Call the dentist to reschedule', 'todo', 'high', d(0), null, null, '', d(0));
+  await task('Pick up the dry cleaning', 'todo', 'low', d(1), null, null, '', d(1));
   await task('Pay the electricity bill', 'done', 'high', d(-4));
   await task('Order a birthday gift for Mum', 'in_progress', 'medium', d(3));
   await task('Clear out the garage', 'todo', 'none', d(14));

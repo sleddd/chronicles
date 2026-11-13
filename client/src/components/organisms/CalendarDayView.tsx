@@ -165,7 +165,7 @@ interface CalendarDayViewProps {
 }
 
 export function CalendarDayView({
-  dateStr, entries, accentColor, eventTopicIds, viewMode,
+  dateStr, entries, accentColor, eventTopicIds, taskTopicIds, viewMode,
   getTopicForEntry, onPrev, onNext, onToday, onViewMode, bills = NO_BILLS, onBillClick,
 }: CalendarDayViewProps) {
   const navigate = useNavigate();
@@ -192,9 +192,12 @@ export function CalendarDayView({
       />
       <DayHead>
         <DayTitle>{dateSubtitle}</DayTitle>
-        <PillButton type="button" onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
-          Add entry
-        </PillButton>
+        <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 10 }}>
+          <PillButton type="button" $variant="neutral" onClick={() => navigate('/goals/planner')}>Plan tasks</PillButton>
+          <PillButton type="button" onClick={() => navigate('/journal', { state: { newEntryDate: dateStr, from: '/calendar' } })}>
+            Add entry
+          </PillButton>
+        </span>
       </DayHead>
 
       <List>
@@ -203,13 +206,19 @@ export function CalendarDayView({
         {entries.map(entry => {
             const topic = getTopicForEntry(entry);
             const timeLabel = getTimeLabel(entry, eventTopicIds);
-            const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
+            const meta = entry.metadata as Record<string, unknown>;
+            const cf = meta?._customFields as Record<string, unknown> | undefined;
+            const title = extractTitle(entry.content, builtinEntryName(cf as Record<string, unknown>));
+            // A task planned for the day has no time: "To do" / "Done", struck through once done
+            const isTask = taskTopicIds.has(meta?._taxonomyId as number);
+            const done = isTask && !!cf?.isCompleted;
             return (
               <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
-                <TimeLabel>{timeLabel}</TimeLabel>
+                <TimeLabel>{isTask ? (done ? 'Done' : 'To do') : timeLabel}</TimeLabel>
                 <div style={{ minWidth: 0 }}>
-                  {topic && <TopicLabel>{topic.name}</TopicLabel>}
-                  <EntryTitle>{title}</EntryTitle>
+                  {isTask ? <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot style={{ background: 'var(--chart-blue)' }} />Task</TopicLabel>
+                    : topic && <TopicLabel>{topic.name}</TopicLabel>}
+                  <EntryTitle style={done ? { textDecoration: 'line-through' } : undefined}>{title}</EntryTitle>
                 </div>
               </EntryRow>
             );

@@ -44,9 +44,14 @@ describe('task board status', () => {
     expect(taskStatusOf({})).toBe('todo');
     expect(taskStatusOf({ isInProgress: true })).toBe('in_progress');
     expect(taskStatusOf({ isInProgress: true, isCompleted: true })).toBe('done');
-    expect(taskStatusOf({ isInReview: true })).toBe('in_review');
-    expect(taskFieldsForStatus('in_progress')).toEqual({ isInProgress: true, isInReview: false, isCompleted: false });
-    expect(taskFieldsForStatus('in_review')).toEqual({ isInProgress: false, isInReview: true, isCompleted: false });
-    expect(taskFieldsForStatus('done')).toEqual({ isInProgress: false, isInReview: false, isCompleted: true });
+    // The old "In review" flag reads as In progress
+    expect(taskStatusOf({ isInReview: true })).toBe('in_progress');
+    expect(taskFieldsForStatus('in_progress')).toEqual({ isBacklog: false, isInProgress: true, isInReview: false, isCompleted: false });
+    expect(taskFieldsForStatus('done')).toEqual({ isBacklog: false, isInProgress: false, isInReview: false, isCompleted: true });
+    // Idea / Backlog: kept for later; starting or finishing it wins over the flag
+    expect(taskStatusOf({ isBacklog: true })).toBe('backlog');
+    expect(taskStatusOf({ isBacklog: true, isInProgress: true })).toBe('in_progress');
+    expect(taskFieldsForStatus('backlog')).toEqual({ isBacklog: true, isInProgress: false, isInReview: false, isCompleted: false });
+    expect(taskFieldsForStatus('todo').isBacklog).toBe(false);
   });
 });

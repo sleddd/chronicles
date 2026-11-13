@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addDays, dayList, symptomDays, loggedDays, rankedSymptoms, questionRows, metricTiles, dayTriggers, exerciseReport,
+  addDays, dayList, symptomDays, loggedDays, rankedSymptoms, questionRows, habitRows, metricTiles, dayTriggers, exerciseReport,
   medicationReport, symptomGlance, type ReportScope, type ReportSymptom,
 } from '@/utils/healthReport';
 import { inventoryDays, type InventoryWellness } from '@/utils/dailyInventory';
@@ -112,6 +112,42 @@ describe('dayTriggers', () => {
   it('skips something taken nearly every day', () => {
     const daily = DAYS.map(day => ({ key: 'f:pill', name: 'Pill', kind: 'medication' as const, at: Date.parse(`${day}T08:00:00`), day }));
     expect(dayTriggers(daily, diary(), 1).triggers).toEqual([]);
+  });
+});
+
+describe('habitRows', () => {
+  // Mood is 4 on even days and 2 on odd days; headache on every odd day
+  const habit = (name: string, on: (i: number) => boolean, since = FROM) => ({
+    id: name.length, name, since, count: (day: string) => { const i = DAYS.indexOf(day); return i !== -1 && on(i) ? 1 : 0; },
+  });
+
+  it('says which days you feel better on', () => {
+    const rows = habitRows(diary(), [habit('Balance board', i => i % 2 === 0), habit('Late coffee', i => i % 2 === 1)], { kind: 'mood' });
+    expect(rows.map(r => [r.name, r.days, r.times])).toEqual([['Balance board', 10, 10], ['Late coffee', 10, 10]]);
+    expect(rows[0].compare).toEqual({ ready: true, sentence: 'You feel better on days you tick “Balance board”.' });
+    expect(rows[1].compare).toEqual({ ready: true, sentence: 'You feel better on days you don’t tick “Late coffee”.' });
+  });
+
+  it('compares with a symptom, and says when it makes no difference', () => {
+    const headache = { kind: 'symptom' as const, key: 'headache', name: 'Headache' };
+    const [row] = habitRows(diary(), [habit('Balance board', i => i % 2 === 0)], headache);
+    expect(row.compare).toEqual({ ready: true, sentence: 'You get headache less often on days you tick “Balance board”.' });
+    // Ticked on two even and two odd days of every eight: mood averages the same either way
+    const [flat] = habitRows(diary(), [habit('Read', i => i % 8 < 4 && i % 4 < 2 || i % 8 === 2 || i % 8 === 3)], { kind: 'mood' });
+    expect(flat.compare).toEqual({ ready: true, sentence: 'Your mood is about the same either way.' });
+  });
+
+  it('waits for three days on each side, counted from the first tick', () => {
+    const [few] = habitRows(diary(), [habit('Stretch', i => i === 2 || i === 4)], { kind: 'mood' });
+    expect(few.compare).toEqual({ ready: false, need: 'Needs 1 more logged day with it ticked' });
+    // Started two days ago and ticked every day since: no days without it yet
+    const [fresh] = habitRows(diary(), [habit('New one', i => i >= 17, DAYS[17])], { kind: 'mood' });
+    expect(fresh.compare).toEqual({ ready: false, need: 'Needs 3 more logged days without it' });
+  });
+
+  it('leaves out a habit never ticked, and the comparison when not comparing', () => {
+    expect(habitRows(diary(), [habit('Never', () => false, '')], { kind: 'mood' })).toEqual([]);
+    expect(habitRows(diary(), [habit('Balance board', i => i % 2 === 0)], null)[0].compare).toBeNull();
   });
 });
 

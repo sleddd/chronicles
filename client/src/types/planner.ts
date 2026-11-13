@@ -71,12 +71,12 @@ export function forgetPlannerKeyword(): void {
 /** Planning's remembered filters (`GoalsView`), for this tab. */
 export const PLANNING_FILTERS_STORE = 'planning-filters-v1';
 
-/** On lock: the filter's task-type name is the owner's own wording; the rest (sort, ids, statuses) stays. */
+/** On lock: the filter's task-type and category names are the owner's own wording; the rest (sort, ids, statuses) stays. */
 export function forgetPlanningTypeFilter(): void {
   try {
     const saved: unknown = JSON.parse(sessionStorage.getItem(PLANNING_FILTERS_STORE) || 'null');
-    if (!saved || typeof saved !== 'object' || !('typeFilter' in saved)) return;
-    const { typeFilter: _dropped, ...rest } = saved as Record<string, unknown>;
+    if (!saved || typeof saved !== 'object' || !('typeFilter' in saved || 'categoryFilter' in saved)) return;
+    const { typeFilter: _type, categoryFilter: _category, ...rest } = saved as Record<string, unknown>;
     sessionStorage.setItem(PLANNING_FILTERS_STORE, JSON.stringify(rest));
   } catch { /* storage unavailable or unreadable */ }
 }

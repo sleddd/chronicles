@@ -17,6 +17,8 @@ import { FieldRowLayoutContext } from '../molecules/FormField.js';
 import { TaskFields, type TaskFieldValues } from '../molecules/fields/TaskFields.js';
 import { GoalFields, type GoalFieldValues } from '../molecules/fields/GoalFields.js';
 import { MilestoneFields, type MilestoneFieldValues } from '../molecules/fields/MilestoneFields.js';
+import { HabitFields, type HabitFieldValues } from '../molecules/fields/HabitFields.js';
+import { HABIT_DEFAULTS } from '../../utils/habits.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { FoodFields, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
 import { MedicationFields, type MedicationFieldValues } from '../molecules/fields/MedicationFields.js';
@@ -54,6 +56,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
 import { EMPTY_SYMPTOM_CHIPS, symptomChipList, addSymptomChip, removeSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { taskTypeList, addTaskType, removeTaskType } from '../../utils/taskTypes.js';
+import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, addGoalCategory, removeGoalCategory, type GoalCategoryConfig } from '../../utils/goalCategories.js';
 import { ALLOWED_IMAGE_TYPES } from '../../utils/processImage.js';
 
 function escapeHtml(text: string): string {
@@ -513,6 +516,7 @@ const TOPIC_TO_TYPE: Record<string, string> = {
   'training plan': 'training_plan', 'training plans': 'training_plan',
   'time tracking': 'time_tracking',
   media: 'media', 'media journal': 'media', 'media library': 'media',
+  habit: 'habit', habits: 'habit',
 };
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
@@ -520,7 +524,7 @@ const NAME_FIELD_BY_TYPE: Record<string, string> = {
   food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
   goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
   event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName', change: 'changeWhat',
-  routine: 'routineName', training_plan: 'planName', time_tracking: 'activityName', media: 'mediaTitle',
+  routine: 'routineName', training_plan: 'planName', time_tracking: 'activityName', media: 'mediaTitle', habit: 'habitName',
 };
 
 function getCustomType(topicName: string | undefined): string | null {
@@ -613,6 +617,10 @@ export function EntryForm({
   // Task types: Regular task / Small victory plus the owner's own (encrypted setting)
   const [savedTaskTypes, saveTaskTypes, taskTypesLoaded] = useEncryptedSetting<string[]>('taskTypes', NO_TASK_TYPES);
   const taskTypes = Array.isArray(savedTaskTypes) ? savedTaskTypes.filter((t): t is string => typeof t === 'string') : NO_TASK_TYPES;
+  // Goal categories: the built-in list plus the owner's own (see GoalFields)
+  const [savedCategories, saveCategories, categoriesLoaded] = useEncryptedSetting<GoalCategoryConfig>('goalCategories', EMPTY_GOAL_CATEGORIES);
+  const goalCategories = useMemo(() => parseGoalCategories(savedCategories), [savedCategories]);
+  const goalCategoryNames = useMemo(() => goalCategoryList(goalCategories), [goalCategories]);
   const ownDictationRef = useRef<DictationControls | null>(null);
   const dictRef = dictationControlRef ?? ownDictationRef;
   const [listening, setListening] = useState(false);
@@ -1040,7 +1048,12 @@ export function EntryForm({
               {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
                 types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
                 onRemoveType={taskTypesLoaded ? l => { void saveTaskTypes(removeTaskType(taskTypes, l)); } : undefined} />}
-              {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
+              {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
+                categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
+                onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}
+              {customType === 'habit' && <HabitFields values={{ ...HABIT_DEFAULTS, parentGoalId: null, ...customFields } as HabitFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions}
+                categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
+                onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}
               {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
               {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}

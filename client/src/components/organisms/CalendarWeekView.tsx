@@ -123,12 +123,12 @@ const Item = styled.button`
   &:hover { color: var(--text-primary); }
 `;
 
-const Dot = styled.i<{ $bill?: boolean }>`
+const Dot = styled.i<{ $bill?: boolean; $task?: boolean }>`
   flex: none;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
+  background: ${({ $bill, $task }) => ($bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
 `;
 
 const Dash = styled.span`
@@ -161,7 +161,7 @@ interface CalendarWeekViewProps {
 }
 
 export function CalendarWeekView({
-  weekStart, entriesByDate, accentColor, eventTopicIds,
+  weekStart, entriesByDate, accentColor, eventTopicIds, taskTopicIds,
   viewMode, getTopicForEntry, billsByDate, onBillClick,
   onPrev, onNext, onToday, onViewMode,
 }: CalendarWeekViewProps) {
@@ -207,10 +207,16 @@ export function CalendarWeekView({
               <Items>
                 {dayEntries.map(entry => {
                   const topic = getTopicForEntry(entry);
-                  const title = extractTitle(entry.content, builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>));
+                  const meta = entry.metadata as Record<string, unknown>;
+                  const cf = meta?._customFields as Record<string, unknown> | undefined;
+                  const title = extractTitle(entry.content, builtinEntryName(cf as Record<string, unknown>));
+                  // A task planned for the day: its own dot, no time, struck through once done
+                  const isTask = taskTopicIds.has(meta?._taxonomyId as number);
                   return (
                     <Item key={entry.id} type="button" onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
-                      <Dot aria-hidden="true" /><span>{title}</span>{topic && <small>{topic.name} · {getTimeLabel(entry, eventTopicIds)}</small>}
+                      <Dot $task={isTask} aria-hidden="true" />
+                      <span style={isTask && cf?.isCompleted ? { textDecoration: 'line-through' } : undefined}>{title}</span>
+                      {isTask ? <small>Task{cf?.isCompleted ? ' · Done' : ''}</small> : topic && <small>{topic.name} · {getTimeLabel(entry, eventTopicIds)}</small>}
                     </Item>
                   );
                 })}

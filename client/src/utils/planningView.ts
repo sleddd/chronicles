@@ -66,6 +66,8 @@ export interface SavedPlanView {
   status: string;
   /** Task type filter ('' = all); older saved views have none */
   taskType?: string;
+  /** Goal category filter ('' = all) on Goals, Milestones and Tasks; older saved views have none */
+  category?: string;
 }
 
 export type PlanViewState = Omit<SavedPlanView, 'id' | 'name'>;
@@ -78,7 +80,7 @@ export const PLAN_TAB_PATHS: Record<PlanTabKey, string> = {
 export function isSameView(a: PlanViewState, b: PlanViewState): boolean {
   return a.tab === b.tab && a.view === b.view && a.query.trim() === b.query.trim() && a.sort === b.sort
     && a.goalId === b.goalId && a.milestoneId === b.milestoneId && a.status === b.status
-    && (a.taskType ?? '') === (b.taskType ?? '');
+    && (a.taskType ?? '') === (b.taskType ?? '') && (a.category ?? '') === (b.category ?? '');
 }
 
 /** Keep only well-formed saved views (the setting is user data from the server) */

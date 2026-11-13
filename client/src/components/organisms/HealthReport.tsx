@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
+import { SquareRow, Square, SquareLegend, SquareSwatch } from '../molecules/DaySquares.js';
 import { TrendChart, ChartLegend, type TrendSeries } from '../molecules/charts/TrendChart.js';
 import { StatTile } from '../molecules/StatTile.js';
 import { FilterTabs } from '../molecules/FilterTabs.js';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { JoinedGroup, JoinedBtn } from '../molecules/fields/formKit.js';
 import { MOOD_WORDS, QUALITY_WORDS, STRESS_WORDS } from '../../utils/dailyInventory.js';
 import { TRIGGER_KIND_LABEL, triggerKey, type TriggerEvent, type TriggerReviews, type TriggerReview, type TriggerVerdict } from '../../utils/foodSymptoms.js';
 import {
-  addDays, dayList, shortDay, lc, questionRows, metricTiles, metricSeries, rankedSymptoms, dayTriggers, exerciseReport,
-  medicationReport, symptomGlance, loggedDays,
+  addDays, dayList, shortDay, lc, questionRows, habitRows, type ReportHabit, metricTiles, metricSeries, rankedSymptoms, dayTriggers, exerciseReport,
+  symptomGlance, loggedDays,
   type ReportScope, type CompareTarget, type MetricKey, type DayTrigger, type GlanceCell, type Tone,
 } from '../../utils/healthReport.js';
 
@@ -72,6 +74,28 @@ const PanelTitle = styled.h3`
   font-weight: 400;
   color: var(--text-primary);
 `;
+
+/* A panel's title as the button that folds it: the name and a chevron (no counts) */
+const FoldHead = styled.button<{ $open: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: ${({ $open }) => ($open ? '4px' : '0')};
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-primary);
+  cursor: pointer;
+  svg { margin-left: auto; flex: none; color: var(--text-muted); }
+  &:hover svg { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+`;
+
+const QUESTIONS_OPEN_KEY = 'health-report-daily-questions-open-v1';
 
 const Note = styled.p`
   margin: 12px 0 0;
@@ -326,22 +350,9 @@ const SEVERITY_COLOR: Record<GlanceCell, string> = {
   mild: 'var(--mood-4)', moderate: 'var(--chart-amber)', severe: 'var(--mood-1)', none: 'var(--border-subtle)', unlogged: 'transparent',
 };
 
-const Legend = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
-  span { display: inline-flex; align-items: center; gap: 6px; }
-`;
-
-const Swatch = styled.i<{ $c: string }>`
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: ${({ $c }) => $c};
-`;
+/* The squares and their key are shared with the habit tracker (molecules/DaySquares) */
+const Legend = SquareLegend;
+const Swatch = SquareSwatch;
 
 const HeatRow = styled.div<{ $head?: boolean }>`
   display: grid;
@@ -362,17 +373,7 @@ const HeatRow = styled.div<{ $head?: boolean }>`
   }
 `;
 
-const Cells = styled.span`
-  display: flex;
-  gap: 2px;
-`;
-
-const Square = styled.i<{ $c: string }>`
-  flex: 1;
-  height: 18px;
-  border-radius: 2px;
-  background: ${({ $c }) => $c};
-`;
+const Cells = SquareRow;
 
 const Ends = styled.span`
   display: flex;
@@ -478,8 +479,8 @@ interface HealthReportProps {
   events: TriggerEvent[];
   /** Exercise sessions in the range */
   sessions: { day: string; minutes: number; type?: string }[];
-  /** Medications taken (ticked doses and Meals rows logged as medication / supplement) */
-  doses: { name: string; day: string }[];
+  /** Habits with their check-ins (Health → Habits), compared with mood or the chosen symptom */
+  habits?: ReportHabit[];
   /** The owner's verdicts on possible triggers (encrypted setting, held by the view) */
   triggerReviews?: TriggerReviews;
   /** Mark a trigger confirmed / not a trigger (null clears); omitted = no buttons */
@@ -488,7 +489,9 @@ interface HealthReportProps {
 
 /* ── Component ── */
 
-export function HealthReport({ scope, rangeLabel, events, sessions, doses, triggerReviews, onReviewTrigger }: HealthReportProps) {
+const NO_HABITS: ReportHabit[] = [];
+
+export function HealthReport({ scope, rangeLabel, events, sessions, habits = NO_HABITS, triggerReviews, onReviewTrigger }: HealthReportProps) {
   // Opens comparing with mood, so "You feel better on days…" shows straight away (× Clear hides it)
   const [target, setTarget] = useState<CompareTarget | null>({ kind: 'mood' });
   const [chartKey, setChartKey] = useState<MetricKey>('mood');
@@ -498,6 +501,12 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
   const [exAll, setExAll] = useState(false);
   const [symAll, setSymAll] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
+  // Daily Questions is folded until opened (remembered per browser)
+  const [questionsOpen, setQuestionsOpenState] = useState(() => { try { return localStorage.getItem(QUESTIONS_OPEN_KEY) === '1'; } catch { return false; } });
+  const setQuestionsOpen = (open: boolean) => {
+    setQuestionsOpenState(open);
+    try { if (open) localStorage.setItem(QUESTIONS_OPEN_KEY, '1'); else localStorage.removeItem(QUESTIONS_OPEN_KEY); } catch { /* storage unavailable */ }
+  };
   const compareRef = useRef<HTMLDivElement>(null);
 
   const ranked = useMemo(() => rankedSymptoms(scope), [scope]);
@@ -505,11 +514,11 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
   const symptomTarget = target?.kind === 'symptom' ? target : undefined;
   const tiles = useMemo(() => metricTiles(scope, symptomTarget), [scope, symptomTarget]);
   const rows = useMemo(() => questionRows(scope, target), [scope, target]);
-  // Food only — medications and supplements (Medication Impact covers them; and a pain reliever just follows its pain) and exercise stay out
+  const habitList = useMemo(() => habitRows(scope, habits, target), [scope, habits, target]);
+  // Food only — medications and supplements (a pain reliever just follows its pain) and exercise stay out
   const foodEvents = useMemo(() => events.filter(e => e.kind === 'food'), [events]);
   const triggers = useMemo(() => dayTriggers(foodEvents, scope, Number(win)), [foodEvents, scope, win]);
   const exercise = useMemo(() => exerciseReport(scope, sessions), [scope, sessions]);
-  const meds = useMemo(() => medicationReport(scope, doses), [scope, doses]);
   // Symptoms at a glance always shows the last 30 days, whatever the range
   const glance = useMemo(() => symptomGlance({ ...scope, range: { from: addDays(scope.today, -29), to: scope.today } }), [scope]);
   const hasAnything = useMemo(() =>
@@ -649,8 +658,14 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
       </Panel>
 
       {rows.length > 0 && (
-        <Panel aria-label="Questions">
-          <Table $cols={cols}>
+        <Panel aria-label="Daily Questions">
+          <FoldHead type="button" $open={questionsOpen} aria-expanded={questionsOpen} aria-controls="report-questions"
+            onClick={() => setQuestionsOpen(!questionsOpen)}>
+            Daily Questions
+            <Icon name={questionsOpen ? 'chevron-up' : 'chevron-down'} size={18} strokeWidth={2} />
+          </FoldHead>
+          {questionsOpen && (
+          <Table $cols={cols} id="report-questions">
             <Row $head>
               <span>Question</span><span>Today</span><span>Last 7 days</span><span>{rangeLabel}</span>
               {comparing && <span>{outcomeLabel}</span>}
@@ -667,13 +682,44 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
               </Row>
             ))}
           </Table>
+          )}
         </Panel>
       )}
-      {comparing && (
+      {comparing && questionsOpen && rows.length > 0 && (
         <Note>
           Averages only count days you logged. The last column compares {target.kind === 'symptom'
             ? `how often you had ${lc(target.name)}` : 'your usual mood'} on days above and below your own average, or on days you did something and days you didn’t. These are links, not causes.
         </Note>
+      )}
+
+      {/* Habits: how each lines up with mood (or the compared symptom) */}
+      {habitList.length > 0 && (
+        <>
+          <SectionHeading>Habits</SectionHeading>
+          <Panel aria-label="Habits">
+            <Table $cols={comparing ? 'minmax(0, 1.3fr) repeat(2, minmax(0, 0.6fr)) minmax(0, 2fr)' : 'minmax(0, 1.6fr) repeat(2, minmax(0, 1fr))'}>
+              <Row $head>
+                <span>Habit</span><span>Days done</span><span>Times</span>
+                {comparing && <span>{outcomeLabel}</span>}
+              </Row>
+              {habitList.map(h => (
+                <Row key={h.id}>
+                  <NameCell>{h.name}</NameCell>
+                  <Cell data-label="Days done">{h.days}</Cell>
+                  <Cell data-label="Times" $muted>{h.times}</Cell>
+                  {comparing && h.compare && (h.compare.ready
+                    ? <CompareText>{h.compare.sentence}</CompareText>
+                    : <NeedText>{h.compare.need}</NeedText>)}
+                </Row>
+              ))}
+            </Table>
+          </Panel>
+          <Note>
+            {comparing
+              ? `Days you ticked a habit against days you didn’t, from its first tick, on days you logged ${target.kind === 'symptom' ? 'anything' : 'your mood'}. Pick a symptom under Compare with to see it against that instead. These are links, not causes.`
+              : 'Pick Mood or a symptom under Compare with to see how each habit lines up with it.'}
+          </Note>
+        </>
       )}
 
       {/* Possible food triggers */}
@@ -768,28 +814,6 @@ export function HealthReport({ scope, rangeLabel, events, sessions, doses, trigg
           <Quiet>Log at least 3 days with exercise and 3 without to see how it lines up with your mood, sleep and symptoms.</Quiet>
         )}
       </Panel>
-
-      {/* Medication */}
-      {meds.length > 0 && (
-        <>
-          <SectionHeading>Medication Impact</SectionHeading>
-          <Panel aria-label="Medication Impact">
-            <Table $cols="minmax(0, 1.2fr) minmax(0, 2fr)">
-              {meds.map(m => (
-                <Row key={m.name}>
-                  <NameCell>{m.name}<small>Taken {m.taken} of {m.of} days lately</small></NameCell>
-                  <WideCell style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14 }}>
-                    {m.lessOften.length > 0 && <span><Cell $tone="less">Less often: </Cell>{m.lessOften.join(', ')}</span>}
-                    {m.moreOften.length > 0 && <span><Cell $tone="more">More often: </Cell>{m.moreOften.join(', ')}</span>}
-                    {m.note && <Cell $muted>{m.note}</Cell>}
-                  </WideCell>
-                </Row>
-              ))}
-            </Table>
-            <Note>How often each symptom shows up on days you took a medication, compared with days you didn’t. A link means the two tend to happen together. It doesn’t show that the medication causes or prevents the symptom.</Note>
-          </Panel>
-        </>
-      )}
 
       {/* Symptoms at a glance */}
       {glance.rows.length > 0 && (

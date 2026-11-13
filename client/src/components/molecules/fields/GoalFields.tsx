@@ -3,12 +3,15 @@ import type { GoalFieldValues } from '../../../types/fields.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareDate, BoxText,
 } from './formKit.js';
+import { PickChips } from './PickChips.js';
 export type { GoalFieldValues } from '../../../types/fields.js';
 
 /* Goal fields — the same form in the journal editor and Quick Entry: the
    objective as a big borderless title (an older goal's text fills it once),
-   then one outlined box of rows — Type and Status as outline chips, Target
-   date — each with a muted label on the left, then Notes. Props only. */
+   then one outlined box of rows — Category (the person's own list: tap again
+   to clear, + Add, Edit), Type and Status as outline chips, Start date and
+   Target date (the two ends of its bar on the roadmap) — each with a muted
+   label on the left, then Notes. Props only. */
 
 const TYPES: { value: GoalFieldValues['goalType']; label: string }[] = [
   { value: 'short_term', label: 'Short-term' },
@@ -27,12 +30,19 @@ const STATUSES: { value: GoalFieldValues['goalStatus']; label: string }[] = [
 interface GoalFieldsProps {
   values: GoalFieldValues;
   onChange: (values: GoalFieldValues) => void;
+  /** The categories to offer (built-in + the owner's own) */
+  categories?: string[];
+  /** Save a new category; omitted = no + Add */
+  onAddCategory?: (label: string) => void;
+  /** Remove one from the list; omitted = no Edit */
+  onRemoveCategory?: (label: string) => void;
 }
 
-export function GoalFields({ values, onChange }: GoalFieldsProps) {
+export function GoalFields({ values, onChange, categories = [], onAddCategory, onRemoveCategory }: GoalFieldsProps) {
   const set = (patch: Partial<GoalFieldValues>) => onChange({ ...values, ...patch });
   // Older goals may hold a legacy status ("active", "archived") — those show as New
   const status = STATUSES.some(s => s.value === values.goalStatus) ? values.goalStatus : 'new';
+  const startId = useId();
   const dateId = useId();
   const notesId = useId();
 
@@ -48,6 +58,11 @@ export function GoalFields({ values, onChange }: GoalFieldsProps) {
       </Section>
 
       <RowBox style={{ marginTop: 30 }}>
+        <LabelledRow>
+          <RowLabel>Category</RowLabel>
+          <PickChips label="Category" value={values.goalCategory ?? ''} options={categories}
+            onPick={goalCategory => set({ goalCategory })} onAdd={onAddCategory} onRemove={onRemoveCategory} />
+        </LabelledRow>
         <LabelledRow>
           <RowLabel>Type</RowLabel>
           <Chips role="radiogroup" aria-label="Type">
@@ -69,6 +84,11 @@ export function GoalFields({ values, onChange }: GoalFieldsProps) {
               </Chip>
             ))}
           </Chips>
+        </LabelledRow>
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={startId}>Start date</RowLabel>
+          <BareDate id={startId} type="date" value={values.startOn ?? ''} max={values.targetDate || undefined}
+            onChange={e => set({ startOn: e.target.value })} />
         </LabelledRow>
         <LabelledRow>
           <RowLabel as="label" htmlFor={dateId}>Target date</RowLabel>

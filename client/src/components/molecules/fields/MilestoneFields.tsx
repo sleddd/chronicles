@@ -10,7 +10,8 @@ export type { MilestoneFieldValues } from '../../../types/fields.js';
 /* Milestone fields — the same form in the journal editor and Quick Entry: the
    objective as a big borderless title (an older milestone's text fills it
    once), then one outlined box of rows — Goal (a bare "No goal ⌄" picker),
-   Status chips and Target date — each with a muted label on the left — then Notes. */
+   Status chips, Start date and Target date (the two ends of its bar on the
+   roadmap) — each with a muted label on the left — then Notes. */
 
 const STATUSES: { value: MilestoneFieldValues['milestoneStatus']; label: string }[] = [
   { value: 'not_started', label: 'Not started' },
@@ -34,6 +35,7 @@ export function MilestoneFields({ values, onChange, goalOptions }: MilestoneFiel
   const status: MilestoneFieldValues['milestoneStatus'] = values.isCompleted ? 'completed'
     : values.milestoneStatus === 'in_progress' ? 'in_progress' : 'not_started';
   const goalId = useId();
+  const startId = useId();
   const dateId = useId();
   const notesId = useId();
 
@@ -71,6 +73,11 @@ export function MilestoneFields({ values, onChange, goalOptions }: MilestoneFiel
               </Chip>
             ))}
           </Chips>
+        </LabelledRow>
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={startId}>Start date</RowLabel>
+          <BareDate id={startId} type="date" value={values.startOn ?? ''} max={values.targetDate || undefined}
+            onChange={e => set({ startOn: e.target.value })} />
         </LabelledRow>
         <LabelledRow>
           <RowLabel as="label" htmlFor={dateId}>Target date</RowLabel>

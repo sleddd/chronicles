@@ -11,7 +11,7 @@
 /** Keys that belong to the original only */
 const LEFT_BEHIND = new Set([
   '_isFavorite', '_sync', '_changes', '_doseLink', '_routineLink', '_importKey',
-  'isCompleted', 'isInProgress', 'isInReview', 'completedAt', 'completedOn',
+  'isCompleted', 'isInProgress', 'isInReview', 'isBacklog', 'completedAt', 'completedOn',
 ]);
 
 const untick = (value: unknown): unknown => {

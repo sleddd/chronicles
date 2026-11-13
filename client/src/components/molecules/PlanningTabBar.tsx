@@ -8,7 +8,8 @@ const TABS = [
   { label: 'Goals', path: '/goals' },
   { label: 'Milestones', path: '/goals/milestones' },
   { label: 'Tasks', path: '/goals/tasks' },
-  { label: 'Todos', path: '/goals/todos' },
+  { label: 'Roadmap', path: '/goals/roadmap' },
+  { label: 'Planner', path: '/goals/planner' },
 ];
 
 export function PlanningTabBar() {
@@ -18,9 +19,10 @@ export function PlanningTabBar() {
   return (
     <Bar>
       {TABS.map((t) => {
+        // Todos is a view of the Tasks tab (its Show pill), reached at /goals/todos
         const isActive = t.path === '/goals'
           ? location.pathname === '/goals'
-          : location.pathname.startsWith(t.path);
+          : location.pathname.startsWith(t.path) || (t.path === '/goals/tasks' && location.pathname.startsWith('/goals/todos'));
         return (
           <TabBtn
             key={t.path}

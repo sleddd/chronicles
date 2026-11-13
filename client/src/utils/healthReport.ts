@@ -315,6 +315,70 @@ export function questionRows(scope: ReportScope, target: CompareTarget | null): 
   return out;
 }
 
+/* ── Habits ── */
+
+/** A habit as the report reads it: its name and how many times it was ticked on a day */
+export interface ReportHabit {
+  id: number;
+  name: string;
+  count: (day: string) => number;
+  /** The first day it was ever ticked (YYYY-MM-DD); days before it aren't "days without" */
+  since: string;
+}
+
+export interface HabitRow {
+  id: number;
+  name: string;
+  /** Days ticked in the range, and times in all */
+  days: number;
+  times: number;
+  /** How the compared outcome differs on days it was ticked; null when not comparing */
+  compare: Comparison | null;
+}
+
+/**
+ * One row per habit ticked at least once: how often in the range, and — when
+ * comparing — how mood (or the symptom) differs between the logged days it was
+ * ticked and the ones it wasn't, counted from the habit's first tick. Needs 3
+ * days on each side, like the questions.
+ */
+export function habitRows(scope: ReportScope, habits: ReportHabit[], target: CompareTarget | null): HabitRow[] {
+  const to = scope.range.to < scope.today ? scope.range.to : scope.today;
+  const range = dayList(scope.range.from, to);
+  const logged = loggedDays(scope, scope.range.from, to);
+  const out: HabitRow[] = [];
+  for (const h of habits) {
+    if (!h.since) continue;
+    const counts = range.map(d => h.count(d));
+    const row: HabitRow = { id: h.id, name: h.name, days: counts.filter(n => n > 0).length, times: counts.reduce((a, b) => a + b, 0), compare: null };
+    if (target) {
+      const usable = logged.filter(d => d >= h.since && outcome(scope, d, target) !== null);
+      const did = usable.filter(d => h.count(d) > 0);
+      const skipped = usable.filter(d => h.count(d) === 0);
+      const name = `“${h.name}”`;
+      if (did.length < MIN_SIDE || skipped.length < MIN_SIDE) {
+        const k = MIN_SIDE - (did.length < MIN_SIDE ? did.length : skipped.length);
+        row.compare = { ready: false, need: `Needs ${k} more logged ${k === 1 ? 'day' : 'days'} ${did.length < MIN_SIDE ? 'with it ticked' : 'without it'}` };
+      } else {
+        const gd = group(scope, did, target)!;
+        const gs = group(scope, skipped, target)!;
+        if (target.kind === 'symptom') {
+          const symptom = lc(target.name);
+          row.compare = Math.abs(gd.score - gs.score) < 0.15
+            ? { ready: true, sentence: `You get ${symptom} about as often either way.` }
+            : { ready: true, sentence: `You get ${symptom} less often on days you ${gd.score < gs.score ? 'tick' : 'don’t tick'} ${name}.` };
+        } else {
+          row.compare = Math.abs(gd.score - gs.score) < 0.5 || gd.text === gs.text
+            ? { ready: true, sentence: 'Your mood is about the same either way.' }
+            : { ready: true, sentence: `You feel better on days you ${gd.score > gs.score ? 'tick' : 'don’t tick'} ${name}.` };
+        }
+      }
+    }
+    out.push(row);
+  }
+  return out.sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
+}
+
 /* ── Metric tiles and the chart ── */
 
 export type MetricKey = 'symptom' | 'mood' | 'sleep' | 'social' | 'exercise' | 'stress';

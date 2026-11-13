@@ -42,7 +42,7 @@ export interface BoardColumn<K extends string> {
   items: BoardItem[];
 }
 
-/* ── Styles ── */
+/* ── Styles (the lane and card pieces are shared with the week planner, PlannerBoard) ── */
 
 /* Columns always sit side by side; narrow screens scroll the row sideways
    (snapping to a column, the next one peeking in) — never stacked */
@@ -69,7 +69,7 @@ const Board = styled.div<{ $cols: number }>`
   }
 `;
 
-const Column = styled.section<{ $over?: boolean }>`
+export const Column = styled.section<{ $over?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -82,11 +82,11 @@ const Column = styled.section<{ $over?: boolean }>`
   transition: background 120ms ease;
 `;
 
-const ColumnHead = styled.header`
+export const ColumnHead = styled.header`
   padding: 0 4px 4px;
 `;
 
-const ColumnTitle = styled.h3`
+export const ColumnTitle = styled.h3`
   margin: 0;
   font-family: var(--font-display);
   font-size: 19px;
@@ -95,7 +95,7 @@ const ColumnTitle = styled.h3`
   color: var(--text-primary);
 `;
 
-const ColumnCount = styled.span`
+export const ColumnCount = styled.span`
   display: block;
   margin-top: 2px;
   font-family: var(--font-sans);
@@ -119,14 +119,14 @@ const AddBtn = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-const Cards = styled.div`
+export const Cards = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-height: 40px;
 `;
 
-const Empty = styled.div`
+export const Empty = styled.div`
   padding: 14px 8px;
   font-family: var(--font-sans);
   font-size: 13px;
@@ -134,7 +134,7 @@ const Empty = styled.div`
   text-align: center;
 `;
 
-const Card = styled.article<{ $dragging?: boolean }>`
+export const Card = styled.article<{ $dragging?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -193,7 +193,7 @@ const Pill = styled.span<{ $color: string }>`
   white-space: nowrap;
 `;
 
-const Kicker = styled.span`
+export const Kicker = styled.span`
   font-family: var(--font-sans);
   font-size: 9.5px;
   font-weight: 500;
@@ -206,7 +206,7 @@ const Kicker = styled.span`
   white-space: nowrap;
 `;
 
-const CardTitle = styled.h4<{ $done?: boolean }>`
+export const CardTitle = styled.h4<{ $done?: boolean }>`
   margin: 0;
   font-family: var(--font-sans);
   font-size: 16px;
@@ -257,7 +257,7 @@ const TimerChip = styled.button<{ $running: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-const Chip = styled.span`
+export const Chip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 5px;

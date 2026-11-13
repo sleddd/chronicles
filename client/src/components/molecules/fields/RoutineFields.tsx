@@ -75,13 +75,13 @@ const DurationInput = styled.input`
   &::placeholder { color: var(--text-hint); }
 `;
 
-const Days = styled.div`
+export const Days = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 `;
 
-const DayChip = styled.button<{ $active: boolean }>`
+export const DayChip = styled.button<{ $active: boolean }>`
   width: 46px;
   height: 44px;
   padding: 0;
@@ -161,7 +161,7 @@ const AddLink = styled.button`
   &:hover { text-decoration: underline; }
 `;
 
-const StatusCard = styled.div`
+export const StatusCard = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;

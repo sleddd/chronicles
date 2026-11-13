@@ -10,6 +10,7 @@ import {
 } from './formKit.js';
 import { isDefaultTaskType, sameTaskType } from '../../../utils/taskTypes.js';
 import { checklistOf } from '../../../utils/taskLists.js';
+import { DAY_PARTS, partOf } from '../../../utils/planner.js';
 import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 export type { TaskFieldValues } from '../../../types/fields.js';
@@ -20,7 +21,9 @@ export type { TaskFieldValues } from '../../../types/fields.js';
    Part of (goal and milestone pills),
    Priority chips (no dots), Type chips (Regular task, Small victory and the
    owner's own — tap the chosen one again to clear it; + Add saves a new type,
-   Edit removes the owner's own), Deadline, Status chips (To do, In progress, In review, Completed) and an Auto-migrate
+   Edit removes the owner's own), Planned for (the day it sits on in the
+   planner and on the calendar) and, once it has a day, Time of day (Morning /
+   Noon / Night; Morning until another is chosen), Deadline, Status chips (Idea / Backlog, To do, In progress, Completed) and an Auto-migrate
    switch — then, for a todo list, its items (no limit, ticked off in place),
    then Notes. Props only. */
 
@@ -38,9 +41,9 @@ const PRIORITIES: { value: TaskFieldValues['priority']; label: string }[] = [
 ];
 
 const STATUSES: { value: TaskStatus; label: string }[] = [
+  { value: 'backlog', label: 'Idea / Backlog' },
   { value: 'todo', label: 'To do' },
   { value: 'in_progress', label: 'In progress' },
-  { value: 'in_review', label: 'In review' },
   { value: 'done', label: 'Completed' },
 ];
 
@@ -100,6 +103,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
   };
   const goalId = useId();
   const milestoneId = useId();
+  const scheduledId = useId();
   const deadlineId = useId();
   const notesId = useId();
 
@@ -213,6 +217,30 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
             </Chips>
           )}
         </LabelledRow>
+
+        <LabelledRow>
+          <RowLabel as="label" htmlFor={scheduledId}>Planned for</RowLabel>
+          <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
+            onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value ? {} : { scheduledPart: '' }) })} />
+        </LabelledRow>
+
+        {values.scheduledDate && (
+          <LabelledRow>
+            <RowLabel>Time of day</RowLabel>
+            <Chips role="radiogroup" aria-label="Time of day">
+              {DAY_PARTS.map(p => {
+                // None chosen yet = Morning, where the planner shows it
+                const on = partOf(values as unknown as Record<string, unknown>) === p.value;
+                return (
+                  <Chip key={p.value} type="button" role="radio" aria-checked={on} $active={on}
+                    onClick={() => set({ scheduledPart: p.value })}>
+                    {p.label}
+                  </Chip>
+                );
+              })}
+            </Chips>
+          </LabelledRow>
+        )}
 
         <LabelledRow>
           <RowLabel as="label" htmlFor={deadlineId}>Deadline</RowLabel>

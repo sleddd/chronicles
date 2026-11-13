@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { calendarDayFor } from '../utils/calendarItems.js';
+import { calendarDayFor, isTaskTopic } from '../utils/calendarItems.js';
 import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
 import styled from 'styled-components';
 import { CalendarGrid } from '../components/organisms/CalendarGrid.js';
@@ -89,7 +89,7 @@ export function CalendarView() {
   );
 
   const taskTopicIds = useMemo(
-    () => new Set(allTopics.filter(t => t.name.toLowerCase() === 'task').map(t => t.id)),
+    () => new Set(allTopics.filter(t => isTaskTopic(t.name)).map(t => t.id)),
     [allTopics]
   );
 
@@ -293,6 +293,7 @@ export function CalendarView() {
             selectedDate={selectedDate}
             entriesByDate={entriesByDate}
             eventTopicIds={eventTopicIds}
+            taskTopicIds={taskTopicIds}
             onDayClick={handleDayClick}
             onDayDoubleClick={handleDayDoubleClick}
             getTopicName={entry => getTopicForEntry(entry)?.name}

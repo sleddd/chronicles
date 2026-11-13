@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
@@ -26,12 +26,13 @@ const latte: TriggerEvent[] = DAYS.filter((_, i) => i % 4 === 0).map(day => ({ k
 function renderReport(props: Partial<Parameters<typeof HealthReport>[0]> = {}) {
   return render(
     <ThemeProvider theme={lightTheme}>
-      <HealthReport scope={scope()} rangeLabel="Last 30 days" events={latte} sessions={[]} doses={[]} {...props} />
+      <HealthReport scope={scope()} rangeLabel="Last 30 days" events={latte} sessions={[]} {...props} />
     </ThemeProvider>,
   );
 }
 
 describe('HealthReport', () => {
+  beforeEach(() => { localStorage.clear(); });
   it('says nothing is logged yet when the period is empty', () => {
     renderReport({ scope: scope(true) });
     expect(screen.getByText(/Nothing logged in this period yet/)).toBeInTheDocument();
@@ -41,6 +42,11 @@ describe('HealthReport', () => {
     renderReport();
     expect(screen.getByRole('button', { name: /Sleep/ })).toBeInTheDocument();
     expect(screen.getByText('Mood over time')).toBeInTheDocument();
+    // Daily Questions is folded until opened
+    const fold = screen.getByRole('button', { name: 'Daily Questions' });
+    expect(fold).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Water')).not.toBeInTheDocument();
+    fireEvent.click(fold);
     expect(screen.getByText('Water')).toBeInTheDocument(); // the question named by its topic
     expect(screen.getByText('Your mood')).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole('group', { name: 'Compare with' })).getByRole('button', { name: '× Clear' }));
@@ -57,6 +63,7 @@ describe('HealthReport', () => {
     renderReport();
     const group = screen.getByRole('group', { name: 'Compare with' });
     fireEvent.click(within(group).getByRole('button', { name: 'Headache' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Daily Questions' }));
     expect(screen.getByText('Days with headache')).toBeInTheDocument();
     expect(screen.getByText(/These are links, not causes/)).toBeInTheDocument();
     fireEvent.click(within(group).getByRole('button', { name: '× Clear' }));

@@ -28,6 +28,7 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Changes', icon: 'clock', color: '#64748B' },
   { name: 'Mantra', icon: 'spa', color: '#14B8A6' },
   { name: 'Time Tracking', icon: 'stopwatch', color: '#3B82F6' },
+  { name: 'Habit', icon: 'calendar-check', color: '#14B8A6' },
 ];
 
 /* Earlier names a default topic went by — an account that has one doesn't get the new name too */

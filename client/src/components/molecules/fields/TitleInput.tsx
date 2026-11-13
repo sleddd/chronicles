@@ -33,6 +33,8 @@ const Area = styled.textarea`
     font-size: 22px;
     font-weight: 300;
     line-height: 1.32;
+    /* Room for about two lines before it starts to grow */
+    min-height: calc(2 * 1.32em);
     color: var(--text-primary);
   }
   /* No label above: the placeholder names the field, so it reads a step firmer */

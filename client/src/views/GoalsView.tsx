@@ -41,6 +41,10 @@ import { hasMixedTopics } from '../utils/mixedTopics.js';
 import { taskTypeList, taskTypeOf, taskTypeRank, sameTaskType } from '../utils/taskTypes.js';
 import { taskPassesFilter, checklistProgress } from '../utils/taskLists.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import {
+  EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, goalCategoryOf, categoriesInUse, sameCategory, groupByCategory,
+  type GoalCategoryConfig,
+} from '../utils/goalCategories.js';
 
 /* ── Layout (mirrors Health) ── */
 
@@ -51,11 +55,11 @@ const Page = styled.div`
   overflow-y: auto;
 `;
 
+/* Planning runs the whole width of the page (boards, roadmap, planner alike), not the usual 1150px column */
 const Inner = styled.div`
   width: 100%;
-  max-width: 1150px;
   margin: 0 auto;
-  padding: 0 24px 64px;
+  padding: 0 32px 64px;
   @media (max-width: 768px) { padding: 0 16px 48px; }
 `;
 
@@ -288,6 +292,18 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* A category's heading over its goals in the list view (MonthGroups' heading) */
+const GroupHead = styled.h2`
+  margin: 36px 0 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  section:first-child > & { margin-top: 24px; }
+`;
+
 type PlanTab = 'goals' | 'milestones' | 'tasks' | 'todos';
 type PlanView = 'board' | 'list';
 const VIEW_KEY = 'planning-view-v1';
@@ -328,7 +344,7 @@ const NO_TASK_TYPES: string[] = [];
 /* Status filters on the Goals and Milestones boards ('' = all) */
 type RoadmapFilters = { goals: RoadmapStatus | ''; milestones: RoadmapStatus | '' };
 const NO_ROADMAP_FILTERS: RoadmapFilters = { goals: '', milestones: '' };
-function savedFilters(): Partial<{ sortBy: PlanSort; goalFilter: number | null; milestoneFilter: number | null; statusFilter: TaskStatus | ''; typeFilter: string; roadmapStatus: RoadmapFilters }> {
+function savedFilters(): Partial<{ sortBy: PlanSort; goalFilter: number | null; milestoneFilter: number | null; statusFilter: TaskStatus | ''; typeFilter: string; categoryFilter: string; roadmapStatus: RoadmapFilters }> {
   try { return JSON.parse(sessionStorage.getItem(FILTERS_KEY) || '{}'); } catch { return {}; }
 }
 
@@ -410,10 +426,8 @@ export function GoalsView() {
 
   // Todos have no parent goal or milestone connection
   const todos = useMemo(() => tasks.filter(t => !t.parentMilestoneId && !t.parentGoalId), [tasks]);
-  // The Tasks tab only shows tasks attached to a goal or milestone (the rest are Todos)
-  const linkedTasks = useMemo(() => tasks.filter(t => t.parentMilestoneId || t.parentGoalId), [tasks]);
   // Topic labels only when a list spans more than one topic
-  const tasksMixed = useMemo(() => hasMixedTopics(linkedTasks.map(t => t.taxonomyId)), [linkedTasks]);
+  const tasksMixed = useMemo(() => hasMixedTopics(tasks.map(t => t.taxonomyId)), [tasks]);
   const todosMixed = useMemo(() => hasMixedTopics(todos.map(t => t.taxonomyId)), [todos]);
 
   const goalTitles = useMemo(() => new Map(goals.map(g => [g.id, g.title])), [goals]);
@@ -506,7 +520,9 @@ export function GoalsView() {
   useEffect(() => { setOrderedGoals(filteredGoals); }, [filteredGoals]);
   useEffect(() => { setOrderedMilestones(filteredMilestones); }, [filteredMilestones]);
 
-  const sortedTasks = useMemo(() => inPlanOrder([...linkedTasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), planOrder.tasks), [linkedTasks, planOrder.tasks]);
+  // Tasks shows every task, todos included: the order you dragged them into there wins, then the Todos view's own
+  const allTasksOrder = useMemo(() => [...(planOrder.todos ?? []), ...(planOrder.tasks ?? [])], [planOrder.todos, planOrder.tasks]);
+  const sortedTasks = useMemo(() => inPlanOrder([...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), allTasksOrder), [tasks, allTasksOrder]);
   const sortedTodos = useMemo(() => inPlanOrder([...todos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()), planOrder.todos), [todos, planOrder.todos]);
 
   /* ── Status changes (board drag) ── */
@@ -587,8 +603,11 @@ export function GoalsView() {
   /* ── Tasks / Todos filters: by goal, milestone and/or status ── */
   const [goalFilter, setGoalFilter] = useState<number | null>(() => savedFilters().goalFilter ?? null);
   const [milestoneFilter, setMilestoneFilter] = useState<number | null>(() => savedFilters().milestoneFilter ?? null);
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>(() => savedFilters().statusFilter ?? '');
+  // A status that no longer exists (a remembered or saved "In review") means no filter
+  const knownStatus = (s: unknown): TaskStatus | '' => (TASK_COLUMNS.some(c => c.key === s) ? s as TaskStatus : '');
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>(() => knownStatus(savedFilters().statusFilter));
   const [typeFilter, setTypeFilter] = useState<string>(() => savedFilters().typeFilter ?? '');
+  const [categoryFilter, setCategoryFilter] = useState<string>(() => savedFilters().categoryFilter ?? '');
   const [roadmapStatus, setRoadmapStatus] = useState<RoadmapFilters>(() => ({ ...NO_ROADMAP_FILTERS, ...savedFilters().roadmapStatus }));
   const setPlanStatus = (which: keyof RoadmapFilters, status: RoadmapStatus | '') =>
     setRoadmapStatus(prev => ({ ...prev, [which]: status }));
@@ -603,11 +622,18 @@ export function GoalsView() {
     }
     return list;
   }, [savedTaskTypes, tasks]);
+  // Goal categories (see GoalFields): the list, plus any still on a goal but since removed
+  const [savedCategories] = useEncryptedSetting<GoalCategoryConfig>('goalCategories', EMPTY_GOAL_CATEGORIES);
+  const categories = useMemo(
+    () => categoriesInUse(goalCategoryList(parseGoalCategories(savedCategories)), goals.map(g => goalCategoryOf(g.customFields))),
+    [savedCategories, goals],
+  );
+  const goalCategory = useMemo(() => new Map(goals.map(g => [g.id, goalCategoryOf(g.customFields)])), [goals]);
   // Kept for this browser tab, so opening a card in the journal and coming
   // back finds the board as it was
   useEffect(() => {
-    try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ sortBy, goalFilter, milestoneFilter, statusFilter, typeFilter, roadmapStatus })); } catch { /* storage unavailable */ }
-  }, [sortBy, goalFilter, milestoneFilter, statusFilter, typeFilter, roadmapStatus]);
+    try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ sortBy, goalFilter, milestoneFilter, statusFilter, typeFilter, categoryFilter, roadmapStatus })); } catch { /* storage unavailable */ }
+  }, [sortBy, goalFilter, milestoneFilter, statusFilter, typeFilter, categoryFilter, roadmapStatus]);
   const milestoneGoal = useMemo(() => new Map(milestones.map(m => [m.id, m.parentGoalId])), [milestones]);
   // Milestones to pick from: those under the chosen goal, else all
   const milestoneChoices = useMemo(
@@ -624,21 +650,27 @@ export function GoalsView() {
     ? { parentMilestoneId: milestoneFilter, parentGoalId: milestoneGoal.get(milestoneFilter) ?? goalFilter ?? null }
     : goalFilter ? { parentGoalId: goalFilter } : {};
   const clearFilters = () => {
-    setGoalFilter(null); setMilestoneFilter(null); setStatusFilter(''); setTypeFilter(''); setRoadmapStatus(NO_ROADMAP_FILTERS);
+    setGoalFilter(null); setMilestoneFilter(null); setStatusFilter(''); setTypeFilter(''); setCategoryFilter(''); setRoadmapStatus(NO_ROADMAP_FILTERS);
   };
   const isTaskTab = tab === 'tasks' || tab === 'todos';
   // The status filter of the tab you're in
   const tabStatus: string = isTaskTab ? statusFilter : tab === 'goals' || tab === 'milestones' ? roadmapStatus[tab] : '';
   const hasGoalFilter = tab === 'tasks' || tab === 'milestones';
-  const filtersSet = (hasGoalFilter && !!goalFilter) || (tab === 'tasks' && !!milestoneFilter) || !!tabStatus || (isTaskTab && !!typeFilter);
-  const goalPasses = (g: GoalEntry) => !roadmapStatus.goals || normalizeRoadmapStatus(g.goalStatus) === roadmapStatus.goals;
+  // Milestones and tasks take their goal's category (a todo has no goal, so no category)
+  const hasCategoryFilter = tab !== 'todos';
+  const category = hasCategoryFilter ? categoryFilter : '';
+  const inCategory = (goalId: number | null) => !category || (!!goalId && sameCategory(goalCategory.get(goalId) ?? '', category));
+  const filtersSet = (hasGoalFilter && !!goalFilter) || (tab === 'tasks' && !!milestoneFilter) || !!tabStatus || (isTaskTab && !!typeFilter) || !!category;
+  const goalPasses = (g: GoalEntry) => inCategory(g.id)
+    && (!roadmapStatus.goals || normalizeRoadmapStatus(g.goalStatus) === roadmapStatus.goals);
   const milestonePasses = (m: MilestoneEntryData) =>
-    (!goalFilter || m.parentGoalId === goalFilter)
+    (!goalFilter || m.parentGoalId === goalFilter) && inCategory(m.parentGoalId)
     && (!roadmapStatus.milestones || normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === roadmapStatus.milestones);
   const taskPasses = (t: TaskEntryData) => taskPassesFilter(t.customFields, {
-    scope: tab === 'todos' ? 'todos' : 'tasks',
+    scope: tab === 'todos' ? 'todos' : 'all',
     goalId: goalFilter, milestoneId: milestoneFilter, status: statusFilter, taskType: typeFilter,
-  }, milestoneGoal);
+  }, milestoneGoal)
+    && inCategory(t.parentGoalId ?? (t.parentMilestoneId ? milestoneGoal.get(t.parentMilestoneId) ?? null : null));
   const compact = useMediaQuery('(max-width: 768px)');
   const [filtersOpen, setFiltersOpen] = useState(false);
   useEffect(() => {
@@ -669,14 +701,15 @@ export function GoalsView() {
     milestoneId: tab === 'tasks' ? milestoneFilter : null,
     status: tabStatus,
     taskType: isTaskTab ? typeFilter : '',
+    category,
   };
   // How much is set — shown on the phone "Filters" button
   const activeCount = (current.query ? 1 : 0) + (sort !== 'newest' ? 1 : 0)
-    + (current.goalId ? 1 : 0) + (current.milestoneId ? 1 : 0) + (current.status ? 1 : 0) + (current.taskType ? 1 : 0);
+    + (current.goalId ? 1 : 0) + (current.milestoneId ? 1 : 0) + (current.status ? 1 : 0) + (current.taskType ? 1 : 0) + (current.category ? 1 : 0);
   const showFilters = tab === 'goals' ? orderedGoals.length > 0 : tab === 'milestones' ? orderedMilestones.length > 0
-    : tab === 'tasks' ? linkedTasks.length > 0 : todos.length > 0;
+    : tasks.length > 0; // Tasks and its Todos view share the row (the Show pill switches between them)
   const activeSaved = savedViews.find(v => isSameView(v, current)) ?? null;
-  const hasSetup = !!current.query || sort !== 'newest' || !!current.goalId || !!current.milestoneId || !!current.status || !!current.taskType;
+  const hasSetup = !!current.query || sort !== 'newest' || !!current.goalId || !!current.milestoneId || !!current.status || !!current.taskType || !!current.category;
 
   const applyView = (v: SavedPlanView) => {
     setQuery(v.query);
@@ -684,8 +717,9 @@ export function GoalsView() {
     setGoalFilter(v.goalId);
     setMilestoneFilter(v.milestoneId);
     if (v.tab === 'goals' || v.tab === 'milestones') setPlanStatus(v.tab, v.status as RoadmapStatus | '');
-    else setStatusFilter(v.status as TaskStatus | '');
+    else setStatusFilter(knownStatus(v.status));
     setTypeFilter(v.taskType ?? '');
+    setCategoryFilter(v.category ?? '');
     const nextViews = { ...views, [v.tab]: v.view };
     setViews(nextViews);
     try { localStorage.setItem(VIEW_KEY, JSON.stringify(nextViews)); } catch { /* storage unavailable */ }
@@ -810,14 +844,20 @@ export function GoalsView() {
   const milestoneColumns = ROADMAP_COLUMNS.filter(c => !roadmapStatus.milestones || c.key === roadmapStatus.milestones).map(c => ({
     ...c, items: shownMilestones.filter(m => normalizeMilestoneRoadmapStatus(m.milestoneStatus, m.isCompleted) === c.key).map(milestoneItem),
   }));
-  // The Tasks board's first column reads "Task" (the Todos board keeps "To Do")
+  // The Tasks board's first working column reads "Tasks Planned" (all tasks or just the todos)
   const taskColumns = (list: TaskEntryData[], firstLabel?: string) => TASK_COLUMNS
     .filter(c => !statusFilter || c.key === statusFilter)
     .map(c => ({ ...c, label: c.key === 'todo' && firstLabel ? firstLabel : c.label,
       items: list.filter(t => taskStatusOf(t.customFields) === c.key).map(taskItem) }));
 
   /* ── List rows (same rows as every other list) ── */
-  const renderRows = (items: { id: number; taxonomyId: number; isCompleted?: boolean }[], mixed: boolean) => (
+  // The goals list sits under its categories (in the list's order, "No category" last) unless sorted another way
+  const asGoalRow = (g: GoalEntry) => ({ ...g, isCompleted: normalizeRoadmapStatus(g.goalStatus) === 'completed' });
+  const goalGroups = sort === 'newest'
+    ? groupByCategory(shownGoals.map(asGoalRow), g => goalCategoryOf(g.customFields), categories)
+    : [];
+
+  const renderRows = (items: { id: number; taxonomyId: number; isCompleted?: boolean }[], mixed: boolean, topRule = true) => (
     <RowList>{items.map((t, i) => {
       const entry = entries.find(e => e.id === t.id);
       if (!entry) return null;
@@ -827,7 +867,7 @@ export function GoalsView() {
           <EntryListCard
             // First-row top rule only when filters sit between it and the tabs
             // (straight under the tab bar its hairline would double up)
-            hint={i === 0 && (compact ? filtersOpen : showRow)}
+            hint={topRule && i === 0 && (compact ? filtersOpen : showRow)}
             content={entry.content}
             createdAt={entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt)}
             topicName={mixed ? topic?.name : undefined}
@@ -877,6 +917,15 @@ export function GoalsView() {
   if (activeSaved) menuItems.push({ label: 'Delete view…', icon: 'trash', danger: true, confirmLabel: `Delete “${activeSaved.name}”?`, onSelect: () => persistViews(savedViews.filter(v => v.id !== activeSaved.id)) });
   const doneNoun = completedShown.length === 1 ? (tab === 'todos' ? 'todo' : 'task') : tab;
 
+  const categoryPick = hasCategoryFilter && (
+    <FilterPick name="Category" value={category || 'All'} set={!!category}>
+      <select aria-label="Category" value={category} onChange={e => setCategoryFilter(e.target.value)}>
+        <option value="">All</option>
+        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </FilterPick>
+  );
+
   const rowContent = (<>
               {savedViews.length > 0 && (
                 <FilterPick name="View" value={activeSaved?.name ?? 'None'} set={!!activeSaved}>
@@ -887,6 +936,7 @@ export function GoalsView() {
                 </FilterPick>
               )}
               {showFilters && (tab === 'goals' || tab === 'milestones') && (<>
+              {categoryPick}
               {tab === 'milestones' && (
                 <FilterPick name="Goal" value={goals.find(g => g.id === goalFilter)?.title ?? 'All'} set={!!goalFilter}>
                   <select aria-label="Goal" value={goalFilter ?? ''} onChange={e => pickGoal(e.target.value ? Number(e.target.value) : null)}>
@@ -903,8 +953,16 @@ export function GoalsView() {
               </FilterPick>
               </>)}
               {showFilters && isTaskTab && (<>
+              {/* Todos are tasks with no goal or milestone: one tab, this pill picks all of them or just those */}
+              <FilterPick name="Show" value={tab === 'todos' ? 'Todos' : 'All tasks'} set={tab === 'todos'}>
+                <select aria-label="Show" value={tab} onChange={e => navigate(PLAN_TAB_PATHS[e.target.value as 'tasks' | 'todos'])}>
+                  <option value="tasks">All tasks</option>
+                  <option value="todos">Todos</option>
+                </select>
+              </FilterPick>
               {tab === 'tasks' && (
                 <>
+                  {categoryPick}
                   <FilterPick name="Goal" value={goals.find(g => g.id === goalFilter)?.title ?? 'All'} set={!!goalFilter}>
                     <select aria-label="Goal" value={goalFilter ?? ''} onChange={e => pickGoal(e.target.value ? Number(e.target.value) : null)}>
                       <option value="">All</option>
@@ -1017,7 +1075,14 @@ export function GoalsView() {
                 ? <KanbanBoard columns={goalColumns} noun="goal" onOpen={openInJournal}
                     onMove={persistGoalStatus} onReorder={refined ? undefined : reorder('goals', orderedGoals)}
                     onAdd={key => addIn({ goalStatus: key })()} />
-                : renderRows(shownGoals.map(g => ({ ...g, isCompleted: normalizeRoadmapStatus(g.goalStatus) === 'completed' })), false))}
+                : goalGroups.length > 1 || (goalGroups.length === 1 && goalGroups[0].category)
+                  ? goalGroups.map(g => (
+                      <section key={g.category || 'none'} aria-label={g.category || 'No category'}>
+                        <GroupHead>{g.category || 'No category'}</GroupHead>
+                        {renderRows(g.items, false, false)}
+                      </section>
+                    ))
+                  : renderRows(shownGoals.map(asGoalRow), false))}
 
             {tab === 'milestones' && (orderedMilestones.length === 0
               ? <EmptyState message="No milestones found." submessage="Create a journal entry with the Milestone topic to get started." />
@@ -1027,18 +1092,18 @@ export function GoalsView() {
                     onAdd={key => addIn({ ...milestoneFieldsForStatus(key), ...(goalFilter ? { parentGoalId: goalFilter } : {}) })()} />
                 : renderRows(shownMilestones, false))}
 
-            {tab === 'tasks' && (linkedTasks.length === 0
-              ? <EmptyState message="No tasks found." submessage="Tasks linked to a goal or milestone show here; unlinked ones are Todos." />
+            {tab === 'tasks' && (tasks.length === 0
+              ? <EmptyState message="No tasks found." submessage="Create a journal entry with the Task topic to get started." />
               : view === 'board'
-                ? <KanbanBoard columns={taskColumns(shownTasks, 'Task')} noun="task" onOpen={openInJournal}
+                ? <KanbanBoard columns={taskColumns(shownTasks, 'Tasks Planned')} noun="task" onOpen={openInJournal}
                     onMove={persistTaskStatus} onReorder={refined ? undefined : reorder('tasks', sortedTasks)}
                     onAdd={key => addIn({ ...taskFieldsForStatus(key), ...filterLink })()} />
                 : renderRows(shownTasks, tasksMixed))}
 
             {tab === 'todos' && (todos.length === 0
-              ? <EmptyState message="No todos found." submessage="Create a task without linking it to a milestone or goal." />
+              ? <EmptyState message="No todos found." submessage="A todo is a task that isn’t linked to a goal or milestone." />
               : view === 'board'
-                ? <KanbanBoard columns={taskColumns(shownTodos)} noun="todo" onOpen={openInJournal}
+                ? <KanbanBoard columns={taskColumns(shownTodos, 'Tasks Planned')} noun="todo" onOpen={openInJournal}
                     onMove={persistTaskStatus} onReorder={refined ? undefined : reorder('todos', sortedTodos)}
                     onAdd={key => addIn({ ...taskFieldsForStatus(key) })()} />
                 : renderRows(shownTodos, todosMixed))}

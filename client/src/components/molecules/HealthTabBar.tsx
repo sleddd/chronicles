@@ -13,6 +13,7 @@ export function HealthTabBar() {
   const tabs: { label: string; path: string }[] = [{ label: 'Dashboard', path: '/health' }];
   if (ff.foodEnabled !== false) tabs.push({ label: 'Meals', path: '/health/food' });
   if (ff.exerciseEnabled !== false) tabs.push({ label: 'Exercise', path: '/health/exercise' });
+  tabs.push({ label: 'Habits', path: '/health/habits' });
   tabs.push({ label: 'Symptoms', path: '/health/symptoms' });
   if (ff.medicationEnabled !== false) tabs.push({ label: 'Med list', path: '/health/meds' }, { label: 'Med history', path: '/health/med-history' });
   if (ff.allergiesEnabled !== false) tabs.push({ label: 'Allergies', path: '/health/allergies' });

@@ -97,12 +97,12 @@ const EventRow = styled.div<{ $accent: string }>`
   @media (max-width: 900px) { margin: 0; }
 `;
 
-const Dot = styled.i<{ $bill?: boolean }>`
+const Dot = styled.i<{ $bill?: boolean; $task?: boolean }>`
   width: 7px;
   height: 7px;
   border-radius: 50%;
   align-self: center;
-  background: ${({ $bill }) => ($bill ? 'var(--chart-amber)' : 'var(--color-accent)')};
+  background: ${({ $bill, $task }) => ($bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
 `;
 
 const EventContent = styled.div`
@@ -229,6 +229,7 @@ export function CalendarDayDetail({
 
             let timeLabel = '';
             let metaLine = '';
+            let taskDone = false;
 
             if (isEvent) {
               const cf = meta._customFields as Partial<EventFieldValues & MeetingFieldValues> | undefined;
@@ -242,7 +243,10 @@ export function CalendarDayDetail({
               if (isTask) {
                 const cf = meta._customFields as Partial<TaskFieldValues> | undefined;
                 const priority = cf?.priority;
-                metaLine = priority && priority !== 'none' ? `Task · ${priority[0].toUpperCase()}${priority.slice(1)} priority` : 'Task';
+                // Planned for the day, not timed
+                timeLabel = '';
+                taskDone = !!cf?.isCompleted;
+                metaLine = taskDone ? 'Task · Done' : priority && priority !== 'none' ? `Task · ${priority[0].toUpperCase()}${priority.slice(1)} priority` : 'Task';
               } else {
                 metaLine = topic?.name || 'Entry';
               }
@@ -257,9 +261,9 @@ export function CalendarDayDetail({
 
             return (
               <EventRow key={entry.id} $accent={accentColor} onClick={handleClick} title={timeLabel ? `${timeLabel} · ${metaLine}` : metaLine}>
-                <Dot aria-hidden="true" />
+                <Dot $task={isTask} aria-hidden="true" />
                 <EventContent>
-                  <EventTitle>{title}</EventTitle>
+                  <EventTitle style={taskDone ? { textDecoration: 'line-through' } : undefined}>{title}</EventTitle>
                   <EventMeta>{metaLine}</EventMeta>
                 </EventContent>
               </EventRow>

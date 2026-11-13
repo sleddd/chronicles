@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import styled from 'styled-components';
+import { HabitsToday } from '../components/organisms/HabitsToday.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -14,7 +15,6 @@ import { stripHtml } from '../utils/stripHtml.js';
 import { DayAtAGlance } from '../components/organisms/FoodLog.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { foodRowsFrom } from '../utils/foodLog.js';
-import { MacroDistribution } from '../components/organisms/MacroDistribution.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { DEFAULT_NUTRIENT_GOALS, type NutrientGoals } from '../types/nutrition.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -75,13 +75,13 @@ const Pair = styled.div`
   ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
-/* Macro distribution on the left, Wellness check-in on the right — side by side
-   on tablets too, stacked only on phones */
+/* The quick log on the left, Wellness check-in on the right — side by side
+   on tablets too, stacked only on phones. The two columns are the same height. */
 const TopPair = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
   @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
@@ -92,6 +92,11 @@ const Column = styled.div`
   gap: 24px;
   min-width: 0;
   ${NAV_COMPACT} { gap: 16px; }
+`;
+
+/* A column whose card stretches to the row's height (the quick log beside the taller check-in) */
+const FillColumn = styled(Column)`
+  & > * { flex: 1; }
 `;
 
 /* "Today" + the date, then the nutrient strip */
@@ -130,16 +135,6 @@ function FoodGlance() {
   const todayRows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
 
   return <DayAtAGlance rows={todayRows} goals={goals} />;
-}
-
-/** Today's protein / carbs / fat split */
-function TodayMacros() {
-  const entries = useEntriesStore(s => s.decryptedEntries);
-  const allTopics = useEntriesStore(s => s.allTopics);
-  const today = toDateStr(new Date());
-  const mealsTopicId = useMemo(() => allTopics.find(t => t.name.toLowerCase() === 'meals')?.id, [allTopics]);
-  const rows = useMemo(() => foodRowsFrom(entries, mealsTopicId).filter(r => r.day === today), [entries, mealsTopicId, today]);
-  return <MacroDistribution rows={rows} />;
 }
 
 /** True when an active medication has at least one scheduled dose time. */
@@ -219,29 +214,34 @@ export function HealthDashboardView() {
           <Stack>
             {food ? (
               <TopPair>
-                <Column><TodayMacros /></Column>
+                {/* The quick log leads, beside the check-in (the macro chart is on the Meals page only) */}
+                <FillColumn><QuickLog meal={food} exercise={exercise} /></FillColumn>
                 <Column><WellnessCheckIn title="Wellness check-in" quad bare /></Column>
               </TopPair>
             ) : <WellnessCheckIn title="Wellness check-in" quad bare />}
             {hasMeds && medsOn && (food || exercise) ? (
               <Pair>
                 <Column>
-                  <QuickLog meal={food} exercise={exercise} />
+                  {!food && <QuickLog meal={food} exercise={exercise} />}
                   <QuickChange />
                   <QuickSymptom />
+                  {/* The exercise schedule sits under Log a symptom; Medications has the right column */}
+                  {routines && <ExerciseToday panel />}
                 </Column>
                 <Column>
+                  {/* Habits sit right under the Wellness check-in, above Medications */}
+                  <HabitsToday panel />
                   <MedicationsToday doses={doses} panel />
-                  {routines && <ExerciseToday panel />}
                 </Column>
               </Pair>
             ) : (
               <>
-                <QuickLog meal={food} exercise={exercise} />
+                <HabitsToday panel />
+                {!food && <QuickLog meal={food} exercise={exercise} />}
                 <QuickChange />
                 <QuickSymptom />
-                {medsOn && <MedicationsToday doses={doses} hideWhenEmpty panel />}
                 {routines && <ExerciseToday panel />}
+                {medsOn && <MedicationsToday doses={doses} hideWhenEmpty panel />}
               </>
             )}
           </Stack>
