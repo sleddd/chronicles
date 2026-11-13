@@ -65,7 +65,7 @@ describe('PlanTimeline', () => {
 describe('PlannerBoard', () => {
   const card = (id: number, title: string, over: Partial<PlannerCard> = {}): PlannerCard => ({ id, title, done: false, day: '', ...over });
   const setup = () => {
-    const props = { onOpen: vi.fn(), onOpenEvent: vi.fn(), onToggle: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onPickDay: vi.fn() };
+    const props = { onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onPickDay: vi.fn() };
     renderWithTheme(<PlannerBoard {...props}
       overdue={[card(1, 'Renew registration', { day: '2026-11-10', note: 'Tue, Nov 10' })]} open={[card(2, 'Call the dentist', { due: 'Due Nov 14' })]}
       lanes={[
@@ -96,14 +96,9 @@ describe('PlannerBoard', () => {
     expect(screen.getByRole('cell', { name: 'Fri 13, Night' }).textContent).toBe('Night');
   });
 
-  it('ticks, plans by date, adds and opens without dragging', () => {
+  it('plans by date, adds and opens without dragging; no card carries a tick', () => {
     const props = setup();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Write the FAQ, done' }));
-    expect(props.onToggle).toHaveBeenCalledWith(3, true);
-    expect(props.onOpen).not.toHaveBeenCalled();
-    // Unscheduled cards carry no tick
-    expect(screen.queryByRole('checkbox', { name: 'Call the dentist, done' })).toBeNull();
-    expect(screen.queryByRole('checkbox', { name: 'Renew registration, done' })).toBeNull();
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     fireEvent.change(screen.getByLabelText('Day for Call the dentist'), { target: { value: '2026-11-13' } });
     expect(props.onSchedule).toHaveBeenCalledWith(2, '2026-11-13', null);
     const add = screen.getByLabelText('Add a task on Fri 13');
@@ -122,7 +117,7 @@ describe('PlannerBoard', () => {
 describe('PlannerBoard folding', () => {
   it('folds Unscheduled down to a strip and opens it again', () => {
     const onFold = vi.fn();
-    const base = { onOpen: vi.fn(), onOpenEvent: vi.fn(), onToggle: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onFold,
+    const base = { onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onFold,
       overdue: [], open: [{ id: 2, title: 'Call the dentist', done: false, day: '' }],
       lanes: [{ day: '2026-11-13', label: 'Fri 13', today: false, events: [], cards: [] }] };
     const { rerender } = renderWithTheme(<PlannerBoard {...base} />);

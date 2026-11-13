@@ -17,8 +17,6 @@ export const SLIDES = [
   { key: 'journal-dark', name: 'Journal', caption: 'Every entry, with fields for each topic' },
   { key: 'health-dark', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
   { key: 'reports-dark', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
-  { key: 'meals-dark', name: 'Meals', caption: 'Daily nutrition against your goals' },
-  { key: 'med-history-dark', name: 'Med history', caption: 'What you took this month and how often' },
   { key: 'tasks-dark', name: 'Tasks', caption: 'Drag tasks from to do to done' },
   { key: 'roadmap-dark', name: 'Roadmap', caption: 'Goals and their milestones across the year' },
   { key: 'calendar-dark', name: 'Calendar', caption: 'Events, deadlines and bills due' },

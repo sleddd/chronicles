@@ -17,7 +17,6 @@ import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { showFlash } from '../services/flashNotice.js';
-import { taskFieldsForStatus } from '../types/goals.js';
 import { toDateStr, formatTime12h } from '../utils/dateUtils.js';
 import { calendarDayFor, isEventTopic } from '../utils/calendarItems.js';
 import { repeatRuleOf, occurrencesBetween } from '../utils/recurrence.js';
@@ -185,14 +184,6 @@ export function PlannerView() {
     void saveOrder(movedOrder(order, id, day, dayIds, overId, today)).catch(err => console.error('Failed to save the day’s order:', err));
   };
 
-  const toggle = (id: number, done: boolean) => {
-    const t = planned.find(x => x.id === id);
-    if (!t) return;
-    void saveFields(t.entry, { ...t.fields, ...taskFieldsForStatus(done ? 'done' : 'todo') }).then(ok => {
-      if (!ok) showFlash('Couldn’t save that tick. Try again.');
-    });
-  };
-
   const add = (day: string, text: string) => {
     void createEntry({ name: 'Task', icon: 'circle-check' }, text, {
       taskDescription: text, isInProgress: false, isCompleted: false, isAutoMigrating: false,
@@ -218,7 +209,7 @@ export function PlannerView() {
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
       <PlannerBoard
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)}
-        onOpen={openInJournal} onOpenEvent={openInJournal} onToggle={toggle} onSchedule={schedule} onAdd={add}
+        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onAdd={add}
         folded={folded} onFold={setFolded}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}
         tools={(

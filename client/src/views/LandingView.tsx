@@ -39,13 +39,6 @@ function slidesFor(f: Feature): Slide[] {
 /** Stagger for revealed items: each later one starts a beat after */
 const delay = (i: number) => ({ '--reveal-delay': `${i * 0.1}s` }) as CSSProperties;
 
-const QUESTIONS_FOUR = [
-  { title: 'What matters now?', body: 'Today’s priorities, active goals and what’s due, all in one glance.' },
-  { title: 'What am I doing about it?', body: 'Your goals, milestones and tasks sit together, so progress shows right next to the work.' },
-  { title: 'What changed?', body: 'Mood, sleep, symptoms and spending trend over time, so patterns show up without any digging.' },
-  { title: 'What should change next?', body: 'Reports show what’s helping and what isn’t, so the next adjustment is easy to see.' },
-];
-
 interface Feature {
   label: string;
   title: string;
@@ -62,16 +55,6 @@ interface Feature {
 
 const FEATURES: Feature[] = [
   {
-    label: 'Life dashboard', title: 'Your whole day at a glance.',
-    body: 'Weather, priorities, doses, the day’s menu, your shopping list and what’s ahead, under your own wallpaper. Choose what shows with Customize view.',
-    points: ['Quick entry from the top of the page', 'Wellness check-in for water, sleep and mood', 'World clocks, daily quote, light and dark themes'],
-    shot: ['dashboard', 'dashboard-2'], size: [1268, 1300],
-    alt: [
-      'The dashboard with the greeting and weather, quick entry, the daily quote, the wellness check-in and world clocks',
-      'Further down the dashboard, today’s priorities, what’s coming up, the shopping list, medications, a quick meal log and a symptom log',
-    ],
-  },
-  {
     label: 'Journal', title: 'A journal that keeps up with you.',
     body: 'Write with rich text, photos, voice dictation, or Apple Pencil handwriting and drawing. Search by keyword, topic or date, and bookmark what matters.',
     points: ['Entries grouped by day and month', 'Ideas, quotes, books and films beside your days', 'Encrypted before it leaves your browser'],
@@ -79,11 +62,11 @@ const FEATURES: Feature[] = [
     alt: 'The journal with everyday entries by month and a Sunday entry open',
   },
   {
-    label: 'Goals and planning', title: 'Goals that hold everything they need.',
-    body: 'A goal gathers its milestones and tasks in one place. Tasks roll up into milestones, milestones roll up into goals, and the roadmap shows where it all lands. Then plan your week around it.',
+    label: 'Goals and planning', title: 'Plan your week around what matters.',
+    body: 'Drop tasks into your week, see how they fit around your calendar, and watch the roadmap show where it all leads. Goals, milestones and tasks stay linked, so every day you plan moves something forward.',
     points: [
-      'Roadmap timeline: See every goal on a Gantt-style timeline by quarter, year or three years, with a marker for today.',
-      'Weekly planner: Drop tasks into morning, noon and night, right beside your calendar events.',
+      'Weekly planner: Place tasks into morning, noon and night, right beside your calendar events.',
+      'Roadmap timeline: See your goals on a Gantt-style timeline by quarter, year or three years, with a marker for today.',
       'Kanban boards or lists: Drag to change status.',
       'Priorities, deadlines and todos: Keep what’s due in front of you.',
       'Time tracking: Track time on tasks and focus sessions.',
@@ -361,36 +344,7 @@ const Marker = styled.span`
   background: radial-gradient(circle, ${SKY_INK} 0 5px, transparent 5.5px);
 `;
 
-/* ——— Four questions ——— */
-
-const Four = styled.ol`
-  --gap: 56px;
-  list-style: none;
-  margin: 72px 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  column-gap: var(--gap);
-  border-top: 1px solid var(--border-subtle);
-  /* Each question spans two shared rows (title, text), so every title takes the
-     tallest title's room and the descriptions start on one line. Equal columns,
-     the rule between them drawn in the middle of the gap */
-  li { position: relative; display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 0; padding: 44px 0 8px; }
-  li + li::before { content: ''; position: absolute; top: 0; bottom: 0; left: calc(var(--gap) / -2); border-left: 1px solid var(--border-subtle); }
-  h3 { margin: 0 0 14px; font-family: var(--font-display); font-size: 28px; font-weight: 300; line-height: 1.2; color: var(--text-primary); }
-  p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text-soft); }
-  @media (max-width: 960px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    li:nth-child(3)::before { display: none; }
-    li:nth-child(n + 3) { border-top: 1px solid var(--border-subtle); }
-  }
-  @media (max-width: 560px) {
-    grid-template-columns: minmax(0, 1fr);
-    li { padding: 32px 0 28px; }
-    li + li::before { display: none; }
-    li + li { border-top: 1px solid var(--border-subtle); }
-  }
-`;
+/* ——— Features (heading, then the rows) ——— */
 
 /* ——— Feature rows ——— */
 
@@ -398,7 +352,7 @@ const FeatureRows = styled.div`
   display: flex;
   flex-direction: column;
   gap: 136px;
-  margin-top: 136px;
+  margin-top: 104px;
   @media (max-width: 900px) { gap: 80px; margin-top: 88px; }
 `;
 
@@ -419,7 +373,7 @@ const FeatureRow = styled.article`
   }
 `;
 
-/* "01 · Life dashboard": spaced grey capitals */
+/* A row's label ("Journal"): spaced grey capitals */
 const RowLabel = styled.p`
   && { margin: 0 0 24px; font-size: 17px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-soft); }
 `;
@@ -664,21 +618,12 @@ export function LandingView() {
         <Band $tone="white" id="features" aria-labelledby="four-title">
           <Container>
             <div data-reveal>
-              <Eyebrow>A dashboard that leads to decisions</Eyebrow>
               <H2 id="four-title">A good dashboard answers four questions.</H2>
               <Lede>
-                The best life dashboard isn’t the one with the most charts. It’s the one you barely need, but always
-                count on.
+                The best life dashboard isn’t the one with the most charts. It’s the one you need every day and barely
+                have to touch.
               </Lede>
             </div>
-            <Four>
-              {QUESTIONS_FOUR.map((f, i) => (
-                <li key={f.title} data-reveal style={delay(i)}>
-                  <h3>{f.title}</h3>
-                  <p>{f.body}</p>
-                </li>
-              ))}
-            </Four>
 
             <FeatureRows>
               {FEATURES.map((f, i) => (

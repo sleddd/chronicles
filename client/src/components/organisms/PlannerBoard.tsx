@@ -7,7 +7,6 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
-import { TickMark } from '../atoms/TickMark.js';
 import { Kicker, CardTitle, Chip } from './KanbanBoard.js';
 import { DEFAULT_PART, PLANNER_ROWS, type DayPart } from '../../utils/planner.js';
 
@@ -313,18 +312,6 @@ const Line = styled.div`
   gap: 8px;
 `;
 
-const Tick = styled.button`
-  flex: none;
-  display: inline-flex;
-  margin-top: 1px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-`;
-
 const Text = styled.div`
   flex: 1;
   min-width: 0;
@@ -418,23 +405,16 @@ function DropZone({ id, children }: { id: string; children: (over: boolean, ref:
 
 interface CardActions {
   onOpen: (id: number) => void;
-  onToggle: (id: number, done: boolean) => void;
   /** Plan a task for a day ('' = take it off). `part` is where in the day it was dropped; undefined = leave that as it is */
   onSchedule: (id: number, day: string, overId: number | null, part?: DayPart | '') => void;
 }
 
-function CardBody({ card, onToggle, onSchedule, tick = true }: { card: PlannerCard; tick?: boolean } & Partial<CardActions>) {
+/* No tick on a planner card: a task is marked done where it lives (its board or the journal); a done one shows struck through */
+function CardBody({ card, onSchedule }: { card: PlannerCard } & Partial<CardActions>) {
   // Controls inside a draggable card must not start a drag or open it
   const quiet = { onPointerDown: (e: React.SyntheticEvent) => e.stopPropagation(), onKeyDown: (e: React.SyntheticEvent) => e.stopPropagation(), onClick: (e: React.SyntheticEvent) => e.stopPropagation() };
   return (<>
     <Line>
-      {/* Unscheduled cards have no tick: a task is ticked done on its day */}
-      {tick && (
-        <Tick type="button" role="checkbox" aria-checked={card.done} aria-label={`${card.title}, done`}
-          {...quiet} onClick={e => { e.stopPropagation(); onToggle?.(card.id, !card.done); }}>
-          <TickMark checked={card.done} size={20} />
-        </Tick>
-      )}
       <Text>
         {card.kicker && <Kicker>{card.kicker}</Kicker>}
         <Title $done={card.done}>{card.title}</Title>
@@ -453,14 +433,14 @@ function CardBody({ card, onToggle, onSchedule, tick = true }: { card: PlannerCa
   </>);
 }
 
-function SortableCard({ card, tick, ...actions }: { card: PlannerCard; tick?: boolean } & CardActions) {
+function SortableCard({ card, ...actions }: { card: PlannerCard } & CardActions) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   return (
     <TaskCard ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging}
       {...attributes} {...listeners}
       onClick={() => actions.onOpen(card.id)}
       onKeyDown={e => { if (e.key === 'Enter') actions.onOpen(card.id); }}>
-      <CardBody card={card} tick={tick} {...actions} />
+      <CardBody card={card} {...actions} />
     </TaskCard>
   );
 }
@@ -508,7 +488,7 @@ interface PlannerBoardProps extends CardActions {
   onFold?: (folded: boolean) => void;
 }
 
-export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onToggle, onSchedule, onOpenEvent, onAdd, onPickDay, folded = false, onFold }: PlannerBoardProps) {
+export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, onOpenEvent, onAdd, onPickDay, folded = false, onFold }: PlannerBoardProps) {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
@@ -555,7 +535,7 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onToggle, on
     onSchedule(id, to.day, onCard ? Number(over.id) : null, to.part);
   };
 
-  const actions = { onOpen: openCard, onToggle, onSchedule };
+  const actions = { onOpen: openCard, onSchedule };
   const single = lanes.length === 1;
 
   return (
@@ -583,9 +563,9 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onToggle, on
               {tools}
               <SortableContext items={backlog.map(c => c.id)} strategy={verticalListSortingStrategy}>
                 {overdue.length > 0 && <Group>Overdue</Group>}
-                {overdue.map(c => <SortableCard key={c.id} card={c} tick={false} {...actions} />)}
+                {overdue.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
                 {overdue.length > 0 && open.length > 0 && <Group>No day yet</Group>}
-                {open.map(c => <SortableCard key={c.id} card={c} tick={false} {...actions} />)}
+                {open.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
                 {backlog.length === 0 && <Empty>Nothing left to plan</Empty>}
               </SortableContext>
               <AddTask label="Add a task with no day" onAdd={text => onAdd('', text)} />
@@ -646,7 +626,7 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onToggle, on
         </div>
       </Wrap>
       <DragOverlay dropAnimation={null}>
-        {floating ? <Floating as="div"><CardBody card={floating} tick={placeOf(floating.id)?.day !== ''} /></Floating> : null}
+        {floating ? <Floating as="div"><CardBody card={floating} /></Floating> : null}
       </DragOverlay>
     </DndContext>
   );
