@@ -621,7 +621,7 @@ export const notice = {
 
 // Public landing page — no account needed
 export interface BetaApplication {
-  name: string; email: string; trackFirst: string; device: string; website?: string;
+  name: string; email: string; website?: string;
 }
 export const beta = {
   apply: (a: BetaApplication) =>

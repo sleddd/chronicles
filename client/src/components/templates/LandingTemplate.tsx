@@ -1,7 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Link } from 'react-router-dom';
-import { BrandMark } from '../atoms/BrandMark.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { BETA_DETAILS } from '@shared/legal/index.js';
 
@@ -9,9 +8,11 @@ import { BETA_DETAILS } from '@shared/legal/index.js';
    and controls: thin Work Sans headings, Open Sans text, round accent pills.
    Always the app's light theme, whatever theme the visitor last used: the DS
    tokens are pinned to their light values (default Teal accent) on the page
-   root. The header and hero sit on a full-width teal gradient (`HeroBand`,
-   white text and pills),
-   and the privacy band re-pins them dark (`DarkBand`). */
+   root. The header and hero sit on a night-sky photo (`HeroBand`: Benjamin
+   Voros's Milky Way over mountains, one of the app's wallpapers) with white
+   text and pills, fading into the page colour at its foot. The privacy band
+   uses the teal gradient (`TEAL_GRADIENT`) and dark bands re-pin dark text
+   tones (`DarkBand`). */
 
 /** The light theme's tokens, pinned on a page root — the landing page and the public shelf use them */
 export const LIGHT_TOKENS = `
@@ -56,33 +57,34 @@ export const TEAL_GRADIENT = `
   linear-gradient(135deg, #123c3b 0%, #1b5a58 38%, #23706e 62%, #2f9895 100%)
 `;
 
-/* The full-width teal gradient behind the header and hero: deep teal where the
-   text sits (white text stays ≥ 4.5:1) easing to the accent on the right, with
-   a soft light at the top right. Text, links, the logo and pills turn white. */
+/** The hero's photo (served from public/wallpapers, like the app's backgrounds) */
+export const HERO_PHOTO = '/wallpapers/benjamin-voros-phIFdC6lA4E.jpg';
+
+/* The night sky behind the header and hero: a shade at the top so the white
+   text reads, the photo, and a long fade into the page colour at the foot so
+   the screenshot frame lands on the light page. Text, links and pills turn white. */
 const HeroBand = styled.div`
   --text-primary: #ffffff;
   --text-secondary: #ffffff;
-  --text-soft: rgba(255, 255, 255, 0.9);
-  --text-muted: rgba(255, 255, 255, 0.8);
+  --text-soft: rgba(255, 255, 255, 0.92);
+  --text-muted: rgba(255, 255, 255, 0.82);
   --shadow-ring: 0 0 0 3px rgba(255, 255, 255, 0.55);
-  --logo-top: #ffffff;
-  --logo-mid: #e3f3f2;
-  --logo-low: #c9e9e7;
-  --logo-end: #acdcd9;
-  color-scheme: dark;
-  padding-bottom: 88px;
-  background: ${TEAL_GRADIENT};
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(10, 16, 34, 0.5) 0%, rgba(10, 16, 34, 0.12) 30%, rgba(10, 16, 34, 0) 52%),
+    linear-gradient(180deg, transparent 70%, var(--bg-app) 96%),
+    #141a2e url(${HERO_PHOTO}) center 28% / cover no-repeat;
   color: var(--text-secondary);
-  @media (max-width: 768px) { padding-bottom: 56px; }
 
-  /* Pills on teal: the primary turns white with teal text, the neutral one a white outline */
+  /* Pills on the photo: the primary turns white with deep teal text, the neutral one a white glass outline */
   --pill-primary-bg: #ffffff;
   --pill-primary-fg: #174a49;
   --pill-primary-hover: #e3f3f2;
-  --pill-neutral-bg: transparent;
-  --pill-neutral-border: rgba(255, 255, 255, 0.75);
+  --pill-neutral-bg: rgba(255, 255, 255, 0.14);
+  --pill-neutral-border: rgba(255, 255, 255, 0.7);
   --pill-neutral-fg: #ffffff;
-  --pill-neutral-hover: rgba(255, 255, 255, 0.12);
+  --pill-neutral-hover: rgba(255, 255, 255, 0.24);
 `;
 
 export const DarkBand = styled.section`
@@ -125,7 +127,7 @@ const Page = styled.div`
 
 /** One centred column, used by the header, each section and the footer */
 export const Container = styled.div`
-  max-width: 1120px;
+  max-width: 1184px;
   margin: 0 auto;
   padding: 0 24px;
   @media (max-width: 768px) { padding: 0 32px; }
@@ -164,21 +166,23 @@ const HeaderRow = styled(Container)`
   display: flex;
   align-items: center;
   gap: 32px;
+  @media (max-width: 480px) { gap: 12px; }
 `;
 
+/* The app icon (the rounded teal tile) beside the name in Work Sans */
 const Brand = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-right: auto;
   text-decoration: none;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 300;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  @media (max-width: 480px) { font-size: 15px; letter-spacing: 0.12em; gap: 8px; }
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  img { display: block; width: 36px; height: 36px; border-radius: 9px; }
+  @media (max-width: 480px) { font-size: 19px; gap: 10px; img { width: 32px; height: 32px; } }
 `;
 
 const Nav = styled.nav`
@@ -193,50 +197,71 @@ const Nav = styled.nav`
     font-weight: 500;
     &:hover { color: var(--text-primary); }
   }
-  @media (max-width: 900px) {
+  @media (max-width: 1000px) {
     gap: 16px;
     [data-section-link] { display: none; }
   }
+  @media (max-width: 480px) { gap: 12px; a:not([data-button]) { font-size: 14px; } }
 `;
 
-/** Sign up in the header: the white outlined pill, a step smaller than the hero's */
+/** Join the beta in the header: the white pill, a step smaller than the hero's */
 const HeaderPill = styled(ActionPill)`
-  && { min-height: 36px; padding: 6px 18px; white-space: nowrap; }
+  && { min-height: 42px; padding: 8px 20px; white-space: nowrap; }
+  @media (max-width: 480px) { && { min-height: 38px; padding: 6px 14px; font-size: 14px; } }
 `;
 
-/* The app's dark page colour, like the Questions band above it, a hairline between */
+/* A step darker than the Questions band above it, a hairline between: the
+   brand and a line about it, Product / Trust / Help columns, then the
+   copyright under a rule */
 const Footer = styled.footer`
   --text-primary: #f7f8fa;
-  --text-soft: #a5a8b0;
-  --color-accent-line: #7cc4c2;
-  --logo-top: rgb(174, 219, 218);
-  --logo-mid: #34a5a2;
-  --logo-low: #34a5a2;
-  --logo-end: rgb(44, 140, 138);
-  margin-top: 0;
-  padding: 32px 0;
-  background: #1f2229;
+  --text-soft: #b4b7be;
+  padding: 72px 0 36px;
+  background: #1a1c21;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-soft);
   font-size: 14px;
+  @media (max-width: 768px) { padding: 56px 0 32px; }
 `;
 
-const FooterRow = styled(Container)`
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  flex-wrap: wrap;
-  color: var(--text-soft);
-  span { display: inline-flex; align-items: center; gap: 10px; margin-right: auto; }
-  nav { display: flex; gap: 24px; }
-  a { color: var(--text-primary); font-weight: 500; text-decoration: none; &:hover { color: var(--color-accent-line); } }
-  /* Phones: the copyright line and the links stacked and centred */
-  @media (max-width: 768px) {
-    flex-direction: column;
-    justify-content: center;
+const FooterTop = styled(Container)`
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  > div:first-child p { max-width: 360px; margin: 22px 0 0; line-height: 1.65; }
+  h2 {
+    margin: 10px 0 18px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+  }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  a { color: var(--text-soft); text-decoration: none; &:hover { color: var(--text-primary); } }
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    > div:first-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 480px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+`;
+
+const FooterBrand = styled(Brand)`
+  font-size: 21px;
+  && { color: var(--text-soft); }
+`;
+
+/* The copyright and the promise, under a rule the column's width */
+const FooterBottom = styled(Container)`
+  margin-top: 56px;
+  > div {
+    display: flex;
+    justify-content: space-between;
     gap: 16px;
-    text-align: center;
-    span { margin-right: 0; justify-content: center; }
-    nav { justify-content: center; flex-wrap: wrap; }
+    flex-wrap: wrap;
+    padding-top: 28px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
 `;
 
@@ -272,13 +297,15 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <HeroBand>
       <Header>
         <HeaderRow>
-          <Brand to="/"><BrandMark size={28} gradientId="logo-landing" /> Chronicles</Brand>
+          <Brand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</Brand>
           <Nav aria-label="Main">
             <a href="#how" data-section-link>How it works</a>
             <a href="#features" data-section-link>Features</a>
+            <a href="#compare" data-section-link>Compare</a>
             <a href="#privacy" data-section-link>Privacy</a>
+            <a href="#faq" data-section-link>FAQ</a>
             {signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}
-            {!signedIn && <HeaderPill as="a" href="#beta" data-button>Sign up</HeaderPill>}
+            {!signedIn && <HeaderPill as="a" href="#beta" $primary data-button>Join the beta</HeaderPill>}
           </Nav>
         </HeaderRow>
       </Header>
@@ -286,15 +313,44 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       </HeroBand>
       <main>{children}</main>
       <Footer>
-        <FooterRow>
-          <span><BrandMark size={22} gradientId="logo-landing-foot" /> © 2025–{year} {BETA_DETAILS.copyrightHolder}</span>
-          <nav aria-label="Legal">
-            <Link to="/health-privacy">Privacy policy</Link>
-            <Link to="/terms">Terms</Link>
-            <Link to="/report-a-bug">Report a bug</Link>
-            <a href={BETA_DETAILS.githubUrl} target="_blank" rel="noopener noreferrer">GitHub</a>
+        <FooterTop>
+          <div>
+            <FooterBrand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</FooterBrand>
+            <p>A zero-knowledge encrypted life dashboard, journal and digital day planner.</p>
+          </div>
+          <nav aria-labelledby="foot-product">
+            <h2 id="foot-product">Product</h2>
+            <ul>
+              <li><a href="#features">Features</a></li>
+              <li><a href="#how">How it works</a></li>
+              <li><a href="#compare">Compare</a></li>
+              <li><a href="#beta">Join the beta</a></li>
+            </ul>
           </nav>
-        </FooterRow>
+          <nav aria-labelledby="foot-trust">
+            <h2 id="foot-trust">Trust</h2>
+            <ul>
+              <li><a href="#privacy">Privacy and encryption</a></li>
+              <li><Link to="/health-privacy">Privacy policy</Link></li>
+              <li><Link to="/terms">Terms</Link></li>
+              <li><a href={`${BETA_DETAILS.githubUrl}/blob/rebuild/LICENSE`} target="_blank" rel="noopener noreferrer">License</a></li>
+            </ul>
+          </nav>
+          <nav aria-labelledby="foot-help">
+            <h2 id="foot-help">Help</h2>
+            <ul>
+              <li><a href="#faq">FAQ</a></li>
+              <li><Link to="/report-a-bug">Report a bug</Link></li>
+              <li>{signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}</li>
+            </ul>
+          </nav>
+        </FooterTop>
+        <FooterBottom>
+          <div>
+            <span>© {year} {BETA_DETAILS.copyrightHolder}</span>
+            <span>No analytics. No tracking. No ads.</span>
+          </div>
+        </FooterBottom>
       </Footer>
     </Page>
   );

@@ -391,8 +391,9 @@ export const betaApplicationSchema = z.object({
   // eslint-disable-next-line no-control-regex
   name: z.string().trim().min(1, 'Add your name').max(100).regex(/^[^\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]*$/, 'Use letters, numbers and punctuation only'),
   email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254),
-  trackFirst: z.enum(BETA_TRACK_OPTIONS),
-  device: z.enum(BETA_DEVICE_OPTIONS),
+  // No longer asked on the landing page; older clients may still send them
+  trackFirst: z.enum(BETA_TRACK_OPTIONS).optional(),
+  device: z.enum(BETA_DEVICE_OPTIONS).optional(),
   ageConfirmed: z.literal(true, { message: 'You must be 18 or older to join' }),
   riskAccepted: z.literal(true, { message: 'Tick the box to show you understand the beta' }),
   website: z.string().max(200).optional(),

@@ -40,6 +40,13 @@ describe('beta routes', () => {
     expect(applyForBeta).toHaveBeenCalledWith({ email: 'sam@example.com', name: 'Sam', trackFirst: 'journal', device: 'ios' });
   });
 
+  it('takes an application with just a name and email (the page no longer asks the rest)', async () => {
+    const { trackFirst: _t, device: _d, ...plain } = application;
+    const res = await request(app).post('/api/beta/apply').set(xhr).send(plain);
+    expect(res.status).toBe(200);
+    expect(applyForBeta).toHaveBeenCalledWith({ email: 'sam@example.com', name: 'Sam', trackFirst: null, device: null });
+  });
+
   it('needs both boxes ticked', async () => {
     for (const k of ['ageConfirmed', 'riskAccepted'] as const) {
       const res = await request(app).post('/api/beta/apply').set(xhr).send({ ...application, [k]: false });

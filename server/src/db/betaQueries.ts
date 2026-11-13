@@ -114,7 +114,7 @@ export async function unapprove(email: string): Promise<boolean> {
  * the last seat. Someone already holding a seat keeps it (details updated);
  * anyone else gets a seat while one is open, else the waitlist.
  */
-export async function applyForBeta(a: { email: string; name: string; trackFirst: string; device: string }): Promise<BetaStatus> {
+export async function applyForBeta(a: { email: string; name: string; trackFirst: string | null; device: string | null }): Promise<BetaStatus> {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(7302461)::text`;
     const existing = await tx.$queryRaw<{ status: BetaStatus }[]>`

@@ -24,7 +24,7 @@ describe('LandingView', () => {
   it('shows the headline and sign in, and never a seat count', async () => {
     await renderPage();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('A life dashboard for people too busy to plan.');
-    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+    expect(screen.getAllByRole('link', { name: 'Sign in' })[0]).toHaveAttribute('href', '/login');
     expect(screen.queryByText(/seats open|of 30/)).not.toBeInTheDocument();
   });
 
@@ -32,7 +32,7 @@ describe('LandingView', () => {
     await renderPage();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sam' } });
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'sam@example.com' } });
-    const submit = screen.getByRole('button', { name: 'Sign Up For Beta' });
+    const submit = screen.getByRole('button', { name: 'Request a beta seat' });
     fireEvent.click(submit);
     expect(await screen.findByRole('alert')).toHaveTextContent('Tick both boxes');
     expect(apply).not.toHaveBeenCalled();
@@ -40,7 +40,7 @@ describe('LandingView', () => {
     fireEvent.click(screen.getByLabelText('I’m 18 or older'));
     fireEvent.click(screen.getByLabelText(/I understand Chronicles is still in development/));
     fireEvent.click(submit);
-    await waitFor(() => expect(apply).toHaveBeenCalledWith({ name: 'Sam', email: 'sam@example.com', trackFirst: 'journal', device: 'ios' }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith({ name: 'Sam', email: 'sam@example.com' }));
     expect(await screen.findByText('Thank you for signing up to test Chronicles.')).toBeInTheDocument();
   });
 
@@ -48,6 +48,8 @@ describe('LandingView', () => {
     await renderPage();
     expect(screen.getAllByLabelText('Email')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Join the waitlist' })).not.toBeInTheDocument();
+    // Just name and email: no "what would you track first" or device questions
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
   it('thanks a late applicant the same way, without saying the beta is full', async () => {
@@ -57,7 +59,7 @@ describe('LandingView', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'sam@example.com' } });
     fireEvent.click(screen.getByLabelText('I’m 18 or older'));
     fireEvent.click(screen.getByLabelText(/I understand Chronicles is still in development/));
-    fireEvent.click(screen.getByRole('button', { name: 'Sign Up For Beta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request a beta seat' }));
     expect(await screen.findByText('Thank you for signing up to test Chronicles.')).toBeInTheDocument();
     expect(screen.queryByText(/waitlist/i)).toBeNull();
   });

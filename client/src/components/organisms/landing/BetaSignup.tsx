@@ -3,93 +3,61 @@ import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
 
-/* The landing page's "Sign Up" form in a white card. An
+/* The landing page's beta form: name and email in a lifted card. An
    application takes a beta seat while one is open (the server decides, in
    arrival order) and otherwise goes on the waitlist automatically. Everyone
    sees the same thank-you, so the page never shows whether seats are left. A hidden honeypot field catches bots. */
 
-export const TRACK_OPTIONS = [
-  { value: 'journal', label: 'Daily journal' },
-  { value: 'health', label: 'Health and wellness' },
-  { value: 'planning', label: 'Goals and tasks' },
-  { value: 'calendar', label: 'Calendar' },
-  { value: 'kitchen', label: 'Meals and recipes' },
-  { value: 'finance', label: 'Budget and bills' },
-  { value: 'everything', label: 'A bit of everything' },
-] as const;
-
-export const DEVICE_OPTIONS = [
-  { value: 'ios', label: 'iPhone or iPad' },
-  { value: 'android', label: 'Android phone or tablet' },
-  { value: 'desktop', label: 'Computer' },
-  { value: 'mixed', label: 'A mix' },
-] as const;
-
-/* A white card with a hairline and a soft shadow around the form */
+/* A lifted card: the light panel colour, a hairline and a soft shadow */
 const BetaCard = styled.div`
-  max-width: 680px;
-  margin: 8px auto 0;
-  padding: 40px 40px 36px;
-  border: 1px solid #e3e5e8;
-  border-radius: 20px;
-  background: #ffffff;
-  box-shadow: 0 2px 6px rgba(20, 24, 32, 0.04), 0 22px 54px rgba(20, 24, 32, 0.08);
-  @media (max-width: 600px) { padding: 26px 20px 24px; border-radius: 16px; }
+  padding: 44px 40px 36px;
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--bg-panel);
+  box-shadow: 0 2px 6px rgba(20, 24, 32, 0.04), 0 24px 56px rgba(20, 24, 32, 0.10);
+  @media (max-width: 600px) { padding: 28px 20px 24px; border-radius: 14px; }
 `;
 
 const Muted = styled.p`
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
+  text-align: left;
   color: var(--text-muted);
 `;
 
-/* Two fields a row (one on phones) */
+/* Name over email, one field a row */
 const Fields = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px 20px;
-  margin-bottom: 24px;
-  @media (max-width: 600px) { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  gap: 22px;
+  margin-bottom: 22px;
 `;
 
 /* The app's field row (FormField, light theme): sentence-case label above a
-   48px filled box with a faint --border-field outline and 6px corners */
+   48px filled --bg-sunken box with a faint --border-field outline */
 const Field = styled.label`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
-  input, select {
-    height: 52px;
+  input {
+    height: 48px;
     padding: 0 16px;
     border: 1px solid var(--border-field);
-    border-radius: 10px;
-    background: #ffffff;
+    border-radius: 8px;
+    background: var(--bg-sunken);
     font-family: var(--font-sans);
     font-size: 16px;
     font-weight: 400;
-    color: #1f2128;
+    color: var(--text-primary);
     outline: none;
     width: 100%;
     box-sizing: border-box;
   }
-  /* The app's select chevron (filledInputs), not the browser's arrow; the
-     outline is forced back on (GlobalStyle strips borders from selects) */
-  && select { border: 1px solid var(--border-field) !important; }
-  select {
-    appearance: none;
-    padding-right: 40px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23575d68' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 16px center;
-    cursor: pointer;
-  }
-  /* Inputs opt out of the app's flat-field rule (data-underline); selects
-     can't, so focus is an outline on both */
-  && input:focus, && select:focus { outline: 1px solid var(--color-accent); outline-offset: -1px; }
-  input::placeholder { color: #8a9099; }
+  /* Inputs opt out of the app's flat-field rule (data-underline) */
+  && input:focus { outline: 1px solid var(--color-accent-line); outline-offset: -1px; }
+  input::placeholder { color: var(--text-muted); }
 `;
 
 /* The two checkboxes, inset a little from the fields' edges on both sides */
@@ -97,9 +65,7 @@ const Checks = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 24px;
-  padding: 0 16px;
-  @media (max-width: 600px) { padding: 0 8px; }
+  margin-bottom: 26px;
   .ch-check { align-items: flex-start; }
   .ch-check__box { margin-top: 2px; }
   .ch-check__label { font-size: 14px; line-height: 1.45; color: var(--text-primary); }
@@ -113,16 +79,16 @@ const Submit = styled.div`
   text-align: center;
 `;
 
-/* The submit: full width, filled deep teal, softly rounded */
+/* The submit: a full-width round pill, filled deep teal (like Save entry) */
 const SubmitButton = styled.button`
   width: 100%;
-  height: 54px;
+  height: 50px;
   border: none;
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--color-accent-line);
   color: #ffffff;
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: background 150ms;
@@ -159,8 +125,6 @@ const messageOf = (err: unknown) => (err instanceof Error && err.message ? err.m
 export function BetaSignup() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [trackFirst, setTrackFirst] = useState<string>(TRACK_OPTIONS[0].value);
-  const [device, setDevice] = useState<string>(DEVICE_OPTIONS[0].value);
   const [adult, setAdult] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const [trap, setTrap] = useState('');
@@ -168,14 +132,13 @@ export function BetaSignup() {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
-
   const apply = async (e: FormEvent) => {
     e.preventDefault();
     if (!adult || !understood) { setError('Tick both boxes to apply.'); return; }
     setSending(true);
     setError('');
     try {
-      await beta.apply({ name: name.trim(), email: email.trim(), trackFirst, device, ...(trap ? { website: trap } : {}) });
+      await beta.apply({ name: name.trim(), email: email.trim(), ...(trap ? { website: trap } : {}) });
       setDone(true);
     } catch (err) {
       setError(messageOf(err));
@@ -184,10 +147,8 @@ export function BetaSignup() {
     }
   };
 
-
   return (
       <BetaCard id="apply">
-
 
         {done ? (
           <Done role="status">
@@ -197,18 +158,8 @@ export function BetaSignup() {
         ) : (
           <form onSubmit={apply}>
             <Fields>
-              <Field>Name<input value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} required placeholder="Ada Lovelace" data-underline /></Field>
-              <Field>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" data-underline /></Field>
-              <Field>What would you track first?
-                <select value={trackFirst} onChange={e => setTrackFirst(e.target.value)}>
-                  {TRACK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </Field>
-              <Field>Device you’ll use most
-                <select value={device} onChange={e => setDevice(e.target.value)}>
-                  {DEVICE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </Field>
+              <Field>Name<input value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} required data-underline /></Field>
+              <Field>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={254} required data-underline /></Field>
             </Fields>
             <Honeypot aria-hidden tabIndex={-1} autoComplete="off" name="website" value={trap} onChange={e => setTrap(e.target.value)} />
             <Checks>
@@ -220,8 +171,8 @@ export function BetaSignup() {
               />
             </Checks>
             <Submit>
-              <SubmitButton type="submit" disabled={sending}>{sending ? 'Sending…' : 'Sign Up For Beta'}</SubmitButton>
-              <Muted>If the beta is full, your application joins the waitlist.</Muted>
+              <SubmitButton type="submit" disabled={sending}>{sending ? 'Sending…' : 'Request a beta seat'}</SubmitButton>
+              <Muted>For adults 18 and older. When seats fill, you’ll join the waitlist.</Muted>
             </Submit>
             {error && <ErrorText role="alert">{error}</ErrorText>}
           </form>
