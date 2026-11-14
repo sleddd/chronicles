@@ -1,5 +1,6 @@
 /**
- * Wallpapers (Settings → Theme → Background): photos from Unsplash, served
+ * Wallpapers (Settings → Theme → Background): photos from Unsplash and our
+ * own (ids starting own-, no credit or link), served
  * from public/wallpapers — 2,400px wide, with 480 × 300 thumbnails for the
  * picker — and loaded only once chosen. The originals are kept outside the
  * app (src/assets/wallpaper, not committed). Each carries its credit:
@@ -8,18 +9,22 @@
 
 export interface Wallpaper {
   id: string;
-  /** The photographer, as Unsplash credits them */
-  by: string;
-  /** The photo's Unsplash page */
-  url: string;
+  /** The photographer, as Unsplash credits them. None on our own photos */
+  by?: string;
+  /** The photo's Unsplash page. None on our own photos */
+  url?: string;
 }
 
 export const WALLPAPERS: Wallpaper[] = [
   { id: 'ales-krivec-wsokJokUfgI', by: 'Ales Krivec', url: 'https://unsplash.com/photos/wsokJokUfgI' },
+  { id: 'alexander-grey-LrfEWoFq6S8', by: 'Alexander Grey', url: 'https://unsplash.com/photos/LrfEWoFq6S8' },
   { id: 'andrew-ridley-Kt5hRENuotI', by: 'Andrew Ridley', url: 'https://unsplash.com/photos/Kt5hRENuotI' },
+  { id: 'art_photo_fil-JLJP8C5JOsk', by: 'Art_photo_fil', url: 'https://unsplash.com/photos/JLJP8C5JOsk' },
   { id: 'ashim-d-silva-WeYamle9fDM', by: 'Ashim D’Silva', url: 'https://unsplash.com/photos/WeYamle9fDM' },
+  { id: 'behnam-mohsenzadeh-8KZLgOy-xQY', by: 'Behnam Mohsenzadeh', url: 'https://unsplash.com/photos/8KZLgOy-xQY' },
   { id: 'benjamin-voros-phIFdC6lA4E', by: 'Benjamin Voros', url: 'https://unsplash.com/photos/phIFdC6lA4E' },
-  { id: 'casey-horner-Ib3VGPlGrMc', by: 'Casey Horner', url: 'https://unsplash.com/photos/Ib3VGPlGrMc' },
+  { id: 'camille-brodard-kOAU9SG0VX8', by: 'Camille Brodard', url: 'https://unsplash.com/photos/kOAU9SG0VX8' },
+  { id: 'chi-pham-8uT6dwcLwKE', by: 'Chi Pham', url: 'https://unsplash.com/photos/8uT6dwcLwKE' },
   { id: 'colin-watts-T5g1bLqJego', by: 'Colin Watts', url: 'https://unsplash.com/photos/T5g1bLqJego' },
   { id: 'curated-lifestyle-kfRDQsx6Oa4', by: 'Curated Lifestyle', url: 'https://unsplash.com/photos/kfRDQsx6Oa4' },
   { id: 'curated-lifestyle-rq6-JSmTN7k', by: 'Curated Lifestyle', url: 'https://unsplash.com/photos/rq6-JSmTN7k' },
@@ -30,26 +35,45 @@ export const WALLPAPERS: Wallpaper[] = [
   { id: 'daniil-komov-KqOtezbdxKs', by: 'Daniil Komov', url: 'https://unsplash.com/photos/KqOtezbdxKs' },
   { id: 'david-zieglgansberger-YhBPpNRyN-8', by: 'David Zieglgänsberger', url: 'https://unsplash.com/photos/YhBPpNRyN-8' },
   { id: 'dennis-yu-4FLmDMG6wQs', by: 'Dennis Yu', url: 'https://unsplash.com/photos/4FLmDMG6wQs' },
+  { id: 'europeana-r5F0zmg_BAk', by: 'Europeana', url: 'https://unsplash.com/photos/r5F0zmg_BAk' },
   { id: 'evgeni-tcherkasski-EJ6Y59HMDEY', by: 'Evgeni Tcherkasski', url: 'https://unsplash.com/photos/EJ6Y59HMDEY' },
+  { id: 'gary-scott-nkCA4va-6k0', by: 'Gary Scott', url: 'https://unsplash.com/photos/nkCA4va-6k0' },
+  { id: 'getty-images-AjKc-dLEtBI', by: 'Getty Images', url: 'https://unsplash.com/photos/AjKc-dLEtBI' },
   { id: 'getty-images-Eu8PztU27_w', by: 'Getty Images', url: 'https://unsplash.com/photos/Eu8PztU27_w' },
   { id: 'getty-images-GNqLWDUKwDk', by: 'Getty Images', url: 'https://unsplash.com/photos/GNqLWDUKwDk' },
   { id: 'getty-images-kqr1K7ASnGY', by: 'Getty Images', url: 'https://unsplash.com/photos/kqr1K7ASnGY' },
   { id: 'getty-images-LSVUVk4o7DM', by: 'Getty Images', url: 'https://unsplash.com/photos/LSVUVk4o7DM' },
+  { id: 'getty-images-MHNO45T-EBg', by: 'Getty Images', url: 'https://unsplash.com/photos/MHNO45T-EBg' },
+  { id: 'hans-Xs8QsHwM3a8', by: 'Hans', url: 'https://unsplash.com/photos/Xs8QsHwM3a8' },
   { id: 'henrique-ferreira-RKsLQoSnuTc', by: 'Henrique Ferreira', url: 'https://unsplash.com/photos/RKsLQoSnuTc' },
+  { id: 'jeremy-bishop-SltlOI33APs', by: 'Jeremy Bishop', url: 'https://unsplash.com/photos/SltlOI33APs' },
   { id: 'jessica-pamp-sGRMspZmfPE', by: 'Jessica Pamp', url: 'https://unsplash.com/photos/sGRMspZmfPE' },
   { id: 'joshua-earle-Ax3b7Ge4HO8', by: 'Joshua Earle', url: 'https://unsplash.com/photos/Ax3b7Ge4HO8' },
   { id: 'justin-fisher-qrga71KYbgM', by: 'Justin Fisher', url: 'https://unsplash.com/photos/qrga71KYbgM' },
+  { id: 'justin-wolff-pbp_Ww2cewA', by: 'Justin Wolff', url: 'https://unsplash.com/photos/pbp_Ww2cewA' },
   { id: 'karsten-wurth-rafblRbne3o', by: 'Karsten Würth', url: 'https://unsplash.com/photos/rafblRbne3o' },
+  { id: 'kat-von-wood-jqyhb23qcc0', by: 'Kat Von Wood', url: 'https://unsplash.com/photos/jqyhb23qcc0' },
+  { id: 'kateryna-hliznitsova-jaDZGVtwDKM', by: 'Kateryna Hliznitsova', url: 'https://unsplash.com/photos/jaDZGVtwDKM' },
   { id: 'kev-kindred-EJ41bTpIdB8', by: 'Kev Kindred', url: 'https://unsplash.com/photos/EJ41bTpIdB8' },
   { id: 'kurt-cotoaga-JocesMTPf58', by: 'Kurt Cotoaga', url: 'https://unsplash.com/photos/JocesMTPf58' },
   { id: 'ladi-svoboda-RGDR7LCPk2E', by: 'Ladi Svoboda', url: 'https://unsplash.com/photos/RGDR7LCPk2E' },
   { id: 'leonardo-milani-SW2iwG3vBOM', by: 'Leonardo Milani', url: 'https://unsplash.com/photos/SW2iwG3vBOM' },
   { id: 'luca-micheli-ruWkmt3nU58', by: 'Luca Micheli', url: 'https://unsplash.com/photos/ruWkmt3nU58' },
+  { id: 'madison-kuhn-aV7_rCZpvGY', by: 'Madison Kuhn', url: 'https://unsplash.com/photos/aV7_rCZpvGY' },
   { id: 'maksim-shutov-pwod5dX4hEc', by: 'Maksim Shutov', url: 'https://unsplash.com/photos/pwod5dX4hEc' },
+  { id: 'marissa-grootes-smI9fDfoQZw', by: 'Marissa Grootes', url: 'https://unsplash.com/photos/smI9fDfoQZw' },
+  { id: 'mark-olsen-OyiSf0nVz7U', by: 'Mark Olsen', url: 'https://unsplash.com/photos/OyiSf0nVz7U' },
+  { id: 'mary-skrynnikova-sAdxPjmvT1U', by: 'Mary Skrynnikova', url: 'https://unsplash.com/photos/sAdxPjmvT1U' },
   { id: 'matt-hardy-6ArTTluciuA', by: 'Matt Hardy', url: 'https://unsplash.com/photos/6ArTTluciuA' },
   { id: 'michal-mrozek-y0iTdaWGBxI', by: 'Michal Mrozek', url: 'https://unsplash.com/photos/y0iTdaWGBxI' },
+  { id: 'nikolett-harmat-VSTP_kmMpPQ', by: 'Nikolett Harmat', url: 'https://unsplash.com/photos/VSTP_kmMpPQ' },
+  { id: 'own-img-4094' },
   { id: 'pj-gal-szabo--LgSPyExO9I', by: 'PJ Gal-Szabo', url: 'https://unsplash.com/photos/-LgSPyExO9I' },
+  { id: 'ray-hennessy-E62TNAOLyJA', by: 'Ray Hennessy', url: 'https://unsplash.com/photos/E62TNAOLyJA' },
+  { id: 'ritz-WupU1u45AbE', by: 'Ritz', url: 'https://unsplash.com/photos/WupU1u45AbE' },
   { id: 'robert-ostheimer-YzhqA8pj_uI', by: 'Robert Ostheimer', url: 'https://unsplash.com/photos/YzhqA8pj_uI' },
+  { id: 'sabari-nathan-p_fv7e4RzoY', by: 'Sabari Nathan', url: 'https://unsplash.com/photos/p_fv7e4RzoY' },
+  { id: 'the-metropolitan-museum-of-art-mdb3LSgqKuo', by: 'The Metropolitan Museum of Art', url: 'https://unsplash.com/photos/mdb3LSgqKuo' },
   { id: 'uran-wang-TVORvlpH2ZY', by: 'Uran Wang', url: 'https://unsplash.com/photos/TVORvlpH2ZY' },
   { id: 'venti-views-Vs5ciaxG1Cs', by: 'Venti Views', url: 'https://unsplash.com/photos/Vs5ciaxG1Cs' },
   { id: 'wynand-van-poortvliet-4AmyOdXZAQc', by: 'Wynand van Poortvliet', url: 'https://unsplash.com/photos/4AmyOdXZAQc' },
@@ -68,9 +92,9 @@ export const UNSPLASH_LINK = `https://unsplash.com/${UTM}`;
    sealed `wallpaper` setting is the record; this is only a head start) */
 const KEY = 'chronicles.wallpaper-v1';
 
-/** The background everyone starts with: Daniel Seßler's green lake under a
- *  mountain and a blue sky */
-export const DEFAULT_WALLPAPER = 'daniel-sessler-BurTAJlbsRo';
+/** The background everyone starts with: Madison Kuhn's river running
+ *  through a valley */
+export const DEFAULT_WALLPAPER = 'madison-kuhn-aV7_rCZpvGY';
 
 /** What's saved when someone picks None — kept apart from "never chosen",
  *  which means the default */

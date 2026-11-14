@@ -21,6 +21,13 @@ describe('wallpapers', () => {
     expect(wallpaperById('benjamin-voros-phIFdC6lA4E')?.url).toBe('https://unsplash.com/photos/phIFdC6lA4E');
   });
 
+  it('lists our own photos with no credit or link', () => {
+    const own = WALLPAPERS.filter(w => w.id.startsWith('own-'));
+    expect(own.length).toBeGreaterThan(0);
+    for (const w of own) expect(w.by ?? w.url).toBeUndefined();
+    for (const w of WALLPAPERS.filter(x => !x.id.startsWith('own-'))) expect(w.by && w.url).toBeTruthy();
+  });
+
   it('starts on the mountains, keeps None as None, and falls back from a removed photo', () => {
     expect(wallpaperById(DEFAULT_WALLPAPER)).toBeDefined();
     expect(resolveWallpaper(null)).toBe(DEFAULT_WALLPAPER);

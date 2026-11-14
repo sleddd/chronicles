@@ -11,6 +11,10 @@
  * not its original is still here. To drop one, add its 11-character id to
  * scripts/wallpapers-removed.txt and run this again: its copies are deleted
  * and it is never built again. Needs ImageMagick (`magick`).
+ *
+ * Our own photos: any other .jpg / .jpeg / .png in that folder (IMG_0456.jpeg)
+ * is built the same way under the id own-<file name> and listed with no
+ * credit or link. To drop one, add that id to wallpapers-removed.txt.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -34,6 +38,10 @@ const removed = new Set(existsSync(removedFile)
   ? readFileSync(removedFile, 'utf8').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
   : []);
 const isRemoved = id => removed.has(id.match(ID)[2]);
+
+/* Our own photos: own-<file name>, no Unsplash id */
+const OWN = /^own-[a-z0-9-]+$/;
+const ownId = file => `own-${file.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 const tidy = s => s.replace(/\s+/g, ' ').trim();
 
 /* Credits, as Unsplash gives them: "Uploaded by: Luca Bravo (@lucabravo) - …" */
@@ -59,11 +67,19 @@ const originals = existsSync(SRC)
   ? readdirSync(SRC).filter(f => f.endsWith('-unsplash.jpg')).map(f => f.slice(0, -'-unsplash.jpg'.length)).filter(id => ID.test(id) && !isRemoved(id))
   : [];
 
-const todo = originals.filter(id => !existsSync(join(OUT, `${id}.jpg`)) || !existsSync(join(THUMBS, `${id}.jpg`)));
+const own = existsSync(SRC)
+  ? readdirSync(SRC).filter(f => /\.(jpe?g|png)$/i.test(f) && !f.endsWith('-unsplash.jpg')).map(f => ({ id: ownId(f), file: f })).filter(o => !removed.has(o.id))
+  : [];
+
+const todo = [
+  ...originals.map(id => ({ id, file: `${id}-unsplash.jpg` })),
+  ...own,
+].filter(({ id }) => !existsSync(join(OUT, `${id}.jpg`)) || !existsSync(join(THUMBS, `${id}.jpg`)));
 let done = 0;
 async function worker() {
-  for (let id = todo.pop(); id; id = todo.pop()) {
-    const from = join(SRC, `${id}-unsplash.jpg`);
+  for (let next = todo.pop(); next; next = todo.pop()) {
+    const { id } = next;
+    const from = join(SRC, next.file);
     await run('magick', [from, '-auto-orient', '-resize', '2400x2400>', '-strip', '-interlace', 'JPEG', '-quality', '76', join(OUT, `${id}.jpg`)]);
     await run('magick', [from, '-auto-orient', '-resize', '480x300^', '-gravity', 'center', '-extent', '480x300', '-strip', '-quality', '72', join(THUMBS, `${id}.jpg`)]);
     done += 1;
@@ -74,7 +90,7 @@ await Promise.all(Array.from({ length: Math.max(2, cpus().length - 2) }, worker)
 let dropped = 0;
 for (const f of readdirSync(OUT).filter(f => f.endsWith('.jpg'))) {
   const id = f.slice(0, -4);
-  if (!ID.test(id) || !isRemoved(id)) continue;
+  if (!(OWN.test(id) ? removed.has(id) : ID.test(id) && isRemoved(id))) continue;
   rmSync(join(OUT, f));
   rmSync(join(THUMBS, f), { force: true });
   dropped += 1;
@@ -83,10 +99,11 @@ for (const f of readdirSync(OUT).filter(f => f.endsWith('.jpg'))) {
 const ids = readdirSync(OUT)
   .filter(f => f.endsWith('.jpg'))
   .map(f => f.slice(0, -4))
-  .filter(id => ID.test(id) && existsSync(join(THUMBS, `${id}.jpg`)))
+  .filter(id => (OWN.test(id) || ID.test(id)) && existsSync(join(THUMBS, `${id}.jpg`)))
   .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
 
 const rows = ids.map(id => {
+  if (OWN.test(id)) return `  { id: '${id}' },`;
   const by = known.get(id) ?? credits.get(id) ?? fromFileName(id);
   return `  { id: '${id}', by: '${by.replace(/'/g, "\\'")}', url: 'https://unsplash.com/photos/${id.match(ID)[2]}' },`;
 });

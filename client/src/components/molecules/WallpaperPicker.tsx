@@ -4,7 +4,7 @@ import { UNSPLASH_LINK, WALLPAPERS, wallpaperLink, wallpaperThumb } from '../../
 
 /* Settings → Theme → Background: "None" (the default) then every wallpaper as
    a thumbnail, each with its credit on it — "Photo by <name> on Unsplash",
-   linking to the photo and to Unsplash. The chosen one has an accent outline
+   linking to the photo and to Unsplash (our own photos carry no credit). The chosen one has an accent outline
    and a tick. Props only. */
 
 const Grid = styled.div`
@@ -82,14 +82,16 @@ export function WallpaperPicker({ value, onChange }: { value: string | null; onC
       </Tile>
       {WALLPAPERS.map(w => (
         <Tile key={w.id} $on={value === w.id}>
-          <Pick type="button" role="radio" aria-checked={value === w.id} aria-label={`Photo by ${w.by}`} onClick={() => onChange(w.id)}>
+          <Pick type="button" role="radio" aria-checked={value === w.id} aria-label={w.by ? `Photo by ${w.by}` : `Photo ${w.id.replace(/^own-/, '').replace(/-/g, ' ')}`} onClick={() => onChange(w.id)}>
             <img src={wallpaperThumb(w.id)} alt="" loading="lazy" decoding="async" />
           </Pick>
           {value === w.id && <Chosen><Icon name="check" size={12} strokeWidth={3} /></Chosen>}
-          <Credit>
-            Photo by <a href={wallpaperLink(w)} target="_blank" rel="noopener noreferrer">{w.by}</a>
-            {' '}on <a href={UNSPLASH_LINK} target="_blank" rel="noopener noreferrer">Unsplash</a>
-          </Credit>
+          {w.by && w.url && (
+            <Credit>
+              Photo by <a href={wallpaperLink(w)} target="_blank" rel="noopener noreferrer">{w.by}</a>
+              {' '}on <a href={UNSPLASH_LINK} target="_blank" rel="noopener noreferrer">Unsplash</a>
+            </Credit>
+          )}
         </Tile>
       ))}
     </Grid>

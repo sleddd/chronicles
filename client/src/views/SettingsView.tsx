@@ -1086,7 +1086,7 @@ export function SettingsView() {
           <ColorSectionTitle>Background</ColorSectionTitle>
           <ColorSectionDesc>
             A photo across the top of every page. Pick another, or None for a plain page.
-            {wallpaperById(wallpaper) && <> Showing a photo by {wallpaperById(wallpaper)!.by} on Unsplash.</>}
+            {wallpaperById(wallpaper)?.by && <> Showing a photo by {wallpaperById(wallpaper)!.by} on Unsplash.</>}
           </ColorSectionDesc>
           <WallpaperPicker value={wallpaperById(wallpaper) ? wallpaper : null} onChange={chooseWallpaper} />
         </ColorSection>
