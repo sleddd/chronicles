@@ -2,7 +2,7 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { useSwipe } from '../../../hooks/useSwipe.js';
-import { SKY_INK } from '../../templates/LandingTemplate.js';
+import { PAGE_INK } from '../../templates/LandingTemplate.js';
 
 /* A landing feature row's screenshots in the light device bezel. Given several
    views it becomes a small slideshow that starts on the first and never moves
@@ -65,11 +65,11 @@ const Arrow = styled.button<{ $side: 'left' | 'right' }>`
   border: 1px solid var(--border-card);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.96);
-  color: ${SKY_INK};
+  color: ${PAGE_INK};
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(20, 24, 32, 0.12);
   &:hover { background: #ffffff; }
-  &:focus-visible { outline: 2px solid ${SKY_INK}; outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid ${PAGE_INK}; outline-offset: 3px; }
   @media (max-width: 768px) { width: 32px; height: 32px; ${({ $side }) => $side}: -12px; }
 `;
 
@@ -89,8 +89,8 @@ const Dots = styled.div`
     align-items: center;
     justify-content: center;
     &::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--border-default); transition: background 150ms; }
-    &[aria-current='true']::before { background: ${SKY_INK}; }
-    &:focus-visible { outline: 2px solid ${SKY_INK}; outline-offset: -2px; border-radius: 50%; }
+    &[aria-current='true']::before { background: ${PAGE_INK}; }
+    &:focus-visible { outline: 2px solid ${PAGE_INK}; outline-offset: -2px; border-radius: 50%; }
   }
 `;
 

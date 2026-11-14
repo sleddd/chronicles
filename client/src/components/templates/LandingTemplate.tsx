@@ -9,28 +9,45 @@ import { LIGHT_TOKENS } from '../../styles/lightTokens.js';
    and controls: thin Work Sans headings, Open Sans text, round accent pills.
    Always the app's light theme, whatever theme the visitor last used: the DS
    tokens are pinned to their light values (default Teal accent) on the page
-   root. The header and hero sit on a night-sky photo (`HeroBand`: Benjamin
-   Voros's Milky Way over mountains, one of the app's wallpapers) with white
+   root. The header and hero sit on a photo (`HeroBand`: Madison Kuhn's river
+   running through a valley, the app's default wallpaper) with white
    text and pills, fading into the page colour at its foot. The privacy band
-   uses the night-sky gradient (`SKY_GRADIENT`, colours taken from the hero photo) and dark bands re-pin dark text
+   uses the teal gradient (`BAND_GRADIENT`) and dark bands re-pin dark text
    tones (`DarkBand`). */
 
 /** The light theme's tokens, pinned on a page root — the landing page and the public shelf use them */
 export { LIGHT_TOKENS };
 
-/** The page's teal gradient: deep teal on the left easing to the accent on the
-    right, with a soft light at the top right. The hero and the privacy band. */
-/** The night sky's indigo (from the hero photo), for the form button and the page's icons */
+/** The page's ink (the form button, slide dots and arrows, ticks, the How it
+    works rings) and the privacy band's gradient: the app's teal — deep teal on
+    the left easing to the accent on the right, with a soft light at the top
+    right. The night-sky set that went with the star photo is kept beside it
+    (`SKY_*`), so the page can go back by pointing `PAGE_INK`, `PAGE_INK_HOVER`
+    and `BAND_GRADIENT` at it. */
+export const TEAL_INK = '#23706e';
+export const TEAL_INK_HOVER = '#2c8c8a';
+export const TEAL_GRADIENT = `
+  radial-gradient(circle at 88% 0%, rgba(255, 255, 255, 0.14), transparent 45%),
+  linear-gradient(135deg, #123c3b 0%, #1b5a58 38%, #23706e 62%, #2f9895 100%)
+`;
+
 export const SKY_INK = '#3b4580';
 export const SKY_INK_HOVER = '#2c3566';
-
 export const SKY_GRADIENT = `
   radial-gradient(circle at 88% 0%, rgba(255, 255, 255, 0.12), transparent 45%),
   linear-gradient(135deg, #0d2249 0%, #183e6e 36%, #3b4580 66%, #64598f 100%)
 `;
 
-/** The hero's photo (served from public/wallpapers, like the app's backgrounds) */
-export const HERO_PHOTO = '/wallpapers/benjamin-voros-phIFdC6lA4E.jpg';
+export const PAGE_INK = TEAL_INK;
+export const PAGE_INK_HOVER = TEAL_INK_HOVER;
+export const BAND_GRADIENT = TEAL_GRADIENT;
+
+/** The hero's photo (served from public/wallpapers, like the app's backgrounds):
+    Madison Kuhn's river running through a valley, the app's default background.
+    The one before it was Benjamin Voros's Milky Way (`HERO_PHOTO_STARS`), kept
+    with its screenshots (src/assets/landing-stars) so the page can go back. */
+export const HERO_PHOTO_STARS = '/wallpapers/benjamin-voros-phIFdC6lA4E.jpg';
+export const HERO_PHOTO = '/wallpapers/madison-kuhn-aV7_rCZpvGY.jpg';
 
 /* The night sky behind the header and hero: a shade at the top so the white
    text reads, the photo, and a long fade into the page colour at the foot so

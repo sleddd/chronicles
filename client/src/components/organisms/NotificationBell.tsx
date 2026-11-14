@@ -197,8 +197,8 @@ const CornerBell = styled(BarBell)`
   top: 17px;
   right: 20px;
   z-index: 30;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   border: 1px solid transparent;
   background: var(--bg-panel);
   box-shadow: 0 1px 3px rgba(20, 24, 32, 0.08);
@@ -386,8 +386,8 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigge
     <>
       {trigger ? trigger(props) : variant === 'corner' ? (
         <CornerBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
-          <MaterialIcon $size={22} aria-hidden="true">notifications</MaterialIcon>
-          {due.length > 0 && <BellBadge aria-hidden="true" style={{ top: 0, right: -2 }}>{due.length}</BellBadge>}
+          <MaterialIcon $size={18} aria-hidden="true">notifications</MaterialIcon>
+          {due.length > 0 && <BellBadge aria-hidden="true" style={{ top: -2, right: -4, minWidth: 15, height: 15, padding: '0 4px', fontSize: 10, lineHeight: '15px' }}>{due.length}</BellBadge>}
         </CornerBell>
       ) : (
         <BarBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">

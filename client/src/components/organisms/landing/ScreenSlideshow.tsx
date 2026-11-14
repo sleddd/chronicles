@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { useSwipe } from '../../../hooks/useSwipe.js';
-import { SKY_INK } from '../../templates/LandingTemplate.js';
+import { PAGE_INK } from '../../templates/LandingTemplate.js';
 
 /* The landing hero's slideshow of the real app (test account), led by the dark theme:
    every view in dark, with one light shot, the dashboard, right after the dark one.
@@ -85,7 +85,7 @@ const Arrow = styled.button<{ $side: 'left' | 'right' }>`
   border: none;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.94);
-  color: ${SKY_INK};
+  color: ${PAGE_INK};
   cursor: pointer;
   box-shadow: var(--shadow-lg, 0 8px 28px rgba(20, 20, 30, 0.14));
   transition: background 150ms, transform 150ms;
@@ -113,8 +113,8 @@ const Dots = styled.div`
     justify-content: center;
     &::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #bfc4cc; transition: background 150ms, transform 150ms; }
     &:hover::before { background: #80868f; }
-    &[aria-current='true']::before { background: ${SKY_INK}; transform: scale(1.25); }
-    &:focus-visible { outline: 2px solid ${SKY_INK}; outline-offset: -2px; border-radius: 50%; }
+    &[aria-current='true']::before { background: ${PAGE_INK}; transform: scale(1.25); }
+    &:focus-visible { outline: 2px solid ${PAGE_INK}; outline-offset: -2px; border-radius: 50%; }
   }
 `;
 

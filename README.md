@@ -6,7 +6,7 @@ Chronicles is now available to sign up for beta testing at [mydailychronicles.co
 
 ### Dashboard
 Your day at a glance, in light or dark mode: a greeting with the date and local weather, a Quick entry box, a daily quote or your next event, a wellness check-in for water, sleep, mood and cycle, and world clocks. Under them are cards you can drag between two columns and fold away: Stats (entries, meals, doses, exercise, symptoms and check-ins this week, this month or ever), Time tracked, today's priorities and wins, tasks and to-do lists (or just what you planned for today), today's habits, a daily mantra, what's coming up, recent entries, today's menu, your medications and exercise schedule, and your shopping list. Choose which cards show with **Customize view**.
-<img width="1600" height="1000" alt="The dashboard in dark mode, a starry sky behind the greeting and Quick entry" src="client/src/assets/landing/dashboard-dark.jpg" />
+<img width="1600" height="1000" alt="The dashboard in dark mode, a river valley behind the greeting and Quick entry" src="client/src/assets/landing/dashboard-dark.jpg" />
 <img width="1600" height="1000" alt="The same dashboard in light mode" src="client/src/assets/landing/dashboard.jpg" />
 <img width="1268" height="1300" alt="Further down the dashboard: today's priorities, wins, tasks, the shopping list, time tracked and medications" src="client/src/assets/landing/features/dashboard-2-dark.jpg" />
 

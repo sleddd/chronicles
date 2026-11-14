@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
-import { LandingTemplate, Container, ActionPill, DarkBand, SKY_GRADIENT, SKY_INK } from '../components/templates/LandingTemplate.js';
+import { LandingTemplate, Container, ActionPill, DarkBand, BAND_GRADIENT, PAGE_INK } from '../components/templates/LandingTemplate.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlides.js';
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
@@ -19,20 +19,18 @@ import { BETA_DETAILS } from '@shared/legal/index.js';
 /** The home page's title (also in index.html, for crawlers) */
 export const SEO_TITLE = 'Chronicles — Zero-Knowledge Encrypted Journal & Digital Day Planner';
 
-/* Feature screenshots (light theme, test account): src/assets/landing/features/<key>.jpg */
+/* Feature screenshots (dark theme, test account): src/assets/landing/features/<key>.jpg */
 const SHOTS = import.meta.glob<string>('../assets/landing/features/*.jpg', { eager: true, query: '?url', import: 'default' });
 const shotUrl = (key: string) => SHOTS[`../assets/landing/features/${key}.jpg`];
 
-/** A row's slides: each light screen, then its dark version right after it when there is one */
+/** A row's slides: one shot of each screen, in dark (the light one only where there's no dark) */
 function slidesFor(f: Feature): Slide[] {
   const keys = Array.isArray(f.shot) ? f.shot : [f.shot];
   const alts = Array.isArray(f.alt) ? f.alt : [f.alt];
   return keys.flatMap((k, i) => {
     const alt = alts[i] ?? alts[0];
-    return [
-      { src: shotUrl(k), alt, size: f.size },
-      ...(f.lightOnly ? [] : [{ src: shotUrl(`${k}-dark`), alt: `${alt} (dark mode)`, size: f.size }]),
-    ].filter(sl => !!sl.src) as Slide[];
+    const dark = shotUrl(`${k}-dark`);
+    return [{ src: dark ?? shotUrl(k), alt: dark ? `${alt} (dark mode)` : alt, size: f.size }].filter(sl => !!sl.src) as Slide[];
   });
 }
 
@@ -49,8 +47,6 @@ interface Feature {
   shot: string | string[];
   size: [number, number];
   alt: string | string[];
-  /** A slideshow of light screens only, no dark versions */
-  lightOnly?: boolean;
 }
 
 const FEATURES: Feature[] = [
@@ -83,7 +79,7 @@ const FEATURES: Feature[] = [
     body: 'Track nutrition against your goals, log wellness, and run medication and exercise schedules with doses you check off. Allergy, symptom and medication lists print for appointments.',
     points: ['Meals, calories, macros and vitamins', 'Mood tracker, sleep, water and stress', 'Exercise history and symptom logs'],
     shot: ['health-dashboard', 'health-meals', 'health-exercise-history', 'health-reports'],
-    size: [1268, 1300], lightOnly: true,
+    size: [1268, 1300],
     alt: [
       'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs, today’s doses and a quick symptom log',
       'The meals log with the day’s calories and vitamins against goals beside the protein, carbs and fat split, and what was eaten',
@@ -100,7 +96,7 @@ const FEATURES: Feature[] = [
       'Savings targets: Track progress toward each one.',
       'Built from your entries: No bank connection needed.',
     ],
-    shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440], lightOnly: true,
+    shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440],
     alt: [
       'The budget with planned, bills, spending and what’s left, and where the money goes by category',
       'Bills and subscriptions with what’s due, paid and overdue this month',
@@ -110,9 +106,9 @@ const FEATURES: Feature[] = [
 ];
 
 const MODULES = [
-  { title: 'Calendar', body: 'Day, week and month views of events, deadlines and bills. Two-way Google Calendar sync and a private Apple Calendar feed.', shot: 'calendar', alt: 'The month calendar with events and bills on their days' },
-  { title: 'Meal planning', body: 'A weekly menu, recipes with checkable ingredients, and one tap to turn the menu into a shopping list.', shot: 'kitchen', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
-  { title: 'Budget and finance', body: 'A manual budget, bills and subscriptions, savings funds and money goals. Off by default, and never linked to a bank.', shot: 'finance', alt: 'The budget with planned, bills, spending and what’s left' },
+  { title: 'Calendar', body: 'Day, week and month views of events, deadlines and bills. Two-way Google Calendar sync and a private Apple Calendar feed.', shot: 'calendar-dark', alt: 'The month calendar with events and bills on their days' },
+  { title: 'Meal planning', body: 'A weekly menu, recipes with checkable ingredients, and one tap to turn the menu into a shopping list.', shot: 'kitchen-dark', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
+  { title: 'Budget and finance', body: 'A manual budget, bills and subscriptions, savings funds and money goals. Off by default, and never linked to a bank.', shot: 'finance-dark', alt: 'The budget with planned, bills, spending and what’s left' },
   { title: 'Media journal', body: 'Books, movies, shows and music on one shelf, with half-star ratings, progress, notes and a public shelf to share.', shot: 'media-dark', alt: 'The media journal shelf of book covers' },
 ];
 
@@ -190,7 +186,7 @@ const Ticks = styled.ul`
   display: grid;
   gap: 12px;
   li { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; color: var(--text-primary); }
-  li > span { flex: none; margin-top: 2px; color: ${SKY_INK}; }
+  li > span { flex: none; margin-top: 2px; color: ${PAGE_INK}; }
 `;
 
 function TickList({ items }: { items: string[] }) {
@@ -235,8 +231,8 @@ const H1 = styled.h1`
   font-weight: 200;
   line-height: 1.04;
   color: var(--text-primary);
-  /* The second half in a light sky blue, the page's one coloured phrase */
-  em { font-style: normal; color: #a9c8f0; }
+  /* The second half in white like the first (it was the page's one coloured phrase) */
+  em { font-style: normal; color: inherit; }
   @media (max-width: 768px) { font-size: 44px; }
 `;
 
@@ -339,9 +335,9 @@ const Marker = styled.span`
   width: 34px;
   height: 34px;
   flex: none;
-  border: 2px solid ${SKY_INK};
+  border: 2px solid ${PAGE_INK};
   border-radius: 50%;
-  background: radial-gradient(circle, ${SKY_INK} 0 5px, transparent 5.5px);
+  background: radial-gradient(circle, ${PAGE_INK} 0 5px, transparent 5.5px);
 `;
 
 /* ——— Features (heading, then the rows) ——— */
@@ -412,10 +408,10 @@ const Extras = styled.ul`
   @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
-/* ——— Privacy (the night-sky band) ——— */
+/* ——— Privacy (the teal band) ——— */
 
 const PrivacyBand = styled(DarkBand)`
-  background: ${SKY_GRADIENT};
+  background: ${BAND_GRADIENT};
   --text-secondary: rgba(255, 255, 255, 0.88);
   --text-muted: rgba(255, 255, 255, 0.7);
   padding: 128px 0 96px;
@@ -439,8 +435,8 @@ const PrivacyGrid = styled.ul`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 56px 64px;
-  li { padding-top: 36px; border-top: 1px solid rgba(196, 188, 232, 0.3); }
-  li > span { display: block; margin-bottom: 22px; color: #cbbfeb; }
+  li { padding-top: 36px; border-top: 1px solid rgba(124, 196, 194, 0.32); }
+  li > span { display: block; margin-bottom: 22px; color: #8fd1cd; }
   h3 { margin: 0 0 12px; font-family: var(--font-display); font-size: 24px; font-weight: 300; color: var(--text-primary); }
   p { margin: 0; font-size: 16px; line-height: 1.7; color: var(--text-secondary); }
   @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 44px 40px; }
@@ -471,9 +467,9 @@ const BetaLayout = styled(Container)`
 const FaqBand = styled(DarkBand)`
   --border-default: rgba(255, 255, 255, 0.22);
   --border-subtle: rgba(255, 255, 255, 0.12);
-  /* The night sky's light blue (the hero's "too busy to plan."), not teal */
-  --color-accent-line: #a9c8f0;
-  --shadow-ring: 0 0 0 3px rgba(169, 200, 240, 0.5);
+  /* A light teal on the dark band */
+  --color-accent-line: #7cc4c2;
+  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.5);
   padding: 120px 0 120px;
   @media (max-width: 768px) { padding: 72px 0 80px; }
 `;

@@ -419,6 +419,10 @@ const QuickCard = styled.section`
   /* On a wallpaper the photo shows through the Quick entry: a lighter fill and
      only a slight blur (the other cards keep the usual frost) */
   html[data-wallpaper] & { --glass-solid: 40%; --glass-blur: 3px; }
+  /* …so in dark its quiet text (the prompt, the tools, "Logged to
+     today", Save entry before there's anything to save) is a step brighter,
+     to read over the photo */
+  html[data-wallpaper][data-theme='dark'] & { --text-muted: #b9bcc4; --text-soft: #cdd0d6; --border-card: #5a5e69; }
   ${glassCard}
 `;
 
@@ -437,6 +441,8 @@ const QuickHead = styled.div`
 const QuickTitle = styled.h2`
   margin: 0;
   ${cardLabel}
+  /* The label stays faded over a photo: only the card's other quiet text is brightened */
+  html[data-wallpaper][data-theme='dark'] & { color: #7c7f88; }
 `;
 
 /* The topic picker as an outlined pill ("No topic ⌄"), its menu right-aligned */
