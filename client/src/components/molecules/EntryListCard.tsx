@@ -7,7 +7,8 @@ import {
 
 interface EntryListCardProps {
   content: string;
-  createdAt: Date;
+  /** Left out: no date on the right */
+  createdAt?: Date;
   topicName?: string;
   topicColor?: string;
   completed?: boolean;
@@ -22,6 +23,8 @@ interface EntryListCardProps {
   flush?: boolean;
   /** A little more room above and below (a topic's page) */
   roomy?: boolean;
+  /** Nothing to open (the public shelf): the same row, without the hover outline or pointer */
+  readOnly?: boolean;
 }
 
 /* Spreadsheet row: [Topic] | Entry | DATE | chevron, with a hairline rule
@@ -49,6 +52,14 @@ const Row = styled.div<{ $hasTopic: boolean; $hint?: boolean; $flush?: boolean; 
   ${EntryPreview} { margin-top: ${({ $roomy }) => ($roomy ? '7px' : '3px')}; font-size: 13px; color: var(--text-muted); }
 `;
 
+/* The read-only row: the plain row's spacing and rule, nothing to hover or press */
+const StaticRow = styled.div<{ $roomy?: boolean }>`
+  padding: ${({ $roomy }) => ($roomy ? '21px 0' : '15px 0')};
+  border-bottom: 1px solid var(--border-subtle);
+  ${EntryTitle} { color: var(--text-secondary); }
+  ${EntryPreview} { margin-top: ${({ $roomy }) => ($roomy ? '7px' : '3px')}; font-size: 13px; color: var(--text-muted); }
+`;
+
 const ListDate = styled(DateCell)`
   font-size: 14px;
   font-weight: 400;
@@ -56,8 +67,19 @@ const ListDate = styled(DateCell)`
   text-align: right;
 `;
 
-export function EntryListCard({ content, createdAt, topicName, completed, onClick, fallbackTitle, preview, hint, flush, roomy }: EntryListCardProps) {
+export function EntryListCard({ content, createdAt, topicName, completed, onClick, fallbackTitle, preview, hint, flush, roomy, readOnly }: EntryListCardProps) {
   const title = extractTitle(content, fallbackTitle);
+
+  if (readOnly) {
+    return (
+      <StaticRow $roomy={roomy}>
+        <EntryCell>
+          <EntryTitle $completed={completed}>{title}</EntryTitle>
+          {preview && <EntryPreview>{preview}</EntryPreview>}
+        </EntryCell>
+      </StaticRow>
+    );
+  }
 
   return (
     <Row
@@ -73,9 +95,11 @@ export function EntryListCard({ content, createdAt, topicName, completed, onClic
         <EntryTitle $completed={completed}>{title}</EntryTitle>
         {preview && <EntryPreview>{preview}</EntryPreview>}
       </EntryCell>
-      <ListDate title={createdAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
-        {formatListDate(createdAt)}
-      </ListDate>
+      {createdAt && (
+        <ListDate title={createdAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
+          {formatListDate(createdAt)}
+        </ListDate>
+      )}
     </Row>
   );
 }

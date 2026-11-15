@@ -6,7 +6,9 @@ import { PublicTemplate } from '../components/templates/PublicTemplate.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
-import { MediaFilterBar, MediaToolBox, EMPTY_MEDIA_FILTERS, type MediaFilters } from '../components/molecules/MediaFilterBar.js';
+import { MediaFilterBar, MediaToolBox, MediaViewSwitch, EMPTY_MEDIA_FILTERS, type MediaFilters, type MediaLayout } from '../components/molecules/MediaFilterBar.js';
+import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { formatRating, mediaSubtitle, shelfLabel } from '../utils/media.js';
 import { Chip } from '../components/molecules/fields/formKit.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { publicShelf as publicShelfApi, type PublicShelfPage, type PublicShelfQuery } from '../services/api.js';
@@ -40,6 +42,18 @@ const Message = styled.p`
 
 /* The visitor's type chips: the chosen one in the bright accent, the rest a
    soft grey outline — no fill on any of them */
+/* The list layout: the app's flush rows (title, a muted line), under a top rule — read-only here */
+const ListBox = styled.div`
+  margin-top: 40px;
+  border-top: 1px solid var(--border-subtle);
+`;
+
+/* Grid or list, remembered per browser (a visitor's own choice, nothing sent) */
+const LAYOUT_KEY = 'public-shelf-view-v1';
+function loadLayout(): MediaLayout {
+  try { return localStorage.getItem(LAYOUT_KEY) === 'list' ? 'list' : 'grid'; } catch { return 'grid'; }
+}
+
 const Filters = styled.div`
   /* The box keeps the light hairline whatever theme the visitor's browser remembers */
   ${MediaToolBox} { border-color: var(--border-subtle) !important; }
@@ -84,6 +98,11 @@ export function PublicShelfView() {
   const phone = useMediaQuery('(max-width: 768px)');
   const [filters, setFilters] = useState<MediaFilters>(EMPTY_MEDIA_FILTERS);
   const [query, setQuery] = useState('');
+  const [layout, setLayoutState] = useState<MediaLayout>(loadLayout);
+  const setLayout = (l: MediaLayout) => {
+    setLayoutState(l);
+    try { localStorage.setItem(LAYOUT_KEY, l); } catch { /* storage refused */ }
+  };
   const [sent, setSent] = useState(''); // the search as last sent (typing waits 300 ms)
   const [state, setState] = useState<State>({ status: 'loading', title: null });
   const knownTitle = state.status === 'done' ? state.data.title : state.status === 'loading' ? state.title : null;
@@ -130,7 +149,8 @@ export function PublicShelfView() {
       {state.status === 'error' && <Message>This shelf isn’t available.</Message>}
       {state.status !== 'error' && knownTitle && <Title>{knownTitle}</Title>}
       {state.status !== 'error' && hasAny && (
-        <Filters><MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} phone={phone} searchPlaceholder="Search this shelf" /></Filters>
+        <Filters><MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} phone={phone} searchPlaceholder="Search this shelf"
+          aside={<MediaViewSwitch value={layout} onChange={setLayout} />} /></Filters>
       )}
       {state.status === 'loading' && <Centre><Spinner size={36} /></Centre>}
       {state.status === 'done' && (
@@ -138,6 +158,15 @@ export function PublicShelfView() {
           <Message>{filtering ? 'Nothing matches those filters.' : 'Nothing on this shelf yet.'}</Message>
         ) : (
           <>
+            {layout === 'list' ? (
+              <ListBox>
+                {state.items.map((item, i) => (
+                  <EntryListCard key={i} readOnly flush roomy content={item.title}
+                    preview={[mediaSubtitle({ type: item.type, creator: item.creator ?? '', year: item.year ?? '', album: '', season: '' }),
+                      item.rating ? `${formatRating(item.rating)} stars` : '', item.shelf ? shelfLabel(item.shelf, item.type) : ''].filter(Boolean).join(' · ')} />
+                ))}
+              </ListBox>
+            ) : (
             <PosterGrid>
               {state.items.map((item, i) => (
                 <MediaPosterCard
@@ -148,6 +177,7 @@ export function PublicShelfView() {
                 />
               ))}
             </PosterGrid>
+            )}
             <LoadMore shown={state.items.length} total={state.data.total} hasMore={state.data.page < state.data.pages} loading={state.loadingMore} onMore={loadMore} />
           </>
         )

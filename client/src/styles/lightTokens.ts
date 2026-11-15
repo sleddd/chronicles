@@ -10,6 +10,9 @@ export const LIGHT_TOKENS = `
   --bg-band: #dcdfe4;
   --bg-hover: #eef0f3;
   --bg-active: #d3d7dd;
+  --bg-tab-active: #e4e7eb;
+  --bg-tile: #fbfbfc;
+  --text-placeholder: #575d68;
   --bg-control: #fefefe;
   --text-primary: #1f2128;
   --text-secondary: #1f2128;

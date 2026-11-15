@@ -53,7 +53,8 @@ const Card = styled.article`
   ${glassCard}
 `;
 
-/* The cover fills the card's width, 2:3; with none, the title is written on the tile */
+/* The cover fills the card's width, 2:3; with none, the title is written on the
+   tile — a dark slate "book cover" in both themes, its words in white */
 const coverLook = `
   position: relative;
   display: flex;
@@ -67,8 +68,8 @@ const coverLook = `
   border: 1px solid var(--border-card);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-tile);
-  color: var(--text-muted);
+  background: #2c2e37;
+  color: rgba(255, 255, 255, 0.6);
   text-align: center;
   img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 `;
@@ -90,7 +91,7 @@ const TileTitle = styled.span`
   font-size: clamp(15px, 1.6cqi, 19px);
   font-weight: 300;
   line-height: 1.25;
-  color: var(--text-primary);
+  color: #ffffff;
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -101,7 +102,7 @@ const TileTitle = styled.span`
 const TileSub = styled.span`
   font-family: var(--font-sans);
   font-size: 12px;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.75);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
