@@ -41,7 +41,7 @@ describe('LandingView', () => {
     fireEvent.click(screen.getByLabelText(/I understand Chronicles is still in development/));
     fireEvent.click(submit);
     await waitFor(() => expect(apply).toHaveBeenCalledWith({ name: 'Sam', email: 'sam@example.com' }));
-    expect(await screen.findByText('Thank you for signing up to test Chronicles.')).toBeInTheDocument();
+    expect(await screen.findByText('Thank you for requesting early access to Chronicles.')).toBeInTheDocument();
   });
 
   it('has one sign-up form and no separate waitlist form', async () => {
@@ -60,7 +60,7 @@ describe('LandingView', () => {
     fireEvent.click(screen.getByLabelText('I’m 18 or older'));
     fireEvent.click(screen.getByLabelText(/I understand Chronicles is still in development/));
     fireEvent.click(screen.getByRole('button', { name: 'Request a beta seat' }));
-    expect(await screen.findByText('Thank you for signing up to test Chronicles.')).toBeInTheDocument();
+    expect(await screen.findByText('Thank you for requesting early access to Chronicles.')).toBeInTheDocument();
     expect(screen.queryByText(/waitlist/i)).toBeNull();
   });
 });
