@@ -41,7 +41,7 @@ export class PasskeyCancelled extends Error {
 }
 /** This passkey (or this browser) can't produce the secret that opens the journal */
 export class PasskeyCannotUnlock extends Error {
-  constructor() { super('This passkey can’t open your journal on this device.'); this.name = 'PasskeyCannotUnlock'; }
+  constructor() { super('This passkey can’t open your journal. If a password manager such as LastPass saved it, try again and choose your device instead (Touch ID, Windows Hello or your phone).'); this.name = 'PasskeyCannotUnlock'; }
 }
 
 function rethrow(err: unknown): never {
@@ -107,13 +107,16 @@ export interface PasskeySignIn {
 /** Sign in with a passkey: one touch, then the session and this passkey's wrap. */
 export async function signInWithPasskey(): Promise<PasskeySignIn> {
   const { options } = await authApi.passkeyLoginOptions();
-  const { response, prf } = await assert(options);
+  const { response, prf, credentialId } = await assert(options);
   if (!prf) throw new PasskeyCannotUnlock();
   try {
     const { user, passkey } = await authApi.passkeyLogin(response);
     return { user, wrap: passkey, prf };
   } catch (err) {
     prf.fill(0);
+    // The server has never stored this passkey (its adding never finished):
+    // ask the device to drop it, so it stops being offered at sign-in
+    if ((err as { body?: { unknownCredential?: unknown } } | null)?.body?.unknownCredential === true) forgetOnDevice(options.rpId, credentialId);
     throw err;
   }
 }
@@ -154,7 +157,7 @@ export interface NewPasskey {
  * use, so a second touch may follow (once). One that can't do PRF at all is
  * refused: it could sign in but never open the journal.
  */
-export async function createPasskey(options: PasskeyCreationOptions): Promise<NewPasskey> {
+export async function createPasskey(options: PasskeyCreationOptions, onSecondTouch?: () => void): Promise<NewPasskey> {
   const first = await passkeyPrfInput();
   const cred = await navigator.credentials.create({
     publicKey: {
@@ -177,10 +180,14 @@ export async function createPasskey(options: PasskeyCreationOptions): Promise<Ne
     if (made.enabled === false) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock(); }
     // The secret comes on first use. This touch is only for the secret: its
     // signature goes nowhere, so the challenge is made here
+    // Say so first: a second sheet with no word of why reads as a stall. It
+    // also ends by itself (the first has the server's timeout; this had none)
+    onSecondTouch?.();
     const used = await navigator.credentials.get({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         rpId: options.rp.id,
+        timeout: options.timeout ?? 120_000,
         userVerification: 'required',
         allowCredentials: [{ id: new Uint8Array(cred.rawId), type: 'public-key' }],
         extensions: { prf: { eval: { first } } } as AuthenticationExtensionsClientInputs,

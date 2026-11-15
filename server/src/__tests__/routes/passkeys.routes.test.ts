@@ -274,6 +274,14 @@ describe('passkeys', () => {
       expect(res.headers['set-cookie']).toBeUndefined();
     });
 
+    it('says when a passkey was never stored, so the device can drop it', async () => {
+      await addPasskey(app);
+      const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;
+      const res = await request(app).post('/api/auth/passkey/verify').send({ response: softPasskey(RP, ORIGIN).assertion(c) });
+      expect(res.status).toBe(401);
+      expect(res.body.unknownCredential).toBe(true);
+    });
+
     it('spends the challenge even when the passkey is unknown', async () => {
       const { key } = await addPasskey(app);
       const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;

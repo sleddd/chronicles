@@ -136,7 +136,17 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
 
     const passkey = await checkAssertion(parsed.data.response, LOGIN_CHALLENGES, null);
     if (!passkey) {
-      logSecurityEvent('passkey_login_failed', { ip: req.ip });
+      // A passkey this server has never stored: one made on the device whose
+      // adding never finished (the page was closed, a password manager took
+      // over half way). Saying so lets the browser drop it from the device
+      // (signalUnknownCredential) instead of offering it at every sign-in. It
+      // tells nothing about any account: the id is one the caller already holds
+      const unknown = !(await findPasskey(parsed.data.response.id).catch(() => null));
+      logSecurityEvent('passkey_login_failed', { ip: req.ip, details: { reason: unknown ? 'unknown_credential' : 'verification' } });
+      if (unknown) {
+        res.status(401).json({ error: 'That passkey didn’t work because it isn’t on your account. Sign in with your password, then add it again in Settings.', unknownCredential: true });
+        return;
+      }
       refuse();
       return;
     }

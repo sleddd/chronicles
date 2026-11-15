@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import { useEncryption } from '../../contexts/EncryptionContext.js';
-import { useAddPasskey } from '../../hooks/useAddPasskey.js';
+import { useAddPasskey, usePasskeyAddConfirmation } from '../../hooks/useAddPasskey.js';
 import { PasskeyCancelled, suggestedPasskeyName } from '../../services/passkeys.js';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
@@ -48,22 +47,25 @@ interface PasskeyOfferProps {
 }
 
 export function PasskeyOffer({ email, password, onDone }: PasskeyOfferProps) {
-  const { passwordSource } = useEncryption();
+  const confirmation = usePasskeyAddConfirmation();
   const addPasskey = useAddPasskey();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [secondTouch, setSecondTouch] = useState(false);
 
   const add = async () => {
     setError('');
     setBusy(true);
     try {
-      const source = await passwordSource(password(), email, 'passkey-add');
-      await addPasskey(source, source.confirmToken, suggestedPasskeyName());
+      const source = await confirmation.confirm(password(), email);
+      await addPasskey(source, source.confirmToken, suggestedPasskeyName(), () => setSecondTouch(true));
       onDone();
     } catch (err) {
+      confirmation.failed(err);
       // Closing the sheet is not an error: the offer stays, with Not now beside it
       if (!(err instanceof PasskeyCancelled)) setError(err instanceof Error && err.message ? err.message : 'Couldn’t add the passkey. You can add one later in Settings.');
       setBusy(false);
+      setSecondTouch(false);
     }
   };
 
@@ -73,7 +75,9 @@ export function PasskeyOffer({ email, password, onDone }: PasskeyOfferProps) {
         Add a passkey and you can sign in with your fingerprint, face or device PIN. There is no password to type, and it opens your journal in one touch.
       </Text>
       <Quiet>Your device will ask to confirm it’s you, sometimes twice. Your password and recovery key keep working.</Quiet>
+      <Quiet>Save it to this device (Touch ID, Windows Hello) or your phone. If a password manager offers to save it, decline: some, such as LastPass, can’t hold a passkey that opens your journal.</Quiet>
       {error && <ErrorBanner>{error}</ErrorBanner>}
+      {secondTouch && <Quiet role="status">One more touch to finish. Choose the same passkey again, in the same place you just saved it.</Quiet>}
       <Button type="button" fullWidth variant="secondary" disabled={busy} onClick={() => void add()}>
         {busy ? <Spinner size={18} /> : 'Add a passkey'}
       </Button>

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { deriveAuthSecret } from '@chronicles/shared';
-import { useEncryption, type KeySource } from '../../contexts/EncryptionContext.js';
+import type { KeySource } from '../../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError, type PasskeyInfo } from '../../services/api.js';
 import { PasskeyCancelled, confirmWithPasskey, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
-import { useAddPasskey } from '../../hooks/useAddPasskey.js';
+import { useAddPasskey, usePasskeyAddConfirmation } from '../../hooks/useAddPasskey.js';
 import { TextInput } from '../atoms/TextInput.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { ConfirmIdentity } from '../molecules/ConfirmIdentity.js';
@@ -85,7 +85,7 @@ interface PasskeySettingsProps {
 type Open = { kind: 'add' } | { kind: 'remove'; id: number } | { kind: 'remove-all' } | { kind: 'rename'; id: number } | null;
 
 export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySettingsProps) {
-  const { passwordSource } = useEncryption();
+  const confirmation = usePasskeyAddConfirmation();
   const addPasskey = useAddPasskey();
   const [passkeys, setPasskeys] = useState<PasskeyInfo[] | null>(null);
   const [supported, setSupported] = useState(false);
@@ -96,6 +96,8 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  // The device asks a second time for some passkeys: say why, so it doesn't read as a stall
+  const [secondTouch, setSecondTouch] = useState(false);
 
   useEffect(() => { void passkeysAvailable().then(setSupported); }, []);
   useEffect(() => {
@@ -104,7 +106,7 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
   const count = passkeys?.length ?? 0;
   useEffect(() => { onUsable?.(supported && count > 0); }, [supported, count, onUsable]);
 
-  const close = () => { setOpen(null); setPassword(''); setCode(''); setError(''); setBusy(false); };
+  const close = () => { confirmation.drop(); setOpen(null); setPassword(''); setCode(''); setError(''); setBusy(false); setSecondTouch(false); };
   const start = (next: Open) => { setOpen(next); setPassword(''); setCode(''); setError(''); setNote(''); };
   const withCode = totpEnabled && code.trim() ? { code: code.trim() } : {};
 
@@ -117,27 +119,30 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
       // Who is asking, first: a wrong password or code must not leave a passkey
       // on the device. Either way the answer is a single-use token for adding one
       let source: KeySource;
-      let confirmation: { confirmToken: string };
+      let confirmToken: string;
       if (via === 'passkey') {
         const c = await confirmWithPasskey('passkey-add');
         sourcePrf = c.prf;
         source = { kind: 'passkey', prf: c.prf, wrap: c.wrap };
-        confirmation = { confirmToken: c.confirmToken };
+        confirmToken = c.confirmToken;
       } else {
-        const fromPassword = await passwordSource(password, email, 'passkey-add', totpEnabled ? code : undefined);
+        // Kept across tries the device turned away, so a retry asks for nothing again
+        const fromPassword = await confirmation.confirm(password, email, totpEnabled ? code : undefined);
         source = fromPassword;
-        confirmation = { confirmToken: fromPassword.confirmToken };
+        confirmToken = fromPassword.confirmToken;
       }
-      setPasskeys(await addPasskey(source, confirmation.confirmToken, name));
+      setPasskeys(await addPasskey(source, confirmToken, name, () => setSecondTouch(true)));
       close();
       setNote('Passkey added. You can sign in with it from now on.');
     } catch (err) {
+      confirmation.failed(err);
       if (!(err instanceof PasskeyCancelled)) setError(message(err, 'Couldn’t add the passkey'));
       setBusy(false);
+      setSecondTouch(false);
     } finally {
       sourcePrf?.fill(0);
     }
-  }, [password, email, code, totpEnabled, name, passwordSource, addPasskey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [password, email, code, totpEnabled, name, confirmation, addPasskey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = useCallback(async (via: 'password' | 'passkey') => {
     if (!open || (open.kind !== 'remove' && open.kind !== 'remove-all')) return;
@@ -213,9 +218,10 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
       {open?.kind === 'add' && (
         <>
           <RowNote style={{ marginTop: 0 }}>
-            Name it, then confirm it’s you. Your device will ask for your fingerprint, face or PIN, sometimes twice.
+            Name it, then confirm it’s you. Your device will ask for your fingerprint, face or PIN, sometimes twice. Save it to this device (Touch ID, Windows Hello) or your phone. If a password manager offers to save it, decline: some, such as LastPass, can’t hold a passkey that opens your journal.
           </RowNote>
           {error && <RowNote $error style={{ marginTop: 0 }} role="alert">{error}</RowNote>}
+          {secondTouch && <RowNote style={{ marginTop: 0 }} role="status">One more touch to finish. Choose the same passkey again, in the same place you just saved it.</RowNote>}
           <TextInput value={name} onChange={e => setName(e.target.value.slice(0, 60))} placeholder="Name, such as MacBook or Phone" aria-label="Passkey name" />
           {confirmFields(() => { if (!cantGo) void add('password'); }, count > 0)}
           <FormActions>

@@ -31,6 +31,7 @@ vi.mock('@/services/passkeys', () => ({
   ...svc,
   suggestedPasskeyName: () => 'Safari on macOS',
   PasskeyCancelled: class PasskeyCancelled extends Error {},
+  PasskeyCannotUnlock: class PasskeyCannotUnlock extends Error {},
 }));
 vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => enc }));
 vi.mock('@chronicles/shared', () => ({ deriveAuthSecret: async (pw: string) => `secret-of-${pw}` }));
