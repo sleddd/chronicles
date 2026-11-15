@@ -8,7 +8,6 @@ import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlid
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
 import { BetaSignup } from '../components/organisms/landing/BetaSignup.js';
 import { useScrollReveal } from '../hooks/useScrollReveal.js';
-import { BETA_DETAILS } from '@shared/legal/index.js';
 
 /* The public home page at `/`: the hero on a night-sky photo with the
    dashboard in a frame, how it works, the feature rows, everything else, a comparison, privacy, the beta
@@ -51,14 +50,14 @@ interface Feature {
 const FEATURES: Feature[] = [
   {
     label: 'Journal', title: 'A journal that keeps up with you.',
-    body: 'Capture thoughts however they come with rich text, photos, voice dictation, or Apple Pencil sketching. Chronicles automatically groups entries by day and month, weaving books, films, quotes, and ideas seamlessly into your timeline. Search instantly by keyword, topic, or date and bookmark key moments, all protected by encryption before anything leaves your browser.',
+    body: 'Everything you capture on your home dashboard flows into your main journal, where you can search, review, and edit every note, wellness check, and media entry in one chronological stream. Switch to the media journal view to organize books, movies, TV shows, and music with ratings and progress tracking, using separate public and private shelves so you share only what you choose with others.',
     points: [],
     shot: 'journal', size: [1268, 1000],
     alt: 'The journal with everyday entries by month and a Sunday entry open',
   },
   {
-    label: 'Goals and planning', title: 'Plan your week around what matters.',
-    body: 'Drop tasks into your week to see how they fit around your calendar while your Gantt roadmap maps out the bigger picture. By keeping goals, milestones, and tasks linked, every day moves you forward. Plan your days with morning, noon, and night slots beside calendar events, view goals across months and years with a today marker, switch between lists and Kanban boards to update task statuses instantly, and keep priorities front and center with built-in time tracking and focus sessions.',
+    label: 'Goals and planning', title: 'From multiyear roadmaps down to your daily plan.',
+    body: 'Every task links directly to milestones and goals, giving you seamless movement between list views, Kanban boards, and a draggable Gantt roadmap. Filter instantly by goal or category, drag tasks into your weekly planner to map out your days, and see everything automatically appear on your main calendar next to synced events and bills.',
     points: [],
     shot: ['planning-tasks', 'planning-roadmap', 'planning-planner'], size: [1268, 900],
     alt: [
@@ -68,8 +67,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    label: 'Health and wellness', title: 'Health, wellness, and fitness tracking.',
-    body: 'Track your complete wellness picture by logging daily habits, mood, sleep, hydration, and stress alongside custom exercise routines and detailed meal, calorie, and macro goals. Stay on top of medication schedules with effortless dose tracking, use built-in reporting to spot symptom patterns and food triggers, and print organized allergy, symptom, and medication lists for your doctor’s visits.',
+    label: 'Health and wellness', title: 'Health, wellness, and endurance training in one view.',
+    body: 'Log daily habits, mood, sleep, hydration, and nutrition with macro and micronutrient targets, alongside scheduled workouts and multi-phase training plans built for big athletic goals like mountaineering. Stay consistent with effortless medication dose tracking, uncover symptom patterns and food triggers through built in reports, and print organized allergy, symptom, and medication lists for your doctor.',
     points: [],
     shot: ['health-dashboard', 'health-meals', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
@@ -81,8 +80,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    label: 'Budget and finance', title: 'Know where your money goes.',
-    body: 'Take control of your money by setting monthly budgets, organizing recurring bills and subscriptions, and tracking visual progress toward every savings target. Real time reports compare planned against actual spending by category so you can course correct before the month ends, built entirely from your own entries with zero bank connections or third party logins required.',
+    label: 'Budget and finance', title: 'Private budgeting to keep your finances on track.',
+    body: 'Manage monthly category budgets, recurring bills, subscriptions, and dedicated savings funds in one clean view. Your running balance updates automatically as you log expenses, while clear reports compare planned versus actual spending so you can adjust before the month ends.',
     points: [],
     shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440],
     alt: [
@@ -94,38 +93,39 @@ const FEATURES: Feature[] = [
 ];
 
 const MODULES = [
-  { title: 'Calendar', body: 'View events, deadlines, and bills by day, week, or month—with two-way Google Calendar sync and a private Apple Calendar feed.', shot: 'calendar-dark', alt: 'The month calendar with events and bills on their days' },
+  { title: 'Calendar', body: 'View events, deadlines, and bills by day, week, or month, complete with two-way Google Calendar sync and a private Apple Calendar feed.', shot: 'calendar-dark', alt: 'The month calendar with events and bills on their days' },
   { title: 'Meal planning', body: 'Build a weekly menu, save recipes with checkable ingredients, and turn your meal plan into a shopping list in one tap.', shot: 'kitchen-dark', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
-  { title: 'Budget & finance', body: 'Manage a manual budget, bills, subscriptions, and savings goals—off by default, and never linked to a bank.', shot: 'finance-dark', alt: 'The budget with planned, bills, spending and what’s left' },
+  { title: 'Budget and finance', body: 'Manage a manual budget, bills, subscriptions, and savings goals. Off by default, and never linked to a bank.', shot: 'finance-dark', alt: 'The budget with planned, bills, spending and what’s left' },
   { title: 'Media journal', body: 'Keep books, movies, shows, and music on one shelf with half-star ratings, progress tracking, notes, and an optional public shelf to share.', shot: 'media-dark', alt: 'The media journal shelf of book covers' },
 ];
 
 const EXTRAS = [
   { title: 'Custom topics', body: 'Create, reorder, and customize any topic with its own icon and tailored fields.' },
   { title: 'Time tracking', body: 'Time any task, workout, or focus session directly from its entry.' },
-  { title: 'Works on any device', body: 'Runs smoothly in your browser and installs straight to your phone’s home screen.' },
-  { title: 'Optional AI', body: 'Get instant calorie and nutrient estimates using your own Anthropic, OpenAI, or Bedrock API key—it never touches or sees your journal.' },
+  { title: 'Built for mobile', body: 'Access your secure workspace in any web browser or install it straight to your phone home screen for a seamless native experience.' },
+  { title: 'Optional AI', body: 'Get instant calorie and nutrient estimates using your own Anthropic, OpenAI, or Bedrock API key. It never touches or sees your journal.' },
 ];
 
 const PRIVACY = [
-  { icon: 'lock', title: 'Encrypted on your device', body: 'AES-256 encryption in the browser, and your password never leaves your device.' },
+  { icon: 'lock', title: 'Encrypted on your device', body: 'Client-side AES encryption in the browser, ensuring your password and keys never leave your device.' },
   { icon: 'visibility_off', title: 'No tracking', body: 'No analytics, telemetry or crash reporting. When something breaks, a bug form is how you report it.' },
   { icon: 'notifications_off', title: 'No pings, no marketing', body: 'No notifications and no marketing email. Chronicles waits until you open it.' },
   { icon: 'key', title: 'AI on your terms', body: 'The assistant is optional and uses your own key. Requests go from your browser straight to the provider.' },
-  { icon: 'image', title: 'Photos in your own storage', body: 'Photos are encrypted and kept in your own Cloudflare R2 bucket. They never touch the Chronicles server.' },
-  { icon: 'download', title: 'Your data leaves with you', body: 'Export entries to CSV any time, and finance data as spreadsheets with a full JSON backup.' },
+  { icon: 'image', title: 'Private, encrypted photo storage.', body: 'Photos stay off by default. Connect your own private storage bucket, and encrypted images upload directly to your personal cloud without touching our servers.' },
+  { icon: 'download', title: 'Your data leaves with you', body: 'Export entries, including finance, to JSON or CSV, print medical summaries, or jump straight in using built-in seed data for wellness, topics, and finance.' },
 ];
 
 const BETA_POINTS = ['Free access for the whole beta', 'A direct say in what gets built next', 'After release, no more than $20 a month'];
 
 const QUESTIONS = [
-  { q: 'What is a life dashboard app?', a: 'A life dashboard gathers the parts of your life you want to review, like goals, tasks, health, mood and money, into one view so you can see what changed and decide what to do next. Chronicles pairs that dashboard with a journal and a day planner, so the data behind it comes from the same quick entries.' },
-  { q: 'Is Chronicles a life tracker, a journal or a planner?', a: 'All three. The journal is where entries go in. The planner holds goals, milestones and tasks. The tracker turns health, mood and spending into reports. One entry line feeds them all.' },
-  { q: 'Who is Chronicles for?', a: 'Adults who want one place for the details of their days. You must be 18 or older to join.' },
-  { q: 'Does it connect to my bank or health apps?', a: 'No. Health and finance tracking are entered by you, and nothing connects to a bank. Google Calendar sync is the one connection, and you choose whether to turn it on.' },
-  { q: 'Is there a phone app?', a: 'Chronicles runs in your browser on phones and tablets, and you can add it to your home screen like an app. Native iPhone and Android apps are planned after the beta.' },
-  { q: 'What will it cost?', a: `Chronicles is free during the beta. After that it will be a paid subscription priced to cover hosting and maintenance. ${BETA_DETAILS.priceTerms}` },
-  { q: 'What happens if I lose my password?', a: 'When you sign up you receive a recovery key. If you forget your password, it’s the only way back into your account, so keep it somewhere safe. If you lose both your password and your recovery key, no one can open your data, including us. It’s encrypted with keys only you hold. What we can do is delete your account and everything in it once you confirm the request from your account’s email address, so you can start again.' },
+  { q: 'How do I give feedback or report a bug?', a: 'Simply head to your settings, open the built-in report a bug or feedback form, fill out your notes, and click send.' },
+  { q: 'Can I import my existing notes or journal entries?', a: 'Yes. Because Chronicles supports full JSON backups and CSV exports, you can easily migrate or restore your data anytime.' },
+  { q: 'What happens to my data if I stop using Chronicles?', a: 'Your data is entirely yours. You can export your complete archive to JSON or CSV spreadsheets at any moment, leaving nothing behind on any server.' },
+  { q: 'How does optional AI work without compromising privacy?', a: 'You bring your own API key (Anthropic, OpenAI, or Bedrock). The AI is only used on demand for quick calorie or nutrient estimates, and your journal contents are never used to train models or stored externally.' },
+  { q: 'Is my data accessible offline?', a: 'Yes. Because it runs directly in your browser with local storage and client-side encryption, your workspace remains fully accessible and functional even when you are offline.' },
+  { q: 'What happens if I lose my password?', a: 'Because Chronicles uses zero-knowledge client-side encryption where your password and keys never leave your device, we cannot recover or reset your password for you. Your data remains strictly private.' },
+  { q: 'Is there a phone app?', a: 'Chronicles runs smoothly in any modern web browser and installs straight to your phone home screen for a seamless native app experience. A native iOS and Android app will be developed after initial beta release.' },
+  { q: 'What will it cost?', a: 'During the active beta, access is completely free. After official release, pricing will be no more than $20 a month.' },
 ];
 
 /* ——— Shared pieces ——— */
@@ -234,9 +234,9 @@ const Showcase = styled.div`
 /* ——— How it works (the original timeline) ——— */
 
 const STEPS = [
-  { title: 'Choose or create a topic', body: 'Use the quick-entry widget to pick an existing topic or build your own with custom fields.' },
-  { title: 'Capture it in seconds', body: 'Log a meal, a medication dose, an expense, or a quick thought—all in under 15 seconds.' },
-  { title: 'View your big picture', body: 'Chronicles automatically sorts your entries by topic so you can effortlessly track, plan, budget, and spot patterns in your life.' },
+  { title: 'Choose or create a topic', body: 'Pick an existing topic or build your own with custom fields.' },
+  { title: 'Capture it in seconds', body: 'Log a meal, medication dose, expense, or thought in under 15 seconds.' },
+  { title: 'View your big picture', body: 'Chronicles sorts your entries by topic so you can track, plan, and organize your days effortlessly.' },
 ];
 
 /* More room above and below than the other bands */
@@ -562,10 +562,10 @@ export function LandingView() {
             <div data-reveal>
               <HowTitle id="how-title">How it works</HowTitle>
               <WideLede>
-                Set up your custom topics once—adding essentials like your medication list, allergies, bills, and dated goals
-                that map straight onto a roadmap—and spend less than 10–15 minutes a day keeping things current.
-                Your single, continuous stream of data is intelligently sorted into a myriad of custom views that
-                expand and grow right alongside you.
+                Configure your custom topics once with essentials like medications, allergies, bills, and roadmap goals,
+                and maintain everything in under fifteen minutes a day. Your continuous stream of entries is automatically
+                sorted into custom views, creating a centralized digital hub that brings your metrics, tasks, goals, and
+                routines into one clear view.
               </WideLede>
             </div>
             <Steps>
@@ -658,8 +658,7 @@ export function LandingView() {
             <div data-reveal>
               <H2 id="beta-title">Help shape your new life dashboard.</H2>
               <Lede>
-                Chronicles is in active design and development. Seats are limited so every tester’s feedback gets the
-                attention it needs.
+                Chronicles is in active development with limited seats to ensure every tester gets direct attention.
               </Lede>
               <TickList items={BETA_POINTS} />
             </div>
@@ -670,7 +669,7 @@ export function LandingView() {
         <FaqBand id="faq" aria-labelledby="faq-title">
           <FaqLayout>
             <div data-reveal>
-              <H2 id="faq-title">Good to know.</H2>
+              <H2 id="faq-title">Good to know</H2>
             </div>
             <Faq>
               {QUESTIONS.map(({ q, a }, i) => (
