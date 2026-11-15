@@ -436,7 +436,17 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   ` : '')}
   ${({ $quick }) => ($quick ? css`
     margin-top: 24px;
-    /* Solid: no blur, nothing showing through */
+    /* A touch see-through over the photo (no blur); the formatting bar paints the same */
+    background: color-mix(in srgb, var(--bg-panel) 86%, transparent);
+    && ${EditorArea} { --editor-surface: color-mix(in srgb, var(--bg-panel) 86%, transparent); }
+    /* See-through, so its lines and placeholders a step stronger than on a solid card */
+    --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
+    --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
+    /* No outline: it lifts off the photo with a soft shadow instead */
+    border-color: transparent;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    /* "Enter title/text..." a step brighter than the tools beside it */
+    && input::placeholder, && textarea::placeholder, && .tiptap p.is-editor-empty:first-child::before { color: var(--text-secondary); opacity: 0.8; }
     @media (max-width: 768px) { margin-top: 18px; }
   ` : '')}
   /* The writing area is the card's title row; the tools sit at its top right */
@@ -547,15 +557,18 @@ const QuickPrompt = styled(PromptLine)`
   @media (max-width: 400px) { font-size: 17px; }
   ${photoTokens}
   ${onPhoto}
-  /* Over the photo the picker's words are a light grey (an accent can sink into a dark
-     photo), a step back from the white question */
-  html[data-wallpaper] & > div > button { color: #c9cdd4; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
+  /* Over the photo the picker's words are bright white like the question (an accent
+     can sink into a dark photo) */
+  html[data-wallpaper] & > div > button { color: #fff; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
   /* Its menu over the photo: the lines between topics barely there */
   html[data-wallpaper] & > div > div { --border-faint: rgba(255, 255, 255, 0.12); }
 `;
 
 /* Under the card: Save entry (and the tools when the writing area is hidden) */
 const QuickFoot = styled(CardFoot)`
+  /* Its tint already sets it apart from the fields: no rule above it, a little room instead */
+  border-top: none;
+  margin-top: 14px;
   /* Save entry: an accent outline with accent text (never filled) once there's
      something to save; a quiet grey outline until then */
   && ${SaveButton}, html[data-theme='light'] && ${SaveButton} {
@@ -657,8 +670,10 @@ const QuickTools = styled.div<{ $beside?: boolean }>`
   display: flex;
   gap: 2px;
   margin-left: -6px;
-  & > button { width: 34px; height: 34px; color: var(--text-secondary); }
-  & > button[aria-pressed="true"] { color: var(--color-accent); }
+  /* Quiet tools (the writing comes first); full colour on hover */
+  & > button { width: 34px; height: 34px; color: var(--text-muted); opacity: 0.8; }
+  & > button:hover { opacity: 1; }
+  & > button[aria-pressed="true"] { color: var(--color-accent); opacity: 1; }
   /* Beside the writing area, at its top right — in reach without scrolling down */
   ${({ $beside }) => ($beside ? `
     position: absolute;

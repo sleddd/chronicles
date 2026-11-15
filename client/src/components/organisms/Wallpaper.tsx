@@ -16,8 +16,19 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
   height: ${({ $height }) => $height};
   z-index: -1;
   pointer-events: none;
-  background: url(${({ $src }) => $src}) center 55% / cover no-repeat;
   opacity: ${({ $shown }) => ($shown ? 1 : 0)};
+  /* The photo itself (its own layer, so dimming it never greys the wash over it) */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url(${({ $src }) => $src}) center 55% / cover no-repeat;
+  }
+  /* Light theme: a bright photo (white sky, snow) is faded a little — dimmer and
+     softer — so it doesn't glare against the light page; the brighter, the more */
+  html[data-theme='light'] &::before {
+    filter: ${({ $shade }) => `brightness(${(1 - Math.min(0.6, $shade) * 0.25).toFixed(3)}) contrast(${(1 - Math.min(0.6, $shade) * 0.15).toFixed(3)})`};
+  }
   transition: opacity 0.4s ease;
   /* A long, eased fade (no visible edge): solid at the top, thinning out
      gradually from a quarter of the way down */

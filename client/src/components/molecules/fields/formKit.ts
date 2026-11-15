@@ -43,21 +43,21 @@ export const Chips = styled.div`
   gap: 14px 12px;
 `;
 
-/* Outline chip; the chosen one a solid accent fill with --on-accent text
-   (white, or near-black on a very light accent) */
+/* Outline chip; the chosen one an accent outline with soft-accent text (no fill)
+   */
 export const Chip = styled.button<{ $active: boolean }>`
   height: 32px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-pill, var(--border-card))')};
-  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
+  /* The chosen one in the accent */
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'color-mix(in srgb, var(--border-pill, var(--border-card)) 75%, transparent)')};
+  background: transparent;
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-soft)')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')};
   cursor: pointer;
-  transition: border-color 120ms, color 120ms, background 120ms;
-  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-hover, var(--color-accent))' : 'var(--control-border)')}; }
-  ${({ $active }) => ($active ? '&:hover { background: var(--color-accent-hover, var(--color-accent)); }' : '')}
+  transition: border-color 120ms, color 120ms;
+  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -77,15 +77,15 @@ export const Segments = styled.div`
 export const Segment = styled.button<{ $active: boolean }>`
   height: 30px;
   padding: 0 14px;
-  /* The chosen segment: a solid accent fill with --on-accent text, like the chosen chips */
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
+  /* The chosen segment: an accent outline and soft-accent text, like the chosen chips */
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'transparent')};
   border-radius: 7px;
-  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
+  background: transparent;
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   cursor: pointer;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-soft)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 

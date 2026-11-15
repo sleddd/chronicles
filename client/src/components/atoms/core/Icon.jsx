@@ -4,6 +4,7 @@ import React from "react";
    Matches Chronicles' bold, elegant aesthetic. */
 const PATHS = {
   check: "M20 6 9 17l-5-5",
+  "corner-down-left": "M9 10l-5 5 5 5M20 4v7a4 4 0 0 1-4 4H4",
   x: "M18 6 6 18M6 6l12 12",
   plus: "M5 12h14M12 5v14",
   minus: "M5 12h14",

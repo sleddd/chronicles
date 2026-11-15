@@ -1,5 +1,5 @@
 export type IconName =
-  | "check" | "x" | "plus" | "minus" | "search" | "settings" | "calendar"
+  | "check" | "corner-down-left" | "x" | "plus" | "minus" | "search" | "settings" | "calendar"
   | "chevron-right" | "chevron-left" | "chevron-down" | "chevron-up"
   | "arrow-right" | "arrow-left" | "arrow-up-right" | "star" | "circle"
   | "more-horizontal" | "more-vertical" | "trash" | "pencil" | "sun" | "moon"

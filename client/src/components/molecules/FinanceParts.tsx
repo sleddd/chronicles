@@ -892,6 +892,8 @@ export const FoldHeading = styled.button`
 export const CardRows = styled.div`
   display: flex;
   flex-direction: column;
+  /* Room above the first row and below the last */
+  padding: 10px 0;
   font-family: var(--font-sans);
 `;
 
@@ -901,11 +903,12 @@ export const CardRow = styled.div`
   column-gap: 24px;
   align-items: center;
   min-height: 68px;
-  padding: 14px 36px;
+  /* The entry card's rows' 20px top and bottom */
+  padding: 20px 36px;
   border-top: 1px solid var(--border-subtle);
   &:first-child { border-top: none; }
   & > :not(:first-child) { min-width: 0; }
-  @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); row-gap: 10px; padding: 16px 20px; }
+  @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); row-gap: 10px; padding: 18px 20px; }
 `;
 
 export const CardRowLabel = styled.label`
@@ -935,7 +938,8 @@ export const CardFootBand = styled.div`
   justify-content: space-between;
   gap: 10px 16px;
   padding: 14px 24px 14px 36px;
-  border-top: 1px solid var(--border-subtle);
+  /* Its tint sets it apart: no rule above it, a little room instead (like the Quick entry's) */
+  margin-top: 14px;
   background: var(--bg-app);
   & > :last-child { margin-left: auto; }
   @media (max-width: 640px) { padding: 12px 20px; }

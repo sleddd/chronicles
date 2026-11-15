@@ -86,12 +86,12 @@ export const DayChip = styled.button<{ $active: boolean }>`
   height: 44px;
   padding: 0;
   border-radius: var(--r-lg, 6px);
-  /* The chosen day: a solid accent fill with --on-accent text, like the chosen chips */
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-card)')};
-  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
+  /* The chosen day: an accent outline and soft-accent text, like the chosen chips */
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'color-mix(in srgb, var(--border-card) 75%, transparent)')};
+  background: transparent;
   font-family: var(--font-sans);
   font-size: 15px;
-  color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-secondary)')};
+  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }

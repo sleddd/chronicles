@@ -478,7 +478,9 @@ const Col = styled.div`
    leaves room at its end for the grip and the fold chevron; the content runs
    the card's full width */
 const cardShell = css`
-  border: 1px solid var(--border-card);
+  /* No outline: a soft shadow sets each card off the page */
+  border: 1px solid transparent;
+  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
   border-radius: 16px;
   background: var(--bg-panel);
   ${glassCard}
@@ -505,6 +507,7 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
   ${({ $plain }) => ($plain ? `
     padding: 0 !important;
     border: none !important;
+    box-shadow: none !important;
     background: none !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
@@ -515,6 +518,17 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
   ${({ $collapsed }) => ($collapsed ? `
     padding-top: 16px;
     padding-bottom: 16px;
+    /* Folded: no fill or outline — just its title row, edge to edge across the
+       column (the label at the left edge, the grip and chevron at the right) */
+    padding-left: 0;
+    padding-right: 0;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    background: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    & > button[aria-expanded] { right: -6px; }
+    & > button[aria-label^="Move"] { right: 28px; }
     & > section > :not(:first-child) { display: none; }
     && > section > :first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
     /* Grip and chevron centred on the folded card's one row */
@@ -574,8 +588,9 @@ const SectionHead = styled.div`
   border-bottom: 1px solid var(--border-subtle);
   h2 { margin: 0; ${cardLabel} }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
-  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; white-space: nowrap; }
-  button:hover { text-decoration: underline; }
+  /* The title row's links: quiet grey at a normal weight, the accent on hover */
+  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text-muted); cursor: pointer; white-space: nowrap; transition: color 120ms; }
+  button:hover { color: var(--color-accent-link); }
   button:disabled { opacity: 0.6; cursor: default; }
 `;
 
@@ -2177,26 +2192,51 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
 const AddRow = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px 20px;
+  gap: 16px 28px;
   margin-top: 32px;
+  /* Room under the lines before the cards start */
+  margin-bottom: 16px;
+  /* Phones: one full-width line each, stacked */
   @media (max-width: 768px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    & > :first-child, & > :last-child:nth-child(even) { grid-column: 1 / -1; }
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 12px;
   }
 `;
 
+/* The add row's boxes (Add a priority, Log a meal…): a single line to type on —
+   no box, fill or shadow, just a rule under the text (the accent while typing) */
 const AddPill = styled.form`
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 48px;
-  padding: 0 22px;
-  border: 1px solid var(--border-pill, var(--border-card));
-  border-radius: 999px;
-  background: var(--bg-panel);
-  ${glassCard}
-  &:focus-within { border-color: var(--color-accent); }
+  height: 44px;
+  padding: 0 2px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 55%, transparent);
+  border-radius: 0;
+  background: transparent;
+  && input::placeholder { color: var(--text-muted); opacity: 1; }
+  &:focus-within { border-bottom-color: var(--color-accent); }
+`;
+
+const EnterBtn = styled.button`
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 120ms, color 120ms;
+  &:hover:not(:disabled), ${AddPill}:focus-within &:not(:disabled) { opacity: 1; color: var(--color-accent-link); }
+  &:disabled { cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
 const AddRowError = styled(Muted)`
@@ -2224,6 +2264,10 @@ function AddPillInput({ field, onError }: { field: AddField; onError: (message: 
       <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
         placeholder={field.placeholder} aria-label={field.label}
         onKeyDown={e => { if (e.key === 'Escape') setDraft(''); }} />
+      {/* The return key, faded: press Enter (or tap it) to save */}
+      <EnterBtn type="submit" aria-label={`Save: ${field.label}`} title="Press Enter to save" disabled={!draft.trim()}>
+        <Icon name="corner-down-left" size={16} strokeWidth={1.8} />
+      </EnterBtn>
     </AddPill>
   );
 }
