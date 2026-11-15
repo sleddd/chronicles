@@ -26,11 +26,12 @@ const Figure = styled.div<{ $running: boolean }>`
   align-items: baseline;
   gap: 10px;
   min-width: 0;
+  /* The time so far at the normal text size */
   b {
-    font-family: var(--font-display);
-    font-size: 34px;
-    font-weight: 300;
-    line-height: 1;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.3;
     font-variant-numeric: tabular-nums;
     color: ${({ $running }) => ($running ? 'var(--color-accent-soft)' : 'var(--text-primary)')};
   }

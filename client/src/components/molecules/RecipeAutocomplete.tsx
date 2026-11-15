@@ -52,7 +52,7 @@ const SearchInput = styled.input`
   &&:focus { border-color: var(--color-accent) !important; }
   /* Five classes outrank GlobalStyle's input:not(…×4) { border: none !important } */
   &&&&& { border: 1.5px solid var(--border-card) !important; }
-  &&&&&:focus { border-color: var(--color-accent) !important; }
+  &&&&&:focus { border: 1.5px solid var(--color-accent) !important; }
   &::placeholder { color: var(--text-placeholder); }
 `;
 

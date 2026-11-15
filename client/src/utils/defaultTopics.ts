@@ -1,6 +1,8 @@
 /* The default topics every account has. The browser seeds any that are
    missing (encrypted — the server can't, since topic names are sealed).
-   Singular/plural tolerant: a user's "Recipes" counts as "Recipe". */
+   Singular/plural tolerant: a user's "Recipes" counts as "Recipe".
+   Books, Music and TV/Movies are no longer defaults — Media replaced them
+   (Settings → Data moves them in and deletes them), so a deleted one stays gone. */
 
 export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Task', icon: 'circle-check', color: '#3B82F6' },
@@ -16,9 +18,6 @@ export const DEFAULT_TOPICS: { name: string; icon: string; color: string }[] = [
   { name: 'Exercise Routine', icon: 'person-running', color: '#EF4444' },
   { name: 'Training Plan', icon: 'mountain', color: '#10B981' },
   { name: 'Symptom', icon: 'flask', color: '#EF4444' },
-  { name: 'Music', icon: 'music', color: '#EC4899' },
-  { name: 'Books', icon: 'book', color: '#8B5CF6' },
-  { name: 'TV/Movies', icon: 'film', color: '#F59E0B' },
   { name: 'Media', icon: 'media', color: '#EC4899' },
   { name: 'Quote', icon: 'quote-left', color: '#6366F1' },
   { name: 'Allergy', icon: 'triangle-exclamation', color: '#F97316' },

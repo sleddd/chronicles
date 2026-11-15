@@ -87,7 +87,7 @@ const AddLink = styled.button`
 `;
 
 /* "Currently taking": title + note on the left, switch on the right */
-const StatusCard = styled.div`
+const StatusCard = styled.div.attrs({ className: 'card-row' })`
   display: flex;
   align-items: center;
   justify-content: space-between;

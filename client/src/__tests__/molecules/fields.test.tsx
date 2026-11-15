@@ -167,22 +167,22 @@ describe('SymptomFields', () => {
   it('renders the severity scale, When (date, time, lasted) and Notes', () => {
     renderWithTheme(<SymptomFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getAllByText('Severity').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('radio')).toHaveLength(10);
+    expect(screen.getByRole('slider', { name: 'Severity' })).toBeInTheDocument();
     expect(screen.getByText('When')).toBeInTheDocument();
     expect(screen.getByLabelText('Lasted (minutes)')).toBeInTheDocument();
     expect(screen.getByLabelText('Notes')).toBeInTheDocument();
   });
 
-  it('shows the level as a figure with its word, and marks the chosen tile', () => {
+  it('shows the level with its word, and the slider at it', () => {
     renderWithTheme(<SymptomFields values={defaultValues} onChange={() => {}} />);
-    expect(screen.getByText('/ 10 · Moderate')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Severity 5' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('5 · Moderate')).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Severity' })).toHaveValue('5');
   });
 
-  it('sets the severity when a tile is tapped', () => {
+  it('sets the severity when the slider moves', () => {
     const onChange = vi.fn();
     renderWithTheme(<SymptomFields values={defaultValues} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Severity 8' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Severity' }), { target: { value: '8' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ severity: 8 }));
   });
 
@@ -508,7 +508,7 @@ describe('TaskFields', () => {
     renderWithTheme(<TaskFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByPlaceholderText('What needs doing?')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'None' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: 'To do' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Planned' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('Deadline')).toBeInTheDocument();
     expect(screen.getByLabelText('Auto-migrate')).toBeInTheDocument();
   });

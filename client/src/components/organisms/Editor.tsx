@@ -66,7 +66,8 @@ strong { font-weight: 700; }
 /* The formatting bar stays at the top while a long entry scrolls under it,
    so it's still in reach at the bottom. It needs a solid background — the
    surface it sits on (--editor-surface, set by the form; the page otherwise) */
-const ToolbarRow = styled.div<{ $collapsed: boolean }>`
+/** Exported so the dashboard's Quick entry can space it and drop its fill */
+export const ToolbarRow = styled.div<{ $collapsed: boolean }>`
   display: flex;
   align-items: center;
   justify-content: flex-start;

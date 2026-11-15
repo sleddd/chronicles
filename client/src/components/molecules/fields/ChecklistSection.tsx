@@ -64,8 +64,11 @@ const Remove = styled.button`
   &:hover { color: var(--color-danger); }
 `;
 
+/* Right under the label like every other field's box (the head's own 14px);
+   12px of room only once there are items above it */
 const AddBox = styled(BoxInput)`
-  margin-top: 12px;
+  && { margin-top: 0; }
+  ${Item} + && { margin-top: 12px; }
 `;
 
 interface ChecklistSectionProps {

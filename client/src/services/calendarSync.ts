@@ -382,7 +382,8 @@ async function importForeignEvent(
   const syncedHash = await computeSyncHash(payload || remotePayloadOf(event));
   const sync: EntrySyncState = { googleEventId: event.id, calendarId, syncedHash, imported: true };
 
-  const fields: Record<string, unknown> = { ...remoteFields, calendarTitle: summary, _sync: sync };
+  // eventName too: the text's first line is the event's name, and field-first readers see the same
+  const fields: Record<string, unknown> = { ...remoteFields, calendarTitle: summary, eventName: summary, _sync: sync };
   const metadata: Record<string, unknown> = { _taxonomyId: eventTopicId, _customFields: fields };
 
   const encrypted = await deps.encryptNewPost(content, metadata);

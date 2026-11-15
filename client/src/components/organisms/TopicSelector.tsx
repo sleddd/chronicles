@@ -31,7 +31,7 @@ const Trigger = styled.button<{ $filled?: boolean }>`
   border: 1px solid var(--rule, #d4cfc5);
   border-radius: ${({ theme }) => theme.borderRadius.md}px;
   background: transparent;
-  color: ${({ theme }) => theme.colors.text};
+  color: var(--text-primary, ${({ theme }) => theme.colors.text});
   cursor: pointer;
   transition: background 0.15s;
 
@@ -83,7 +83,7 @@ const Dropdown = styled.div`
 
 const SearchWrapper = styled.div`
   padding: 8px;
-  border-bottom: 1px solid var(--border-faint);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-faint) 50%, transparent); /* faded: the rows read as one list */
   position: sticky;
   top: 0;
   background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
@@ -126,7 +126,7 @@ const Item = styled.button<{ $active?: boolean }>`
   color: var(--text-secondary);
   background: ${({ $active }) => $active ? 'rgba(0,0,0,0.04)' : 'transparent'};
   border: none;
-  border-bottom: 1px solid var(--border-faint);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-faint) 50%, transparent);
   cursor: pointer;
   transition: background 0.1s;
 
@@ -159,6 +159,8 @@ interface TopicSelectorProps {
   /** The extra chosen, shown on the trigger in place of the topic */
   selectedExtra?: string | null;
   onSelectExtra?: (key: string) => void;
+  /** The trigger's words for the chosen topic (the Quick entry: "a journal entry") */
+  label?: (name: string) => string;
 }
 
 type PickerTopic = { id: number | null; name: string; icon: string | null; extra?: string };
@@ -167,7 +169,7 @@ const isJournal = (t: { name: string }) => t.name.toLowerCase() === 'journal';
 /** Topic picker. There is no "No topic": an entry without one is saved under
  *  Journal, so null shows — and is listed — as Journal (even before the
  *  Journal topic exists; picking it then keeps null). Always A–Z. */
-export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false, extras = [], selectedExtra = null, onSelectExtra }: TopicSelectorProps) {
+export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false, extras = [], selectedExtra = null, onSelectExtra, label }: TopicSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -204,10 +206,10 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
         {selected ? (
           <>
             {!hideIcon && <TopicIcon $color={accentColor}><TopicGlyph name={selected.icon} size={17} /></TopicIcon>}
-            {selected.name}
+            {label ? label(selected.name) : selected.name}
           </>
         ) : (
-          <Placeholder>Journal</Placeholder>
+          <Placeholder>{label ? label('Journal') : 'Journal'}</Placeholder>
         )}
         <ChevronIcon $open={open}>
           <FontAwesomeIcon icon={faChevronDown} />

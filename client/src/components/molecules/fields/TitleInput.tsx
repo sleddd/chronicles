@@ -9,7 +9,8 @@ import styled from 'styled-components';
    sized to its content, Enter never adds a line break (pasted line breaks
    become spaces). Props only. */
 
-const Field = styled.div`
+/** Exported so the Quick entry can outline it all round */
+export const TitleField = styled.div`
   display: flex;
   flex-direction: column;
   padding-bottom: 20px;
@@ -77,9 +78,9 @@ export function TitleInput({ value, onChange, onKeyDown, label, hideLabel: _hide
 
   return (
     // style / className place the whole field (its spacing), never the text box inside
-    <Field style={style} className={className}>
+    <TitleField style={style} className={className}>
       <Area ref={ref} id={fieldId} rows={1} value={value} onChange={change} onKeyDown={keyDown}
         aria-label={label ?? ariaLabel ?? 'Title'} placeholder={placeholder ?? label ?? ariaLabel} {...rest} />
-    </Field>
+    </TitleField>
   );
 }

@@ -42,7 +42,7 @@ const PRIORITIES: { value: TaskFieldValues['priority']; label: string }[] = [
 
 const STATUSES: { value: TaskStatus; label: string }[] = [
   { value: 'backlog', label: 'Idea / Backlog' },
-  { value: 'todo', label: 'To do' },
+  { value: 'todo', label: 'Planned' },
   { value: 'in_progress', label: 'In progress' },
   { value: 'done', label: 'Completed' },
 ];
@@ -66,6 +66,28 @@ const MigrateRow = styled.div`
   color: var(--text-soft);
 `;
 
+/* Deadline | Planned for: two halves of one row, a rule between; stacked on phones */
+const DateRow = styled(LabelledRow).attrs({ className: 'card-split' })`
+  && { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; padding: 0; }
+  @media (max-width: 560px) { && { grid-template-columns: minmax(0, 1fr); } }
+`;
+
+const DateHalf = styled.div`
+  display: grid;
+  /* The first half keeps the rows' 150px label column, so its date lines up with the chips above and below */
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 10px 18px;
+  & > input { min-width: 0 !important; }
+  & + & { grid-template-columns: auto minmax(0, 1fr); gap: 16px; border-left: 1px solid var(--border-card); }
+  @media (max-width: 560px) {
+    && { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 16px; }
+    & + & { border-left: none; border-top: 1px solid var(--border-card); }
+  }
+`;
 interface TaskFieldsProps {
   values: TaskFieldValues;
   onChange: (values: TaskFieldValues) => void;
@@ -130,6 +152,12 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
         />
       </Section>
 
+      {/* A to-do list's items first, above the task's row box */}
+      {isList && (
+        <ChecklistSection label="Todo List" noun="to-do" style={{ marginTop: 30 }}
+          items={checklistOf(values as unknown as Record<string, unknown>)} onChange={checklist => set({ checklist })} />
+      )}
+
       <RowBox style={{ marginTop: 30 }}>
         <LabelledRow>
           <RowLabel>Format</RowLabel>
@@ -171,6 +199,19 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
               <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
             </BareSelect>
           </PartOf>
+        </LabelledRow>
+
+        <LabelledRow>
+          <RowLabel>Status</RowLabel>
+          <Chips role="radiogroup" aria-label="Status">
+            {STATUSES.map(s => (
+              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
+                $active={status === s.value}
+                onClick={() => set(taskFieldsForStatus(s.value))}>
+                {s.label}
+              </Chip>
+            ))}
+          </Chips>
         </LabelledRow>
 
         <LabelledRow>
@@ -218,11 +259,18 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
           )}
         </LabelledRow>
 
-        <LabelledRow>
-          <RowLabel as="label" htmlFor={scheduledId}>Planned for</RowLabel>
-          <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
-            onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value ? {} : { scheduledPart: '' }) })} />
-        </LabelledRow>
+        {/* Deadline | Planned for on one line, a rule between them */}
+        <DateRow>
+          <DateHalf>
+            <RowLabel as="label" htmlFor={deadlineId}>Deadline</RowLabel>
+            <BareDate id={deadlineId} type="date" value={values.deadline} onChange={e => set({ deadline: e.target.value })} />
+          </DateHalf>
+          <DateHalf>
+            <RowLabel as="label" htmlFor={scheduledId}>Planned for</RowLabel>
+            <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
+              onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value ? {} : { scheduledPart: '' }) })} />
+          </DateHalf>
+        </DateRow>
 
         {values.scheduledDate && (
           <LabelledRow>
@@ -243,24 +291,6 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
         )}
 
         <LabelledRow>
-          <RowLabel as="label" htmlFor={deadlineId}>Deadline</RowLabel>
-          <BareDate id={deadlineId} type="date" value={values.deadline} onChange={e => set({ deadline: e.target.value })} />
-        </LabelledRow>
-
-        <LabelledRow>
-          <RowLabel>Status</RowLabel>
-          <Chips role="radiogroup" aria-label="Status">
-            {STATUSES.map(s => (
-              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
-                $active={status === s.value}
-                onClick={() => set(taskFieldsForStatus(s.value))}>
-                {s.label}
-              </Chip>
-            ))}
-          </Chips>
-        </LabelledRow>
-
-        <LabelledRow>
           <RowLabel>Auto-migrate</RowLabel>
           <MigrateRow>
             Move to tomorrow if unfinished
@@ -268,11 +298,6 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
           </MigrateRow>
         </LabelledRow>
       </RowBox>
-
-      {isList && (
-        <ChecklistSection label="To-dos" noun="to-do" style={{ marginTop: 30 }}
-          items={checklistOf(values as unknown as Record<string, unknown>)} onChange={checklist => set({ checklist })} />
-      )}
 
       <Section style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>

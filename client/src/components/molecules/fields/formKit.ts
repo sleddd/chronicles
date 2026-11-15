@@ -40,22 +40,24 @@ export { TitleInput } from './TitleInput.js';
 export const Chips = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 14px 12px;
 `;
 
-/* Outline chip: chosen = accent outline + soft-accent text, never a fill */
+/* Outline chip; the chosen one a solid accent fill with --on-accent text
+   (white, or near-black on a very light accent) */
 export const Chip = styled.button<{ $active: boolean }>`
   height: 32px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-pill, var(--border-card))')};
-  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'var(--bg-control, transparent)')};
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-pill, var(--border-card))')};
+  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')};
+  color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-soft)')};
   cursor: pointer;
-  transition: border-color 120ms, color 120ms;
-  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
+  transition: border-color 120ms, color 120ms, background 120ms;
+  &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-hover, var(--color-accent))' : 'var(--control-border)')}; }
+  ${({ $active }) => ($active ? '&:hover { background: var(--color-accent-hover, var(--color-accent)); }' : '')}
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -75,14 +77,15 @@ export const Segments = styled.div`
 export const Segment = styled.button<{ $active: boolean }>`
   height: 30px;
   padding: 0 14px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'transparent')};
+  /* The chosen segment: a solid accent fill with --on-accent text, like the chosen chips */
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
   border-radius: 7px;
-  background: transparent;
+  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 14px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+  color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-muted)')};
   cursor: pointer;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-soft)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -229,7 +232,10 @@ export const BoxInput = styled.input`
   /* Beats GlobalStyle's input:not(…×4) { border: none !important } — that
      selector outranks two classes, so the outline needs five */
   &&&&& { border: 1px solid var(--border-card) !important; }
-  &&&&&:focus { border-color: var(--color-accent) !important; }
+  /* The whole border on focus, not just its colour: GlobalStyle's input:focus
+     { border: none !important } outranks the five-class rule above, and would
+     leave no border at all */
+  &&&&&:focus { border: 1px solid var(--color-accent) !important; }
   &::placeholder { color: var(--text-hint); }
 `;
 

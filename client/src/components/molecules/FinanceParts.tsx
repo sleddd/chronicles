@@ -884,3 +884,59 @@ export const FoldHeading = styled.button`
   small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
 `;
 
+
+/* ── The entry card's rows (the Quick entry's Bill and Spending forms) ──
+   Laid out like every topic's fields in the entry card: a small tracked-
+   capitals label in a 200px left column, the field on the right, hairlines
+   edge to edge, and a tinted foot band. Props only. */
+export const CardRows = styled.div`
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+`;
+
+export const CardRow = styled.div`
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: center;
+  min-height: 68px;
+  padding: 14px 36px;
+  border-top: 1px solid var(--border-subtle);
+  &:first-child { border-top: none; }
+  & > :not(:first-child) { min-width: 0; }
+  @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); row-gap: 10px; padding: 16px 20px; }
+`;
+
+export const CardRowLabel = styled.label`
+  align-self: start;
+  padding-top: 13px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  @media (max-width: 640px) { padding-top: 0; }
+`;
+
+/* The field side when it holds more than one thing (a box and a note under it) */
+export const CardRowField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+`;
+
+export const CardFootBand = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 24px 14px 36px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-app);
+  & > :last-child { margin-left: auto; }
+  @media (max-width: 640px) { padding: 12px 20px; }
+`;

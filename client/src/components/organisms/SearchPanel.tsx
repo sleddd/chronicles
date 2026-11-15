@@ -29,7 +29,7 @@ const Field = styled.label`
   gap: 4px;
   min-width: 0;
 
-  /* Filled DS box (GlobalStyle flattens inputs to transparent) */
+  /* Outlined, no fill (GlobalStyle strips input borders, hence !important) */
   input, select {
     width: 100%;
     min-height: 38px;
@@ -37,7 +37,8 @@ const Field = styled.label`
     font-family: var(--font-sans);
     font-size: 14px;
     color: var(--text-primary);
-    background-color: var(--bg-sunken) !important;
+    background-color: transparent !important;
+    border: 1px solid var(--border-card) !important;
     border-radius: 4px; /* just a little round */
   }
   select {
@@ -48,7 +49,7 @@ const Field = styled.label`
     background-repeat: no-repeat;
     background-position: right 10px center;
   }
-  input:focus, select:focus { outline: 1px solid var(--color-accent) !important; outline-offset: -1px; }
+  input:focus, select:focus { outline: none !important; border-color: var(--color-accent) !important; }
 `;
 
 const FieldLabel = styled.span`
@@ -101,11 +102,11 @@ export function SearchPanel() {
       <DateRow>
         <Field>
           <FieldLabel>From</FieldLabel>
-          <DateInput value={searchDateFrom} onChange={e => setSearchDateFrom(e.target.value)} />
+          <DateInput data-underline value={searchDateFrom} onChange={e => setSearchDateFrom(e.target.value)} />
         </Field>
         <Field>
           <FieldLabel>To</FieldLabel>
-          <DateInput value={searchDateTo} onChange={e => setSearchDateTo(e.target.value)} />
+          <DateInput data-underline value={searchDateTo} onChange={e => setSearchDateTo(e.target.value)} />
         </Field>
       </DateRow>
       {hasFilters && (

@@ -317,6 +317,11 @@ export async function seedTestData(deps: SeedDeps): Promise<string> {
     count += await seedPriorities(deps);
 
     onProgress?.('Creating entertainment entries...');
+    // The old topics Media replaced (no longer defaults): made here so their entries
+    // can be moved in with Settings → Data → Move Books, Music and TV/Movies into Media
+    await ensureTopic(deps, 'Music', 'music');
+    await ensureTopic(deps, 'Books', 'book');
+    await ensureTopic(deps, 'TV/Movies', 'film');
 
     // Music
     await createEntry(deps, 'Discovered Khruangbin — incredible blend of funk, soul, and psychedelic. "Time (You and I)" on repeat', 'Music', {}); count++;

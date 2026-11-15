@@ -8,8 +8,7 @@ import type { UserFieldDef } from '../../types/userFields.js';
 
 /* Topic editor: an outlined icon tile (tap to pick an icon) beside the name as
    a big thin title; "Custom fields" — one outlined box of rows (name typed in
-   place, a type pill, ×) ending in "+ Add field"; a "Hide main text field"
-   card with a switch; Close + Save topic. Props only. */
+   place, a type pill, ×) ending in "+ Add field"; Close + Save topic. Props only. */
 
 const Wrap = styled.div`
   display: flex;
@@ -257,8 +256,6 @@ interface TopicEditFormProps {
   fieldDefs?: UserFieldDef[];
   onFieldDefsChange?: (defs: UserFieldDef[]) => void;
   // Entry editor option: hide the main text area for this topic's entries
-  hideTextField?: boolean;
-  onHideTextFieldChange?: (hide: boolean) => void;
   /** Delete the topic (asks once, inline). Left out → no Delete button */
   onDelete?: () => void;
 }
@@ -267,7 +264,7 @@ export function TopicEditForm({
   name, icon, saving, saveLabel = 'Save topic', cancelLabel = 'Cancel',
   onNameChange, onIconChange, onSave, onCancel, onKeyDown,
   topicId, fieldDefs = [], onFieldDefsChange,
-  hideTextField = false, onHideTextFieldChange, onDelete,
+  onDelete,
 }: TopicEditFormProps) {
   const [picking, setPicking] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -362,16 +359,6 @@ export function TopicEditForm({
             <AddField type="button" disabled={adding && !newLabel.trim()} onClick={addAnother}>+ Add field</AddField>
           </Box>
         </>
-      )}
-
-      {topicId !== undefined && onHideTextFieldChange && (
-        <OptionCard>
-          <div>
-            <strong className="opt-title">Hide main text field</strong>
-            <span className="opt-note">Entries use custom fields; notes can be expanded</span>
-          </div>
-          <Toggle checked={hideTextField} aria-label="Hide main text field" onChange={onHideTextFieldChange} />
-        </OptionCard>
       )}
 
       {onDelete && confirmDelete && (

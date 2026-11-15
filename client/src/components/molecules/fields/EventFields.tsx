@@ -247,7 +247,7 @@ const UNIT_WORDS: Record<Exclude<RepeatKind, ''>, [string, string]> = {
 };
 
 /* "Sync to calendar" card: title + note on the left, switch on the right */
-const SyncCard = styled.div`
+const SyncCard = styled.div.attrs({ className: 'card-row' })`
   display: flex;
   align-items: center;
   justify-content: space-between;

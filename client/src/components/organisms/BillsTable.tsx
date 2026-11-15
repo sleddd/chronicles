@@ -6,6 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
 import { FormField } from '../molecules/FormField.js';
 import { Toggle } from '../atoms/Toggle.js';
 import { JoinedGroup, JoinedBtn } from '../molecules/fields/formKit.js';
+import { CardRows, CardRow, CardRowLabel, CardRowField, CardFootBand } from '../molecules/FinanceParts.js';
 import {
   Actions, ErrorNote, RowMenu, type RowMenuItem,
   SheetHead, SheetHeading, SheetBox, SHEET_RULE, Seg, SegBtn, RowBtn, DueBadge, PickerPill,
@@ -349,9 +350,13 @@ function draftFrom(b?: Bill): Draft {
 
 const NEW_CATEGORY = '__new__';
 
-export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory, framed }: {
+export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory, framed, noHeading, card }: {
   /** In its own panel (editing a row inside the bills table) */
   framed?: boolean;
+  /** No "New bill" heading (the Quick entry, whose question already says what it is) */
+  noHeading?: boolean;
+  /** The entry card's layout (the Quick entry): label-left rows and a foot band */
+  card?: boolean;
   bill?: BillRecord;
   categories: FinanceRecord<'budget'>[];
   onAddCategory?: (name: string) => Promise<string | null>;
@@ -403,11 +408,103 @@ export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory, 
   const cents = parseMoney(d.amount) ?? 0;
   const summary = billSummaryLine({ amountCents: cents, frequency: d.frequency, dueDate: d.dueDate, autopay: d.autopay }, todayStr());
 
+  // The entry card's layout: a row per field (label on the left), then the foot band
+  const categoryControl = newCat !== null ? (
+    <NewCatRow>
+      <input id={`bill-cat-${uid}`} autoFocus value={newCat} placeholder="New category name" aria-label="New category name"
+        onChange={e => setNewCat(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); void addCategory(); }
+          if (e.key === 'Escape') { e.preventDefault(); setNewCat(null); }
+        }} />
+      <PillButton type="button" disabled={!newCat.trim() || addingCat} onClick={() => void addCategory()}>Add</PillButton>
+      <PillButton type="button" $variant="neutral" onClick={() => setNewCat(null)}>Cancel</PillButton>
+    </NewCatRow>
+  ) : (
+    <select id={`bill-cat-${uid}`} value={d.categoryId}
+      onChange={e => (e.target.value === NEW_CATEGORY ? setNewCat('') : set({ categoryId: e.target.value }))}>
+      <option value="">No category</option>
+      {categories.filter(c => !c.archived || c.id === d.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      {onAddCategory && <option value={NEW_CATEGORY}>+ New category…</option>}
+    </select>
+  );
+  if (card) return (
+    <form onSubmit={e => void submit(e)}>
+      <CardRows>
+        <CardRow>
+          <CardRowLabel as="span" id={`bill-kind-${uid}`}>Type</CardRowLabel>
+          <JoinedGroup role="radiogroup" aria-labelledby={`bill-kind-${uid}`} style={{ justifySelf: 'start' }}>
+            {KINDS.map(k => (
+              <JoinedBtn key={k.value} type="button" role="radio" aria-checked={d.kind === k.value} $active={d.kind === k.value} $fill
+                onClick={() => set({ kind: k.value })}>{k.label}</JoinedBtn>
+            ))}
+          </JoinedGroup>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor={`bill-name-${uid}`}>Name</CardRowLabel>
+          <input id={`bill-name-${uid}`} value={d.name} onChange={e => set({ name: e.target.value })} placeholder="Rent, Netflix, phone…" />
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor={`bill-amount-${uid}`}>Amount</CardRowLabel>
+          <Money>
+            <span aria-hidden="true">$</span>
+            <input id={`bill-amount-${uid}`} inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" />
+          </Money>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor={`bill-freq-${uid}`}>How often</CardRowLabel>
+          <select id={`bill-freq-${uid}`} value={d.frequency} onChange={e => set({ frequency: e.target.value as Bill['frequency'] })}>
+            {BILL_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor={`bill-due-${uid}`}>{d.frequency === 'once' || bill ? 'Due date' : 'Next due'}</CardRowLabel>
+          <CardRowField>
+            <input id={`bill-due-${uid}`} type="date" value={d.dueDate} onChange={e => set({ dueDate: e.target.value })} />
+            {d.dueDate && <FieldHint>{billRepeatNote(d.frequency, d.dueDate)}</FieldHint>}
+          </CardRowField>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor={`bill-cat-${uid}`}>Category</CardRowLabel>
+          {categoryControl}
+        </CardRow>
+        <CardRow>
+          <CardRowLabel as="span" id={`bill-auto-${uid}`}>Autopay</CardRowLabel>
+          <SettingRow style={{ padding: 0 }}>
+            <SettingNote style={{ marginTop: 0 }}>Your bank pays it on the due date. Mark it paid when it goes through.</SettingNote>
+            <Toggle checked={d.autopay} aria-labelledby={`bill-auto-${uid}`} onChange={v => set({ autopay: v })} />
+          </SettingRow>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel as="span" id={`bill-status-${uid}`}>Status</CardRowLabel>
+          <JoinedGroup role="radiogroup" aria-labelledby={`bill-status-${uid}`} style={{ justifySelf: 'start' }}>
+            {BILL_STATUSES.map(st => (
+              <JoinedBtn key={st.value} type="button" role="radio" aria-checked={d.status === st.value} $active={d.status === st.value} $fill
+                onClick={() => set({ status: st.value })}>{st.label}</JoinedBtn>
+            ))}
+          </JoinedGroup>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor={`bill-notes-${uid}`}>Notes</CardRowLabel>
+          <textarea id={`bill-notes-${uid}`} rows={3} value={d.notes} onChange={e => set({ notes: e.target.value })} placeholder="Last 4 of the account, how to cancel…" />
+        </CardRow>
+        {error && <CardRow><span /><ErrorNote>{error}</ErrorNote></CardRow>}
+      </CardRows>
+      <CardFootBand>
+        <Summary><b>{summary.split(' ')[0]}</b> {summary.slice(summary.indexOf(' ') + 1)}</Summary>
+        <EditorActions>
+          <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>
+          <PillButton type="submit">{bill ? 'Save bill' : <><Icon name="plus" size={15} strokeWidth={2.4} /> Add bill</>}</PillButton>
+        </EditorActions>
+      </CardFootBand>
+    </form>
+  );
+
   return (
     <EditorBox $framed={framed}>
       <form onSubmit={e => void submit(e)}>
         <EditorHead>
-          <SheetHeading as="h3">{bill ? 'Edit bill' : 'New bill'}</SheetHeading>
+          {!noHeading && <SheetHeading as="h3">{bill ? 'Edit bill' : 'New bill'}</SheetHeading>}
           <JoinedGroup role="radiogroup" aria-label="Type">
             {KINDS.map(k => (
               <JoinedBtn key={k.value} type="button" role="radio" aria-checked={d.kind === k.value} $active={d.kind === k.value} $fill

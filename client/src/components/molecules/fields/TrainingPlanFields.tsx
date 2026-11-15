@@ -26,7 +26,7 @@ const Count = styled.span`
   color: var(--text-muted);
 `;
 
-const TemplateCard = styled.div`
+const TemplateCard = styled.div.attrs({ className: 'card-row' })`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -125,7 +125,7 @@ const Sheet = styled.table`
   td.num input { text-align: right; }
 `;
 
-const StatusCard = styled.div`
+const StatusCard = styled.div.attrs({ className: 'card-row' })`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -221,7 +221,7 @@ export function TrainingPlanFields({ values, onChange }: TrainingPlanFieldsProps
                   </Remove>
                 </div>
                 <p className="counts">Counts automatically</p>
-                <Chips style={{ marginTop: 8 }} aria-label={`Activities counted as ${c.name}`}>
+                <Chips style={{ marginTop: 10 }} aria-label={`Activities counted as ${c.name}`}>
                   {EXERCISE_TYPES.map(t => {
                     const on = !!c.exerciseTypes?.includes(t.value);
                     return (

@@ -183,153 +183,90 @@ export function EntryHeroBanner({ image, onFocusChange }: EntryHeroBannerProps) 
   );
 }
 
-/* ── Thumbnail strip ── */
+/* ── Photos under the text (no featured banner) ──
+   One photo shows larger, at its own proportions; two or more sit in one row
+   at the same height, each its natural width (wrapping when there are more).
+   × removes (shown on hover, always on touch; a second tap confirms). */
 
-const StripWrap = styled.div`
+const PhotosWrap = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: var(--s-5, 20px);
-  padding-top: var(--s-4, 16px);
-  border-top: 1px solid var(--border-subtle);
 `;
 
-const ThumbTile = styled.div`
+const PhotoTile = styled.div<{ $one: boolean; $w?: number }>`
   position: relative;
-  width: 96px;
-  height: 96px;
-  border-radius: var(--r-lg, 2px);
+  flex: none;
+  height: ${({ $one }) => ($one ? 'auto' : '110px')};
+  ${({ $one, $w }) => ($one ? 'max-width: min(360px, 100%);' : $w ? `width: ${$w}px;` : 'min-width: 110px;')}
+  border-radius: 10px;
   background: var(--bg-sunken);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  & > img { display: block; width: ${({ $one }) => ($one ? '100%' : 'auto')}; height: ${({ $one }) => ($one ? 'auto' : '100%')}; max-width: 100%; object-fit: cover; cursor: zoom-in; }
 `;
 
-const ThumbImg = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  cursor: pointer;
-`;
-
-const ThumbControls = styled.div`
+const PhotoRemove = styled.button<{ $armed: boolean }>`
   position: absolute;
-  top: 4px;
-  right: 4px;
-  left: 4px;
-  display: flex;
-  justify-content: space-between;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: ${({ $armed }) => ($armed ? 'var(--color-danger, #dc3232)' : '#fff')};
+  cursor: pointer;
   opacity: 0;
   transition: opacity 120ms ease;
-
-  ${ThumbTile}:hover &, ${ThumbTile}:focus-within & { opacity: 1; }
+  ${PhotoTile}:hover &, ${PhotoTile}:focus-within &, &:focus-visible { opacity: 1; }
   @media (hover: none) { opacity: 1; }
 `;
 
-const ThumbBtn = styled.button<{ $active?: boolean; $armed?: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-md, 1px);
-  background: rgba(0, 0, 0, 0.55);
-  color: ${({ $active, $armed }) =>
-    $armed ? 'var(--color-danger, #dc3232)' :
-    $active ? 'var(--color-accent)' : '#fff'};
-  cursor: pointer;
-
-  svg { fill: ${({ $active }) => ($active ? 'currentColor' : 'none')}; }
-`;
-
-function Thumb({
-  image, isFeatured, onSetFeatured, onRemove, onOpen,
-}: {
-  image: EntryImage;
-  isFeatured: boolean;
-  onSetFeatured: (key: string | null) => void;
-  onRemove: (key: string) => void;
-  onOpen: () => void;
-}) {
-  const { url, loading, error } = useDecryptedImage(image.thumbKey, image.thumbIv, image.mimeType);
-  // Two-step armed remove — first tap arms, second removes (no window.confirm)
+function Photo({ image, one, onRemove, onOpen }: { image: EntryImage; one: boolean; onRemove: (key: string) => void; onOpen: () => void }) {
+  // One photo: the full image (it shows larger); a row: the thumbnails
+  const { url, loading, error } = useDecryptedImage(one ? image.key : image.thumbKey, one ? image.iv : image.thumbIv, image.mimeType);
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(false), 3000);
     return () => clearTimeout(timer);
   }, [armed]);
-
+  // In a row, the tile takes the photo's width at 110px tall (no jump as it loads)
+  const w = !one && image.width && image.height ? Math.round((110 * image.width) / image.height) : undefined;
   return (
-    <ThumbTile>
-      {url ? (
-        <ThumbImg src={url} alt="" onClick={onOpen} />
-      ) : loading ? (
-        <Spinner size={16} />
-      ) : error ? (
-        <Icon name="image" size={20} strokeWidth={2} style={{ color: 'var(--text-disabled)' }} />
-      ) : null}
-      <ThumbControls>
-        <ThumbBtn
-          type="button"
-          $active={isFeatured}
-          title={isFeatured ? 'Remove featured image' : 'Set as featured image'}
-          aria-label={isFeatured ? 'Remove featured image' : 'Set as featured image'}
-          onClick={() => onSetFeatured(isFeatured ? null : image.key)}
-        >
-          <Icon name="star" size={13} strokeWidth={2} />
-        </ThumbBtn>
-        <ThumbBtn
-          type="button"
-          $armed={armed}
-          title={armed ? 'Tap again to remove' : 'Remove image'}
-          aria-label={armed ? 'Tap again to remove image' : 'Remove image'}
-          onClick={() => {
-            if (armed) onRemove(image.key);
-            else setArmed(true);
-          }}
-        >
-          <Icon name={armed ? 'trash' : 'x'} size={13} strokeWidth={2.5} />
-        </ThumbBtn>
-      </ThumbControls>
-    </ThumbTile>
+    <PhotoTile $one={one} $w={w} style={one && !url ? { width: 240, height: 160 } : undefined}>
+      {url ? <img src={url} alt="" onClick={onOpen} />
+        : loading ? <Spinner size={16} />
+        : error ? <Icon name="image" size={20} strokeWidth={2} style={{ color: 'var(--text-disabled)' }} /> : null}
+      <PhotoRemove type="button" $armed={armed}
+        title={armed ? 'Tap again to remove' : 'Remove image'} aria-label={armed ? 'Tap again to remove image' : 'Remove image'}
+        onClick={() => (armed ? onRemove(image.key) : setArmed(true))}>
+        <Icon name={armed ? 'trash' : 'x'} size={13} strokeWidth={2.5} />
+      </PhotoRemove>
+    </PhotoTile>
   );
 }
 
-export function EntryImageStrip({
-  images, featuredKey, uploading, onSetFeatured, onRemove, onOpen,
-}: {
+export function EntryPhotos({ images, uploading, onRemove, onOpen }: {
   images: EntryImage[];
-  featuredKey: string | null;
   uploading: boolean;
-  onSetFeatured: (key: string | null) => void;
   onRemove: (key: string) => void;
   onOpen: (index: number) => void;
 }) {
   if (images.length === 0 && !uploading) return null;
+  const one = images.length === 1 && !uploading;
   return (
-    <StripWrap>
-      {images.map((img, i) => (
-        <Thumb
-          key={img.key}
-          image={img}
-          isFeatured={featuredKey === img.key}
-          onSetFeatured={onSetFeatured}
-          onRemove={onRemove}
-          onOpen={() => onOpen(i)}
-        />
-      ))}
-      {uploading && (
-        <ThumbTile aria-label="Uploading image">
-          <Spinner size={18} />
-        </ThumbTile>
-      )}
-    </StripWrap>
+    <PhotosWrap>
+      {images.map((img, i) => <Photo key={img.key} image={img} one={one} onRemove={onRemove} onOpen={() => onOpen(i)} />)}
+      {uploading && <PhotoTile $one={false} aria-label="Uploading image"><Spinner size={18} /></PhotoTile>}
+    </PhotosWrap>
   );
 }
 

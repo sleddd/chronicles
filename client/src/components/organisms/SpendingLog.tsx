@@ -5,6 +5,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
 import {
   Actions, ConfirmDelete, SmallBtn, SheetHead, SheetHeading, SheetBox, SHEET_RULE, FoldHeading,
 } from '../molecules/FinanceParts.js';
+import { CardRows, CardRow, CardRowLabel, CardFootBand } from '../molecules/FinanceParts.js';
 import { centsToInput, formatCents, formatDay, formatMonth, parseMoney, todayStr } from '../../utils/finance.js';
 import type { FinanceExpense, FinanceRecord } from '../../types/finance.js';
 
@@ -134,23 +135,68 @@ const Total = styled(Line)`
   b { margin-left: 6px; font-weight: 500; font-size: 15px; color: var(--text-secondary); }
 `;
 
-export function ExpenseForm({ initial, categories, submitLabel, onSubmit, onCancel }: {
+/* "$" inside the amount box (card layout) */
+const CardMoney = styled.div`
+  position: relative;
+  span { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--text-muted); pointer-events: none; }
+  && input { width: 100%; padding-left: 34px !important; }
+`;
+
+export function ExpenseForm({ initial, categories, submitLabel, onSubmit, onCancel, card }: {
   initial: { date: string; description: string; amount: string; categoryId: string };
   categories: FinanceRecord<'budget'>[];
   submitLabel: string;
   onSubmit: (e: FinanceExpense) => void;
   onCancel?: () => void;
+  /** The entry card's layout (the Quick entry): label-left rows and a foot band */
+  card?: boolean;
 }) {
   const [d, setD] = useState(initial);
   const cents = parseMoney(d.amount);
   const valid = d.description.trim() !== '' && cents !== null && cents > 0 && !!d.date;
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valid || cents === null) return;
+    onSubmit({ date: d.date, description: d.description.trim(), amountCents: cents, categoryId: d.categoryId || undefined });
+    if (!onCancel) setD({ ...d, description: '', amount: '' });
+  };
+  if (card) return (
+    <form onSubmit={submit}>
+      <CardRows>
+        <CardRow>
+          <CardRowLabel htmlFor="spend-what">What</CardRowLabel>
+          <input id="spend-what" value={d.description} onChange={e => setD({ ...d, description: e.target.value })} placeholder="Groceries, gas, takeout…" />
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor="spend-amount">Amount</CardRowLabel>
+          <CardMoney>
+            <span aria-hidden="true">$</span>
+            <input id="spend-amount" inputMode="decimal" value={d.amount} onChange={e => setD({ ...d, amount: e.target.value })} placeholder="0.00" />
+          </CardMoney>
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor="spend-date">Date</CardRowLabel>
+          <input id="spend-date" type="date" value={d.date} onChange={e => setD({ ...d, date: e.target.value })} />
+        </CardRow>
+        <CardRow>
+          <CardRowLabel htmlFor="spend-cat">Category</CardRowLabel>
+          <select id="spend-cat" value={d.categoryId} onChange={e => setD({ ...d, categoryId: e.target.value })}>
+            <option value="">No category</option>
+            {categories.filter(c => !c.archived || c.id === d.categoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </CardRow>
+      </CardRows>
+      <CardFootBand>
+        <span />
+        <Actions>
+          {onCancel && <PillButton type="button" $variant="neutral" onClick={onCancel}>Cancel</PillButton>}
+          <PillButton type="submit" disabled={!valid}>{submitLabel}</PillButton>
+        </Actions>
+      </CardFootBand>
+    </form>
+  );
   return (
-    <AddRow onSubmit={e => {
-      e.preventDefault();
-      if (!valid || cents === null) return;
-      onSubmit({ date: d.date, description: d.description.trim(), amountCents: cents, categoryId: d.categoryId || undefined });
-      if (!onCancel) setD({ ...d, description: '', amount: '' });
-    }}>
+    <AddRow onSubmit={submit}>
       <label><Bare type="date" aria-label="Date" value={d.date} onChange={e => setD({ ...d, date: e.target.value })} /></label>
       <label><Bare aria-label="What" value={d.description} onChange={e => setD({ ...d, description: e.target.value })} placeholder="Groceries, gas, takeout…" /></label>
       <label><Dollar>$</Dollar><Bare aria-label="Amount" inputMode="decimal" value={d.amount} onChange={e => setD({ ...d, amount: e.target.value })} placeholder="0.00" /></label>

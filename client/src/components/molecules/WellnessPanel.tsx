@@ -1,6 +1,7 @@
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { JoinedGroup, JoinedBtn } from './fields/formKit.js';
+import { glassCard } from '../../styles/wallpaper.js';
 
 /* The wellness check-in, one look everywhere (Health dashboard card + the
    journal's Wellness fields): Water and Sleep as tiles — a round icon (tap it
@@ -395,6 +396,48 @@ const Quad = styled.div`
   @container (max-width: 360px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
 `;
 
+/* Strip (home dashboard): Water | Sleep | Mood | Cycle as four equal cells
+   across one lifted card, rules between; under 860px Water | Sleep share a
+   row and Mood, then Cycle, take a row each */
+const StripWrapper = styled(CompactWrapper)`
+  && ${Label} { font-size: 16px; color: var(--text-secondary); }
+  && ${Head} { margin-bottom: 18px; align-items: center; }
+  && ${Meter} > ${Label} { margin-bottom: 16px; }
+  && ${MeterMain} { gap: 14px; }
+  && ${Badge} { width: 38px; height: 38px; & > span { font-size: 21px; } }
+  && ${Fig} { font-size: 40px; font-weight: 300; color: var(--text-primary); }
+  && ${Unit} { font-size: 15px; color: var(--text-muted); }
+  && ${Slider} { margin-top: 18px; }
+  && ${MoodName} { font-size: 15px; font-weight: 600; }
+  && ${Faces} { flex-wrap: nowrap; justify-content: space-between; gap: 6px; }
+  && ${FaceBtn} { width: 38px; height: 38px; & > span { font-size: 46px; } }
+  && ${CycleNote} { font-size: 13px; }
+  && ${Chips} { gap: 10px 8px; }
+  && ${Chip} { height: 34px; padding: 0 16px; font-size: 15px; font-weight: 400; }
+`;
+
+const Strip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--bg-panel);
+  overflow: hidden;
+  ${glassCard}
+  --cell-x: 26px; /* Your day's bar lines up with the cells */
+  & > * {
+    min-width: 0;
+    padding: 26px var(--cell-x) 28px;
+    box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
+  }
+  /* Narrower: Water | Sleep, then Mood and Cycle a row each (Your day stays full width) */
+  @container (max-width: 860px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    & > :nth-child(3), & > :nth-child(4) { grid-column: 1 / -1; }
+  }
+  @container (max-width: 480px) { --cell-x: 22px; & > * { padding: 22px var(--cell-x) 24px; } }
+`;
+
 interface MeterProps {
   label: string;
   icon: string;
@@ -409,18 +452,20 @@ interface MeterProps {
   onChange: (v: number) => void;
   /** A − button beside the figure */
   minus?: boolean;
+  /** No round icon (the strip): the figure and the rule only */
+  noBadge?: boolean;
 }
 
-function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange, minus }: MeterProps) {
+function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange, minus, noBadge }: MeterProps) {
   const pct = Math.min(100, (value / goal) * 100);
   return (
     <Meter>
       <Label>{label}</Label>
       <MeterMain>
-        <Badge type="button" $color={color} aria-label={`Add one ${one}`} title={`Add one ${one}`}
+        {!noBadge && <Badge type="button" $color={color} aria-label={`Add one ${one}`} title={`Add one ${one}`}
           disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>
           <MaterialIcon $size={26}>{icon}</MaterialIcon>
-        </Badge>
+        </Badge>}
         <Figure>
           <Fig aria-label={`${value} ${noun}`}>{value}</Fig>
           <Unit>{unit}</Unit>
@@ -465,24 +510,27 @@ interface WellnessPanelProps {
   smallFaces?: boolean;
   /** One row: Water | Sleep | Mood | Cycle in one outlined box (journal, Quick entry, Health dashboard) */
   row?: boolean;
-  /** A full-width last row inside the box (row and quad layouts) — Your day */
+  /** Strip: Water | Sleep | Mood | Cycle across one lifted card (home dashboard), no icon
+   *  badges; its footer (Your day) as a full-width last row */
+  strip?: boolean;
+  /** A full-width last row inside the box (row, quad and strip layouts) — Your day */
   footer?: React.ReactNode;
 }
 
 
 export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
-  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces, row, footer,
+  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces, row, strip, footer,
 }: WellnessPanelProps) {
   // One colour throughout: the accent (no per-metric blues, violets or mood hues)
   const accent = 'var(--color-accent)';
   const water$ = (
     <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
-      max={WATER_MAX} unit={row ? `/ ${waterGoal}` : `of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} minus={row} />
+      max={WATER_MAX} unit={row ? `/ ${waterGoal}` : `of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} minus={row} noBadge={strip} />
   );
   const sleep$ = (
     <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
-      max={SLEEP_MAX} unit={row ? 'h' : 'hours'} noun="hours of sleep" one="hour of sleep" onChange={onSleep} minus={row} />
+      max={SLEEP_MAX} unit={row ? 'h' : 'hours'} noun="hours of sleep" one="hour of sleep" onChange={onSleep} minus={row} noBadge={strip} />
   );
   const mood$ = (
     <Cell>
@@ -523,6 +571,10 @@ export function WellnessPanel({
       )}
     </Cell>
   );
+
+  if (strip) {
+    return <StripWrapper><Strip>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
+  }
 
   if (row) {
     return <RowWrapper><Row4>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Row4></RowWrapper>;

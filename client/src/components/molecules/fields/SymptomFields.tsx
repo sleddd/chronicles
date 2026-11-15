@@ -23,57 +23,65 @@ const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export { severityWord };
 
-const Readout = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: var(--text-muted);
-`;
-
-const Figure = styled.span`
-  font-family: var(--font-display);
-  font-size: 48px;
-  font-weight: 200;
-  line-height: 0.9;
-  color: var(--text-primary);
-`;
-
-const Scale = styled.div`
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 4px;
-`;
-
-/* Filled tiles are the accent, lightened most at 1 and full strength at 10.
-   Light tints carry dark ink; the deeper ones --on-accent */
-const tint = (level: number) => Math.round(55 * (1 - (level - 1) / 9)); // % white
-const Tile = styled.button<{ $filled: boolean; $level: number }>`
-  height: 40px;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  border-radius: 10px;
-  background: ${({ $filled, $level }) => ($filled
-    ? `color-mix(in oklab, var(--color-accent), white ${tint($level)}%)`
-    : 'var(--bg-today-col)')};
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: ${({ $filled, $level }) => (!$filled ? 'var(--text-muted)' : tint($level) >= 25 ? '#202229' : 'var(--on-accent)')};
-  cursor: pointer;
-  transition: background 120ms, filter 120ms;
-  &:hover { filter: brightness(1.12); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-`;
-
-const ScaleLabels = styled.div`
+/* "5 · Moderate" in the accent, across from the scale's start */
+const Readout = styled.div`
   display: flex;
-  justify-content: space-between;
-  margin-top: 14px;
+  justify-content: flex-end;
+  margin-bottom: 10px;
   font-family: var(--font-sans);
   font-size: 14px;
-  color: var(--text-placeholder);
+  font-weight: 600;
+  color: var(--color-accent-soft);
+`;
+
+const THUMB = 22;
+
+/* A slider: a rounded track filled in the accent up to the level, a round thumb,
+   and the numbers 1–10 under it, each under its stop */
+const Slider = styled.input<{ $pct: number }>`
+  && {
+    display: block;
+    width: 100%;
+    height: ${THUMB}px;
+    margin: 0;
+    padding: 0;
+    border: none !important;
+    background: transparent !important;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+  &::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--color-accent) ${({ $pct }) => $pct}%, var(--border-default) ${({ $pct }) => $pct}%);
+  }
+  &::-moz-range-track { height: 6px; border-radius: 3px; background: var(--border-default); }
+  &::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--color-accent); }
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: ${THUMB}px;
+    height: ${THUMB}px;
+    margin-top: ${(6 - THUMB) / 2}px;
+    border: 2px solid var(--text-secondary);
+    border-radius: 50%;
+    background: #fff;
+  }
+  &::-moz-range-thumb { width: ${THUMB - 4}px; height: ${THUMB - 4}px; border: 2px solid var(--text-secondary); border-radius: 50%; background: #fff; }
+  &:focus-visible { outline: none; }
+  &:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--color-accent-subtle), 0 0 0 1px var(--color-accent); }
+`;
+
+/* The stops' numbers, each centred under where the thumb sits for it */
+const Ticks = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 0 ${THUMB / 2 - 4}px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  span { width: 8px; text-align: center; }
 `;
 
 /* date | time | lasted */
@@ -102,27 +110,19 @@ const LastedInput = styled(DateTimeField)`
   &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 `;
 
-/* The 1–10 severity scale section — shared by Symptom and Allergy fields */
+/* The 1–10 severity slider — shared by Symptom and Allergy fields */
 export function SeveritySection({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   const level = Math.min(10, Math.max(1, Number(value) || 1));
   return (
     <Section aria-label="Severity">
-      <SectionHead>
-        <SectionLabel>Severity</SectionLabel>
-        <Readout aria-live="polite">
-          <Figure>{level}</Figure>
-          <span>/ 10 · {severityWord(level)}</span>
-        </Readout>
-      </SectionHead>
-      <Scale role="radiogroup" aria-label="Severity">
-        {LEVELS.map(n => (
-          <Tile key={n} type="button" role="radio" aria-checked={n === level} aria-label={`Severity ${n}`}
-            $filled={n <= level} $level={n} onClick={() => onChange(n)}>
-            {n}
-          </Tile>
-        ))}
-      </Scale>
-      <ScaleLabels aria-hidden="true"><span>Mild</span><span>Moderate</span><span>Severe</span></ScaleLabels>
+      <SectionHead><SectionLabel as="label" htmlFor="severity-slider">Severity</SectionLabel></SectionHead>
+      <div>
+        <Readout aria-hidden="true">{level} · {severityWord(level)}</Readout>
+        <Slider id="severity-slider" type="range" min={1} max={10} step={1} value={level}
+          $pct={((level - 1) / 9) * 100} aria-valuetext={`${level} out of 10, ${severityWord(level)}`}
+          onChange={e => onChange(Number(e.target.value))} />
+        <Ticks aria-hidden="true">{LEVELS.map(n => <span key={n}>{n}</span>)}</Ticks>
+      </div>
     </Section>
   );
 }

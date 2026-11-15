@@ -207,7 +207,6 @@ export function TopicDetailView() {
   // Inline topic editor (same as the Topics list's)
   const setTopics = useEntriesStore(s => s.setTopics);
   const updateTopicFields = useUIStore(s => s.updateTopicFields);
-  const topicHideText = useUIStore(s => s.topicHideText);
   const { savePrivateSetting } = usePrivateSettings();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -235,13 +234,6 @@ export function TopicDetailView() {
     savePrivateSetting('topicCustomFields', { ...useUIStore.getState().topicCustomFields, [topic.id]: defs })
       .catch(err => console.error('Failed to save topic fields:', err));
   };
-  const changeHideText = (hide: boolean) => {
-    if (!topic) return;
-    useUIStore.getState().updateTopicHideText(topic.id, hide);
-    savePrivateSetting('topicHideText', useUIStore.getState().topicHideText)
-      .catch(err => console.error('Failed to save topic option:', err));
-  };
-
   if (needsUnlock) return (
     <>
       <ContentTemplate><EmptyState message="Unlock your journal to view this topic" /></ContentTemplate>
@@ -287,8 +279,6 @@ export function TopicDetailView() {
               topicId={topic.id}
               fieldDefs={fieldDefs}
               onFieldDefsChange={changeFields}
-              hideTextField={!!topicHideText[topic.id]}
-              onHideTextFieldChange={changeHideText}
               onDelete={() => void deleteTopic()}
             />
           </EditBox>

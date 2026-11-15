@@ -133,7 +133,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--border-faint':      '#e6e8ec', /* the lightest hairline (topic picker) */
   '--border-pill':       '#80868f',  /* pills, ± buttons, round controls (light only) */
   '--progress-track':    '#d3d7dd',  /* empty part of a progress rule */
-  '--bg-control':        '#fefefe',  /* pills, the topic picker, ± buttons (light only) */
+  '--bg-control':        'transparent',  /* pills, chips, the topic picker, ± buttons: outlines only — never a fill */
   '--bg-tracker':        '#fbfbfc',  /* the wellness four-square card (light only) */
   '--border-default':    '#bfc4cc',
   '--border-strong':     '#a9afb8',
@@ -572,8 +572,8 @@ export function App() {
     // Progress-rule fills: the accent in dark; a touch deeper in light (Teal → ~#2c8b88, 4.1:1)
     root.style.setProperty('--color-accent-fill',   isDark ? color : deriveDarker(color, 0.84));
     // Chosen pill / mood behind its accent text — light only (Teal → ~#daefee); unset in dark
-    if (isDark) root.style.removeProperty('--bg-selected');
-    else root.style.setProperty('--bg-selected', mix(color, 255, 0.82));
+    // Chosen chips are an accent outline and text only — never a tinted fill, in either theme
+    root.style.removeProperty('--bg-selected');
     root.style.setProperty('--on-accent', onAccent);
     // Lighter accent shades for text on dark (links, today's label); deeper in light
     root.style.setProperty('--color-accent-link', isDark ? mix(color, 255, 0.24) : deriveDarker(color, 0.68));

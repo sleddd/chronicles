@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { EntryForm } from './EntryForm.js';
+import { QUICK_PLACEHOLDER } from '../../utils/quickPlaceholder.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { entries as entriesApi } from '../../services/api.js';
 import { getOrCreateJournalTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { hasEntryData, prepareEntryForSave } from '../../utils/entrySave.js';
-import { nextReflectivePrompt } from '../../utils/journalPrompts.js';
 import { useTimeStore } from '../../stores/timeStore.js';
 import { startTimer } from '../../utils/timeTracking.js';
 import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from './QuickFinance.js';
@@ -33,8 +33,6 @@ export function QuickEntry() {
   // both still see isSaving false and create the entry twice
   const savingRef = useRef(false);
   const [status, setStatus] = useState('');
-  // The next reflective prompt each time the dashboard opens (utils/journalPrompts)
-  const [prompt] = useState(nextReflectivePrompt);
 
   const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); };
 
@@ -102,7 +100,7 @@ export function QuickEntry() {
       isEditing={false}
       isSaving={isSaving}
       saveStatus={status}
-      placeholder={prompt}
+      placeholder={QUICK_PLACEHOLDER}
     />
   );
 }

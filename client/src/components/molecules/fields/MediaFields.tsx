@@ -214,7 +214,8 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
         </Chips>
       </Section>
 
-      <Section style={{ marginTop: 30 }}>
+      <Section style={{ marginTop: 30 }} aria-label="Details">
+        <SectionHead><SectionLabel>Details</SectionLabel></SectionHead>
         <Details>
           <CoverCol>
             <CoverBox aria-label={chosenUrl ? 'Cover' : 'No cover yet'}>

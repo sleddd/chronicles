@@ -1,14 +1,13 @@
 import styled from 'styled-components';
-import { glassBar, solidUnderPhoto } from '../../styles/wallpaper.js';
-import { memo, useMemo, useCallback, useState } from 'react';
+import { solidUnderPhoto } from '../../styles/wallpaper.js';
+import { memo, useMemo, useCallback, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { EntryCard } from './EntryCard.js';
 import { Checkbox } from '../atoms/Checkbox.js';
+import { useJournalSelect } from '../../stores/journalSelectStore.js';
 import { entries as entriesApi } from '../../services/api.js';
-import { removeEntriesLocally } from '../../services/calendarSync.js';
 import { collectImageKeys, bestEffortDeleteImages } from '../../services/imageStorage.js';
-import { filterDeletableImageKeys } from '../../utils/entryActions.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 
 const TOPIC_TO_TYPE: Record<string, string> = {
@@ -60,49 +59,6 @@ const EmptyState = styled.div`
   padding: var(--s-7, 32px);
   color: var(--text-secondary);
   font-size: var(--text-sm, 15px);
-`;
-
-const BulkBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--border-subtle, ${({ theme }) => theme.colors.border});
-  font-family: var(--font-label);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  ${glassBar}
-`;
-
-const BulkButton = styled.button<{ $danger?: boolean }>`
-  padding: 3px 10px;
-  font-family: var(--font-label);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ $danger }) => ($danger ? 'var(--color-danger, #c0392b)' : 'var(--text-secondary)')};
-  background: transparent;
-  border: 1px solid var(--border-default, ${({ theme }) => theme.colors.border});
-  border-radius: 4px; /* just a little round, like the search fields */
-  cursor: pointer;
-  &:hover { background: var(--bg-hover); }
-  &:disabled { opacity: 0.5; cursor: default; }
-`;
-
-const BulkSpacer = styled.span`
-  margin-left: auto;
-`;
-
-/* Label across from the Select button — same type as the button text. */
-const BulkLabel = styled.span`
-  font-family: var(--font-label);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
 `;
 
 const SelectRow = styled.div`
@@ -163,30 +119,14 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
   const searchKeyword = useUIStore(s => s.searchKeyword);
   const searchDateFrom = useUIStore(s => s.searchDateFrom);
   const searchDateTo = useUIStore(s => s.searchDateTo);
-  const calendarSyncEnabled = useUIStore(s => s.calendarSyncEnabled);
 
-  // Bulk selection
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [bulkConfirm, setBulkConfirm] = useState(false);
-  const [alsoDeleteRemote, setAlsoDeleteRemote] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-
-  const exitSelectMode = useCallback(() => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-    setBulkConfirm(false);
-    setAlsoDeleteRemote(false);
-  }, []);
-
-  const toggleSelected = useCallback((id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    setBulkConfirm(false);
-  }, []);
+  // Select mode (started from the list head's ⋯ menu, ended there by Done / Delete)
+  const selectMode = useJournalSelect(s => s.selecting);
+  const selectedIds = useJournalSelect(s => s.ids);
+  const toggleSelected = useJournalSelect(s => s.toggle);
+  const stopSelecting = useJournalSelect(s => s.stop);
+  // Leaving the journal ends it
+  useEffect(() => () => stopSelecting(), [stopSelecting]);
 
   const handleTopicClick = useCallback((topicId: number) => {
     setSelectedTopicId(topicId);
@@ -306,96 +246,12 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
   // An open entry in view is the active row — then the first row needs no hint
   const openRowVisible = selectedEntryId != null && filteredEntries.some(e => e.id === selectedEntryId);
 
-  const selectedEntries = useMemo(
-    () => filteredEntries.filter(e => selectedIds.has(e.id)),
-    [filteredEntries, selectedIds],
-  );
-  const selectionHasSyncLinks = useMemo(
-    () => selectedEntries.some(e => !!((e.metadata?._customFields as Record<string, unknown> | undefined)?._sync)),
-    [selectedEntries],
-  );
-
-  const handleBulkDelete = useCallback(async () => {
-    if (selectedEntries.length === 0) return;
-    setBulkDeleting(true);
-    // R2 keys for entries whose delete succeeds — only those objects are removed,
-    // so a failed entry delete never strips images from a surviving entry
-    const cleanupKeys: string[] = [];
-    try {
-      if (alsoDeleteRemote) {
-        // Plain deletes — the sync hook's deletion tracker propagates linked
-        // entries to Google Calendar
-        for (const entry of selectedEntries) {
-          try {
-            const imageKeys = collectImageKeys([entry]);
-            await entriesApi.delete(entry.id);
-            removeEntry(entry.id);
-            cleanupKeys.push(...imageKeys);
-          } catch (err) {
-            console.error('Failed to delete entry:', err);
-          }
-        }
-      } else {
-        // Strip sync links first so nothing is deleted from Google Calendar
-        await removeEntriesLocally(selectedEntries);
-        // Per-entry failures are swallowed above — clean up only entries gone from the store
-        const remaining = new Set(useEntriesStore.getState().decryptedEntries.map(e => e.id));
-        cleanupKeys.push(...collectImageKeys(selectedEntries.filter(e => !remaining.has(e.id))));
-      }
-    } finally {
-      // Skip objects still referenced by surviving entries (library reuse)
-      const deletable = filterDeletableImageKeys(cleanupKeys);
-      if (deletable.length > 0) void bestEffortDeleteImages(deletable);
-      setBulkDeleting(false);
-      exitSelectMode();
-    }
-  }, [selectedEntries, alsoDeleteRemote, removeEntry, exitSelectMode]);
-
   if (filteredEntries.length === 0) {
     return <EmptyState>No entries yet</EmptyState>;
   }
 
   return (
     <ListContainer>
-      <BulkBar>
-        {!selectMode ? (
-          <>
-            <BulkLabel>BULK EDIT</BulkLabel>
-            <BulkSpacer />
-            <BulkButton onClick={() => setSelectMode(true)}>Select</BulkButton>
-          </>
-        ) : (
-          <>
-            <span>{selectedIds.size} selected</span>
-            <BulkButton onClick={() => { setSelectedIds(new Set(filteredEntries.map(e => e.id))); setBulkConfirm(false); }}>
-              Select all
-            </BulkButton>
-            <BulkSpacer />
-            {!bulkConfirm ? (
-              <BulkButton $danger disabled={selectedIds.size === 0 || bulkDeleting} onClick={() => setBulkConfirm(true)}>
-                Delete ({selectedIds.size})
-              </BulkButton>
-            ) : (
-              <>
-                <span style={{ textTransform: 'none', letterSpacing: 0 }}>
-                  Delete {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'}?
-                </span>
-                {calendarSyncEnabled && selectionHasSyncLinks && (
-                  <Checkbox
-                    checked={alsoDeleteRemote}
-                    onChange={setAlsoDeleteRemote}
-                    label="Also delete from Google Calendar"
-                  />
-                )}
-                <BulkButton $danger disabled={bulkDeleting} onClick={handleBulkDelete}>
-                  {bulkDeleting ? 'Deleting…' : 'Confirm delete'}
-                </BulkButton>
-              </>
-            )}
-            <BulkButton disabled={bulkDeleting} onClick={exitSelectMode}>Cancel</BulkButton>
-          </>
-        )}
-      </BulkBar>
       {/* First row carries the active hint only while no (visible) entry is open */}
       {groups.map(([dateKey, groupEntries], groupIndex) => {
         // All: a "Month YYYY" heading wherever the month changes

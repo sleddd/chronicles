@@ -59,10 +59,12 @@ interface ContentTemplateProps {
   hideSidebar?: boolean;
   /** How far down the wallpaper reaches (default: the dashboard's, down behind the top of the content) */
   wallpaperHeight?: string;
+  /** The wallpaper stays solid down to this many px, then fades (the dashboard: its Quick entry's foot) */
+  wallpaperSolid?: number;
 }
 
 /** Full-height template: left sidebar (full height) + main column (header bar + scrollable content). */
-export function ContentTemplate({ children, hideSidebar, wallpaperHeight }: ContentTemplateProps) {
+export function ContentTemplate({ children, hideSidebar, wallpaperHeight, wallpaperSolid }: ContentTemplateProps) {
   /* Same as AppTemplate: hide the mobile chrome while a full-view overlay
      (e.g. dashboard Quick Entry) is open so it can fill the whole viewport. */
   const focusMode = useUIStore(s => s.editorFocusMode);
@@ -74,7 +76,7 @@ export function ContentTemplate({ children, hideSidebar, wallpaperHeight }: Cont
         {!hideSidebar && <div data-print-hide><Sidebar /></div>}
         <MainColumn>
           <div data-print-hide><Header /></div>
-          <Main><Wallpaper height={wallpaperHeight} />{children}</Main>
+          <Main><Wallpaper height={wallpaperHeight} solid={wallpaperSolid} />{children}</Main>
         </MainColumn>
       </Layout>
     </>

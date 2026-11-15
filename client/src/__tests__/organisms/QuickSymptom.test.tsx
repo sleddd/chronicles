@@ -48,7 +48,7 @@ describe('QuickSymptom', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Runny nose' }));
     expect(screen.queryByLabelText('Symptom')).toBeNull(); // no title box, just chips
     expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(screen.getByRole('radio', { name: 'Severity 7' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Severity' }), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'After lunch' } });
     fireEvent.click(screen.getByRole('button', { name: 'Log symptom' }));
 

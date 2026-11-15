@@ -29,6 +29,7 @@ vi.mock('@/services/api', () => ({
 }));
 
 vi.mock('@/components/organisms/Editor', () => ({
+  ToolbarRow: 'div',
   Editor: () => <div data-testid="editor">Editor</div>,
 }));
 

@@ -52,21 +52,6 @@ const BareInput = styled.input`
   &::placeholder { color: var(--text-hint); }
 `;
 
-/* Yes/no: label on the left, switch on the right, in an outlined row */
-const SwitchRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 56px;
-  padding: 0 18px;
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: var(--text-secondary);
-`;
-
 const DateBox = styled(BoxInput)`
   &&&&& { max-width: 260px; color-scheme: light dark; }
 `;
@@ -104,10 +89,8 @@ export function UserFieldsForm({ fieldDefs, values, onChange }: UserFieldsFormPr
         if (f.type === 'boolean') {
           return (
             <Section key={f.id}>
-              <SwitchRow>
-                <span>{label}</span>
-                <Toggle checked={!!val} aria-label={label} onChange={v => set(f.id, v)} />
-              </SwitchRow>
+              <SectionHead><SectionLabel>{label}</SectionLabel></SectionHead>
+              <Toggle checked={!!val} aria-label={label} onChange={v => set(f.id, v)} />
             </Section>
           );
         }

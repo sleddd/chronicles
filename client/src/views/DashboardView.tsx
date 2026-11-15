@@ -28,6 +28,8 @@ import { firstRun, gettingStarted, showChecklist, toggleTicked, type OnboardingS
 import { usePrivateSettings, type PrivateSettingKey } from '../services/privateSettings.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
+import { NAV_COMPACT_QUERY } from '../styles/breakpoints.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { goalCategoryOf } from '../utils/goalCategories.js';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
 import { plannerFacts, tasksByDay, parsePlannerOrder, type PlannerOrder } from '../utils/planner.js';
@@ -35,6 +37,8 @@ import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
+import { useSaveCommand } from '../hooks/useSaveCommand.js';
+import { useAiReady } from '../hooks/useAiReady.js';
 import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { QuickLog } from '../components/organisms/HealthQuickLog.js';
@@ -63,7 +67,6 @@ import { prioritiesTitle } from '../utils/entrySave.js';
 import { winsContent, winsOf, winsTitle, type WinItem } from '../utils/wins.js';
 import type { ThemePreference } from '../utils/autoTheme.js';
 import { dailyQuote, greeting, parseQuoteText, type Quote } from '../utils/dailyQuote.js';
-import { shortDateLine } from '../utils/dateLine.js';
 import { currentWeather, describeWeather, findPlace, hoursFromLocal, type CurrentWeather, type Place } from '../utils/weather.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { ShoppingItem } from '../types/fields.js';
@@ -134,8 +137,8 @@ interface DashboardConfig {
 
 /** The cards that can be dragged between the two columns, and where they start */
 const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['quote', 'nextUp', 'stats', 'priorities', 'wins', 'tasks', 'habits', 'comingUp', 'quickLog', 'exercise'],
-  right: ['wellness', 'mantra', 'time', 'recent', 'shopping', 'menu', 'meds', 'symptom'],
+  left: ['quote', 'priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise'],
+  right: ['wellness', 'clocks', 'recent', 'shopping', 'mantra', 'time', 'menu', 'meds', 'symptom'],
 };
 
 /** The saved layout with any card it doesn't know put back in its default column, at its default place there */
@@ -150,6 +153,9 @@ function fullLayout(saved?: { left: SectionKey[]; right: SectionKey[] }): { left
 
 const DEFAULT_CONFIG: DashboardConfig = { hidden: [], places: [] };
 
+/** How far past the Quick entry's top the photo stays solid (its question and the top of its card) */
+const PHOTO_PAST_TOP = 120;
+
 /* ── Layout ── */
 
 const Page = styled.div`
@@ -157,55 +163,62 @@ const Page = styled.div`
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  /* Never a sideways scroll */
+  overflow-x: hidden;
 `;
 
 const Inner = styled.div`
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 1150px;
   margin: 0 auto;
-  padding: 56px 24px 64px;
-  @media (max-width: 768px) { padding: 34px 16px 48px; }
+  padding: 40px 24px 64px;
+  @media (max-width: 768px) { padding: 28px 16px 48px; }
 `;
 
+/* Voice and the sliders at the top right, the date line and greeting under them */
 const Head = styled.div`
-  margin-top: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 16px 40px;
-  /* Phones: the greeting and its two buttons stay side by side, the buttons on its first line */
-  @media (max-width: 640px) { align-items: start; gap: 12px; }
 `;
 
-/* "Good evening, Alex" over "Saturday, October 17 · 55° and clear in Portland" */
-const DateBlock = styled.div`
+/* "Good evening, Olivia." over "Saturday, November 14 · 56° and cloudy in Portland",
+   a little below the buttons at the top (on phones and tablets they're in the top bar) */
+const DateBlock = styled.div<{ $below: boolean }>`
   min-width: 0;
+  /* Wide screens: level with Voice and the sliders (the buttons centre on its first line) */
+  margin-top: ${({ $below }) => ($below ? '0' : '12px')};
 `;
 
-const Eyebrow = styled.div`
-  margin-top: 6px;
+const DateLine = styled.div`
+  margin-top: 10px;
   /* In a touch, so it lines up under the greeting's first letter */
-  padding-left: 12px;
+  padding-left: 4px;
   font-family: var(--font-sans);
   font-size: 15px;
   font-style: italic;
   color: var(--text-muted);
   ${onPhoto}
-  /* Phones get the short line ("Tues, Oct. 27th - 50° and cloudy") */
+  /* A step back from the greeting */
+  opacity: 0.72;
+  /* Phones get the short line ("Sat, Nov 14 · 56° and cloudy") */
   & > .short { display: none; }
-  @media (max-width: 640px) { margin-top: 10px; padding-left: 6px; & > .long { display: none; } & > .short { display: inline; } }
+  @media (max-width: 640px) { margin-top: 8px; padding-left: 2px; & > .long { display: none; } & > .short { display: inline; } }
 `;
 
 const Hello = styled.h1`
   margin: 0;
   font-family: var(--font-display);
-  font-size: 56px;
+  font-size: 58px;
   font-weight: 200; /* the view titles' weight */
   line-height: 1.1;
   color: var(--text-primary);
   text-wrap: balance;
-  @media (max-width: 640px) { font-size: 38px; }
-  @media (max-width: 400px) { font-size: 34px; }
+  @media (max-width: 640px) { font-size: 41px; }
+  @media (max-width: 400px) { font-size: 37px; }
   ${onPhoto}
 `;
 
@@ -216,8 +229,25 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  /* Phones: beside the greeting, Voice as just its mic, with room between the two round buttons */
-  @media (max-width: 640px) { flex-wrap: nowrap; gap: 12px; }
+  /* Centred on the greeting's first line (56px × 1.1 tall, the buttons 44px) */
+  margin-top: 9px;
+`;
+
+/* Phones and tablets: the mic and the sliders in the top bar, plain like the bell */
+const BarBtn = styled.button<{ $on: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 /* Voice: a quiet button — the mic and the word, no outline, never a darker fill
@@ -227,33 +257,20 @@ const VoiceBtn = styled.button<{ $on: boolean }>`
   align-items: center;
   gap: 6px;
   height: 44px;
-  padding: 0 14px;
-  border: none;
+  padding: 0 22px 0 18px;
+  border: 1px solid var(--border-card);
   border-radius: 999px;
   background: transparent;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
   cursor: pointer;
-  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; border-color: var(--control-border); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 640px) { position: relative; width: 44px; padding: 0; justify-content: center; }
   /* On a wallpaper: a glass pill with white text (the accent while open) */
   ${glassPill}
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
-`;
-
-/* "Voice": the word beside the mic, left out on phones (the mic alone, named for screen readers) */
-const VoiceWord = styled.span`
-  @media (max-width: 640px) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
 `;
 
 /* View options: a round sliders button — no darker fill when open or hovered
@@ -265,12 +282,12 @@ const ViewBtn = styled.button<{ $on: boolean }>`
   width: 44px;
   height: 44px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--border-card);
   border-radius: 50%;
   background: transparent;
   color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
   cursor: pointer;
-  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
+  &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; border-color: var(--control-border); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   ${glassPill}
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
@@ -316,19 +333,6 @@ const ThemeOpt = styled.button<{ $on: boolean }>`
 
 const THEME_ICON = { light: 'light_mode', dark: 'dark_mode', auto: 'contrast' } as const;
 
-const LinkBtn = styled.button`
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-accent-link);
-  cursor: pointer;
-  white-space: nowrap;
-  &:hover { text-decoration: underline; }
-`;
-
 const OutlineBtn = styled.button`
   height: 38px;
   padding: 0 16px;
@@ -345,11 +349,11 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
-  margin-top: 48px;
-  @media (max-width: 640px) { margin-top: 32px; }
-  /* Getting started → Write your first entry: the card ringed in the accent */
+  margin-top: 56px;
+  @media (max-width: 640px) { margin-top: 40px; }
+  /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
-    & > section { box-shadow: 0 0 0 2px var(--color-accent); transition: box-shadow 200ms ease; }
+    & > section { border-radius: 14px; outline: 2px solid var(--color-accent); outline-offset: 12px; }
   ` : '')}
 `;
 
@@ -405,140 +409,58 @@ const NextActions = styled.div`
   padding-top: 24px;
 `;
 
-/* World clocks: a one-line strip in a grey --bg-panel card (home first, in the accent,
-   then the others as many as fit); "All N cities" opens the grid of city tiles — four across, wrapping */
+/* The daily quote and the world clocks on one line straight on the page, no
+   card: the quote on the left ("~ Author" muted after it), then the cities —
+   home first, its name in the accent — as many as fit, and "All N cities",
+   which opens the grid of city tiles (four across, wrapping) under the line.
+   Phones: the line moves to the foot of the page, the quote over the clocks. */
 const MAX_PLACES = 8;
 
-const Clocks = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  padding: 28px 0 32px;
-  border-top: 1px solid var(--border-card); /* splits the open grid from the strip */
-  @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-`;
-
-const ClocksSection = styled.section`
-  margin-top: 32px;
-  padding: 0 24px;
-  border-radius: 14px;
-  background: var(--bg-panel);
-  @media (max-width: 480px) { padding: 0 16px; }
-  ${glassCard}
-`;
-
-const Strip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 40px;
-  min-height: 64px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  & > b { flex: none; ${cardLabel} }
-  @media (max-width: 640px) { gap: 20px; }
-`;
-
-const StripCities = styled.div`
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 32px;
-  height: 24px;
-  line-height: 24px;
-  overflow: hidden;
-  min-width: 0;
-`;
-
-const StripCity = styled.span<{ $home?: boolean }>`
-  white-space: nowrap;
-  color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-muted)')};
-  strong { margin-left: 10px; font-weight: 500; color: var(--text-primary); }
-  small { margin-left: 8px; font-size: 14px; color: var(--text-hint); }
-`;
-
-/* Each city in the open grid is its own filled tile on the grey panel */
-const Clock = styled.div`
-  min-width: 0;
-  padding: 16px 18px;
-  border-radius: 10px;
-  background: var(--bg-tile);
-  /* Light: --bg-tile is nearly the panel's grey — white tiles read instead */
-  html[data-theme='light'] & { background: var(--bg-control, var(--bg-app)); }
-`;
-
-const ClockHead = styled.div<{ $home: boolean }>`
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  b { font-weight: 500; color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-muted)')}; }
-  span { color: var(--text-muted); }
-`;
-
-const ClockTime = styled.div`
-  margin: 14px 0 12px;
-  font-family: var(--font-display);
-  font-size: 40px;
-  font-weight: 300;
-  line-height: 1;
-  color: var(--text-secondary);
-  small { margin-left: 6px; font-family: var(--font-sans); font-size: 14px; color: var(--text-muted); }
-`;
-
-const ClockWeather = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--text-soft);
-  & > span:first-child { color: var(--color-accent); }
-  /* "58°F · Clear" in light italics (not the icon, which would slant) */
-  & > span:last-child { font-style: italic; font-weight: 300; letter-spacing: 0.02em; }
-`;
-
-/* Daily quote: in the Next up card's place (the grey panel) when it's on */
-/* The quote and its author as one block, centred vertically in the card,
-   left-aligned */
-/* The daily quote's card: roomier top and a narrower right side so the
-   quote isn't squeezed; a wider right side on desktop */
-const QuoteCard = styled(NextCard)``;
-
-const QuoteBody = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  /* Just under the "Daily quote" label, not centred in the card */
-  justify-content: flex-start;
-  align-items: flex-start;
-  text-align: left;
-  padding: 8px 0 4px;
-`;
-
+/* Both on: the quote takes two thirds, the clocks the last third (right-aligned);
+   either alone takes the whole line */
+/* The daily quote's card: the quote in thin italic Work Sans, "~ Author" muted under it */
 const QuoteText = styled.blockquote`
-  margin: 0;
+  margin: 16px 0 0;
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 300;
   font-style: italic;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--text-primary);
-  @media (max-width: 480px) { font-size: 19px; }
+  @media (max-width: 480px) { font-size: 20px; }
 `;
 
 const QuoteBy = styled.p`
-  margin: 16px 0 0;
+  margin: 10px 0 0;
+  font-family: var(--font-sans);
   font-size: 15px;
   color: var(--text-muted);
-  @media (min-width: 901px) { margin-top: 22px; }
 `;
+
+/* The world clocks' card: a row per city — the name (home in the accent) with
+   Local / +3h under it, the weather, the time on the right */
+const ClockRow = styled.div<{ $home: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  font-family: var(--font-sans);
+  & + & { border-top: 1px solid var(--border-subtle); }
+  .city { flex: 1; min-width: 0; font-size: 16px; color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-secondary)')}; }
+  .city small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
+  .weather { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-muted); white-space: nowrap; }
+  .weather > span:first-child { color: var(--color-accent); }
+  .time { flex: none; min-width: 84px; text-align: right; font-size: 16px; font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  @media (max-width: 480px) { .weather .label { display: none; } }
+`;
+
+/** How many cities the clocks card lists before "All N cities" */
+const CLOCKS_SHOWN = 3;
 
 const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  /* The same 24px under the world clocks (or the cards above) as between cards */
   margin-top: 24px;
   align-items: start;
   @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
@@ -551,62 +473,60 @@ const Col = styled.div`
   min-width: 0;
 `;
 
-/* Each section in the two columns sits in its own grey card, like Next up and the
-   quote, with a chevron on the right that folds it down to its title row */
-const WidgetCard = styled.div<{ $collapsed: boolean; $tall?: boolean; $plain?: boolean }>`
-  position: relative;
-  min-width: 0;
-  padding: 28px 92px 28px 32px;
-  border-radius: 14px;
+/* The dashboard's card: lifted a step off the page (--bg-panel) with a
+   hairline outline. Its title row (the card label, its link on the right)
+   leaves room at its end for the grip and the fold chevron; the content runs
+   the card's full width */
+const cardShell = css`
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
   background: var(--bg-panel);
   ${glassCard}
-  @media (max-width: 480px) { padding: 22px 76px 22px 20px; }
+`;
+
+const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
+  position: relative;
+  min-width: 0;
+  padding: 34px 32px 30px;
+  ${cardShell}
+  @media (max-width: 480px) { padding: 24px 22px 22px; }
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
-  & > section > :first-child { align-items: center; }
-  /* The same room between every title row and the card's content */
-  && > section > :first-child { margin-bottom: 16px; }
+  & > section > :first-child { align-items: center; padding-right: 64px; }
+  @media (max-width: 480px) { & > section > :first-child { padding-right: 58px; } }
+  && > section > :first-child { margin-bottom: 6px; }
   /* Titles: the dashboards' card label (small tracked grey capitals), on the chevron's 30px line */
   & > section > :first-child h2 {
     margin: 0;
     line-height: 30px;
     ${cardLabel}
   }
-  /* $plain (Wellness check-in): no panel, title or fold — the four-square card as
-     it is, with only the grip, tucked into its top-right corner */
+  /* $plain (Wellness check-in): no panel, title or fold — its four-square box as it is,
+     with only the grip, tucked into the box's top-right corner */
   ${({ $plain }) => ($plain ? `
     padding: 0 !important;
+    border: none !important;
     background: none !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
-    & > section > :first-child { margin-bottom: 0 !important; }
+    &&& > section > :first-child { padding-right: 0; margin-bottom: 0; }
     & > button { top: 10px; right: 10px; }
     @media (max-width: 480px) { & > button { top: 8px; right: 8px; } }
   ` : '')}
-  /* A title over a picker (Shopping list, Tasks): the grip and chevron sit on its middle */
-  ${({ $tall, $collapsed }) => ($tall && !$collapsed ? `
-    & > button { top: 47px; }
-    @media (max-width: 480px) { & > button { top: 41px; } }
-  ` : '')}
   ${({ $collapsed }) => ($collapsed ? `
-    padding-top: 14px;
-    padding-bottom: 14px;
+    padding-top: 16px;
+    padding-bottom: 16px;
     & > section > :not(:first-child) { display: none; }
     && > section > :first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
     /* Grip and chevron centred on the folded card's one row */
     & > button { top: 50% !important; transform: translateY(-50%); }
-  ` : '')}
-  /* Folded, a picker card (Shopping list, Tasks) is just its title too — no picker or +, so it
-     reads as folded rather than as a list with nothing in it */
-  ${({ $tall, $collapsed }) => ($tall && $collapsed ? `
-    & > section > :first-child > :not(h2) { display: none; }
   ` : '')}
 `;
 
 /* The grip to drag a card by, just left of its fold chevron */
 const DragHandle = styled.button`
   position: absolute;
-  top: 28px;
-  right: 54px;
+  top: 34px;
+  right: 56px;
   display: grid;
   place-items: center;
   width: 26px;
@@ -619,15 +539,15 @@ const DragHandle = styled.button`
   cursor: grab;
   touch-action: none;
   html[data-theme='dark'] & { color: var(--text-disabled); }
-  &:hover { color: var(--text-muted); background: var(--bg-row-hover); }
+  &:hover { color: var(--text-primary); }
   &:active { cursor: grabbing; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 480px) { top: 22px; right: 44px; }
+  @media (max-width: 480px) { top: 24px; right: 46px; }
 `;
 
 const FoldBtn = styled.button<{ $collapsed: boolean }>`
   position: absolute;
-  top: 28px;
+  top: 34px;
   right: 22px;
   display: grid;
   place-items: center;
@@ -640,9 +560,9 @@ const FoldBtn = styled.button<{ $collapsed: boolean }>`
   color: var(--text-muted);
   cursor: pointer;
   svg { transition: transform 150ms ease; transform: rotate(${({ $collapsed }) => ($collapsed ? 0 : 180)}deg); }
-  &:hover { color: var(--text-primary); background: var(--bg-row-hover); }
+  &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 480px) { top: 22px; right: 14px; }
+  @media (max-width: 480px) { top: 24px; right: 14px; }
 `;
 
 const SectionHead = styled.div`
@@ -654,8 +574,9 @@ const SectionHead = styled.div`
   border-bottom: 1px solid var(--border-subtle);
   h2 { margin: 0; ${cardLabel} }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
-  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; }
+  button { padding: 0; border: none; background: none; font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--color-accent-link); cursor: pointer; white-space: nowrap; }
   button:hover { text-decoration: underline; }
+  button:disabled { opacity: 0.6; cursor: default; }
 `;
 
 /* Two links side by side in a SectionHead (Today's wins: New list · All wins) */
@@ -800,45 +721,30 @@ function WorldClocks({ places, now, open, onToggle }: { places: Place[]; now: Da
     return () => { live = false; };
   }, [places]);
 
+  const list = places.slice(0, MAX_PLACES);
+  const shown = open ? list : list.slice(0, CLOCKS_SHOWN);
   return (
-    <ClocksSection aria-label="World clocks">
-      <Strip>
-        <b>World clocks</b>
-        <StripCities>
-          {places.slice(0, MAX_PLACES).map((p, i) => {
-            const [t, ampm] = clockParts(p.timezone, now);
-            const w = weather[p.name];
-            return (
-              <StripCity key={`${p.name}-${i}`} $home={i === 0}>
-                {p.name}<strong>{t} {ampm}</strong>{w && <small>{w.tempF}°</small>}
-              </StripCity>
-            );
-          })}
-        </StripCities>
-        <LinkBtn type="button" aria-expanded={open} onClick={onToggle}>
-          {open ? 'Show less' : `All ${places.length} ${places.length === 1 ? 'city' : 'cities'}`}
-        </LinkBtn>
-      </Strip>
-      {open && (
-        <Clocks>
-          {places.slice(0, MAX_PLACES).map((p, i) => {
-            const [t, ampm] = clockParts(p.timezone, now);
-            const diff = hoursFromLocal(p.timezone, now);
-            const w = weather[p.name];
-            const d = w ? describeWeather(w.code, w.isDay) : null;
-            return (
-              <Clock key={`${p.name}-${i}`}>
-                <ClockHead $home={i === 0}><b>{p.name}</b><span>{diff === 0 ? 'Local' : `${diff > 0 ? '+' : ''}${diff}h`}</span></ClockHead>
-                <ClockTime>{t}<small>{ampm}</small></ClockTime>
-                <ClockWeather>
-                  {d ? <><MaterialIcon $size={18} aria-hidden="true">{d.icon}</MaterialIcon><span>{w!.tempF}°F · {d.label}</span></> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                </ClockWeather>
-              </Clock>
-            );
-          })}
-        </Clocks>
-      )}
-    </ClocksSection>
+    <section aria-label="World clocks">
+      <SectionHead>
+        <h2>World clocks</h2>
+        {list.length > CLOCKS_SHOWN && (
+          <button type="button" aria-expanded={open} onClick={onToggle}>{open ? 'Show less' : `All ${list.length} cities`}</button>
+        )}
+      </SectionHead>
+      {list.length === 0 ? <Muted>Add your city under Theme and layout (the sliders button) for the weather and world clocks.</Muted> : shown.map((p, i) => {
+        const [t, ampm] = clockParts(p.timezone, now);
+        const diff = hoursFromLocal(p.timezone, now);
+        const w = weather[p.name];
+        const d = w ? describeWeather(w.code, w.isDay) : null;
+        return (
+          <ClockRow key={`${p.name}-${i}`} $home={i === 0}>
+            <span className="city">{p.name}<small>{diff === 0 ? 'Local' : `${diff > 0 ? '+' : ''}${diff}h`}</small></span>
+            {d && <span className="weather"><MaterialIcon $size={18} aria-hidden="true">{d.icon}</MaterialIcon><span>{w!.tempF}°<span className="label"> · {d.label}</span></span></span>}
+            <span className="time">{t} {ampm}</span>
+          </ClockRow>
+        );
+      })}
+    </section>
   );
 }
 
@@ -1008,18 +914,6 @@ function PriorityText({ item, onCommit, label = 'Priority' }: { item: PriorityIt
 }
 
 
-/* "Add a priority": a standard outlined text box (the border on the box — inputs are flat app-wide) */
-const AddBox = styled.label`
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  padding: 12px 16px;
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
-  cursor: text;
-  &:focus-within { border-color: var(--color-accent); }
-`;
-
 const BareInput = styled.input`
   && {
     flex: 1;
@@ -1076,21 +970,15 @@ function usePriorities() {
   return { entry, items, tid };
 }
 
-function Priorities() {
+/** Writes the Priorities list — the newest entry, or a new one when there's none */
+function usePriorityList() {
   const setTopics = useEntriesStore(s => s.setTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const { encryptPost, encryptNewPost } = useEncryption();
+  const { encryptNewPost } = useEncryption();
   const save = useSaveFields();
-  const [draft, setDraft] = useState('');
   const { entry, items, tid } = usePriorities();
-  const [starting, setStarting] = useState(false);
   // The entry's title: "Priorities: 10/18/2026" — the list's own date
   const textOf = (date = new Date()) => `<p>${prioritiesTitle(date)}</p>`;
-
-  const write = async (next: PriorityItem[]) => {
-    if (entry) return save(entry, { ...cfOf(entry), priorities: next }, textOf(new Date(entry.createdAt)));
-    return create(next);
-  };
 
   /** A new Priorities entry — the newest, so the dashboard shows it from now on */
   const create = async (next: PriorityItem[]) => {
@@ -1112,18 +1000,25 @@ function Priorities() {
       createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
   };
 
+  const write = async (next: PriorityItem[]) => {
+    if (entry) return save(entry, { ...cfOf(entry), priorities: next }, textOf(new Date(entry.createdAt)));
+    return create(next);
+  };
+  const add = (text: string) => write([...items, { id: crypto.randomUUID(), text, done: false }]);
+  return { items, write, create, add };
+}
+
+/* Numbered rows — each edited in place, a quiet ×, a check on the right.
+   New ones come in from "Add a priority" in the add row */
+function Priorities() {
+  const { items, write, create } = usePriorityList();
+  const [starting, setStarting] = useState(false);
+
   // New list: starts an empty one; the old list stays in the journal
   const startNew = async () => {
     setStarting(true);
     try { await create([]); } catch (err) { console.error('New priorities list failed:', err); }
     finally { setStarting(false); }
-  };
-
-  const add = () => {
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    void write([...items, { id: crypto.randomUUID(), text, done: false }]);
   };
 
   return (
@@ -1134,6 +1029,7 @@ function Priorities() {
           <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
         )}
       </SectionHead>
+      {items.length === 0 && <Muted>No priorities yet. Type one into Add a priority.</Muted>}
       {items.map((p, i) => (
         <Row key={p.id}>
           <PNum>{i + 1}</PNum>
@@ -1147,10 +1043,6 @@ function Priorities() {
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
         </Row>
       ))}
-      <AddBox style={items.length ? { marginTop: 12 } : undefined}>
-        <BareArea value={draft} placeholder="Add a priority" aria-label="Add a priority"
-          onChange={e => setDraft(e.target.value)} onBlur={add} onEnter={add} />
-      </AddBox>
     </section>
   );
 }
@@ -1173,23 +1065,14 @@ function useWinsList() {
   return { entry, items: entry ? winsOf(cfOf(entry)) : [], tid };
 }
 
-/* Laid out like Today's priorities: numbered rows, each win edited in place
-   with a quiet ×, and "Add a win" under them — no ticks (a win is done) */
-function Wins() {
+/** Writes the Wins list — the newest entry, or a new one when there's none */
+function useWinsActions() {
   const setTopics = useEntriesStore(s => s.setTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const { encryptNewPost } = useEncryption();
   const save = useSaveFields();
-  const navigate = useNavigate();
-  const [draft, setDraft] = useState('');
   const { entry, items, tid } = useWinsList();
   const creating = useRef(false);
-  const [starting, setStarting] = useState(false);
-
-  const write = async (next: WinItem[]) => {
-    if (entry) return save(entry, { ...cfOf(entry), wins: next }, winsContent(winsTitle(new Date(entry.createdAt)), next));
-    return create(next);
-  };
 
   /** A new Wins entry — the newest, so the card shows it from now on */
   const create = async (next: WinItem[]) => {
@@ -1215,18 +1098,26 @@ function Wins() {
     } finally { creating.current = false; }
   };
 
+  const write = async (next: WinItem[]) => {
+    if (entry) return save(entry, { ...cfOf(entry), wins: next }, winsContent(winsTitle(new Date(entry.createdAt)), next));
+    return create(next);
+  };
+  const add = (text: string) => write([...items, { id: crypto.randomUUID(), text }]);
+  return { items, tid, write, create, add };
+}
+
+/* Laid out like Today's priorities: numbered rows, each win edited in place
+   with a quiet × — no ticks (a win is done). New ones come in from "Add a win" */
+function Wins() {
+  const navigate = useNavigate();
+  const { items, tid, write, create } = useWinsActions();
+  const [starting, setStarting] = useState(false);
+
   // New list: starts an empty one; the old list stays in the journal
   const startNew = async () => {
     setStarting(true);
     try { await create([]); } catch (err) { console.error('New wins list failed:', err); }
     finally { setStarting(false); }
-  };
-
-  const add = () => {
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    write([...items, { id: crypto.randomUUID(), text }]).catch(err => console.error('Saving a win failed:', err));
   };
 
   return (
@@ -1238,6 +1129,7 @@ function Wins() {
           {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
         </HeadLinks>
       </SectionHead>
+      {items.length === 0 && <Muted>No wins yet. Type one into Add a win.</Muted>}
       {items.map((w, i) => (
         <Row key={w.id}>
           <PNum>{i + 1}</PNum>
@@ -1249,37 +1141,32 @@ function Wins() {
           </PRemove>
         </Row>
       ))}
-      <AddBox style={items.length ? { marginTop: 12 } : undefined}>
-        <BareArea value={draft} placeholder="Add a win" aria-label="Add a win"
-          onChange={e => setDraft(e.target.value)} onBlur={add} onEnter={add} />
-      </AddBox>
     </section>
   );
 }
 
 /* ── Tasks: open tasks, a saved Planning view, or one todo list ── */
 
-/* The picker in the Tasks and Shopping list cards' title rows: a rounded
-   square outlined in light grey (--border-card, 10px corners, no fill) like
-   the Meal | Exercise switch, with the choice and a chevron */
-const ShowPick = styled.label`
+/* A card label that is its own picker ("OPEN TASKS ⌄", "SHOPPING LIST ⌄",
+   "THIS MONTH ⌄"): the choice in the card label's tracked capitals with a
+   small chevron; the real select lies invisibly over both (a select is as wide
+   as its longest option, which would push the chevron away from the text) */
+const LabelPick = styled.label<{ $wrap?: boolean }>`
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  max-width: 260px;
-  height: 32px;
-  /* Bare: the choice as text, flush left, its chevron right after it; the real
-     select lies invisibly over both (a select is as wide as its longest option,
-     which would push the chevron away from the text) */
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--text-primary);
+  max-width: 100%;
   cursor: pointer;
-  & > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  svg { flex: none; color: var(--text-muted); }
+  && > span {
+    ${cardLabel}
+    min-width: 0;
+    line-height: ${({ $wrap }) => ($wrap ? 1.7 : '30px')};
+    ${({ $wrap }) => ($wrap ? '' : 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')}
+  }
+  && > svg { flex: none; color: var(--text-muted); }
+  &:hover > span, &:hover > svg { color: var(--text-primary); }
   select {
     position: absolute;
     inset: 0;
@@ -1291,40 +1178,11 @@ const ShowPick = styled.label`
     font-size: 16px; /* iOS doesn't zoom into a 16px control */
     cursor: pointer;
   }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
 `;
 
-/* Shopping list / Tasks: the title over its picker, a + across from both (the
-   card's grip and chevron line up with it — WidgetCard $tall) and a rule under */
-const PickerHead = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 12px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  & > h2 { grid-column: 1; }
-  & > label { grid-column: 1; justify-self: start; margin-top: 6px; }
-  & > button { grid-column: 2; grid-row: 1 / span 2; }
-`;
-
-/* + : start a new list (× while one is being named) */
-const PlusBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-accent-link);
-  cursor: pointer;
-  /* No darker fill on hover — the + just firms up */
-  &:hover { color: var(--color-accent-line); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-`;
+/** The "start a new list" choice at the foot of a card's picker */
+const NEW_LIST = '__new';
 
 /* A task's title: opens it in the journal (or a todo list in this card) */
 const TaskTitle = styled.button<{ $done?: boolean }>`
@@ -1507,32 +1365,38 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
 
   return (
     <section aria-label="Tasks">
-      <PickerHead>
-        <h2>Tasks</h2>
-        <ShowPick>
-            <span>{pickLabel}</span>
-            <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
-            <select aria-label="Show" value={pickValue} onChange={e => onShow(e.target.value)}>
-              <option value="open">Open tasks</option>
-              <option value="today">Today’s plan</option>
-              {views.length > 0 && (
-                <optgroup label="Saved views">
-                  {views.map(v => <option key={v.id} value={`view:${v.id}`}>{v.name}</option>)}
-                </optgroup>
-              )}
-              {lists.length > 0 && (
-                <optgroup label="To-do lists">
-                  {lists.map(l => <option key={l.id} value={`list:${l.id}`}>{titleOf(l)}</option>)}
-                </optgroup>
-              )}
-            </select>
-        </ShowPick>
-        {/* +: clears the card for a fresh list while it's named; the shown list itself is untouched */}
-        <PlusBtn type="button" aria-label={naming ? 'Cancel the new to-do list' : 'New To-Do List'} title={naming ? 'Cancel' : 'New To-Do List'}
-          onClick={() => { setNaming(n => !n); setNewName(''); setDraft(''); }}>
-          <Icon name={naming ? 'x' : 'plus'} size={18} strokeWidth={2} />
-        </PlusBtn>
-      </PickerHead>
+      <SectionHead>
+        <LabelPick>
+          <span>{naming ? 'New to-do list' : pickLabel}</span>
+          <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+          <select aria-label="What the Tasks card shows" value={naming ? NEW_LIST : pickValue}
+            onChange={e => {
+              const v = e.target.value;
+              setNewName(''); setDraft(''); setError('');
+              if (v === NEW_LIST) { setNaming(true); return; }
+              setNaming(false);
+              onShow(v);
+            }}>
+            <option value="open">Open tasks</option>
+            <option value="today">Today’s plan</option>
+            {views.length > 0 && (
+              <optgroup label="Saved views">
+                {views.map(v => <option key={v.id} value={`view:${v.id}`}>{v.name}</option>)}
+              </optgroup>
+            )}
+            {lists.length > 0 && (
+              <optgroup label="To-do lists">
+                {lists.map(l => <option key={l.id} value={`list:${l.id}`}>{titleOf(l)}</option>)}
+              </optgroup>
+            )}
+            <option value={NEW_LIST}>New to-do list…</option>
+          </select>
+        </LabelPick>
+        {naming ? <button type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</button>
+          : mode === 'list' && list ? <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>
+          : mode === 'today' ? <button type="button" onClick={() => navigate(morePath)}>Open planner</button>
+          : <button type="button" onClick={() => navigate(morePath)}>{rows.length > TASKS_SHOWN ? `${rows.length - TASKS_SHOWN} more in Planning` : 'Planning'}</button>}
+      </SectionHead>
 
       {naming && (
         <AddItem onSubmit={e => void createList(e)}>
@@ -1563,7 +1427,6 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
           <BareArea value={draft} placeholder="Add a to-do" aria-label={`Add a to-do to ${titleOf(list)}`}
             onChange={e => setDraft(e.target.value)} onEnter={el => el.form?.requestSubmit()} />
         </AddItem>
-        <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>
       </>)}
 
       {!naming && mode !== 'list' && (<>
@@ -1584,12 +1447,6 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
             </Row>
           );
         })}
-        {rows.length > TASKS_SHOWN && (
-          <MoreLink type="button" onClick={() => navigate(morePath)}>{rows.length - TASKS_SHOWN} more in Planning</MoreLink>
-        )}
-        {mode === 'today' && rows.length <= TASKS_SHOWN && (
-          <MoreLink type="button" onClick={() => navigate(morePath)}>Open planner<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>
-        )}
       </>)}
     </section>
   );
@@ -1763,16 +1620,31 @@ const MantraNav = styled.div`
   button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/** Saves a new mantra to the Mantra topic (made on first use) */
+function useAddMantra() {
+  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
+  const { encryptNewPost } = useEncryption();
+  return async (text: string) => {
+    const tid = await getOrCreateTopic(MANTRA_TOPIC, MANTRA_ICON);
+    const content = `<p>${escapeHtml(text)}</p>`;
+    const metadata = { _taxonomyId: tid };
+    const enc = await encryptNewPost(content, metadata);
+    const res = await entriesApi.create({ id: enc.id,
+      contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+      metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+      isEncrypted: true, taxonomyIds: [tid],
+    });
+    addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
+      createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+  };
+}
+
 function Mantra() {
   const navigate = useNavigate();
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
-  const { encryptNewPost } = useEncryption();
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState('');
 
   const topicId = allTopics.find(t => isMantraTopic(t.name))?.id;
   // Oldest first, so the daily turn is stable as new ones are added
@@ -1783,33 +1655,12 @@ function Mantra() {
     .sort((a, b) => a.id - b.id)), [entries, topicId]);
   const shown = mantras[stepIndex(dailyMantraIndex(mantras.length), step, mantras.length)];
 
-  const add = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    setError('');
-    try {
-      const tid = await getOrCreateTopic(MANTRA_TOPIC, MANTRA_ICON);
-      const content = `<p>${escapeHtml(text)}</p>`;
-      const metadata = { _taxonomyId: tid };
-      const enc = await encryptNewPost(content, metadata);
-      const res = await entriesApi.create({ id: enc.id,
-        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
-        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
-        isEncrypted: true, taxonomyIds: [tid],
-      });
-      addDecryptedEntry({ id: res.id as number, content, metadata, isEncrypted: true,
-        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
-      // Show the new one: it's last in the list
-      const count = mantras.length + 1;
-      setStep(count - 1 - dailyMantraIndex(count));
-    } catch (err) {
-      console.error('Mantra save failed:', err);
-      setDraft(text);
-      setError('That mantra didn’t save. Try again.');
-    }
-  };
+  // One just written (in Write a mantra) shows here: it's last in the list
+  const count = useRef(mantras.length);
+  useEffect(() => {
+    if (mantras.length > count.current) setStep(mantras.length - 1 - dailyMantraIndex(mantras.length));
+    count.current = mantras.length;
+  }, [mantras.length]);
 
   return (
     <section aria-label="Mantra">
@@ -1829,14 +1680,7 @@ function Mantra() {
             </button>
           </MantraNav>
         )}
-      </>) : <Muted>No mantras yet. Write your first one below.</Muted>}
-      <form onSubmit={e => void add(e)}>
-        <AddBox style={{ marginTop: 20 }}>
-          <BareArea value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
-            placeholder="Write a mantra" aria-label="Write a mantra" onEnter={el => el.form?.requestSubmit()} />
-        </AddBox>
-      </form>
-      {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
+      </>) : <Muted>No mantras yet. Write one in Write a mantra.</Muted>}
     </section>
   );
 }
@@ -1876,8 +1720,9 @@ function RecentEntries() {
   );
 }
 
-/* Stats: how much was logged this week / month / ever — big thin figures, a label under each */
-/* The card head without SectionHead's link-button styling, so the period switch keeps its own look */
+/* Stats: a full-width bar at the foot of the page — the period as the card
+   label's own picker ("THIS MONTH ⌄") on the left, then big thin figures
+   across, a label under each */
 const StatsHead = styled.div`
   display: flex;
   align-items: center;
@@ -1888,30 +1733,49 @@ const StatsHead = styled.div`
   h2 { margin: 0; ${cardLabel} }
 `;
 
+const StatsBar = styled.section<{ $phoneLast: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 24px 40px;
+  margin-top: 28px;
+  padding: 30px 40px;
+  ${cardShell}
+  & > label { flex: none; width: 104px; }
+  @media (max-width: 768px) {
+    ${({ $phoneLast }) => ($phoneLast ? 'order: 3;' : '')}
+    flex-direction: column;
+    align-items: stretch;
+    padding: 24px 22px;
+    & > label { width: auto; align-self: flex-start; }
+  }
+`;
+
 const StatGrid = styled.div`
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 22px 16px;
-  margin-top: 18px;
-  @media (max-width: 400px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  min-width: 0;
+  @media (max-width: 768px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 `;
 
 const StatFig = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
-  b { font-family: var(--font-display); font-size: 34px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-  span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
+  b { font-family: var(--font-display); font-size: 38px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  span { font-family: var(--font-sans); font-size: 15px; color: var(--text-muted); }
+  @media (max-width: 480px) { b { font-size: 32px; } span { font-size: 14px; } }
 `;
 
 const STAT_PERIODS: { value: StatsPeriod; label: string }[] = [
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'all', label: 'All' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+  { value: 'all', label: 'All time' },
 ];
 
-function Stats({ meals, meds, exercise }: { meals: boolean; meds: boolean; exercise: boolean }) {
+function Stats({ meals, meds, exercise, phoneLast }: { meals: boolean; meds: boolean; exercise: boolean; phoneLast: boolean }) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const [period, setPeriod] = useState<StatsPeriod>('month');
@@ -1930,26 +1794,29 @@ function Stats({ meals, meds, exercise }: { meals: boolean; meds: boolean; exerc
   const stats = useMemo(() => dashboardStats(entries, allTopics, doseRecords, period, new Date()), [entries, allTopics, doseRecords, period]);
   const figures: { label: string; value: number; on: boolean }[] = [
     { label: 'Entries', value: stats.entries, on: true },
-    { label: 'Journal entries', value: stats.journal, on: true },
-    { label: 'Meals logged', value: stats.meals, on: meals },
-    { label: 'Doses taken', value: stats.doses, on: meds },
-    { label: 'Exercise sessions', value: stats.exercise, on: exercise },
-    { label: 'Symptoms logged', value: stats.symptoms, on: true },
-    { label: 'Wellness check-ins', value: stats.checkIns, on: true },
+    { label: 'Journal', value: stats.journal, on: true },
+    { label: 'Meals', value: stats.meals, on: meals },
+    { label: 'Doses', value: stats.doses, on: meds },
+    { label: 'Exercise', value: stats.exercise, on: exercise },
+    { label: 'Symptoms', value: stats.symptoms, on: true },
+    { label: 'Check-ins', value: stats.checkIns, on: true },
   ];
 
   return (
-    <section aria-label="Stats">
-      <StatsHead>
-        <h2>Stats</h2>
-        <FilterTabs options={STAT_PERIODS} active={period} onChange={setPeriod} />
-      </StatsHead>
+    <StatsBar aria-label="Stats" $phoneLast={phoneLast}>
+      <LabelPick $wrap>
+        <span>{STAT_PERIODS.find(p => p.value === period)?.label}</span>
+        <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+        <select aria-label="Stats for" value={period} onChange={e => setPeriod(e.target.value as StatsPeriod)}>
+          {STAT_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </select>
+      </LabelPick>
       <StatGrid>
         {figures.filter(f => f.on).map(f => (
           <StatFig key={f.label}><b>{f.value.toLocaleString()}</b><span>{f.label}</span></StatFig>
         ))}
       </StatGrid>
-    </section>
+    </StatsBar>
   );
 }
 
@@ -2021,18 +1888,49 @@ const TimeRemove = styled.button<{ $confirm?: boolean }>`
 
 const TIME_ROWS = 8;
 
-function TimeTracked() {
-  const openInJournal = useOpenInJournal();
+/** Starts a timer for an activity by name: an existing Time Tracking entry of
+ *  that name, else a new one (in the account's time-tracking topic, else a new
+ *  Time Tracking topic) */
+function useStartTimerFor() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const { encryptNewPost } = useEncryption();
+  const loaded = useTimeStore(s => s.loaded);
+  const apply = useTimeStore(s => s.apply);
+  return async (name: string) => {
+    if (!loaded) throw new Error('The time log isn’t loaded yet');
+    const tracking = new Set(allTopics.filter(t => isTimeTrackingTopic(t.name)).map(t => t.id));
+    const nameOf = (e: DecryptedPost) => entryTitleText(e.content) || builtinEntryName(cfOf(e)) || 'Untitled';
+    const existing = entries.find(x => tracking.has((x.metadata as Record<string, unknown>)?._taxonomyId as number) && nameOf(x).toLowerCase() === name.toLowerCase());
+    let id = existing?.id;
+    if (id === undefined) {
+      const topicId = [...tracking][0] ?? await getOrCreateTopic(TIME_TRACKING_TOPIC, 'stopwatch');
+      const content = `<p>${escapeHtml(name)}</p>`;
+      const metadata = { _taxonomyId: topicId, _customFields: { activityName: name, notes: '' } };
+      const enc = await encryptNewPost(content, metadata);
+      const res = await entriesApi.create({ id: enc.id,
+        contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
+        metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
+        isEncrypted: true, taxonomyIds: [topicId],
+      });
+      id = res.id as number;
+      addDecryptedEntry({ id, content, metadata, isEncrypted: true,
+        createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+    }
+    const startId = id;
+    apply(list => startTimer(list, startId, new Date(), crypto.randomUUID()));
+  };
+}
+
+function TimeTracked() {
+  const openInJournal = useOpenInJournal();
+  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allTopics = useEntriesStore(s => s.allTopics);
   const sessions = useTimeStore(s => s.sessions);
   const loaded = useTimeStore(s => s.loaded);
   const apply = useTimeStore(s => s.apply);
   const [period, setPeriod] = useState<TimePeriod>('today');
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
   const running = runningSession(sessions);
   const now = useNow(!!running);
@@ -2057,39 +1955,6 @@ function TimeTracked() {
   };
   const toggle = (id: number) => apply(list => (running?.entryId === id ? stopTimer(list, new Date()) : startTimer(list, id, new Date(), crypto.randomUUID())));
 
-  // A timer for an activity by name: an existing Time Tracking entry of that name, else a new one
-  const startFor = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = draft.trim();
-    if (!name || !loaded) return;
-    setError('');
-    const existing = entries.find(x => trackingTopics.has((x.metadata as Record<string, unknown>)?._taxonomyId as number) && nameOf(x).toLowerCase() === name.toLowerCase());
-    try {
-      let id = existing?.id;
-      if (id === undefined) {
-        // The account's time-tracking topic, whatever it's called, else a new Time Tracking one
-        const topicId = [...trackingTopics][0] ?? await getOrCreateTopic(TIME_TRACKING_TOPIC, 'stopwatch');
-        const content = `<p>${escapeHtml(name)}</p>`;
-        const metadata = { _taxonomyId: topicId, _customFields: { activityName: name, notes: '' } };
-        const enc = await encryptNewPost(content, metadata);
-        const res = await entriesApi.create({ id: enc.id,
-          contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
-          metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,
-          isEncrypted: true, taxonomyIds: [topicId],
-        });
-        id = res.id as number;
-        addDecryptedEntry({ id, content, metadata, isEncrypted: true,
-          createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
-      }
-      const startId = id;
-      apply(list => startTimer(list, startId, new Date(), crypto.randomUUID()));
-      setDraft('');
-    } catch (err) {
-      console.error('Time tracking start failed:', err);
-      setError('That timer didn’t start. Try again.');
-    }
-  };
-
   const periodWord = period === 'today' ? 'today' : period === 'week' ? 'in the last 7 days' : 'this month';
   return (
     <section aria-label="Time tracked">
@@ -2099,7 +1964,7 @@ function TimeTracked() {
       </StatsHead>
       <TimeTotal><b>{formatSpent(total)}</b><span>{periodWord}</span></TimeTotal>
       {rows.length === 0
-        ? <Muted>Nothing timed {periodWord}. Start a timer on a task, goal or exercise, or name an activity below.</Muted>
+        ? <Muted>Nothing timed {periodWord}. Start a timer on a task, goal or exercise, or type an activity into Start a timer for….</Muted>
         : <div style={{ marginTop: 10 }}>
           {shown.map(({ entry, ms: spent, name }) => {
             const on = running?.entryId === entry.id;
@@ -2130,12 +1995,6 @@ function TimeTracked() {
             <MoreLink type="button" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</MoreLink>
           )}
         </div>}
-      <AddItem onSubmit={e => void startFor(e)}>
-        <MaterialIcon $size={18} aria-hidden="true">play_arrow</MaterialIcon>
-        <BareArea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Start a timer for…" aria-label="Start a timer for an activity"
-          onEnter={el => el.form?.requestSubmit()} />
-      </AddItem>
-      {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
     </section>
   );
 }
@@ -2145,7 +2004,7 @@ const Pills = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 2px;
+  margin-top: 16px;
 `;
 
 const ItemPill = styled.button<{ $got: boolean }>`
@@ -2261,24 +2120,26 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
 
   return (
     <section aria-label="Shopping list">
-      <PickerHead>
-        <h2>Shopping list</h2>
-        {lists.length > 0 && (
-          <ShowPick>
-            <span>{chosen ? listName(chosen) : 'Latest open list'}</span>
-            <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
-            <select aria-label="Which shopping list" value={chosen ? String(chosen.id) : 'latest'} onChange={e => onShow(e.target.value)}>
-              <option value="latest">Latest open list</option>
-              {lists.map(l => <option key={l.id} value={String(l.id)}>{listName(l)}</option>)}
-            </select>
-          </ShowPick>
-        )}
-        {/* +: clears the card for a fresh list while it's named; the shown list itself is untouched */}
-        <PlusBtn type="button" aria-label={naming ? 'Cancel the new shopping list' : 'New shopping list'} title={naming ? 'Cancel' : 'New list'}
-          onClick={() => { setNaming(n => !n); setNewName(''); setError(''); }}>
-          <Icon name={naming ? 'x' : 'plus'} size={18} strokeWidth={2} />
-        </PlusBtn>
-      </PickerHead>
+      <SectionHead>
+        <LabelPick>
+          <span>{naming ? 'New shopping list' : chosen ? listName(chosen) : 'Shopping list'}</span>
+          <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+          <select aria-label="Which shopping list" value={naming ? NEW_LIST : chosen ? String(chosen.id) : 'latest'}
+            onChange={e => {
+              const v = e.target.value;
+              setNewName(''); setError('');
+              if (v === NEW_LIST) { setNaming(true); return; }
+              setNaming(false);
+              onShow(v);
+            }}>
+            <option value="latest">Latest open list</option>
+            {lists.map(l => <option key={l.id} value={String(l.id)}>{listName(l)}</option>)}
+            <option value={NEW_LIST}>New list…</option>
+          </select>
+        </LabelPick>
+        {naming ? <button type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</button>
+          : list && <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>}
+      </SectionHead>
       {naming ? (
         <AddItem onSubmit={e => void startList(e)}>
           <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
@@ -2303,21 +2164,116 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
         <BareArea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add an item" aria-label="Add an item to the shopping list"
           onEnter={el => el.form?.requestSubmit()} />
       </AddItem>
-      {/* The whole list in the journal editor: rename, remove items, notes… */}
-      {list && <MoreLink type="button" onClick={() => openInJournal(list.id)}>Open list<Icon name="chevron-right" size={14} strokeWidth={2} /></MoreLink>}
       </>)}
       {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
     </section>
   );
 }
 
+/* ── The add row: one pill each to add a priority, a win, a mantra or start a timer ── */
+
+/* Equal pills across the page; phones: the first on its own, then two a row
+   (a last one left alone takes the whole row) */
+const AddRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 20px;
+  margin-top: 32px;
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    & > :first-child, & > :last-child:nth-child(even) { grid-column: 1 / -1; }
+  }
+`;
+
+const AddPill = styled.form`
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 48px;
+  padding: 0 22px;
+  border: 1px solid var(--border-pill, var(--border-card));
+  border-radius: 999px;
+  background: var(--bg-panel);
+  ${glassCard}
+  &:focus-within { border-color: var(--color-accent); }
+`;
+
+const AddRowError = styled(Muted)`
+  color: var(--color-danger);
+`;
+
+interface AddField { key: string; placeholder: string; label: string; failed: string; run: (text: string) => Promise<unknown> }
+
+function AddPillInput({ field, onError }: { field: AddField; onError: (message: string) => void }) {
+  const [draft, setDraft] = useState('');
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    onError('');
+    field.run(text).catch(err => {
+      console.error(`${field.label} failed:`, err);
+      setDraft(text);
+      onError(field.failed);
+    });
+  };
+  return (
+    <AddPill onSubmit={submit}>
+      <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
+        placeholder={field.placeholder} aria-label={field.label}
+        onKeyDown={e => { if (e.key === 'Escape') setDraft(''); }} />
+    </AddPill>
+  );
+}
+
+/** Logs a meal or a symptom from a line of text, shaped like its form (the AI chat's /save):
+ *  a meal dated now with its type by the time of day (and its nutrients filled by In-App AI
+ *  when it's set up), a symptom dated now with its name — in the account's Meals / Symptom
+ *  topic, made on first use */
+function useQuickLog() {
+  const saveCommand = useSaveCommand();
+  const aiReady = useAiReady();
+  return async (kind: 'meal' | 'symptom', text: string) => {
+    const [name, icon] = kind === 'meal' ? ['Meals', 'utensils'] : ['Symptom', 'flask'];
+    const id = await getOrCreateTopic(name, icon);
+    await saveCommand({ id, name }, text, { estimateNutrition: kind === 'meal' && aiReady });
+  };
+}
+
+function QuickAdds({ priorities, wins, mantra, timer, meal, symptom }: {
+  priorities: boolean; wins: boolean; mantra: boolean; timer: boolean; meal: boolean; symptom: boolean;
+}) {
+  const prioritiesList = usePriorityList();
+  const winsList = useWinsActions();
+  const addMantra = useAddMantra();
+  const startFor = useStartTimerFor();
+  const quickLog = useQuickLog();
+  const [error, setError] = useState('');
+  const fields: (AddField | false)[] = [
+    priorities && { key: 'priority', placeholder: 'Add a priority', label: 'Add a priority', failed: 'That priority didn’t save. Try again.', run: prioritiesList.add },
+    wins && { key: 'win', placeholder: 'Add a win', label: 'Add a win', failed: 'That win didn’t save. Try again.', run: winsList.add },
+    meal && { key: 'meal', placeholder: 'Log a meal', label: 'Log a meal', failed: 'That meal didn’t save. Try again.', run: (t: string) => quickLog('meal', t) },
+    symptom && { key: 'symptom', placeholder: 'Log a symptom', label: 'Log a symptom', failed: 'That symptom didn’t save. Try again.', run: (t: string) => quickLog('symptom', t) },
+    mantra && { key: 'mantra', placeholder: 'Write a mantra', label: 'Write a mantra', failed: 'That mantra didn’t save. Try again.', run: addMantra },
+    timer && { key: 'timer', placeholder: 'Start a timer for…', label: 'Start a timer for an activity', failed: 'That timer didn’t start. Try again.', run: startFor },
+  ];
+  const shown = fields.filter((f): f is AddField => !!f);
+  if (!shown.length) return null;
+  return (<>
+    <AddRow>{shown.map(f => <AddPillInput key={f.key} field={f} onError={setError} />)}</AddRow>
+    {error && <AddRowError role="alert">{error}</AddRowError>}
+  </>);
+}
+
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
-function SortableCard({ id, collapsed, label, tall, plain, children }: { id: SectionKey; collapsed: boolean; label: string; tall?: boolean; plain?: boolean; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, plain, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
-    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $tall={tall} $plain={plain}
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
@@ -2389,6 +2345,12 @@ export function DashboardView() {
     if (next.left.join() !== saved.left.join() || next.right.join() !== saved.right.join()) void saveConfig({ ...config, layout: next });
   };
   const [customizing, setCustomizing] = useState(false);
+  // The buttons move into the top bar on phones and tablets
+  const compactNav = useMediaQuery(NAV_COMPACT_QUERY);
+  // The wallpaper stays solid down past the Quick entry's question (fixed, whatever its card holds)
+  const pageRef = useRef<HTMLDivElement>(null);
+  const photoEndRef = useRef<HTMLDivElement>(null);
+  const [photoSolid, setPhotoSolid] = useState<number | undefined>(undefined);
   // Voice commands: only where the browser can do speech (not Firefox). One
   // tap opens the panel and starts listening (the session lives here so the
   // mic starts inside the tap)
@@ -2462,6 +2424,22 @@ export function DashboardView() {
     return () => { live = false; };
   }, [home]);
 
+  useEffect(() => {
+    const page = pageRef.current, end = photoEndRef.current;
+    if (!page || !end || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const pageTop = page.getBoundingClientRect().top - page.scrollTop;
+      // From the Quick entry's top (the question, then the start of its card), never its foot:
+      // the card covers the photo below that, so fields coming and going never resize the photo
+      const solid = end.getBoundingClientRect().top - pageTop + PHOTO_PAST_TOP;
+      setPhotoSolid(prev => (prev !== undefined && Math.abs(prev - solid) < 2 ? prev : Math.round(solid)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(end);
+    return () => ro.disconnect();
+  });
+
   if (needsUnlock) return (
     <>
       <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
@@ -2508,18 +2486,18 @@ export function DashboardView() {
   };
   const hd = homeWeather ? describeWeather(homeWeather.code, homeWeather.isDay) : null;
   const eyebrow = [
-    now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+    now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
     homeWeather && hd && home ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()} in ${home.name}` : null,
   ].filter(Boolean).join(' · ');
-  // Phones: "Tues, Oct. 27th - 50° and cloudy" (today's weather, no city)
+  // Phones: "Tue, Nov 10 · 55° and cloudy" (today's weather, no city)
   const shortEyebrow = [
-    shortDateLine(now),
+    now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
     homeWeather && hd ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()}` : null,
-  ].filter(Boolean).join(' - ');
+  ].filter(Boolean).join(' · ');
   const financeOn = ff.financeEnabled === true;
   // "Good evening, Alex" — the display name, else the username
   const helloName = displayName.trim() || user?.username?.trim() || '';
-  const hello = helloName ? `${greeting(now)}, ${helloName}` : greeting(now);
+  const hello = `${helloName ? `${greeting(now)}, ${helloName}` : greeting(now)}.`;
   const quote = dailyQuote(now, myQuotes);
   const kitchenOn = true;
 
@@ -2539,17 +2517,6 @@ export function DashboardView() {
     }
   };
 
-  // The daily quote's card
-  const quoteCard = (
-    <QuoteCard aria-label="Daily quote">
-      <SectionHead><h2>Daily quote</h2></SectionHead>
-      <QuoteBody>
-        <QuoteText>{quote.text}</QuoteText>
-        {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
-      </QuoteBody>
-    </QuoteCard>
-  );
-
   const left: ReactNode[] = [];
   const right: ReactNode[] = [];
   // Phones start with every card folded (their own list of opened cards); wider screens keep `collapsed`
@@ -2565,9 +2532,22 @@ export function DashboardView() {
   };
   // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
   const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
-    quote: { label: 'daily quote', on: shown('quote'), node: quoteCard },
-    nextUp: { label: 'next up', on: shown('nextUp'), node: <NextUp now={now} /> },
+    quote: {
+      label: 'daily quote', on: shown('quote'),
+      node: (
+        <section aria-label="Daily quote">
+          <SectionHead><h2>Daily quote</h2></SectionHead>
+          <QuoteText>{quote.text}</QuoteText>
+          {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
+        </section>
+      ),
+    },
+    clocks: {
+      label: 'world clocks', on: shown('clocks'),
+      node: <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />,
+    },
     wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" quad bare /> },
+    nextUp: { label: 'next up', on: shown('nextUp'), node: <NextUp now={now} /> },
     priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },
     wins: { label: "today's wins", on: shown('wins'), node: <Wins /> },
     tasks: {
@@ -2584,10 +2564,6 @@ export function DashboardView() {
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
     time: { label: 'time tracked', on: shown('time'), node: <TimeTracked /> },
-    stats: {
-      label: 'stats', on: shown('stats'),
-      node: <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} />,
-    },
     mantra: { label: 'mantra', on: shown('mantra'), node: <Mantra /> },
     shopping: {
       label: 'shopping list', on: shown('shopping'),
@@ -2598,13 +2574,16 @@ export function DashboardView() {
     symptom: { label: 'log a symptom', on: shown('symptom'), node: <LogSymptom /> },
   };
   const visible = (k: SectionKey) => !!widgets[k]?.on;
-  const cols = { left: layout.left.filter(visible), right: layout.right.filter(visible) };
+  // fullLayout again at render: a card the in-memory order doesn't know yet (a new
+  // card, or an order kept across a reload of the code) still shows, in its default place
+  const placed = fullLayout(layout);
+  const cols = { left: placed.left.filter(visible), right: placed.right.filter(visible) };
   const card = (k: SectionKey) => {
     const w = widgets[k]!;
-    // The wellness check-in keeps its own look: moved by its grip, never folded
+    // The wellness check-in keeps its own look (the four-square box): moved by its grip, never folded
     if (k === 'wellness') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain>{w.node}</SortableCard>;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} tall={k === 'shopping' || k === 'tasks'}>
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label}>
         {w.node}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
           aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
@@ -2616,27 +2595,46 @@ export function DashboardView() {
   left.push(...cols.left.map(card));
   right.push(...cols.right.map(card));
 
+  const voiceBtnLabel = voice.open ? 'Close voice commands' : 'Voice commands';
+
   return (
-    <ContentTemplate>
-      <Page>
+    <ContentTemplate wallpaperSolid={photoSolid}>
+      <Page ref={pageRef}>
         <Inner>
           <Head>
-            <DateBlock>
+            <DateBlock $below={!compactNav}>
               <Hello>{hello}</Hello>
-              <Eyebrow><span className="long">{eyebrow}</span><span className="short">{shortEyebrow}</span></Eyebrow>
+              <DateLine><span className="long">{eyebrow}</span><span className="short">{shortEyebrow}</span></DateLine>
             </DateBlock>
-            <HeadActions>
+            {compactNav ? (
+              <TopBarAction>
+                {voice.supported && (
+                  <BarBtn type="button" $on={voice.open} aria-label={voiceBtnLabel} title="Voice" aria-expanded={voice.open}
+                    onClick={() => (voice.open ? voice.close() : voice.openAndListen())}>
+                    <MaterialIcon $size={22} aria-hidden="true">mic</MaterialIcon>
+                  </BarBtn>
+                )}
+                <BarBtn type="button" $on={customizing} aria-label="Theme and layout" title="Theme and layout"
+                  aria-expanded={customizing} onClick={() => setCustomizing(o => !o)}>
+                  <MaterialIcon $size={22} aria-hidden="true">tune</MaterialIcon>
+                </BarBtn>
+              </TopBarAction>
+            ) : (
+              <HeadActions>
                 {voice.supported && (
                   <VoiceBtn type="button" $on={voice.open} aria-expanded={voice.open} onClick={() => (voice.open ? voice.close() : voice.openAndListen())}>
-                    <MaterialIcon $size={20} aria-hidden="true">mic</MaterialIcon><VoiceWord>Voice</VoiceWord>
+                    <MaterialIcon $size={20} aria-hidden="true">mic</MaterialIcon>Voice
                   </VoiceBtn>
                 )}
                 <ViewBtn type="button" $on={customizing} aria-label="Theme and layout" title="Theme and layout"
                   aria-expanded={customizing} onClick={() => setCustomizing(o => !o)}>
                   <MaterialIcon $size={22} aria-hidden="true">tune</MaterialIcon>
                 </ViewBtn>
-            </HeadActions>
+              </HeadActions>
+            )}
           </Head>
+          {/* Where the photo's solid part ends when the Quick entry is off */}
+          {!shown('quickEntry') && <div ref={photoEndRef} />}
 
           {voice.open && <VoiceCommand session={voice} />}
           {tourOpen && (
@@ -2704,22 +2702,22 @@ export function DashboardView() {
                   <button type="button" onClick={() => setEntryGuide(null)}>{entrySaved ? 'Done' : 'Close'}</button>
                 </EntryGuide>
               )}
-              <QuickEntry />
+              <div ref={photoEndRef}><QuickEntry /></div>
             </QuickWrap>
           )}
           {showChecklist(onboarding) && (
             <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
           )}
 
-          {shown('clocks') && places.length > 0 && <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />}
-          {shown('clocks') && places.length === 0 && !customizing && (
-            <Muted style={{ marginTop: 20 }}>Add your city under Customize view for the weather and world clocks.</Muted>
-          )}
 
+          {shown('stats') && <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} />}
+
+          <QuickAdds priorities={shown('priorities')} wins={shown('wins')} mantra={shown('mantra')} timer={shown('time')}
+            meal={shown('quickLog') && ff.foodEnabled !== false} symptom={shown('symptom')} />
 
           {(left.length > 0 || right.length > 0) && (
             <DndContext sensors={sensors} collisionDetection={closestCorners}
-              onDragStart={() => setDragging(true)} onDragOver={onDragOver} onDragEnd={onDragEnd}
+              onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
               onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
               <Columns>
                 <DropCol id="left" items={cols.left}>{left}</DropCol>
@@ -2727,6 +2725,7 @@ export function DashboardView() {
               </Columns>
             </DndContext>
           )}
+
         </Inner>
       </Page>
     </ContentTemplate>

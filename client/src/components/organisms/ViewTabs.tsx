@@ -1,8 +1,14 @@
-import { useCallback, useRef, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { glassBar, glassControl } from '../../styles/wallpaper.js';
+import { glassControl } from '../../styles/wallpaper.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { Icon } from '../atoms/core/Icon.jsx';
+import { cardLabel } from '../../styles/cardLabel.js';
+import { useJournalSelect } from '../../stores/journalSelectStore.js';
+import { useEntriesStore } from '../../stores/entriesStore.js';
+import { useBulkDeleteEntries } from '../../hooks/useBulkDeleteEntries.js';
+import { Checkbox } from '../atoms/Checkbox.js';
 
 type TabValue = Parameters<ReturnType<typeof useUIStore.getState>['setViewMode']>[0];
 
@@ -19,21 +25,154 @@ const tabs: TabEntry[] = [
   { value: 'favorites', icon: 'bookmark', title: 'Bookmarked entries' },
 ];
 
-/* The journal list's tool row (60px, same hairline as the editor's top bar so
-   the two read as one): a search box, then Today / All / Bookmarks as one
-   segmented group of icons. Typing searches; the tune button opens the topic
-   and date filters (the Search panel) without typing. New entry lives in the
-   page's title row. */
+/* The journal list's head: a rounded search box, then one quiet row naming what
+   the list shows ("SAT, NOV 14 ×" — × clears the day — "ALL ENTRIES",
+   "BOOKMARKS") with ⋯ holding Today / All / Bookmarks and Select entries.
+   While selecting, the same row reads "2 SELECTED" with Delete and Done.
+   Typing searches; the tune button opens the topic and date filters (the
+   Search panel). New entry lives in the page's title row. */
 const Container = styled.div`
   display: flex;
-  align-items: center;
-  gap: 10px;
-  box-sizing: border-box;
-  height: 60px;
+  flex-direction: column;
+  gap: 6px;
   flex-shrink: 0;
+  padding: 16px var(--s-4, 16px) 0;
+  /* The page's own colour (light or dark), solid — no frosted blur over the photo */
+  background: var(--bg-app);
+`;
+
+const ViewRow = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* A standard row: hairlines above and below, edge to edge across the list */
+  min-height: 48px;
+  margin: 10px calc(-1 * var(--s-4, 16px)) 0;
+  padding: 0 calc(var(--s-4, 16px) - 2px) 0 20px;
+  border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
-  padding: 0 var(--s-4, 16px);
-  ${glassBar}
+`;
+
+const RowLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  ${cardLabel}
+`;
+
+/* The × after a day's name: clears the day (shows All entries) */
+const ClearBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+const RowActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+`;
+
+/* Delete / Done while selecting: the small outlined pills of the title row's New entry */
+const RowPill = styled.button<{ $tone: 'danger' | 'accent' }>`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid ${({ $tone }) => ($tone === 'danger' ? 'var(--border-pill, var(--border-default))' : 'var(--color-accent-line)')};
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ $tone }) => ($tone === 'danger' ? 'var(--color-danger, #c0392b)' : 'var(--color-accent-line)')};
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover:not(:disabled) { border-color: ${({ $tone }) => ($tone === 'danger' ? 'var(--color-danger, #c0392b)' : 'var(--color-accent-line)')}; }
+  &:disabled { opacity: 0.45; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* Under the row while a delete waits for its second click */
+const ConfirmNote = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 calc(-1 * var(--s-4, 16px));
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-secondary);
+`;
+
+const MenuBtn = styled.button<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-right: -6px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ $open }) => ($open ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+const Menu = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border-pop);
+  border-radius: 10px;
+  background: var(--bg-tile);
+  box-shadow: var(--shadow-lg);
+`;
+
+const MenuItem = styled.button<{ $on: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $on }) => ($on ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-secondary)')};
+  text-align: left;
+  cursor: pointer;
+  & > span:first-child { color: var(--text-muted); }
+  &:hover { background: var(--bg-hover); }
+`;
+
+const MenuRule = styled.div`
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border-pop);
 `;
 
 const SearchBox = styled.label<{ $active: boolean }>`
@@ -42,14 +181,18 @@ const SearchBox = styled.label<{ $active: boolean }>`
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 36px;
-  padding: 0 6px 0 12px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-card)')};
-  border-radius: 8px;
+  height: 40px;
+  padding: 0 10px 0 16px;
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-subtle)')};
+  border-radius: 999px;
   background: transparent;
   color: var(--text-muted);
-  &:focus-within { border-color: var(--color-accent); }
   ${glassControl}
+  /* A faint outline that fades into the bar (the photo's glass included) */
+  ${({ $active }) => ($active ? '' : 'html[data-wallpaper] & { border-color: color-mix(in srgb, var(--border-subtle) 70%, transparent); }')}
+  /* Light theme: no fill, even over the photo */
+  html[data-theme='light'][data-wallpaper] & { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  &:focus-within, html[data-wallpaper] &:focus-within { border-color: var(--color-accent); }
 `;
 
 const SearchInput = styled.input`
@@ -78,39 +221,10 @@ const TuneBtn = styled.button<{ $active: boolean }>`
   padding: 0;
   border: none;
   border-radius: 6px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
-  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-muted)')};
-  cursor: pointer;
-  &:hover { color: var(--text-primary); }
-`;
-
-/* Today / All / Bookmarks — one outlined group; the current one is lifted
-   onto --bg-active with its icon bright (--text-primary, never the accent) */
-const Segments = styled.div`
-  flex: none;
-  display: flex;
-  gap: 2px;
-  height: 36px;
-  padding: 3px;
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-  ${glassControl}
-`;
-
-const Segment = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: transparent;
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
-  transition: color 120ms ease, background 120ms ease;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
 function isSameDay(a: Date, b: Date) {
@@ -162,15 +276,55 @@ export function ViewTabs({ onTodayClick }: ViewTabsProps = {}) {
     if (v) enterSearch();
   };
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    let nextIndex: number | null = null;
-    if (e.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
-    else if (e.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
-    if (nextIndex !== null) {
-      e.preventDefault();
-      handleTabClick(tabs[nextIndex]);
-    }
-  }, [handleTabClick]);
+  // ⋯: Today / All / Bookmarks — closes on a choice, a click outside or Escape
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const away = (e: MouseEvent) => { if (!rowRef.current?.contains(e.target as Node)) setMenuOpen(false); };
+    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+  }, [menuOpen]);
+
+  // Select mode: "Select entries" in ⋯ starts it, Done (or Escape) ends it
+  const selecting = useJournalSelect(st => st.selecting);
+  const selectedIds = useJournalSelect(st => st.ids);
+  const startSelecting = useJournalSelect(st => st.start);
+  const stopSelecting = useJournalSelect(st => st.stop);
+  const entries = useEntriesStore(st => st.decryptedEntries);
+  const calendarSyncEnabled = useUIStore(st => st.calendarSyncEnabled);
+  const { deleteEntries, deleting } = useBulkDeleteEntries();
+  const [confirming, setConfirming] = useState(false);
+  const [alsoRemote, setAlsoRemote] = useState(false);
+  const selected = entries.filter(e => selectedIds.has(e.id));
+  const count = selected.length;
+  const hasSyncLinks = selected.some(e => !!((e.metadata?._customFields as Record<string, unknown> | undefined)?._sync));
+  // A change of selection asks again
+  useEffect(() => { setConfirming(false); }, [selectedIds]);
+  useEffect(() => {
+    if (selecting) return;
+    setConfirming(false);
+    setAlsoRemote(false);
+  }, [selecting]);
+  useEffect(() => {
+    if (!selecting || menuOpen) return;
+    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !deleting) stopSelecting(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [selecting, menuOpen, deleting, stopSelecting]);
+  const onDelete = async () => {
+    if (!confirming) { setConfirming(true); return; }
+    await deleteEntries(selected, alsoRemote);
+    stopSelecting();
+  };
+
+  // What the list shows, named in the row
+  const viewLabel = searching ? 'Search results'
+    : viewMode === 'all' ? 'All entries'
+    : viewMode === 'favorites' ? 'Bookmarks'
+    : selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
   return (
     <Container>
@@ -191,25 +345,59 @@ export function ViewTabs({ onTodayClick }: ViewTabsProps = {}) {
           <MaterialIcon $size={18} aria-hidden="true">{searching ? 'close' : 'tune'}</MaterialIcon>
         </TuneBtn>
       </SearchBox>
-      <Segments role="tablist" aria-label="Show">
-        {tabs.map((tab, i) => {
-          const active = isTabActive(tab);
-          return (
-            <Segment
-              key={tab.title}
-              role="tab"
-              aria-selected={active}
-              aria-label={tab.title}
-              $active={active}
-              title={tab.title}
-              onClick={() => handleTabClick(tab)}
-              onKeyDown={e => handleKeyDown(e, i)}
-            >
-              <MaterialIcon $size={20} aria-hidden="true">{tab.icon}</MaterialIcon>
-            </Segment>
-          );
-        })}
-      </Segments>
+      <ViewRow ref={rowRef}>
+        {selecting ? (
+          <>
+            <RowLabel aria-live="polite">{count} selected</RowLabel>
+            <RowActions>
+              <RowPill type="button" $tone="danger" disabled={count === 0 || deleting} onClick={onDelete}>
+                {deleting ? 'Deleting…' : confirming ? `Delete ${count}?` : 'Delete'}
+              </RowPill>
+              <RowPill type="button" $tone="accent" disabled={deleting} onClick={stopSelecting}>Done</RowPill>
+            </RowActions>
+          </>
+        ) : (
+          <>
+            <RowLabel>
+              {viewLabel}
+              {viewMode === 'date' && (
+                <ClearBtn type="button" aria-label="Clear the day" title="Show all entries" onClick={() => setViewMode('all')}>
+                  <MaterialIcon $size={16} aria-hidden="true">close</MaterialIcon>
+                </ClearBtn>
+              )}
+            </RowLabel>
+            <MenuBtn type="button" $open={menuOpen} aria-label="Show" title="View and select" aria-haspopup="menu" aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(o => !o)}>
+              <Icon name="more-horizontal" size={26} strokeWidth={2.6} />
+            </MenuBtn>
+          </>
+        )}
+        {menuOpen && !selecting && (
+          <Menu role="menu" aria-label="Show">
+            {tabs.map(tab => {
+              const active = isTabActive(tab);
+              return (
+                <MenuItem key={tab.title} type="button" role="menuitemradio" aria-checked={active} aria-label={tab.title} $on={active}
+                  onClick={() => { setMenuOpen(false); handleTabClick(tab); }}>
+                  <MaterialIcon $size={20} aria-hidden="true">{tab.icon}</MaterialIcon>
+                  {tab.title}
+                </MenuItem>
+              );
+            })}
+            <MenuRule role="separator" />
+            <MenuItem type="button" role="menuitem" $on={false}
+              onClick={() => { setMenuOpen(false); startSelecting(); }}>
+              <MaterialIcon $size={20} aria-hidden="true">check_circle</MaterialIcon>
+              Select entries
+            </MenuItem>
+          </Menu>
+        )}
+      </ViewRow>
+      {selecting && confirming && calendarSyncEnabled && hasSyncLinks && (
+        <ConfirmNote>
+          <Checkbox checked={alsoRemote} onChange={setAlsoRemote} label="Also delete from Google Calendar" />
+        </ConfirmNote>
+      )}
     </Container>
   );
 }

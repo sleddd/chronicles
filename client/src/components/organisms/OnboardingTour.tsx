@@ -31,7 +31,7 @@ const Card = styled.div`
   overflow-y: auto;
   padding: 36px 36px 24px;
   background: var(--bg-tile);
-  html[data-theme='light'] & { background: var(--bg-control, var(--bg-panel)); }
+  html[data-theme='light'] & { background: #fefefe; }
   border: 1px solid var(--border-pop);
   border-radius: 16px;
   box-shadow: var(--shadow-xl);

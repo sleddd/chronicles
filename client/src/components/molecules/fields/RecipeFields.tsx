@@ -399,52 +399,58 @@ export function RecipeFields({ values, onChange, shoppingListOptions = [] }: Rec
         placeholder="What is the recipe?"
         aria-label="Recipe name"
       />
-      <DescInput
-        value={values.description ?? ''}
-        onChange={e => set({ description: e.target.value })}
-        placeholder="A short, appetizing one-liner…"
-        aria-label="Description"
-      />
+      <Section aria-label="Description">
+        <SectionHead><SectionLabel>Description</SectionLabel></SectionHead>
+        <DescInput
+          value={values.description ?? ''}
+          onChange={e => set({ description: e.target.value })}
+          placeholder="A short, appetizing one-liner…"
+          aria-label="Description"
+        />
+      </Section>
 
-      <Strip>
-        <Cell>
-          <CellLabel>Category</CellLabel>
-          <CellSelect value={values.category ?? ''} onChange={e => set({ category: e.target.value as RecipeCategory | '' })}>
-            <option value="">Choose</option>
-            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </CellSelect>
-        </Cell>
-        <Cell>
-          <CellLabel>Cuisine</CellLabel>
-          <CellInput value={values.cuisine} onChange={e => set({ cuisine: e.target.value })} placeholder="e.g. Italian" />
-        </Cell>
-        <Cell>
-          <CellLabel>Servings</CellLabel>
-          <CellInput type="number" min="1" inputMode="numeric" value={values.servings}
-            onChange={e => set({ servings: e.target.value })} placeholder="4" />
-        </Cell>
-        <Cell>
-          <CellLabel>Prep time</CellLabel>
-          <CellValue>
-            <CellInput inputMode="numeric" value={values.prepTime} onChange={e => set({ prepTime: e.target.value })} placeholder="10" />
-            <Unit>min</Unit>
-          </CellValue>
-        </Cell>
-        <Cell>
-          <CellLabel>Cook time</CellLabel>
-          <CellValue>
-            <CellInput inputMode="numeric" value={values.cookTime} onChange={e => set({ cookTime: e.target.value })} placeholder="20" />
-            <Unit>min</Unit>
-          </CellValue>
-        </Cell>
-        <Cell>
-          <CellLabel>Calories</CellLabel>
-          <CellValue>
-            <CellInput inputMode="numeric" value={values.calories ?? ''} onChange={e => set({ calories: e.target.value })} placeholder="320" />
-            <Unit>kcal</Unit>
-          </CellValue>
-        </Cell>
-      </Strip>
+      <Section aria-label="Details">
+        <SectionHead><SectionLabel>Details</SectionLabel></SectionHead>
+        <Strip>
+          <Cell>
+            <CellLabel>Category</CellLabel>
+            <CellSelect value={values.category ?? ''} onChange={e => set({ category: e.target.value as RecipeCategory | '' })}>
+              <option value="">Choose</option>
+              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </CellSelect>
+          </Cell>
+          <Cell>
+            <CellLabel>Cuisine</CellLabel>
+            <CellInput value={values.cuisine} onChange={e => set({ cuisine: e.target.value })} placeholder="e.g. Italian" />
+          </Cell>
+          <Cell>
+            <CellLabel>Servings</CellLabel>
+            <CellInput type="number" min="1" inputMode="numeric" value={values.servings}
+              onChange={e => set({ servings: e.target.value })} placeholder="4" />
+          </Cell>
+          <Cell>
+            <CellLabel>Prep time</CellLabel>
+            <CellValue>
+              <CellInput inputMode="numeric" value={values.prepTime} onChange={e => set({ prepTime: e.target.value })} placeholder="10" />
+              <Unit>min</Unit>
+            </CellValue>
+          </Cell>
+          <Cell>
+            <CellLabel>Cook time</CellLabel>
+            <CellValue>
+              <CellInput inputMode="numeric" value={values.cookTime} onChange={e => set({ cookTime: e.target.value })} placeholder="20" />
+              <Unit>min</Unit>
+            </CellValue>
+          </Cell>
+          <Cell>
+            <CellLabel>Calories</CellLabel>
+            <CellValue>
+              <CellInput inputMode="numeric" value={values.calories ?? ''} onChange={e => set({ calories: e.target.value })} placeholder="320" />
+              <Unit>kcal</Unit>
+            </CellValue>
+          </Cell>
+        </Strip>
+      </Section>
 
       <Section aria-label="Difficulty">
         <SectionHead><SectionLabel>Difficulty</SectionLabel></SectionHead>

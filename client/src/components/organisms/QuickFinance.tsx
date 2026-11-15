@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { outlinedInputs } from '../../styles/filledInputs.js';
 import { BillEditor } from './BillsTable.js';
 import { ExpenseForm } from './SpendingLog.js';
 import { useFinance } from '../../hooks/useFinance.js';
@@ -19,13 +20,19 @@ export const QUICK_FINANCE_CHOICES: { key: QuickFinanceKind; name: string; icon:
   { key: 'spending', name: 'Spending', icon: 'wallet' },
 ];
 
+/* In the Quick entry the bill and spending fields are outlined like the entry
+   forms' boxes — no shaded fill */
 const Wrap = styled.div`
-  margin-top: 20px;
   font-family: var(--font-sans);
+  ${outlinedInputs}
+  /* The entry card's rows: boxes fill their column */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { width: 100%; }
 `;
 
 const Saved = styled.p`
-  margin: 14px 0 0;
+  margin: 0;
+  padding: 14px 36px;
+  border-top: 1px solid var(--border-subtle);
   font-size: 14px;
   color: var(--text-muted);
   button {
@@ -57,6 +64,8 @@ export function QuickFinance({ kind }: { kind: QuickFinanceKind }) {
     <Wrap>
       {kind === 'bill' ? (
         <BillEditor
+          card
+          noHeading
           key={`bill-${round}`}
           categories={categories}
           onAddCategory={async name => (await budget.save({ name, monthlyPlannedCents: 0, order: categories.reduce((m, c) => Math.max(m, c.order), -1) + 1 }))?.id ?? null}
@@ -68,6 +77,7 @@ export function QuickFinance({ kind }: { kind: QuickFinanceKind }) {
           key={`spend-${round}`}
           initial={{ date: todayStr(), description: '', amount: '', categoryId: '' }}
           categories={categories}
+          card
           submitLabel="Log spending"
           onSubmit={e => void expenses.save(e).then(r => { if (r) done(`Logged ${e.description} to Spending.`); })}
         />

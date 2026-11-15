@@ -1,14 +1,18 @@
 import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/ChangeFields.js';
 import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode } from 'react';
-import { PillButton } from '../atoms/PillButton.js';
-import styled from 'styled-components';
-import { glassBar, glassCard, solidUnderPhoto } from '../../styles/wallpaper.js';
+import styled, { css } from 'styled-components';
+import { onPhoto, photoTokens, solidUnderPhoto } from '../../styles/wallpaper.js';
 import { cardLabel } from '../../styles/cardLabel.js';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
+import { SectionLabel, RowBox, LabelledRow, RowLabel } from '../molecules/fields/formKit.js';
+import { TitleField } from '../molecules/fields/TitleInput.js';
+import { QUICK_PLACEHOLDER } from '../../utils/quickPlaceholder.js';
+import { NAME_FIELD_BY_TYPE, NAME_MAX, NAME_PLACEHOLDER_BY_TYPE, contentWithName, nameFromContent } from '../../utils/nameFields.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
-import { Editor, type DictationControls, type DrawingControls } from './Editor.js';
+import { Editor, ToolbarRow, type DictationControls, type DrawingControls } from './Editor.js';
 import { RecipeEntry } from './RecipeEntry.js';
 import { ImageLibraryPicker } from './ImageLibraryPicker.js';
 import { TopicSelector } from './TopicSelector.js';
@@ -48,11 +52,10 @@ import { WinsFields, type WinsFieldValues } from '../molecules/fields/WinsFields
 import { WellnessFields, type WellnessFieldValues } from '../molecules/fields/WellnessFields.js';
 import { UserFieldsForm, titleFieldOf } from '../molecules/fields/UserFieldsForm.js';
 import { useUIStore } from '../../stores/uiStore.js';
-import { EntryHeroBanner, EntryImageStrip, EntryLightbox } from './EntryImageGallery.js';
+import { EntryHeroBanner, EntryPhotos, EntryLightbox } from './EntryImageGallery.js';
 import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
-import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
 import { EMPTY_SYMPTOM_CHIPS, symptomChipList, addSymptomChip, removeSymptomChip, type SymptomChipConfig } from '../../utils/symptomChips.js';
 import { taskTypeList, addTaskType, removeTaskType } from '../../utils/taskTypes.js';
@@ -73,34 +76,6 @@ const FormWrapper = styled.div`
   flex: 1;
   min-height: 0;
   overflow: hidden;
-`;
-
-/* Editor top bar — continues the journal list's quick-tabs bar (ViewTabs):
-   same 60px height and --border-subtle hairline, edge to edge, so the two
-   read as one seamless bar. Topic picker left, entry actions right. */
-const EdToolRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  box-sizing: border-box;
-  height: 60px;
-  flex-shrink: 0;
-  /* Above the writing area, so the ⋯ More menu sits on top of it */
-  position: relative;
-  z-index: 5;
-  padding: 0 20px 0 32px;
-  border-bottom: 1px solid var(--border-subtle);
-  ${glassBar}
-`;
-
-const EdActions = styled.div`
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-left: auto;
-  min-width: 0;
-  /* No overflow clipping here — it would hide the ⋯ More menu that drops below */
 `;
 
 const IconBtn = styled.button<{ $active?: boolean; $activeColor?: string; $danger?: boolean }>`
@@ -126,23 +101,17 @@ const IconBtn = styled.button<{ $active?: boolean; $activeColor?: string; $dange
   }
 `;
 
-/* A thin rule between the entry actions and the window controls (expand / close) */
-const ToolDivider = styled.span`
-  width: 1px;
-  height: 26px;
-  margin: 0 8px;
-  background: var(--border-card);
-`;
-
 /* ⋯ More: the less-used actions (share, add from library, draw) */
 const MoreWrap = styled.div`
   position: relative;
 `;
 
-const MoreMenu = styled.div`
+const MoreMenu = styled.div<{ $up?: boolean }>`
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
+  /* In the journal's tool row (at the foot): opening upward, from the left */
+  ${({ $up }) => ($up ? 'top: auto; bottom: calc(100% + 8px); right: auto; left: 0;' : '')}
   z-index: 40;
   min-width: 240px;
   padding: 6px;
@@ -192,38 +161,16 @@ const ScrollArea = styled.div`
 `;
 
 /* Centered content column */
+/* At least the pane's height, so a short entry's foot (Close / Save) sits at the
+   bottom of the pane — and a long one's at the end of the entry, scrolling with it */
 const EdBody = styled.div`
-  max-width: 90%;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  margin: 0 auto;
-  padding: var(--s-4, 16px) var(--s-5, 20px) var(--s-4, 16px);
+  min-height: 100%;
+  padding-bottom: 24px;
+  & > * { flex: 1 0 auto; }
 `;
-
-/* The topic picker at the left of the editor's top bar: the topic's name
-   in regular-weight sentence case with a chevron (restyles the TopicSelector trigger,
-   keeping its dropdown intact). */
-const CrumbTopic = styled.div`
-  & > div > button {
-    border: none;
-    border-radius: 0;
-    padding: 0 2px;
-    background: transparent;
-    font-family: var(--font-sans);
-    font-size: 18px;
-    font-weight: 400;
-    letter-spacing: normal;
-    text-transform: none;
-    color: var(--text-primary);
-    gap: 12px;
-  }
-  & > div > button:hover { background: transparent; color: var(--text-primary); }
-  & > div > button > span:last-child { color: var(--text-muted); }
-  /* Dropdown menu: drop the outer border (matches Quick Entry). */
-  & > div > div { border: none; }
-`;
-
-
-
 
 /* cf-card: the card that wraps each custom-fields section */
 const CustomFieldsSection = styled.div<{ $noRule?: boolean }>`
@@ -240,29 +187,53 @@ const CustomFieldsSection = styled.div<{ $noRule?: boolean }>`
   margin-top: ${({ $noRule }) => ($noRule ? '8px' : 'var(--s-5, 20px)')};
 `;
 
-const CustomFieldsBody = styled.div`
+const CustomFieldsBody = styled.div<{ $nameInText?: boolean }>`
   /* Editor wrappers/rows: no extra gap — each field row carries its own padding. */
   & > div { gap: 0 !important; }
+  /* The name is the text area's first line now: the forms' own title box stays out */
+  /* …and whatever comes after it (a task's Todo List, which sets its own 30px) starts
+     straight away, so the fields begin right under the writing area. When the title
+     sits alone in a section of its own (TaskFields), that section goes too */
+  ${({ $nameInText }) => ($nameInText ? `& ${TitleField} { display: none; } & ${TitleField} + * { margin-top: 0 !important; } & section:has(> ${TitleField}:only-child) { display: none; } & section:has(> ${TitleField}:only-child) + * { margin-top: 0 !important; }` : '')}
 `;
 
-const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean }>`
+const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: boolean; $roomy?: boolean }>`
+  /* One look in the journal and the Quick entry: the formatting bar on the card's
+     colour, no rule above it, room under it before the text */
+  & ${ToolbarRow} { margin-bottom: 28px; padding-top: 0; border-top: none; background: var(--editor-surface); }
+  /* Name-led topics: the first line is the entry's name, set like a title */
+  ${({ $titled }) => ($titled ? `
+    .tiptap > :first-child, .tiptap > p.is-editor-empty:first-child::before {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 300;
+      line-height: 1.32;
+    }
+    .tiptap > :first-child { margin-bottom: 0.5em; }
+  ` : '')}
   display: ${({ $hidden }) => ($hidden ? 'none' : 'flex')};
   flex-direction: column;
   /* clip, not hidden: hidden would make this a scroll box of its own and the
      formatting bar would stick to it instead of the scrolling body */
   overflow: clip;
-  /* What the sticky formatting bar paints behind itself */
-  --editor-surface: ${({ $quick }) => ($quick ? 'var(--bg-panel)' : 'var(--bg-app)')};
-  margin-top: ${({ $quick }) => ($quick ? '8px' : '24px')};
-  /* A real writing area even when the entry is one line */
-  .tiptap { min-height: ${({ $quick }) => ($quick ? '170px' : '220px')}; }
-  /* Phones: the Quick entry's writing area a little taller */
-  @media (max-width: 768px) { .tiptap { min-height: ${({ $quick }) => ($quick ? '210px' : '220px')}; } }
-  /* Quick entry: the journal's own text (font, size, weight), the prompt in italics */
-  ${({ $quick }) => ($quick ? `
-    .tiptap { padding: 12px 0 20px; }
-    .tiptap p.is-editor-empty:first-child::before { font-style: italic; color: var(--text-muted); }
-  ` : '')}
+  /* What the sticky formatting bar paints behind itself: the card */
+  --editor-surface: var(--bg-panel);
+  /* Plain text on the card, only as tall as what's written (it grows as you type) */
+  .tiptap { min-height: 0; padding: 0; font-size: 16px; line-height: 1.6; color: var(--text-primary); }
+  /* The Quick entry with nothing but text (Journal, a topic with no fields): room to write */
+  ${({ $roomy }) => ($roomy ? '.tiptap { min-height: 140px; }' : '')}
+`;
+
+/* The formatted recipe page, inset like the card's rows (36px a side, 20px on a narrow card) */
+const RecipePad = styled.div`
+  padding: 20px 36px 32px;
+  @container entrycard (max-width: 600px) { padding: 16px 20px 24px; }
+`;
+
+/* The photos' row, lined up with the text (the entry card's side margins) */
+const PhotosRow = styled.div`
+  padding: 0 36px 20px;
+  @media (max-width: 640px) { padding: 0 20px 18px; }
 `;
 
 /* "Done editing — view recipe" — accent text button above the recipe fields. */
@@ -271,7 +242,9 @@ const ViewRecipeBtn = styled.button`
   align-items: center;
   gap: 6px;
   align-self: flex-start;
-  margin-bottom: 12px;
+  /* Lined up with the card's rows (36px in, 20px on a narrow card) */
+  margin: 18px 36px 14px;
+  @container entrycard (max-width: 600px) { margin: 14px 20px 10px; }
   padding: 4px 0;
   background: transparent;
   border: none;
@@ -294,62 +267,10 @@ const ImageErrorText = styled.div`
   color: var(--color-danger, #c0392b);
 `;
 
-/* Delete in the footer — the standard rounded pill, neutral until hovered,
-   then danger red (outline + text) so it still reads as destructive. */
-const FooterDeleteBtn = styled(PillButton)`
-  &&:hover:not(:disabled) {
-    color: var(--color-danger, #dc3232);
-    border-color: var(--color-danger, #dc3232);
-    background: transparent;
-  }
-  @media (max-width: 768px) { order: 3; }
-`;
-
 /* Phones: the "Saved" note is dropped (a save failure still shows) */
 const StatusSlot = styled.span<{ $failed?: boolean }>`
   display: contents;
   @media (max-width: 768px) { display: ${({ $failed }) => ($failed ? 'contents' : 'none')}; }
-`;
-
-const FooterLeft = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-`;
-
-/* Footer. Desktop / tablet: bottom-docked, outside the scroll area ($docked).
-   Phones (not tablets): in the page flow after the entry ($inFlow), the
-   buttons stacked full width — Save, Discard, Delete */
-const SaveRow = styled.div<{ $inFlow?: boolean }>`
-  ${({ $inFlow }) => ($inFlow ? '@media (max-width: 768px) { && { margin-top: 28px; padding-inline: 0; } }' : '')}
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px var(--s-6, 24px);
-  border-top: 1px solid var(--rule, ${({ theme }) => theme.colors.border});
-  gap: 8px;
-  flex-shrink: 0;
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    padding: 14px 16px;
-    & > div { display: contents; }
-    & button { width: 100%; min-height: 44px; }
-  }
-`;
-
-const SaveRowActions = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: auto;
-`;
-
-/* Close (discards unsaved changes) — the standard neutral outlined pill */
-const DiscardBtn = styled(PillButton).attrs({ $variant: 'neutral' as const, type: 'button' as const })`
-  @media (max-width: 768px) { order: 2; }
 `;
 
 const SaveHint = styled.div`
@@ -404,101 +325,343 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
 
 /* ── Quick entry (dashboard) ── */
 
-/* The card: --bg-panel with a hairline outline, the dashboard cards' 14px corners */
-const QuickCard = styled.section`
+/* No card: written straight on the page (on the photo, when there's a
+   wallpaper — photoTokens turn its text and lines white there) */
+const QuickCard = styled.div`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 30px 28px 18px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-panel);
   font-family: var(--font-sans);
-  @media (max-width: 768px) { padding: 22px 24px 26px; }
-  @media (max-width: 480px) { padding: 20px 18px 22px; }
-  /* On a wallpaper the photo shows through the Quick entry: a lighter fill and
-     only a slight blur (the other cards keep the usual frost) */
-  html[data-wallpaper] & { --glass-solid: 40%; --glass-blur: 3px; }
-  /* …so in dark its quiet text (the prompt, the tools, "Logged to
-     today", Save entry before there's anything to save) is a step brighter,
-     to read over the photo */
-  html[data-wallpaper][data-theme='dark'] & { --text-muted: #b9bcc4; --text-soft: #cdd0d6; --border-card: #5a5e69; }
-  ${glassCard}
 `;
 
-const QuickHead = styled.div`
+/* Everything under the question — the fields, the writing area, the tools and
+   Save entry — in one frosted card */
+/* The entry card (the Quick entry and the journal): the writing area as its
+   title row (the T / pencil / mic tools at its top right), then the topic's
+   fields as full-width rows — a small tracked-capitals label on the left, the
+   field on the right, hairlines edge to edge — and a tinted foot with Save */
+const CARD_X = '36px';
+const LABEL_COL = '200px';
+
+const cardRows = css`
+  /* Every field group is a row: its head (the label) in the left column, the field on the right */
+  & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) {
+    display: grid;
+    grid-template-columns: ${LABEL_COL} minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: start;
+    margin: 0 !important;
+    padding: 20px ${CARD_X};
+    border-top: 1px solid var(--border-subtle);
+  }
+  & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > * { grid-column: 2; min-width: 0; margin-top: 0; }
+  & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > * + * { margin-top: 12px; }
+  /* Links and buttons sitting in a row (+ Add notes, + Add exercises…) keep to the left, not stretched */
+  & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > button { justify-self: start; }
+  & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) {
+    grid-column: 1;
+    grid-row: 1 / span 20;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding-top: 9px;
+  }
+  & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) > :first-child { ${cardLabel} }
+  & ${SectionLabel}, & ${RowLabel} { ${cardLabel} }
+  /* A group that runs the card's width (the meal's Nutrition panel, a media item's cover + details) */
+  & ${CustomFieldsBody} section[data-card-wide]:not(${CustomFieldsBody} section section) > * { grid-column: 1 / -1; grid-row: auto; }
+  /* A group whose only content is the (hidden) title box: no row at all */
+  && ${CustomFieldsBody} section:has(> ${TitleField}:only-child) { display: none; }
+  /* Forms built from labelled rows: the same rows, no box of their own */
+  & ${CustomFieldsBody} > * > ${RowBox} { margin: 0 !important; border: none; border-radius: 0; overflow: visible; }
+  && ${CustomFieldsBody} > * > ${RowBox} > ${LabelledRow} {
+    grid-template-columns: ${LABEL_COL} minmax(0, 1fr);
+    column-gap: 24px;
+    min-height: 68px;
+    padding: 12px ${CARD_X};
+    border-top: 1px solid var(--border-subtle);
+  }
+  /* A switch card (On my habits, Currently taking, Sync to calendar…): a row too */
+  & .card-row {
+    margin: 0 !important;
+    padding: 18px ${CARD_X};
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
+  }
+  /* A row split in two (Task's Deadline | Planned for): the halves side by side, the
+     first keeping the label column so its field lines up with the rows above */
+  &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0; padding: 0; }
+  &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split > :first-child { grid-template-columns: ${LABEL_COL} minmax(0, 1fr); column-gap: 24px; padding: 12px 24px 12px ${CARD_X}; }
+  &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split > :first-child + * { padding: 12px ${CARD_X} 12px 24px; }
+  /* Wrappers that only group rows (Routine's Duration | Times) step aside */
+  & .card-contents { display: contents; }
+  /* Anything else a form puts between its rows keeps the card's side margins */
+  & ${CustomFieldsBody} > * > :not(section):not(${RowBox}):not(${TitleField}):not(.card-row):not(.card-contents) {
+    margin-inline: ${CARD_X};
+  }
+  @container entrycard (max-width: 600px) {
+    & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section), && ${CustomFieldsBody} > * > ${RowBox} > ${LabelledRow} {
+      grid-template-columns: minmax(0, 1fr); row-gap: 10px; padding: 16px 20px;
+    }
+    & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > *, & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) { grid-column: 1; grid-row: auto; }
+    & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) { flex-direction: row; flex-wrap: wrap; padding-top: 0; }
+    & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > * + * { margin-top: 10px; }
+    & .card-row { padding: 16px 20px; }
+    & ${CustomFieldsBody} > * > :not(section):not(${RowBox}):not(${TitleField}):not(.card-row):not(.card-contents) { margin-inline: 20px; }
+  }
+`;
+
+const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
+  position: relative;
   display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  overflow: clip;
+  /* Its rows stack (label over field) by the card's own width, not the window's */
+  container: entrycard / inline-size;
+  /* The journal: no card — the same rows, edge to edge in the editor pane */
+  ${({ $flat }) => ($flat ? css`
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+    /* The formatting bar paints the page, not a card */
+    && ${EditorArea} { --editor-surface: var(--bg-app); padding-top: 18px; }
+  ` : '')}
+  ${({ $quick }) => ($quick ? css`
+    margin-top: 24px;
+    /* Solid: no blur, nothing showing through */
+    @media (max-width: 768px) { margin-top: 18px; }
+  ` : '')}
+  /* The writing area is the card's title row; the tools sit at its top right */
+  && ${EditorArea} { margin: 0; padding: 28px ${CARD_X} 22px; border: none; border-radius: 0; }
+  && ${EditorArea} .tiptap { padding-bottom: 0; }
+  &&[data-tools-beside] ${EditorArea} { padding-right: 150px; }
+  @container entrycard (max-width: 600px) {
+    && ${EditorArea} { padding: 22px 20px 18px; }
+    &&[data-tools-beside] ${EditorArea} { padding-right: 124px; }
+  }
+  /* Placeholders faded (the Quick entry's read "Enter title/text...", QUICK_PLACEHOLDER below);
+     the topic menu's search (in QuickPrompt) keeps its own */
+  & input::placeholder, & textarea::placeholder { color: var(--text-muted); font-style: normal; opacity: 0.55; }
+  && .tiptap p.is-editor-empty:first-child::before { font-style: normal; color: var(--text-muted); opacity: 0.55; }
+  /* The fields: straight under the title row, as the card's rows */
+  && ${CustomFieldsSection} { margin: 0; padding: 0; border: none; }
+  /* The journal: a little more room between the writing and the fields */
+  ${({ $flat }) => ($flat ? css`&& ${CustomFieldsSection}[data-after-text] { margin-top: 16px; }` : '')}
+  ${cardRows}
+`;
+
+/* The Quick entry's finance forms (Bill, Spending): a card like the entry card, their rows edge to edge */
+const QuickExtraBox = styled.div`
+  margin-top: 24px;
+  /* The forms inside lay out the entry card's rows themselves (edge to edge) */
+  overflow: clip;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  @media (max-width: 640px) { margin-top: 18px; }
+`;
+
+/* The card's foot: a tinted band — what's left of the footer on the left, Save on the right */
+const CardFoot = styled.div`
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  /* "Quick entry" on the left, the topic pill on the right */
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px 12px;
+  padding: 14px 24px 14px ${CARD_X};
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-app);
+  & > :last-child { margin-left: auto; }
+  @media (max-width: 640px) { padding: 12px 20px; }
+`;
+
+/* "What would you like to write down? a journal entry ⌄" — thin italic Work
+   Sans, the topic picker inline as underlined words */
+/* "What would you like to write down? a journal entry ⌄" — thin italic Work Sans,
+   the topic picker inline as underlined words (the Quick entry and the journal) */
+const PromptLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 300;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-primary);
   /* Above the writing area, so the topic menu drops over it */
   position: relative;
   z-index: 5;
-`;
-
-/* The card's label: small tracked capitals in a quiet grey (the mockup's "QUICK ENTRY") */
-const QuickTitle = styled.h2`
-  margin: 0;
-  ${cardLabel}
-  /* The label stays faded over a photo: only the card's other quiet text is brightened */
-  html[data-wallpaper][data-theme='dark'] & { color: #7c7f88; }
-`;
-
-/* The topic picker as an outlined pill ("No topic ⌄"), its menu right-aligned */
-const QuickTopic = styled.div`
+  & > h2 { margin: 0; font: inherit; color: inherit; }
+  /* The picker: the chosen topic as words over a hairline, a small chevron */
   & > div > button {
-    min-width: 160px;
-    height: 38px;
-    padding: 0 14px 0 16px;
     gap: 16px;
-    justify-content: space-between;
-    border: 1px solid var(--border-card); /* light grey, not the darker pill outline */
-    border-radius: var(--r-full, 999px);
-    background: var(--bg-control, transparent);
-    font-size: 14px;
+    padding: 0 6px 6px;
+    border: none;
+    border-bottom: 1px solid var(--border-default);
+    border-radius: 0;
+    background: none;
+    font: inherit;
     text-transform: none;
-    color: var(--text-primary);
+    color: var(--color-accent-soft);
   }
-  /* Hover: no fill — the outline firms up instead */
-  & > div > button:hover { background: var(--bg-control, transparent); border-color: var(--border-strong); }
-  & > div > button > span:last-child { color: var(--text-muted); font-size: 11px; }
-  & > div > div { left: auto; right: 0; }
+  /* Hover changes nothing — the underline keeps its colour */
+  & > div > button:hover { background: none; border-bottom-color: var(--border-default); }
+  & > div > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  & > div > button > span:last-child { font-size: 12px; color: inherit; }
+  & > div > div { font-style: normal; font-family: var(--font-sans); font-weight: 400; text-shadow: none; }
+  & input::placeholder { color: var(--text-placeholder, var(--text-muted)); opacity: 1; }
+  @media (max-width: 768px) { font-size: 20px; }
+  @media (max-width: 400px) { font-size: 19px; }
 `;
 
-/* Hairline under the writing area, then the tools and Save entry */
-const QuickFoot = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
-  /* Save entry: accent outline + accent text in both themes (no fill), faded until there's something to save */
+/* The journal's: a step smaller, beside the editor's actions */
+const JournalPrompt = styled(PromptLine)`
+  /* At the top of the writing area (no bar): 22px, wrapping when the pane is narrow */
+  font-size: 22px;
+  column-gap: 8px;
+  /* The picker's words without the underline here */
+  & > div > button, & > div > button:hover { padding: 0; border-bottom: none; gap: 10px; }
+  @media (max-width: 768px) { font-size: 19px; }
+`;
+
+/* The Quick entry's: on the photo — white text, its picker's menu dark */
+const QuickPrompt = styled(PromptLine)`
+  /* Phones: a little smaller */
+  @media (max-width: 768px) { font-size: 18px; }
+  @media (max-width: 400px) { font-size: 17px; }
+  ${photoTokens}
+  ${onPhoto}
+  /* Over the photo the picker's words are a light grey (an accent can sink into a dark
+     photo), a step back from the white question */
+  html[data-wallpaper] & > div > button { color: #c9cdd4; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
+  /* Its menu over the photo: the lines between topics barely there */
+  html[data-wallpaper] & > div > div { --border-faint: rgba(255, 255, 255, 0.12); }
+`;
+
+/* Under the card: Save entry (and the tools when the writing area is hidden) */
+const QuickFoot = styled(CardFoot)`
+  /* Save entry: an accent outline with accent text (never filled) once there's
+     something to save; a quiet grey outline until then */
   && ${SaveButton}, html[data-theme='light'] && ${SaveButton} {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    order: 0;
+    height: 40px;
+    padding: 0 28px;
+    border: 1px solid var(--color-accent-line);
+    border-radius: var(--r-full, 999px);
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
     color: var(--color-accent-line);
+    text-shadow: none;
+    transition: background 150ms, border-color 150ms;
+  }
+  && ${SaveButton}:hover:not(:disabled), html[data-theme='light'] && ${SaveButton}:hover:not(:disabled) {
+    border-color: var(--color-accent-line);
+    background: var(--color-accent-subtle);
+  }
+  && ${SaveButton}:disabled, html[data-theme='light'] && ${SaveButton}:disabled {
+    border-color: var(--border-card);
+    background: transparent;
+    color: var(--text-muted);
+  }
+  @media (max-width: 480px) { && ${SaveButton} { padding: 0 24px; } }
+`;
+
+/* The journal's foot: the Quick entry's (Save entry a solid accent pill once there's
+   something to save), on the page — no tinted band */
+const JournalFoot = styled(CardFoot)`
+  background: transparent;
+  /* Pushed to the bottom of the pane when the entry is short (EdBody's min-height) */
+  margin-top: auto;
+  /* Close and Delete: outlines only — no white fill (light theme's --bg-control) */
+  && button:not(${SaveButton}) { background: transparent; }
+  && button:not(${SaveButton}):hover:not(:disabled) { background: var(--bg-hover); }
+  /* Save entry: the app's normal pill — an accent outline with accent text, never filled
+     (light theme included), a faint accent tint on hover */
+  && ${SaveButton}:not(:disabled), html[data-theme='light'] && ${SaveButton}:not(:disabled) {
     border-color: var(--color-accent-line);
     background: transparent;
+    color: var(--color-accent-line);
   }
-  /* Nothing to save yet: a quiet grey outline and grey text */
-  && ${SaveButton}:disabled { color: var(--text-muted); border-color: var(--border-card); opacity: 1; }
-  && ${SaveButton}:hover:not(:disabled) { background: var(--color-accent-subtle); }
+  && ${SaveButton}:hover:not(:disabled), html[data-theme='light'] && ${SaveButton}:hover:not(:disabled) {
+    border-color: var(--color-accent-line);
+    background: var(--color-accent-subtle);
+  }
 `;
 
-const QuickTools = styled.div`
+/* The journal's head (no bar): the question and topic picker, full screen / close on the
+   right — clear of the corner reminders bell on wide screens */
+/* The question and topic picker. Its icons sit at the pane's right edge, except
+   in full screen, where they stop clear of the corner reminders bell. With no
+   text area (Exercise, Wellness…) the fields get room under it. */
+const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px ${({ $expanded }) => ($expanded ? '76px' : '28px')} ${({ $roomy }) => ($roomy ? '28px' : '4px')} 36px;
+  ${NAV_COMPACT} { padding-right: 24px; }
+  @media (max-width: 640px) { padding: 20px 12px ${({ $roomy }) => ($roomy ? '18px' : '4px')} 20px; }
+`;
+
+const HeadIcons = styled.div`
   display: flex;
   gap: 4px;
+  flex: none;
+  & > button { width: 34px; height: 34px; color: var(--text-muted); }
 `;
 
-/* "Logged to today" before Save entry, then the button */
-const QuickSaveSide = styled.div`
+/* The tool row's left side: the entry's tools as plain icons */
+const JournalTools = styled.div`
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-size: 13px;
-  color: var(--text-soft);
-  @media (max-width: 480px) { & > span { display: none; } }
+  gap: 4px;
+  margin-left: -8px;
+  & > button, & > div > button { width: 36px; height: 36px; color: var(--text-secondary); }
+  & > button[aria-pressed="true"] { color: var(--color-accent); }
+`;
+
+const JournalSaveSide = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+`;
+
+/* T, the pencil and the mic — plain, in the text colour */
+const QuickTools = styled.div<{ $beside?: boolean }>`
+  display: flex;
+  gap: 2px;
+  margin-left: -6px;
+  & > button { width: 34px; height: 34px; color: var(--text-secondary); }
+  & > button[aria-pressed="true"] { color: var(--color-accent); }
+  /* Beside the writing area, at its top right — in reach without scrolling down */
+  ${({ $beside }) => ($beside ? `
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 3;
+    margin-left: 0;
+    @media (max-width: 640px) { top: 18px; right: 12px; }
+  ` : '')}
 `;
 
 /* Only shown when a save fails */
@@ -507,6 +670,12 @@ const QuickError = styled.p`
   font-size: 13px;
   color: var(--color-danger);
 `;
+
+/** The prompt's words for a topic: "a journal entry", "an exercise entry" */
+export function quickTopicPhrase(name: string): string {
+  const n = name.trim().toLowerCase() || 'journal';
+  return `${/^[aeiou]/.test(n) ? 'an' : 'a'} ${n} entry`;
+}
 
 /* ── Helpers ── */
 
@@ -526,12 +695,6 @@ const TOPIC_TO_TYPE: Record<string, string> = {
 };
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
-const NAME_FIELD_BY_TYPE: Record<string, string> = {
-  food: 'mealDescription', medication: 'medicationName', allergy: 'allergen',
-  goal: 'goalObjective', milestone: 'milestoneObjective', recipe: 'recipeName',
-  event: 'eventName', meeting: 'meetingName', task: 'taskDescription', symptom: 'symptomName', change: 'changeWhat',
-  routine: 'routineName', training_plan: 'planName', time_tracking: 'activityName', media: 'mediaTitle', habit: 'habitName',
-};
 
 function getCustomType(topicName: string | undefined): string | null {
   if (!topicName) return null;
@@ -614,10 +777,30 @@ export function EntryForm({
   quickExtras, quickExtra = null, onQuickExtra, quickExtraBody,
 }: EntryFormProps) {
   const quick = variant === 'quick';
+  // Quick entry: every text field's placeholder is "Enter title/text...", whichever topic's form shows
+  const quickRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = quickRef.current;
+    if (!quick || !root) return;
+    const apply = () => {
+      root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(el => {
+        if (el.closest('[data-keep-placeholder]')) return;
+        if (el instanceof HTMLInputElement && !['text', 'search', 'url', 'number', 'email', 'tel', ''].includes(el.type)) return;
+        // Number fields (exercise stats, nutrients, amounts…) read just "0"
+        if (el instanceof HTMLInputElement && (el.type === 'number' || el.inputMode === 'decimal' || el.inputMode === 'numeric')) {
+          if (el.placeholder !== '0') el.placeholder = '0';
+          return;
+        }
+        if (el.placeholder !== QUICK_PLACEHOLDER) el.placeholder = QUICK_PLACEHOLDER;
+      });
+    };
+    apply();
+    const mo = new MutationObserver(apply);
+    mo.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['placeholder'] });
+    return () => mo.disconnect();
+  }, [quick]);
   // Time tracking on this entry (tasks, goals, milestones, exercise, Time Tracking activities)
   const timer = useTimeTracking(entryId);
-  // Phones (not tablets): Save / Discard / Delete sit in the page flow, not docked
-  const phone = useMediaQuery('(max-width: 768px)');
   // Symptom chips: the built-in list plus the owner's own (encrypted setting)
   const [symptomChips, saveSymptomChips, chipsLoaded] = useEncryptedSetting<SymptomChipConfig>('symptomChips', EMPTY_SYMPTOM_CHIPS);
   // Task types: Regular task / Small victory plus the owner's own (encrypted setting)
@@ -648,8 +831,10 @@ export function EntryForm({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const featuredImage = featuredKey ? images.find(img => img.key === featuredKey) ?? null : null;
-  const heroFocus = featuredImage && onImageFocus ? (x: number, y: number) => onImageFocus(featuredImage.key, x, y) : undefined;
+  // No featured banner any more: photos show under the text. A recipe's formatted page
+  // still leads with one — the one chosen before, else the first
+  const recipePhoto = (featuredKey ? images.find(img => img.key === featuredKey) : undefined) ?? images[0] ?? null;
+  const recipeFocus = recipePhoto && onImageFocus ? (x: number, y: number) => onImageFocus(recipePhoto.key, x, y) : undefined;
   const imagesFull = images.length >= 7;
   const [savedAgoText, setSavedAgoText] = useState('');
   useEffect(() => {
@@ -665,7 +850,6 @@ export function EntryForm({
   const entries = useEntriesStore(s => s.decryptedEntries);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
-  const topicHideText = useUIStore(s => s.topicHideText);
   const cycleTrackingEnabled = useUIStore(s => s.cycleTrackingEnabled);
   const calendarSyncEnabled = useUIStore(s => s.calendarSyncEnabled);
 
@@ -778,7 +962,8 @@ export function EntryForm({
   // Any filled-in field makes an entry saveable — topics without a text area
   // (books, exercise, custom topics with only yes/no fields…) must still save
   const isFilled = (v: unknown) => v !== '' && v != null && v !== false && !(Array.isArray(v) && v.length === 0);
-  const hasFieldValue = Object.entries(customFields).some(([k, v]) => !k.startsWith('_') && isFilled(v))
+  // (a new task's Idea / Backlog default alone doesn't make it saveable)
+  const hasFieldValue = Object.entries(customFields).some(([k, v]) => !k.startsWith('_') && k !== 'isBacklog' && isFilled(v))
     || Object.values(userFieldValues).some(isFilled);
   const canSave = stripHtml(content).length > 0
     || hasFieldValue
@@ -798,7 +983,6 @@ export function EntryForm({
   const setFormatOpen = (open: boolean) => { setToolbarOpen(open); setNotesExpanded(open); };
   const hasTextContent = stripHtml(content).trim().length > 0 || content.includes('data-type="drawing"');
   const isJournalTopic = !selectedTopic || selectedTopic.name.toLowerCase() === 'journal';
-  const hideByTopicOption = topicId != null && !!topicHideText[topicId];
   // Quote/Books/Music entries live in their custom fields — no text area
   // …but only once the topic has fields: with none defined, the text area stays
   const fieldLedTopic = userFieldDefs.length > 0 && ['quote', 'quotes', 'book', 'books', 'music']
@@ -816,44 +1000,15 @@ export function EntryForm({
   const contentText = stripHtml(content).trim();
   // Menu plans too: their text is just "Menu: Oct 12 – Oct 18"; and Priorities
   // lists ("Priorities: 10/18/2026")
-  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || customType === 'priorities' || customType === 'wins' || !!nameKey;
+  // Name-led topics (nameKey) show the text area: its first line IS the name
+  const titleOnlyTopic = customType === 'shopping_list' || customType === 'menu_plan' || customType === 'priorities' || customType === 'wins';
   // Wellness is fields only: its auto-save writes a summary ("3/8 glasses · …")
   // as the text, which must not bring the text area back
   const editorCollapsed = !notesExpanded && (
-    customType === 'event' || customType === 'wellness' || titleOnlyTopic || hideByTopicOption ||
-    (!hasTextContent && !isJournalTopic && customType !== 'task'
+    customType === 'wellness' || titleOnlyTopic ||
+    (!hasTextContent && !isJournalTopic && !nameKey
       && (customType !== null || fieldLedTopic))
   );
-
-  // Tasks used to have a separate "Task description" field; a task whose words
-  // live only there gets them moved into the text area once, when opened.
-  const migratedTaskRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (customType !== 'task' || entryId == null || migratedTaskRef.current === entryId) return;
-    migratedTaskRef.current = entryId;
-    const desc = typeof customFields.taskDescription === 'string' ? customFields.taskDescription.trim() : '';
-    if (desc && !hasTextContent) {
-      onContentChange(`<p>${escapeHtml(desc)}</p>`);
-    }
-  }, [entryId, customType]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // An entry whose name lives only in its text gets it copied into the name
-  // field once, when opened. After that, editing the name keeps the (hidden)
-  // text in step — only while the text is just the name.
-  const migratedNameRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!nameKey || entryId == null || migratedNameRef.current === entryId) return;
-    migratedNameRef.current = entryId;
-    if (!nameValue && contentText) onCustomFieldsChange({ ...customFields, [nameKey]: contentText });
-  }, [entryId, nameKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const lastNameRef = useRef<{ id: number | null; key: string | undefined; name: string } | null>(null);
-  useEffect(() => {
-    if (!nameKey) return;
-    const prev = lastNameRef.current;
-    lastNameRef.current = { id: entryId, key: nameKey, name: nameValue };
-    if (!prev || prev.id !== entryId || prev.key !== nameKey || prev.name === nameValue) return;
-    if (!contentText || contentText === prev.name) onContentChange(nameValue ? `<p>${escapeHtml(nameValue)}</p>` : '');
-  }, [nameValue, entryId, nameKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recipes render as a formatted page (RecipeEntry) once they have content;
   // empty/new recipes start in the fields editor. "Edit recipe" flips back.
@@ -911,26 +1066,47 @@ export function EntryForm({
       onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [quoteDef.id]: contentText } });
     }
   }, [entryId, isQuoteTopic, quoteDef?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Switching topic after typing (Quick entry, a new journal entry): a topic
-  // with no text area of its own — a name field (Meals, Medication, Task…), a
-  // Quote field, or its own Title / Name field — takes the words typed so far,
-  // so they don't vanish behind it.
-  const customTitle = titleFieldOf(userFieldDefs);
+  // The name is the text area's first line (utils/nameFields): the name field —
+  // or an own topic's leading Title / Name field — is kept as a copy written from
+  // it, for everything that reads the field. Opening an entry whose first line
+  // isn't its name (an older entry) puts the name in front, once.
+  const customTitle = !fieldLedTopic && !summaryLedTopic && customType === null ? titleFieldOf(userFieldDefs) : undefined;
+  const nameTarget = nameKey ?? (customTitle ? `_userFields.${customTitle.id}` : undefined);
+  const storedName = nameKey ? nameValue
+    : customTitle ? String(userFieldValues[customTitle.id] ?? '').trim() : '';
+  // Switching to a Quote / Books topic after typing: the words go into its Quote / Title field
   const carriedTopicRef = useRef(topicId);
   useEffect(() => {
     if (carriedTopicRef.current === topicId) return;
     carriedTopicRef.current = topicId;
     if (!contentText || contentIsSummary) return;
-    if (nameKey && !nameValue) {
-      onCustomFieldsChange({ ...customFields, [nameKey]: contentText });
-    } else if (isQuoteTopic && quoteDef && !quoteValue) {
+    const ledTitle = (fieldLedTopic || summaryLedTopic) ? titleFieldOf(userFieldDefs) : undefined;
+    if (isQuoteTopic && quoteDef && !quoteValue) {
       onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [quoteDef.id]: contentText } });
-    } else if (customTitle && !String(userFieldValues[customTitle.id] ?? '').trim()
-      && (hideByTopicOption || fieldLedTopic || summaryLedTopic)) {
-      // A topic whose title is one of its own fields and that hides the text area
-      onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [customTitle.id]: contentText } });
+    } else if (ledTitle && !String(userFieldValues[ledTitle.id] ?? '').trim()) {
+      // Books / Music: a summary topic whose own Title field is the entry's name
+      onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [ledTitle.id]: contentText } });
     }
   }, [topicId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const repairedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!nameTarget) return;
+    const key = `${entryId}:${nameTarget}`;
+    if (repairedRef.current !== key) {
+      repairedRef.current = key;
+      if (storedName && nameFromContent(content) !== storedName.slice(0, NAME_MAX)) {
+        onContentChange(contentWithName(content, storedName));
+        return;
+      }
+    }
+    const line = nameFromContent(content);
+    // A new task starts as Idea / Backlog (one write with the name, so neither change is lost)
+    const backlogDefault = customType === 'task' && entryId == null
+      && !['isBacklog', 'isInProgress', 'isCompleted'].some(k => k in customFields);
+    if (line === storedName && !backlogDefault) return;
+    if (nameKey) onCustomFieldsChange({ ...customFields, [nameKey]: line, ...(backlogDefault ? { isBacklog: true } : {}) });
+    else if (customTitle) onCustomFieldsChange({ ...customFields, _userFields: { ...userFieldValues, [customTitle.id]: line } });
+  }, [content, entryId, nameTarget]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leaving a summary-led topic (e.g. Exercise → Journal) takes its generated
   // line with it, so "Running · 30 min" never lingers as another topic's text
   const prevTopicRef = useRef(topicId);
@@ -952,6 +1128,12 @@ export function EntryForm({
   }, [fieldSummary, entryId, summaryLedTopic]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const editorHidden = editorCollapsed || recipeViewMode || (summaryHidesEditor && !notesExpanded);
+  // Quick entry: a new topic starts with the formatting bar closed
+  useEffect(() => {
+    if (!quick) return;
+    setToolbarOpen(false);
+    setNotesExpanded(false);
+  }, [topicId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveStatusNode = (() => {
     if (saveStatus === 'Save failed') return <StatusText>Save failed</StatusText>;
@@ -985,50 +1167,35 @@ export function EntryForm({
     </SaveButton>
   );
 
-  // Delete + save status, then Discard and Save entry
-  const footer = (
-    <>
-      <FooterLeft>
-        {entryId && onDelete && (
-          <FooterDeleteBtn type="button" $variant="neutral" onClick={onDelete} title="Delete entry">
-            Delete
-          </FooterDeleteBtn>
-        )}
-        {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
-      </FooterLeft>
-      <SaveRowActions>
-        <DiscardBtn onClick={onNew}>Close</DiscardBtn>
-        {saveButton}
-      </SaveRowActions>
-    </>
-  );
 
   // The writing area and the topic's fields — the same in both layouts
   const body = (
     <>
       {/* Featured image hero — at the top, above the topic / actions row
           (recipes place it inside their own layout) */}
-      {featuredImage && !recipeViewMode && <EntryHeroBanner image={featuredImage} onFocusChange={heroFocus} />}
 
       {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
 
       {/* Recipe read view — the formatted recipe page */}
       {recipeViewMode && (
-        <RecipeEntry
-          values={recipeValues}
-          hero={imagesReady && featuredImage ? <EntryHeroBanner image={featuredImage} onFocusChange={heroFocus} /> : null}
-          onToggleIngredient={toggleRecipeIngredient}
-          onEdit={() => setRecipeEditing(true)}
-        />
+        <RecipePad>
+          <RecipeEntry
+            values={recipeValues}
+            hero={imagesReady && recipePhoto ? <EntryHeroBanner image={recipePhoto} onFocusChange={recipeFocus} /> : null}
+            onToggleIngredient={toggleRecipeIngredient}
+            onEdit={() => setRecipeEditing(true)}
+          />
+        </RecipePad>
       )}
 
 
       {/* Rich text editor — hidden entirely for structured topics */}
-      <EditorArea $hidden={editorHidden} $quick={quick}>
+      <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $roomy={quick && !customType && userFieldDefs.length === 0}>
         <Editor
           content={content}
           onChange={onContentChange}
-          placeholder={placeholder}
+          placeholder={quick || !nameTarget ? placeholder
+            : (nameKey && customType ? NAME_PLACEHOLDER_BY_TYPE[customType] : customTitle?.label) || placeholder}
           onEnterSave={canSave && !isSaving ? onSave : undefined}
           toolbarOpen={toolbarOpen}
           onToolbarToggle={setFormatOpen}
@@ -1039,17 +1206,24 @@ export function EntryForm({
         />
       </EditorArea>
 
+      {/* Photos under the text: one larger, more in a row (no featured banner) */}
+      {!recipeViewMode && images.length + (imageUploading ? 1 : 0) > 0 && (
+        <PhotosRow>
+          <EntryPhotos images={images} uploading={imageUploading} onRemove={key => onImageRemoved?.(key)} onOpen={setLightboxIndex} />
+        </PhotosRow>
+      )}
+
       {/* Custom fields, below editor — recipes in view mode render the
           formatted page instead; "Edit recipe" brings the fields back */}
       {customType && !recipeViewMode && (
-        <CustomFieldsSection $noRule={editorHidden}>
+        <CustomFieldsSection $noRule={editorHidden} data-after-text={editorHidden ? undefined : ''}>
             {isRecipe && recipeHasContent && (
               <ViewRecipeBtn type="button" onClick={() => setRecipeEditing(false)}>
                 <Icon name="check" size={12} strokeWidth={2.5} />
                 Done editing — view recipe
               </ViewRecipeBtn>
             )}
-            <CustomFieldsBody>
+            <CustomFieldsBody $nameInText={!!nameTarget}>
               <FieldRowLayoutContext.Provider value={true}>
               {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
                 types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
@@ -1093,7 +1267,7 @@ export function EntryForm({
                 </div>
               )}
               {customType && TIME_TRACKED_TYPES.has(customType) && !quick && (
-                <div style={{ marginTop: 40 }}>
+                <div>
                   <TimeTracker
                     sessions={timer.sessions} totalMs={timer.totalMs} running={timer.running} otherRunning={timer.otherRunning} now={timer.now}
                     disabled={(entryId === null && !onSaveAndStartTimer) || isSaving || !timer.loaded}
@@ -1113,8 +1287,8 @@ export function EntryForm({
 
       {/* User-defined custom fields */}
       {userFieldDefs.length > 0 && !recipeViewMode && (
-        <CustomFieldsSection $noRule={editorHidden}>
-            <CustomFieldsBody>
+        <CustomFieldsSection $noRule={editorHidden} data-after-text={editorHidden ? undefined : ''}>
+            <CustomFieldsBody $nameInText={!!nameTarget}>
               <FieldRowLayoutContext.Provider value={true}>
                 <UserFieldsForm
                   fieldDefs={userFieldDefs}
@@ -1126,205 +1300,170 @@ export function EntryForm({
         </CustomFieldsSection>
       )}
 
-      {/* Image thumbnail strip at the bottom of the post */}
-      {(imagesReady || images.length > 0) && (
-        <EntryImageStrip
-          images={images}
-          featuredKey={featuredKey}
-          uploading={imageUploading}
-          onSetFeatured={key => onSetFeatured?.(key)}
-          onRemove={key => onImageRemoved?.(key)}
-          onOpen={setLightboxIndex}
-        />
-      )}
     </>
   );
 
-  if (quick) return (
-    <QuickCard aria-label="Quick entry">
-      <QuickHead>
-        <QuickTitle>Quick entry</QuickTitle>
-        <QuickTopic>
-          <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
-            extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
-        </QuickTopic>
-      </QuickHead>
-      {quickExtra && quickExtraBody ? quickExtraBody : (<>
-      {body}
-      <QuickFoot>
-        <QuickTools aria-label="Entry tools">
+  // Format, Draw and Dictate: up beside the writing area, else (its text area hidden) under the card
+  const quickTools = (
+    <QuickTools aria-label="Entry tools" $beside={!editorHidden}>
           <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
             onClick={() => setFormatOpen(!toolbarOpen)}>
-            <Icon name="type" size={20} strokeWidth={1.8} />
+            <Icon name="type" size={18} strokeWidth={1.7} />
           </IconBtn>
           <IconBtn type="button" aria-label="Draw" title="Draw"
             onClick={() => { setNotesExpanded(true); drawingControlRef.current?.open(); }}>
-            <Icon name="pencil" size={20} strokeWidth={1.8} />
+            <Icon name="pencil" size={17} strokeWidth={1.7} />
           </IconBtn>
           <IconBtn type="button" $active={listening} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Dictate" aria-pressed={listening}
             onClick={() => { setNotesExpanded(true); dictRef.current?.toggle(); }}>
-            <Icon name="mic" size={20} strokeWidth={1.8} />
+            <Icon name="mic" size={17} strokeWidth={1.7} />
           </IconBtn>
         </QuickTools>
-        <QuickSaveSide>
-          <span>Logged to today</span>
-          {saveButton}
-        </QuickSaveSide>
-      </QuickFoot>
-      {saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
-      </>)}
+  );
+
+  if (quick) return (
+    <QuickCard role="region" aria-label="Quick entry" ref={quickRef}>
+      <QuickPrompt data-keep-placeholder>
+        <h2>What would you like to write down?</h2>
+        <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon label={quickTopicPhrase}
+          extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
+      </QuickPrompt>
+      {quickExtra && quickExtraBody ? <QuickExtraBox>{quickExtraBody}</QuickExtraBox> : (
+        <EntryCard $quick data-tools-beside={!editorHidden ? '' : undefined}>
+          {body}
+          {!editorHidden && quickTools}
+          <QuickFoot>
+            {editorHidden ? quickTools : <span />}
+            {saveButton}
+          </QuickFoot>
+        </EntryCard>
+      )}
+      {!(quickExtra && quickExtraBody) && saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
     </QuickCard>
   );
 
   return (
     <FormWrapper>
-          {/* Top bar, outside the scroll: topic picker left, entry actions right — same
-          60px height and hairline as the list's quick tabs, so the two read as one bar */}
-          <EdToolRow>
-          <CrumbTopic>
-            <TopicSelector
-              selectedId={topicId}
-              onSelect={id => onTopicChange(id)}
-              topics={topics}
-              hideIcon
-            />
-          </CrumbTopic>
-          <EdActions aria-label="Entry actions">
-              <IconBtn
-                type="button"
-                $active={isFavorite}
-                $activeColor={accentColor}
-                aria-label={isFavorite ? 'Remove bookmark' : 'Bookmark entry'}
-                title="Bookmark"
-                onClick={() => entryId && onBookmark?.()}
-                style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}
-              >
-                <Icon name="bookmark" size={20} strokeWidth={1.8} />
-              </IconBtn>
-              {imagesReady && (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={ALLOWED_IMAGE_TYPES.join(',')}
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={e => {
-                      const files = Array.from(e.target.files ?? []);
-                      if (files.length > 0) onImagesSelected?.(files);
-                      e.target.value = '';
-                    }}
-                  />
-                  <IconBtn
-                    type="button"
-                    aria-label="Add images"
-                    title={imagesFull ? 'Maximum of 7 images per entry' : 'Add images'}
-                    disabled={imagesFull || imageUploading}
-                    onClick={() => !imagesFull && !imageUploading && fileInputRef.current?.click()}
-                    style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}
-                  >
-                    {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={20} strokeWidth={1.8} />}
-                  </IconBtn>
-                  {onExistingImagesSelected && (
-                    <IconBtn
-                      type="button"
-                      aria-label="Add image from library"
-                      title={imagesFull ? 'Maximum of 7 images per entry' : 'Add from library'}
-                      disabled={imagesFull}
-                      onClick={() => !imagesFull && setLibraryOpen(true)}
-                      style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}
-                    >
-                      <MaterialIcon $size={22} aria-hidden="true">photo_library</MaterialIcon>
-                    </IconBtn>
-                  )}
-                </>
-              )}
-              {/* Format: shows / hides the formatting bar (bold, lists, … and Draw) */}
-              <IconBtn
-                type="button"
-                $active={toolbarOpen}
-                aria-label="Formatting"
-                title="Format"
-                aria-pressed={toolbarOpen}
-                onClick={() => setFormatOpen(!toolbarOpen)}
-              >
-                <Icon name="type" size={20} strokeWidth={1.8} />
-              </IconBtn>
-              {/* ⋯ More: Dictate, Share, Duplicate and Draw */}
-              <MoreWrap ref={moreRef}>
-                <IconBtn
-                  type="button"
-                  $active={moreOpen}
-                  aria-label="More actions"
-                  title="More"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen(o => !o)}
-                >
-                  <Icon name="more-horizontal" size={20} strokeWidth={2} />
-                </IconBtn>
-                {moreOpen && (
-                  <MoreMenu role="menu">
-                    {/* Every action is listed; one that can't be used right now says why */}
-                    <MoreItem type="button" role="menuitem"
-                      onClick={() => { setMoreOpen(false); setNotesExpanded(true); dictRef.current?.toggle(); }}>
-                      <Icon name="mic" size={16} strokeWidth={1.8} />
-                      <MoreText>Dictate</MoreText>
-                    </MoreItem>
-                    <MoreItem type="button" role="menuitem"
-                      disabled={!entryId || (images.length > 0 && !isRecipe)}
-                      onClick={() => { setMoreOpen(false); if (entryId) onShare?.(); }}>
-                      <Icon name="share" size={16} strokeWidth={1.8} />
-                      <MoreText>
-                        Share
-                        {!entryId ? <MoreHint>Save the entry first</MoreHint>
-                          : images.length > 0 && !isRecipe ? <MoreHint>Not for entries with images</MoreHint> : null}
-                      </MoreText>
-                    </MoreItem>
-                    {onDuplicate && (
-                      <MoreItem type="button" role="menuitem" disabled={!entryId}
-                        onClick={() => { setMoreOpen(false); if (entryId) onDuplicate(); }}>
-                        <Icon name="copy" size={16} strokeWidth={1.8} />
-                        <MoreText>
-                          Duplicate
-                          {!entryId && <MoreHint>Save the entry first</MoreHint>}
-                        </MoreText>
-                      </MoreItem>
-                    )}
-                    <MoreItem type="button" role="menuitem"
-                      onClick={() => { setMoreOpen(false); setNotesExpanded(true); drawingControlRef.current?.open(); }}>
-                      <Icon name="pencil" size={16} strokeWidth={1.8} />
-                      <MoreText>Draw</MoreText>
-                    </MoreItem>
-                  </MoreMenu>
-                )}
-              </MoreWrap>
-              {(onToggleExpand || onClose) && <ToolDivider aria-hidden="true" />}
-              {onToggleExpand && (
-                <IconBtn
-                  type="button"
-                  $active={expanded}
-                  aria-label={expanded ? 'Exit full screen' : 'Expand editor'}
-                  title={expanded ? 'Exit full screen' : 'Expand'}
-                  aria-pressed={!!expanded}
-                  onClick={onToggleExpand}
-                >
-                  <Icon name={expanded ? 'minimize' : 'maximize'} size={20} strokeWidth={1.8} />
-                </IconBtn>
-              )}
-              {onClose && (
-                <IconBtn type="button" aria-label="Close" title="Close" onClick={onClose}>
-                  <Icon name="x" size={20} strokeWidth={1.8} />
-                </IconBtn>
-              )}
-          </EdActions>
-          </EdToolRow>
-      {/* Scrollable body */}
+      {/* No top bar: the question, the writing area, the fields and the tool row all in one scroll */}
       <ScrollArea>
         <EdBody>
-          {body}
-          {/* Phones: the footer in the page flow, after the entry */}
-          {phone && <SaveRow $inFlow>{footer}</SaveRow>}
+          <EntryCard $flat>
+            <JournalHead $expanded={!!expanded} $roomy={editorHidden && !recipeViewMode}>
+              <JournalPrompt>
+                <h2>What would you like to write down?</h2>
+                <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon label={quickTopicPhrase} />
+              </JournalPrompt>
+              {(onToggleExpand || onClose) && (
+                <HeadIcons>
+                  {onToggleExpand && (
+                    <IconBtn type="button" $active={expanded} aria-label={expanded ? 'Exit full screen' : 'Expand editor'}
+                      title={expanded ? 'Exit full screen' : 'Expand'} aria-pressed={!!expanded} onClick={onToggleExpand}>
+                      <Icon name={expanded ? 'minimize' : 'maximize'} size={18} strokeWidth={1.8} />
+                    </IconBtn>
+                  )}
+                  {onClose && (
+                    <IconBtn type="button" aria-label="Close" title="Close" onClick={onClose}>
+                      <Icon name="x" size={18} strokeWidth={1.8} />
+                    </IconBtn>
+                  )}
+                </HeadIcons>
+              )}
+            </JournalHead>
+            {body}
+            {/* The tool row: Format, Draw, Dictate, images, Bookmark and ⋯ on the left; Save entry on the right */}
+            <JournalFoot>
+              <JournalTools aria-label="Entry tools">
+                <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
+                  onClick={() => setFormatOpen(!toolbarOpen)}>
+                  <Icon name="type" size={18} strokeWidth={1.7} />
+                </IconBtn>
+                <IconBtn type="button" aria-label="Draw" title="Draw"
+                  onClick={() => { setNotesExpanded(true); drawingControlRef.current?.open(); }}>
+                  <Icon name="pencil" size={17} strokeWidth={1.7} />
+                </IconBtn>
+                <IconBtn type="button" $active={listening} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Dictate" aria-pressed={listening}
+                  onClick={() => { setNotesExpanded(true); dictRef.current?.toggle(); }}>
+                  <Icon name="mic" size={17} strokeWidth={1.7} />
+                </IconBtn>
+                {/* Fields-only entries (no text area, e.g. a symptom) with no photos: no image tools */}
+                {imagesReady && !(editorHidden && !recipeViewMode && images.length === 0 && !imageUploading) && (
+                  <>
+                    <input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES.join(',')} multiple style={{ display: 'none' }}
+                      onChange={e => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) onImagesSelected?.(files);
+                        e.target.value = '';
+                      }} />
+                    <IconBtn type="button" aria-label="Add images" title={imagesFull ? 'Maximum of 7 images per entry' : 'Add images'}
+                      disabled={imagesFull || imageUploading}
+                      onClick={() => !imagesFull && !imageUploading && fileInputRef.current?.click()}
+                      style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
+                      {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={18} strokeWidth={1.7} />}
+                    </IconBtn>
+                    {onExistingImagesSelected && (
+                      <IconBtn type="button" aria-label="Add image from library" title={imagesFull ? 'Maximum of 7 images per entry' : 'Add from library'}
+                        disabled={imagesFull} onClick={() => !imagesFull && setLibraryOpen(true)}
+                        style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
+                        <MaterialIcon $size={20} aria-hidden="true">photo_library</MaterialIcon>
+                      </IconBtn>
+                    )}
+                  </>
+                )}
+                <IconBtn type="button" $active={isFavorite} $activeColor={accentColor}
+                  aria-label={isFavorite ? 'Remove bookmark' : 'Bookmark entry'} title="Bookmark"
+                  onClick={() => entryId && onBookmark?.()}
+                  style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}>
+                  <Icon name="bookmark" size={18} strokeWidth={1.7} />
+                </IconBtn>
+                {/* ⋯ More: Share, Duplicate, Close and Delete (opens upward) */}
+                <MoreWrap ref={moreRef}>
+                  <IconBtn type="button" $active={moreOpen} aria-label="More actions" title="More" aria-haspopup="menu" aria-expanded={moreOpen}
+                    onClick={() => setMoreOpen(o => !o)}>
+                    <Icon name="more-horizontal" size={18} strokeWidth={2} />
+                  </IconBtn>
+                  {moreOpen && (
+                    <MoreMenu role="menu" $up>
+                      <MoreItem type="button" role="menuitem"
+                        disabled={!entryId || (images.length > 0 && !isRecipe)}
+                        onClick={() => { setMoreOpen(false); if (entryId) onShare?.(); }}>
+                        <Icon name="share" size={16} strokeWidth={1.8} />
+                        <MoreText>
+                          Share
+                          {!entryId ? <MoreHint>Save the entry first</MoreHint>
+                            : images.length > 0 && !isRecipe ? <MoreHint>Not for entries with images</MoreHint> : null}
+                        </MoreText>
+                      </MoreItem>
+                      {onDuplicate && (
+                        <MoreItem type="button" role="menuitem" disabled={!entryId}
+                          onClick={() => { setMoreOpen(false); if (entryId) onDuplicate(); }}>
+                          <Icon name="copy" size={16} strokeWidth={1.8} />
+                          <MoreText>
+                            Duplicate
+                            {!entryId && <MoreHint>Save the entry first</MoreHint>}
+                          </MoreText>
+                        </MoreItem>
+                      )}
+                      <MoreItem type="button" role="menuitem" onClick={() => { setMoreOpen(false); onNew(); }}>
+                        <Icon name="x" size={16} strokeWidth={1.8} />
+                        <MoreText>Close<MoreHint>Unsaved changes are dropped</MoreHint></MoreText>
+                      </MoreItem>
+                      {entryId && onDelete && (
+                        <MoreItem type="button" role="menuitem" style={{ color: 'var(--color-danger)' }}
+                          onClick={() => { setMoreOpen(false); onDelete(); }}>
+                          <Icon name="trash" size={16} strokeWidth={1.8} />
+                          <MoreText>Delete entry</MoreText>
+                        </MoreItem>
+                      )}
+                    </MoreMenu>
+                  )}
+                </MoreWrap>
+              </JournalTools>
+              <JournalSaveSide>
+                {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
+                {saveButton}
+              </JournalSaveSide>
+            </JournalFoot>
+          </EntryCard>
         </EdBody>
       </ScrollArea>
 
@@ -1345,8 +1484,6 @@ export function EntryForm({
         />
       )}
 
-      {/* Footer — bottom-docked save/discard (desktop / tablet) */}
-      {!phone && <SaveRow>{footer}</SaveRow>}
     </FormWrapper>
   );
 }

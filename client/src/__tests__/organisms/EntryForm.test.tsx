@@ -24,6 +24,7 @@ vi.mock('@/stores/uiStore', () => ({
         5: [{ id: 'author', label: 'Author', type: 'text' }],
         11: [{ id: 'title', label: 'Title', type: 'text' }, { id: 'author', label: 'Author', type: 'text' }],
         12: [{ id: 'quote', label: 'Quote', type: 'text' }, { id: 'author', label: 'Author', type: 'text' }],
+        40: [{ id: 'title', label: 'Title', type: 'text' }, { id: 'host', label: 'Host', type: 'text' }],
       },
       topicHideText: { 7: true },
     }),
@@ -41,6 +42,7 @@ vi.mock('@/utils/stripHtml', () => ({
 }));
 
 vi.mock('@/components/organisms/Editor', () => ({
+  ToolbarRow: 'div',
   Editor: ({ content, onChange, placeholder }: { content: string; onChange: (c: string) => void; placeholder: string }) => (
     <textarea
       data-testid="editor"
@@ -122,10 +124,11 @@ describe('EntryForm', () => {
     expect(screen.getByText('Save entry')).not.toBeDisabled();
   });
 
-  it('shows Close, wired to onNew', () => {
+  it('has Close in the ⋯ menu, wired to onNew', () => {
     const onNew = vi.fn();
     renderWithTheme(<EntryForm {...defaultProps} isEditing={true} entryId={1} onNew={onNew} />);
-    fireEvent.click(screen.getByText('Close'));
+    fireEvent.click(screen.getByLabelText('More actions'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Close/ }));
     expect(onNew).toHaveBeenCalled();
   });
 
@@ -177,22 +180,22 @@ describe('EntryForm', () => {
     expect(screen.queryByLabelText('Entry location')).not.toBeInTheDocument();
   });
 
-  describe('hidden text area for structured topics', () => {
-    it('hides the editor entirely for built-in structured topics (no Add notes affordance)', () => {
+  describe('the text area and name-led topics', () => {
+    it('shows the text area for events: its first line is the name, asked for in the placeholder', () => {
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={null} topicId={3}
           topics={[{ id: 3, name: 'Event', icon: null, color: null }]} content="" />
       );
-      expect(screen.getByTestId('editor')).not.toBeVisible();
-      expect(screen.queryByText(/add notes/i)).not.toBeInTheDocument();
+      expect(screen.getByTestId('editor')).toBeVisible();
+      expect(screen.getByTestId('editor')).toHaveAttribute('placeholder', 'What is the event?');
     });
 
-    it('hides the editor for custom topics with the hide-text option enabled', () => {
+    it('no longer hides the text area for a custom topic that had the old hide-text option', () => {
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={null} topicId={7}
           topics={[{ id: 7, name: 'Dreams', icon: null, color: null }]} content="" />
       );
-      expect(screen.getByTestId('editor')).not.toBeVisible();
+      expect(screen.getByTestId('editor')).toBeVisible();
     });
 
     it('keeps the editor for custom topics without the hide option', () => {
@@ -237,14 +240,14 @@ describe('EntryForm', () => {
       expect(screen.getByTestId('editor')).not.toBeVisible();
     });
 
-    it('tasks are name-led: no text area; an older task text fills the title once', () => {
+    it('tasks: the text area shows and its first line fills the task name', () => {
       const onCustomFieldsChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={6}
-          topics={[{ id: 6, name: 'Task', icon: null, color: null }]} content="<p>Call the vet</p>"
+          topics={[{ id: 6, name: 'Task', icon: null, color: null }]} content="<p>Call the vet</p><p>Ask about the booster</p>"
           onCustomFieldsChange={onCustomFieldsChange} />
       );
-      expect(screen.getByTestId('editor')).not.toBeVisible();
+      expect(screen.getByTestId('editor')).toBeVisible();
       expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ taskDescription: 'Call the vet' }));
     });
 
@@ -258,46 +261,49 @@ describe('EntryForm', () => {
       expect(onContentChange).toHaveBeenCalledWith('<p>Call the vet</p>');
     });
 
-    it('hides the text area for meals whose text is just the meal name', () => {
+    it('shows the text area for a meal whose text is its name, and changes nothing', () => {
+      const onContentChange = vi.fn();
+      const onCustomFieldsChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={8}
           topics={[{ id: 8, name: 'Meals', icon: null, color: null }]} content="<p>Oatmeal</p>"
-          customFields={{ mealDescription: 'Oatmeal' }} />
+          customFields={{ mealDescription: 'Oatmeal' }} onContentChange={onContentChange} onCustomFieldsChange={onCustomFieldsChange} />
       );
-      expect(screen.getByTestId('editor')).not.toBeVisible();
+      expect(screen.getByTestId('editor')).toBeVisible();
+      expect(onContentChange).not.toHaveBeenCalled();
+      expect(onCustomFieldsChange).not.toHaveBeenCalled();
     });
 
-    it('hides the text area for meals but never overwrites writing beyond the name', () => {
+    it('an older meal whose text doesn’t start with its name gets the name put in front, the writing kept', () => {
       const onContentChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={8}
-          topics={[{ id: 8, name: 'Meals', icon: null, color: null }]} content="<p>Oatmeal at the cafe with Sam</p>"
+          topics={[{ id: 8, name: 'Meals', icon: null, color: null }]} content="<p>At the cafe with Sam</p>"
           customFields={{ mealDescription: 'Oatmeal' }} onContentChange={onContentChange} />
       );
-      expect(screen.getByTestId('editor')).not.toBeVisible();
-      expect(onContentChange).not.toHaveBeenCalled();
+      expect(onContentChange).toHaveBeenCalledWith('<p>Oatmeal</p><p>At the cafe with Sam</p>');
     });
 
-    it('medication: name field instead of a text area; old names move into it', () => {
+    it('medication: the first line fills Medication name; the form’s own name box stays out of sight', () => {
       const onCustomFieldsChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={11} isEditing topicId={15}
           topics={[{ id: 15, name: 'Medication', icon: null, color: null }]} content="<p>Montelukast</p>"
           customFields={{ dosage: '10mg' }} onCustomFieldsChange={onCustomFieldsChange} />
       );
-      expect(screen.getByLabelText('Medication name')).toBeInTheDocument();
-      expect(screen.getByTestId('editor')).not.toBeVisible();
+      expect(screen.getByTestId('editor')).toBeVisible();
+      expect(screen.getByLabelText('Medication name')).not.toBeVisible();
       expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ medicationName: 'Montelukast', dosage: '10mg' }));
     });
 
-    it('allergy: the Allergen field names the entry and there is no text area', () => {
-      const onContentChange = vi.fn();
+    it('allergy: editing the first line keeps Allergen in step', () => {
+      const onCustomFieldsChange = vi.fn();
       const props = { ...defaultProps, entryId: 12, isEditing: true, topicId: 16,
-        topics: [{ id: 16, name: 'Allergy', icon: null, color: null }], content: '<p>Peanuts</p>', onContentChange };
-      const { rerender } = renderWithTheme(<EntryForm {...props} customFields={{ allergen: 'Peanuts' }} />);
-      expect(screen.getByTestId('editor')).not.toBeVisible();
-      rerender(<ThemeProvider theme={lightTheme}><EntryForm {...props} customFields={{ allergen: 'Tree nuts' }} /></ThemeProvider>);
-      expect(onContentChange).toHaveBeenCalledWith('<p>Tree nuts</p>');
+        topics: [{ id: 16, name: 'Allergy', icon: null, color: null }], customFields: { allergen: 'Peanuts' }, onCustomFieldsChange };
+      const { rerender } = renderWithTheme(<EntryForm {...props} content="<p>Peanuts</p>" />);
+      expect(onCustomFieldsChange).not.toHaveBeenCalled();
+      rerender(<ThemeProvider theme={lightTheme}><EntryForm {...props} content="<p>Tree nuts</p><p>Hives last time</p>" /></ThemeProvider>);
+      expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ allergen: 'Tree nuts' }));
     });
 
     it('switching a new entry to a name-led topic carries the typed text into its name (Quick entry bug)', () => {
@@ -340,15 +346,6 @@ describe('EntryForm', () => {
           customFields={{}} onCustomFieldsChange={onCustomFieldsChange} />
       );
       expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ mealDescription: 'Lentil soup' }));
-    });
-
-    it('keeps the hidden meal text in step with an edited Meal Description', () => {
-      const onContentChange = vi.fn();
-      const props = { ...defaultProps, entryId: 4, isEditing: true, topicId: 8,
-        topics: [{ id: 8, name: 'Meals', icon: null, color: null }], content: '<p>Toast</p>', onContentChange };
-      const { rerender } = renderWithTheme(<EntryForm {...props} customFields={{ mealDescription: 'Toast' }} />);
-      rerender(<ThemeProvider theme={lightTheme}><EntryForm {...props} customFields={{ mealDescription: 'Toast with jam' }} /></ThemeProvider>);
-      expect(onContentChange).toHaveBeenCalledWith('<p>Toast with jam</p>');
     });
 
     it('writes a book as "Title — Author" and hides the text area', () => {
@@ -419,14 +416,14 @@ describe('EntryForm', () => {
       expect(screen.getByTestId('editor')).not.toBeVisible();
     });
 
-    it('goals: the objective is the name — no text area; old text moves into it', () => {
+    it('goals: the text area shows and its first line is the objective', () => {
       const onCustomFieldsChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={20} isEditing topicId={17}
           topics={[{ id: 17, name: 'Goal', icon: null, color: null }]} content="<p>Run a 10k</p>"
           customFields={{ goalType: 'short_term' }} onCustomFieldsChange={onCustomFieldsChange} />
       );
-      expect(screen.getByTestId('editor')).not.toBeVisible();
+      expect(screen.getByTestId('editor')).toBeVisible();
       expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ goalObjective: 'Run a 10k' }));
     });
 
@@ -438,14 +435,27 @@ describe('EntryForm', () => {
       expect(screen.getByTestId('editor')).toBeVisible();
     });
 
-    it('moves an older symptom entry\'s text into its name (symptoms are name-led)', () => {
+    it('symptoms: the first line is the symptom name', () => {
       const onCustomFieldsChange = vi.fn();
       renderWithTheme(
         <EntryForm {...defaultProps} entryId={2} isEditing topicId={3} onCustomFieldsChange={onCustomFieldsChange}
           topics={[{ id: 3, name: 'Symptom', icon: null, color: null }]} content="<p>Runny nose</p>" />
       );
-      expect(screen.queryByTestId('editor')).not.toBeVisible();
+      expect(screen.getByTestId('editor')).toBeVisible();
       expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({ symptomName: 'Runny nose' }));
+    });
+
+    it('an own topic with a leading Title field: the first line fills it', () => {
+      const onCustomFieldsChange = vi.fn();
+      renderWithTheme(
+        <EntryForm {...defaultProps} entryId={30} isEditing topicId={40}
+          topics={[{ id: 40, name: 'Podcasts', icon: null, color: null }]} content="<p>Hardcore History</p>"
+          customFields={{}} onCustomFieldsChange={onCustomFieldsChange} />
+      );
+      expect(screen.getByTestId('editor')).toBeVisible();
+      expect(onCustomFieldsChange).toHaveBeenCalledWith(expect.objectContaining({
+        _userFields: expect.objectContaining({ title: 'Hardcore History' }),
+      }));
     });
   });
 });

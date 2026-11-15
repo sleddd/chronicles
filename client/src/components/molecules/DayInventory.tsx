@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import type { WellnessFieldValues } from '../../types/fields.js';
 import { JoinedGroup, JoinedBtn, BoxText } from './fields/formKit.js';
@@ -141,6 +141,44 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
     !!values.sleepQuality, typeof woke === 'boolean', typeof dreamed === 'boolean', !!values.eating,
     !!values.workDay, !!values.social, !!values.procrastination, !!values.stress,
   ].filter(Boolean).length;
+  const questions: [string, ReactNode][] = [
+    ['Rested when you woke', <RatingRow label="How rested you felt" value={values.sleepQuality || 0} words={RESTED_WORDS}
+      onChange={v => onChange({ sleepQuality: v })} />],
+    ['Woke in the night', (
+      <JoinedGroup role="radiogroup" aria-label="Woke in the night">
+        {([[true, 'Yes'], [false, 'No']] as const).map(([v, label]) => (
+          <JoinedBtn key={label} type="button" role="radio" aria-checked={woke === v} $fill $active={woke === v}
+            onClick={() => onChange({ wokeAtNight: woke === v ? null : v })}>{label}</JoinedBtn>
+        ))}
+      </JoinedGroup>
+    )],
+    ['Did you dream?', (
+      <JoinedGroup role="radiogroup" aria-label="Did you dream?">
+        {([[true, 'Yes'], [false, 'No']] as const).map(([v, label]) => (
+          <JoinedBtn key={label} type="button" role="radio" aria-checked={dreamed === v} $fill $active={dreamed === v}
+            onClick={() => onChange({ dreamed: dreamed === v ? null : v })}>{label}</JoinedBtn>
+        ))}
+      </JoinedGroup>
+    )],
+    ['Ate today', (
+      <JoinedGroup role="radiogroup" aria-label="Ate today">
+        {EATING.map(e => (
+          <JoinedBtn key={e.value} type="button" role="radio" aria-checked={values.eating === e.value} $fill $active={values.eating === e.value}
+            onClick={() => onChange({ eating: values.eating === e.value ? '' : e.value })}>{e.label}</JoinedBtn>
+        ))}
+      </JoinedGroup>
+    )],
+    ['Work day', <RatingRow label="Work day" value={values.workDay || 0} words={QUALITY_WORDS} onChange={v => onChange({ workDay: v })} />],
+    ['Social time', <RatingRow label="Social time" value={values.social || 0} words={QUALITY_WORDS} onChange={v => onChange({ social: v })} />],
+    ['Procrastinated', <RatingRow label="How much you procrastinated" value={values.procrastination || 0} words={PROCRASTINATION_WORDS}
+      onChange={v => onChange({ procrastination: v })} />],
+    ['Stress level', <RatingRow label="Stress level" value={values.stress || 0} words={STRESS_WORDS} onChange={v => onChange({ stress: v })} />],
+  ];
+  const notes = (
+    <BoxText value={values.notes || ''} rows={2} placeholder="Anything else about today?"
+      onChange={e => onChange({ notes: e.target.value })} />
+  );
+
   return (
     <Box as="section" aria-label="Your day" $inside={inside}>
       <Bar type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(o => !o)}>
@@ -150,60 +188,11 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
       {open && (
         <Body id={bodyId}>
           <Grid>
-            <Item>
-              <span>Rested when you woke</span>
-              <RatingRow label="How rested you felt" value={values.sleepQuality || 0} words={RESTED_WORDS}
-                onChange={v => onChange({ sleepQuality: v })} />
-            </Item>
-            <Item>
-              <span>Woke in the night</span>
-              <JoinedGroup role="radiogroup" aria-label="Woke in the night">
-                {([[true, 'Yes'], [false, 'No']] as const).map(([v, label]) => (
-                  <JoinedBtn key={label} type="button" role="radio" aria-checked={woke === v} $fill $active={woke === v}
-                    onClick={() => onChange({ wokeAtNight: woke === v ? null : v })}>{label}</JoinedBtn>
-                ))}
-              </JoinedGroup>
-            </Item>
-            <Item>
-              <span>Did you dream?</span>
-              <JoinedGroup role="radiogroup" aria-label="Did you dream?">
-                {([[true, 'Yes'], [false, 'No']] as const).map(([v, label]) => (
-                  <JoinedBtn key={label} type="button" role="radio" aria-checked={dreamed === v} $fill $active={dreamed === v}
-                    onClick={() => onChange({ dreamed: dreamed === v ? null : v })}>{label}</JoinedBtn>
-                ))}
-              </JoinedGroup>
-            </Item>
-            <Item>
-              <span>Ate today</span>
-              <JoinedGroup role="radiogroup" aria-label="Ate today">
-                {EATING.map(e => (
-                  <JoinedBtn key={e.value} type="button" role="radio" aria-checked={values.eating === e.value} $fill $active={values.eating === e.value}
-                    onClick={() => onChange({ eating: values.eating === e.value ? '' : e.value })}>{e.label}</JoinedBtn>
-                ))}
-              </JoinedGroup>
-            </Item>
-            <Item>
-              <span>Work day</span>
-              <RatingRow label="Work day" value={values.workDay || 0} words={QUALITY_WORDS} onChange={v => onChange({ workDay: v })} />
-            </Item>
-            <Item>
-              <span>Social time</span>
-              <RatingRow label="Social time" value={values.social || 0} words={QUALITY_WORDS} onChange={v => onChange({ social: v })} />
-            </Item>
-            <Item>
-              <span>Procrastinated</span>
-              <RatingRow label="How much you procrastinated" value={values.procrastination || 0} words={PROCRASTINATION_WORDS}
-                onChange={v => onChange({ procrastination: v })} />
-            </Item>
-            <Item>
-              <span>Stress level</span>
-              <RatingRow label="Stress level" value={values.stress || 0} words={STRESS_WORDS} onChange={v => onChange({ stress: v })} />
-            </Item>
+            {questions.map(([label, answer]) => <Item key={label}><span>{label}</span>{answer}</Item>)}
           </Grid>
           <NotesRow>
             <span>Notes</span>
-            <BoxText value={values.notes || ''} rows={2} placeholder="Anything else about today?"
-              onChange={e => onChange({ notes: e.target.value })} />
+            {notes}
           </NotesRow>
         </Body>
       )}

@@ -26,7 +26,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
-import { onPhoto } from '../styles/wallpaper.js';
+import { glassPill, onPhoto } from '../styles/wallpaper.js';
 import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
@@ -147,6 +147,11 @@ const ListBox = styled.div`
   border-top: 1px solid var(--border-subtle);
 `;
 
+/* Copy shelf link: the neutral pill, a white glass pill on a wallpaper (like Add media) */
+const CopyLinkBtn = styled(PillButton)`
+  ${glassPill}
+`;
+
 const Actions = styled.div`
   display: flex;
   align-items: center;
@@ -198,6 +203,8 @@ const NameBtn = styled.button`
   background: none;
   ${nameFace}
   color: var(--text-primary);
+  /* White on a wallpaper, like the title over it */
+  ${onPhoto}
   cursor: pointer;
   & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* The pencil in the same colour as the name (it inherits, white on a wallpaper too) */
@@ -213,6 +220,7 @@ const NameInput = styled.input`
     ${nameFace}
     color: var(--text-primary);
     background: transparent !important;
+    html[data-wallpaper] & { color: #fff; }
     border: none !important;
     border-bottom: 1px solid var(--color-accent-line) !important;
     border-radius: 0;
@@ -373,9 +381,9 @@ export function MediaView() {
               </Meta>
               <Actions>
                 {publicShelf && (
-                  <PillButton type="button" $variant="neutral" onClick={copyLink} data-copied={copied} aria-label={copied ? 'Copied' : 'Copy the public shelf link'}>
+                  <CopyLinkBtn type="button" $variant="neutral" onClick={copyLink} data-copied={copied} aria-label={copied ? 'Copied' : 'Copy the public shelf link'}>
                     <Icon name={copied ? 'check' : 'link'} size={14} strokeWidth={2.5} />{copied ? 'Copied' : 'Copy shelf link'}
-                  </PillButton>
+                  </CopyLinkBtn>
                 )}
                 {topicId != null && (
                   <TopBarAction>

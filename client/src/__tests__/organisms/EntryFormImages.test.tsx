@@ -23,6 +23,7 @@ vi.mock('@/stores/uiStore', () => ({
 }));
 
 vi.mock('@/components/organisms/Editor', () => ({
+  ToolbarRow: 'div',
   Editor: ({ content }: { content: string }) => <textarea data-testid="editor" defaultValue={content} />,
 }));
 
@@ -89,13 +90,14 @@ describe('EntryForm image gating', () => {
     expect(screen.getByRole('menuitem', { name: /share/i })).toBeInTheDocument();
   });
 
-  it('More holds Dictate (first), Share and Draw', () => {
+  it('puts Dictate and Draw in the tool row, and Share and Close in More', () => {
     renderWithTheme(<EntryForm {...defaultProps} images={[]} />);
+    expect(screen.getByLabelText('Dictate')).toBeInTheDocument();
+    expect(screen.getByLabelText('Draw')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('More actions'));
     const items = screen.getAllByRole('menuitem').map(i => i.textContent);
-    expect(items[0]).toMatch(/dictate/i);
     expect(items.some(t => /share/i.test(t ?? ''))).toBe(true);
-    expect(items.some(t => /draw/i.test(t ?? ''))).toBe(true);
+    expect(items.some(t => /close/i.test(t ?? ''))).toBe(true);
   });
 
   it('keeps Format visible in the toolbar (not in More)', () => {
@@ -115,10 +117,11 @@ describe('EntryForm image gating', () => {
   });
 
 
-  it('renders one thumbnail per image', () => {
+  it('shows each photo under the text, each with its own remove (no featured image)', () => {
     const images = [makeImage(1), makeImage(2), makeImage(3)];
     renderWithTheme(<EntryForm {...defaultProps} images={images} imagesReady={true} />);
-    expect(screen.getAllByLabelText(/Set as featured image|Remove featured image/)).toHaveLength(3);
+    expect(screen.getAllByLabelText('Remove image')).toHaveLength(3);
+    expect(screen.queryByLabelText(/featured image/)).not.toBeInTheDocument();
   });
 
   it('shows the inline image error', () => {

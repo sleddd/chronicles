@@ -13,6 +13,7 @@ import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { safeAccent } from '../styles/accent.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
+import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameIntoText.js';
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -138,9 +139,14 @@ export function useInitializeData() {
         step(`${decrypted.length} entries decrypted`);
         setDecryptedEntries(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
-        if (olderEntriesAllowed()) {
-          void resealOlderEntries(decrypted, encryptPost, encryptBytes)
-            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err));
+        const resealed = olderEntriesAllowed()
+          ? resealOlderEntries(decrypted, encryptPost, encryptBytes)
+            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err))
+          : Promise.resolve();
+        // Once per account, after that: every name-led entry's name becomes its text's first line
+        if (settingsMap[NAME_IN_TEXT_MARKER] !== true) {
+          void resealed.then(() => moveNamesIntoTextOnce(decrypted, topicsData, useUIStore.getState().topicCustomFields, encryptPost))
+            .catch(err => console.warn('Names will be moved into their text at the next load:', err instanceof Error ? err.message : err));
         }
         setLoading(false);
         step('ready');

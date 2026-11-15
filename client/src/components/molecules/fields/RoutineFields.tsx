@@ -30,7 +30,7 @@ const Count = styled.span`
 `;
 
 /* Duration | Times side by side; stacked on phones */
-const Pair = styled.div`
+const Pair = styled.div.attrs({ className: 'card-contents' })`
   display: grid;
   grid-template-columns: 186px minmax(0, 1fr);
   column-gap: 28px;
@@ -86,11 +86,12 @@ export const DayChip = styled.button<{ $active: boolean }>`
   height: 44px;
   padding: 0;
   border-radius: var(--r-lg, 6px);
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--border-card)')};
-  background: ${({ $active }) => ($active ? 'var(--bg-selected, transparent)' : 'var(--bg-control, transparent)')};
+  /* The chosen day: a solid accent fill with --on-accent text, like the chosen chips */
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-card)')};
+  background: ${({ $active }) => ($active ? 'var(--color-accent)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 15px;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
+  color: ${({ $active }) => ($active ? 'var(--on-accent, #fff)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -161,7 +162,7 @@ const AddLink = styled.button`
   &:hover { text-decoration: underline; }
 `;
 
-export const StatusCard = styled.div`
+export const StatusCard = styled.div.attrs({ className: 'card-row' })`
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -20,6 +20,12 @@ export const NAME_FIELD_BY_TOPIC: Record<string, string> = {
   recipe: 'recipeName', recipes: 'recipeName',
   task: 'taskDescription', tasks: 'taskDescription',
   media: 'mediaTitle', 'media journal': 'mediaTitle', 'media library': 'mediaTitle',
+  symptom: 'symptomName', symptoms: 'symptomName',
+  change: 'changeWhat', changes: 'changeWhat',
+  'exercise routine': 'routineName', routine: 'routineName', 'exercise schedule': 'routineName',
+  'training plan': 'planName',
+  'time tracking': 'activityName',
+  habit: 'habitName', habits: 'habitName',
 };
 
 const QUOTE_TOPICS = ['quote', 'quotes'];

@@ -29,7 +29,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
-export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: boolean; bare?: boolean } = {}) {
+export function WellnessCheckIn({ title, quad, bare, strip }: { title?: string; quad?: boolean; bare?: boolean; strip?: boolean } = {}) {
   const { encryptPost, encryptNewPost } = useEncryption();
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -197,7 +197,7 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
   };
 
   const nextPeriod = prediction
-    ? `Next period est. ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
+    ? `${strip ? 'Next est.' : 'Next period est.'} ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
     : 'Log a period day to estimate the next';
 
   const panel = (
@@ -205,9 +205,10 @@ export function WellnessCheckIn({ title, quad, bare }: { title?: string; quad?: 
       water={water} sleep={sleep} mood={mood} flow={flow}
       onWater={setWater} onSleep={setSleep} onMood={setMood} onFlow={setFlow}
       cycleNote={nextPeriod}
-      compact={!quad}
-      quad={quad && (bare || !title)}
-      row={!!title && !bare}
+      compact={!quad && !strip}
+      strip={strip}
+      quad={!strip && quad && (bare || !title)}
+      row={!strip && !!title && !bare}
       smallFaces={bare}
       footer={<DayInventory values={day} onChange={setDay} inside />}
     />

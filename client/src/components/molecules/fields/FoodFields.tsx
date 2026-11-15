@@ -77,7 +77,7 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
         </DateTimeBox>
       </Section>
 
-      <Section aria-label="Nutrition">
+      <Section aria-label="Nutrition" data-card-wide>
         <NutritionPanel
           values={raw as Partial<Record<NutrientKey, unknown>>}
           onChange={setNutrient}

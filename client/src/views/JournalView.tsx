@@ -45,6 +45,7 @@ import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
+import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameIntoText.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { useTimeStore } from '../stores/timeStore.js';
 import { startTimer } from '../utils/timeTracking.js';
@@ -153,12 +154,30 @@ const NewEntryPill = styled.button`
   font-size: 13px;
   font-weight: 500;
   color: var(--color-accent);
-  /* On a wallpaper: a glass pill with white text */
+  /* On a wallpaper: a white outline and white text, no fill or blur */
   ${glassPill}
+  html[data-wallpaper] &&, html[data-wallpaper] .page-action &&,
+  html[data-wallpaper] .page-action &&:hover {
+    background: transparent !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* …but not in the phone / tablet top bar, which sits on the page colour, not the
+     photo: the accent outline and text there, in either theme */
+  html[data-wallpaper] #mobile-bar-actions &, #mobile-bar-actions & {
+    border-color: var(--color-accent-line);
+    background: transparent;
+    color: var(--color-accent-line);
+    text-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 120ms, color 120ms;
-  &:hover { border-color: var(--color-accent-hover); color: var(--color-accent-hover); }
+  /* A little faded, full strength on hover */
+  opacity: 0.75;
+  transition: border-color 120ms, color 120ms, opacity 120ms;
+  &:hover { opacity: 1; border-color: var(--color-accent-hover); color: var(--color-accent-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -619,9 +638,14 @@ export function JournalView() {
         }))).flat();
         setDecryptedEntries(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
-        if (olderEntriesAllowed()) {
-          void resealOlderEntries(decrypted, encryptPost, encryptBytes)
-            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err));
+        const resealed = olderEntriesAllowed()
+          ? resealOlderEntries(decrypted, encryptPost, encryptBytes)
+            .catch(err => console.warn('Entries will be re-sealed at the next load:', err instanceof Error ? err.message : err))
+          : Promise.resolve();
+        // Once per account, after that: every name-led entry's name becomes its text's first line
+        if (settingsMap[NAME_IN_TEXT_MARKER] !== true) {
+          void resealed.then(() => moveNamesIntoTextOnce(decrypted, topicsData, useUIStore.getState().topicCustomFields, encryptPost))
+            .catch(err => console.warn('Names will be moved into their text at the next load:', err instanceof Error ? err.message : err));
         }
         setLoading(false);
       } catch (err) {
@@ -1106,14 +1130,6 @@ export function JournalView() {
         sidePanel={
           <SidePanel hiddenMobile={showMobileEditor}>
             <ViewTabs />
-            {viewMode === 'date' && (
-              <DateFilterBar>
-                {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                <DateFilterClear onClick={() => setViewMode('all')}>
-                  <FontAwesomeIcon icon={faXmark} size="xs" /> Clear
-                </DateFilterClear>
-              </DateFilterBar>
-            )}
             {filterTopic && (
               <DateFilterBar aria-label="Topic filter">
                 {filterTopic.name}
