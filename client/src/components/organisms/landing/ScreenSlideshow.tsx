@@ -13,7 +13,6 @@ import { PAGE_INK } from '../../templates/LandingTemplate.js';
 
 export const SLIDES = [
   { key: 'dashboard-dark', name: 'Dashboard', caption: 'Your day at a glance' },
-  { key: 'dashboard', name: 'Dashboard', caption: 'Your day at a glance, in light mode' },
   { key: 'journal-dark', name: 'Journal', caption: 'Every entry, with fields for each topic' },
   { key: 'health-dark', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
   { key: 'reports-dark', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
@@ -36,8 +35,8 @@ const AVAILABLE = SLIDES.flatMap(s => {
 
 const INTERVAL_MS = 6000;
 
-/* No frame: the screenshot itself with rounded corners, the ‹ › arrows over
-   its left and right edges, dots under it (on the light page the hero fades into) */
+/* The screenshot in a dark device frame, the ‹ › arrows over its left and
+   right edges, dots under it (on the light page the hero band stops on) */
 const Carousel = styled.section`
   position: relative;
 `;
@@ -52,9 +51,10 @@ const Viewport = styled.div`
   position: relative;
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  border-radius: 14px;
+  border: 8px solid #2b2e36;
+  border-radius: 16px;
   background: #1f2229;
-  box-shadow: 0 30px 80px rgba(10, 14, 28, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 22px 44px -12px rgba(10, 14, 28, 0.34), 0 40px 90px -24px rgba(10, 14, 28, 0.2);
   img {
     position: absolute;
     inset: 0;
@@ -67,7 +67,7 @@ const Viewport = styled.div`
   }
   img[data-active='true'] { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { img { transition: none; } }
-  @media (max-width: 768px) { border-radius: 10px; }
+  @media (max-width: 768px) { border-width: 5px; border-radius: 11px; }
 `;
 
 /* White round buttons centred on the image's left and right edges */
@@ -100,7 +100,7 @@ const Dots = styled.div`
   justify-content: center;
   flex-wrap: wrap;
   gap: 2px;
-  margin-top: 18px;
+  margin-top: 40px;
   button {
     width: 22px;
     height: 22px;

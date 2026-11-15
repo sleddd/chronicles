@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import { Link } from 'react-router-dom';
 import { PillButton } from '../atoms/PillButton.js';
+import { BOOK_5 } from '../atoms/BrandMark.js';
 import { BETA_DETAILS } from '@shared/legal/index.js';
 import { LIGHT_TOKENS } from '../../styles/lightTokens.js';
 
@@ -49,9 +50,63 @@ export const BAND_GRADIENT = TEAL_GRADIENT;
 export const HERO_PHOTO_STARS = '/wallpapers/benjamin-voros-phIFdC6lA4E.jpg';
 export const HERO_PHOTO = '/wallpapers/madison-kuhn-aV7_rCZpvGY.jpg';
 
-/* The night sky behind the header and hero: a shade at the top so the white
-   text reads, the photo, and a long fade into the page colour at the foot so
-   the screenshot frame lands on the light page. Text, links and pills turn white. */
+/** The hero's background: 'mountains' is Madison Kuhn's river valley (the app's
+    default wallpaper) under a dark shade, fading into the page at its foot;
+    'stars' is exactly the privacy band's — the app's dark page colour over the
+    Milky Way photo, faint; 'gradient' is the teal / indigo gradient from the mockup */
+const HERO_BACKGROUND: 'mountains' | 'stars' | 'gradient' = 'mountains';
+
+/* The river valley, shaded so the white text reads, fading into the page colour
+   at its foot so the screenshot lands on the light page */
+const heroMountains = css`
+  background:
+    linear-gradient(180deg, transparent 78%, var(--bg-app) 98%),
+    linear-gradient(rgba(10, 12, 17, 0.65), rgba(10, 12, 17, 0.65)),
+    #141a2e url(${HERO_PHOTO}) center 28% / cover no-repeat;
+`;
+
+/* The privacy band's background, layer for layer, stopping partway down the
+   screenshot like the gradient (keep the two in step: PrivacyBand in LandingView) */
+const heroStars = css`
+  background:
+    linear-gradient(180deg, transparent calc(100% - var(--hero-light)), var(--bg-app) calc(100% - var(--hero-light))),
+    linear-gradient(180deg, rgba(31, 34, 41, 0.9) 0%, rgba(31, 34, 41, 0.84) 45%, rgba(31, 34, 41, 0.92) 100%),
+    #1f2229 url(${HERO_PHOTO_STARS}) center 62% / cover no-repeat;
+`;
+
+/* The gradient matched to the user's mockup: a deep teal left half fading into a
+   deep indigo right half, a soft teal-grey light at the top centre */
+const heroGradient = css`
+  /* The right half: deep indigo, darkening down the band (the left half's teal
+     and the top light are the two layers below) */
+  background:
+    linear-gradient(180deg, transparent calc(100% - var(--hero-light)), var(--bg-app) calc(100% - var(--hero-light))),
+    linear-gradient(180deg, #2c2c47 0%, #282842 20%, #23243c 40%, #1e2136 60%, #1b1e32 80%, #191b2e 100%) top / 100% calc(100% - var(--hero-light)) no-repeat;
+  /* The left half: deep teal, fading out across the middle into the indigo */
+  &::before, &::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 var(--hero-light) 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+  &::before {
+    background: linear-gradient(180deg, #234045 0%, #20393f 20%, #1d323b 40%, #1a2a35 60%, #172230 80%, #161d2d 100%);
+    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 72%);
+    mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 72%);
+  }
+  /* A soft teal-grey light at the top centre, and the middle a shade deeper */
+  &::after {
+    background:
+      radial-gradient(ellipse 24% 44% at 51% 0%, rgba(96, 136, 144, 0.42), transparent 100%),
+      radial-gradient(ellipse 30% 34% at 50% 64%, rgba(12, 16, 28, 0.32), transparent 100%);
+  }
+`;
+
+/* The header and hero on a dark navy band: a soft teal-grey light at the top
+   centre, teal along the left, violet along the right, deepening to navy. The band stops partway down the screenshot, so
+   its lower part sits on the light page. Text, links and pills turn white.
+   (The photo constants above are kept for going back to a photo hero.) */
 const HeroBand = styled.div`
   --text-primary: #ffffff;
   --text-secondary: #ffffff;
@@ -60,10 +115,12 @@ const HeroBand = styled.div`
   --shadow-ring: 0 0 0 3px rgba(255, 255, 255, 0.55);
   position: relative;
   isolation: isolate;
-  background:
-    linear-gradient(180deg, transparent 78%, var(--bg-app) 98%),
-    linear-gradient(rgba(10, 12, 17, 0.65), rgba(10, 12, 17, 0.65)),
-    #141a2e url(${HERO_PHOTO}) center 28% / cover no-repeat;
+  /* Above the next band, so the screenshot's shadow fades out over it instead of
+     stopping at a hard edge */
+  z-index: 1;
+  --hero-light: 270px;
+  ${HERO_BACKGROUND === 'mountains' ? heroMountains : HERO_BACKGROUND === 'stars' ? heroStars : heroGradient}
+  @media (max-width: 768px) { --hero-light: 110px; }
   color: var(--text-secondary);
 
   /* Pills on the photo: the primary turns white with deep teal text, the neutral one a white glass outline */
@@ -151,7 +208,9 @@ const Header = styled.header`
   padding: 24px 0;
 `;
 
+/* The header lines up with the hero's screenshot frame */
 const HeaderRow = styled(Container)`
+  && { max-width: 1048px; }
   position: relative;
   display: flex;
   align-items: center;
@@ -160,6 +219,23 @@ const HeaderRow = styled(Container)`
 `;
 
 /* The app icon (the rounded teal tile) beside the name in Work Sans */
+/* The logo: the book mark in the dusk colours (lavender to teal) beside "Chronicles"
+   in thin Work Sans — no tile; the tile is the app icon, for the home screen only */
+function DuskMark({ id }: { id: string }) {
+  return (
+    <svg viewBox="0 -960 960 960" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">
+          <stop offset="0" stopColor="#ece4fb" />
+          <stop offset="0.5" stopColor="#c9d6f0" />
+          <stop offset="1" stopColor="#7fd3c9" />
+        </linearGradient>
+      </defs>
+      <path d={BOOK_5} fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
 const Brand = styled(Link)`
   display: inline-flex;
   align-items: center;
@@ -168,11 +244,11 @@ const Brand = styled(Link)`
   text-decoration: none;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 400;
+  font-size: 26px;
+  font-weight: 300;
   letter-spacing: 0.01em;
-  img { display: block; width: 36px; height: 36px; border-radius: 9px; }
-  @media (max-width: 480px) { font-size: 19px; gap: 10px; img { width: 32px; height: 32px; } }
+  svg { display: block; width: 30px; height: 30px; flex-shrink: 0; }
+  @media (max-width: 480px) { font-size: 22px; gap: 10px; svg { width: 26px; height: 26px; } }
 `;
 
 const Nav = styled.nav`
@@ -244,7 +320,7 @@ const MenuPanel = styled.nav`
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 16px;
-  background: rgba(13, 22, 48, 0.94);
+  background: #47525f;
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
@@ -309,7 +385,7 @@ const FooterTop = styled(Container)`
 `;
 
 const FooterBrand = styled(Brand)`
-  font-size: 21px;
+  font-size: 23px;
   && { color: var(--text-soft); }
 `;
 
@@ -373,7 +449,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <HeroBand>
       <Header>
         <HeaderRow>
-          <Brand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</Brand>
+          <Brand to="/"><DuskMark id="landing-mark-head" /> Chronicles</Brand>
           <Nav aria-label="Main">
             <a href="#how" data-section-link>How it works</a>
             <a href="#features" data-section-link>Features</a>
@@ -403,7 +479,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       <Footer>
         <FooterTop>
           <div>
-            <FooterBrand to="/"><img src="/chronicles-logo.svg" alt="" /> Chronicles</FooterBrand>
+            <FooterBrand to="/"><DuskMark id="landing-mark-foot" /> Chronicles</FooterBrand>
             <p>A zero-knowledge encrypted life dashboard, journal and digital day planner.</p>
           </div>
           <nav aria-labelledby="foot-product">
