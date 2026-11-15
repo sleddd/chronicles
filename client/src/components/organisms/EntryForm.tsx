@@ -231,9 +231,9 @@ const RecipePad = styled.div`
 `;
 
 /* The photos' row, lined up with the text (the entry card's side margins) */
-const PhotosRow = styled.div`
-  padding: 0 36px 20px;
-  @media (max-width: 640px) { padding: 0 20px 18px; }
+const PhotosRow = styled.div<{ $foot?: boolean }>`
+  padding: ${({ $foot }) => ($foot ? '28px' : '0')} 36px 20px;
+  @media (max-width: 640px) { padding: ${({ $foot }) => ($foot ? '22px' : '0')} 20px 18px; }
 `;
 
 /* "Done editing — view recipe" — accent text button above the recipe fields. */
@@ -1095,6 +1095,8 @@ export function EntryForm({
   // Books, quotes and exercise never show the text area — just their fields.
   // Other writing already on an entry is kept as-is (never deleted), only hidden.
   const summaryHidesEditor = summaryLedTopic;
+  // A media item's photos sit at the foot of its card, after the cover and details
+  const photosAtFoot = customType === 'media';
   // A quote typed into the text area (Quote field empty) moves into the field once
   const migratedQuoteRef = useRef<number | null>(null);
   useEffect(() => {
@@ -1244,8 +1246,9 @@ export function EntryForm({
         />
       </EditorArea>
 
-      {/* Photos under the text: one larger, more in a row (no featured banner) */}
-      {!recipeViewMode && images.length + (imageUploading ? 1 : 0) > 0 && (
+      {/* Photos under the text: one larger, more in a row (no featured banner).
+          A media item's go at the foot of the card instead, after its cover and details */}
+      {!recipeViewMode && !photosAtFoot && images.length + (imageUploading ? 1 : 0) > 0 && (
         <PhotosRow>
           <EntryPhotos images={images} uploading={imageUploading} onRemove={key => onImageRemoved?.(key)} onOpen={setLightboxIndex} />
         </PhotosRow>
@@ -1336,6 +1339,13 @@ export function EntryForm({
               </FieldRowLayoutContext.Provider>
             </CustomFieldsBody>
         </CustomFieldsSection>
+      )}
+
+      {/* A media item's own photos, at the foot of its card (one stands in for the cover on the shelf) */}
+      {!recipeViewMode && photosAtFoot && images.length + (imageUploading ? 1 : 0) > 0 && (
+        <PhotosRow $foot>
+          <EntryPhotos images={images} uploading={imageUploading} onRemove={key => onImageRemoved?.(key)} onOpen={setLightboxIndex} />
+        </PhotosRow>
       )}
 
     </>

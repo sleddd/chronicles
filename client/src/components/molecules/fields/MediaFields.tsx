@@ -57,6 +57,8 @@ const CoverActions = styled.div`
   flex-direction: column;
   gap: 6px;
   align-items: flex-start;
+  /* A button centres its text: wrapped onto two lines in this narrow column, keep it flush left */
+  & > button { text-align: left; }
 `;
 
 const Candidates = styled.div`
@@ -232,6 +234,7 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
                   Remove cover
                 </TextAction>
               )}
+              {/* No cover found (or not the one you want): a photo of your own */}
             </CoverActions>
           </CoverCol>
 
@@ -275,7 +278,7 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
           </Candidates>
         )}
         <FieldNote>
-          Find cover &amp; details sends the title{values.creator?.trim() ? ` and ${info.creatorLabel.toLowerCase()}` : ''} to {type === 'book' ? 'Open Library' : type === 'music' ? 'Apple’s music catalogue' : type === 'tv' ? 'TVmaze (or Wikipedia)' : 'Wikipedia'}{onAiDetails ? ', and to your In-App AI for anything still blank' : ''}, fills the empty fields from what comes back (nothing you typed is changed) and keeps a small copy of the cover in this entry. A photo added with Add images is shown instead when there is one.
+          Find cover &amp; details sends the title{values.creator?.trim() ? ` and ${info.creatorLabel.toLowerCase()}` : ''} to {type === 'book' ? 'Open Library' : type === 'music' ? 'Apple’s music catalogue' : type === 'tv' ? 'TVmaze (or Wikipedia)' : 'Wikipedia'}{onAiDetails ? ', and to your In-App AI for anything still blank' : ''}, fills the empty fields from what comes back (nothing you typed is changed) and keeps a small copy of the cover in this entry. A photo added with Add images is shown instead when there is one, at the bottom of this card.
         </FieldNote>
       </Section>
 
