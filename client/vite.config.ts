@@ -3,9 +3,39 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
+/**
+ * Development only: retire a service worker left in the browser by an earlier
+ * production build or preview on this address. Such a worker serves its cached
+ * copy of the app (an old bundle) for every page load and never reaches the
+ * dev server, so no change shows up. The dev server has no /sw.js of its own,
+ * so the worker's update check found nothing and it stayed for good. This
+ * answers that check with a worker that clears the caches, unregisters itself
+ * and reloads the open tabs — one reload and the tab is on the live source.
+ */
+const RETIRE_SW = `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil((async () => {
+  for (const key of await caches.keys()) await caches.delete(key);
+  await self.registration.unregister();
+  for (const client of await self.clients.matchAll({ type: 'window' })) client.navigate(client.url);
+})()));
+`;
+const retireStaleServiceWorker = () => ({
+  name: 'retire-stale-service-worker',
+  apply: 'serve' as const,
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void; end: (b: string) => void }, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      if (req.url?.split('?')[0] !== '/sw.js') { next(); return; }
+      res.setHeader('Content-Type', 'application/javascript');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(RETIRE_SW);
+    });
+  },
+});
+
 export default defineConfig({
   plugins: [
     react(),
+    retireStaleServiceWorker(),
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icons/*.png'],
