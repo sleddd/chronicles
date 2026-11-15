@@ -33,6 +33,11 @@ import {
   postStorageBytes,
   financeStorageBytes,
   reservePostIds,
+  ensurePostReservations,
+  postReservationStatements,
+  RESERVATION_DAYS,
+  MAX_RESERVATIONS,
+  RESERVATION_SEED_WINDOW,
   resealPosts,
   createPost,
   getPost,
@@ -310,9 +315,42 @@ describe('Post queries', () => {
     it('hands out ids from the posts sequence', async () => {
       mockQueryRawUnsafe.mockResolvedValue([{ id: 41 }, { id: 42 }]);
       expect(await reservePostIds(SCHEMA, 2)).toEqual([41, 42]);
-      const [sql, n] = mockQueryRawUnsafe.mock.calls[0];
+      const [sql, n, keep] = mockQueryRawUnsafe.mock.calls[0];
       expect(sql).toContain("nextval('usr_1_abc123.posts_id_seq')");
       expect(n).toBe(2);
+      // Recorded, so a create can use each one up exactly once
+      expect(sql).toContain('INSERT INTO usr_1_abc123.post_id_reservations (id)');
+      // Unused ones expire and an account holds a bounded number (oldest go first)
+      expect(sql).toContain(`reserved_at < NOW() - make_interval(days => ${RESERVATION_DAYS})`);
+      expect(sql).toContain('ORDER BY reserved_at DESC, id DESC OFFSET $2');
+      expect(keep).toBe(MAX_RESERVATIONS - 2);
+    });
+  });
+
+  describe('ensurePostReservations', () => {
+    it('creates the table and seeds the recent unused ids once, then only remembers', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: false }]);
+      mockExecuteRawUnsafe.mockResolvedValue(0);
+      mockTransaction.mockResolvedValue([]);
+      await ensurePostReservations('usr_9_cccccc');
+      const sqls = mockExecuteRawUnsafe.mock.calls.map(c => c[0] as string);
+      expect(sqls[0]).toContain('CREATE TABLE IF NOT EXISTS usr_9_cccccc.post_id_reservations');
+      const seed = sqls.find(q => q.startsWith('INSERT INTO usr_9_cccccc.post_id_reservations'))!;
+      expect(seed).toContain(`q.last_value - ${RESERVATION_SEED_WINDOW - 1}`);
+      expect(seed).toContain('WHERE q.is_called');
+      // never an id an entry has, or a deleted one
+      expect(seed).toContain('NOT EXISTS (SELECT 1 FROM usr_9_cccccc.posts p WHERE p.id = g.id)');
+      expect(seed).toContain('NOT EXISTS (SELECT 1 FROM usr_9_cccccc.deleted_posts d WHERE d.id = g.id)');
+      expect(mockTransaction).toHaveBeenCalledTimes(1);
+      await ensurePostReservations('usr_9_cccccc');
+      expect(mockQueryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+
+    it('only reads the catalog when the table is there', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: true }]);
+      await ensurePostReservations('usr_10_dddddd');
+      expect(mockExecuteRawUnsafe).not.toHaveBeenCalled();
+      expect(mockTransaction).not.toHaveBeenCalled();
     });
   });
 
@@ -324,13 +362,17 @@ describe('Post queries', () => {
       metadataIv: Buffer.from('meta-iv-12b!'),
     };
 
-    it('inserts an encrypted post under its reserved id, only if that id was handed out', async () => {
+    it('inserts an encrypted post under its reserved id, using up the reservation', async () => {
       mockQueryRawUnsafe.mockResolvedValue([{ id: 7, isEncrypted: true }]);
       const result = await createPost(SCHEMA, { id: 7, ...fields });
       expect(result?.id).toBe(7);
       const [sql, id, ce, ci, me, mi, created] = mockQueryRawUnsafe.mock.calls[0];
       expect(sql).toContain('INSERT INTO usr_1_abc123.posts (id, content_encrypted');
-      expect(sql).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.posts_id_seq)');
+      // Only an id with a reservation, and the same statement uses it up
+      expect(sql).toContain('DELETE FROM usr_1_abc123.post_id_reservations WHERE id = $1 RETURNING id');
+      expect(sql).toContain('FROM reservation');
+      expect(sql).toContain('NOT EXISTS (SELECT 1 FROM usr_1_abc123.deleted_posts d WHERE d.id = $1)');
+      expect(sql).not.toContain('last_value');
       expect(sql).toContain('ON CONFLICT (id) DO NOTHING');
       expect(sql).not.toMatch(/\bcontent, metadata, is_encrypted\)/);
       expect([id, ce, ci, me, mi, created]).toEqual([7, fields.contentEncrypted, fields.contentIv, fields.metadataEncrypted, fields.metadataIv, null]);
@@ -375,7 +417,7 @@ describe('Post queries', () => {
       const made = await createPosts(SCHEMA, [{ id: 1, ...fields }, { id: 2, ...fields }]);
       expect(made?.map(p => p.id)).toEqual([1, 2]);
       expect(mockTransaction).toHaveBeenCalledTimes(1);
-      expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.posts_id_seq)');
+      expect(mockQueryRawUnsafe.mock.calls[0][0]).toContain('DELETE FROM usr_1_abc123.post_id_reservations WHERE id = $1 RETURNING id');
     });
 
     it('inside a caller\'s transaction, keeps all-or-none with a savepoint', async () => {
@@ -723,6 +765,12 @@ describe('ensurePostSync — deletions index', () => {
   it('new schemas get an index on deleted_posts.id (every insert checks its id was never deleted)', () => {
     expect(postSyncStatements(SCHEMA)).toContain(
       'CREATE INDEX IF NOT EXISTS idx_usr_1_abc123_deleted_id ON usr_1_abc123.deleted_posts (id)');
+  });
+
+  it('new schemas get the id reservations table (nothing to seed)', () => {
+    const sqls = postReservationStatements(SCHEMA);
+    expect(sqls[0]).toBe('CREATE TABLE IF NOT EXISTS usr_1_abc123.post_id_reservations (id INTEGER PRIMARY KEY, reserved_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+    expect(sqls.some(q => q.includes('post_id_reservations (reserved_at)'))).toBe(true);
   });
 
   it('an account already tracked but missing an index gets just the indexes, after a catalog read', async () => {

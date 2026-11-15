@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
 import { MAIN_SHARD, shardClient, shardForNewAccount, tenantDb, forgetTenant } from './shards.js';
-import { financeTableStatements, doseRecordStatements, postSyncStatements } from './tenantQueries.js';
+import { financeTableStatements, doseRecordStatements, postSyncStatements, postReservationStatements } from './tenantQueries.js';
 
 // =============================================================================
 // Tenant Schema Manager
@@ -90,6 +90,8 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
 
     // Change tracking for the browser's entry sync (trigger function: ensurePostSyncFunction)
     ...postSyncStatements(s),
+    // Each id handed out for a new entry, used up when it's created (reservePostIds)
+    ...postReservationStatements(s),
 
     // Record initial schema version
     `INSERT INTO ${s}._migrations (version, name) VALUES (1, 'initial_schema')`,

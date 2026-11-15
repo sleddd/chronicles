@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import crypto from 'crypto';
-import { createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
+import { createPost, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
@@ -14,6 +14,8 @@ const router = Router();
 router.use(async (req, res, next) => {
   try {
     await ensurePostSync(req.auth!.tenantSchemaName);
+    // Ids handed out for new entries are recorded and used up on create
+    await ensurePostReservations(req.auth!.tenantSchemaName);
     next();
   } catch (err) {
     console.error('Entry sync setup error:', err);

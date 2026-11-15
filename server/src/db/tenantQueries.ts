@@ -350,23 +350,48 @@ const POST_SELECT = `id, content, metadata,
 /**
  * Reserve ids for new entries. The client encrypts an entry bound to its id
  * (the id is in the AAD), so it needs the id before the entry exists.
+ *
+ * Each id handed out is written down (post_id_reservations), and creating an
+ * entry uses that row up: an id can only ever be created once, whatever later
+ * happens to deleted_posts (it is trimmed) or to the sequence (a restore, a
+ * setval). Reservations nobody used go after RESERVATION_DAYS, and an account
+ * holds at most MAX_RESERVATIONS (the oldest go first) — one statement.
  */
+export const RESERVATION_DAYS = 7;
+export const MAX_RESERVATIONS = 2_000;
+
 export async function reservePostIds(schemaName: string, count: number): Promise<number[]> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<{ id: number }[]>(
-    `SELECT nextval('${s}.posts_id_seq')::int AS id FROM generate_series(1, $1)`,
-    count
+    `WITH expired AS (
+       DELETE FROM ${s}.post_id_reservations WHERE reserved_at < NOW() - make_interval(days => ${RESERVATION_DAYS})
+     ), overflow AS (
+       DELETE FROM ${s}.post_id_reservations WHERE id IN (
+         SELECT id FROM ${s}.post_id_reservations ORDER BY reserved_at DESC, id DESC OFFSET $2)
+     ), fresh AS (
+       INSERT INTO ${s}.post_id_reservations (id)
+       SELECT nextval('${s}.posts_id_seq')::int FROM generate_series(1, $1)
+       RETURNING id
+     )
+     SELECT id FROM fresh ORDER BY id`,
+    count,
+    Math.max(0, MAX_RESERVATIONS - count)
   );
   return rows.map(r => r.id);
 }
 
 function insertPostSql(s: string): string {
-  return `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
-     SELECT $1, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
-     WHERE $1 <= (SELECT last_value FROM ${s}.posts_id_seq)
-       -- a deleted entry's id stays spent, so it can't come back under sync
-       AND NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = $1)
+  // The reservation is used up by the same statement that creates the entry
+  // (rolled back with it when a batch fails), so an id is created at most once
+  return `WITH reservation AS (
+       DELETE FROM ${s}.post_id_reservations WHERE id = $1 RETURNING id
+     )
+     INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+     SELECT reservation.id, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
+     FROM reservation
+     -- a deleted entry's id stays spent (belt and braces: its reservation is gone too)
+     WHERE NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = $1)
      ON CONFLICT (id) DO NOTHING
      RETURNING ${POST_SELECT}`;
 }
@@ -377,8 +402,8 @@ const insertPostArgs = (input: CreatePostInput) => [
 
 /**
  * Create an encrypted entry under a reserved id. Returns null when the id was
- * never handed out (beyond the sequence), is taken, or belonged to a deleted
- * entry. Server and client both
+ * never reserved, its reservation was already used (or expired), it is taken,
+ * or it belonged to a deleted entry. Server and client both
  * refuse plaintext posts, so there is no plaintext path.
  */
 export async function createPost(schemaName: string, input: CreatePostInput, client?: TenantClient): Promise<TenantPost | null> {
@@ -562,9 +587,9 @@ export async function deletePost(schemaName: string, id: number): Promise<void> 
 // below it may have missed a deletion, so it is told to load everything
 // (getPostChanges) — a full load shows what's gone by what's left.
 //
-// A trimmed id is no longer "spent": after 10,000 later deletions the server
-// would accept an entry under it again. Every browser at or below the mark
-// reloads, so none can hold the old entry under that id.
+// Trimming doesn't free an id for reuse: creating an entry uses up the id's
+// reservation (post_id_reservations), so a deleted id can never be created
+// again, trimmed or not. Every browser at or below the mark reloads.
 export const DELETED_POSTS_KEEP = 10_000;
 export const DELETED_POSTS_SLACK = 2_000;
 const TRIM_MARK_ID = 0;
@@ -676,6 +701,56 @@ export async function ensurePostSync(schemaName: string): Promise<void> {
     await db.$executeRawUnsafe(deletedPostsIdIndexSql(s));
   }
   postSyncReady.add(s);
+}
+
+// =============================================================================
+// Entry id reservations (see reservePostIds)
+// =============================================================================
+
+/** The reservations table (new schemas get it at creation, with nothing to seed). */
+export function postReservationStatements(s: string): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS ${s}.post_id_reservations (id INTEGER PRIMARY KEY, reserved_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS idx_${s}_reserved_at ON ${s}.post_id_reservations (reserved_at)`,
+  ];
+}
+
+/** How far back the one-time seed looks for ids handed out before reservations were recorded. */
+export const RESERVATION_SEED_WINDOW = 500;
+
+/**
+ * For an account from before reservations were recorded: an open tab may still
+ * hold ids it was handed (a few batches of 20, always the newest). Seed the
+ * newest RESERVATION_SEED_WINDOW ids the sequence gave out that no entry has
+ * and no deletion names, so those saves still go through. Older ids — and every
+ * deleted one — can't be created again.
+ */
+function seedReservationsSql(s: string): string {
+  return `INSERT INTO ${s}.post_id_reservations (id)
+     SELECT g.id FROM (SELECT last_value, is_called FROM ${s}.posts_id_seq) q,
+       LATERAL generate_series(GREATEST(1, q.last_value - ${RESERVATION_SEED_WINDOW - 1}), q.last_value) AS g(id)
+     WHERE q.is_called
+       AND NOT EXISTS (SELECT 1 FROM ${s}.posts p WHERE p.id = g.id)
+       AND NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = g.id)
+     ON CONFLICT (id) DO NOTHING`;
+}
+
+const reservationsReady = new Set<string>();
+
+/** JIT migration for id reservations: one catalog read once it's in place. Needs ensurePostSync first (deleted_posts). */
+export async function ensurePostReservations(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  if (reservationsReady.has(s)) return;
+  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = $1 AND t.relname = 'post_id_reservations') AS ready`,
+    s
+  );
+  if (!ready) {
+    await db.$transaction([...postReservationStatements(s), seedReservationsSql(s)].map(sql => db.$executeRawUnsafe(sql)));
+  }
+  reservationsReady.add(s);
 }
 
 /** A cursor taken before reading: every transaction below it has finished. */

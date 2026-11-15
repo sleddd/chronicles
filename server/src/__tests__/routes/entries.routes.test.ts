@@ -9,6 +9,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   createPost: vi.fn(),
   createPosts: vi.fn(),
   ensurePostSync: vi.fn().mockResolvedValue(undefined),
+  ensurePostReservations: vi.fn().mockResolvedValue(undefined),
   getSyncCursor: vi.fn(),
   getPostChanges: vi.fn(),
   updatePost: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getPostPage, getPost, createPost, createPosts, ensurePostSync, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
+import { getPostPage, getPost, createPost, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -324,6 +325,7 @@ describe('Entry Routes', () => {
       (getPostPage as any).mockResolvedValue({ posts: [], more: false });
       await request(app).get('/api/entries');
       expect(ensurePostSync).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
+      expect(ensurePostReservations).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
     });
 
     it('gives a cursor and a scope for this account', async () => {
