@@ -496,7 +496,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
               <li><a href="#privacy">Privacy and encryption</a></li>
               <li><Link to="/health-privacy">Privacy policy</Link></li>
               <li><Link to="/terms">Terms</Link></li>
-              <li><a href={`${BETA_DETAILS.githubUrl}/blob/rebuild/LICENSE`} target="_blank" rel="noopener noreferrer">License</a></li>
+              <li><Link to="/license">License</Link></li>
             </ul>
           </nav>
           <nav aria-labelledby="foot-help">

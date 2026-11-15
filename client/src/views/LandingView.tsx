@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
-import { LandingTemplate, Container, DarkBand, HERO_PHOTO, PAGE_INK } from '../components/templates/LandingTemplate.js';
+import { LandingTemplate, Container, DarkBand, ActionPill, HERO_PHOTO, PAGE_INK } from '../components/templates/LandingTemplate.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlides.js';
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
@@ -81,7 +81,7 @@ const FEATURES: Feature[] = [
   },
   {
     label: 'Budget and finance', title: 'Private budgeting to keep your finances on track.',
-    body: 'Manage monthly category budgets, recurring bills, subscriptions, and dedicated savings funds in one clean view. Your running balance updates automatically as you log expenses, while clear reports compare planned versus actual spending so you can adjust before the month ends.',
+    body: 'Set monthly category budgets, track recurring bills and subscriptions, and watch your running balance update automatically as you log spending or mark bills paid. Build dedicated savings funds and compare planned versus actual spending in clear reports, all powered by your own entries with zero bank logins required.',
     points: [],
     shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440],
     alt: [
@@ -102,7 +102,7 @@ const MODULES = [
 const EXTRAS = [
   { title: 'Custom topics', body: 'Create, reorder, and customize any topic with its own icon and tailored fields.' },
   { title: 'Time tracking', body: 'Time any task, workout, or focus session directly from its entry.' },
-  { title: 'Built for mobile', body: 'Access your secure workspace in any web browser or install it straight to your phone home screen for a seamless native experience.' },
+  { title: 'Works on any device', body: 'Runs smoothly in your browser and installs straight to your phone home screen as a progressive web app for instant access anywhere.' },
   { title: 'Optional AI', body: 'Get instant calorie and nutrient estimates using your own Anthropic, OpenAI, or Bedrock API key. It never touches or sees your journal.' },
 ];
 
@@ -111,21 +111,22 @@ const PRIVACY = [
   { icon: 'visibility_off', title: 'No tracking', body: 'No analytics, telemetry or crash reporting. When something breaks, a bug form is how you report it.' },
   { icon: 'notifications_off', title: 'No pings, no marketing', body: 'No notifications and no marketing email. Chronicles waits until you open it.' },
   { icon: 'key', title: 'AI on your terms', body: 'The assistant is optional and uses your own key. Requests go from your browser straight to the provider.' },
-  { icon: 'image', title: 'Private, encrypted photo storage.', body: 'Photos stay off by default. Connect your own private storage bucket, and encrypted images upload directly to your personal cloud without touching our servers.' },
-  { icon: 'download', title: 'Your data leaves with you', body: 'Export entries, including finance, to JSON or CSV, print medical summaries, or jump straight in using built-in seed data for wellness, topics, and finance.' },
+  { icon: 'image', title: 'Optional encrypted photo storage', body: 'Photos are off by default. Bring your own storage key to connect a private bucket, and your encrypted photos go straight to your personal storage without ever touching the Chronicles server.' },
+  { icon: 'download', title: 'Your data leaves with you', body: 'Export full JSON backups, download entries and finance data as CSV, or print clean medical summaries anytime. Start fresh or load built-in seed data for wellness, topics, and finance to test out the app instantly.' },
 ];
 
 const BETA_POINTS = ['Free access for the whole beta', 'A direct say in what gets built next', 'After release, no more than $20 a month'];
 
 const QUESTIONS = [
-  { q: 'How do I give feedback or report a bug?', a: 'Simply head to your settings, open the built-in report a bug or feedback form, fill out your notes, and click send.' },
-  { q: 'Can I import my existing notes or journal entries?', a: 'Yes. Because Chronicles supports full JSON backups and CSV exports, you can easily migrate or restore your data anytime.' },
+  { q: 'Why did you build Chronicles?', a: 'Chronicles was born out of personal necessity during illness to serve as a private daily anchor. Because commercial alternatives often lack true zero knowledge privacy or lock essential features behind expensive subscriptions, the source code remains completely public and free to run yourself. Only the managed hosted version and future native mobile apps will carry a post beta price to cover ongoing infrastructure, maintenance, and project sustainability.' },
+  { q: 'How do I give feedback or report a bug?', a: 'Head to your settings, open the built-in feedback or report a bug form, fill out your notes, and click send.' },
+  { q: 'Can I import my existing notes or journal entries?', a: 'Yes. Chronicles supports full JSON backups and CSV exports so you can migrate or restore your data anytime.' },
   { q: 'What happens to my data if I stop using Chronicles?', a: 'Your data is entirely yours. You can export your complete archive to JSON or CSV spreadsheets at any moment, leaving nothing behind on any server.' },
   { q: 'How does optional AI work without compromising privacy?', a: 'You bring your own API key (Anthropic, OpenAI, or Bedrock). The AI is only used on demand for quick calorie or nutrient estimates, and your journal contents are never used to train models or stored externally.' },
-  { q: 'Is my data accessible offline?', a: 'Yes. Because it runs directly in your browser with local storage and client-side encryption, your workspace remains fully accessible and functional even when you are offline.' },
+  { q: 'Is my data accessible offline?', a: 'Yes. Because it runs directly in your browser with local storage and client-side encryption, your workspace remains fully functional even when you are offline.' },
   { q: 'What happens if I lose my password?', a: 'Because Chronicles uses zero-knowledge client-side encryption where your password and keys never leave your device, we cannot recover or reset your password for you. Your data remains strictly private.' },
-  { q: 'Is there a phone app?', a: 'Chronicles runs smoothly in any modern web browser and installs straight to your phone home screen for a seamless native app experience. A native iOS and Android app will be developed after initial beta release.' },
-  { q: 'What will it cost?', a: 'During the active beta, access is completely free. After official release, pricing will be no more than $20 a month.' },
+  { q: 'Is there a phone app?', a: 'Chronicles runs smoothly in any modern web browser and installs straight to your phone home screen for a seamless native app experience.' },
+  { q: 'What will it cost?', a: 'During active beta, access is completely free. After official release, pricing will be no more than $20 a month.' },
 ];
 
 /* ——— Shared pieces ——— */
@@ -215,12 +216,28 @@ const H1 = styled.h1`
 `;
 
 const HeroText = styled.p`
-  max-width: 960px; /* first line ends at "moments, and", the second starts at "tasks" */
+  max-width: 1120px; /* wide enough for the first line to run to "notes, habits," */
   margin: 0 auto;
   font-size: 18px;
   line-height: 1.65;
   color: var(--text-soft);
+  /* The line break after "habits," is for wide screens only */
+  br { @media (max-width: 768px) { display: none; } }
   @media (max-width: 768px) { font-size: 17px; }
+`;
+
+/* The hero's two buttons, under the intro */
+const HeroActions = styled.div`
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 40px;
+  a { text-shadow: none; }
+`;
+
+const BigPill = styled(ActionPill)`
+  && { min-height: 48px; padding: 10px 26px; font-size: 16px; font-weight: 600; }
 `;
 
 /* The hero's slideshow of the app, no frame */
@@ -545,10 +562,14 @@ export function LandingView() {
             <HeroEyebrow>Life dashboard · Journal · Day planner</HeroEyebrow>
             <H1 id="hero-title">A life dashboard for<br /> people <em>too busy to plan.</em></H1>
             <HeroText>
-              Chronicles is a zero-knowledge encrypted journal, planner, and life tracker. Capture notes, habits, moments,
-              and tasks in one place, and let Chronicles automatically organize them into the views you need to manage
-              your day.
+              Chronicles is a private zero knowledge life dashboard and day planner that automatically organizes your
+              notes, habits,<br /> and tasks into one secure workspace where your data stays entirely on your device with zero
+              corporate tracking.
             </HeroText>
+            <HeroActions>
+              <BigPill as="a" href="#beta" $primary>Join the beta</BigPill>
+              <BigPill as="a" href="#how">See how it works</BigPill>
+            </HeroActions>
           </Hero>
           <Showcase>
             <ScreenSlideshow />

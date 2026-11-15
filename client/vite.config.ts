@@ -19,9 +19,9 @@ export default defineConfig({
         scope: '/',
         start_url: '/dashboard',
         icons: [
-          { src: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-192x192.png?v=9', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512x512.png?v=9', sizes: '512x512', type: 'image/png' },
+          { src: '/icons/icon-maskable-512x512.png?v=9', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

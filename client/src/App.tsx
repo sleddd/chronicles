@@ -19,6 +19,7 @@ import { LoginView } from './views/LoginView.js';
 import { RegisterView } from './views/RegisterView.js';
 import { HealthPrivacyView } from './views/HealthPrivacyView.js';
 import { TermsView } from './views/TermsView.js';
+import { LicenseView } from './views/LicenseView.js';
 import { NoticeBanner } from './components/organisms/NoticeBanner.js';
 import { RecoverView } from './views/RecoverView.js';
 import { JournalView } from './views/JournalView.js';
@@ -424,7 +425,7 @@ function deriveAccentScale(base: string): Record<string, string> {
 }
 
 /** The landing page, sign-in screens, shares and legal pages — no chat or notice banner there */
-const PUBLIC_PREFIXES = ['/login', '/sign-up', '/register', '/recover', '/share', '/public-shelf', '/health-privacy', '/terms', '/report-a-bug'];
+const PUBLIC_PREFIXES = ['/login', '/sign-up', '/register', '/recover', '/share', '/public-shelf', '/health-privacy', '/terms', '/license', '/report-a-bug'];
 function isPublicPage(pathname: string): boolean {
   return pathname === '/' || PUBLIC_PREFIXES.some(p => pathname.startsWith(p));
 }
@@ -664,6 +665,7 @@ export function App() {
               <Route path="/public-shelf/:token" element={<PublicShelfView />} />
               <Route path="/health-privacy" element={<HealthPrivacyView />} />
               <Route path="/terms" element={<TermsView />} />
+              <Route path="/license" element={<LicenseView />} />
               <Route path="/report-a-bug" element={<BugReportView />} />
 
               {/* Core */}
