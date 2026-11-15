@@ -180,7 +180,7 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
   );
 
   return (
-    <Box as="section" aria-label="Your day" $inside={inside}>
+    <Box role="region" aria-label="Your day" $inside={inside}>
       <Bar type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(o => !o)}>
         <span><span className="title">Your day</span><span className="count"> · {answered} of 8</span></span>
         <span className="hint">{open ? 'Hide' : answered === 8 ? 'All answered' : 'Tap to answer'}</span>

@@ -29,7 +29,6 @@ const Head = styled.header`
   gap: 12px 24px;
   /* The title sits where the other pages' do (Topics, Health, Planning…: 53px) */
   padding: 53px 36px 30px;
-  border-bottom: 1px solid var(--border-subtle);
   @media (max-width: 768px) { padding: 34px 24px 32px; align-items: center; row-gap: 10px; }
   /* Phones/tablets: the top bar names the page and holds New entry — this row
      is only the back caret, while an entry is open */
@@ -100,16 +99,17 @@ const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean 
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: var(--bg-app);
+  /* The list is a drawer beside the editor: a shade darker than the page (no
+     divider). Its head, rows and month headings read --list-bg too */
+  --list-bg: color-mix(in srgb, var(--bg-app) 80%, #000);
+  html[data-theme='light'] & { --list-bg: color-mix(in srgb, var(--bg-app) 95%, #000); }
+  background: var(--list-bg);
   html[data-wallpaper] & { background: transparent; }
-  /* Hairline down its right edge, separating the list from the editor */
-  border-right: 1px solid var(--border-subtle);
 
   @media (max-width: 1024px) {
     width: 100%;
     min-width: 100%;
     max-width: 100%;
-    border-right: none; /* one pane at a time — nothing beside it */
     display: ${({ $hiddenMobile }) => $hiddenMobile ? 'none' : 'flex'};
   }
 `;
@@ -172,7 +172,7 @@ export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', tit
   return (
     <Page>
       {/* Just the title row and the panels' top bars — the rows and the editor stay solid */}
-      <Wallpaper height="min(300px, 38vh)" follow={false} />
+      <Wallpaper height="min(200px, 25vh)" follow={false} />
       <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (

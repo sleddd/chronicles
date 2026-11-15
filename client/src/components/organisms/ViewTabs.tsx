@@ -37,8 +37,8 @@ const Container = styled.div`
   gap: 6px;
   flex-shrink: 0;
   padding: 16px var(--s-4, 16px) 0;
-  /* The page's own colour (light or dark), solid — no frosted blur over the photo */
-  background: var(--bg-app);
+  /* The list pane's colour (a shade under the editor's), solid — no blur over the photo */
+  background: var(--list-bg, var(--bg-app));
 `;
 
 const ViewRow = styled.div`
@@ -47,12 +47,12 @@ const ViewRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  /* A standard row: hairlines above and below, edge to edge across the list */
-  min-height: 48px;
+  /* A standard row: faint hairlines above and below (like the list's rows), edge to edge */
+  min-height: 44px;
   margin: 10px calc(-1 * var(--s-4, 16px)) 0;
   padding: 0 calc(var(--s-4, 16px) - 2px) 0 20px;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
 `;
 
 const RowLabel = styled.span`
@@ -114,8 +114,7 @@ const ConfirmNote = styled.div`
   align-items: center;
   gap: 8px 14px;
   margin: 0 calc(-1 * var(--s-4, 16px));
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 4px 20px 10px;
   font-family: var(--font-sans);
   font-size: 13px;
   color: var(--text-secondary);

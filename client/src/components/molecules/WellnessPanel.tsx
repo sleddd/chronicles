@@ -1,6 +1,5 @@
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
-import { JoinedGroup, JoinedBtn } from './fields/formKit.js';
 import { glassCard } from '../../styles/wallpaper.js';
 
 /* The wellness check-in, one look everywhere (Health dashboard card + the
@@ -335,13 +334,16 @@ const RowWrapper = styled(CompactWrapper)`
   && ${FaceBtn} { width: 32px; height: 32px; & > span { font-size: 38px; } }
 `;
 
+/* The journal / Quick entry: no outer border or fill (the entry card is the
+   container) — only the rules between the cells; overflow clips the outer edges' rules */
 const Row4 = styled.div`
-  background: var(--bg-tracker, transparent);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 2fr);
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
+  /* Mood gets room for its five faces; Cycle's chips wrap in a narrower cell */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, 1.4fr);
   overflow: hidden;
+  /* No outer box, so the outer cells' padding hangs outside: the first cell's
+     text lines up with the card's labels, the last cell's with its right edge */
+  margin: 0 calc(-1 * var(--cell-x));
   --cell-x: 18px; /* Your day's bar lines up with the cells */
   & > * {
     min-width: 0;
@@ -552,23 +554,13 @@ export function WellnessPanel({
   const cycle$ = showCycle && (
     <Cell>
       <Head><Label>Cycle</Label>{cycleNote && <CycleNote>{cycleNote}</CycleNote>}</Head>
-      {row ? (
-        <JoinedGroup role="group" aria-label="Cycle">
-          {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
-            <JoinedBtn key={f || 'none'} type="button" $fill $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
-              {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
-            </JoinedBtn>
-          ))}
-        </JoinedGroup>
-      ) : (
-        <Chips role="group" aria-label="Cycle">
-          {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
-            <Chip key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
-              {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
-            </Chip>
-          ))}
-        </Chips>
-      )}
+      <Chips role="group" aria-label="Cycle">
+        {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => (
+          <Chip key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f} onClick={() => onFlow(f)}>
+            {f ? f[0].toUpperCase() + f.slice(1) : 'None'}
+          </Chip>
+        ))}
+      </Chips>
     </Cell>
   );
 

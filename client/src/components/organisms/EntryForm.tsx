@@ -207,7 +207,7 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: b
       font-family: var(--font-display);
       font-size: 22px;
       font-weight: 300;
-      line-height: 1.32;
+      line-height: 1.45;
     }
     .tiptap > :first-child { margin-bottom: 0.5em; }
   ` : '')}
@@ -453,8 +453,12 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   && .tiptap p.is-editor-empty:first-child::before { font-style: normal; color: var(--text-muted); opacity: 0.55; }
   /* The fields: straight under the title row, as the card's rows */
   && ${CustomFieldsSection} { margin: 0; padding: 0; border: none; }
-  /* The journal: a little more room between the writing and the fields */
-  ${({ $flat }) => ($flat ? css`&& ${CustomFieldsSection}[data-after-text] { margin-top: 16px; }` : '')}
+  /* The journal: a little more room between the writing and the fields, and its
+     placeholders a step brighter */
+  ${({ $flat }) => ($flat ? css`
+    && ${CustomFieldsSection}[data-after-text] { margin-top: 16px; }
+    && .tiptap p.is-editor-empty:first-child::before, & input::placeholder, & textarea::placeholder { opacity: 0.85; }
+  ` : '')}
   ${cardRows}
 `;
 
@@ -527,12 +531,13 @@ const PromptLine = styled.div`
 
 /* The journal's: a step smaller, beside the editor's actions */
 const JournalPrompt = styled(PromptLine)`
-  /* At the top of the writing area (no bar): 22px, wrapping when the pane is narrow */
-  font-size: 22px;
+  /* At the top of the writing area (no bar): 18px — a step under the entry's 22px
+     title line — wrapping when the pane is narrow */
+  font-size: 18px;
   column-gap: 8px;
   /* The picker's words without the underline here */
   & > div > button, & > div > button:hover { padding: 0; border-bottom: none; gap: 10px; }
-  @media (max-width: 768px) { font-size: 19px; }
+  @media (max-width: 768px) { font-size: 17px; }
 `;
 
 /* The Quick entry's: on the photo — white text, its picker's menu dark */
@@ -594,16 +599,17 @@ const JournalFoot = styled(CardFoot)`
   /* Close and Delete: outlines only — no white fill (light theme's --bg-control) */
   && button:not(${SaveButton}) { background: transparent; }
   && button:not(${SaveButton}):hover:not(:disabled) { background: var(--bg-hover); }
-  /* Save entry: the app's normal pill — an accent outline with accent text, never filled
-     (light theme included), a faint accent tint on hover */
+  /* Save entry: the strongest thing at the foot — filled in the accent with dark text
+     (a quiet grey outline while there's nothing to save) */
   && ${SaveButton}:not(:disabled), html[data-theme='light'] && ${SaveButton}:not(:disabled) {
-    border-color: var(--color-accent-line);
-    background: transparent;
-    color: var(--color-accent-line);
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: #15181d;
   }
   && ${SaveButton}:hover:not(:disabled), html[data-theme='light'] && ${SaveButton}:hover:not(:disabled) {
-    border-color: var(--color-accent-line);
-    background: var(--color-accent-subtle);
+    border-color: var(--color-accent-hover);
+    background: var(--color-accent-hover);
+    color: #15181d;
   }
 `;
 

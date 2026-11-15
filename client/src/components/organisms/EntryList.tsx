@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { solidUnderPhoto } from '../../styles/wallpaper.js';
 import { memo, useMemo, useCallback, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -46,10 +45,11 @@ const ListContainer = styled.div`
   flex-direction: column;
   gap: 0;
   /* Room above the first row (sitewide entry-list spacing) */
-  padding: 12px 0 0;
-  flex-shrink: 0;
+  padding: 6px 0 0;
+  /* Fills the pane, so its colour runs to the foot on a wallpaper too */
+  flex: 1 0 auto;
   background: transparent;
-  ${solidUnderPhoto}
+  html[data-wallpaper] & { background: var(--list-bg, var(--bg-app)); }
 `;
 
 const EmptyState = styled.div`
@@ -100,7 +100,7 @@ const MonthHead = styled.h3`
   font-size: 18px;
   font-weight: 300;
   color: var(--text-secondary);
-  background: var(--bg-app);
+  background: var(--list-bg, var(--bg-app));
 `;
 
 export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryListProps = {}) {
@@ -293,6 +293,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
               const card = (
                 <EntryCard
                   hint={groupIndex === 0 && rowIndex === 0 && !openRowVisible}
+                  showDate={viewMode !== 'date'}
                   key={selectMode ? undefined : entry.id}
                   id={entry.id}
                   content={entry.content}

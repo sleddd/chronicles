@@ -118,7 +118,8 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   border: none;
   cursor: pointer;
   background: ${({ $active }) => $active ? 'var(--bg-rail-active)' : 'transparent'};
-  color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-secondary)'};
+  /* Idle rows recede (about 55%) so only the active one reads bright */
+  color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'color-mix(in srgb, var(--text-secondary) 55%, transparent)'};
   transition: background 120ms ease, color 120ms ease;
 
 
@@ -296,19 +297,19 @@ export const Sidebar = memo(function Sidebar() {
       <NavScroll>
         {mainItems.map(item => (
           <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}>
-            <IconCell><MaterialIcon aria-hidden="true">{item.icon}</MaterialIcon></IconCell>
+            <IconCell><MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon></IconCell>
             {name(item.label)}
           </NavIconBtn>
         ))}
         {/* Settings: its own row, last before Collapse */}
         {settingsItem && (
           <NavIconBtn $active={settingsItem.active} onClick={() => navigate(settingsItem.path)} title={open ? undefined : settingsItem.label}>
-            <IconCell><MaterialIcon aria-hidden="true">{settingsItem.icon}</MaterialIcon></IconCell>
+            <IconCell><MaterialIcon $size={22} aria-hidden="true">{settingsItem.icon}</MaterialIcon></IconCell>
             {name(settingsItem.label)}
           </NavIconBtn>
         )}
         <ToggleBtn onClick={toggle} aria-expanded={open} title={open ? undefined : 'Show names'}>
-          <IconCell><MaterialIcon aria-hidden="true">{open ? 'chevron_left' : 'chevron_right'}</MaterialIcon></IconCell>
+          <IconCell><MaterialIcon $size={22} aria-hidden="true">{open ? 'chevron_left' : 'chevron_right'}</MaterialIcon></IconCell>
           {open ? <Label>Collapse</Label> : <SrOnly>Show names</SrOnly>}
         </ToggleBtn>
         <ToggleBtn ref={moreRef} onClick={() => (menuAt ? closeMenu() : openMenu())}

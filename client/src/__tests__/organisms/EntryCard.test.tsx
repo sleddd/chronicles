@@ -31,15 +31,17 @@ describe('EntryCard', () => {
     expect(screen.getByText('This is a journal entry')).toBeInTheDocument();
   });
 
-  it('renders a spreadsheet row: topic over the date, then the entry', () => {
+  it('renders one line: topic, then the entry, then the date', () => {
     const { container } = renderWithTheme(<EntryCard {...defaultProps} topicName="Work" />);
-    // 2024 isn't the current year, so the short year is shown
     expect(screen.getByText("Jan 15")).toBeInTheDocument();
     const text = container.textContent ?? '';
-    expect(text.indexOf('Work')).toBeLessThan(text.indexOf("Jan 15"));
-    expect(text.indexOf("Jan 15")).toBeLessThan(text.indexOf('This is a journal entry'));
-    // Topic and date share one column
-    expect(screen.getByText('Work').parentElement).toBe(screen.getByText("Jan 15").parentElement);
+    expect(text.indexOf('Work')).toBeLessThan(text.indexOf('This is a journal entry'));
+    expect(text.indexOf('This is a journal entry')).toBeLessThan(text.indexOf('Jan 15'));
+  });
+
+  it('leaves the date out when the list is one day', () => {
+    renderWithTheme(<EntryCard {...defaultProps} topicName="Work" showDate={false} />);
+    expect(screen.queryByText('Jan 15')).not.toBeInTheDocument();
   });
 
   it('calls onClick when card is clicked', () => {

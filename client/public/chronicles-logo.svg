@@ -1,13 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="26 -958 908 908" width="64" height="64">
   <!-- Chronicles favicon: just the book_5 mark (Material Symbols, Apache 2.0), no tile.
-       Deep violet to teal on light browser tabs, the dusk lavender to teal on dark ones.
-       The home-screen icons keep the dusk tile (public/icons). The tile favicon it
-       replaced is kept in src/assets/app-icons/dusk-tile-favicon.svg. -->
+       A teal gradient, pale teal at the top to a deep teal at the foot, on light and
+       dark browser tabs alike. The home-screen icons keep the dusk tile (public/icons).
+       The tile favicon it replaced is kept in src/assets/app-icons/dusk-tile-favicon.svg. -->
   <style>
-    .a { stop-color: #5b4a9a; } .b { stop-color: #3f6f9a; } .c { stop-color: #23807c; }
-    @media (prefers-color-scheme: dark) {
-      .a { stop-color: #ece4fb; } .b { stop-color: #c9d6f0; } .c { stop-color: #7fd3c9; }
-    }
+    .a { stop-color: #a6dedb; } .b { stop-color: #5cb6b2; } .c { stop-color: #2b8784; }
   </style>
   <defs>
     <linearGradient id="book" gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">

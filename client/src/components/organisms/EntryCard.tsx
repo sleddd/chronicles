@@ -3,10 +3,7 @@ import { entryRow, rowHoverHandlers, clearRowHover } from '../../styles/entryRow
 import { entryTitleText } from '../../utils/entryTitle.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { SwipeActions } from '../molecules/SwipeActions.js';
-import {
-  ENTRY_ROW_COLUMNS, ENTRY_ROW_INSET_PADDING, formatListDate,
-  MetaCell, DateCell, TopicCell, EntryCell, EntryTitle,
-} from '../molecules/EntryTable.js';
+import { formatListDate, DateCell, TopicCell, EntryCell, EntryTitle } from '../molecules/EntryTable.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
 
@@ -28,6 +25,8 @@ interface EntryCardProps {
   previewText?: string;
   /** First row of the list: shown active until the pointer is over a row */
   hint?: boolean;
+  /** Off when the list is one day (its heading already names it) */
+  showDate?: boolean;
 }
 
 function extractTitle(html: string, fallback?: string): string {
@@ -37,18 +36,26 @@ function extractTitle(html: string, fallback?: string): string {
 /* Spreadsheet row (see EntryTable): Topic over Date | Entry | controls.
    Shared row style (styles/entryRow): sunken rows; the open entry, the
    hovered row and the first-row hint use the page (editor) colour + accent bar. */
-const Row = styled.div<{ $active?: boolean; $hint?: boolean }>`
+/* One line: the small topic label, then the title (the date on the right only
+   when the list spans days). Compact, a hairline between rows */
+const Row = styled.div<{ $active?: boolean; $hint?: boolean; $noTopic?: boolean }>`
   position: relative;
   display: grid;
-  grid-template-columns: ${ENTRY_ROW_COLUMNS};
+  grid-template-columns: ${({ $noTopic }) => ($noTopic ? 'minmax(0, 1fr) auto' : 'minmax(0, 84px) minmax(0, 1fr) auto')};
   gap: 12px;
-  align-items: center;
+  align-items: baseline;
   box-sizing: border-box;
   cursor: pointer;
-  padding: ${ENTRY_ROW_INSET_PADDING};
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 17px 20px;
+  /* A faint hairline — fainter than --border-subtle on the darker list pane */
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
   ${entryRow}
+`;
 
+/* List titles stay quiet (soft grey, a little smaller); the open entry is bright */
+const RowTitle = styled(EntryTitle)<{ $open?: boolean }>`
+  font-size: 14px;
+  color: ${({ $completed, $open }) => ($completed ? 'var(--text-tertiary)' : $open ? 'var(--text-primary)' : 'color-mix(in srgb, var(--text-primary) 62%, transparent)')};
 `;
 
 /* Tapping the topic filters the list to that topic */
@@ -89,7 +96,7 @@ const BookmarkIcon = styled.span`
 export function EntryCard({
   id, content, date, topicName,
   topicId, active, onClick, onDelete, onTopicClick, onToggleBookmark,
-  isCompleted, isFavorite, previewText, hint,
+  isCompleted, isFavorite, previewText, hint, showDate = true,
 }: EntryCardProps) {
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
@@ -97,8 +104,8 @@ export function EntryCard({
   const title = extractTitle(content, previewText);
 
   const inner = (
-    <Row $active={active} $hint={hint} onClick={() => { clearRowHover(); onClick(); }} {...rowHoverHandlers}>
-      <MetaCell>
+    <Row $active={active} $hint={hint} $noTopic={!topicName} onClick={() => { clearRowHover(); onClick(); }} {...rowHoverHandlers}>
+      {topicName && <span style={{ minWidth: 0, display: 'flex' }}>
         {topicName && onTopicClick && topicId != null ? (
           <TopicButton
             type="button"
@@ -111,14 +118,16 @@ export function EntryCard({
         ) : topicName ? (
           <TopicCell $active={active} title={topicName}>{topicName}</TopicCell>
         ) : null}
-        <DateCell title={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
-          {formatListDate(d)}
-        </DateCell>
-      </MetaCell>
+      </span>}
       <EntryCell>
-        <EntryTitle $completed={isCompleted}>{title}</EntryTitle>
+        <RowTitle $completed={isCompleted} $open={active}>{title}</RowTitle>
       </EntryCell>
       <EndCol>
+        {showDate && (
+          <DateCell title={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}>
+            {formatListDate(d)}
+          </DateCell>
+        )}
         {isFavorite && (
           <BookmarkIcon
             onClick={e => { e.stopPropagation(); onToggleBookmark?.(id, false); }}

@@ -69,9 +69,8 @@ const DateFilterBar = styled.div`
   padding: 14px 20px;
   background: transparent;
   border: none;
-  /* Just a hairline under it — the tabs above already draw the one on top */
-  border-bottom: 1px solid var(--border-subtle);
-  ${glassBar}
+  /* On the list pane's colour, no rule */
+  background: var(--list-bg, var(--bg-app));
   border-radius: 0;
   font-family: var(--mono, ${({ theme }) => theme.fontFamily.mono});
   font-size: 10.5px;
