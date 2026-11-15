@@ -147,7 +147,7 @@ const ListBox = styled.div`
   border-top: 1px solid var(--border-subtle);
 `;
 
-/* Copy shelf link: the neutral pill, a white glass pill on a wallpaper (like Add media) */
+/* Copy shelf link: the neutral pill, a smoked glass pill on a wallpaper (like Add media) */
 const CopyLinkBtn = styled(PillButton)`
   ${glassPill}
 `;

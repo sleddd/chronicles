@@ -83,7 +83,7 @@ const FEATURES: Feature[] = [
       'Habit & wellness metrics: Build consistent habits while logging mood, sleep, water intake, and stress over time.',
       'Training & exercise routines: Plan physical training schedules, build custom workout routines, and track your exercise history.',
       'Nutrition & macros: Monitor meals, calories, vitamins, and daily nutrient targets.',
-      'Symptom & trigger reporting: Compare symptoms side-by-side with food logs and habits to spot hidden triggers, with print-ready clinical exports.',
+      'Symptom & trigger reporting: Compare symptoms side-by-side with food logs and habits to spot hidden triggers.',
     ],
     shot: ['health-dashboard', 'health-meals', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
@@ -148,18 +148,6 @@ const QUESTIONS = [
 ];
 
 /* ——— Shared pieces ——— */
-
-/* A small label over a section heading: spaced teal capitals */
-const Eyebrow = styled.p<{ $center?: boolean }>`
-  margin: 0 0 18px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--color-accent-line);
-  ${({ $center }) => $center && 'text-align: center;'}
-`;
 
 /* Section headings: big thin Work Sans, sentence case */
 const H2 = styled.h2<{ $center?: boolean }>`
@@ -413,11 +401,6 @@ const PrivacyBand = styled(DarkBand)`
   @media (max-width: 768px) { padding: 80px 0 64px; }
 `;
 
-/* "PRIVACY" over the heading, in the band's pale teal */
-const PrivacyEyebrow = styled(Eyebrow)`
-  && { margin-bottom: 14px; color: #8fd1cd; }
-`;
-
 const PrivacyHead = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -639,7 +622,6 @@ export function LandingView() {
         <Band $tone="page" aria-labelledby="more-title">
           <Container>
             <div data-reveal>
-              <Eyebrow>All in one life tracker</Eyebrow>
               <H2 id="more-title">Everything else your days touch.</H2>
               <Lede>Modules switch on and off, so your workspace stays clean and you only keep what you use.</Lede>
             </div>
@@ -669,7 +651,6 @@ export function LandingView() {
           <Container>
             <PrivacyHead data-reveal>
               <div>
-                <PrivacyEyebrow>Privacy</PrivacyEyebrow>
                 <H2 id="privacy-title">Only you can read it.</H2>
               </div>
               <p>Chronicles is zero knowledge. Entries are encrypted in your browser before they’re saved, so the server only
@@ -694,7 +675,6 @@ export function LandingView() {
         <Band $tone="page" id="beta" aria-labelledby="beta-title">
           <BetaLayout>
             <div data-reveal>
-              <Eyebrow>Private beta</Eyebrow>
               <H2 id="beta-title">Help shape your new life dashboard.</H2>
               <Lede>
                 Chronicles is in active design and development. Seats are limited so every tester’s feedback gets the
@@ -709,9 +689,7 @@ export function LandingView() {
         <FaqBand id="faq" aria-labelledby="faq-title">
           <FaqLayout>
             <div data-reveal>
-              <Eyebrow>Questions</Eyebrow>
               <H2 id="faq-title">Good to know.</H2>
-              <Lede>Anything else goes through the in-app bug and feedback form.</Lede>
             </div>
             <Faq>
               {QUESTIONS.map(({ q, a }, i) => (

@@ -203,7 +203,7 @@ const CornerBell = styled(BarBell)`
   background: var(--bg-panel);
   box-shadow: 0 1px 3px rgba(20, 24, 32, 0.08);
   ${glassPill}
-  html[data-wallpaper] &:hover { background: rgba(255, 255, 255, 0.26); }
+  html[data-wallpaper] &:hover { background: rgba(18, 20, 26, 0.66); }
 `;
 
 export interface BellTriggerProps {

@@ -31,8 +31,9 @@ export const glassControl = css`
  *  a white glass pill with white text, readable on light and dark photos */
 export const glassPill = css`
   html[data-wallpaper] & {
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.55);
+    /* Smoked glass: a dark see-through fill, so the white text holds on a bright photo */
+    background: rgba(18, 20, 26, 0.5);
+    border: 1px solid transparent; /* the fill runs to the edge: no outline against it */
     color: #fff;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
     -webkit-backdrop-filter: blur(14px);

@@ -207,7 +207,7 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: b
       font-family: var(--font-display);
       font-size: 22px;
       font-weight: 300;
-      line-height: 1.45;
+      line-height: 1.75;
     }
     .tiptap > :first-child { margin-bottom: 0.5em; }
   ` : '')}

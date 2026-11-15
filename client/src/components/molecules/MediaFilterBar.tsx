@@ -163,6 +163,12 @@ const TypeRow = styled(Chips)<{ $phone: boolean }>`
   margin-top: 24px;
   ${({ $phone }) => ($phone ? 'flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; &::-webkit-scrollbar { display: none; }' : '')}
   ${Chip} { height: 36px; padding: 0 18px; flex: none; }
+  /* The forms' chips are faded on purpose; here they sit on the page (or the
+     photo), so the unchosen ones keep a clear outline */
+  ${Chip}[aria-pressed='false'] { border-color: var(--border-pill, var(--control-border)); }
+  html[data-wallpaper] & ${Chip}[aria-pressed='false'] { border-color: rgba(255, 255, 255, 0.55); }
+  html[data-wallpaper][data-theme='dark'] & ${Chip}[aria-pressed='false'] { border-color: rgba(255, 255, 255, 0.24); }
+  ${Chip}[aria-pressed='false']:hover { border-color: var(--text-muted); }
 `;
 
 export type MediaLayout = 'grid' | 'list';

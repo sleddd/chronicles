@@ -21,17 +21,17 @@ export const GlobalStyle = createGlobalStyle`
   /* …and list rows (entryRowPlain) go clear so they don't stripe the photo */
   html[data-wallpaper] { --row-plain-bg: transparent; }
 
-  /* A page's main action beside its title (TopBarAction, desktop): a white glass
+  /* A page's main action beside its title (TopBarAction, desktop): a smoked glass
      pill on the photo, whatever button it is */
   html[data-wallpaper] .page-action button {
-    background: rgba(255, 255, 255, 0.16) !important;
-    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    background: rgba(18, 20, 26, 0.5) !important;
+    border: 1px solid transparent !important;
     color: #fff !important;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
-  html[data-wallpaper] .page-action button:hover { background: rgba(255, 255, 255, 0.26) !important; }
+  html[data-wallpaper] .page-action button:hover { background: rgba(18, 20, 26, 0.66) !important; }
 
   html[data-wallpaper] .view-title {
     color: #fff !important;
