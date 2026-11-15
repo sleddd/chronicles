@@ -114,6 +114,36 @@ describe('useInitializeData', () => {
     expect(useEntriesStore.getState().decryptedEntries.map(e => e.content)).toEqual(['entry 1', '[Decryption failed]', 'entry 3']);
   });
 
+  it('writes nothing — no placeholders, not initialized — when the key has left the tab', async () => {
+    serverReturns([], [1, 2, 3]);
+    // Every decrypt says the key is gone (the session ended mid-load)
+    encryptionState.decryptPosts.mockRejectedValue(new Error('Encryption not unlocked'));
+    renderHook(() => useInitializeData());
+    await waitFor(() => expect(console.error).toHaveBeenCalled());
+    const store = useEntriesStore.getState();
+    expect(store.decryptedEntries).toEqual([]);
+    expect(store.isInitialized).toBe(false);
+  });
+
+  it('a load cancelled by the key leaving while it downloads commits nothing and does not retry', async () => {
+    let finish!: (rows: unknown[]) => void;
+    (entriesApi.getAll as any).mockReturnValue(new Promise(r => { finish = r; }));
+    (topicsApi.getAll as any).mockResolvedValue([]);
+    (settingsApi.getAll as any).mockResolvedValue([]);
+    const { rerender } = renderHook(() => useInitializeData());
+    await waitFor(() => expect(entriesApi.getAll).toHaveBeenCalled());
+    // The key leaves: the effect is cleaned up, the store cleared
+    encryptionState.isUnlocked = false;
+    act(() => { useEntriesStore.getState().clearAll(); });
+    rerender();
+    await act(async () => { finish([rawEntry(1)]); await Promise.resolve(); await Promise.resolve(); });
+    const store = useEntriesStore.getState();
+    expect(store.decryptedEntries).toEqual([]);
+    expect(store.isInitialized).toBe(false);
+    expect(openStartupSettings).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   it('opens settings through the shared startup path (sealed, key-bound, migrated once)', async () => {
     serverReturns([{ key: 'displayName', value: 'Alex' }]);
     const { result } = renderHook(() => useInitializeData());

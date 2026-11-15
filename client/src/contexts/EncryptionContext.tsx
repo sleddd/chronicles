@@ -343,8 +343,16 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   // journal open
   useEffect(() => onRemoteReset(() => { if (masterKeyRef.current) clearKey(); }, () => emailRef.current), [clearKey]);
 
-  // The tab is going away for good: let the holder lock go at once
-  useEffect(() => () => { releaseHolderRef.current?.(); masterKeyRef.current = null; }, []);
+  // The tab is going away: let the holder lock go at once. The key itself is
+  // left in its ref — a real unmount drops the ref with the provider, and
+  // under Fast Refresh (development) this effect re-runs on an edit while the
+  // ref keeps its key: nulling it there left `isUnlocked` true with no key, so
+  // every decrypt failed until the next sign-in. Re-run with a key, it takes
+  // the lock again
+  useEffect(() => {
+    if (masterKeyRef.current) claimKeyHolder();
+    return () => { releaseHolderRef.current?.(); releaseHolderRef.current = null; };
+  }, [claimKeyHolder]);
 
   return (
     <EncryptionContext.Provider value={{

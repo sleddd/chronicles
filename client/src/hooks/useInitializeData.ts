@@ -14,6 +14,10 @@ import { safeAccent } from '../styles/accent.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
 import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameIntoText.js';
 
+/** What the encryption context throws once the key has left the tab (EncryptionContext `getKey`) */
+const KEY_GONE = 'Encryption not unlocked';
+const keyGone = (err: unknown): boolean => err instanceof Error && err.message === KEY_GONE;
+
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
  * Safe to call from any protected view — only loads once (checks isInitialized).
@@ -53,6 +57,10 @@ export function useInitializeData() {
           topicsApi.getAll().finally(() => step('topics opened')),
           settingsApi.getAll().finally(() => step('settings downloaded')),
         ]);
+        // The key left while that downloaded (the session ended, another tab
+        // wiped this browser): nothing of this load may be written — not the
+        // re-sealed settings below, and never "[Decryption failed]" rows
+        if (cancelled) return;
         // Dose records sealed before they were bound to their day are re-saved, once
         void dosesApi.resealOlder().catch(() => { /* tried again next session */ });
         // Med history and Reports read every dose; start opening them now so those pages don't wait
@@ -62,6 +70,7 @@ export function useInitializeData() {
         // Sealed settings opened (each bound to its key); pre-v2 ones re-sealed once
         const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         step('settings opened');
+        if (cancelled) return;
         // No saved accent → Teal (never the previous account's colour)
         const accent = safeAccent(settingsMap.accentColor);
         setAccentColor(accent);
@@ -116,6 +125,9 @@ export function useInitializeData() {
           try {
             return await decryptPosts([entry]);
           } catch (err) {
+            // No key is not a bad entry: the whole load stops, so a journal of
+            // placeholders is never shown or marked initialized
+            if (keyGone(err)) throw err;
             console.warn(`Skipping entry ${entry.id} — decryption failed:`, err);
             return [{
               id: entry.id,
@@ -127,6 +139,7 @@ export function useInitializeData() {
             }];
           }
         }))).flat();
+        if (cancelled) return;
         step(`${decrypted.length} entries decrypted`);
         setDecryptedEntries(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
@@ -142,6 +155,9 @@ export function useInitializeData() {
         setLoading(false);
         step('ready');
       } catch (err) {
+        // A load this effect already gave up on (the key left): nothing to
+        // retry here — the next unlock starts a fresh one
+        if (cancelled) return;
         // Transient failure (rate limit, server restart, network) — keep the
         // loading state and retry rather than rendering an empty journal,
         // which reads as data loss
@@ -149,7 +165,7 @@ export function useInitializeData() {
         // rate-limited account locked out
         const delay = retryDelayMs(err, attempt++);
         console.error(`Failed to load, retrying in ${Math.round(delay / 1000)}s:`, err);
-        if (!cancelled) retryTimer = setTimeout(load, delay);
+        retryTimer = setTimeout(load, delay);
       }
     };
     load();

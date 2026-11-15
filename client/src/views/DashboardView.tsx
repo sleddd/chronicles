@@ -2485,15 +2485,18 @@ export function DashboardView() {
     return () => ro.disconnect();
   });
 
+  // A passkey is offered only where this browser can open the journal with one.
+  // Every hook sits above the early return below: these two once came after
+  // it, so the loading render had fewer hooks than the ready one
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  useEffect(() => { void passkeysAvailable().then(setPasskeySupported); }, []);
+
   if (isLoading || !isReady || !configLoaded) return (
     <ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>
   );
 
   const shown = (k: SectionKey) => !(config.hidden ?? []).includes(k);
   const onboardingState = onboarding ?? {};
-  // A passkey is offered only where this browser can open the journal with one
-  const [passkeySupported, setPasskeySupported] = useState(false);
-  useEffect(() => { void passkeysAvailable().then(setPasskeySupported); }, []);
   const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported, passkeySupported });
   const entrySaved = !!entryGuide && quoteEntries.length > entryGuide.baseline;
   const toggleChecklist = (key: ChecklistKey) => markOnboarding({ ticked: toggleTicked(onboardingState, key) });
