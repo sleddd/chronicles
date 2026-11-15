@@ -436,15 +436,18 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   ` : '')}
   ${({ $quick }) => ($quick ? css`
     margin-top: 24px;
-    /* A touch see-through over the photo (no blur); the formatting bar paints the same */
-    background: color-mix(in srgb, var(--bg-panel) 86%, transparent);
-    && ${EditorArea} { --editor-surface: color-mix(in srgb, var(--bg-panel) 86%, transparent); }
+    /* Frosted glass: mostly clear over the photo with a light blur, so the photo shows
+       through; the formatting bar stays clear on it */
+    background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    && ${EditorArea} { --editor-surface: transparent; }
     /* See-through, so its lines and placeholders a step stronger than on a solid card */
     --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
     --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
-    /* No outline: it lifts off the photo with a soft shadow instead */
+    /* No outline: the dashboard cards' shadow instead */
     border-color: transparent;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
     /* "Enter title/text..." a step brighter than the tools beside it */
     && input::placeholder, && textarea::placeholder, && .tiptap p.is-editor-empty:first-child::before { color: var(--text-secondary); opacity: 0.8; }
     @media (max-width: 768px) { margin-top: 18px; }
@@ -477,9 +480,23 @@ const QuickExtraBox = styled.div`
   margin-top: 24px;
   /* The forms inside lay out the entry card's rows themselves (edge to edge) */
   overflow: clip;
-  border: 1px solid var(--border-card);
   border-radius: 14px;
-  background: var(--bg-panel);
+  /* Frosted like the Quick entry card: see-through with a light blur, no outline, its shadow */
+  background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+  --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
+  --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
+  /* Its joined switches (Bill | Subscription, Active / Paused / Cancelled): clear on the
+     glass, no frosted fill of their own */
+  && [role='radiogroup'], html[data-wallpaper] && [role='radiogroup'] {
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* …and the chosen one's fill faded */
+  && [role='radiogroup'] [aria-checked='true'] { background: color-mix(in srgb, var(--bg-tab-active) 45%, transparent); }
   @media (max-width: 640px) { margin-top: 18px; }
 `;
 
