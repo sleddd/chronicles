@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
-import { LandingTemplate, Container, DarkBand, HERO_PHOTO_STARS, PAGE_INK } from '../components/templates/LandingTemplate.js';
+import { LandingTemplate, Container, DarkBand, HERO_PHOTO, PAGE_INK } from '../components/templates/LandingTemplate.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlides.js';
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
@@ -401,12 +401,12 @@ const Extras = styled.ul`
 
 /* ——— Privacy (the dark band over the night sky) ——— */
 
-/* The app's dark page colour over the star photo, faint: the Milky Way and the
-   mountains just show through. (`BAND_GRADIENT`, the teal band, is kept for going back.) */
+/* The app's dark page colour over the mountain photo (the river valley, the
+   hero's), faint. (`BAND_GRADIENT`, the teal band, is kept for going back.) */
 const PrivacyBand = styled(DarkBand)`
   background:
     linear-gradient(180deg, rgba(31, 34, 41, 0.9) 0%, rgba(31, 34, 41, 0.84) 45%, rgba(31, 34, 41, 0.92) 100%),
-    #1f2229 url(${HERO_PHOTO_STARS}) center 62% / cover no-repeat;
+    #1f2229 url(${HERO_PHOTO}) center 55% / cover no-repeat;
   --text-secondary: rgba(255, 255, 255, 0.88);
   --text-muted: rgba(255, 255, 255, 0.7);
   padding: 128px 0 96px;
