@@ -328,7 +328,7 @@ Phase 2 without Phase 1 means a typed password on every cold start for everyone.
 |---|---|---|
 | `passkeys` and `trusted_devices` as Prisma models, plus an `accounts.webauthn_user_id` column | Plain tables made at startup (`db/passkeyQueries.ts`, `db/trustedDeviceQueries.ts`). No account column: the user handle is an HMAC of the account id | The repo has no Prisma migrations. Every other added table is made this way, and nothing has to be run by hand on deploy |
 | `POST /api/auth/key-wrap` | `POST /api/auth/password-wrap` | A test guards that the old `/key-wrap` upgrade route stays gone |
-| `/me` keeps the old shape for one release | `/me` never returns the wrap unless `LEGACY_ME_KEY_WRAP=true` is set | Off by default closes finding 1 at once. Set the flag for the first deploy if tabs running the old app may be open, then remove it |
+| `/me` keeps the old shape for one release | `/me` never returns the wrap. The `LEGACY_ME_KEY_WRAP` bridge that brought the old answer back was removed after the first release | A tab still running the old app waits on `/me` until it is reloaded, which loads the new app and shows sign-in |
 | Unlock dialog gains a passkey button during Phase 1 | Not built | All phases were built together, so the dialog was removed outright |
 | "Your passkey can't confirm this yet" line until Phase 4 | Not shown | Phase 4 shipped with the rest |
 | Session expiry keeps the cache, a revoked session wipes the browser | Both keep what the browser stores | It is ciphertext only and no wrap of the key is stored in the browser, so it opens nothing. Wiping it would also lose the sealed draft of whatever was being written |

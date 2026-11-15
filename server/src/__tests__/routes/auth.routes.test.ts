@@ -401,6 +401,22 @@ describe('Auth Routes', () => {
       recoveryWrapIv: Buffer.from('riv'),
     };
 
+    it('refuses a sign-in that "Sign out everywhere" cancelled while its session was being made', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+      (bcrypt.compare as any).mockResolvedValue(true);
+      // Sign out everywhere lands between the password check and the session
+      (authMw.createSession as any).mockImplementationOnce(async () => {
+        await (await import('../../routes/authState.js')).cancelSignIns(mockAccount.id);
+        return 'aabbccddee11' + 'verifier1234567890123456789012';
+      });
+
+      const res = await request(app).post('/api/auth/login').send(validLoginBody);
+
+      expect(res.status).toBe(401);
+      expect(authMw.revokeSession).toHaveBeenCalledWith('aabbccddee11', 'credentials_changed');
+      expect((res.headers['set-cookie'] as unknown as string[] | undefined ?? []).some(c => /chronicle_session=/.test(c))).toBe(false);
+    });
+
     it('returns 200 with user and encryption data on valid login', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
       (bcrypt.compare as any).mockResolvedValue(true);

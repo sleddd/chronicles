@@ -415,6 +415,20 @@ describe('2FA hardening', () => {
       expect((res.headers['set-cookie'] as unknown as string[] | undefined ?? []).some(c => /chronicle_session=/.test(c))).toBe(false);
     });
 
+    it('refuses a sign-in that "Sign out everywhere" cancelled while its session was being made', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const pendingToken = await pendingTokenFor(app, account);
+      (authMw.createSession as any).mockImplementationOnce(async () => {
+        await (await import('../../routes/authState.js')).cancelSignIns(account.id);
+        return 'aabbccddee11' + 'verifier1234567890123456789012';
+      });
+      const res = await request(app).post('/api/auth/login/2fa').send({ pendingToken, code: generateSync({ secret }) });
+      expect(res.status).toBe(401);
+      expect(authMw.revokeSession).toHaveBeenCalledWith('aabbccddee11', 'credentials_changed');
+      expect((res.headers['set-cookie'] as unknown as string[] | undefined ?? []).some(c => /chronicle_session=/.test(c))).toBe(false);
+    });
+
     it('accepts and consumes a legacy SHA-256 backup code', async () => {
       const account = twoFAAccount(generateSecret(), [sha256('aaaaaa-bbbbbb'), sha256('cccccc-dddddd')]);
 

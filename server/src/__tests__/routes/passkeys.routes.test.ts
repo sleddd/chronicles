@@ -261,6 +261,28 @@ describe('passkeys', () => {
       expect((await request(app).post('/api/auth/passkey/verify').send({ response: forged })).status).toBe(401);
     });
 
+    it('drops the session if "Sign out everywhere" landed while the sign-in was in flight', async () => {
+      const { key } = await addPasskey(app);
+      const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;
+      vi.mocked(authMw.createSession).mockImplementationOnce(async () => {
+        await (await import('../../routes/authState.js')).cancelSignIns(1);
+        return 'aabbccddee11' + 'v'.repeat(32);
+      });
+      const res = await request(app).post('/api/auth/passkey/verify').send({ response: key.assertion(c) });
+      expect(res.status).toBe(401);
+      expect(authMw.revokeSession).toHaveBeenCalledWith('aabbccddee11', 'credentials_changed');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('spends the challenge even when the passkey is unknown', async () => {
+      const { key } = await addPasskey(app);
+      const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;
+      // A passkey this server has never seen answers the challenge first…
+      expect((await request(app).post('/api/auth/passkey/verify').send({ response: softPasskey(RP, ORIGIN).assertion(c) })).status).toBe(401);
+      // …and the real one can no longer use it
+      expect((await request(app).post('/api/auth/passkey/verify').send({ response: key.assertion(c) })).status).toBe(401);
+    });
+
     it('drops the session if the passkey was removed while the sign-in was in flight', async () => {
       const { key } = await addPasskey(app);
       const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;

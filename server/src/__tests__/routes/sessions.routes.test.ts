@@ -133,6 +133,19 @@ describe('Session Routes', () => {
       expect(await sharedState.getToken(PENDING_2FA, 'q'.repeat(64))).toBe(TEST_AUTH.accountId + 1);
     });
 
+    it('cancels sign-ins under way before it revokes the sessions', async () => {
+      // A sign-in between its check and its session: cancelled first, so it
+      // can't take its token after the sessions were revoked and slip through
+      const { beginSignIn, signInStillWanted } = await import('../../routes/authState.js');
+      const flight = await beginSignIn(TEST_AUTH.accountId);
+      let wantedAtRevoke: boolean | null = null;
+      (revokeAllSessions as any).mockImplementationOnce(async () => {
+        wantedAtRevoke = await signInStillWanted(TEST_AUTH.accountId, flight);
+      });
+      expect((await request(app).post('/api/sessions/revoke-all')).status).toBe(200);
+      expect(wantedAtRevoke).toBe(false);
+    });
+
     it('returns 500 on database error', async () => {
       (revokeAllSessions as any).mockRejectedValue(new Error('DB error'));
 

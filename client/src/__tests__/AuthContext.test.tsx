@@ -124,6 +124,16 @@ describe('AuthProvider – login', () => {
     expect((result.current as unknown as Record<string, unknown>).encryptionData).toBeUndefined();
   });
 
+  it('a sign-in clears a sign-out that never reached the server, so the next load keeps the new session', async () => {
+    mockLogin.mockResolvedValue({ user: { email: 'a@b.com', username: 'alice' }, encryption: {} });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // Signed out offline earlier, in this same page
+    localStorage.setItem('chronicles.pending-sign-out', '1');
+    await act(async () => { await result.current.login('a@b.com', 'password'); });
+    expect(localStorage.getItem('chronicles.pending-sign-out')).toBeNull();
+  });
+
   it('sends a derived secret, never the password', async () => {
     mockLogin.mockResolvedValue({ user: { email: 'a@b.com', username: 'alice' }, encryption: {} });
     const { result } = renderHook(() => useAuth(), { wrapper });

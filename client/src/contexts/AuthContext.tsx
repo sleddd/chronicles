@@ -17,6 +17,13 @@ const tryServerLogout = async (forgetBrowser = false): Promise<boolean> => {
   return false;
 };
 
+/** A sign-in succeeded: the server ended whatever session this browser's cookie held
+ *  (revokeBrowserSession) and set a new one, so nothing is left to sign out. Left set,
+ *  the flag would end this NEW session at the next page load */
+const clearPendingSignOut = (): void => {
+  try { localStorage.removeItem(PENDING_SIGN_OUT); } catch { /* storage blocked */ }
+};
+
 interface User {
   email: string;
   username: string;
@@ -98,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { pending = localStorage.getItem(PENDING_SIGN_OUT) === '1'; } catch { /* storage blocked */ }
     if (pending) {
       void tryServerLogout().then(ok => {
-        if (ok) { try { localStorage.removeItem(PENDING_SIGN_OUT); } catch { /* storage blocked */ } }
+        if (ok) clearPendingSignOut();
         setIsLoading(false);
       });
       return;
@@ -131,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPending2FA({ pendingToken: result.pendingToken });
       return null;
     }
+    clearPendingSignOut();
     setUser(result.user);
     return result.encryption;
   }, []);
@@ -139,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!pending2FA) throw new Error('No pending 2FA session');
     const result = await authApi.submit2FA({ pendingToken: pending2FA.pendingToken, code, ...(trustBrowser ? { trustBrowser: true } : {}) });
     setPending2FA(null);
+    clearPendingSignOut();
     setUser(result.user);
     return result.encryption;
   }, [pending2FA]);
@@ -147,15 +156,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await signInWithPasskey();
     // The browser's session is this person's now: a tab showing anyone else lets go
     announceSigningIn(result.user.email);
+    clearPendingSignOut();
     setUser(result.user);
     return result;
   }, []);
 
   const cancel2FA = useCallback(() => setPending2FA(null), []);
-  const adoptSession = useCallback((signedIn: User) => setUser(signedIn), []);
+  const adoptSession = useCallback((signedIn: User) => { clearPendingSignOut(); setUser(signedIn); }, []);
 
   const register = useCallback(async (data: Parameters<typeof authApi.register>[0]) => {
     const result = await authApi.register(data);
+    clearPendingSignOut();
     setUser({ ...result.user, totpEnabled: false });
   }, []);
 

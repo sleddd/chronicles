@@ -18,7 +18,7 @@ const INVITE_KEY = 'chronicles.invite-v1';
 export function RegisterView() {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const { setupEncryption } = useEncryption();
+  const { setupEncryption, clearKey } = useEncryption();
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   // After the recovery key, where the browser can do it: the passkey step. The
   // password just chosen confirms it, so it is kept for that step only — in a
@@ -54,6 +54,13 @@ export function RegisterView() {
     } catch { /* no session storage: the link still works until a reload */ }
     return { inviteCode: invite, invitedEmail: email };
   });
+  /** Starting a sign-up clears this tab's session storage (nothing of the last person
+   *  carries over) and a fresh key can wipe the browser: put the link's code back, so a
+   *  reload after a refused attempt still has it */
+  const keepInvite = () => {
+    if (!inviteCode) return;
+    try { sessionStorage.setItem(INVITE_KEY, JSON.stringify({ invite: inviteCode, email: invitedEmail })); } catch { /* no session storage */ }
+  };
   useEffect(() => {
     if (window.location.hash || query.has('invite') || query.has('email')) {
       window.history.replaceState(window.history.state, '', window.location.pathname);
@@ -66,6 +73,7 @@ export function RegisterView() {
     await freshSignIn(email);
     // Setup encryption — generates master key, wraps with password + recovery key
     const result = await setupEncryption(password);
+    keepInvite();
 
     // The server gets only derived secrets — never the password or recovery key
     const [authSecret, { recoveryKeyHash, recoveryKeySalt }] = await Promise.all([
@@ -74,19 +82,28 @@ export function RegisterView() {
     ]);
 
     // Register with server
-    await register({
-      email,
-      username,
-      authSecret,
-      encryptedMasterKey: result.wrappedMK,
-      kekSalt: result.salt,
-      kekWrapIv: result.wrapIv,
-      recoveryWrappedMK: result.recoveryWrappedMK,
-      recoveryWrapIv: result.recoveryWrapIv,
-      recoveryKeyHash,
-      recoveryKeySalt,
-      ...(inviteCode ? { inviteCode } : {}),
-    });
+    try {
+      await register({
+        email,
+        username,
+        authSecret,
+        encryptedMasterKey: result.wrappedMK,
+        kekSalt: result.salt,
+        kekWrapIv: result.wrapIv,
+        recoveryWrappedMK: result.recoveryWrappedMK,
+        recoveryWrapIv: result.recoveryWrapIv,
+        recoveryKeyHash,
+        recoveryKeySalt,
+        ...(inviteCode ? { inviteCode } : {}),
+      });
+    } catch (err) {
+      // No account came of it: the key made for the attempt goes again (a tab
+      // holds the key only while it is signed in)
+      clearKey();
+      throw err;
+    }
+    // The code is spent with the account
+    try { sessionStorage.removeItem(INVITE_KEY); } catch { /* no session storage */ }
 
     // Record the consent given on the card (if this fails, the consent gate
     // asks again before the app opens)

@@ -13,13 +13,14 @@ import {
   removeAllPasskeys, removePasskey, renamePasskey, type StoredPasskey,
 } from '../db/passkeyQueries.js';
 import { authMiddleware, createSession, revokeAllSessions, revokeBrowserSession, revokeSession } from '../middleware/auth.js';
-import { authLimiter, strictLimiter } from '../middleware/rateLimiter.js';
+import { apiLimiter, authLimiter, strictLimiter } from '../middleware/rateLimiter.js';
 import { parseId } from '../middleware/parseId.js';
 import { sharedState } from '../services/sharedState.js';
 import { issueConfirmToken } from '../services/confirmTokens.js';
 import { passkeyUserHandle, webauthnConfig } from '../services/webauthn.js';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { confirmGate, confirmIdentity, countConfirmFailure, rememberKnownDevice, sendIfHasherBusy, setSessionCookie } from './auth.js';
+import { beginSignIn, cancelSignIns, signInStillWanted } from './authState.js';
 
 /*
  * Passkeys: sign in and open the journal with one touch.
@@ -53,10 +54,21 @@ const publicView = (p: StoredPasskey) => ({
 /** This passkey's wrap of the master key: what its PRF secret opens */
 const wrapOf = (p: StoredPasskey) => ({ credentialId: p.credentialId, wrappedMK: b64(p.wrappedMK), wrapIv: b64(p.wrapIv) });
 
+/** The challenge an answer says it signed (from its clientDataJSON), or null. */
+function challengeOf(clientDataJSON: string): string | null {
+  try {
+    const challenge = (JSON.parse(Buffer.from(clientDataJSON, 'base64url').toString('utf8')) as { challenge?: unknown }).challenge;
+    return typeof challenge === 'string' && challenge.length <= 512 ? challenge : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Check a signed challenge against a stored passkey. The challenge must be one
- * this server issued into `bucket` and is spent here, whatever the outcome, so
- * an answer can't be replayed. The user must have been verified (the touch).
+ * this server issued into `bucket` and is spent here, whatever the outcome
+ * (an unknown passkey included), so an answer can't be replayed. The user must
+ * have been verified (the touch).
  */
 async function checkAssertion(
   response: Parameters<typeof verifyAuthenticationResponse>[0]['response'],
@@ -64,7 +76,11 @@ async function checkAssertion(
   expectAccount: number | null,
 ): Promise<StoredPasskey | null> {
   const passkey = await findPasskey(response.id);
-  if (!passkey || (expectAccount !== null && passkey.accountId !== expectAccount)) return null;
+  if (!passkey || (expectAccount !== null && passkey.accountId !== expectAccount)) {
+    const challenge = challengeOf(response.response.clientDataJSON);
+    if (challenge) await sharedState.takeToken(bucket, challenge);
+    return null;
+  }
   const { rpID, origins } = webauthnConfig();
   let issuedFor: number | null = null;
   const verification = await verifyAuthenticationResponse({
@@ -127,14 +143,18 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
     const account = await prisma.account.findUnique({ where: { id: passkey.accountId } });
     if (!account) { refuse(); return; }
 
+    // Held until the session exists: "Sign out everywhere" landing in between
+    // cancels this sign-in (routes/authState.ts)
+    const flight = await beginSignIn(account.id);
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       deviceInfo: 'passkey',
     });
     // Removed while this request was in flight ("Remove all passkeys" after a
-    // lost device): the session it just earned must not outlive that
-    if (!(await passkeyExists(passkey.id, account.id))) {
+    // lost device), or every session signed out: the session it just earned
+    // must not outlive that
+    if (!(await passkeyExists(passkey.id, account.id)) || !(await signInStillWanted(account.id, flight))) {
       try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
       logSecurityEvent('login_superseded', { accountId: account.id });
       refuse();
@@ -158,7 +178,7 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
 // =============================================================================
 // GET /api/auth/passkeys — this account's passkeys
 // =============================================================================
-router.get('/passkeys', authMiddleware, async (req, res) => {
+router.get('/passkeys', authMiddleware, apiLimiter, async (req, res) => {
   try {
     res.json((await listPasskeys(req.auth!.accountId)).map(publicView));
   } catch (err) {
@@ -262,7 +282,7 @@ router.post('/passkeys/register/verify', strictLimiter, authMiddleware, confirmG
 // =============================================================================
 // PATCH /api/auth/passkeys/:id — rename
 // =============================================================================
-router.patch('/passkeys/:id', authMiddleware, async (req, res) => {
+router.patch('/passkeys/:id', authMiddleware, apiLimiter, async (req, res) => {
   try {
     const id = parseId(String(req.params.id));
     const parsed = passkeyRenameSchema.safeParse(req.body);
@@ -287,7 +307,9 @@ async function confirmedRemoval(req: Request, res: Response, remove: (accountId:
   if (removed === 0) { res.status(404).json({ error: 'Not found' }); return; }
   // A passkey is removed because its device is gone or no longer trusted: any
   // session it already made must not outlive it. Like the other credential
-  // changes, every other session is signed out and this one stays
+  // changes, every other session is signed out and this one stays (sign-ins
+  // under way are cancelled first, so none finishes afterwards)
+  await cancelSignIns(account.id);
   await revokeAllSessions(account.id, req.auth!.selector, 'passkey_removed');
   logSecurityEvent(removed > 1 ? 'passkeys_removed_all' : 'passkey_removed', { accountId: account.id, ip: req.ip, details: { count: removed } });
   res.json({ passkeys: (await listPasskeys(account.id)).map(publicView) });

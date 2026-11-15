@@ -184,11 +184,8 @@ initPasskeysTable().catch(err => console.error('Failed to init passkeys table:',
 // A passkey is tied for good to the domain it was made on: say so when that would be localhost in production
 {
   const { rpID } = webauthnConfig();
-  if (process.env.NODE_ENV === 'production' && (rpID === 'localhost' || (!process.env.APP_URL && !process.env.CLIENT_URL && !process.env.WEBAUTHN_RP_ID))) {
+  if (process.env.NODE_ENV !== 'development' && (rpID === 'localhost' || (!process.env.APP_URL && !process.env.CLIENT_URL && !process.env.WEBAUTHN_RP_ID))) {
     console.warn(`Passkeys: no site address is configured (APP_URL, CLIENT_URL or WEBAUTHN_RP_ID), so passkeys would be tied to "${rpID}" and fail to verify. Set APP_URL to the app's https address.`);
-  }
-  if (process.env.LEGACY_ME_KEY_WRAP === 'true') {
-    console.warn('LEGACY_ME_KEY_WRAP is on: GET /api/auth/me returns the wrapped master key to any session, as before the sign-in redesign. Remove it once every open tab has updated.');
   }
 }
 initTrustedDevicesTable()

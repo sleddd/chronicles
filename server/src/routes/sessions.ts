@@ -3,8 +3,7 @@ import { prisma } from '../db/prisma.js';
 import { revokeAllSessions, SESSION_IDLE_MS } from '../middleware/auth.js';
 import { forgetAllTrustedDevices } from '../db/trustedDeviceQueries.js';
 import { parseId } from '../middleware/parseId.js';
-import { sharedState } from '../services/sharedState.js';
-import { PENDING_2FA } from './authState.js';
+import { cancelSignIns } from './authState.js';
 import type { SessionInfo } from '@chronicles/shared';
 
 const router = Router();
@@ -52,9 +51,10 @@ router.get('/', async (req, res) => {
 // IMPORTANT: Must be defined BEFORE /:id/revoke to avoid Express matching "revoke-all" as :id
 router.post('/revoke-all', async (req, res) => {
   try {
+    // First: a sign-in under way (waiting on its 2FA code, or between its
+    // check and its session) would otherwise still finish afterwards
+    await cancelSignIns(req.auth!.accountId);
     await revokeAllSessions(req.auth!.accountId, req.auth!.selector, 'user_logout');
-    // A sign-in waiting on its 2FA code would otherwise still finish afterwards
-    await sharedState.deleteTokensForAccount(PENDING_2FA, req.auth!.accountId);
     // And no browser skips the 2FA code any more: each earns its trust again
     await forgetAllTrustedDevices(req.auth!.accountId);
     res.json({ success: true });
