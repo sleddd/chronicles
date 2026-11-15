@@ -1,3 +1,5 @@
+import { useSealedDraft } from '../hooks/useSealedDraft.js';
+import { DraftNote } from '../components/molecules/DraftNote.js';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { validEntryRows } from '../utils/entryRows.js';
 import { duplicateEntryFields } from '../utils/entryDuplicate.js';
@@ -11,7 +13,6 @@ import { faXmark } from '@fortawesome/free-solid-svg-icons';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
 import { JournalTemplate, SidePanel, EditorPanel } from '../components/templates/JournalTemplate.js';
 import { LoadingCenter } from '../components/atoms/LoadingCenter.js';
-import { EmptyEditor } from '../components/atoms/EmptyEditor.js';
 import { SidePadding } from '../components/atoms/SidePadding.js';
 import { ViewTabs } from '../components/organisms/ViewTabs.js';
 import { EntryList } from '../components/organisms/EntryList.js';
@@ -20,11 +21,9 @@ import { EntryBreadcrumb } from '../components/molecules/EntryBreadcrumb.js';
 import { getEntryTrail } from '../utils/topicBreadcrumb.js';
 import type { DictationControls } from '../components/organisms/Editor.js';
 import { SearchPanel } from '../components/organisms/SearchPanel.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { ShareModal } from '../components/organisms/ShareModal.js';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { withMedicationChanges } from '../utils/healthChanges.js';
@@ -60,6 +59,13 @@ const NewEntryDateNote = styled.div`
   text-transform: uppercase;
   color: var(--color-accent);
 `;
+
+const JournalDraftNote = styled(DraftNote)`
+  margin: 16px 20px 0;
+`;
+
+/** The editor's unsaved writing (sealed as it's typed, services/drafts.ts) */
+interface JournalDraft { entryId: number | null; topicId: number | null; content: string; fields: Record<string, unknown> }
 
 const DateFilterBar = styled.div`
   display: flex;
@@ -186,8 +192,7 @@ const imagesSig = (imgs: EntryImage[], featured: string | null) =>
 
 
 export function JournalView() {
-  const { encryptionData } = useAuth();
-  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptNewPost, encryptBytes, decryptBytes } = useEncryption();
+  const { isUnlocked, decryptPosts, encryptPost, encryptNewPost, encryptBytes, decryptBytes } = useEncryption();
   // A new entry's prompt — the next one each time the journal opens (utils/journalPrompts)
   const [writingPrompt] = useState(nextPrompt);
   const {
@@ -552,13 +557,6 @@ export function JournalView() {
     return () => setEditorFocusMode(false);
   }, [editorExpanded]);
 
-  const handleUnlock = useCallback(async (password: string, remember = false) => {
-    if (!encryptionData?.kekSalt || !encryptionData?.encryptedMasterKey || !encryptionData?.kekWrapIv) {
-      throw new Error('Missing encryption data');
-    }
-    await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations, remember);
-  }, [encryptionData, unlock]);
-
   useEffect(() => {
     if (!isUnlocked || isInitialized) return;
     let cancelled = false;
@@ -680,6 +678,45 @@ export function JournalView() {
     setLastSavedAt(null);
   }, []);
 
+  // Unsaved writing survives the session ending under it (the server expired
+  // it, 15 minutes away, a reload): sealed a moment after each change, offered
+  // back after the next sign-in. Once the entry is saved there is nothing to
+  // keep, and the stored draft goes (services/drafts.ts)
+  const draft = useSealedDraft<JournalDraft>('journal', () => {
+    const saved = loadedStateRef.current;
+    const fields = JSON.stringify(customFields);
+    if (editorContent === saved.content && fields === saved.customFields) return null;
+    if (!editorContent && fields === '{}') return null;
+    return { entryId: entryIdRef.current, topicId: editorTopicId, content: editorContent, fields: customFields };
+  }, [editorContent, customFields, editorTopicId, lastSavedAt]);
+  const restoreDraft = () => {
+    if (!draft.found) return;
+    const d = draft.found.value;
+    const entry = d.entryId != null ? decryptedEntries.find(e => e.id === d.entryId) : undefined;
+    const meta = (entry?.metadata ?? {}) as Record<string, unknown>;
+    const imgs = Array.isArray(meta._images) ? (meta._images as EntryImage[]) : [];
+    const feat = typeof meta._featuredKey === 'string' ? meta._featuredKey : null;
+    editSessionRef.current++;
+    entryIdRef.current = entry ? entry.id : null;
+    // Marked as what the editor shows, so the load effect below leaves it alone
+    shownRef.current = entry ? `e${entry.id}` : `new:${pendingNewTopicId}:${JSON.stringify(pendingNewFields ?? {})}`;
+    setSelectedEntryId(entry ? entry.id : null);
+    setEditorContent(typeof d.content === 'string' ? d.content : '');
+    setEditorTopicId(typeof d.topicId === 'number' ? d.topicId : null);
+    setCustomFields(d.fields && typeof d.fields === 'object' ? d.fields : {});
+    setWidgetType(entry ? (meta._widgetType as string | null ?? null) : null);
+    setEntryImages(imgs);
+    setFeaturedKey(feat);
+    setImageError('');
+    setShowMobileEditor(true);
+    // What is saved is the entry as it stands (or nothing): the restored writing counts as unsaved, so it autosaves
+    loadedStateRef.current = entry
+      ? { content: entry.content, customFields: JSON.stringify((meta._customFields as Record<string, unknown>) ?? {}), images: imagesSig(imgs, feat) }
+      : { content: '', customFields: '{}', images: imagesSig([], null) };
+    setLastSavedAt(null);
+    draft.taken();
+  };
+
   useEffect(() => {
     if (selectedEntryId) {
       // Already showing it (opened earlier, or just created by a save): don't reload
@@ -714,33 +751,6 @@ export function JournalView() {
       calendarArrivalRef.current = false;
     }
   }, [selectedEntryId, decryptedEntries, pendingNewTopicId, pendingNewFields, showBlankEntry]);
-
-  // Locked: the stores drop every decrypted entry, but the open one's text and
-  // fields are also held here, and this view stays mounted behind the unlock
-  // dialog. Let them go too — unless there is writing not saved yet, which a
-  // lock (switching tabs locks) must never lose. Unlocking loads the entry
-  // again from the store (shownRef cleared).
-  const wasUnlockedRef = useRef(isUnlocked);
-  useEffect(() => {
-    const was = wasUnlockedRef.current;
-    wasUnlockedRef.current = isUnlocked;
-    if (!was || isUnlocked) return;
-    const saved = loadedStateRef.current;
-    const unsaved = editorContent !== saved.content
-      || JSON.stringify(customFields) !== saved.customFields
-      || imagesSig(entryImages, featuredKey) !== saved.images;
-    if (unsaved) return;
-    editSessionRef.current++;
-    shownRef.current = null;
-    setEditorContent('');
-    setCustomFields({});
-    setWidgetType(null);
-    setEntryImages([]);
-    setFeaturedKey(null);
-    loadedStateRef.current = { content: '', customFields: '{}', images: imagesSig([], null) };
-    // Only the moment of locking matters, with the editor as it is then
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUnlocked]);
 
   const handleSave = useCallback(async () => {
     const userFieldDefs = editorTopicId != null ? (topicCustomFields[editorTopicId] ?? []) : [];
@@ -1112,11 +1122,8 @@ export function JournalView() {
     // Store is already updated optimistically by EntryList
   }, [decryptedEntries, encryptPost]);
 
-  if (encryptionData?.encryptionEnabled && !isUnlocked && !isRestoring) {
-    return (<><AppTemplate><EmptyEditor>Unlock your journal to view entries</EmptyEditor></AppTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
-  }
-
-  if (isLoading || (isRestoring && !isUnlocked)) {
+  // A signed-in tab always holds the key (there is no lock screen); until the data is in, a spinner
+  if (isLoading || !isUnlocked) {
     return (<AppTemplate><LoadingCenter><Spinner size={40} /></LoadingCenter></AppTemplate>);
   }
 
@@ -1175,6 +1182,7 @@ export function JournalView() {
               onFocus={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}
               onPointerDown={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}
             >
+            {draft.found && <JournalDraftNote savedAt={draft.found.savedAt} onRestore={restoreDraft} onDiscard={draft.discard} />}
             {pendingEntryDate && selectedEntryId === null && (
               <NewEntryDateNote>
                 New entry for {new Date(pendingEntryDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}

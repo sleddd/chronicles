@@ -1,22 +1,18 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { auth as authApi, ApiError } from '../services/api.js';
 import { deriveAuthSecret } from '@chronicles/shared';
-import { clearEntryCache } from '../services/entryCache.js';
-import { announceLocalReset, onRemoteReset } from '../services/signOutBroadcast.js';
-import { setEgressAccount, EGRESS_STORE } from '../services/deviceConsent.js';
-import { SETTING_REVS_STORE } from '../services/settingCipher.js';
-import { SEEN_MARKERS_STORE } from '../services/sealedFormats.js';
-
-/** Kept through sign-out: they hold no data, and dropping them would weaken what they guard. */
-const KEPT_ON_SIGN_OUT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE];
+import { announceLocalReset, announceSigningIn, onRemoteReset } from '../services/signOutBroadcast.js';
+import { setEgressAccount } from '../services/deviceConsent.js';
+import { wipeBrowserData } from '../services/browserData.js';
+import { signInWithPasskey, type PasskeySignIn } from '../services/passkeys.js';
 
 /** Set when sign-out couldn't reach the server: the session cookie may still be good, so the
  *  next load ends it before trusting /me (never signs the last person back in) */
 const PENDING_SIGN_OUT = 'chronicles.pending-sign-out';
 
-const tryServerLogout = async (): Promise<boolean> => {
+const tryServerLogout = async (forgetBrowser = false): Promise<boolean> => {
   for (let attempt = 0; attempt < 2; attempt++) {
-    try { await authApi.logout(); return true; } catch { /* once more, then give up */ }
+    try { await authApi.logout(forgetBrowser); return true; } catch { /* once more, then give up */ }
   }
   return false;
 };
@@ -43,16 +39,19 @@ interface Pending2FA {
 
 interface AuthContextValue {
   user: User | null;
-  encryptionData: EncryptionData | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   pending2FA: Pending2FA | null;
+  /** Password sign-in. The key wrap it returns is handed straight to the unlock — it is not kept here. */
   login: (email: string, password: string) => Promise<EncryptionData | null>;
-  submitTotpCode: (code: string) => Promise<EncryptionData>;
+  /** `trustBrowser`: don't ask this browser for a code for 30 days */
+  submitTotpCode: (code: string, trustBrowser?: boolean) => Promise<EncryptionData>;
+  /** Sign in with a passkey: one touch. Returns its wrap and the secret that opens it. */
+  loginWithPasskey: () => Promise<PasskeySignIn>;
   /** Leave the 2FA code screen and go back to the sign-in form */
   cancel2FA: () => void;
-  /** Replace the cached key data (after the master key was re-wrapped) */
-  updateEncryptionData: (patch: Partial<EncryptionData>) => void;
+  /** Recovery signed this browser in (the server set its session): this tab now shows that person */
+  adoptSession: (user: User) => void;
   register: (data: {
     email: string;
     username: string;
@@ -65,10 +64,19 @@ interface AuthContextValue {
     recoveryKeyHash: string;
     recoveryKeySalt: string;
   }) => Promise<void>;
+  /** The person pressed Sign out: end the session, end this browser's trust, wipe everything it holds */
   logout: () => Promise<void>;
+  /** The session ends by itself (idle, a reload with no other tab): ended on the
+   *  server, memory cleared — what the browser stores stays for the same
+   *  person's next sign-in */
+  endSession: () => Promise<void>;
+  /** Forget who is signed in, in this tab only: the browser's session is left alone (another tab is using it) */
+  dropUser: () => void;
   /** Wipe everything this browser holds for whoever was signed in (memory, storage,
-   *  caches) without calling the server: run before any new sign-in */
+   *  caches) without calling the server */
   resetLocal: () => Promise<void>;
+  /** Clear what this tab holds in memory before a sign-in, telling other tabs who is signing in */
+  beginSignIn: (email: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -80,13 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.email) setEgressAccount(null);
   }, [user?.email]);
-  const [encryptionData, setEncryptionData] = useState<EncryptionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pending2FA, setPending2FA] = useState<Pending2FA | null>(null);
-
-  const updateEncryptionData = useCallback((patch: Partial<EncryptionData>) => {
-    setEncryptionData(prev => (prev ? { ...prev, ...patch } : prev));
-  }, []);
 
   // Check if we have a valid session on mount — unless the last sign-out didn't reach
   // the server: then end that session first and start signed out
@@ -109,8 +112,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return res.json();
       })
       .then(data => {
+        // Who is signed in — never the key wrap: that comes only with a checked
+        // password or passkey. With no key in this tab, the encryption provider
+        // takes it from another tab or ends this session (EncryptionContext)
         setUser(data.user);
-        setEncryptionData(data.encryption);
         setIsLoading(false);
       })
       .catch(() => {
@@ -127,20 +132,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
     setUser(result.user);
-    setEncryptionData(result.encryption);
     return result.encryption;
   }, []);
 
-  const submitTotpCode = useCallback(async (code: string): Promise<EncryptionData> => {
+  const submitTotpCode = useCallback(async (code: string, trustBrowser = false): Promise<EncryptionData> => {
     if (!pending2FA) throw new Error('No pending 2FA session');
-    const result = await authApi.submit2FA({ pendingToken: pending2FA.pendingToken, code });
+    const result = await authApi.submit2FA({ pendingToken: pending2FA.pendingToken, code, ...(trustBrowser ? { trustBrowser: true } : {}) });
     setPending2FA(null);
     setUser(result.user);
-    setEncryptionData(result.encryption);
     return result.encryption;
   }, [pending2FA]);
 
+  const loginWithPasskey = useCallback(async (): Promise<PasskeySignIn> => {
+    const result = await signInWithPasskey();
+    // The browser's session is this person's now: a tab showing anyone else lets go
+    announceSigningIn(result.user.email);
+    setUser(result.user);
+    return result;
+  }, []);
+
   const cancel2FA = useCallback(() => setPending2FA(null), []);
+  const adoptSession = useCallback((signedIn: User) => setUser(signedIn), []);
 
   const register = useCallback(async (data: Parameters<typeof authApi.register>[0]) => {
     const result = await authApi.register(data);
@@ -150,7 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** What this tab holds in memory for the signed-in person: auth state and the decrypted stores */
   const clearMemory = useCallback(async () => {
     setUser(null);
-    setEncryptionData(null);
     setPending2FA(null);
     try {
       const { useEntriesStore } = await import('../stores/entriesStore.js');
@@ -179,85 +190,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Another tab signed out (or is starting a fresh sign-in): this tab's copy of
   // the last person goes too, rather than staying on screen. The encryption
   // provider drops the master key on the same signal.
-  useEffect(() => onRemoteReset(() => { void clearMemory(); }), [clearMemory]);
+  const userEmail = user?.email ?? null;
+  useEffect(() => onRemoteReset(() => { void clearMemory(); }, () => userEmail), [clearMemory, userEmail]);
 
   /** Everything this browser holds for the signed-in person, gone — the session itself is the server's */
   const resetLocal = useCallback(async () => {
     announceLocalReset();
     await clearMemory();
-
-    // The browser's copy of the journal (ciphertext) goes first: its open
-    // connection would otherwise block deleting the database below
-    await clearEntryCache().catch(() => {});
-
-    // Clear all persisted site data in parallel
-    await Promise.allSettled([
-      // Web Storage
-      (async () => {
-        const kept = KEPT_ON_SIGN_OUT.map(k => [k, localStorage.getItem(k)] as const);
-        localStorage.clear();
-        sessionStorage.clear();
-        for (const [k, v] of kept) if (v !== null) localStorage.setItem(k, v);
-      })(),
-
-      // Cache Storage (PWA / service worker caches)
-      (async () => {
-        if (!('caches' in window)) return;
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      })(),
-
-      // IndexedDB — enumerate and delete every database
-      (async () => {
-        if (!('indexedDB' in window)) return;
-        const dbs = await indexedDB.databases?.() ?? [];
-        await Promise.all(dbs.map(db => new Promise<void>((res, rej) => {
-          if (!db.name) return res();
-          const req = indexedDB.deleteDatabase(db.name);
-          req.onsuccess = () => res();
-          req.onerror   = () => rej(req.error);
-          req.onblocked = () => res(); // don't hang if another tab has it open
-        })));
-      })(),
-
-      // Unregister service workers so stale caches don't linger
-      (async () => {
-        if (!('serviceWorker' in navigator)) return;
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
-      })(),
-
-      // Non-HttpOnly cookies (session cookie is cleared server-side above)
-      (async () => {
-        document.cookie.split(';').forEach(c => {
-          const name = c.split('=')[0].trim();
-          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-        });
-      })(),
-    ]);
+    await wipeBrowserData();
   }, [clearMemory]);
 
   const logout = useCallback(async () => {
     // End the session on the server; if that can't be reached, remember to end it on the next load
-    const ended = await tryServerLogout();
+    const ended = await tryServerLogout(true);
     await resetLocal();
     if (!ended) { try { localStorage.setItem(PENDING_SIGN_OUT, '1'); } catch { /* storage blocked */ } }
   }, [resetLocal]);
 
+  const endSession = useCallback(async () => {
+    const ended = await tryServerLogout();
+    await clearMemory();
+    // What was typed into searches and filters came from decrypted data
+    try { sessionStorage.clear(); } catch { /* storage blocked */ }
+    if (!ended) { try { localStorage.setItem(PENDING_SIGN_OUT, '1'); } catch { /* storage blocked */ } }
+  }, [clearMemory]);
+
+  const dropUser = useCallback(() => { void clearMemory(); }, [clearMemory]);
+
+  const beginSignIn = useCallback(async (email: string | null) => {
+    if (email) announceSigningIn(email);
+    await clearMemory();
+    try { sessionStorage.clear(); } catch { /* storage blocked */ }
+  }, [clearMemory]);
+
   return (
     <AuthContext.Provider value={{
       user,
-      encryptionData,
       isAuthenticated: user !== null,
       isLoading,
       pending2FA,
       login,
       submitTotpCode,
+      loginWithPasskey,
       cancel2FA,
-      updateEncryptionData,
+      adoptSession,
       register,
       logout,
+      endSession,
+      dropUser,
       resetLocal,
+      beginSignIn,
     }}>
       {children}
     </AuthContext.Provider>

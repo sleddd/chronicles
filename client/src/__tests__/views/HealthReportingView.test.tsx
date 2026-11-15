@@ -19,8 +19,6 @@ vi.mock('@/hooks/useInitializeData', () => ({
   useInitializeData: vi.fn(() => ({
     isReady: false,
     isLoading: true,
-    needsUnlock: false,
-    handleUnlock: vi.fn(),
   })),
 }));
 
@@ -76,10 +74,6 @@ vi.mock('@/components/organisms/HealthReport', () => ({
   HealthReport: () => <div data-testid="health-report">Health Report</div>,
 }));
 
-vi.mock('@/components/organisms/UnlockDialog', () => ({
-  UnlockDialog: () => <div data-testid="unlock-dialog" />,
-}));
-
 vi.mock('@/utils/stripHtml', () => ({
   builtinEntryName: (cf: Record<string, unknown> | undefined | null) => { if (!cf) return ''; for (const k of ['eventName','meetingName','goalObjective','milestoneObjective','taskDescription','mealDescription']) { const v = cf[k]; if (typeof v === 'string' && v.trim()) return v.trim(); } return ''; },
   stripHtml: vi.fn((html: string) => html.replace(/<[^>]*>/g, '')),
@@ -97,34 +91,12 @@ describe('HealthReportingView (loading)', () => {
   });
 });
 
-describe('HealthReportingView (needs unlock)', () => {
-  beforeEach(() => {
-    vi.mocked(useInitializeData).mockReturnValue({
-      isReady: false,
-      isLoading: false,
-      needsUnlock: true,
-      handleUnlock: vi.fn(),
-    });
-  });
-
-  it('shows unlock dialog', () => {
-    renderWithTheme(<HealthReportingView />);
-    expect(screen.getByTestId('unlock-dialog')).toBeInTheDocument();
-  });
-
-  it('shows empty state with unlock message', () => {
-    renderWithTheme(<HealthReportingView />);
-    expect(screen.getByTestId('empty-state')).toHaveTextContent('Unlock your journal to view reports');
-  });
-});
 
 describe('HealthReportingView (ready)', () => {
   beforeEach(() => {
     vi.mocked(useInitializeData).mockReturnValue({
       isReady: true,
       isLoading: false,
-      needsUnlock: false,
-      handleUnlock: vi.fn(),
     });
   });
 

@@ -1,6 +1,7 @@
 // Checks that sign-in state is shared when the server runs as several
 // instances behind a load balancer (rr-proxy.mjs alternates every request).
 //   BASE_URL=http://127.0.0.1:3000 node multi-instance-check.mjs
+import { softPasskey } from './soft-passkey.mjs';
 import crypto from 'node:crypto';
 import { generateSecret, generateSync } from 'otplib';
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:3000';
@@ -92,18 +93,68 @@ async function newAccount() {
   check('a used authenticator code is refused on any instance', replay.status === 401, `replay → ${replay.status} on ${replay.instance}`);
 }
 
-// 4. Remember me: grant made on one instance is read on the other; forgetting works everywhere
+// 4. Trusted browser: trust earned on one instance skips the 2FA code on another; forgetting works everywhere
 {
-  const { b } = await newAccount();
-  const made = await b.req('POST', '/api/auth/remember');
-  const read = await b.req('POST', '/api/auth/remember/key');
-  check('Remember me secret made on one instance is served by the other',
-    made.status === 200 && read.status === 200 && read.json.secret === made.json.secret && made.instance !== read.instance, `${made.instance} → ${read.instance}`);
-  const unlockCookie = [...b.jar].find(([k]) => k.includes('unlock'));
-  const forget = await b.req('DELETE', '/api/auth/remember');
-  if (unlockCookie) b.jar.set(unlockCookie[0], unlockCookie[1]); // replay the old cookie
-  const after = await b.req('POST', '/api/auth/remember/key');
-  check('a forgotten grant is gone on every instance', forget.status === 200 && after.status === 404, `after forget → ${after.status} on ${after.instance}`);
+  const { b, acct } = await newAccount();
+  const setup = await b.req('POST', '/api/auth/2fa/setup');
+  const secret = setup.json.secret;
+  await b.req('POST', '/api/auth/2fa/enable', { secret, code: generateSync({ secret }), currentAuthSecret: acct.authSecret });
+  await new Promise(r => setTimeout(r, (30 - (Math.floor(Date.now() / 1000) % 30)) * 1000 + 500));
+
+  const c = browser(freshIp());
+  const login = await c.req('POST', '/api/auth/login', { email: acct.email, authSecret: acct.authSecret });
+  const trusted = await c.req('POST', '/api/auth/login/2fa', { pendingToken: login.json.pendingToken, code: generateSync({ secret }), trustBrowser: true });
+  const again = await c.req('POST', '/api/auth/login', { email: acct.email, authSecret: acct.authSecret });
+  check('a browser trusted on one instance skips the 2FA code on the other',
+    trusted.status === 200 && again.status === 200 && !again.json.requires2FA && trusted.instance !== again.instance, `${trusted.instance} → ${again.instance}: requires2FA ${again.json.requires2FA}`);
+
+  const wrong = await c.req('POST', '/api/auth/login', { email: acct.email, authSecret: hex(32) });
+  check('a trusted browser still needs the right password', wrong.status === 401, `wrong password → ${wrong.status}`);
+
+  // Sign out everywhere (from the trusted browser's own session) ends every trust, on every instance
+  const everywhere = await c.req('POST', '/api/sessions/revoke-all');
+  const after = await c.req('POST', '/api/auth/login', { email: acct.email, authSecret: acct.authSecret });
+  check('Sign out everywhere ends the trust on every instance', everywhere.status === 200 && after.json.requires2FA === true, `after → requires2FA ${after.json.requires2FA} on ${after.instance}`);
+}
+
+// 5. Passkeys: a challenge made on one instance is answered on another, once.
+// The instances must expect this origin (their APP_URL / CLIENT_URL) and its host as the RP ID.
+{
+  const origin = process.env.LOADTEST_ORIGIN ?? 'http://localhost:5173';
+  const rpId = new URL(origin).hostname;
+  const { b, acct } = await newAccount();
+  const key = softPasskey(rpId, origin);
+  const wrap = { wrappedMK: 'A'.repeat(64), wrapIv: 'B'.repeat(16) };
+
+  const regOptions = await b.req('POST', '/api/auth/passkeys/register/options');
+  const reg = await b.req('POST', '/api/auth/passkeys/register/verify',
+    { response: key.attestation(regOptions.json.options.challenge), ...wrap, name: 'Load test', currentAuthSecret: acct.authSecret });
+  check('a passkey is added with its challenge made on another instance', reg.status === 201 && regOptions.instance !== reg.instance, `${regOptions.instance} → ${reg.instance}: ${reg.status}`);
+
+  const c = browser(freshIp());
+  const options = await c.req('POST', '/api/auth/passkey/options');
+  const answer = key.assertion(options.json.options.challenge);
+  const signIn = await c.req('POST', '/api/auth/passkey/verify', { response: answer });
+  check('passkey sign-in started on one instance finishes on the other', signIn.status === 200 && signIn.json.passkey?.wrappedMK === wrap.wrappedMK && options.instance !== signIn.instance,
+    `${options.instance} → ${signIn.instance}: ${signIn.status}`);
+  check('/me gives who is signed in and never the key wrap', await (async () => {
+    const me = await c.req('GET', '/api/auth/me');
+    return me.status === 200 && me.json.user?.email === acct.email && me.json.encryption === undefined;
+  })());
+
+  const d = browser(freshIp());
+  const replay = await d.req('POST', '/api/auth/passkey/verify', { response: key.assertion(options.json.options.challenge) });
+  check('a used passkey challenge is refused on any instance', replay.status === 401, `replay → ${replay.status} on ${replay.instance}`);
+
+  // A passkey touch confirms one action: the token is made on one instance and spent on another, once
+  const confirmOptions = await c.req('POST', '/api/auth/confirm/options', { action: 'passkey-remove' });
+  const confirmed = await c.req('POST', '/api/auth/confirm/verify', { action: 'passkey-remove', response: key.assertion(confirmOptions.json.options.challenge) });
+  const wrongAction = await c.req('DELETE', '/api/auth/account', { confirmToken: confirmed.json.confirmToken });
+  const removed = await c.req('POST', '/api/auth/passkeys/remove-all', { confirmToken: confirmed.json.confirmToken });
+  const spent = await c.req('POST', '/api/auth/passkeys/remove-all', { confirmToken: confirmed.json.confirmToken });
+  check('a passkey confirmation works for its own action only, once, across instances',
+    confirmed.status === 200 && wrongAction.status === 401 && removed.status === 200 && spent.status === 401,
+    `confirm ${confirmed.status}, other action ${wrongAction.status}, own ${removed.status}, again ${spent.status}`);
 }
 
 const failed = results.filter(r => !r.ok).length;

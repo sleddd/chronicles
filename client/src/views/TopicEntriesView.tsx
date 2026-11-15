@@ -5,7 +5,6 @@ import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { MonthGroups } from '../components/molecules/MonthGroups.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
@@ -82,7 +81,7 @@ interface TopicEntriesViewProps {
 }
 
 export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesViewProps) {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -124,12 +123,6 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
     } catch (err) { console.error('Failed to delete entry:', err); }
   }, []);
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

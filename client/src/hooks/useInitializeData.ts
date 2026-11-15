@@ -1,6 +1,5 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { validEntryRows } from '../utils/entryRows.js';
-import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
@@ -18,11 +17,10 @@ import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameInto
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
  * Safe to call from any protected view — only loads once (checks isInitialized).
- * Returns { isReady, isLoading, needsUnlock, handleUnlock }.
+ * Returns { isReady, isLoading }.
  */
 export function useInitializeData() {
-  const { encryptionData } = useAuth();
-  const { isUnlocked, isRestoring, unlock, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
+  const { isUnlocked, decryptPosts, encryptPost, encryptBytes, decryptBytes } = useEncryption();
   const {
     setDecryptedEntries, setRawEntries, setTopics, setFeatureFlags,
     isInitialized, setLoading, isLoading,
@@ -38,13 +36,6 @@ export function useInitializeData() {
   const setGoogleCalendarId = useUIStore(s => s.setGoogleCalendarId);
   const setGoogleSyncToken = useUIStore(s => s.setGoogleSyncToken);
   const setCalendarImportMode = useUIStore(s => s.setCalendarImportMode);
-
-  const handleUnlock = useCallback(async (password: string, remember = false) => {
-    if (!encryptionData?.kekSalt || !encryptionData?.encryptedMasterKey || !encryptionData?.kekWrapIv) {
-      throw new Error('Missing encryption data');
-    }
-    await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations, remember);
-  }, [encryptionData, unlock]);
 
   useEffect(() => {
     if (!isUnlocked || isInitialized) return;
@@ -168,8 +159,7 @@ export function useInitializeData() {
     };
   }, [isUnlocked, isInitialized]);
 
-  // While a remembered unlock is being restored, don't prompt for the password
-  const needsUnlock = !!encryptionData?.encryptionEnabled && !isUnlocked && !isRestoring;
-
-  return { isReady: isUnlocked && isInitialized, isLoading, needsUnlock, handleUnlock };
+  // A signed-in tab always holds the key (there is no lock screen): until the
+  // data is in, the views show their spinner
+  return { isReady: isUnlocked && isInitialized, isLoading };
 }

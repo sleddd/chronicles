@@ -5,6 +5,8 @@ import { lightTheme, darkTheme } from '@shared/theme/tokens';
 import { useUIStore } from './stores/uiStore.js';
 import { GlobalStyle } from './styles/GlobalStyle.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { flushDrafts } from './services/drafts.js';
+import { useIdleSignOut } from './hooks/useIdleSignOut.js';
 import { onSessionEnded } from './services/api.js';
 import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.js';
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
@@ -439,7 +441,12 @@ function PublicShelfSync() {
   return null;
 }
 
-/** The floating AI chat — only for a signed-in, unlocked journal, never on public pages. */
+/** Ends the session after 15 minutes with nobody at any Chronicles tab (hooks/useIdleSignOut.ts) */
+function IdleGate() {
+  useIdleSignOut();
+  return null;
+}
+
 /** The server ended this browser's session (revoked, expired): retrying can't
  *  help, so lock, clear what this browser holds and go to sign-in with a note —
  *  instead of every load retrying behind a spinner.
@@ -449,8 +456,8 @@ function PublicShelfSync() {
  *  never calls the server's sign-out — the session is already dead, and that
  *  call ends whichever session the cookie holds now, which could be the new one. */
 function SessionEndedGate() {
-  const { isAuthenticated, resetLocal } = useAuth();
-  const { lock } = useEncryption();
+  const { isAuthenticated, dropUser } = useAuth();
+  const { clearKey } = useEncryption();
   const navigate = useNavigate();
   const ending = useRef(false);
   useEffect(() => onSessionEnded(reason => {
@@ -463,8 +470,16 @@ function SessionEndedGate() {
         const note = reason === 'Session expired'
           ? 'Your session expired. Sign in again to carry on.'
           : 'You were signed out on this browser. Sign in again to carry on.';
-        lock();
-        await resetLocal();
+        // Unsaved writing is sealed first, while the key is still here
+        await flushDrafts().catch(() => {});
+        clearKey();
+        // The key and everything decrypted leave this tab. What the browser
+        // stores stays: it is ciphertext only (the encrypted cache, sealed
+        // drafts), and no wrap of the key is stored here, so without signing in
+        // again it opens nothing — and the writing a session ended under is
+        // still there to restore. A different person signing in wipes it.
+        dropUser();
+        try { sessionStorage.clear(); } catch { /* storage blocked */ }
         navigate('/login', { replace: true, state: { signInNote: note } });
       } catch {
         // Offline: leave things as they are — the next answer will say again
@@ -472,7 +487,7 @@ function SessionEndedGate() {
         ending.current = false;
       }
     })();
-  }), [isAuthenticated, resetLocal, lock, navigate]);
+  }), [isAuthenticated, dropUser, clearKey, navigate]);
   return null;
 }
 
@@ -722,6 +737,7 @@ export function App() {
               <Route path="*" element={<NotFoundView />} />
             </Routes>
             <SessionEndedGate />
+            <IdleGate />
             <ChatGate />
             <PublicShelfSync />
             <TimeGate />

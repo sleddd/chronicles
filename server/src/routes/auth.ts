@@ -10,13 +10,15 @@ import { isApproved, hasPendingInvite, spendInvite } from '../db/betaQueries.js'
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware, revokeBrowserSession } from '../middleware/auth.js';
-import { revokeGrantsForAccount } from '../services/rememberGrants.js';
+import { issueConfirmToken, takeConfirmToken } from '../services/confirmTokens.js';
+import { trustDevice, useTrustedDevice, forgetTrustToken, forgetAllTrustedDevices, listTrustedDevices, forgetTrustedDevice, TRUST_DAYS } from '../db/trustedDeviceQueries.js';
+import { removeAllPasskeys } from '../db/passkeyQueries.js';
+import { parseId } from '../middleware/parseId.js';
 import { sharedState, resetSharedStateForTests } from '../services/sharedState.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, normalizeEmail } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail, type ConfirmAction } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
-import { clearRememberCookie } from './remember.js';
 
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
 // default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
@@ -35,7 +37,7 @@ const PASSWORD_DAILY = 'day_pw';
 const EMAIL_CHANGES = 'email_change';
 
 /** Drop an account's pending 2FA sign-ins (after a password change, recovery or 2FA change). */
-async function cancelPendingTwoFA(accountId: number): Promise<void> {
+export async function cancelPendingTwoFA(accountId: number): Promise<void> {
   await sharedState.deleteTokensForAccount(PENDING_2FA, accountId);
 }
 
@@ -241,7 +243,7 @@ const CONFIRM_MAX_FAILURES = 10;
 const CONFIRM_LOCK_MS = 15 * 60 * 1000;
 
 /** The password-confirm bucket of the session making this request. */
-const confirmKey = (req: Request): string => `${req.auth!.accountId}:s:${req.auth!.selector}`;
+export const confirmKey = (req: Request): string => `${req.auth!.accountId}:s:${req.auth!.selector}`;
 
 // Per-account cap on email changes, counting every try
 const EMAIL_CHANGE_MAX = 5;
@@ -290,7 +292,7 @@ async function verifySecondFactor(
  * backup code, so a stolen session plus a phished password isn't enough.
  * Sends the refusal itself; true means go ahead.
  */
-async function secondFactorGate(
+export async function secondFactorGate(
   account: { id: number; totpEnabled: boolean; totpSecret: string | null; totpBackupCodes: string[] },
   code: string | undefined,
   req: Request,
@@ -350,7 +352,7 @@ async function checkSecondFactor(
   return 'backup';
 }
 
-function buildEncryptionResponse(account: {
+export function buildEncryptionResponse(account: {
   encryptionEnabled: boolean;
   kekSalt: Uint8Array | null;
   encryptedMasterKey: Uint8Array | null;
@@ -390,7 +392,7 @@ const OTHER_COOKIE_NAME = IS_PRODUCTION ? null : '__Host-chronicle_session';
 function clearOtherSessionCookie(res: Response): void {
   if (OTHER_COOKIE_NAME) res.clearCookie(OTHER_COOKIE_NAME, { path: '/', httpOnly: true, secure: true, sameSite: 'strict' as const });
 }
-function setSessionCookie(res: Response, token: string): void {
+export function setSessionCookie(res: Response, token: string): void {
   res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
   clearOtherSessionCookie(res);
 }
@@ -428,7 +430,7 @@ const DEVICE_COOKIE_OPTIONS = {
   maxAge: 90 * 24 * 60 * 60 * 1000,
   path: '/',
 };
-interface DeviceAccount {
+export interface DeviceAccount {
   id: number; email: string; passwordHash: string;
   totpEnabled: boolean | null; totpSecret: string | null;
 }
@@ -448,7 +450,7 @@ const deviceMac = (account: DeviceAccount, nonce: string) => {
     .update(`${account.id}\n${credential}\n${account.email}\n${nonce}\n${secondFactor}`).digest('base64url');
 };
 
-function rememberKnownDevice(res: Response, account: DeviceAccount): void {
+export function rememberKnownDevice(res: Response, account: DeviceAccount): void {
   const nonce = crypto.randomBytes(16).toString('base64url');
   res.cookie(DEVICE_COOKIE, `${nonce}.${deviceMac(account, nonce)}`, DEVICE_COOKIE_OPTIONS);
 }
@@ -528,7 +530,7 @@ async function hashAuthSecret(authSecret: string): Promise<string> {
 }
 
 /** A sign-in burst filled the hashing queue: say "try again" (503) rather than fail. */
-function sendIfHasherBusy(err: unknown, res: Response): boolean {
+export function sendIfHasherBusy(err: unknown, res: Response): boolean {
   if (!(err instanceof HasherBusyError)) return false;
   res.set('Retry-After', '5').status(503).json({ error: 'Lots of people are signing in right now. Please try again in a few seconds.' });
   return true;
@@ -551,7 +553,7 @@ async function confirmLocked(key: string): Promise<boolean> {
 }
 
 /** Route guard for the password-confirmed actions: 429 once this session is locked. */
-async function confirmGate(req: Request, res: Response, next: (err?: unknown) => void): Promise<void> {
+export async function confirmGate(req: Request, res: Response, next: (err?: unknown) => void): Promise<void> {
   try {
     if (req.auth && (await confirmLocked(confirmKey(req)))) {
       res.status(429).json({ error: 'Too many incorrect passwords. Try again later.' });
@@ -563,6 +565,17 @@ async function confirmGate(req: Request, res: Response, next: (err?: unknown) =>
   }
 }
 
+/**
+ * A passkey touch that didn't verify at a confirmation: counted in the same
+ * per-session bucket as a wrong password, so a session can't be used to try
+ * confirmations without end either.
+ */
+export async function countConfirmFailure(req: Request): Promise<void> {
+  const key = confirmKey(req);
+  const n = await claimConfirmAttempt(key);
+  if (n !== null) await passwordFailed(CONFIRM_FAILURES, key, n, CONFIRM_MAX_FAILURES);
+}
+
 /** Check the current password at a password-confirmed action (counted per session). */
 async function checkConfirmSecret(account: { id: number; passwordHash: string }, authSecret: string, key: string): Promise<boolean> {
   const n = await claimConfirmAttempt(key);
@@ -571,6 +584,67 @@ async function checkConfirmSecret(account: { id: number; passwordHash: string },
   if (ok) await sharedState.clear(CONFIRM_FAILURES, key);
   else await passwordFailed(CONFIRM_FAILURES, key, n, CONFIRM_MAX_FAILURES);
   return ok;
+}
+
+/**
+ * Who is asking, at a sensitive action: the current password (and, with 2FA
+ * on, an authenticator or backup code) — or a single-use token from a passkey
+ * touch, which stands in for both (services/confirmTokens.ts; the touch was
+ * checked with the user verified, for this action, in this session).
+ * Sends the refusal itself; true means go ahead.
+ */
+export async function confirmIdentity(
+  req: Request,
+  res: Response,
+  account: { id: number; passwordHash: string; totpEnabled: boolean; totpSecret: string | null; totpBackupCodes: string[] },
+  given: { authSecret?: string; code?: string; confirmToken?: string },
+  action: ConfirmAction,
+  failedEvent: string,
+  { wrongPassword = 'Current password incorrect', secondFactor = true } = {},
+): Promise<boolean> {
+  if (given.confirmToken !== undefined) {
+    if (await takeConfirmToken(action, req.auth!.selector, account.id, given.confirmToken)) return true;
+    logSecurityEvent(failedEvent, { accountId: account.id, ip: req.ip, details: { reason: 'bad_confirmation' } });
+    res.status(401).json({ error: 'That confirmation has expired. Try again.' });
+    return false;
+  }
+  if (!given.authSecret || !(await checkConfirmSecret(account, given.authSecret, confirmKey(req)))) {
+    logSecurityEvent(failedEvent, { accountId: account.id, ip: req.ip });
+    res.status(401).json({ error: wrongPassword });
+    return false;
+  }
+  return secondFactor ? secondFactorGate(account, given.code, req, res, failedEvent) : true;
+}
+
+// ---------------------------------------------------------------------------
+// Trusted browsers: "don't ask for a code on this browser for 30 days"
+// (db/trustedDeviceQueries.ts). The cookie holds a random token; it is looked
+// at only after the password has checked out, and it skips the authenticator
+// code at sign-in — never the password, never the code at a sensitive action.
+// ---------------------------------------------------------------------------
+const TRUST_COOKIE = IS_PRODUCTION ? '__Host-chronicle_trust' : 'chronicle_trust';
+const TRUST_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: IS_PRODUCTION,
+  sameSite: 'strict' as const,
+  maxAge: TRUST_DAYS * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+const trustToken = (req: Request): string | undefined => {
+  const raw = req.cookies?.[TRUST_COOKIE];
+  return typeof raw === 'string' ? raw : undefined;
+};
+function clearTrustCookie(res: Response): void {
+  res.clearCookie(TRUST_COOKIE, { path: '/', httpOnly: true, secure: IS_PRODUCTION, sameSite: 'strict' as const });
+}
+/** "Chrome on macOS", for the list in Settings — never the full user agent */
+export function browserLabel(userAgent: string | undefined): string {
+  const ua = userAgent ?? '';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox'
+    : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const system = /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
+    : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+  return system ? `${browser} on ${system}` : browser;
 }
 
 // The recovery check stores SHA-256 of the client's proof (PBKDF2 of the
@@ -768,21 +842,24 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
 // =============================================================================
 // GET /api/auth/me — Validate current session and return user info
 // =============================================================================
+// Who is signed in — and nothing that opens the journal. The wrapped master key
+// used to come back here, to any live session: a stolen session cookie was then
+// enough to guess the password offline, with no lockout. The wrap now leaves
+// the server only in the answer to a checked password or passkey (/login,
+// /login/2fa, /recover, /passkey/verify, /password-wrap, /confirm/verify).
+// LEGACY_ME_KEY_WRAP=true keeps the old answer for a release, for tabs still
+// running the app from before (they wait on it forever otherwise).
 router.get('/me', authMiddleware, async (req, res) => {
   try {
+    const legacy = process.env.LEGACY_ME_KEY_WRAP === 'true';
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
       select: {
         email: true,
         username: true,
-        encryptionEnabled: true,
-        kekSalt: true,
-        encryptedMasterKey: true,
-        kekWrapIv: true,
-        kekIterations: true,
-        recoveryWrappedMK: true,
-        recoveryWrapIv: true,
         totpEnabled: true,
+        encryptionEnabled: true,
+        ...(legacy ? { kekSalt: true, encryptedMasterKey: true, kekWrapIv: true, kekIterations: true, recoveryWrappedMK: true, recoveryWrapIv: true } : {}),
       },
     });
 
@@ -793,7 +870,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
-      encryption: buildEncryptionResponse(account),
+      ...(legacy ? { encryption: buildEncryptionResponse(account as unknown as Parameters<typeof buildEncryptionResponse>[0]) } : {}),
     });
   } catch (err) {
     console.error('Me error:', err instanceof Error ? err.message : 'Unknown error');
@@ -848,8 +925,12 @@ router.post('/login', authLimiter, async (req, res) => {
 
     await sharedState.clear(LOGIN_FAILURES, failureKey);
 
-    // 2FA check — if enabled, return a pending token instead of a session
-    if (account.totpEnabled) {
+    // 2FA check — if enabled, return a pending token instead of a session.
+    // Unless this browser is trusted for this account: looked at only now,
+    // after the password checked out, so a wrong password learns nothing of it
+    const trusted = account.totpEnabled && await useTrustedDevice(account.id, trustToken(req)).catch(() => false);
+    if (trusted) logSecurityEvent('login_trusted_browser', { accountId: account.id, ip: req.ip });
+    if (account.totpEnabled && !trusted) {
       const pendingToken = crypto.randomBytes(32).toString('hex');
       await sharedState.putToken(PENDING_2FA, pendingToken, account.id, PENDING_2FA_TTL_MS);
       logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip });
@@ -860,8 +941,12 @@ router.post('/login', authLimiter, async (req, res) => {
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
+      deviceInfo: trusted ? 'trusted' : 'password',
     });
-    if (!(await sessionStillEarned(token, account))) {
+    // A trust ended while the password was being checked (a password or 2FA
+    // change, Sign out everywhere) must not leave this session behind either
+    if (!(await sessionStillEarned(token, account)) || (trusted && !(await useTrustedDevice(account.id, trustToken(req)).catch(() => false)))) {
+      try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
@@ -888,11 +973,21 @@ router.post('/login', authLimiter, async (req, res) => {
 // session is already expired, idle or revoked (it once needed a live session,
 // so a stale cookie stayed in the browser). Browser calls still need the CSRF
 // header; Bearer clients go through the usual check.
-const clearSessionCookies = (res: Response) => {
+export const clearSessionCookies = (res: Response) => {
   res.clearCookie(COOKIE_NAME, { path: '/', httpOnly: true, secure: IS_PRODUCTION, sameSite: 'strict' as const });
   clearOtherSessionCookie(res);
-  clearRememberCookie(res);
+  // The unlock cookie of the old stored-key Remember me, should a browser still hold one
+  res.clearCookie(IS_PRODUCTION ? '__Host-chronicle_unlock' : 'chronicle_unlock', { path: '/', httpOnly: true, secure: IS_PRODUCTION, sameSite: 'strict' as const });
 };
+
+// Pressing Sign out also ends this browser's trust (`forgetBrowser: true`).
+// A session that ends by itself — idle, a reload, the app closed — sends no
+// such thing and keeps it, or the trust would never get to skip anything.
+async function endBrowserTrust(req: Request, res: Response): Promise<void> {
+  if (req.body?.forgetBrowser !== true) return;
+  try { await forgetTrustToken(trustToken(req)); } catch { /* the cookie goes either way */ }
+  clearTrustCookie(res);
+}
 
 router.post('/logout', async (req, res, next) => {
   if (req.headers.authorization) {
@@ -911,6 +1006,7 @@ router.post('/logout', async (req, res, next) => {
   try {
     const accountId = await revokeBrowserSession(req, 'user_logout');
     if (accountId !== null) logSecurityEvent('logout', { accountId, ip: req.ip });
+    await endBrowserTrust(req, res);
     clearSessionCookies(res);
     res.json({ success: true });
   } catch (err) {
@@ -937,20 +1033,14 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       return;
     }
 
-    const { currentAuthSecret, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv, code } = parsed.data;
+    const { currentAuthSecret, confirmToken, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv, code } = parsed.data;
     const account = await prisma.account.findUnique({ where: { id: req.auth!.accountId } });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;
     }
 
-    const valid = await checkConfirmSecret(account, currentAuthSecret, confirmKey(req));
-    if (!valid) {
-      logSecurityEvent('password_change_failed', { accountId: account.id, ip: req.ip });
-      res.status(401).json({ error: 'Current password incorrect' });
-      return;
-    }
-    if (!(await secondFactorGate(account, code, req, res, 'password_change_failed'))) return;
+    if (!(await confirmIdentity(req, res, account, { authSecret: currentAuthSecret, code, confirmToken }, 'change-password', 'password_change_failed'))) return;
 
     const passwordHash = await hashAuthSecret(newAuthSecret);
 
@@ -974,13 +1064,16 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       }),
     ]);
 
-    await revokeGrantsForAccount(account.id);
+    // Every trusted browser was trusted under the old password
+    await forgetAllTrustedDevices(account.id);
+    clearTrustCookie(res);
     await cancelPendingTwoFA(account.id);
 
     // Create a fresh session after revoking all old ones (prevents race condition)
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
+      deviceInfo: confirmToken !== undefined ? 'passkey' : 'password',
     });
 
     logSecurityEvent('password_change', { accountId: account.id, ip: req.ip });
@@ -1050,9 +1143,11 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
       where: { id: req.auth!.accountId },
       data: { email: normalizedEmail, passwordHash },
     });
-    // Like a password change: every other session (and its Remember me
-    // grant) is signed out and pending 2FA sign-ins are cancelled; this one stays
+    // Like a password change: every other session is signed out and pending 2FA sign-ins are cancelled; this one stays
     await revokeAllSessions(account.id, req.auth!.selector, 'email_change');
+    // The sign-in secret changed with the email: every trust was earned under the old one
+    await forgetAllTrustedDevices(account.id);
+    clearTrustCookie(res);
     await cancelPendingTwoFA(account.id);
 
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
@@ -1173,7 +1268,13 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
-    await revokeGrantsForAccount(account.id);
+    await forgetAllTrustedDevices(account.id);
+    clearTrustCookie(res);
+    // A lost device is a common reason to be here: its passkeys can go too
+    if (parsed.data.removePasskeys) {
+      const removed = await removeAllPasskeys(account.id);
+      if (removed) logSecurityEvent('passkeys_removed_all', { accountId: account.id, ip: req.ip, details: { count: removed, at: 'recovery' } });
+    }
     await cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, { id: account.id, email, passwordHash, totpEnabled: account.totpEnabled, totpSecret: account.totpSecret });
@@ -1182,6 +1283,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
+      deviceInfo: 'recovery',
     });
 
     setSessionCookie(res, token);
@@ -1215,7 +1317,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
 
-    const { pendingToken, code } = parsed.data;
+    const { pendingToken, code, trustBrowser } = parsed.data;
 
     const pendingAccountId = await sharedState.getToken(PENDING_2FA, pendingToken);
     if (pendingAccountId === null) {
@@ -1276,10 +1378,24 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
+      deviceInfo: 'password',
     });
     if (!(await sessionStillEarned(token, account))) {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
+    }
+
+    // "Don't ask for a code on this browser for 30 days": only after the
+    // authenticator's own code — a backup code is for when the phone is gone
+    if (trustBrowser && factor === 'totp') {
+      try {
+        const trust = await trustDevice(account.id, browserLabel(req.headers['user-agent']));
+        res.cookie(TRUST_COOKIE, trust, TRUST_COOKIE_OPTIONS);
+        logSecurityEvent('browser_trusted', { accountId: account.id, ip: req.ip });
+      } catch (err) {
+        // The sign-in stands; the next one asks for a code as usual
+        console.error('Trust browser error:', err instanceof Error ? err.message : 'Unknown error');
+      }
     }
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
@@ -1331,17 +1447,19 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
       return;
     }
 
-    const { secret, code, currentAuthSecret } = parsed.data;
+    const { secret, code, currentAuthSecret, confirmToken } = parsed.data;
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, email: true, passwordHash: true, totpEnabled: true },
+      select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
-    if (!account || !(await checkConfirmSecret(account, currentAuthSecret, confirmKey(req)))) {
+    if (!account) {
       logSecurityEvent('2fa_enable_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
+    // No second factor to ask for yet — it is what's being turned on
+    if (!(await confirmIdentity(req, res, account, { authSecret: currentAuthSecret, confirmToken }, '2fa-enable', '2fa_enable_failed', { secondFactor: false }))) return;
     // Replacing a live authenticator goes through disable (password) first
     if (account.totpEnabled) {
       res.status(409).json({ error: 'Two-factor authentication is already on' });
@@ -1379,9 +1497,11 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
     // code can't then finish a sign-in (replay)
     await clearTwoFAState(account.id);
     await sharedState.advance(TOTP_STEP, String(account.id), step, TOTP_STEP_TTL_MS);
-    // Like a password change: every other session (and its Remember me grant)
-    // is signed out and pending sign-ins are cancelled; this one stays
+    // Like a password change: every other session is signed out
+    // and pending sign-ins are cancelled; this one stays
     await revokeAllSessions(account.id, req.auth!.selector, '2fa_enabled');
+    await forgetAllTrustedDevices(account.id);
+    clearTrustCookie(res);
     await cancelPendingTwoFA(account.id);
 
     // Every known-device cookie from before is void now (they needed only the
@@ -1417,27 +1537,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
       return;
     }
 
-    const valid = await checkConfirmSecret(account, parsed.data.authSecret, confirmKey(req));
-    if (!valid) {
-      logSecurityEvent('2fa_disable_failed', { accountId: req.auth!.accountId, ip: req.ip });
-      res.status(401).json({ error: 'Incorrect password' });
-      return;
-    }
-
-    if (account.totpEnabled && account.totpSecret) {
-      const bucket = `${account.id}:s:${req.auth!.selector}`;
-      const lock = await twoFALock(bucket);
-      if (lock) {
-        res.status(429).json({ error: twoFALockMessage(lock) });
-        return;
-      }
-      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, parsed.data.code, bucket);
-      if (!factor) {
-        logSecurityEvent('2fa_disable_failed', { accountId: account.id, ip: req.ip, details: { reason: 'bad_code' } });
-        res.status(401).json({ error: 'Invalid code' });
-        return;
-      }
-    }
+    if (!(await confirmIdentity(req, res, account, { authSecret: parsed.data.authSecret, code: parsed.data.code, confirmToken: parsed.data.confirmToken }, '2fa-disable', '2fa_disable_failed', { wrongPassword: 'Incorrect password' }))) return;
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },
@@ -1445,9 +1545,10 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     });
     await clearTwoFAState(req.auth!.accountId);
     await cancelPendingTwoFA(req.auth!.accountId);
-    // Like turning it on: every other session (and its Remember me grant) is
-    // signed out, so one that was let in before stays out; this one stays
+    // Like turning it on: every other session is signed out, so one that was let in before stays out; this one stays
     await revokeAllSessions(req.auth!.accountId, req.auth!.selector, '2fa_disabled');
+    await forgetAllTrustedDevices(req.auth!.accountId);
+    clearTrustCookie(res);
 
     rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash: account.passwordHash, totpEnabled: false, totpSecret: null });
 
@@ -1479,23 +1580,16 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
       res.status(404).json({ error: 'Account not found' });
       return;
     }
-    if (!(await checkConfirmSecret(account, parsed.data.authSecret, confirmKey(req)))) {
-      logSecurityEvent('account_delete_failed', { accountId: account.id, ip: req.ip });
-      res.status(401).json({ error: 'Incorrect password' });
-      return;
-    }
-    if (!(await secondFactorGate(account, parsed.data.code, req, res, 'account_delete_failed'))) return;
+    if (!(await confirmIdentity(req, res, account, { authSecret: parsed.data.authSecret, code: parsed.data.code, confirmToken: parsed.data.confirmToken }, 'delete-account', 'account_delete_failed', { wrongPassword: 'Incorrect password' }))) return;
 
-    await revokeGrantsForAccount(account.id);
     // Revoke Google Calendar access at Google before the token row is deleted
     await revokeGoogleAccess(account.id);
     await deleteAccountById(account.id);
     await clearTwoFAState(account.id);
 
     logSecurityEvent('account_deleted', { accountId: account.id, ip: req.ip });
-    res.clearCookie(COOKIE_NAME, { path: '/', secure: IS_PRODUCTION, sameSite: 'strict' as const });
-    clearOtherSessionCookie(res);
-    clearRememberCookie(res);
+    clearSessionCookies(res);
+    clearTrustCookie(res);
     res.json({ success: true });
   } catch (err) {
     if (sendIfHasherBusy(err, res)) return;
@@ -1567,7 +1661,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
       res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
-    const { currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, code } = parsed.data;
+    const { currentAuthSecret, confirmToken, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, code } = parsed.data;
 
     // Whoever sets the recovery key can later reset the password with it, so
     // a signed-in session alone must not be enough to replace it
@@ -1575,12 +1669,12 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
       where: { id: req.auth!.accountId },
       select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
-    if (!account || !(await checkConfirmSecret(account, currentAuthSecret, confirmKey(req)))) {
+    if (!account) {
       logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(401).json({ error: 'Current password incorrect' });
       return;
     }
-    if (!(await secondFactorGate(account, code, req, res, 'recovery_key_regenerate_failed'))) return;
+    if (!(await confirmIdentity(req, res, account, { authSecret: currentAuthSecret, code, confirmToken }, 'recovery-key', 'recovery_key_regenerate_failed'))) return;
 
     await prisma.account.update({
       where: { id: req.auth!.accountId },
@@ -1593,8 +1687,10 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
     });
 
     // Whoever held the old key may be the reason for replacing it: every other
-    // session (and its Remember me grant) is signed out, this one stays
+    // session is signed out, this one stays
     await revokeAllSessions(account.id, req.auth!.selector, 'recovery_key_changed');
+    await forgetAllTrustedDevices(account.id);
+    clearTrustCookie(res);
     await cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_key_regenerated', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
@@ -1602,6 +1698,81 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
     if (sendIfHasherBusy(err, res)) return;
     console.error('Recovery key regeneration error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save recovery key' });
+  }
+});
+
+
+// =============================================================================
+// POST /api/auth/password-wrap — the password wrap, against the password
+// =============================================================================
+// A tab holds the key but never the wrap, so to make another wrap of the key
+// with the typed password (a new password, a recovery key, a passkey) it asks
+// for the password wrap here. That wrap is what opens the journal, so this is
+// confirmed exactly like the action it is for: the password and, with 2FA on,
+// an authenticator or backup code — a stolen session plus a phished password
+// gets nothing. The answer carries a single-use token for that action, so the
+// action's own request doesn't need the (one-use) code a second time. Only the
+// password wrap is returned, never the recovery wrap.
+router.post('/password-wrap', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
+  try {
+    const parsed = keyWrapSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Enter your account password' });
+      return;
+    }
+    const account = await prisma.account.findUnique({ where: { id: req.auth!.accountId } });
+    if (!account) {
+      res.status(401).json({ error: 'Current password incorrect' });
+      return;
+    }
+    const { currentAuthSecret, code, action } = parsed.data;
+    if (!(await confirmIdentity(req, res, account, { authSecret: currentAuthSecret, code }, action, 'key_wrap_failed'))) return;
+    const confirmToken = await issueConfirmToken(action, req.auth!.selector, account.id);
+    res.json({
+      confirmToken,
+      encryption: {
+        kekSalt: account.kekSalt ? Buffer.from(account.kekSalt).toString('base64') : null,
+        encryptedMasterKey: account.encryptedMasterKey ? Buffer.from(account.encryptedMasterKey).toString('base64') : null,
+        kekWrapIv: account.kekWrapIv ? Buffer.from(account.kekWrapIv).toString('base64') : null,
+        kekIterations: account.kekIterations,
+      },
+    });
+  } catch (err) {
+    if (sendIfHasherBusy(err, res)) return;
+    console.error('Key wrap error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// =============================================================================
+// Trusted browsers — the list in Settings → Security, and Forget
+// =============================================================================
+router.get('/trusted-browsers', authMiddleware, async (req, res) => {
+  try {
+    const devices = await listTrustedDevices(req.auth!.accountId, trustToken(req));
+    res.json(devices.map(d => ({
+      id: d.id, label: d.label, isCurrent: d.isCurrent,
+      createdAt: d.createdAt.toISOString(), expiresAt: d.expiresAt.toISOString(), lastUsedAt: d.lastUsedAt?.toISOString() ?? null,
+    })));
+  } catch (err) {
+    console.error('Trusted browsers error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to list trusted browsers' });
+  }
+});
+
+router.delete('/trusted-browsers/:id', authMiddleware, async (req, res) => {
+  try {
+    const id = parseId(String(req.params.id));
+    if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
+    const devices = await listTrustedDevices(req.auth!.accountId, trustToken(req));
+    const target = devices.find(d => d.id === id);
+    if (!target || !(await forgetTrustedDevice(req.auth!.accountId, id))) { res.status(404).json({ error: 'Not found' }); return; }
+    if (target.isCurrent) clearTrustCookie(res);
+    logSecurityEvent('browser_trust_forgotten', { accountId: req.auth!.accountId, ip: req.ip });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Forget trusted browser error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed' });
   }
 });
 

@@ -8,7 +8,6 @@ import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { MonthGroups } from '../components/molecules/MonthGroups.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
 import { PrintButton } from '../components/atoms/PrintButton.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -212,7 +211,7 @@ interface HealthViewProps {
  * breadcrumb leads back here.
  */
 export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel }: HealthViewProps) {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -282,12 +281,6 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
     });
   }, [filtered, summaryFields]);
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

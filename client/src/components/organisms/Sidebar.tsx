@@ -5,7 +5,6 @@ import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useNavItems } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
-import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 
 /* Collapsed: icons only (92px). Expanded: each item's name beside its icon.
@@ -105,7 +104,7 @@ const NavScroll = styled.nav`
 
 /* Rail row — no dividers; the active row is lifted onto --bg-rail-active
    with the accent tab. Under the last item: expand / collapse, then ⋯, whose
-   menu holds Lock (asks for the password again) and Sign out; Settings is its own row above Collapse. */
+   menu holds Sign out; Settings is its own row above Collapse. */
 const NavIconBtn = styled.button<{ $active?: boolean }>`
   position: relative;
   flex: 0 0 auto;
@@ -167,7 +166,7 @@ const Wordmark = styled.span`
   white-space: nowrap;
 `;
 
-/* Settings, then expand / collapse, then ⋯ (Lock, Sign out), under the last item */
+/* Settings, then expand / collapse, then ⋯ (Sign out), under the last item */
 const ToggleBtn = styled(NavIconBtn)`
   height: 44px;
   color: var(--text-muted);
@@ -249,7 +248,6 @@ export const Sidebar = memo(function Sidebar() {
   const navigate = useNavigate();
   const items = useNavItems();
   const signOut = useSignOut();
-  const { lock } = useEncryption();
 
   // Remembered per browser (a convenience, not a setting)
   const [open, setOpen] = useState(readOpen);
@@ -313,16 +311,13 @@ export const Sidebar = memo(function Sidebar() {
           {open ? <Label>Collapse</Label> : <SrOnly>Show names</SrOnly>}
         </ToggleBtn>
         <ToggleBtn ref={moreRef} onClick={() => (menuAt ? closeMenu() : openMenu())}
-          aria-haspopup="menu" aria-expanded={!!menuAt} title={open ? undefined : 'Lock and sign out'}>
+          aria-haspopup="menu" aria-expanded={!!menuAt} title={open ? undefined : 'Sign out'}>
           <IconCell><Dots aria-hidden="true">⋯</Dots></IconCell>
           {open ? <Label>More</Label> : <SrOnly>More</SrOnly>}
         </ToggleBtn>
       </NavScroll>
       {menuAt && createPortal(
         <Flyout ref={menuRef} role="menu" aria-label="More" style={{ left: menuAt.left, top: menuAt.top }}>
-          <FlyoutItem role="menuitem" title="Your password opens it again" onClick={choose(lock)}>
-            <MaterialIcon aria-hidden="true">lock</MaterialIcon>Lock
-          </FlyoutItem>
           <FlyoutItem role="menuitem" onClick={choose(() => { void signOut(); })}>
             <MaterialIcon aria-hidden="true">logout</MaterialIcon>Sign out
           </FlyoutItem>

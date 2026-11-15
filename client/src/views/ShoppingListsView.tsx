@@ -12,7 +12,6 @@ import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJourna
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { entries as entriesApi } from '../services/api.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
@@ -83,7 +82,7 @@ type Tab = 'current' | 'completed';
 /* ── ShoppingListsView ── */
 
 export function ShoppingListsView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries   = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -122,12 +121,6 @@ export function ShoppingListsView() {
     [lists, tab]
   );
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to view shopping lists" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

@@ -56,6 +56,8 @@ export function HealthPrivacyView() {
       <ul>
         <li>Your email address and username, so you can sign in.</li>
         <li>Session details (IP address, browser, device type and last active time), so we can protect your account and let you sign out other devices.</li>
+        <li>Your passkeys, if you add any. For each one we store its public key, the name you give it, when it was added and last used, and one more locked copy of your encryption key that only that passkey can open. We cannot open it. Your fingerprint or face never leaves your device.</li>
+        <li>Trusted browsers, if you choose not to be asked for a 2FA code on one. We store a record for that browser (its name, such as Safari on macOS, and when it was added and last used) for up to 30 days, or until you forget it or sign out there. Your password is still asked every time.</li>
         <li>Your consent record: when you agreed, which versions of this policy and our terms, and how you want security notices sent. If you choose mailed notices, your postal address, used only for that.</li>
         <li>Your Apple Calendar feed, if you turn it on. The titles, times and locations of your event and meeting entries are stored readable so your calendar app can fetch them through your private link. Descriptions are included only if you turn on Include event details.</li>
         <li>Entries you choose to share. A shared entry is stored readable so anyone with the link can open it, until it expires or you revoke it. Photos and drawings are never included.</li>

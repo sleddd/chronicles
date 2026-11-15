@@ -10,6 +10,11 @@ import { hasEntryData, prepareEntryForSave } from '../../utils/entrySave.js';
 import { useTimeStore } from '../../stores/timeStore.js';
 import { startTimer } from '../../utils/timeTracking.js';
 import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from './QuickFinance.js';
+import { useSealedDraft } from '../../hooks/useSealedDraft.js';
+import { DraftNote } from '../molecules/DraftNote.js';
+
+/** What the Quick entry holds before it is saved (sealed as it's typed, services/drafts.ts) */
+interface QuickDraft { topicId: number | null; content: string; fields: Record<string, unknown> }
 
 /**
  * The dashboard's Quick entry: the journal's own editor and topic fields
@@ -36,6 +41,26 @@ export function QuickEntry() {
 
   const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); };
 
+  // Unsaved writing survives the session ending (15 minutes away, a reload):
+  // sealed a moment after each change, offered back after the next sign-in.
+  // Saving or emptying the form removes it
+  const draft = useSealedDraft<QuickDraft>('quick-entry', () => {
+    const defs = topicId != null ? (topicCustomFields[topicId] ?? []) : [];
+    return hasEntryData(typedContent, typedFields, defs) ? { topicId, content: typedContent, fields: typedFields } : null;
+  }, [typedContent, typedFields, topicId]);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const restoreDraft = () => {
+    if (!draft.found) return;
+    const { topicId: id, content, fields } = draft.found.value;
+    setFinance(null);
+    // A topic deleted since: the writing still comes back, under Journal
+    setTopicId(id != null && topics.some(t => t.id === id) ? id : null);
+    setContent(typeof content === 'string' ? content : '');
+    setCustomFields(fields && typeof fields === 'object' ? fields : {});
+    draft.taken();
+  };
+
   /** Saves the entry and clears the form; the new entry's id, or null when nothing was saved */
   const saveEntry = useCallback(async (fill?: { content: string; fields: Record<string, unknown> }): Promise<number | null> => {
     const userFieldDefs = topicId != null ? (topicCustomFields[topicId] ?? []) : [];
@@ -60,6 +85,8 @@ export function QuickEntry() {
       addDecryptedEntry({ id: res.id as number, content: prepared.content, metadata, isEncrypted: true,
         createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
       reset();
+      // Saved: its sealed draft goes now (not a moment later, when this page may be gone)
+      draftRef.current.clear();
       return res.id as number;
     } catch (err) {
       console.error('Quick entry save failed:', err);
@@ -80,6 +107,8 @@ export function QuickEntry() {
   }, [saveEntry]);
 
   return (
+    <>
+    {draft.found && <DraftNote savedAt={draft.found.savedAt} onRestore={restoreDraft} onDiscard={draft.discard} />}
     <EntryForm
       variant="quick"
       entryId={null}
@@ -102,5 +131,6 @@ export function QuickEntry() {
       saveStatus={status}
       placeholder={QUICK_PLACEHOLDER}
     />
+    </>
   );
 }

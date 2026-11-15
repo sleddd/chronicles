@@ -23,8 +23,6 @@ const mockSignOut = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
 // The reminders bell has its own tests
 vi.mock('@/components/organisms/NotificationBell', () => ({ NotificationBell: () => null, BellBadge: 'span' }));
-const mockLock = vi.hoisted(() => vi.fn());
-vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ lock: mockLock }) }));
 
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -62,17 +60,17 @@ describe('Sidebar', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('ends with Settings, expand / collapse, then ⋯ (Lock, Sign out)', () => {
+  it('ends with Settings, expand / collapse, then ⋯ (Sign out — there is no Lock)', () => {
     renderAt();
     const titles = Array.from(document.querySelectorAll('aside button[title]')).map(b => b.getAttribute('title'));
-    expect(titles.slice(-4)).toEqual(['Kitchen', 'Settings', 'Show names', 'Lock and sign out']);
+    expect(titles.slice(-4)).toEqual(['Kitchen', 'Settings', 'Show names', 'Sign out']);
     // Media sits right under Journal
     expect(titles.indexOf('Media')).toBe(titles.indexOf('Journal') + 1);
     const more = screen.getByRole('button', { name: 'More' });
     expect(more).toHaveAttribute('aria-haspopup', 'menu');
     fireEvent.click(more);
     const menu = screen.getByRole('menu', { name: 'More' });
-    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent?.replace(/^(lock|logout)/, ''))).toEqual(['Lock', 'Sign out']);
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent?.replace(/^(lock|logout)/, ''))).toEqual(['Sign out']);
     fireEvent.click(screen.getByTitle('Settings'));
     expect(mockNavigate).toHaveBeenCalledWith('/settings');
   });
@@ -100,12 +98,10 @@ describe('Sidebar', () => {
     expect(screen.queryByTitle('Report a bug')).toBeNull();
   });
 
-  it('locks from the ⋯ menu', () => {
+  it('has no Lock item: a signed-in tab is never left locked with its session alive', () => {
     renderAt();
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /Lock/ }));
-    expect(mockLock).toHaveBeenCalledTimes(1);
-    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menuitem', { name: /Lock/ })).toBeNull();
   });
 
   it('lifts the Settings row while in Settings', () => {

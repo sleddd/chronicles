@@ -71,6 +71,14 @@ async function main(): Promise<void> {
   if (!totals.topics && !totals.doses && !totals.flags && !totals.keyWraps) {
     console.log('All done: every account is on the current formats.');
   }
+
+  // Nothing to migrate here — how sign-in is being used (counts only)
+  const passkeyAccounts = (await exists(prisma, 'public', 'passkeys'))
+    ? await count(prisma, 'SELECT COUNT(DISTINCT account_id) AS n FROM public.passkeys') : 0;
+  const trustedAccounts = (await exists(prisma, 'public', 'trusted_devices'))
+    ? await count(prisma, 'SELECT COUNT(DISTINCT account_id) AS n FROM public.trusted_devices WHERE expires_at > now()') : 0;
+  const oldGrants = await exists(prisma, 'public', 'remember_grants');
+  console.log(`Sign-in: ${passkeyAccounts} account(s) with a passkey, ${trustedAccounts} with a trusted browser.${oldGrants ? ' The old remember_grants table is still there (the server drops it at startup).' : ''}`);
 }
 
 main()

@@ -4,7 +4,6 @@ import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { RowMenu } from '../components/molecules/FinanceParts.js';
@@ -160,7 +159,7 @@ const EditBox = styled.div`
 export function TopicDetailView() {
   const { topicId } = useParams();
   const navigate = useNavigate();
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const allTopics = useEntriesStore(s => s.allTopics);
   const entries = useEntriesStore(s => s.decryptedEntries);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -234,12 +233,6 @@ export function TopicDetailView() {
     savePrivateSetting('topicCustomFields', { ...useUIStore.getState().topicCustomFields, [topic.id]: defs })
       .catch(err => console.error('Failed to save topic fields:', err));
   };
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to view this topic" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

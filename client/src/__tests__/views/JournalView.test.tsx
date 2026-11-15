@@ -165,14 +165,6 @@ vi.mock('@/components/organisms/MiniCalendar', () => ({
   MiniCalendar: () => <div data-testid="mini-calendar" />,
 }));
 
-vi.mock('@/components/organisms/UnlockDialog', () => ({
-  UnlockDialog: ({ onUnlock }: any) => (
-    <div data-testid="unlock-dialog">
-      <button onClick={() => onUnlock('password')}>Unlock</button>
-    </div>
-  ),
-}));
-
 vi.mock('@/components/organisms/ShareModal', () => ({
   ShareModal: () => <div data-testid="share-modal" />,
 }));
@@ -186,23 +178,6 @@ vi.mock('@/utils/stripHtml', () => ({
   stripHtml: vi.fn((html: string) => html.replace(/<[^>]*>/g, '')),
 }));
 
-describe('JournalView (locked)', () => {
-  it('renders without crashing', () => {
-    renderWithTheme(<JournalView />);
-    expect(screen.getByTestId('app-template')).toBeInTheDocument();
-  });
-
-  it('shows unlock dialog when encryption is enabled but not unlocked', () => {
-    renderWithTheme(<JournalView />);
-    expect(screen.getByTestId('unlock-dialog')).toBeInTheDocument();
-  });
-
-  it('shows empty editor message when locked', () => {
-    renderWithTheme(<JournalView />);
-    expect(screen.getByTestId('empty-editor')).toBeInTheDocument();
-    expect(screen.getByText('Unlock your journal to view entries')).toBeInTheDocument();
-  });
-});
 
 describe('JournalView (unlocked, loaded)', () => {
   beforeEach(() => {

@@ -6,9 +6,7 @@ import { CalendarGrid } from '../components/organisms/CalendarGrid.js';
 import { CalendarDayView } from '../components/organisms/CalendarDayView.js';
 import { CalendarWeekView } from '../components/organisms/CalendarWeekView.js';
 import { CalendarDayDetail } from '../components/organisms/CalendarDayDetail.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { AppTemplate } from '../components/templates/AppTemplate.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
@@ -74,7 +72,7 @@ const DetailPane = styled.div`
 `;
 
 export function CalendarView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
@@ -217,14 +215,6 @@ export function CalendarView() {
     onViewMode: handleViewMode,
   };
 
-  if (needsUnlock) return (
-    <AppTemplate transparentContent hideAccentStripe>
-      <Layout>
-        <GridPane><EmptyState message="Unlock your journal to view calendar" /></GridPane>
-        <UnlockDialog onUnlock={handleUnlock} />
-      </Layout>
-    </AppTemplate>
-  );
 
   if (isLoading || !isReady) return (
     <AppTemplate transparentContent hideAccentStripe>

@@ -10,23 +10,38 @@ const readSrc = (relativePath: string) =>
   fs.readFileSync(path.resolve(__dirname, '..', relativePath), 'utf8');
 
 // ============================================================================
-// 1. EncryptionContext — inactivity timeout
+// 1. Idle sign-out — by the clock, not a running timer
 // ============================================================================
-describe('EncryptionContext inactivity timeout', () => {
-  it('has inactivity timeout implementation', () => {
-    const content = readSrc('contexts/EncryptionContext.tsx');
-    expect(content).toContain('INACTIVITY_TIMEOUT_MS');
-    expect(content).toContain('15 * 60 * 1000');
-    expect(content).toContain('mousedown');
-    expect(content).toContain('keydown');
-    expect(content).toContain('scroll');
-    expect(content).toContain('touchstart');
+describe('idle sign-out', () => {
+  it('ends the session after 15 minutes away, watching the usual activity', () => {
+    const content = readSrc('hooks/useIdleSignOut.ts');
+    expect(readSrc('services/activity.ts')).toContain('15 * 60 * 1000');
+    for (const event of ['pointerdown', 'keydown', 'scroll', 'touchstart']) expect(content).toContain(event);
+    expect(content).toContain('removeEventListener');
+    expect(content).toContain('clearInterval(timer)');
   });
 
-  it('clears timeout on unmount', () => {
+  it('measures against the clock and checks when the page comes back (timers stop while a laptop sleeps)', () => {
+    const content = readSrc('hooks/useIdleSignOut.ts');
+    expect(content).toContain('Date.now()');
+    expect(content).toContain('visibilitychange');
+    expect(content).toContain('pageshow');
+    // No timer set for the whole idle period
+    expect(content).not.toMatch(/setTimeout\([^)]*IDLE_SIGN_OUT_MS/);
+  });
+
+  it('a tab asked for the key refuses once the browser is idle, and only a real sign-in counts as being here', () => {
     const content = readSrc('contexts/EncryptionContext.tsx');
-    expect(content).toContain('clearTimeout(inactivityTimer)');
-    expect(content).toContain('removeEventListener');
+    expect(content).toContain('!browserIsIdle()');
+    // Taking the key from another tab is installed without marking activity
+    expect(content).toContain('await install(key, false)');
+  });
+
+  it('is not in the encryption context any more, and nothing there locks a hidden tab', () => {
+    const content = readSrc('contexts/EncryptionContext.tsx');
+    expect(content).not.toContain('INACTIVITY_TIMEOUT_MS');
+    expect(content).not.toContain('visibilitychange');
+    expect(content).not.toContain('document.hidden');
   });
 });
 
@@ -45,12 +60,13 @@ describe('EncryptionContext recovery key lifecycle', () => {
     expect(content).toContain('masterKeyRef.current = null');
   });
 
-  it('visibility change locks the context', () => {
+  it('holds nothing of the old stored-key Remember me', () => {
     const content = readSrc('contexts/EncryptionContext.tsx');
-    expect(content).toContain('visibilitychange');
-    expect(content).toContain('document.hidden');
-    expect(content).toContain('lock()');
+    expect(content).not.toMatch(/rememberDevice|unwrapFromDevice|unwrapMasterKeyForDevice|REMEMBER_STORE_KEY/);
+    expect(fs.existsSync(path.resolve(__dirname, '..', 'services/rememberDevice.ts'))).toBe(false);
+    expect(fs.existsSync(path.resolve(__dirname, '..', 'components/organisms/UnlockDialog.tsx'))).toBe(false);
   });
+
 });
 
 // ============================================================================

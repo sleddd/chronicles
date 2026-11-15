@@ -19,7 +19,7 @@ export function firstRun(state: OnboardingState | null, entryCount: number): 'to
   return entryCount > 0 ? 'existing' : 'tour';
 }
 
-export type ChecklistKey = 'name' | 'city' | 'entry' | 'health' | 'voice' | 'recovery';
+export type ChecklistKey = 'name' | 'city' | 'entry' | 'health' | 'voice' | 'passkey' | 'recovery';
 
 export interface ChecklistItem {
   key: ChecklistKey;
@@ -35,6 +35,8 @@ export function gettingStarted(opts: {
   state: OnboardingState;
   /** Voice isn't offered where the browser can't do speech */
   voiceSupported: boolean;
+  /** A passkey isn't offered where the browser can't use one to open the journal */
+  passkeySupported?: boolean;
 }): ChecklistItem[] {
   const ticked = new Set(opts.state.ticked ?? []);
   const items: ChecklistItem[] = [];
@@ -44,6 +46,7 @@ export function gettingStarted(opts: {
   add('entry', 'Write your first entry', 'Pick a topic in Quick entry, write your entry, then press Save entry.');
   add('health', 'Explore your Health dashboard', 'Health is where you set up medications and your exercise routine, log meals and symptoms, and see your reports.');
   if (opts.voiceSupported) add('voice', 'Try a voice command', 'Tap Voice and say “Add task water the plants”.');
+  if (opts.passkeySupported) add('passkey', 'Set up a passkey', 'Settings → Security → Passkeys. Sign in with your fingerprint, face or device PIN, with no password to type.');
   add('recovery', 'Keep your recovery key somewhere safe', 'It was shown when you signed up. Lost it? Make a new one in Settings → Security.');
   return items;
 }

@@ -1,10 +1,8 @@
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
 import { ContentTemplate } from '../templates/ContentTemplate.js';
-import { EmptyState } from '../atoms/EmptyState.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { PlanningTabBar } from '../molecules/PlanningTabBar.js';
-import { UnlockDialog } from './UnlockDialog.js';
 import { useInitializeData } from '../../hooks/useInitializeData.js';
 import { glassControl } from '../../styles/wallpaper.js';
 
@@ -88,11 +86,8 @@ interface PlanningShellProps {
 }
 
 export function PlanningShell({ title = 'Planning', tabs, actions, wide, children }: PlanningShellProps) {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
 
-  if (needsUnlock) {
-    return (<><ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
-  }
   if (isLoading || !isReady) {
     return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
   }

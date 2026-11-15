@@ -11,18 +11,17 @@ import { glassCard, glassPill, onPhoto } from '../styles/wallpaper.js';
 import { cardLabel } from '../styles/cardLabel.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { Checkbox } from '../components/atoms/core/Checkbox.jsx';
 import { Toggle } from '../components/atoms/Toggle.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
 import { VoiceCommand, useVoiceSession } from '../components/organisms/VoiceCommand.js';
 import { OnboardingTour } from '../components/organisms/OnboardingTour.js';
+import { passkeysAvailable } from '../services/passkeys.js';
 import { GettingStarted } from '../components/organisms/GettingStarted.js';
 import { firstRun, gettingStarted, showChecklist, toggleTicked, type OnboardingState, type ChecklistKey } from '../utils/onboarding.js';
 import { usePrivateSettings, type PrivateSettingKey } from '../services/privateSettings.js';
@@ -2340,7 +2339,7 @@ function DropCol({ id, items, children }: { id: 'left' | 'right'; items: Section
 }
 
 export function DashboardView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const ff = useEntriesStore(s => s.featureFlags);
   const quoteEntries = useEntriesStore(s => s.decryptedEntries);
   const quoteTopics = useEntriesStore(s => s.allTopics);
@@ -2486,23 +2485,21 @@ export function DashboardView() {
     return () => ro.disconnect();
   });
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
   if (isLoading || !isReady || !configLoaded) return (
     <ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>
   );
 
   const shown = (k: SectionKey) => !(config.hidden ?? []).includes(k);
   const onboardingState = onboarding ?? {};
-  const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported });
+  // A passkey is offered only where this browser can open the journal with one
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  useEffect(() => { void passkeysAvailable().then(setPasskeySupported); }, []);
+  const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported, passkeySupported });
   const entrySaved = !!entryGuide && quoteEntries.length > entryGuide.baseline;
   const toggleChecklist = (key: ChecklistKey) => markOnboarding({ ticked: toggleTicked(onboardingState, key) });
   const checklistAction = (key: ChecklistKey) => {
-    if (key === 'name') routerNavigate('/settings');
+    // Passkeys are in Settings → Security
+    if (key === 'name' || key === 'passkey') routerNavigate('/settings');
     else if (key === 'city') {
       // Customize view, down to the box where a city is typed
       setCustomizing(true);

@@ -10,7 +10,6 @@ import {
   Page, Inner, Head, Title, CsvLink, PeriodControls, Summary, Figures, Dates, Scroll, Table, Row, Name, Events,
   figure, fmtDay, fmtTime, rangeLabel, saveCsv,
 } from '../components/molecules/HistoryKit.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
@@ -49,7 +48,7 @@ function downloadCsv(rows: ExerciseHistoryRow[], range: { from: string; to: stri
 }
 
 export function ExerciseHistoryView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const openInJournal = useOpenInJournal();
@@ -84,7 +83,6 @@ export function ExerciseHistoryView() {
     newEntry(topic.id);
   };
 
-  if (needsUnlock) return (<><ContentTemplate><EmptyState message="Unlock your journal to see your exercise history" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
   if (isLoading || !isReady) return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
 
   const multiYear = range.from.slice(0, 4) !== range.to.slice(0, 4);

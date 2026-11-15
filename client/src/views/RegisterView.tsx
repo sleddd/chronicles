@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -6,6 +6,8 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
 import { RegisterForm } from '../components/organisms/RegisterForm.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
+import { PasskeyOffer } from '../components/organisms/PasskeyOffer.js';
+import { passkeysAvailable } from '../services/passkeys.js';
 import { ConsentCard, EMPTY_CONSENT, consentComplete, type ConsentValue } from '../components/molecules/ConsentCard.js';
 import { useConsentStore } from '../stores/consentStore.js';
 import { deriveAuthSecret, newRecoveryProof, LEGAL_VERSIONS } from '@chronicles/shared';
@@ -18,6 +20,15 @@ export function RegisterView() {
   const { register } = useAuth();
   const { setupEncryption } = useEncryption();
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  // After the recovery key, where the browser can do it: the passkey step. The
+  // password just chosen confirms it, so it is kept for that step only — in a
+  // ref (no copies in render history), dropped the moment the step is over
+  const [passkeyStep, setPasskeyStep] = useState<{ email: string } | null>(null);
+  const [canPasskey, setCanPasskey] = useState(false);
+  const passwordRef = useRef('');
+  const emailRef = useRef('');
+  useEffect(() => { void passkeysAvailable().then(setCanPasskey); }, []);
+  useEffect(() => () => { passwordRef.current = ''; }, []);
   const [consent, setConsent] = useState<ConsentValue>(EMPTY_CONSENT);
   const agree = useConsentStore(s => s.agree);
   // The sign-up link from a beta approval carries the email and its invite code
@@ -52,7 +63,7 @@ export function RegisterView() {
   const freshSignIn = useFreshSignIn();
   const handleRegister = async ({ email, username, password }: { email: string; username: string; password: string }) => {
     // Nothing of whoever used this browser last may carry over into the new account
-    await freshSignIn();
+    await freshSignIn(email);
     // Setup encryption — generates master key, wraps with password + recovery key
     const result = await setupEncryption(password);
 
@@ -87,14 +98,32 @@ export function RegisterView() {
     }).catch(() => { /* asked again at the gate */ });
 
     // Show recovery key — user must save it
+    passwordRef.current = password;
+    emailRef.current = email;
     setRecoveryKey(result.recoveryKey);
   };
 
-  const handleConfirm = useCallback(() => {
-    // Clear recovery key from memory before navigating
-    setRecoveryKey(null);
+  const finish = useCallback(() => {
+    passwordRef.current = '';
+    setPasskeyStep(null);
     navigate('/dashboard');
   }, [navigate]);
+
+  const handleConfirm = useCallback(() => {
+    // Clear recovery key from memory before moving on
+    setRecoveryKey(null);
+    // Then the passkey step, where this browser can use one
+    if (canPasskey && passwordRef.current) setPasskeyStep({ email: emailRef.current });
+    else finish();
+  }, [canPasskey, finish]);
+
+  if (passkeyStep) {
+    return (
+      <AuthTemplate title="Sign In With One Touch">
+        <PasskeyOffer email={passkeyStep.email} password={() => passwordRef.current} onDone={finish} />
+      </AuthTemplate>
+    );
+  }
 
   if (recoveryKey) {
     return (

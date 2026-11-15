@@ -9,7 +9,6 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { RecipeAutocomplete } from '../components/molecules/RecipeAutocomplete.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
@@ -474,7 +473,7 @@ export function MenuView() {
     remember(FOLDED_SLOTS_KEY, JSON.stringify(next));
     return next;
   });
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries              = useEntriesStore(s => s.decryptedEntries);
   const allTopics            = useEntriesStore(s => s.allTopics);
   const addDecryptedEntry    = useEntriesStore(s => s.addDecryptedEntry);
@@ -809,14 +808,6 @@ export function MenuView() {
 
   /* ── Guards ── */
 
-  if (needsUnlock) {
-    return (
-      <>
-        <ContentTemplate><EmptyState message="Unlock your journal to view your menu" /></ContentTemplate>
-        <UnlockDialog onUnlock={handleUnlock} />
-      </>
-    );
-  }
 
   if (isLoading || !isReady) {
     return (

@@ -2,10 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
 import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
@@ -366,19 +364,13 @@ function ShoppingChecklist({ list }: { list: ReturnType<typeof useOpenShoppingLi
  * latest unfinished shopping list as a checklist you can tick off and add to.
  */
 export function KitchenDashboardView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const navigate = useNavigate();
   // Cards are titled by what they show: "Today" (or the next planned day) and the list's own name
   const meals = useUpcomingMeals();
   const shopping = useOpenShoppingList();
   const openInJournal = useOpenInJournal();
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

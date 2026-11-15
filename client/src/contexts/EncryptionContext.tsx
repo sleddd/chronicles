@@ -15,14 +15,16 @@ import { clearSealMarkers, clearIssuedTopicIds } from '../services/api.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { forgetPlannerKeyword, forgetPlanningTypeFilter } from '../types/planner.js';
 import { useTimeStore } from '../stores/timeStore.js';
-import { onRemoteReset } from '../services/signOutBroadcast.js';
+import { announceLocalReset, onRemoteReset } from '../services/signOutBroadcast.js';
+import { claimBrowserFor } from '../services/browserData.js';
+import { holdKey, keyHolderExists, requestKey } from '../services/keyHandoff.js';
+import { browserIsIdle, markActivity } from '../services/activity.js';
+import type { ConfirmAction } from '../services/api.js';
+import { auth as authApi, type PasskeyWrap } from '../services/api.js';
+import { deriveAuthSecret } from '@shared/crypto/authSecret.js';
+import { useOptionalAuth } from './AuthContext.js';
 import { cancelCalendarSync } from '../services/calendarSync.js';
 import { clearEncryptedSettings } from '../hooks/useEncryptedSetting.js';
-import {
-  REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
-  hasRememberedUnlock, lastActivity, markActivity, onRememberLost, startRemembering, storeRemembered,
-} from '../services/rememberDevice.js';
-
 export interface EncryptionParams {
   kekSalt: string;
   encryptedMasterKey: string;
@@ -30,16 +32,29 @@ export interface EncryptionParams {
   kekIterations: number;
 }
 
+/**
+ * Where an extractable copy of the master key comes from when another wrap of
+ * it has to be made (a new password, a recovery key, a passkey): the typed
+ * password and its wrap, or a passkey touch and that passkey's wrap.
+ */
+export type KeySource =
+  // `confirmToken`: the server checked the password (and the 2FA code) when it
+  // handed over the wrap, and this single-use token confirms the action it was for
+  | { kind: 'password'; password: string; params: EncryptionParams; confirmToken?: string }
+  | { kind: 'passkey'; prf: Uint8Array; wrap: PasskeyWrap };
+
 interface EncryptionContextValue {
+  /** This tab holds the master key. Signed in and unlocked are one state: there is no lock screen. */
   isUnlocked: boolean;
-  /** True while a remembered unlock is being restored on page load (don't prompt for the password yet). */
+  /** True on page load until it's known whether another tab can hand this one the key. */
   isRestoring: boolean;
-  /** This browser is remembered — stays unlocked across reloads and tabs until it closes. */
-  isRemembered: boolean;
-  unlock: (password: string, kekSalt: string, encryptedMasterKey: string, kekWrapIv: string, kekIterations: number, remember?: boolean) => Promise<void>;
-  lock: () => void;
-  /** Stop remembering this browser but stay unlocked in this tab. */
-  forgetBrowser: () => void;
+  unlock: (password: string, kekSalt: string, encryptedMasterKey: string, kekWrapIv: string, kekIterations: number) => Promise<void>;
+  /** Open the key with a passkey's secret and its wrap (sign-in by passkey). */
+  unlockWithPasskey: (prf: Uint8Array, wrap: PasskeyWrap) => Promise<void>;
+  /** Drop the key and every decrypted thing this tab holds. Always part of ending the session — never a state of its own. */
+  clearKey: () => void;
+  /** A sign-in is starting here: other tabs must not take the browser's session for nobody's (services/keyHandoff.ts). */
+  claimKeyHolder: () => void;
   setupEncryption: (password: string) => Promise<SetupEncryptionResult>;
   /** Encrypt an existing entry, bound to its id */
   encryptPost: (id: number, content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
@@ -53,11 +68,20 @@ interface EncryptionContextValue {
   /** Encrypt one Finance record (AAD bound to kind + id). */
   encryptRecord: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
   decryptRecord: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
-  rewrapMasterKey: (newPassword: string, currentPassword?: string, params?: EncryptionParams) => Promise<{ salt: string; wrappedMK: string; wrapIv: string }>;
-  /** The server took the new wrap from `rewrapMasterKey`: it is now the one this session unwraps. */
-  adoptKeyWrap: (wrap: { salt: string; wrappedMK: string; wrapIv: string }) => void;
-  /** Generate a new recovery key wrapping using the current password to re-derive the extractable master key. */
-  generateRecoveryKey: (currentPassword: string, externalParams?: EncryptionParams) => Promise<{ recoveryKey: string; recoveryWrappedMK: string; recoveryWrapIv: string }>;
+  /**
+   * The typed password as a key source. A tab never keeps the password wrap, so
+   * it is fetched here against the password and — with 2FA on — a code, for one
+   * named action; the source carries the single-use token that confirms it.
+   */
+  passwordSource: (password: string, email: string, action: ConfirmAction, code?: string) => Promise<KeySource & { kind: 'password'; confirmToken: string }>;
+  /** Does this source open the key? Throws when it doesn't (a wrong password) — checked before anything is made with it. */
+  verifyKeySource: (source: KeySource) => Promise<void>;
+  /** A new password wrap of the master key. */
+  rewrapWith: (source: KeySource, newPassword: string) => Promise<{ salt: string; wrappedMK: string; wrapIv: string }>;
+  /** A new recovery key and its wrap of the master key. */
+  recoveryKeyWith: (source: KeySource) => Promise<{ recoveryKey: string; recoveryWrappedMK: string; recoveryWrapIv: string }>;
+  /** The master key wrapped for a new passkey, under that passkey's secret. */
+  passkeyWrapWith: (source: KeySource, newPrf: Uint8Array, newCredentialId: string) => Promise<{ wrappedMK: string; wrapIv: string }>;
   /** Atomic recovery: unwrap with recovery key + rewrap with new password + generate new recovery key in one step. */
   recoverAndRewrap: (recoveryKey: string, recoveryWrappedMK: string, recoveryWrapIv: string, newPassword: string) => Promise<{
     salt: string; wrappedMK: string; wrapIv: string;
@@ -68,28 +92,50 @@ interface EncryptionContextValue {
 const EncryptionContext = createContext<EncryptionContextValue | null>(null);
 
 export function EncryptionProvider({ children }: { children: ReactNode }) {
+  const auth = useOptionalAuth();
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(() => hasRememberedUnlock());
-  const [isRemembered, setIsRemembered] = useState(false);
-  const rememberedRef = useRef(false);
+  // Until it's known whether another tab can hand this one the key (below)
+  const [isRestoring, setIsRestoring] = useState(() => auth !== null);
   // CryptoKey stored in ref — non-extractable, lives only in memory
   const masterKeyRef = useRef<CryptoKey | null>(null);
-  // Stored encryption params for re-derivation during password change
-  const encryptionParamsRef = useRef<EncryptionParams | null>(null);
-  /** Install an unlocked master key and restore the in-memory secrets that depend on it. */
-  const install = useCallback(async (key: CryptoKey) => {
+  // Whose key this is, for the tabs that ask for it
+  const emailRef = useRef<string | null>(null);
+  emailRef.current = auth?.user?.email ?? null;
+  // While this tab holds the key (or is signing in), other tabs can see that and ask for it
+  const releaseHolderRef = useRef<(() => void) | null>(null);
+  const claimKeyHolder = useCallback(() => {
+    releaseHolderRef.current ??= holdKey(() => (
+      // Not once nobody has been here for too long: this tab is about to sign
+      // out, and must not let a new tab in with no password or touch
+      masterKeyRef.current && emailRef.current && !browserIsIdle() ? { key: masterKeyRef.current, email: emailRef.current } : null
+    ));
+  }, []);
+
+  /**
+   * Install an opened master key and restore the in-memory secrets that depend
+   * on it. `signedIn`: someone just proved who they are (a password, a passkey,
+   * a recovery key), which is them being here — taking the key from another tab
+   * is not, and must not reset the idle clock.
+   */
+  const install = useCallback(async (key: CryptoKey, signedIn = true) => {
+    if (signedIn) markActivity();
     // Before anything reads the off-device switches (the startup settings load
     // once isUnlocked flips): their records are kept under this tag
-    setEgressAccount(await encryptionService.accountTag(key, 'egress'));
+    const tag = await encryptionService.accountTag(key, 'egress');
+    // What this browser has stored is kept for the same person and wiped for
+    // anyone else — decided by the key, before any of it is read
+    if (await claimBrowserFor(tag)) announceLocalReset();
+    setEgressAccount(tag);
     masterKeyRef.current = key;
-    // Restore the in-memory R2 credentials (cleared on lock) from their
-    // master-key-encrypted blob so image display/cleanup keeps working
+    claimKeyHolder();
+    // Restore the in-memory R2 credentials from their master-key-encrypted
+    // blob so image display/cleanup keeps working
     void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
     void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
     // Topic names and dose records are sealed by the API layer itself
     installRecordCipher(encryptionService, key);
     setIsUnlocked(true);
-  }, []);
+  }, [claimKeyHolder]);
 
   const unlock = useCallback(async (
     password: string,
@@ -97,47 +143,26 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     encryptedMasterKey: string,
     kekWrapIv: string,
     kekIterations: number,
-    remember = false,
   ) => {
     // Reject iterations below the security minimum to prevent downgrade attacks
     if (kekIterations < PBKDF2_ITERATIONS) {
       throw new Error(`PBKDF2 iterations ${kekIterations} below minimum ${PBKDF2_ITERATIONS}`);
     }
-    let key: CryptoKey | null = null;
-    if (remember) {
-      // Opt-in: also keep a wrapped copy this browser can reopen until it closes.
-      // If the server can't start a grant, fall back to a normal unlock.
-      let grant: Awaited<ReturnType<typeof startRemembering>> | null = null;
-      try { grant = await startRemembering(); } catch (err) { console.warn('Remember me unavailable:', err); }
-      if (grant) {
-        try {
-          const r = await encryptionService.unwrapMasterKeyForDevice(
-            password, kekSalt, encryptedMasterKey, kekWrapIv, kekIterations, grant.secret,
-          );
-          storeRemembered(r.deviceWrapped, r.deviceIv, grant.expiresAt);
-          key = r.masterKey;
-        } finally {
-          grant.secret.fill(0);
-        }
-      }
-    }
-    if (!key) {
-      // Not remembering — make sure no earlier remembered copy lingers
-      forgetRemembered();
-      key = await encryptionService.unwrapMasterKey(password, kekSalt, encryptedMasterKey, kekWrapIv, kekIterations);
-    }
-    rememberedRef.current = remember && hasRememberedUnlock();
-    setIsRemembered(rememberedRef.current);
-    encryptionParamsRef.current = { kekSalt, encryptedMasterKey, kekWrapIv, kekIterations };
+    // The wrap is used and let go: this tab keeps the key, never what wraps it
+    const key = await encryptionService.unwrapMasterKey(password, kekSalt, encryptedMasterKey, kekWrapIv, kekIterations);
+    await install(key);
+  }, [install]);
+
+  const unlockWithPasskey = useCallback(async (prf: Uint8Array, wrap: PasskeyWrap) => {
+    const key = await encryptionService.unwrapWithPasskey(prf, wrap.wrappedMK, wrap.wrapIv, wrap.credentialId);
     await install(key);
   }, [install]);
 
   /** Clear all in-memory key material and decrypted secrets (this tab only). */
-  const lockLocal = useCallback(() => {
+  const clearKey = useCallback(() => {
     masterKeyRef.current = null;
-    encryptionParamsRef.current = null;
-    rememberedRef.current = false;
-    setIsRemembered(false);
+    releaseHolderRef.current?.();
+    releaseHolderRef.current = null;
     // Revoke decrypted image object URLs — they hold plaintext image bytes
     clearImageCache();
     // Drop the decrypted AI provider credentials too
@@ -152,7 +177,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // would read every event as deleted here), nor keep its Google token
     cancelCalendarSync();
     // And every decrypted entry, topic and private setting held in the stores:
-    // after an auto-lock nothing readable stays in memory; unlocking reloads
+    // nothing readable stays in memory once the session ends
     useEntriesStore.getState().clearAll();
     useUIStore.getState().clearPrivateState();
     clearReservedEntryIds();
@@ -160,7 +185,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearSealMarkers();
     // Entry list titles are cached keyed by the decrypted entry HTML
     clearEntryTitleCache();
-    // Time-tracking sessions (which entries, when) — TimeSync reopens them on unlock
+    // Time-tracking sessions (which entries, when) — TimeSync reopens them at the next sign-in
     useTimeStore.getState().reset();
     // Words typed into the planner's search, and the name of a task type
     // picked as a filter, wait in sessionStorage: they're from decrypted data
@@ -169,18 +194,6 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     setEgressAccount(null);
     setIsUnlocked(false);
   }, []);
-
-  const forgetBrowser = useCallback(() => {
-    forgetRemembered();
-    rememberedRef.current = false;
-    setIsRemembered(false);
-  }, []);
-
-  /** Lock everywhere: this tab, the remembered copy, and (via storage events) other tabs. */
-  const lock = useCallback(() => {
-    forgetRemembered();
-    lockLocal();
-  }, [lockLocal]);
 
   const setupEncryption = useCallback(async (password: string): Promise<SetupEncryptionResult> => {
     const result = await encryptionService.setupEncryption(password);
@@ -242,50 +255,37 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     return encryptionService.decryptRecord<T>(getKey(), kind, id, payload, iv);
   }, []) as EncryptionContextValue['decryptRecord'];
 
-  const rewrapMasterKey = useCallback(async (newPassword: string, currentPassword?: string, externalParams?: EncryptionParams) => {
-    const storedParams = encryptionParamsRef.current || externalParams;
-    if (currentPassword && storedParams) {
-      // Change-password flow: re-derive extractable key from stored params
-      const params = storedParams;
-      const result = await encryptionService.rewrapFromParams(
-        currentPassword,
-        params.kekSalt,
-        params.encryptedMasterKey,
-        params.kekWrapIv,
-        params.kekIterations,
-        newPassword
-      );
-      // Not kept yet: the server may still refuse the change (a wrong 2FA
-      // code, a 429), and a wrap it never stored would then be what the next
-      // try — and a new recovery key — unwraps. The caller hands it back with
-      // `adoptKeyWrap` once the server has taken it
-      return result;
-    }
-    // Recovery has its own path (recoverAndRewrap), which never keeps an
-    // extractable copy of the master key around
-    throw new Error('Enter your current password to change it');
+  const passwordSource = useCallback(async (password: string, email: string, action: ConfirmAction, code?: string) => {
+    // Always from the server, against the password and (with 2FA on) a code:
+    // a wrap kept in the tab would go stale the moment the password is changed
+    // in another tab, and it is one more thing in memory that opens the journal
+    const { confirmToken, encryption: e } = await authApi.passwordWrap({
+      currentAuthSecret: await deriveAuthSecret(password, email), action, ...(code?.trim() ? { code: code.trim() } : {}),
+    });
+    if (!e.kekSalt || !e.encryptedMasterKey || !e.kekWrapIv) throw new Error('No encryption params available. Sign in again.');
+    const params = { kekSalt: e.kekSalt, encryptedMasterKey: e.encryptedMasterKey, kekWrapIv: e.kekWrapIv, kekIterations: e.kekIterations };
+    return { kind: 'password' as const, password, params, confirmToken };
   }, []);
 
-  const adoptKeyWrap = useCallback((wrap: { salt: string; wrappedMK: string; wrapIv: string }) => {
-    encryptionParamsRef.current = {
-      kekSalt: wrap.salt,
-      encryptedMasterKey: wrap.wrappedMK,
-      kekWrapIv: wrap.wrapIv,
-      // A new wrap is always made at the current count, whatever the old one used
-      kekIterations: PBKDF2_ITERATIONS,
-    };
+  // The extractable copy exists only inside these calls: made, wrapped, let go
+  const extractable = (source: KeySource): Promise<CryptoKey> => source.kind === 'password'
+    ? encryptionService.extractableFromPassword(source.password, source.params.kekSalt, source.params.encryptedMasterKey, source.params.kekWrapIv, source.params.kekIterations)
+    : encryptionService.extractableFromPasskey(source.prf, source.wrap.wrappedMK, source.wrap.wrapIv, source.wrap.credentialId);
+
+  const verifyKeySource = useCallback(async (source: KeySource) => {
+    try { await extractable(source); } catch { throw new Error(source.kind === 'password' ? 'Current password incorrect' : 'That passkey didn’t open your journal'); }
   }, []);
 
-  const generateRecoveryKey = useCallback(async (currentPassword: string, externalParams?: EncryptionParams) => {
-    const params = encryptionParamsRef.current ?? externalParams;
-    if (!params) throw new Error('No encryption params available — please re-login');
-    return encryptionService.generateRecoveryKeyFromParams(
-      currentPassword,
-      params.kekSalt,
-      params.encryptedMasterKey,
-      params.kekWrapIv,
-      params.kekIterations
-    );
+  const rewrapWith = useCallback(async (source: KeySource, newPassword: string) => {
+    return encryptionService.rewrapMasterKey(await extractable(source), newPassword);
+  }, []);
+
+  const recoveryKeyWith = useCallback(async (source: KeySource) => {
+    return encryptionService.generateNewRecoveryWrapping(await extractable(source));
+  }, []);
+
+  const passkeyWrapWith = useCallback(async (source: KeySource, newPrf: Uint8Array, newCredentialId: string) => {
+    return encryptionService.wrapForPasskey(await extractable(source), newPrf, newCredentialId);
   }, []);
 
   const recoverAndRewrap = useCallback(async (
@@ -300,12 +300,6 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const rewrapped = await encryptionService.rewrapMasterKey(extractableKey, newPassword);
     // Generate a fresh recovery key for the new session
     const recovery = await encryptionService.generateNewRecoveryWrapping(extractableKey);
-    encryptionParamsRef.current = {
-      kekSalt: rewrapped.salt,
-      encryptedMasterKey: rewrapped.wrappedMK,
-      kekWrapIv: rewrapped.wrapIv,
-      kekIterations: PBKDF2_ITERATIONS,
-    };
     // A non-extractable copy for this session, installed like an unlock (the
     // record cipher seals topics and doses; R2 / AI credentials reopen)
     await install(await toNonExtractable(extractableKey));
@@ -317,116 +311,49 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     };
   }, [install]);
 
-  // Clear all key material on unmount
+  // Page load with a session but no key (a new tab, a reload). The key is only
+  // ever in a tab's memory, so: take it from a tab that has it — or, with no
+  // such tab, the session is nobody's any more and it ends here, on to sign-in
+  const askedRef = useRef(false);
+  const authLoading = auth?.isLoading ?? false;
   useEffect(() => {
-    return () => {
-      masterKeyRef.current = null;
-      };
-  }, []);
-
-  // Restore a remembered unlock on page load (new tab, reload, navigating back)
-  useEffect(() => {
-    if (!isRestoring) return;
-    let cancelled = false;
-    (async () => {
-      const got = await fetchRemembered();
-      if (cancelled) return;
-      if (typeof got === 'object') {
-        try {
-          const key = await encryptionService.unwrapFromDevice(got.secret, got.blob.wrapped, got.blob.iv);
-          if (!cancelled) {
-            rememberedRef.current = true;
-            setIsRemembered(true);
-            markActivity();
-            await install(key);
-          }
-        } catch {
-          // Blob doesn't open with this secret (tampered or stale) — forget it
-          forgetRemembered();
-        } finally {
-          got.secret.fill(0);
-        }
+    if (!auth) { setIsRestoring(false); return; }
+    if (authLoading || askedRef.current) return;
+    askedRef.current = true;
+    const email = auth.user?.email;
+    if (!email || masterKeyRef.current) { setIsRestoring(false); return; }
+    void (async () => {
+      const holder = await keyHolderExists();
+      const key = holder === false ? null : await requestKey(email);
+      // A sign-in may have finished here meanwhile
+      if (!masterKeyRef.current) {
+        if (key) await install(key, false);
+        // No tab holds the key: end the session on the server too (the cache stays)
+        else if (holder === false) await auth.endSession();
+        // A tab holds it but couldn't hand it over (or this browser can't say):
+        // sign in here. The browser's session is left alone — that tab is using it
+        else auth.dropUser();
       }
-      if (!cancelled) setIsRestoring(false);
+      setIsRestoring(false);
     })();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Another tab locked or signed out (the remembered copy vanished) — lock here too
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      const cleared = e.key === null || (e.key === REMEMBER_STORE_KEY && e.newValue === null);
-      if (cleared && rememberedRef.current && masterKeyRef.current) lockLocal();
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [lockLocal]);
+  // Another tab wiped this browser (Sign out, a different person signing in):
+  // drop the key here too — a second window must never keep the last person's
+  // journal open
+  useEffect(() => onRemoteReset(() => { if (masterKeyRef.current) clearKey(); }, () => emailRef.current), [clearKey]);
 
-  // The server ended this browser's remembered unlock (idle there, or the
-  // session was revoked from another device): this tab locks too
-  useEffect(() => onRememberLost(() => { if (rememberedRef.current && masterKeyRef.current) lockLocal(); }), [lockLocal]);
-
-  // Another tab signed out or is starting a fresh sign-in: drop the key here
-  // too, remembered or not — a second window must never keep the last
-  // person's journal open
-  useEffect(() => onRemoteReset(() => { if (masterKeyRef.current) lockLocal(); }), [lockLocal]);
-
-  // Auto-lock when tab becomes hidden (user switches away) — unless this
-  // browser is remembered, which is the point of Remember me
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && masterKeyRef.current && !rememberedRef.current) {
-        lock();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [lock]);
-
-  // Inactivity timeout. Normal sessions: 15 minutes without interaction in this
-  // tab. Remembered sessions: an hour without activity in ANY Chronicles tab
-  // (shared timestamp), which also ends the remembered copy.
-  useEffect(() => {
-    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
-    let inactivityTimer: ReturnType<typeof setTimeout>;
-    let lastMark = 0;
-
-    const resetTimer = () => {
-      clearTimeout(inactivityTimer);
-      if (!masterKeyRef.current) return;
-      if (rememberedRef.current) {
-        const now = Date.now();
-        if (now - lastMark > 15_000) { lastMark = now; markActivity(now); }
-        return;
-      }
-      inactivityTimer = setTimeout(() => {
-        if (masterKeyRef.current) lock();
-      }, INACTIVITY_TIMEOUT_MS);
-    };
-
-    const idleCheck = setInterval(() => {
-      if (masterKeyRef.current && rememberedRef.current && Date.now() - lastActivity() > REMEMBER_IDLE_MS) lock();
-    }, 60_000);
-
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach(event => document.addEventListener(event, resetTimer));
-    resetTimer();
-
-    return () => {
-      events.forEach(event => document.removeEventListener(event, resetTimer));
-      clearTimeout(inactivityTimer);
-      clearInterval(idleCheck);
-    };
-  }, [lock, isUnlocked, isRemembered]);
+  // The tab is going away for good: let the holder lock go at once
+  useEffect(() => () => { releaseHolderRef.current?.(); masterKeyRef.current = null; }, []);
 
   return (
     <EncryptionContext.Provider value={{
       isUnlocked,
       isRestoring,
-      isRemembered,
       unlock,
-      lock,
-      forgetBrowser,
+      unlockWithPasskey,
+      clearKey,
+      claimKeyHolder,
       setupEncryption,
       encryptPost,
       encryptNewPost,
@@ -436,9 +363,11 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       decryptBytes,
       encryptRecord,
       decryptRecord,
-      rewrapMasterKey,
-      adoptKeyWrap,
-      generateRecoveryKey,
+      passwordSource,
+      verifyKeySource,
+      rewrapWith,
+      recoveryKeyWith,
+      passkeyWrapWith,
       recoverAndRewrap,
     }}>
       {children}

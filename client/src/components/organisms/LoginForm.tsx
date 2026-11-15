@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
-import { RememberMe } from '../molecules/RememberMe.js';
 import { authFields } from '../atoms/AuthForm.js';
 
 const Form = styled.form`
@@ -60,25 +59,50 @@ const ErrorBanner = styled.div`
   font-size: 13px;
 `;
 
+const Or = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-tertiary);
+  &::before, &::after { content: ''; flex: 1; height: 1px; background: var(--border-default); }
+`;
+
 interface LoginFormProps {
-  onSubmit: (email: string, password: string, remember: boolean) => Promise<void>;
+  onSubmit: (email: string, password: string) => Promise<void>;
   onForgotPassword?: () => void;
+  /** Sign in with a passkey: shown when given (the browser can do it). Rejects with a message to show, or resolves. */
+  onPasskey?: () => Promise<void>;
 }
 
-export function LoginForm({ onSubmit, onForgotPassword }: LoginFormProps) {
+export function LoginForm({ onSubmit, onForgotPassword, onPasskey }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [remember, setRemember] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  const handlePasskey = async () => {
+    if (!onPasskey) return;
+    setError('');
+    setPasskeyBusy(true);
+    try {
+      await onPasskey();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That passkey didn’t work');
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await onSubmit(email, password, remember);
+      await onSubmit(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -123,11 +147,18 @@ export function LoginForm({ onSubmit, onForgotPassword }: LoginFormProps) {
         </InputWrap>
       </Field>
 
-      <RememberMe checked={remember} onChange={setRemember} />
-
-      <Button type="submit" fullWidth disabled={loading} variant="secondary">
+      <Button type="submit" fullWidth disabled={loading || passkeyBusy} variant="secondary">
         {loading ? <Spinner size={18} /> : 'Sign in'}
       </Button>
+
+      {onPasskey && (
+        <>
+          <Or>or</Or>
+          <Button type="button" fullWidth variant="secondary" disabled={passkeyBusy || loading} onClick={handlePasskey}>
+            {passkeyBusy ? <Spinner size={18} /> : 'Sign in with a passkey'}
+          </Button>
+        </>
+      )}
 
       {onForgotPassword && (
         <Button type="button" variant="ghost" onClick={onForgotPassword}>

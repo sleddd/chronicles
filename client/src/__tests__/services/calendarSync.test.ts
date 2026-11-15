@@ -405,14 +405,14 @@ describe('calendarSync pull', () => {
     expect(entriesApi.update).not.toHaveBeenCalled();
   });
 
-  it('pauses quietly when the journal locks mid-run', async () => {
+  it('pauses quietly when the key leaves the tab mid-run', async () => {
     setupStores([makeEntry(10, { ...eventFields })]);
     stubGoogleFetch([], { id: 'g-10' });
     deps.encryptPost.mockRejectedValueOnce(new Error('Encryption not unlocked'));
 
     await runCalendarSync(deps);
 
-    expect(getCalendarSyncUiState().lastError).toContain('unlock your journal');
+    expect(getCalendarSyncUiState().lastError).toContain('Sign in again');
   });
 
   it('never imports past events, even in "all" mode', async () => {
@@ -471,7 +471,7 @@ describe('calendarSync pull', () => {
       const method = init?.method || 'GET';
       fetchCalls.push({ url: String(url), method });
       if (String(url).includes('/events?')) {
-        // The journal locks while the listing is on its way (a tab switch does it)
+        // The session ends while the listing is on its way (15 minutes away does it)
         useEntriesStore.getState().clearAll();
         useUIStore.getState().clearPrivateState();
         return new Response(JSON.stringify({
@@ -487,7 +487,7 @@ describe('calendarSync pull', () => {
     expect(fetchCalls.filter(c => c.method === 'DELETE')).toHaveLength(0);
     expect(entriesApi.delete).not.toHaveBeenCalled();
     expect(settingsApi.upsert).not.toHaveBeenCalled(); // the sync token doesn't move on either
-    expect(getCalendarSyncUiState().lastError).toMatch(/unlock your journal/);
+    expect(getCalendarSyncUiState().lastError).toMatch(/Sign in again/);
   });
 
   it('"they stay in Google Calendar": the deletion tracker cannot queue them, and a Chronicles-made one loses its mark there', async () => {

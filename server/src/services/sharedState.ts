@@ -39,6 +39,8 @@ export interface SharedState {
   /** The token's account, if it exists and hasn't expired. */
   getToken(bucket: string, token: string): Promise<number | null>;
   deleteToken(bucket: string, token: string): Promise<void>;
+  /** Spend a token: its account if it existed and hadn't expired, and it is gone — only one caller gets it. */
+  takeToken(bucket: string, token: string): Promise<number | null>;
   deleteTokensForAccount(bucket: string, accountId: number): Promise<void>;
   /** Raise a stored number if `value` is higher; true if it was (first use of a TOTP step). */
   advance(bucket: string, key: string, value: number, ttlMs: number): Promise<boolean>;
@@ -86,6 +88,11 @@ export function memoryState(): SharedState & { reset(): void } {
     async putToken(bucket, token, accountId, ttlMs) { rows.set(k(bucket, tokenKey(token)), { count: 0, accountId, expiresAt: Date.now() + ttlMs }); },
     async getToken(bucket, token) { return live(bucket, tokenKey(token))?.accountId ?? null; },
     async deleteToken(bucket, token) { rows.delete(k(bucket, tokenKey(token))); },
+    async takeToken(bucket, token) {
+      const id = live(bucket, tokenKey(token))?.accountId ?? null;
+      rows.delete(k(bucket, tokenKey(token)));
+      return id;
+    },
     async deleteTokensForAccount(bucket, accountId) {
       for (const [key, r] of rows) if (key.startsWith(`${bucket}\u0000`) && r.accountId === accountId) rows.delete(key);
     },
@@ -172,6 +179,12 @@ export function postgresState(): SharedState {
     },
     async deleteToken(bucket, token) {
       await (await db()).$executeRawUnsafe(`DELETE FROM public.auth_state WHERE bucket = $1 AND key = $2`, bucket, tokenKey(token));
+    },
+    async takeToken(bucket, token) {
+      const rows = await (await db()).$queryRawUnsafe<{ account_id: number }[]>(
+        `DELETE FROM public.auth_state WHERE bucket = $1 AND key = $2 AND expires_at > now() RETURNING account_id`, bucket, tokenKey(token)
+      );
+      return rows[0]?.account_id ?? null;
     },
     async deleteTokensForAccount(bucket, accountId) {
       await (await db()).$executeRawUnsafe(`DELETE FROM public.auth_state WHERE bucket = $1 AND account_id = $2`, bucket, accountId);

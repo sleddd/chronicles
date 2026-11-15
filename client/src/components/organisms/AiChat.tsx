@@ -1,3 +1,4 @@
+import { useEndSession } from '../../hooks/useSignOut.js';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -363,7 +364,9 @@ export function AiChat() {
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
-  const { encryptNewPost, lock } = useEncryption();
+  const { encryptNewPost } = useEncryption();
+  // The under-18 stop ends the session: whoever owns the account signs in again to a fresh chat
+  const endSession = useEndSession();
   const saveCommand = useSaveCommand();
   const openInJournal = useOpenInJournal();
   const navigate = useNavigate();
@@ -760,8 +763,8 @@ export function AiChat() {
           {/* While paused, the message bar holds Keep talking — always in view, never scrolled away */}
           {minorLocked ? (
             <Composer>
-              <PausedNote>This chat is for adults. The account owner can resume it with their password.</PausedNote>
-              <PillButton type="button" onClick={lock}>Lock Chronicles</PillButton>
+              <PausedNote>This chat is for adults. The account owner can resume it by signing in again.</PausedNote>
+              <PillButton type="button" onClick={() => { void endSession('Signed out. Sign in again to carry on.'); }}>Sign out</PillButton>
             </Composer>
           ) : paused ? (
             <Composer>

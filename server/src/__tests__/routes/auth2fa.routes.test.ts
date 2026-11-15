@@ -22,6 +22,18 @@ vi.mock('../../db/prisma.js', () => ({
   },
 }));
 
+// Plain functions, not vi.fn: a test's resetAllMocks must not leave them returning undefined
+vi.mock('../../db/trustedDeviceQueries.js', () => ({
+  TRUST_DAYS: 30,
+  trustDevice: async () => 't'.repeat(43),
+  useTrustedDevice: async () => false,
+  forgetTrustToken: async () => undefined,
+  forgetAllTrustedDevices: async () => undefined,
+  listTrustedDevices: async () => [],
+  forgetTrustedDevice: async () => true,
+}));
+vi.mock('../../db/passkeyQueries.js', () => ({ removeAllPasskeys: async () => 0 }));
+
 vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAccountById: vi.fn() }));
 vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn().mockResolvedValue(true) }));
 

@@ -1,0 +1,82 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key handoff check</title>
+<body style="font: 16px/1.5 system-ui; max-width: 40rem; margin: 3rem auto; padding: 0 1rem">
+<h1 style="font-weight: 300">Key handoff check</h1>
+<p id="role"></p>
+<pre id="out" style="white-space: pre-wrap"></pre>
+<p>You can close this tab once it says done.</p>
+<script>
+// Can one tab hand another a NON-EXTRACTABLE CryptoKey over BroadcastChannel, and
+// can the second tab see through Web Locks that a holder exists? The same protocol
+// as client/src/services/keyHandoff.ts. Open ?role=holder in one tab, then
+// ?role=asker in another tab of the same browser.
+const role = new URLSearchParams(location.search).get('role') || 'holder';
+const LOCK = 'chronicles-key', CHANNEL = 'chronicles-key', TEXT = 'the same key opened this';
+const out = document.getElementById('out');
+document.getElementById('role').textContent = 'Role: ' + role;
+const say = line => { out.textContent += line + '\n'; };
+const report = result => fetch('/result', { method: 'POST', body: JSON.stringify({ role, ua: navigator.userAgent, ...result }) }).catch(() => {});
+
+(async () => {
+  const result = { webLocks: !!(navigator.locks && navigator.locks.query), broadcastChannel: typeof BroadcastChannel !== 'undefined', subtle: !!(crypto && crypto.subtle) };
+  try {
+    if (role === 'holder') {
+      const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(TEXT)));
+      localStorage.setItem('handoff-check', JSON.stringify({ iv: Array.from(iv), ct: Array.from(ct) }));
+      if (result.webLocks) navigator.locks.request(LOCK, { mode: 'shared' }, () => new Promise(() => {}));
+      const ch = new BroadcastChannel(CHANNEL);
+      ch.onmessage = e => {
+        if (e.data && e.data.type === 'who') { ch.postMessage({ type: 'here', to: e.data.id }); return; }
+        if (!e.data || e.data.type !== 'need') return;
+        try { ch.postMessage({ type: 'key', to: e.data.id, key }); say('handed the key to ' + e.data.id); report({ ...result, handed: true }); }
+        catch (err) { ch.postMessage({ type: 'none', to: e.data.id }); say('could not post the key: ' + err.name); report({ ...result, handed: false, postError: err.name }); }
+      };
+      say('holding a non-extractable key, waiting to be asked');
+      report({ ...result, ready: true });
+      return;
+    }
+    // asker
+    if (result.webLocks) {
+      const { held = [] } = await navigator.locks.query();
+      result.sawHolder = held.some(l => l.name === LOCK);
+    }
+    const ch = new BroadcastChannel(CHANNEL);
+    const id = String(Math.random()).slice(2);
+    // Where there are no Web Locks: "who is here?" must be answered well inside 800 ms
+    const asked = performance.now();
+    result.whoAnsweredMs = await new Promise(resolve => {
+      const probe = new BroadcastChannel(CHANNEL);
+      const timer = setTimeout(() => { probe.close(); resolve(null); }, 3000);
+      probe.onmessage = e => { if (e.data && e.data.type === 'here' && e.data.to === 'w' + id) { clearTimeout(timer); probe.close(); resolve(Math.round(performance.now() - asked)); } };
+      probe.postMessage({ type: 'who', id: 'w' + id });
+    });
+    const key = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve(null), 5000);
+      ch.onmessage = e => { if (e.data && e.data.to === id) { clearTimeout(timer); resolve(e.data.type === 'key' ? e.data.key : 'refused'); } };
+      ch.onmessageerror = () => { clearTimeout(timer); resolve('messageerror'); };
+      ch.postMessage({ type: 'need', id });
+    });
+    result.received = key === null ? 'nothing (timeout)' : typeof key === 'string' ? key : 'a key';
+    if (key && typeof key !== 'string') {
+      result.isCryptoKey = key instanceof CryptoKey;
+      result.extractable = key.extractable;
+      const saved = JSON.parse(localStorage.getItem('handoff-check'));
+      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(saved.iv) }, key, new Uint8Array(saved.ct));
+      result.decrypts = new TextDecoder().decode(plain) === TEXT;
+      result.exportRefused = await crypto.subtle.exportKey('raw', key).then(() => false, () => true);
+    }
+    result.pass = !!(result.isCryptoKey && result.extractable === false && result.decrypts && result.exportRefused);
+    say(JSON.stringify(result, null, 2));
+    say(result.pass ? 'PASS: done' : 'FAIL: done');
+    report(result);
+  } catch (err) {
+    say('error: ' + err);
+    report({ ...result, error: String(err) });
+  }
+})();
+</script>
+</body>

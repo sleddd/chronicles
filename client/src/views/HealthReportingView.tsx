@@ -1,12 +1,10 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import styled from 'styled-components';
 import { glassControl } from '../styles/wallpaper.js';
 import { DateInput } from '../components/atoms/DateInput.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthReport } from '../components/organisms/HealthReport.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -144,7 +142,7 @@ const fields = (e: { metadata?: unknown }) => (((e.metadata as Record<string, un
 /* ── View ── */
 
 export function HealthReportingView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
 
@@ -299,7 +297,6 @@ export function HealthReportingView() {
     return () => { cancelled = true; };
   }, [isReady, data, entries, topicIdMap]);
 
-  if (needsUnlock) return (<><ContentTemplate><EmptyState message="Unlock your journal to view reports" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
   if (isLoading || !isReady) return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
 
   return (

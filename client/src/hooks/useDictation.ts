@@ -1,3 +1,4 @@
+import { noteActivity } from '../services/activity.js';
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface SpeechRecognitionAlternative { transcript: string; confidence: number; }
@@ -64,6 +65,8 @@ export function useDictation({ onFinalResult, lang = 'en-US' }: UseDictationOpti
     recognition.lang = lang;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Words arriving are someone being here (no key or pointer says so while dictating)
+      noteActivity();
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];

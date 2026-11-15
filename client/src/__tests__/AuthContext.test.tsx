@@ -12,6 +12,11 @@ const mockLogin = vi.fn();
 const mockRegister = vi.fn();
 const mockLogout = vi.fn();
 
+const mockWipe = vi.fn().mockResolvedValue(undefined);
+vi.mock('../services/browserData.js', () => ({ wipeBrowserData: (...args: unknown[]) => mockWipe(...args) }));
+const mockPasskeySignIn = vi.fn();
+vi.mock('../services/passkeys.js', () => ({ signInWithPasskey: (...args: unknown[]) => mockPasskeySignIn(...args) }));
+
 vi.mock('../services/api.js', () => ({
   auth: {
     login: (...args: unknown[]) => mockLogin(...args),
@@ -83,12 +88,11 @@ describe('AuthProvider – default state', () => {
 
     expect(result.current.user).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.encryptionData).toBeNull();
   });
 });
 
 describe('AuthProvider – login', () => {
-  it('updates user and encryption data on successful login', async () => {
+  it('sets the user and hands the key wrap straight back, keeping no copy of it', async () => {
     const encryptionData = {
       encryptionEnabled: true,
       kekSalt: 'salt',
@@ -115,8 +119,9 @@ describe('AuthProvider – login', () => {
 
     expect(result.current.user).toEqual({ email: 'a@b.com', username: 'alice' });
     expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.encryptionData).toEqual(encryptionData);
     expect(returned).toEqual(encryptionData);
+    // The wrap goes to the unlock and nowhere else: the context holds none
+    expect((result.current as unknown as Record<string, unknown>).encryptionData).toBeUndefined();
   });
 
   it('sends a derived secret, never the password', async () => {
@@ -200,7 +205,6 @@ describe('AuthProvider – logout', () => {
 
     expect(result.current.user).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.encryptionData).toBeNull();
   });
 
   it('clears client state even if server logout fails', async () => {
@@ -272,5 +276,84 @@ describe('AuthProvider – session restore on mount', () => {
 
     expect(result.current.user).toEqual({ email: 'restored@b.com', username: 'restored' });
     expect(result.current.isAuthenticated).toBe(true);
+  });
+});
+
+describe('AuthProvider – how a session ends', () => {
+  const signIn = async () => {
+    mockLogin.mockResolvedValue({ user: { email: 'a@b.com', username: 'alice' }, encryption: {} });
+    const hook = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    await act(async () => { await hook.result.current.login('a@b.com', 'password'); });
+    return hook;
+  };
+
+  it('pressing Sign out ends the session, ends this browser’s trust, and wipes what the browser stores', async () => {
+    mockLogout.mockResolvedValue({ success: true });
+    const { result } = await signIn();
+    await act(async () => { await result.current.logout(); });
+    expect(mockLogout).toHaveBeenCalledWith(true);
+    expect(mockWipe).toHaveBeenCalledTimes(1);
+    expect(result.current.user).toBeNull();
+  });
+
+  it('a session that ends by itself (idle, a reload) keeps what the browser stores and keeps its trust', async () => {
+    mockLogout.mockResolvedValue({ success: true });
+    localStorage.setItem('chronicles.theme-v1', 'dark');
+    sessionStorage.setItem('planner-keyword-v1', 'typed from decrypted data');
+    const { result } = await signIn();
+    await act(async () => { await result.current.endSession(); });
+    expect(mockLogout).toHaveBeenCalledWith(false);
+    expect(mockWipe).not.toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+    expect(localStorage.getItem('chronicles.theme-v1')).toBe('dark');
+    // What was typed into searches came from decrypted data: that goes
+    expect(sessionStorage.getItem('planner-keyword-v1')).toBeNull();
+    localStorage.removeItem('chronicles.theme-v1');
+  });
+
+  it('dropping the user in one tab leaves the browser’s session alone (another tab is using it)', async () => {
+    const { result } = await signIn();
+    act(() => { result.current.dropUser(); });
+    await waitFor(() => expect(result.current.user).toBeNull());
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(mockWipe).not.toHaveBeenCalled();
+  });
+
+  it('a session that could not be ended on the server is ended on the next load, before /me is trusted', async () => {
+    mockLogout.mockRejectedValue(new Error('offline'));
+    const { result } = await signIn();
+    await act(async () => { await result.current.endSession(); });
+    expect(localStorage.getItem('chronicles.pending-sign-out')).toBe('1');
+    localStorage.removeItem('chronicles.pending-sign-out');
+  });
+});
+
+describe('AuthProvider – what /me gives', () => {
+  it('takes who is signed in and keeps no key wrap, even if a server sent one', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ user: { email: 'a@b.com', username: 'alice', totpEnabled: false }, encryption: { encryptedMasterKey: 'emk', kekSalt: 's' } }),
+    }));
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.user?.email).toBe('a@b.com');
+    expect(JSON.stringify(result.current)).not.toContain('emk');
+  });
+});
+
+describe('AuthProvider – passkey sign-in', () => {
+  it('sets the user and returns the wrap and its secret to the unlock', async () => {
+    const prf = new Uint8Array(32).fill(3);
+    mockPasskeySignIn.mockResolvedValue({ user: { email: 'a@b.com', username: 'alice', totpEnabled: true }, wrap: { credentialId: 'c', wrappedMK: 'w', wrapIv: 'i' }, prf });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let got: unknown;
+    await act(async () => { got = await result.current.loginWithPasskey(); });
+    expect(result.current.isAuthenticated).toBe(true);
+    expect((got as { prf: Uint8Array }).prf).toBe(prf);
+    // No 2FA code screen after a passkey: one touch is both factors
+    expect(result.current.pending2FA).toBeNull();
   });
 });

@@ -6,7 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
    (shown whether the AI is on or off), with the chat consent status under it.
    Props only. Change the date and the change log whenever the text changes. */
 
-export const PROTOCOL_DATE = 'Oct 20, 2026';
+export const PROTOCOL_DATE = 'Nov 15, 2026';
 
 const Wrap = styled.div`
   padding: 16px 0 4px;
@@ -146,7 +146,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
             If what someone writes in the chat says, or strongly suggests, that they are under 18, the AI kindly tells
             them the chat is made for grown-ups and that they did nothing wrong, and points them to a trusted adult. If
             they mention being hurt or unsafe, it also gives them 911, Childhelp (1-800-422-4453) and 988. The chat then
-            pauses and stays paused until the account owner locks Chronicles and opens it again with their password.
+            pauses and stays paused until the account owner signs out and signs in again.
             Chronicles checks for this three ways: a pattern check inside Chronicles, the classification request
             described below, and the AI’s own reply.
           </p>

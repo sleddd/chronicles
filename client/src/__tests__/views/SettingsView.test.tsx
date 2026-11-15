@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { SettingsView } from '@/views/SettingsView';
 import { renderWithTheme } from '../testUtils';
 
@@ -15,8 +15,6 @@ vi.mock('@/hooks/useInitializeData', () => ({
   useInitializeData: vi.fn(() => ({
     isReady: true,
     isLoading: false,
-    needsUnlock: false,
-    handleUnlock: vi.fn(),
   })),
 }));
 
@@ -30,8 +28,8 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 vi.mock('@/contexts/EncryptionContext', () => ({
   useEncryption: vi.fn(() => ({
-    lock: vi.fn(),
-    rewrapMasterKey: vi.fn().mockResolvedValue({ salt: 's', wrappedMK: 'w', wrapIv: 'iv' }),
+    clearKey: vi.fn(),
+    rewrapWith: vi.fn().mockResolvedValue({ salt: 's', wrappedMK: 'w', wrapIv: 'iv' }),
     encryptPost: vi.fn(),
   })),
 }));
@@ -62,7 +60,7 @@ vi.mock('@/stores/entriesStore', () => ({
 }));
 
 vi.mock('@/services/api', () => ({
-  auth: { changePassword: vi.fn() },
+  auth: { changePassword: vi.fn(), passkeys: vi.fn().mockResolvedValue([]), trustedBrowsers: vi.fn().mockResolvedValue([]) },
   settings: { getAll: vi.fn().mockResolvedValue([]), upsert: vi.fn() },
   sessions: { getAll: vi.fn().mockResolvedValue([]), revoke: vi.fn() },
   topics: { getAll: vi.fn().mockResolvedValue([]) },
@@ -199,15 +197,19 @@ describe('SettingsView', () => {
     expect(screen.getByText('Email')).toBeInTheDocument();
   });
 
-  it('renders preferences section with timezone', () => {
+  it('has the timezone in Account, under Profile (there is no Preferences section)', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByText('Preferences')).toBeInTheDocument();
-    expect(screen.getByText('Timezone')).toBeInTheDocument();
+    expect(screen.queryByText('Preferences')).toBeNull();
+    const account = screen.getByRole('region', { name: 'Account' });
+    expect(within(account).getByText('Timezone')).toBeInTheDocument();
+    const text = account.textContent ?? '';
+    expect(text.indexOf('Profile')).toBeLessThan(text.indexOf('Date and time'));
+    expect(text.indexOf('Date and time')).toBeLessThan(text.indexOf('Sign-in and notices'));
   });
 
   it('renders theme section', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByText('Theme')).toBeInTheDocument();
+    expect(screen.getByText('Theme Preferences')).toBeInTheDocument();
     expect(screen.getByText('Light')).toBeInTheDocument();
     expect(screen.getByText('Dark')).toBeInTheDocument();
   });
@@ -238,7 +240,7 @@ describe('SettingsView', () => {
 
   it('contains every section in its own card', () => {
     renderWithTheme(<SettingsView />);
-    for (const name of ['Account', 'Preferences', 'Calendar Sync', 'Entry Images', 'In-App AI', 'Theme', 'Security', 'Features', 'Data', 'Privacy', 'Sign Out']) {
+    for (const name of ['Account', 'Calendar Sync', 'Entry Images', 'In-App AI', 'Theme Preferences', 'Security', 'Features', 'Data', 'Privacy', 'Sign Out']) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument();
     }
   });
@@ -258,18 +260,4 @@ describe('SettingsView', () => {
     expect(screen.getByText('Export Entries')).toBeInTheDocument();
   });
 
-  it('gates behind the unlock dialog when the journal is locked', async () => {
-    const { useInitializeData } = await import('@/hooks/useInitializeData');
-    vi.mocked(useInitializeData).mockReturnValueOnce({
-      isReady: false,
-      isLoading: false,
-      needsUnlock: true,
-      handleUnlock: vi.fn(),
-    });
-    renderWithTheme(<SettingsView />);
-    expect(screen.getByText('Unlock Your Journal')).toBeInTheDocument();
-    expect(screen.getByText('Unlock your journal to view settings')).toBeInTheDocument();
-    // No settings content while locked
-    expect(screen.queryByText('Danger Zone')).not.toBeInTheDocument();
-  });
 });

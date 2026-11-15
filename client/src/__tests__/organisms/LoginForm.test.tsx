@@ -33,7 +33,7 @@ describe('LoginForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith('test@example.com', 'mypassword123', false);
+      expect(onSubmit).toHaveBeenCalledWith('test@example.com', 'mypassword123');
     });
   });
 
@@ -66,5 +66,28 @@ describe('LoginForm', () => {
   it('does not render forgot password button when handler is absent', () => {
     renderWithTheme(<LoginForm onSubmit={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Forgot password?' })).not.toBeInTheDocument();
+  });
+
+  it('has no Remember me box: nothing that opens the journal is ever stored', () => {
+    renderWithTheme(<LoginForm onSubmit={vi.fn()} />);
+    expect(screen.queryByText(/remember me/i)).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('offers the passkey button only when the browser can use one', async () => {
+    const onPasskey = vi.fn().mockResolvedValue(undefined);
+    const { unmount } = renderWithTheme(<LoginForm onSubmit={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull();
+    unmount();
+    renderWithTheme(<LoginForm onSubmit={vi.fn()} onPasskey={onPasskey} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+    await waitFor(() => expect(onPasskey).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows why a passkey sign-in failed', async () => {
+    const onPasskey = vi.fn().mockRejectedValue(new Error('That passkey didn’t work. Try again, or sign in with your password.'));
+    renderWithTheme(<LoginForm onSubmit={vi.fn()} onPasskey={onPasskey} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('That passkey didn’t work');
   });
 });

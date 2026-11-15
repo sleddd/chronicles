@@ -5,7 +5,6 @@ import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { ExerciseToday, RoutineBreakdown } from '../components/organisms/TodayLists.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { ExerciseSubTabs } from '../components/molecules/ExerciseSubTabs.js';
@@ -272,7 +271,7 @@ function ThisWeek({ planName, week, leftToday, onOpenPlan }: {
 }
 
 export function ExerciseScheduleView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const openInJournal = useOpenInJournal();
@@ -323,12 +322,6 @@ export function ExerciseScheduleView() {
     newEntry(id, { ...ROUTINE_DEFAULTS, isActive: true });
   };
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

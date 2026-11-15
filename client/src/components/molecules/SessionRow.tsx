@@ -33,10 +33,23 @@ interface SessionRowProps {
   ipAddress: string | null;
   lastActiveAt: string;
   isCurrent: boolean;
+  /** How this session signed in ("a passkey", "your password") */
+  signedInWith?: string | null;
   onRevoke?: () => void;
 }
 
-export function SessionRow({ deviceInfo, ipAddress, lastActiveAt, isCurrent, onRevoke }: SessionRowProps) {
+/** What the server recorded when the session was made, in words */
+export function signInMethodLabel(method: string | null | undefined): string | null {
+  switch (method) {
+    case 'passkey': return 'a passkey';
+    case 'password': return 'your password';
+    case 'trusted': return 'your password, on a trusted browser';
+    case 'recovery': return 'your recovery key';
+    default: return null;
+  }
+}
+
+export function SessionRow({ deviceInfo, ipAddress, lastActiveAt, isCurrent, signedInWith, onRevoke }: SessionRowProps) {
   return (
     <Row>
       <div>
@@ -46,6 +59,7 @@ export function SessionRow({ deviceInfo, ipAddress, lastActiveAt, isCurrent, onR
         </Info>
         <Meta>
           {ipAddress || 'Unknown IP'} · Last active {new Date(lastActiveAt).toLocaleDateString()}
+          {signedInWith ? ` · Signed in with ${signedInWith}` : ''}
         </Meta>
       </div>
       {!isCurrent && onRevoke && (

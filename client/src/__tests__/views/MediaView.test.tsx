@@ -11,7 +11,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({
-  useInitializeData: vi.fn(() => ({ isReady: true, isLoading: false, needsUnlock: false, handleUnlock: vi.fn() })),
+  useInitializeData: vi.fn(() => ({ isReady: true, isLoading: false })),
 }));
 
 vi.mock('@/hooks/useDecryptedImage', () => ({ useDecryptedImage: () => ({ url: null, loading: false, error: null }) }));
@@ -20,7 +20,6 @@ const mockSave = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock('@/hooks/useSaveFields', () => ({ useSaveFields: () => mockSave }));
 
 vi.mock('@/components/templates/ContentTemplate', () => ({ ContentTemplate: ({ children }: any) => <div>{children}</div> }));
-vi.mock('@/components/organisms/UnlockDialog', () => ({ UnlockDialog: () => null }));
 vi.mock('@/components/organisms/TopBarAction', () => ({ TopBarAction: ({ children }: any) => <>{children}</> }));
 vi.mock('@/services/api', () => ({ publicShelf: { put: vi.fn(), mine: vi.fn(), reset: vi.fn(), remove: vi.fn() }, ApiError: class extends Error {}, retryDelayMs: () => 1000 }));
 

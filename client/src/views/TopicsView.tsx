@@ -6,7 +6,6 @@ import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
 import { RoundSearch } from '../components/molecules/RoundSearch.js';
@@ -141,7 +140,7 @@ const EditWrap = styled.div`
 /* ── View ── */
 
 export function TopicsView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const navigate = useNavigate();
   const allTopics = useEntriesStore(s => s.allTopics);
   const storeTopics = useEntriesStore(s => s.topics);
@@ -223,12 +222,6 @@ export function TopicsView() {
     setEditIcon(topic.icon);
   };
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to view topics" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

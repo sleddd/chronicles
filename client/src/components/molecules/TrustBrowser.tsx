@@ -17,20 +17,23 @@ const Hint = styled.p`
   color: var(--text-tertiary);
 `;
 
-interface RememberMeProps {
+interface TrustBrowserProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
 }
 
-/** "Remember me" opt-in with an honest note on what it does. */
-export function RememberMe({ checked, onChange }: RememberMeProps) {
+/**
+ * "Don't ask for a code on this browser for 30 days" — on the 2FA code screen.
+ * It skips the code only: the password is asked every time, and nothing that
+ * opens the journal is stored.
+ */
+export function TrustBrowser({ checked, onChange }: TrustBrowserProps) {
   return (
     <Wrap>
-      <Checkbox checked={checked} onChange={onChange} label="Remember me" />
+      <Checkbox checked={checked} onChange={onChange} label="Don’t ask for a code on this browser for 30 days" />
       {checked && (
         <Hint>
-          Stay unlocked across tabs and reloads until you close your browser (an hour idle or 12 hours at most).
-          Don’t use this on a shared or public computer.
+          You’ll still enter your password every time. Don’t use this on a shared or public computer.
         </Hint>
       )}
     </Wrap>

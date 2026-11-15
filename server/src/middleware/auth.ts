@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
-import { revokeGrantsForAccount, revokeGrantsForSession } from '../services/rememberGrants.js';
 
 // Extend Express Request with auth info
 declare global {
@@ -19,9 +18,14 @@ declare global {
 
 const ACTIVITY_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
 
-/** A session unused this long ends, whatever its expiry — a stolen or
-    forgotten one doesn't stay good for the full 7 days */
-export const SESSION_IDLE_MS = 24 * 60 * 60 * 1000; // 24 hours
+/** A session unused this long ends, whatever its expiry. A tab ends its own
+    session after 15 minutes away, so what this bounds is a session nobody is
+    using any more — the app was closed without signing out, or the cookie was
+    copied. Two hours: such a session can't open the journal (the key is only
+    in a tab's memory, and its wrap is no longer handed to a session), but it
+    could still fetch ciphertext or delete things. The app pings while someone
+    is at it (useIdleSignOut), so reading for an afternoon doesn't end it. */
+export const SESSION_IDLE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export function isSessionIdle(session: { lastActiveAt: Date }, now = Date.now()): boolean {
   return now - session.lastActiveAt.getTime() > SESSION_IDLE_MS;
@@ -188,7 +192,6 @@ export async function createSession(
  * Revoke a session by selector
  */
 export async function revokeSession(selector: string, reason: string): Promise<void> {
-  await revokeGrantsForSession(selector);
   await prisma.session.update({
     where: { selector },
     data: { revokedAt: new Date(), revokedReason: reason },
@@ -199,7 +202,6 @@ export async function revokeSession(selector: string, reason: string): Promise<v
  * Revoke all sessions for an account except the current one
  */
 export async function revokeAllSessions(accountId: number, exceptSelector?: string, reason = 'password_change'): Promise<void> {
-  await revokeGrantsForAccount(accountId, exceptSelector);
   await prisma.session.updateMany({
     where: {
       accountId,

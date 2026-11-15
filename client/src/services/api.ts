@@ -31,8 +31,12 @@ const SESSION_ENDED_EVENT = 'chronicles:session-ended';
    before, so a request still in flight under the old one can come back
    "Session revoked" after the new one exists — that answer is about the old
    session and must not sign anyone out. */
-const SIGN_IN_PATHS = new Set(['/auth/login', '/auth/login/2fa', '/auth/register', '/auth/recover']);
+const SIGN_IN_PATHS = new Set(['/auth/login', '/auth/login/2fa', '/auth/register', '/auth/recover', '/auth/passkey/verify']);
 let sessionEpoch = 0;
+/** When this tab last asked the server anything: the idle watch pings when someone
+ *  is at the page but nothing has been sent for a while (useIdleSignOut) */
+let lastRequestAt = 0;
+export const lastRequestTime = (): number => lastRequestAt;
 
 /** Listen for the server ending this browser's session. Returns unsubscribe. */
 export function onSessionEnded(listener: (reason: string) => void): () => void {
@@ -139,6 +143,7 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
   }
 
   const started = performance.now();
+  lastRequestAt = Date.now();
   const epoch = sessionEpoch;
   const res = await fetch(url, {
     method,
@@ -174,15 +179,49 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
 // Auth
 // =============================================================================
 
+/** A sensitive action is confirmed with the password's derived secret, or with
+ *  the single-use token a passkey touch earned (never both) */
+export type PasswordOrToken<K extends string> =
+  | ({ [P in K]: string } & { confirmToken?: undefined })
+  | ({ [P in K]?: undefined } & { confirmToken: string });
+
+export type ConfirmAction = 'change-password' | 'recovery-key' | 'passkey-add' | 'passkey-remove' | '2fa-enable' | '2fa-disable' | 'delete-account';
+
+export interface KeyWrapData {
+  encryptionEnabled: boolean;
+  kekSalt: string | null;
+  encryptedMasterKey: string | null;
+  kekWrapIv: string | null;
+  kekIterations: number;
+  recoveryWrappedMK: string | null;
+  recoveryWrapIv: string | null;
+}
+/** A passkey's wrap of the master key: what its PRF secret opens */
+export interface PasskeyWrap { credentialId: string; wrappedMK: string; wrapIv: string }
+export interface PasskeyInfo { id: number; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }
+export interface TrustedBrowserInfo { id: number; label: string; isCurrent: boolean; createdAt: string; expiresAt: string; lastUsedAt: string | null }
+/** WebAuthn options as the server sends them (base64url strings where the browser wants bytes) */
+export interface PasskeyRequestOptions {
+  challenge: string;
+  rpId?: string;
+  timeout?: number;
+  userVerification?: UserVerificationRequirement;
+  allowCredentials?: { id: string; type: 'public-key'; transports?: string[] }[];
+}
+export interface PasskeyCreationOptions {
+  challenge: string;
+  rp: { id?: string; name: string };
+  user: { id: string; name: string; displayName: string };
+  pubKeyCredParams: { type: 'public-key'; alg: number }[];
+  timeout?: number;
+  excludeCredentials?: { id: string; type: 'public-key'; transports?: string[] }[];
+  authenticatorSelection?: AuthenticatorSelectionCriteria;
+  attestation?: AttestationConveyancePreference;
+}
+
 export const auth = {
-  /** "Remember me": start a grant for this browser session; returns the device secret once. */
-  rememberStart: () => request<{ secret: string; expiresAt: string }>('/auth/remember', { method: 'POST' }),
-  /** The device secret, while this browser session still holds the grant. */
-  rememberKey: () => request<{ secret: string; expiresAt: string }>('/auth/remember/key', { method: 'POST' }),
-  /** Forget this browser. */
-  rememberForget: () => request<{ success: boolean }>('/auth/remember', { method: 'DELETE' }),
-  /** This browser is in use: keeps its Remember me grant from going idle on the server. */
-  rememberTouch: () => request<{ success: boolean }>('/auth/remember/touch', { method: 'POST' }),
+  /** Who is signed in (never the key wrap). Also tells the server someone is at the page. */
+  me: () => request<{ user: { email: string; username: string; totpEnabled: boolean } }>('/auth/me'),
   register: (data: {
     email: string;
     username: string;
@@ -220,7 +259,7 @@ export const auth = {
         }
     >('/auth/login', { method: 'POST', body: data }),
 
-  submit2FA: (data: { pendingToken: string; code: string }) =>
+  submit2FA: (data: { pendingToken: string; code: string; trustBrowser?: boolean }) =>
     request<{
       user: { email: string; username: string; totpEnabled: boolean };
       encryption: {
@@ -237,26 +276,58 @@ export const auth = {
   setup2FA: () =>
     request<{ secret: string; qrCodeUrl: string }>('/auth/2fa/setup', { method: 'POST' }),
 
-  enable2FA: (data: { secret: string; code: string; currentAuthSecret: string }) =>
+  enable2FA: (data: { secret: string; code: string } & PasswordOrToken<'currentAuthSecret'>) =>
     request<{ backupCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: data }),
 
-  disable2FA: (data: { authSecret: string; code: string }) =>
+  disable2FA: (data: { code?: string } & PasswordOrToken<'authSecret'>) =>
     request<{ success: boolean }>('/auth/2fa', { method: 'DELETE', body: data }),
 
-  logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
+  /** `forgetBrowser`: the person pressed Sign out, which also ends this browser's
+   *  trust (skip the 2FA code). A session that ends by itself keeps it. */
+  logout: (forgetBrowser = false) => request<{ success: boolean }>('/auth/logout', { method: 'POST', body: { forgetBrowser } }),
 
-  deleteAccount: (data: { authSecret: string; code?: string }) =>
+  deleteAccount: (data: { code?: string } & PasswordOrToken<'authSecret'>) =>
     request<{ success: boolean }>('/auth/account', { method: 'DELETE', body: data }),
 
+  /** The password wrap, against the password and (with 2FA on) a code, for one
+   *  action. Answers with a single-use token that confirms that action. */
+  passwordWrap: (data: { currentAuthSecret: string; action: ConfirmAction; code?: string }) =>
+    request<{ confirmToken: string; encryption: Pick<KeyWrapData, 'kekSalt' | 'encryptedMasterKey' | 'kekWrapIv' | 'kekIterations'> }>(
+      '/auth/password-wrap', { method: 'POST', body: data }),
+
+  // --- Passkeys ------------------------------------------------------------
+  passkeyLoginOptions: () => request<{ options: PasskeyRequestOptions }>('/auth/passkey/options', { method: 'POST' }),
+  passkeyLogin: (response: unknown) =>
+    request<{ user: { email: string; username: string; totpEnabled: boolean }; passkey: PasskeyWrap }>(
+      '/auth/passkey/verify', { method: 'POST', body: { response } }),
+  passkeys: () => request<PasskeyInfo[]>('/auth/passkeys'),
+  passkeyRegisterOptions: () => request<{ options: PasskeyCreationOptions }>('/auth/passkeys/register/options', { method: 'POST' }),
+  passkeyRegister: (data: { response: unknown; wrappedMK: string; wrapIv: string; name: string; code?: string } & PasswordOrToken<'currentAuthSecret'>) =>
+    request<{ passkeys: PasskeyInfo[] }>('/auth/passkeys/register/verify', { method: 'POST', body: data }),
+  passkeyRename: (id: number, name: string) =>
+    request<{ success: boolean }>(`/auth/passkeys/${id}`, { method: 'PATCH', body: { name } }),
+  passkeyRemove: (id: number, data: { code?: string } & PasswordOrToken<'currentAuthSecret'>) =>
+    request<{ passkeys: PasskeyInfo[] }>(`/auth/passkeys/${id}/remove`, { method: 'POST', body: data }),
+  passkeyRemoveAll: (data: { code?: string } & PasswordOrToken<'currentAuthSecret'>) =>
+    request<{ passkeys: PasskeyInfo[] }>('/auth/passkeys/remove-all', { method: 'POST', body: data }),
+  /** Confirm one sensitive action with a passkey touch: a challenge, then a single-use token */
+  confirmOptions: (action: ConfirmAction) =>
+    request<{ options: PasskeyRequestOptions }>('/auth/confirm/options', { method: 'POST', body: { action } }),
+  confirmVerify: (action: ConfirmAction, response: unknown) =>
+    request<{ confirmToken: string; passkey: PasskeyWrap }>('/auth/confirm/verify', { method: 'POST', body: { action, response } }),
+
+  // --- Trusted browsers (skip the 2FA code at sign-in) -----------------------
+  trustedBrowsers: () => request<TrustedBrowserInfo[]>('/auth/trusted-browsers'),
+  forgetTrustedBrowser: (id: number) => request<{ success: boolean }>(`/auth/trusted-browsers/${id}`, { method: 'DELETE' }),
+
   changePassword: (data: {
-    currentAuthSecret: string;
     newAuthSecret: string;
     newEncryptedMasterKey: string;
     newKekSalt: string;
     newKekWrapIv: string;
-    /** Authenticator or backup code — required when the account has 2FA on */
+    /** Authenticator or backup code — required with the password when the account has 2FA on */
     code?: string;
-  }) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
+  } & PasswordOrToken<'currentAuthSecret'>) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
 
   changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string; code?: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
@@ -282,19 +353,20 @@ export const auth = {
     newRecoveryKeySalt: string;
     /** Authenticator or backup code — required when the account has 2FA on */
     code?: string;
+    /** Also remove every passkey (a device was lost) */
+    removePasskeys?: boolean;
   }) => request<{
     user: { email: string; username: string };
     encryption: Record<string, unknown>;
   }>('/auth/recover', { method: 'POST', body: data }),
 
   saveRecoveryKey: (data: {
-    currentAuthSecret: string;
     recoveryWrappedMK: string;
     recoveryWrapIv: string;
     recoveryKeyHash: string;
     recoveryKeySalt: string;
     code?: string;
-  }) => request<{ success: boolean }>('/auth/recovery-key', { method: 'POST', body: data }),
+  } & PasswordOrToken<'currentAuthSecret'>) => request<{ success: boolean }>('/auth/recovery-key', { method: 'POST', body: data }),
 };
 
 // =============================================================================

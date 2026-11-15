@@ -18,7 +18,6 @@ import { FormField } from '../components/molecules/FormField.js';
 import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import { deriveAuthSecret, newRecoveryProof, newPasswordProblem } from '@chronicles/shared';
-import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthMeter.js';
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
@@ -28,8 +27,11 @@ import { TrainingImport } from '../components/organisms/TrainingImport.js';
 import { MediaMigration } from '../components/organisms/MediaMigration.js';
 import { PublicShelfSettingsRow } from '../components/organisms/PublicShelfSettingsRow.js';
 import { CollapsibleCard } from '../components/organisms/CollapsibleCard.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
+import { PasskeySettings } from '../components/organisms/PasskeySettings.js';
+import { TrustedBrowsersSettings } from '../components/organisms/TrustedBrowsersSettings.js';
+import { ConfirmIdentity, ACCOUNT_PASSWORD_LABEL } from '../components/molecules/ConfirmIdentity.js';
+import { signInMethodLabel } from '../components/molecules/SessionRow.js';
+import { PasskeyCancelled, confirmWithPasskey, suggestedPasskeyName } from '../services/passkeys.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useSignOut } from '../hooks/useSignOut.js';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -186,12 +188,13 @@ const GuideBody = styled.div`
 /* ── View ── */
 
 export function SettingsView() {
-  const { user, logout, encryptionData, updateEncryptionData } = useAuth();
-  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, adoptKeyWrap, generateRecoveryKey, encryptNewPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
+  const { user, logout } = useAuth();
+  const { clearKey, passwordSource, rewrapWith, recoveryKeyWith, encryptNewPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
-  // Same unlock gate as every other view — Settings exposes encrypted-at-rest
-  // preferences and master-key operations, so it locks with the journal
-  const { needsUnlock, handleUnlock } = useInitializeData();
+  useInitializeData();
+  // The account has a passkey this browser can use: the confirmed actions offer
+  // "Use a passkey" in place of the password and the 2FA code
+  const [canPasskey, setCanPasskey] = useState(false);
   const clearAll = useEntriesStore(s => s.clearAll);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
@@ -254,7 +257,7 @@ export function SettingsView() {
 
   // Sessions
   const [showSessions, setShowSessions] = useState(false);
-  const [sessionList, setSessionList] = useState<{ id: number; deviceInfo: string | null; ipAddress: string | null; lastActiveAt: string; isCurrent: boolean }[]>([]);
+  const [sessionList, setSessionList] = useState<{ id: number; deviceInfo: string | null; userAgent?: string | null; ipAddress: string | null; lastActiveAt: string; isCurrent: boolean }[]>([]);
 
   // 2FA
   const [totpEnabled, setTotpEnabled] = useState(() => !!(user as unknown as { totpEnabled?: boolean })?.totpEnabled);
@@ -387,57 +390,77 @@ export function SettingsView() {
     await savePrivateSetting(key as PrivateSettingKey, value).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
-  const handleChangePassword = async () => {
+  const handleChangePassword = async (via: 'password' | 'passkey' = 'password') => {
     setPwMessage(''); setPwError(false);
     if (newPw !== confirmPw) { setPwMessage('Passwords do not match'); setPwError(true); return; }
     const pwProblem = newPasswordProblem(newPw, { email: user?.email, username: user?.username });
     if (pwProblem) { setPwMessage(pwProblem); setPwError(true); return; }
     setPwLoading(true);
+    let touched: Uint8Array | null = null;
     try {
-      // A tab opened by Remember me never unlocked with the password, so the
-      // encryption context holds no wrap: hand it the one from sign-in
-      const fallbackParams = encryptionData?.kekSalt && encryptionData?.encryptedMasterKey && encryptionData?.kekWrapIv
-        ? { kekSalt: encryptionData.kekSalt, encryptedMasterKey: encryptionData.encryptedMasterKey, kekWrapIv: encryptionData.kekWrapIv, kekIterations: encryptionData.kekIterations }
-        : undefined;
-      const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPw, currentPw, fallbackParams);
-      const [currentAuthSecret, newAuthSecret] = await Promise.all([
-        deriveAuthSecret(currentPw, user?.email ?? ''),
-        deriveAuthSecret(newPw, user?.email ?? ''),
-      ]);
-      await authApi.changePassword({ currentAuthSecret, newAuthSecret, newEncryptedMasterKey: wrappedMK, newKekSalt: salt, newKekWrapIv: wrapIv, ...withCode(pwCode) });
-      // The server took it: from here this tab unwraps the new wrap, so after a
-      // lock it opens with the new password — and no longer with the old one
-      adoptKeyWrap({ salt, wrappedMK, wrapIv });
-      updateEncryptionData({ kekSalt: salt, encryptedMasterKey: wrappedMK, kekWrapIv: wrapIv, kekIterations: PBKDF2_ITERATIONS });
+      const email = user?.email ?? '';
+      const newAuthSecret = await deriveAuthSecret(newPw, email);
+      let wrap: { salt: string; wrappedMK: string; wrapIv: string };
+      if (via === 'passkey') {
+        // One touch stands in for the current password and the 2FA code, and
+        // opens the key for the new wrap
+        const c = await confirmWithPasskey('change-password');
+        touched = c.prf;
+        wrap = await rewrapWith({ kind: 'passkey', prf: c.prf, wrap: c.wrap }, newPw);
+        await authApi.changePassword({ confirmToken: c.confirmToken, newAuthSecret, newEncryptedMasterKey: wrap.wrappedMK, newKekSalt: wrap.salt, newKekWrapIv: wrap.wrapIv });
+      } else {
+        // The password (and the 2FA code) are checked when the wrap is handed
+        // over, and its token then confirms the change itself
+        const source = await passwordSource(currentPw, email, 'change-password', totpEnabled ? pwCode : undefined);
+        wrap = await rewrapWith(source, newPw);
+        await authApi.changePassword({ confirmToken: source.confirmToken, newAuthSecret, newEncryptedMasterKey: wrap.wrappedMK, newKekSalt: wrap.salt, newKekWrapIv: wrap.wrapIv });
+      }
       setPwMessage('Password changed'); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setShowPassword(false);
-    } catch (err) { setPwMessage(err instanceof Error ? err.message : 'Failed'); setPwError(true); }
-    finally { setPwLoading(false); }
+    } catch (err) {
+      if (!(err instanceof PasskeyCancelled)) { setPwMessage(err instanceof Error ? err.message : 'Failed'); setPwError(true); }
+    } finally {
+      touched?.fill(0);
+      setPwLoading(false);
+    }
   };
 
-  const handleGenerateRecoveryKey = async () => {
+  const handleGenerateRecoveryKey = async (via: 'password' | 'passkey' = 'password') => {
     setRecoveryKeyError('');
-    if (!recoveryKeyPw) { setRecoveryKeyError('Enter your current password'); return; }
+    if (via === 'password' && !recoveryKeyPw) { setRecoveryKeyError(ACCOUNT_PASSWORD_LABEL); return; }
     setRecoveryKeyLoading(true);
+    let touched: Uint8Array | null = null;
     try {
-      const fallbackParams = encryptionData?.kekSalt && encryptionData?.encryptedMasterKey && encryptionData?.kekWrapIv
-        ? { kekSalt: encryptionData.kekSalt, encryptedMasterKey: encryptionData.encryptedMasterKey, kekWrapIv: encryptionData.kekWrapIv, kekIterations: encryptionData.kekIterations }
-        : undefined;
-      const { recoveryKey, recoveryWrappedMK, recoveryWrapIv } = await generateRecoveryKey(recoveryKeyPw, fallbackParams);
-
-      const [currentAuthSecret, { recoveryKeyHash, recoveryKeySalt }] = await Promise.all([
-        deriveAuthSecret(recoveryKeyPw, user?.email ?? ''),
-        newRecoveryProof(recoveryKey),
-      ]);
-
-      await authApi.saveRecoveryKey({ currentAuthSecret, recoveryWrappedMK, recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, ...withCode(recoveryCode) });
-      setGeneratedRecoveryKey(recoveryKey);
+      const email = user?.email ?? '';
+      let made: { recoveryKey: string; recoveryWrappedMK: string; recoveryWrapIv: string };
+      let confirmation: { confirmToken: string };
+      if (via === 'passkey') {
+        const c = await confirmWithPasskey('recovery-key');
+        touched = c.prf;
+        made = await recoveryKeyWith({ kind: 'passkey', prf: c.prf, wrap: c.wrap });
+        confirmation = { confirmToken: c.confirmToken };
+      } else {
+        const source = await passwordSource(recoveryKeyPw, email, 'recovery-key', totpEnabled ? recoveryCode : undefined);
+        made = await recoveryKeyWith(source);
+        confirmation = { confirmToken: source.confirmToken };
+      }
+      const { recoveryKeyHash, recoveryKeySalt } = await newRecoveryProof(made.recoveryKey);
+      await authApi.saveRecoveryKey({ recoveryWrappedMK: made.recoveryWrappedMK, recoveryWrapIv: made.recoveryWrapIv, recoveryKeyHash, recoveryKeySalt, ...confirmation });
+      setGeneratedRecoveryKey(made.recoveryKey);
       setRecoveryKeyPw('');
       setRecoveryCode('');
     } catch (err) {
-      setRecoveryKeyError(err instanceof Error ? err.message : 'Failed to generate recovery key');
+      if (!(err instanceof PasskeyCancelled)) setRecoveryKeyError(err instanceof Error ? err.message : 'Failed to generate recovery key');
     } finally {
+      touched?.fill(0);
       setRecoveryKeyLoading(false);
     }
+  };
+
+  /** A passkey touch for an action that needs no new wrap: just its single-use token */
+  const passkeyToken = async (action: 'delete-account' | '2fa-enable' | '2fa-disable'): Promise<string> => {
+    const c = await confirmWithPasskey(action);
+    c.prf.fill(0);
+    return c.confirmToken;
   };
 
   const handleLoadSessions = async () => {
@@ -474,12 +497,14 @@ export function SettingsView() {
     }
   };
 
-  const handleConfirm2FA = async () => {
+  const handleConfirm2FA = async (via: 'password' | 'passkey' = 'password') => {
     setTwoFALoading(true);
     setTwoFAError('');
     try {
-      const currentAuthSecret = await deriveAuthSecret(twoFAPassword, user?.email ?? '');
-      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, currentAuthSecret });
+      const confirmation = via === 'passkey'
+        ? { confirmToken: await passkeyToken('2fa-enable') }
+        : { currentAuthSecret: await deriveAuthSecret(twoFAPassword, user?.email ?? '') };
+      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, ...confirmation });
       setTwoFABackupCodes(backupCodes);
       setTotpEnabled(true);
       setTwoFAStep('codes');
@@ -489,24 +514,24 @@ export function SettingsView() {
       setTwoFASecret('');
       setTwoFAQrUrl('');
     } catch (err) {
-      setTwoFAError(err instanceof ApiError ? err.message : 'Invalid code');
+      if (!(err instanceof PasskeyCancelled)) setTwoFAError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Invalid code');
     } finally {
       setTwoFALoading(false);
     }
   };
 
-  const handleDisable2FA = async () => {
+  const handleDisable2FA = async (via: 'password' | 'passkey' = 'password') => {
     setTwoFALoading(true);
     setDisable2FAError('');
     try {
-      const authSecret = await deriveAuthSecret(disable2FAPassword, user?.email ?? '');
-      await authApi.disable2FA({ authSecret, code: disable2FACode.trim() });
+      if (via === 'passkey') await authApi.disable2FA({ confirmToken: await passkeyToken('2fa-disable') });
+      else await authApi.disable2FA({ authSecret: await deriveAuthSecret(disable2FAPassword, user?.email ?? ''), code: disable2FACode.trim() });
       setTotpEnabled(false);
       setDisabling2FA(false);
       setDisable2FAPassword('');
       setDisable2FACode('');
     } catch (err) {
-      setDisable2FAError(err instanceof ApiError ? err.message : 'Failed to disable 2FA');
+      if (!(err instanceof PasskeyCancelled)) setDisable2FAError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to disable 2FA');
     } finally {
       setTwoFALoading(false);
     }
@@ -884,44 +909,20 @@ export function SettingsView() {
     }
   };
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = async (via: 'password' | 'passkey' = 'password') => {
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      const authSecret = await deriveAuthSecret(deletePassword, user?.email ?? '');
-      await authApi.deleteAccount({ authSecret, ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
-      lock(); clearAll(); await logout(); navigate('/login');
+      if (via === 'passkey') await authApi.deleteAccount({ confirmToken: await passkeyToken('delete-account') });
+      else await authApi.deleteAccount({ authSecret: await deriveAuthSecret(deletePassword, user?.email ?? ''), ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
+      clearKey(); clearAll(); await logout(); navigate('/login');
     } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : 'Failed to delete account');
+      if (!(err instanceof PasskeyCancelled)) setDeleteError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to delete account');
       setDeleteLoading(false);
     }
   };
 
   const handleSignOut = useSignOut();
-
-  // This view stays mounted behind the unlock dialog, so what was typed into
-  // its password and code boxes would wait in memory through a lock and show
-  // again after it. A recovery key or backup codes just issued are kept: a
-  // lock (switching to a password manager to save them does it) must not
-  // lose the only copy.
-  useEffect(() => {
-    if (!needsUnlock) return;
-    setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode('');
-    setEmailPassword(''); setEmailCode('');
-    setDeletePassword(''); setDeleteCode('');
-    setRecoveryKeyPw(''); setRecoveryCode('');
-    setTwoFAPassword(''); setTwoFACode('');
-    setDisable2FAPassword(''); setDisable2FACode('');
-  }, [needsUnlock]);
-
-  if (needsUnlock) return (
-    <>
-      <SettingsTemplate title="">
-        <EmptyState message="Unlock your journal to view settings" />
-      </SettingsTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   return (
     <SettingsTemplate title="">
@@ -958,6 +959,16 @@ export function SettingsView() {
           </SettingsGroupRow>
         </SettingsGroup>
 
+        {/* Which day "today" is for journal entries */}
+        <SettingsGroup label="Date and time">
+          <SettingsGroupRow label="Timezone">
+            <Select value={timezone} onChange={e => handleTimezoneChange(e.target.value)} aria-label="Timezone">
+              {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+            </Select>
+            <RowNote>Sets which day counts as today for your entries.</RowNote>
+          </SettingsGroupRow>
+        </SettingsGroup>
+
         <SettingsGroup label="Sign-in and notices">
           {/* Email changes need the current password, so it stays a Change flow */}
           <SettingsGroupRow
@@ -966,7 +977,8 @@ export function SettingsView() {
               <RowPill type="button" onClick={() => { setEditingEmail(true); setNewEmail(user?.email || ''); setEmailMessage(''); }}>Change</RowPill>
             )}
           >
-            {user?.email || ''}
+            {/* A step smaller than the other values, so a long address fits beside Change */}
+            <span style={{ fontSize: 14 }}>{user?.email || ''}</span>
             {!editingEmail && emailMessage && <RowNote $error={emailError}>{emailMessage}</RowNote>}
           </SettingsGroupRow>
           {editingEmail && (
@@ -979,22 +991,14 @@ export function SettingsView() {
                 type="email"
                 autoFocus
               />
-              <PasswordInput
-                value={emailPassword}
-                onChange={e => setEmailPassword(e.target.value)}
-                placeholder="Current password"
-                aria-label="Current password"
-                autoComplete="current-password"
+              <ConfirmIdentity
+                password={emailPassword}
+                onPassword={setEmailPassword}
+                showCode={totpEnabled}
+                code={emailCode}
+                onCode={setEmailCode}
               />
-              {totpEnabled && (
-                <TextInput
-                  value={emailCode}
-                  onChange={e => setEmailCode(e.target.value.slice(0, 64))}
-                  placeholder="Authenticator or backup code"
-                  aria-label="2FA code"
-                  autoComplete="one-time-code"
-                />
-              )}
+              {canPasskey && <RowNote style={{ marginTop: 0 }}>Changing your email needs your password. A passkey can’t confirm this one.</RowNote>}
               {emailMessage && <RowNote $error={emailError}>{emailMessage}</RowNote>}
               <FormActions>
                 <RowPill type="button" onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailCode(''); setEmailMessage(''); }}>
@@ -1038,30 +1042,23 @@ export function SettingsView() {
               This permanently deletes your account, every entry, topic and setting, your share links and your calendar feed. It can't be undone.
               Images in your own R2 bucket and events already synced to Google Calendar are not touched. Remove those yourself if you want them gone.
             </RowNote>
-            <PasswordInput
-              value={deletePassword}
-              onChange={e => setDeletePassword(e.target.value)}
-              placeholder="Current password"
-              aria-label="Current password"
-              autoComplete="current-password"
+            <ConfirmIdentity
+              password={deletePassword}
+              onPassword={setDeletePassword}
+              showCode={totpEnabled}
+              code={deleteCode}
+              onCode={setDeleteCode}
+              busy={deleteLoading}
               autoFocus
+              onUsePasskey={canPasskey ? () => void handleDeleteAccount('passkey') : undefined}
             />
-            {totpEnabled && (
-              <TextInput
-                value={deleteCode}
-                onChange={e => setDeleteCode(e.target.value.slice(0, 64))}
-                placeholder="Authenticator or backup code"
-                aria-label="2FA code"
-                autoComplete="one-time-code"
-              />
-            )}
             {deleteError && <RowNote $error>{deleteError}</RowNote>}
             <FormActions>
               <RowPill type="button" onClick={() => setDeletingAccount(false)} disabled={deleteLoading}>Cancel</RowPill>
               <RowPill
                 type="button"
                 $tone="danger"
-                onClick={handleDeleteAccount}
+                onClick={() => void handleDeleteAccount()}
                 disabled={deleteLoading || !deletePassword || (totpEnabled && !deleteCode.trim())}
               >
                 {deleteLoading ? <Spinner size={14} /> : 'Delete forever'}
@@ -1071,23 +1068,227 @@ export function SettingsView() {
         )}
       </Section>
 
+      <Section id="security" title="Security" subtitle="How you sign in and get back in.">
+        <SettingsGroup>
+          {/* ── Passkeys ── */}
+          <PasskeySettings email={user?.email ?? ''} totpEnabled={totpEnabled} onUsable={setCanPasskey} />
 
-      {/* Preferences */}
-      <Section id="preferences" title="Preferences">
-      <SettingsCard>
-        <SettingsRow
-          title="Timezone"
-          description="Used to determine the current day for journal entries"
-          action={
-            <Select value={timezone} onChange={e => handleTimezoneChange(e.target.value)} style={{ width: 220 }}>
-              {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-            </Select>
-          }
-        />
-      </SettingsCard>
+          {/* ── 2FA ── */}
+          <SettingsActionRow
+            title="Two-factor authentication"
+            description={totpEnabled
+              ? <StatusOk>On, using an authenticator app</StatusOk>
+              : twoFAStep === 'idle' ? 'Off. Add a code from an authenticator app when you sign in.' : undefined}
+            action={totpEnabled ? (
+              !disabling2FA && (
+                <RowPill type="button" onClick={() => { setDisabling2FA(true); setDisable2FAPassword(''); setDisable2FACode(''); setDisable2FAError(''); }}>
+                  Turn off
+                </RowPill>
+              )
+            ) : twoFAStep === 'idle' ? (
+              <RowPill type="button" onClick={handleStart2FASetup} disabled={twoFALoading}>
+                {twoFALoading ? <Spinner size={14} /> : 'Turn on'}
+              </RowPill>
+            ) : null}
+          >
+            {/* Turning it off: password and a current code */}
+            {totpEnabled && disabling2FA && (
+              <>
+                {disable2FAError && <RowNote $error style={{ marginTop: 0 }}>{disable2FAError}</RowNote>}
+                <ConfirmIdentity
+                  password={disable2FAPassword}
+                  onPassword={setDisable2FAPassword}
+                  showCode
+                  code={disable2FACode}
+                  onCode={setDisable2FACode}
+                  busy={twoFALoading}
+                  autoFocus
+                  onUsePasskey={canPasskey ? () => void handleDisable2FA('passkey') : undefined}
+                />
+                <FormActions>
+                  <RowPill type="button" onClick={() => setDisabling2FA(false)}>Cancel</RowPill>
+                  <RowPill type="button" $tone="danger" onClick={() => void handleDisable2FA()} disabled={twoFALoading || !disable2FAPassword || !disable2FACode.trim()}>
+                    {twoFALoading ? <Spinner size={14} /> : 'Turn off 2FA'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+
+            {/* Step 1: QR code */}
+            {!totpEnabled && twoFAStep === 'qr' && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>Scan this QR code with your authenticator app, then press Next.</RowNote>
+                {twoFAQrUrl && (
+                  <img src={twoFAQrUrl} alt="2FA QR code" style={{ width: 180, height: 180, borderRadius: 8, border: '1px solid var(--border-card)', background: '#fff' }} />
+                )}
+                <RowNote style={{ marginTop: 0 }}>
+                  Manual entry code: <code style={{ userSelect: 'all', letterSpacing: 2, color: 'var(--text-primary)' }}>{twoFASecret}</code>
+                </RowNote>
+                <FormActions>
+                  <RowPill type="button" onClick={() => { setTwoFAStep('idle'); setTwoFASecret(''); setTwoFAQrUrl(''); }}>Cancel</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => setTwoFAStep('confirm')}>Next</RowPill>
+                </FormActions>
+              </>
+            )}
+
+            {/* Step 2: confirm the code */}
+            {!totpEnabled && twoFAStep === 'confirm' && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>Enter the 6-digit code from your authenticator app, then confirm it’s you to finish.</RowNote>
+                {twoFAError && <RowNote $error style={{ marginTop: 0 }}>{twoFAError}</RowNote>}
+                <TextInput
+                  autoFocus
+                  value={twoFACode}
+                  onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  aria-label="6-digit code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  style={{ fontSize: 20, letterSpacing: 6, textAlign: 'center', width: 180 }}
+                />
+                <ConfirmIdentity
+                  password={twoFAPassword}
+                  onPassword={setTwoFAPassword}
+                  busy={twoFALoading || twoFACode.length !== 6}
+                  onEnter={() => { if (twoFACode.length === 6 && twoFAPassword) void handleConfirm2FA(); }}
+                  onUsePasskey={canPasskey ? () => void handleConfirm2FA('passkey') : undefined}
+                />
+                <FormActions>
+                  <RowPill type="button" onClick={() => { setTwoFAStep('qr'); setTwoFACode(''); setTwoFAPassword(''); setTwoFAError(''); }}>Back</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => void handleConfirm2FA()} disabled={twoFALoading || twoFACode.length !== 6 || !twoFAPassword}>
+                    {twoFALoading ? <Spinner size={14} /> : 'Confirm'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+
+            {/* Step 3: the backup codes, shown once */}
+            {twoFAStep === 'codes' && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Save these backup codes.</strong> They're shown only once. Each works once if you lose your authenticator app.
+                </RowNote>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px',
+                  fontFamily: 'monospace', fontSize: 14, padding: '12px 16px', color: 'var(--text-primary)',
+                  background: 'var(--bg-app)', border: '1px solid var(--border-card)', borderRadius: 8,
+                }}>
+                  {twoFABackupCodes.map(code => (
+                    <span key={code} style={{ userSelect: 'all' }}>{code}</span>
+                  ))}
+                </div>
+                <FormActions>
+                  <RowPill type="button" onClick={() => { navigator.clipboard.writeText(twoFABackupCodes.join('\n')).catch(() => {}); }}>Copy all</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => { setTwoFAStep('idle'); setTwoFABackupCodes([]); }}>Done</RowPill>
+                </FormActions>
+              </>
+            )}
+          </SettingsActionRow>
+
+          {/* ── Password ── */}
+          <SettingsActionRow
+            title="Password"
+            action={!showPassword && <RowPill type="button" onClick={() => setShowPassword(true)}>Change</RowPill>}
+          >
+            {showPassword && (
+              <>
+                {pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
+                <div>
+                  <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password, at least 12 characters" aria-label="New password" autoComplete="new-password" />
+                  <PasswordStrengthMeter password={newPw} email={user?.email} username={user?.username} />
+                </div>
+                <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Confirm new password" aria-label="Confirm new password" autoComplete="new-password" />
+                <ConfirmIdentity
+                  password={currentPw}
+                  onPassword={setCurrentPw}
+                  showCode={totpEnabled}
+                  code={pwCode}
+                  onCode={setPwCode}
+                  busy={pwLoading}
+                  onUsePasskey={canPasskey ? () => void handleChangePassword('passkey') : undefined}
+                />
+                <FormActions>
+                  <RowPill type="button" onClick={() => { setShowPassword(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setPwMessage(''); }}>Cancel</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => void handleChangePassword()} disabled={pwLoading || !currentPw || (totpEnabled && !pwCode.trim())}>
+                    {pwLoading ? <Spinner size={14} /> : 'Update password'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+            {!showPassword && pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
+          </SettingsActionRow>
+
+          {/* ── Recovery key ── */}
+          <SettingsActionRow
+            title="Recovery key"
+            description="For emergency access if you lose your password."
+            action={!generatedRecoveryKey && !showRecoveryKey && (
+              <RowPill type="button" onClick={() => { setShowRecoveryKey(true); setRecoveryKeyError(''); setRecoveryKeyPw(''); setRecoveryCode(''); }}>
+                Generate new
+              </RowPill>
+            )}
+          >
+            {showRecoveryKey && !generatedRecoveryKey && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>Confirm it’s you to make a new recovery key. Your old one stops working.</RowNote>
+                {recoveryKeyError && <RowNote $error style={{ marginTop: 0 }}>{recoveryKeyError}</RowNote>}
+                <ConfirmIdentity
+                  password={recoveryKeyPw}
+                  onPassword={setRecoveryKeyPw}
+                  showCode={totpEnabled}
+                  code={recoveryCode}
+                  onCode={setRecoveryCode}
+                  busy={recoveryKeyLoading}
+                  autoFocus
+                  onUsePasskey={canPasskey ? () => void handleGenerateRecoveryKey('passkey') : undefined}
+                />
+                <FormActions>
+                  <RowPill type="button" onClick={() => setShowRecoveryKey(false)}>Cancel</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => void handleGenerateRecoveryKey()} disabled={recoveryKeyLoading || !recoveryKeyPw || (totpEnabled && !recoveryCode.trim())}>
+                    {recoveryKeyLoading ? <Spinner size={14} /> : 'Generate recovery key'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+            {generatedRecoveryKey && (
+              <RecoveryKeyDisplay
+                recoveryKey={generatedRecoveryKey}
+                onConfirm={() => { setGeneratedRecoveryKey(''); setShowRecoveryKey(false); }}
+              />
+            )}
+          </SettingsActionRow>
+
+          {/* ── Active sessions ── */}
+          <SettingsActionRow
+            title="Active sessions"
+            description="Devices signed in to your account."
+            action={<RowPill type="button" onClick={handleLoadSessions}>{showSessions ? 'Hide' : 'View'}</RowPill>}
+          >
+            {showSessions && (
+              <SessionsList>
+                {sessionList.map(s => (
+                  <SessionItem key={s.id}>
+                    <SessionRow
+                      deviceInfo={s.userAgent ? suggestedPasskeyName(s.userAgent) : null}
+                      signedInWith={signInMethodLabel(s.deviceInfo)}
+                      ipAddress={s.ipAddress}
+                      lastActiveAt={s.lastActiveAt}
+                      isCurrent={s.isCurrent}
+                      onRevoke={() => handleRevokeSession(s.id)}
+                    />
+                  </SessionItem>
+                ))}
+              </SessionsList>
+            )}
+          </SettingsActionRow>
+
+          {/* ── Browsers that skip the 2FA code ── */}
+          {totpEnabled && <TrustedBrowsersSettings />}
+        </SettingsGroup>
       </Section>
 
-      <Section id="theme" title="Theme">
+
+      <Section id="theme" title="Theme Preferences">
       <SettingsCard>
         <ColorSection>
           <ColorSectionTitle>Appearance</ColorSectionTitle>
@@ -1114,14 +1315,6 @@ export function SettingsView() {
           </div>
         </ColorSection>
         <ColorSection>
-          <ColorSectionTitle>Background</ColorSectionTitle>
-          <ColorSectionDesc>
-            A photo across the top of every page. Pick another, or None for a plain page.
-            {wallpaperById(wallpaper)?.by && <> Showing a photo by {wallpaperById(wallpaper)!.by} on Unsplash.</>}
-          </ColorSectionDesc>
-          <WallpaperPicker value={wallpaperById(wallpaper) ? wallpaper : null} onChange={chooseWallpaper} />
-        </ColorSection>
-        <ColorSection>
           <ColorSectionTitle>Accent Color</ColorSectionTitle>
           <ColorSectionDesc>Choose an accent color for highlights and interactive elements</ColorSectionDesc>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -1143,6 +1336,14 @@ export function SettingsView() {
               />
             ))}
           </div>
+        </ColorSection>
+        <ColorSection>
+          <ColorSectionTitle>Background</ColorSectionTitle>
+          <ColorSectionDesc>
+            A photo across the top of every page. Pick another, or None for a plain page.
+            {wallpaperById(wallpaper)?.by && <> Showing a photo by {wallpaperById(wallpaper)!.by} on Unsplash.</>}
+          </ColorSectionDesc>
+          <WallpaperPicker value={wallpaperById(wallpaper) ? wallpaper : null} onChange={chooseWallpaper} />
         </ColorSection>
       </SettingsCard>
       </Section>
@@ -1195,241 +1396,6 @@ export function SettingsView() {
 
       <Section id="ai" title="In-App AI" subtitle="Calorie estimates for food and workouts, plus chat, using your own AI account.">
         <AiSettings themeMode={themeMode} />
-      </Section>
-
-      <Section id="security" title="Security" subtitle="How you sign in and get back in.">
-        <SettingsGroup>
-          {/* ── 2FA ── */}
-          <SettingsActionRow
-            title="Two-factor authentication"
-            description={totpEnabled
-              ? <StatusOk>On, using an authenticator app</StatusOk>
-              : twoFAStep === 'idle' ? 'Off. Add a code from an authenticator app when you sign in.' : undefined}
-            action={totpEnabled ? (
-              !disabling2FA && (
-                <RowPill type="button" onClick={() => { setDisabling2FA(true); setDisable2FAPassword(''); setDisable2FACode(''); setDisable2FAError(''); }}>
-                  Turn off
-                </RowPill>
-              )
-            ) : twoFAStep === 'idle' ? (
-              <RowPill type="button" onClick={handleStart2FASetup} disabled={twoFALoading}>
-                {twoFALoading ? <Spinner size={14} /> : 'Turn on'}
-              </RowPill>
-            ) : null}
-          >
-            {/* Turning it off: password and a current code */}
-            {totpEnabled && disabling2FA && (
-              <>
-                {disable2FAError && <RowNote $error style={{ marginTop: 0 }}>{disable2FAError}</RowNote>}
-                <PasswordInput
-                  value={disable2FAPassword}
-                  onChange={e => setDisable2FAPassword(e.target.value)}
-                  placeholder="Current password"
-                  aria-label="Current password"
-                  autoFocus
-                  autoComplete="current-password"
-                />
-                <TextInput
-                  value={disable2FACode}
-                  onChange={e => setDisable2FACode(e.target.value.slice(0, 64))}
-                  placeholder="Authenticator or backup code"
-                  aria-label="2FA code"
-                  autoComplete="one-time-code"
-                />
-                <FormActions>
-                  <RowPill type="button" onClick={() => setDisabling2FA(false)}>Cancel</RowPill>
-                  <RowPill type="button" $tone="danger" onClick={handleDisable2FA} disabled={twoFALoading || !disable2FAPassword || !disable2FACode.trim()}>
-                    {twoFALoading ? <Spinner size={14} /> : 'Turn off 2FA'}
-                  </RowPill>
-                </FormActions>
-              </>
-            )}
-
-            {/* Step 1: QR code */}
-            {!totpEnabled && twoFAStep === 'qr' && (
-              <>
-                <RowNote style={{ marginTop: 0 }}>Scan this QR code with your authenticator app, then press Next.</RowNote>
-                {twoFAQrUrl && (
-                  <img src={twoFAQrUrl} alt="2FA QR code" style={{ width: 180, height: 180, borderRadius: 8, border: '1px solid var(--border-card)', background: '#fff' }} />
-                )}
-                <RowNote style={{ marginTop: 0 }}>
-                  Manual entry code: <code style={{ userSelect: 'all', letterSpacing: 2, color: 'var(--text-primary)' }}>{twoFASecret}</code>
-                </RowNote>
-                <FormActions>
-                  <RowPill type="button" onClick={() => { setTwoFAStep('idle'); setTwoFASecret(''); setTwoFAQrUrl(''); }}>Cancel</RowPill>
-                  <RowPill type="button" $tone="accent" onClick={() => setTwoFAStep('confirm')}>Next</RowPill>
-                </FormActions>
-              </>
-            )}
-
-            {/* Step 2: confirm the code */}
-            {!totpEnabled && twoFAStep === 'confirm' && (
-              <>
-                <RowNote style={{ marginTop: 0 }}>Enter the 6-digit code from your authenticator app and your password to finish.</RowNote>
-                {twoFAError && <RowNote $error style={{ marginTop: 0 }}>{twoFAError}</RowNote>}
-                <TextInput
-                  autoFocus
-                  value={twoFACode}
-                  onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  aria-label="6-digit code"
-                  inputMode="numeric"
-                  maxLength={6}
-                  style={{ fontSize: 20, letterSpacing: 6, textAlign: 'center', width: 180 }}
-                />
-                <PasswordInput
-                  value={twoFAPassword}
-                  onChange={e => setTwoFAPassword(e.target.value)}
-                  placeholder="Current password"
-                  aria-label="Current password"
-                  autoComplete="current-password"
-                  onKeyDown={e => e.key === 'Enter' && twoFACode.length === 6 && twoFAPassword && handleConfirm2FA()}
-                />
-                <FormActions>
-                  <RowPill type="button" onClick={() => { setTwoFAStep('qr'); setTwoFACode(''); setTwoFAPassword(''); setTwoFAError(''); }}>Back</RowPill>
-                  <RowPill type="button" $tone="accent" onClick={handleConfirm2FA} disabled={twoFALoading || twoFACode.length !== 6 || !twoFAPassword}>
-                    {twoFALoading ? <Spinner size={14} /> : 'Confirm'}
-                  </RowPill>
-                </FormActions>
-              </>
-            )}
-
-            {/* Step 3: the backup codes, shown once */}
-            {twoFAStep === 'codes' && (
-              <>
-                <RowNote style={{ marginTop: 0 }}>
-                  <strong style={{ color: 'var(--text-primary)' }}>Save these backup codes.</strong> They're shown only once. Each works once if you lose your authenticator app.
-                </RowNote>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px',
-                  fontFamily: 'monospace', fontSize: 14, padding: '12px 16px', color: 'var(--text-primary)',
-                  background: 'var(--bg-app)', border: '1px solid var(--border-card)', borderRadius: 8,
-                }}>
-                  {twoFABackupCodes.map(code => (
-                    <span key={code} style={{ userSelect: 'all' }}>{code}</span>
-                  ))}
-                </div>
-                <FormActions>
-                  <RowPill type="button" onClick={() => { navigator.clipboard.writeText(twoFABackupCodes.join('\n')).catch(() => {}); }}>Copy all</RowPill>
-                  <RowPill type="button" $tone="accent" onClick={() => { setTwoFAStep('idle'); setTwoFABackupCodes([]); }}>Done</RowPill>
-                </FormActions>
-              </>
-            )}
-          </SettingsActionRow>
-
-          {/* ── Password ── */}
-          <SettingsActionRow
-            title="Password"
-            action={!showPassword && <RowPill type="button" onClick={() => setShowPassword(true)}>Change</RowPill>}
-          >
-            {showPassword && (
-              <>
-                {pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
-                <PasswordInput value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Current password" aria-label="Current password" autoComplete="current-password" />
-                <div>
-                  <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password, at least 12 characters" aria-label="New password" autoComplete="new-password" />
-                  <PasswordStrengthMeter password={newPw} email={user?.email} username={user?.username} />
-                </div>
-                <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Confirm new password" aria-label="Confirm new password" autoComplete="new-password" />
-                {totpEnabled && (
-                  <TextInput
-                    value={pwCode}
-                    onChange={e => setPwCode(e.target.value.slice(0, 64))}
-                    placeholder="Authenticator or backup code"
-                    aria-label="2FA code"
-                    autoComplete="one-time-code"
-                  />
-                )}
-                <FormActions>
-                  <RowPill type="button" onClick={() => { setShowPassword(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setPwMessage(''); }}>Cancel</RowPill>
-                  <RowPill type="button" $tone="accent" onClick={handleChangePassword} disabled={pwLoading || (totpEnabled && !pwCode.trim())}>
-                    {pwLoading ? <Spinner size={14} /> : 'Update password'}
-                  </RowPill>
-                </FormActions>
-              </>
-            )}
-            {!showPassword && pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
-          </SettingsActionRow>
-
-          {/* ── Recovery key ── */}
-          <SettingsActionRow
-            title="Recovery key"
-            description="For emergency access if you lose your password."
-            action={!generatedRecoveryKey && !showRecoveryKey && (
-              <RowPill type="button" onClick={() => { setShowRecoveryKey(true); setRecoveryKeyError(''); setRecoveryKeyPw(''); setRecoveryCode(''); }}>
-                Generate new
-              </RowPill>
-            )}
-          >
-            {showRecoveryKey && !generatedRecoveryKey && (
-              <>
-                <RowNote style={{ marginTop: 0 }}>Enter your password to make a new recovery key. Your old one stops working.</RowNote>
-                {recoveryKeyError && <RowNote $error style={{ marginTop: 0 }}>{recoveryKeyError}</RowNote>}
-                <PasswordInput
-                  value={recoveryKeyPw}
-                  onChange={e => setRecoveryKeyPw(e.target.value)}
-                  placeholder="Current password"
-                  aria-label="Current password"
-                  autoComplete="current-password"
-                  autoFocus
-                />
-                {totpEnabled && (
-                  <TextInput
-                    value={recoveryCode}
-                    onChange={e => setRecoveryCode(e.target.value.slice(0, 64))}
-                    placeholder="Authenticator or backup code"
-                    aria-label="2FA code"
-                    autoComplete="one-time-code"
-                  />
-                )}
-                <FormActions>
-                  <RowPill type="button" onClick={() => setShowRecoveryKey(false)}>Cancel</RowPill>
-                  <RowPill type="button" $tone="accent" onClick={handleGenerateRecoveryKey} disabled={recoveryKeyLoading || !recoveryKeyPw || (totpEnabled && !recoveryCode.trim())}>
-                    {recoveryKeyLoading ? <Spinner size={14} /> : 'Generate recovery key'}
-                  </RowPill>
-                </FormActions>
-              </>
-            )}
-            {generatedRecoveryKey && (
-              <RecoveryKeyDisplay
-                recoveryKey={generatedRecoveryKey}
-                onConfirm={() => { setGeneratedRecoveryKey(''); setShowRecoveryKey(false); }}
-              />
-            )}
-          </SettingsActionRow>
-
-          {/* ── Active sessions ── */}
-          <SettingsActionRow
-            title="Active sessions"
-            description="Devices signed in to your account."
-            action={<RowPill type="button" onClick={handleLoadSessions}>{showSessions ? 'Hide' : 'View'}</RowPill>}
-          >
-            {showSessions && (
-              <SessionsList>
-                {sessionList.map(s => (
-                  <SessionItem key={s.id}>
-                    <SessionRow
-                      deviceInfo={s.deviceInfo}
-                      ipAddress={s.ipAddress}
-                      lastActiveAt={s.lastActiveAt}
-                      isCurrent={s.isCurrent}
-                      onRevoke={() => handleRevokeSession(s.id)}
-                    />
-                  </SessionItem>
-                ))}
-              </SessionsList>
-            )}
-          </SettingsActionRow>
-
-          {/* ── Remember me on this browser ── */}
-          <SettingsActionRow
-            title="This browser"
-            description={isRemembered
-              ? 'Stays unlocked until you close it, lock, or sign out. One hour idle or 12 hours at most.'
-              : 'Locks when you step away. Tick “Remember me” when you sign in or unlock to stay unlocked until you close the browser.'}
-            action={isRemembered ? <RowPill type="button" onClick={forgetBrowser}>Forget</RowPill> : undefined}
-          />
-        </SettingsGroup>
       </Section>
 
       <Section id="data" title="Data">

@@ -8,7 +8,6 @@ import { TOP_BAR_SLOT_ID } from './TopBarAction.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
-import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEffect } from 'react';
 
 /* Top bar shown only on phones/tablets: the logo and the current page's name
@@ -68,7 +67,7 @@ const PageName = styled.span`
 
 /* The menu: a sheet dropping from under the bar, full width, rounded at the
    bottom — one row per destination (accent icon + name); the current page
-   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings, Lock and Sign out, quieter. Escape, a
+   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings and Sign out, quieter. Escape, a
    destination or a tap outside closes it. */
 const Panel = styled.nav`
   display: none;
@@ -157,7 +156,6 @@ export function MobileChrome() {
   const main = [home, ...items.filter(i => i.key !== 'settings')];
   const settings = items.find(i => i.key === 'settings');
   const signOut = useSignOut();
-  const { lock } = useEncryption();
 
   useEffect(() => {
     if (!open) return;
@@ -193,10 +191,6 @@ export function MobileChrome() {
           {main.map(i => row(i))}
           <MenuRule />
           {settings && row(settings, true)}
-          <NavRow type="button" $active={false} $quiet onClick={() => { setOpen(false); lock(); }}>
-            <MaterialIcon $size={22} aria-hidden="true">lock</MaterialIcon>
-            <span>Lock</span>
-          </NavRow>
           <NavRow type="button" $active={false} $quiet onClick={() => { setOpen(false); void signOut(); }}>
             <MaterialIcon $size={22} aria-hidden="true">logout</MaterialIcon>
             <span>Sign out</span>

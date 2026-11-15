@@ -2,9 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { MacroDistribution } from '../components/organisms/MacroDistribution.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import {
   AiErrorNote, DayAtAGlance, DayNavigator, DayTitle, FillMissingAction, FoodDayList, FoodTotalsTable,
@@ -138,7 +136,7 @@ interface MealsLogViewProps {
  * nutrients are estimated automatically.
  */
 export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
 
@@ -202,12 +200,6 @@ export function MealsLogView({ title = 'Health', tabBar }: MealsLogViewProps) {
     openNew(id, { mealType: mealForNow(), consumedDate: day, consumedTime: day === today ? nowTime() : '' });
   };
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

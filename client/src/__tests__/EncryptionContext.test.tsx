@@ -14,7 +14,13 @@ const mockDecryptPost = vi.fn();
 const mockDecryptPosts = vi.fn();
 const mockUnwrapWithRecoveryKey = vi.fn();
 const mockRewrapMasterKey = vi.fn();
-const mockRewrapFromParams = vi.fn();
+const mockExtractableFromPassword = vi.fn();
+const mockExtractableFromPasskey = vi.fn();
+const mockUnwrapWithPasskey = vi.fn();
+const mockWrapForPasskey = vi.fn();
+const mockNewRecoveryWrapping = vi.fn();
+const mockPasswordWrap = vi.fn();
+const mockClaimBrowserFor = vi.fn();
 
 vi.mock('@shared/crypto/encryptionService.js', () => ({
   encryptionService: {
@@ -26,13 +32,30 @@ vi.mock('@shared/crypto/encryptionService.js', () => ({
     accountTag: async () => 'test-account-tag',
     unwrapWithRecoveryKey: (...args: unknown[]) => mockUnwrapWithRecoveryKey(...args),
     rewrapMasterKey: (...args: unknown[]) => mockRewrapMasterKey(...args),
-    rewrapFromParams: (...args: unknown[]) => mockRewrapFromParams(...args),
+    extractableFromPassword: (...args: unknown[]) => mockExtractableFromPassword(...args),
+    extractableFromPasskey: (...args: unknown[]) => mockExtractableFromPasskey(...args),
+    unwrapWithPasskey: (...args: unknown[]) => mockUnwrapWithPasskey(...args),
+    wrapForPasskey: (...args: unknown[]) => mockWrapForPasskey(...args),
+    generateNewRecoveryWrapping: (...args: unknown[]) => mockNewRecoveryWrapping(...args),
   },
+}));
+
+// What the browser stores is kept for the same person and wiped for anyone else (services/browserData)
+vi.mock('../services/browserData.js', () => ({
+  claimBrowserFor: (...args: unknown[]) => mockClaimBrowserFor(...args),
+}));
+
+vi.mock('../services/api.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../services/api.js')>()),
+  auth: { passwordWrap: (...args: unknown[]) => mockPasswordWrap(...args) },
 }));
 
 vi.mock('@shared/crypto/primitives.js', () => ({
   toNonExtractable: vi.fn().mockResolvedValue({ type: 'secret', algorithm: { name: 'AES-GCM' } } as unknown as CryptoKey),
 }));
+
+// The derived sign-in secret (a real one costs 600k PBKDF2 rounds)
+vi.mock('@shared/crypto/authSecret.js', () => ({ deriveAuthSecret: async () => 'a'.repeat(64) }));
 
 vi.mock('@shared/crypto/constants.js', () => ({
   PBKDF2_ITERATIONS: 600000,
@@ -50,6 +73,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockClaimBrowserFor.mockResolvedValue(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -98,7 +122,7 @@ describe('EncryptionProvider – unlock', () => {
   });
 });
 
-describe('EncryptionProvider – lock', () => {
+describe('EncryptionProvider – clearKey (the session ending)', () => {
   it('clears key and sets isUnlocked to false', async () => {
     mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
 
@@ -110,7 +134,7 @@ describe('EncryptionProvider – lock', () => {
     expect(result.current.isUnlocked).toBe(true);
 
     act(() => {
-      result.current.lock();
+      result.current.clearKey();
     });
 
     expect(result.current.isUnlocked).toBe(false);
@@ -125,7 +149,7 @@ describe('EncryptionProvider – lock', () => {
     useEntriesStore.setState({ decryptedEntries: [{ id: 1, content: 'secret' }] as never, isInitialized: true });
     useUIStore.setState({ displayName: 'Alex', topicCustomFields: { 1: [] } });
 
-    act(() => { result.current.lock(); });
+    act(() => { result.current.clearKey(); });
 
     expect(useEntriesStore.getState().decryptedEntries).toEqual([]);
     expect(useEntriesStore.getState().isInitialized).toBe(false);
@@ -245,35 +269,134 @@ describe('EncryptionProvider – decryptPost / decryptPosts', () => {
   });
 });
 
-describe('EncryptionProvider – rewrapMasterKey', () => {
-  it('rewraps using current password in change-password flow', async () => {
+describe('EncryptionProvider – no lock screen', () => {
+  it('keeps the key when the tab is hidden: switching tabs ends nothing', async () => {
     mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
-    mockRewrapFromParams.mockResolvedValue({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
-
     const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
 
-    // Unlock normally (stores encryption params)
-    await act(async () => {
-      await result.current.unlock('currentPw', 'salt', 'emk', 'iv', 600000);
-    });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
 
-    let rewrapResult: unknown;
-    await act(async () => {
-      rewrapResult = await result.current.rewrapMasterKey('newPw', 'currentPw');
-    });
-
-    expect(rewrapResult).toEqual({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
-    expect(mockRewrapFromParams).toHaveBeenCalledWith('currentPw', 'salt', 'emk', 'iv', 600000, 'newPw');
+    expect(result.current.isUnlocked).toBe(true);
   });
 
-  it('needs the current password (no extractable key is ever kept for a rewrap)', async () => {
+  it('has no lock, remember or forget in what it offers', () => {
     const { result } = renderHook(() => useEncryption(), { wrapper });
+    const api = result.current as unknown as Record<string, unknown>;
+    expect(api.lock).toBeUndefined();
+    expect(api.isRemembered).toBeUndefined();
+    expect(api.forgetBrowser).toBeUndefined();
+  });
 
-    await expect(
-      act(async () => {
-        await result.current.rewrapMasterKey('newPassword');
-      })
-    ).rejects.toThrow('Enter your current password to change it');
+  it('stores nothing that opens the journal: unlocking writes no key material to the browser', async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    const stored = JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage });
+    expect(stored).not.toMatch(/emk|chronicles\.remember|wrapped/i);
+  });
+
+  it('asks whose browser this is before anything loads, and tells other tabs when it was wiped', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    expect(mockClaimBrowserFor).toHaveBeenCalledWith('test-account-tag');
   });
 });
 
+describe('EncryptionProvider – passkey', () => {
+  const wrap = { credentialId: 'cred', wrappedMK: 'w', wrapIv: 'iv' };
+
+  it('opens the key from a passkey’s secret and its wrap', async () => {
+    mockUnwrapWithPasskey.mockResolvedValue(fakeCryptoKey);
+    const prf = new Uint8Array(32).fill(7);
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlockWithPasskey(prf, wrap); });
+    expect(result.current.isUnlocked).toBe(true);
+    expect(mockUnwrapWithPasskey).toHaveBeenCalledWith(prf, 'w', 'iv', 'cred');
+  });
+
+  it('stays closed when the wrap doesn’t open', async () => {
+    mockUnwrapWithPasskey.mockRejectedValue(new Error('OperationError'));
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await expect(act(async () => { await result.current.unlockWithPasskey(new Uint8Array(32), wrap); })).rejects.toThrow();
+    expect(result.current.isUnlocked).toBe(false);
+  });
+
+  it('wraps the key for a new passkey from either source', async () => {
+    const extractable = { extractable: true } as unknown as CryptoKey;
+    mockExtractableFromPasskey.mockResolvedValue(extractable);
+    mockWrapForPasskey.mockResolvedValue({ wrappedMK: 'nw', wrapIv: 'niv' });
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    const prf = new Uint8Array(32).fill(1);
+    const newPrf = new Uint8Array(32).fill(2);
+    let made: unknown;
+    await act(async () => { made = await result.current.passkeyWrapWith({ kind: 'passkey', prf, wrap }, newPrf, 'new-cred'); });
+    expect(made).toEqual({ wrappedMK: 'nw', wrapIv: 'niv' });
+    expect(mockExtractableFromPasskey).toHaveBeenCalledWith(prf, 'w', 'iv', 'cred');
+    expect(mockWrapForPasskey).toHaveBeenCalledWith(extractable, newPrf, 'new-cred');
+  });
+});
+
+describe('EncryptionProvider – a new wrap of the key', () => {
+  const extractable = { extractable: true } as unknown as CryptoKey;
+
+  it('fetches the password wrap against the password and the 2FA code, for one action, and rewraps with it', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    mockExtractableFromPassword.mockResolvedValue(extractable);
+    mockRewrapMasterKey.mockResolvedValue({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
+    mockPasswordWrap.mockResolvedValue({ confirmToken: 't'.repeat(64), encryption: { kekSalt: 'S', encryptedMasterKey: 'E', kekWrapIv: 'I', kekIterations: 600000 } });
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('currentPw', 'salt', 'emk', 'iv', 600000); });
+
+    let rewrapResult: unknown;
+    let token: string | undefined;
+    await act(async () => {
+      const source = await result.current.passwordSource('currentPw', 'a@b.c', 'change-password', ' 123456 ');
+      token = source.confirmToken;
+      rewrapResult = await result.current.rewrapWith(source, 'newPw');
+    });
+
+    // What it sent is the derived sign-in secret (never the password), the action and the code
+    expect(mockPasswordWrap).toHaveBeenCalledWith({ currentAuthSecret: 'a'.repeat(64), action: 'change-password', code: '123456' });
+    // The wrap comes from the server each time — never the one this tab signed
+    // in with, which goes stale when the password is changed in another tab
+    expect(mockExtractableFromPassword).toHaveBeenCalledWith('currentPw', 'S', 'E', 'I', 600000);
+    expect(mockRewrapMasterKey).toHaveBeenCalledWith(extractable, 'newPw');
+    expect(rewrapResult).toEqual({ salt: 'ns', wrappedMK: 'nwmk', wrapIv: 'nwiv' });
+    // The single-use token then confirms the action, so the code isn't asked twice
+    expect(token).toBe('t'.repeat(64));
+  });
+
+  it('keeps no wrap in the tab after signing in', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    mockPasswordWrap.mockRejectedValue(new Error('Current password incorrect'));
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('currentPw', 'salt', 'emk', 'iv', 600000); });
+    // Nothing cached to fall back on: a refused fetch is a refusal
+    await expect(act(async () => { await result.current.passwordSource('wrong', 'a@b.c', 'recovery-key'); })).rejects.toThrow('Current password incorrect');
+    expect((result.current as unknown as Record<string, unknown>).adoptKeyWrap).toBeUndefined();
+  });
+
+  it('says so when the password doesn’t open the key', async () => {
+    mockExtractableFromPassword.mockRejectedValue(new Error('OperationError'));
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await expect(act(async () => {
+      await result.current.verifyKeySource({ kind: 'password', password: 'x', params: { kekSalt: 's', encryptedMasterKey: 'e', kekWrapIv: 'i', kekIterations: 600000 } });
+    })).rejects.toThrow('Current password incorrect');
+  });
+
+  it('makes a recovery key from a passkey touch', async () => {
+    mockExtractableFromPasskey.mockResolvedValue(extractable);
+    mockNewRecoveryWrapping.mockResolvedValue({ recoveryKey: 'rk', recoveryWrappedMK: 'rw', recoveryWrapIv: 'ri' });
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    let made: unknown;
+    await act(async () => { made = await result.current.recoveryKeyWith({ kind: 'passkey', prf: new Uint8Array(32), wrap: { credentialId: 'c', wrappedMK: 'w', wrapIv: 'iv' } }); });
+    expect(made).toEqual({ recoveryKey: 'rk', recoveryWrappedMK: 'rw', recoveryWrapIv: 'ri' });
+    expect(mockNewRecoveryWrapping).toHaveBeenCalledWith(extractable);
+  });
+});

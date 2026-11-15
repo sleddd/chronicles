@@ -8,6 +8,8 @@ import { AuthTemplate } from '../components/templates/AuthTemplate.js';
 import { LoginForm } from '../components/organisms/LoginForm.js';
 import { Button } from '../components/atoms/Button.js';
 import { Spinner } from '../components/atoms/Spinner.js';
+import { TrustBrowser } from '../components/molecules/TrustBrowser.js';
+import { PasskeyCancelled, PasskeyCannotUnlock, passkeysAvailable } from '../services/passkeys.js';
 
 const OtpWrap = styled.div`
   display: flex;
@@ -82,9 +84,12 @@ const ErrorBanner = styled.div`
 
 export function LoginView() {
   const navigate = useNavigate();
-  const { login, submitTotpCode, cancel2FA, pending2FA } = useAuth();
-  const { unlock } = useEncryption();
+  const { login, submitTotpCode, loginWithPasskey, cancel2FA, pending2FA, endSession } = useAuth();
+  const { unlock, unlockWithPasskey, clearKey } = useEncryption();
   const freshSignIn = useFreshSignIn();
+  // The passkey button shows only where the browser can open the journal with one
+  const [canPasskey, setCanPasskey] = useState(false);
+  useEffect(() => { void passkeysAvailable().then(setCanPasskey); }, []);
 
   // The password, held for the unlock after 2FA completes: in a ref, not
   // state (no copies in React's render history or devtools), and dropped as
@@ -96,7 +101,8 @@ export function LoginView() {
     if (forgetTimerRef.current) { clearTimeout(forgetTimerRef.current); forgetTimerRef.current = null; }
   };
   useEffect(() => forgetPassword, []);
-  const [savedRemember, setSavedRemember] = useState(false);
+  // "Don't ask for a code on this browser for 30 days" (the code screen)
+  const [trustBrowser, setTrustBrowser] = useState(false);
 
   // 2FA screen state
   const [otpCode, setOtpCode] = useState('');
@@ -119,43 +125,74 @@ export function LoginView() {
   // Back to the sign-in form (the code screen's link, or a timed-out session)
   const leave2FA = (note = '') => {
     cancel2FA();
+    // The sign-in is off: this tab no longer counts as one that is signing in
+    clearKey();
     setOtpCode(''); setOtpError(''); setUseBackup(false);
     forgetPassword();
     setSignInNote(note);
   };
 
-  const handleLogin = async (email: string, password: string, remember: boolean) => {
-    // Nothing of whoever used this browser last may carry over into this sign-in
-    await freshSignIn();
-    const encryptionData = await login(email, password);
+  /** A session with no key is no use to anyone: if the key didn't open, end what the sign-in started */
+  const abandon = async () => {
+    clearKey();
+    await endSession().catch(() => {});
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+    // Nothing of whoever used this tab last carries over into this sign-in
+    await freshSignIn(email);
+    let encryptionData: Awaited<ReturnType<typeof login>>;
+    try {
+      encryptionData = await login(email, password);
+    } catch (err) {
+      clearKey();
+      throw err;
+    }
 
     if (encryptionData === null) {
       // 2FA required — keep the password for the unlock once the code is in
       forgetPassword();
       savedPasswordRef.current = password;
       forgetTimerRef.current = setTimeout(forgetPassword, 5 * 60 * 1000);
-      setSavedRemember(remember);
       return;
     }
 
-    // Normal login — unlock encryption if enabled
-    if (
-      encryptionData.encryptionEnabled &&
-      encryptionData.kekSalt &&
-      encryptionData.encryptedMasterKey &&
-      encryptionData.kekWrapIv
-    ) {
-      await unlock(
-        password,
-        encryptionData.kekSalt,
-        encryptionData.encryptedMasterKey,
-        encryptionData.kekWrapIv,
-        encryptionData.kekIterations,
-        remember
-      );
+    if (!encryptionData.kekSalt || !encryptionData.encryptedMasterKey || !encryptionData.kekWrapIv) {
+      await abandon();
+      throw new Error('This account has no key to open. Use your recovery key.');
+    }
+    try {
+      await unlock(password, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations);
+    } catch {
+      await abandon();
+      throw new Error('Your journal couldn’t be opened. Try again.');
     }
 
     navigate('/dashboard');
+  };
+
+  /** One touch: the passkey signs in, and its secret opens the key */
+  const handlePasskey = async () => {
+    setSignInNote('');
+    await freshSignIn();
+    let signedIn = false;
+    try {
+      const result = await loginWithPasskey();
+      signedIn = true;
+      try {
+        await unlockWithPasskey(result.prf, result.wrap);
+      } finally {
+        result.prf.fill(0);
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      if (signedIn) await abandon(); else clearKey();
+      if (err instanceof PasskeyCancelled) return;
+      if (err instanceof PasskeyCannotUnlock) throw err;
+      throw new Error(signedIn
+        ? 'Your journal couldn’t be opened with that passkey. Sign in with your password.'
+        : err instanceof Error && /didn’t work|unavailable/.test(err.message) ? err.message : 'That passkey didn’t work. Try again, or sign in with your password.');
+    }
   };
 
   const handleSubmitOtp = async () => {
@@ -164,21 +201,18 @@ export function LoginView() {
     setOtpLoading(true);
     setOtpError('');
     try {
-      const encryptionData = await submitTotpCode(code);
-      if (
-        encryptionData.encryptionEnabled &&
-        encryptionData.kekSalt &&
-        encryptionData.encryptedMasterKey &&
-        encryptionData.kekWrapIv
-      ) {
-        await unlock(
-          savedPasswordRef.current,
-          encryptionData.kekSalt,
-          encryptionData.encryptedMasterKey,
-          encryptionData.kekWrapIv,
-          encryptionData.kekIterations,
-          savedRemember
-        );
+      const encryptionData = await submitTotpCode(code, trustBrowser && !useBackup);
+      if (!encryptionData.kekSalt || !encryptionData.encryptedMasterKey || !encryptionData.kekWrapIv) {
+        await abandon();
+        leave2FA('This account has no key to open. Use your recovery key.');
+        return;
+      }
+      try {
+        await unlock(savedPasswordRef.current, encryptionData.kekSalt, encryptionData.encryptedMasterKey, encryptionData.kekWrapIv, encryptionData.kekIterations);
+      } catch {
+        await abandon();
+        leave2FA('Your journal couldn’t be opened. Sign in again.');
+        return;
       }
       forgetPassword();
       navigate('/dashboard');
@@ -233,6 +267,8 @@ export function LoginView() {
             />
           )}
 
+          {!useBackup && <TrustBrowser checked={trustBrowser} onChange={setTrustBrowser} />}
+
           <Button
             type="button"
             variant="secondary"
@@ -265,8 +301,9 @@ export function LoginView() {
     >
       {signInNote && <ErrorBanner role="status">{signInNote}</ErrorBanner>}
       <LoginForm
-        onSubmit={async (email, password, remember) => { setSignInNote(''); await handleLogin(email, password, remember); }}
+        onSubmit={async (email, password) => { setSignInNote(''); await handleLogin(email, password); }}
         onForgotPassword={() => navigate('/recover')}
+        onPasskey={canPasskey ? handlePasskey : undefined}
       />
     </AuthTemplate>
   );

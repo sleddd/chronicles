@@ -10,8 +10,9 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useAiReady', () => ({ useAiReady: () => true }));
 vi.mock('@/hooks/useOpenInJournal', () => ({ useOpenInJournal: () => vi.fn() }));
-const lockFn = vi.hoisted(() => vi.fn());
-vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ encryptPost: vi.fn(), lock: lockFn }) }));
+const endSessionFn = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ encryptPost: vi.fn() }) }));
+vi.mock('@/hooks/useSignOut', () => ({ useEndSession: () => endSessionFn, useSignOut: () => vi.fn() }));
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ topics: [], addDecryptedEntry: vi.fn() }),
 }));
@@ -198,10 +199,11 @@ describe('AiChat safety', () => {
     expect(await screen.findByText('Thank you for telling me. Chronicles is made for grown-ups.')).toBeInTheDocument();
     expect(screen.queryByText(/\[\[MINOR\]\]/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
-    expect(screen.getByText('This chat is for adults. The account owner can resume it with their password.')).toBeInTheDocument();
+    expect(screen.getByText('This chat is for adults. The account owner can resume it by signing in again.')).toBeInTheDocument();
     expect(analytics.minorDetected).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Lock Chronicles' }));
-    expect(lockFn).toHaveBeenCalled();
+    // The under-18 stop ends the session: the owner signs in again to a fresh chat
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(endSessionFn).toHaveBeenCalledWith('Signed out. Sign in again to carry on.');
   });
 
   it('minor (classifier): an untagged reply is replaced by the fixed one', async () => {
@@ -211,7 +213,7 @@ describe('AiChat safety', () => {
     await send('my teacher gave us homework at recess');
     expect(await screen.findByText(/Chronicles is made for grown-ups, so I can't keep chatting/)).toBeInTheDocument();
     expect(screen.queryByText('Sure, let’s play a game!')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Lock Chronicles' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
   });
 
   it('minor (model tag only): pauses too', async () => {

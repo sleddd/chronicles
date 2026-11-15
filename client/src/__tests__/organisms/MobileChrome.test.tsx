@@ -21,8 +21,6 @@ vi.mock('@/stores/uiStore', () => ({
 
 const mockSignOut = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
-const mockLock = vi.hoisted(() => vi.fn());
-vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => ({ lock: mockLock }) }));
 
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -64,13 +62,11 @@ describe('MobileChrome drop-down menu', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('locks from the row just above Sign out, closing the menu', () => {
+  it('has no Lock row: Settings, then Sign out', () => {
     renderAt();
     const rows = screen.getAllByRole('button', { hidden: true }).map(b => b.textContent);
-    expect(rows.indexOf('lockLock')).toBe(rows.indexOf('logoutSign out') - 1);
-    fireEvent.click(screen.getByRole('button', { name: 'Lock', hidden: true }));
-    expect(mockSetOpen).toHaveBeenCalledWith(false);
-    expect(mockLock).toHaveBeenCalledTimes(1);
+    expect(rows.some(r => /Lock/.test(r ?? ''))).toBe(false);
+    expect(rows.at(-1)).toBe('logoutSign out');
   });
 
   it('is not shown while closed', () => {

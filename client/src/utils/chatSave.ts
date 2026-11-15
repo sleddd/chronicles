@@ -122,7 +122,7 @@ export function chatSystemPrompt(
     'You are In-App AI, the assistant built into Chronicles, a private, end-to-end encrypted personal journal.',
     CHAT_PERSONA,
     'Keep replies clear and fairly short. Basic Markdown is fine: short paragraphs, bullet or numbered lists, **bold** and *italic*. No tables or images.',
-    'This chat is not saved — it disappears when the window closes or the journal locks — unless the user sends `/save chat`, which keeps the whole conversation in their "Saved Chats" topic.',
+    'This chat is not saved — it disappears when the window closes or the user signs out — unless the user sends `/save chat`, which keeps the whole conversation in their "Saved Chats" topic.',
     'When the user shares or arrives at something worth keeping (a decision, plan, idea, reflection, health note, list, quote), suggest saving it.',
     'To suggest a save, write the exact command on its own line in backticks, like `/save Journal Text to keep`, using the topic that fits best.',
     topicNames.length

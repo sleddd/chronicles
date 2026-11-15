@@ -17,6 +17,15 @@ describe('onboarding', () => {
     expect(gettingStarted({ state: {}, voiceSupported: false }).map(i => i.key)).not.toContain('voice');
   });
 
+  it('offers setting up a passkey, before the recovery key, only where the browser can use one', () => {
+    const withPasskey = gettingStarted({ state: {}, voiceSupported: true, passkeySupported: true });
+    expect(withPasskey.map(i => i.key)).toEqual(['name', 'city', 'entry', 'health', 'voice', 'passkey', 'recovery']);
+    expect(withPasskey.find(i => i.key === 'passkey')).toMatchObject({ label: 'Set up a passkey', done: false });
+    expect(gettingStarted({ state: {}, voiceSupported: true, passkeySupported: false }).map(i => i.key)).not.toContain('passkey');
+    // Ticked by hand like the rest
+    expect(gettingStarted({ state: { ticked: ['passkey'] }, voiceSupported: true, passkeySupported: true }).find(i => i.key === 'passkey')?.done).toBe(true);
+  });
+
   it('ticking one item ticks only that one (the last one too)', () => {
     const ticked = toggleTicked({}, 'recovery');
     const items = gettingStarted({ state: { ticked }, voiceSupported: true });

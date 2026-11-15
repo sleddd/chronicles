@@ -24,6 +24,18 @@ vi.mock('../../db/prisma.js', () => ({
 }));
 
 // Mock schemaManager
+// Plain functions, not vi.fn: a test's resetAllMocks must not leave them returning undefined
+vi.mock('../../db/trustedDeviceQueries.js', () => ({
+  TRUST_DAYS: 30,
+  trustDevice: async () => 't'.repeat(43),
+  useTrustedDevice: async () => false,
+  forgetTrustToken: async () => undefined,
+  forgetAllTrustedDevices: async () => undefined,
+  listTrustedDevices: async () => [],
+  forgetTrustedDevice: async () => true,
+}));
+vi.mock('../../db/passkeyQueries.js', () => ({ removeAllPasskeys: async () => 0 }));
+
 vi.mock('../../db/schemaManager.js', () => ({
   registerTenant: vi.fn(),
 }));
@@ -551,7 +563,7 @@ describe('Auth Routes', () => {
   // GET /api/auth/me
   // =========================================================================
   describe('GET /api/auth/me', () => {
-    it('returns user and encryption data when authenticated', async () => {
+    it('returns the user, never the wrapped key', async () => {
       (prisma.account.findUnique as any).mockResolvedValue({
         email: 'test@example.com',
         username: 'testuser',
@@ -571,7 +583,13 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.user.email).toBe('test@example.com');
-      expect(res.body.encryption.encryptionEnabled).toBe(true);
+      // Who is signed in, and nothing that opens the journal: a session alone
+      // never gets the wrapped key (it was enough to guess the password offline)
+      expect(res.body.encryption).toBeUndefined();
+      expect(JSON.stringify(res.body)).not.toMatch(/encryptedMasterKey|kekSalt|recoveryWrappedMK/);
+      const selected = (prisma.account.findUnique as any).mock.calls.at(-1)[0].select;
+      expect(selected.encryptedMasterKey).toBeUndefined();
+      expect(selected.recoveryWrappedMK).toBeUndefined();
     });
 
     it('returns 404 when account not found', async () => {

@@ -9,7 +9,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({
-  useInitializeData: () => ({ isReady: true, isLoading: false, needsUnlock: false, handleUnlock: vi.fn() }),
+  useInitializeData: () => ({ isReady: true, isLoading: false }),
 }));
 
 const topics = [{ id: 1, name: 'Medication' }, { id: 2, name: 'Meals' }];

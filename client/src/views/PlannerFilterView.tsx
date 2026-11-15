@@ -13,7 +13,6 @@ import { Select } from '../components/atoms/Select.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
@@ -307,7 +306,7 @@ const PRIORITY_OPTIONS = [
 ];
 
 export function PlannerFilterView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
@@ -603,9 +602,6 @@ export function PlannerFilterView() {
     setPanelOpen(true);
   };
 
-  if (needsUnlock) {
-    return (<><ContentTemplate><EmptyState message="Unlock your journal to use planner filters" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
-  }
   if (isLoading || !isReady) {
     return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
   }

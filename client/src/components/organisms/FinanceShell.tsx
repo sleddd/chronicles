@@ -2,10 +2,8 @@ import type { ReactNode } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../templates/ContentTemplate.js';
-import { EmptyState } from '../atoms/EmptyState.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { PillButton } from '../atoms/PillButton.js';
-import { UnlockDialog } from './UnlockDialog.js';
 import { FINANCE_TITLE, FinanceTabBar } from '../molecules/FinanceTabBar.js';
 import { ErrorNote, Note } from '../molecules/FinanceParts.js';
 import { useInitializeData } from '../../hooks/useInitializeData.js';
@@ -80,17 +78,11 @@ const Center = styled.div`
  * only when it's on.
  */
 export function FinanceShell({ children, headerAside }: { children: ReactNode; headerAside?: ReactNode }) {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const enabled = useEntriesStore(s => s.featureFlags.financeEnabled === true);
   const error = useFinanceStore(s => s.error);
   const navigate = useNavigate();
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate><Center><Spinner size={40} /></Center></ContentTemplate>

@@ -22,7 +22,6 @@ import { KanbanBoard, type BoardItem } from '../components/organisms/KanbanBoard
 import { deleteEntryWithImages } from '../utils/entryActions.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
 import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
@@ -349,7 +348,7 @@ function savedFilters(): Partial<{ sortBy: PlanSort; goalFilter: number | null; 
 }
 
 export function GoalsView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const updateDecryptedEntry = useEntriesStore(s => s.updateDecryptedEntry);
@@ -881,9 +880,6 @@ export function GoalsView() {
     })}</RowList>
   );
 
-  if (needsUnlock) {
-    return (<><ContentTemplate><EmptyState message="Unlock your journal to view goals" /></ContentTemplate><UnlockDialog onUnlock={handleUnlock} /></>);
-  }
   if (isLoading || !isReady) {
     return (<ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>);
   }

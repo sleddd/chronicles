@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma.js';
 import { revokeAllSessions, SESSION_IDLE_MS } from '../middleware/auth.js';
-import { revokeGrantsForSession } from '../services/rememberGrants.js';
+import { forgetAllTrustedDevices } from '../db/trustedDeviceQueries.js';
 import { parseId } from '../middleware/parseId.js';
 import { sharedState } from '../services/sharedState.js';
 import { PENDING_2FA } from './authState.js';
@@ -55,6 +55,8 @@ router.post('/revoke-all', async (req, res) => {
     await revokeAllSessions(req.auth!.accountId, req.auth!.selector, 'user_logout');
     // A sign-in waiting on its 2FA code would otherwise still finish afterwards
     await sharedState.deleteTokensForAccount(PENDING_2FA, req.auth!.accountId);
+    // And no browser skips the 2FA code any more: each earns its trust again
+    await forgetAllTrustedDevices(req.auth!.accountId);
     res.json({ success: true });
   } catch (err) {
     console.error('Revoke all error:', err instanceof Error ? err.message : 'Unknown error');
@@ -78,10 +80,6 @@ router.post('/:id/revoke', async (req, res) => {
       res.status(404).json({ error: 'Session not found' });
       return;
     }
-
-    // Its "remember me" grant goes with it
-    const revoked = await prisma.session.findUnique({ where: { id: sessionId }, select: { selector: true } });
-    if (revoked) await revokeGrantsForSession(revoked.selector);
 
     res.json({ success: true });
   } catch (err) {

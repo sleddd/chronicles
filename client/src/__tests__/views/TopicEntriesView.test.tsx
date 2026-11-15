@@ -15,8 +15,6 @@ vi.mock('@/hooks/useInitializeData', () => ({
   useInitializeData: vi.fn(() => ({
     isReady: true,
     isLoading: false,
-    needsUnlock: false,
-    handleUnlock: vi.fn(),
   })),
 }));
 
@@ -86,10 +84,6 @@ vi.mock('@/components/organisms/EditableEntryCard', () => ({
   EditableEntryCard: () => <div data-testid="editable-entry-card" />,
 }));
 
-vi.mock('@/components/organisms/UnlockDialog', () => ({
-  UnlockDialog: () => <div data-testid="unlock-dialog" />,
-}));
-
 vi.mock('@/utils/dateUtils', () => ({
   toDateStr: vi.fn((d: Date) => d.toISOString().split('T')[0]),
   startOfWeek: vi.fn((d: Date) => d),
@@ -143,31 +137,12 @@ describe('TopicEntriesView', () => {
   });
 });
 
-describe('TopicEntriesView (needs unlock)', () => {
-  beforeEach(() => {
-    vi.mocked(useInitializeData).mockReturnValue({
-      isReady: false,
-      isLoading: false,
-      needsUnlock: true,
-      handleUnlock: vi.fn(),
-    });
-  });
-
-  it('shows unlock dialog', () => {
-    renderWithTheme(
-      <TopicEntriesView title="Food" topicNames={['Food']} />
-    );
-    expect(screen.getByTestId('unlock-dialog')).toBeInTheDocument();
-  });
-});
 
 describe('TopicEntriesView (loading)', () => {
   beforeEach(() => {
     vi.mocked(useInitializeData).mockReturnValue({
       isReady: false,
       isLoading: true,
-      needsUnlock: false,
-      handleUnlock: vi.fn(),
     });
   });
 

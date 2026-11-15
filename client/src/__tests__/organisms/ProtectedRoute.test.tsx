@@ -9,6 +9,8 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => vi.fn() }));
+const keyState = vi.hoisted(() => ({ isUnlocked: true, isRestoring: false }));
+vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => keyState }));
 const consentState = vi.hoisted(() => ({ status: null as unknown }));
 vi.mock('@/services/api', () => ({
   consent: {
@@ -129,5 +131,32 @@ describe('ProtectedRoute', () => {
     );
 
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+  });
+
+  describe('signed in and holding the key are one state', () => {
+    const dropUser = vi.fn();
+    const signedIn = () => mockUseAuth.mockReturnValue({ isAuthenticated: true, isLoading: false, user: { email: 'a@b.co' }, dropUser } as unknown as ReturnType<typeof useAuth>);
+
+    it('waits, showing nothing of the app, while another tab is asked for the key', () => {
+      Object.assign(keyState, { isUnlocked: false, isRestoring: true });
+      consentState.status = agreed('v2', 'v1');
+      dropUser.mockClear();
+      signedIn();
+      renderWithProviders(<ProtectedRoute><div>Protected Content</div></ProtectedRoute>);
+      expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+      expect(dropUser).not.toHaveBeenCalled();
+      Object.assign(keyState, { isUnlocked: true, isRestoring: false });
+    });
+
+    it('a signed-in tab without the key goes to sign-in: it never sits there with a live session and no journal', () => {
+      Object.assign(keyState, { isUnlocked: false, isRestoring: false });
+      consentState.status = agreed('v2', 'v1');
+      dropUser.mockClear();
+      signedIn();
+      renderWithProviders(<ProtectedRoute><div>Protected Content</div></ProtectedRoute>);
+      expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+      expect(dropUser).toHaveBeenCalledTimes(1);
+      Object.assign(keyState, { isUnlocked: true, isRestoring: false });
+    });
   });
 });

@@ -8,7 +8,7 @@ import { authMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter, writeGate, failedAuthLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes, { checkStoredCredentials, sealStoredTotpSecrets } from './routes/auth.js';
-import rememberRoutes from './routes/remember.js';
+import passkeyRoutes from './routes/passkeys.js';
 import entriesRoutes from './routes/entries.js';
 import topicsRoutes from './routes/topics.js';
 import settingsRoutes from './routes/settings.js';
@@ -34,7 +34,10 @@ import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
 import { checkBackupLockCapacity } from './db/backupCheck.js';
 import { initShards } from './db/shards.js';
 import { initSharedState, sharedState } from './services/sharedState.js';
-import { initRememberGrants } from './services/rememberGrants.js';
+import { webauthnConfig } from './services/webauthn.js';
+import { initPasskeysTable } from './db/passkeyQueries.js';
+import { initTrustedDevicesTable, purgeExpiredTrustedDevices } from './db/trustedDeviceQueries.js';
+import { prisma as mainDb } from './db/prisma.js';
 
 // Prisma raw queries return BigInt for integer columns — make JSON.stringify handle them
 (BigInt.prototype as unknown as Record<string, unknown>).toJSON = function () {
@@ -123,8 +126,8 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Routes
-app.use('/api/auth/remember', authMiddleware, apiLimiter, rememberRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/auth', passkeyRoutes); // passkey sign-in (public), the account's passkeys and passkey confirmation
 app.use('/api/topics', authMiddleware, apiLimiter, writeGate, topicsRoutes);
 app.use('/api/settings', authMiddleware, apiLimiter, writeGate, settingsRoutes);
 app.use('/api/sessions', authMiddleware, apiLimiter, sessionsRoutes);
@@ -166,9 +169,8 @@ app.use(errorHandler);
 // account query reads it, so nothing may run before it exists
 try {
   await initShards();
-  // Sign-in state and Remember me grants every instance shares
+  // Sign-in state every instance shares
   await initSharedState();
-  await initRememberGrants();
 } catch (err) {
   console.error('Database setup failed:', err instanceof Error ? err.message : err);
   process.exit(1);
@@ -178,6 +180,23 @@ initSharesTable()
   .then(() => purgeDeadShares())
   .then(count => { if (count > 0) console.log(`Deleted ${count} revoked/expired share(s)`); })
   .catch(err => console.error('Failed to init shares table:', err));
+initPasskeysTable().catch(err => console.error('Failed to init passkeys table:', err));
+// A passkey is tied for good to the domain it was made on: say so when that would be localhost in production
+{
+  const { rpID } = webauthnConfig();
+  if (process.env.NODE_ENV === 'production' && (rpID === 'localhost' || (!process.env.APP_URL && !process.env.CLIENT_URL && !process.env.WEBAUTHN_RP_ID))) {
+    console.warn(`Passkeys: no site address is configured (APP_URL, CLIENT_URL or WEBAUTHN_RP_ID), so passkeys would be tied to "${rpID}" and fail to verify. Set APP_URL to the app's https address.`);
+  }
+  if (process.env.LEGACY_ME_KEY_WRAP === 'true') {
+    console.warn('LEGACY_ME_KEY_WRAP is on: GET /api/auth/me returns the wrapped master key to any session, as before the sign-in redesign. Remove it once every open tab has updated.');
+  }
+}
+initTrustedDevicesTable()
+  .then(() => purgeExpiredTrustedDevices())
+  .catch(err => console.error('Failed to init trusted browsers table:', err));
+// The stored-key Remember me is gone: its grants (device secrets, sealed) go too
+mainDb.$executeRawUnsafe('DROP TABLE IF EXISTS public.remember_grants')
+  .catch(err => console.error('Failed to drop remember_grants:', err instanceof Error ? err.message : err));
 initPublicShelvesTable().catch(err => console.error('Failed to init public shelves table:', err));
 initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err));
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err));
@@ -204,6 +223,7 @@ checkBackupLockCapacity().catch(err => console.error('Backup lock check failed:'
 setInterval(() => {
   cleanupSessions().catch(() => {});
   purgeDeadShares().catch(() => {});
+  purgeExpiredTrustedDevices().catch(() => {});
   checkBackupLockCapacity().catch(() => {});
   sharedState.sweep().catch(() => {});
 }, 6 * 60 * 60 * 1000);

@@ -2,9 +2,7 @@ import { useMemo } from 'react';
 import styled from 'styled-components';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { QuickLog, QuickSymptom, QuickChange } from '../components/organisms/HealthQuickLog.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
@@ -170,19 +168,13 @@ function useHasRoutines(): boolean {
  * the day's medications and a quick symptom log.
  */
 export function HealthDashboardView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const ff = useEntriesStore(s => s.featureFlags);
   const hasMeds = useHasScheduledMeds();
   const hasRoutines = useHasRoutines();
   const medsOn = ff.medicationEnabled !== false;
   const doses = useTodayDoses(isReady && medsOn);
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

@@ -82,7 +82,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   res.setHeader('Referrer-Policy', 'no-referrer');
   // Disable browser features we don't need. The microphone stays available to
   // our own origin only — voice dictation in the editor needs it.
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=()');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=(), publickey-credentials-get=(self), publickey-credentials-create=(self)');
   next();
 }
 

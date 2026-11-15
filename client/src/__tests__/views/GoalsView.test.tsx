@@ -21,8 +21,6 @@ vi.mock('@/hooks/useInitializeData', () => ({
   useInitializeData: vi.fn(() => ({
     isReady: true,
     isLoading: false,
-    needsUnlock: false,
-    handleUnlock: vi.fn(),
   })),
 }));
 
@@ -131,10 +129,6 @@ vi.mock('@/components/organisms/MilestoneCard', () => ({
   MilestoneCard: () => <div data-testid="milestone-card" />,
 }));
 
-vi.mock('@/components/organisms/UnlockDialog', () => ({
-  UnlockDialog: () => <div data-testid="unlock-dialog" />,
-}));
-
 vi.mock('@/utils/stripHtml', () => ({
   builtinEntryName: (cf: Record<string, unknown> | undefined | null) => { if (!cf) return ''; for (const k of ['eventName','meetingName','goalObjective','milestoneObjective','taskDescription','mealDescription']) { const v = cf[k]; if (typeof v === 'string' && v.trim()) return v.trim(); } return ''; },
   stripHtml: vi.fn((html: string) => html.replace(/<[^>]*>/g, '')),
@@ -209,29 +203,12 @@ describe('GoalsView (phone)', () => {
   });
 });
 
-describe('GoalsView (needs unlock)', () => {
-  beforeEach(() => {
-    vi.mocked(useInitializeData).mockReturnValue({
-      isReady: false,
-      isLoading: false,
-      needsUnlock: true,
-      handleUnlock: vi.fn(),
-    });
-  });
-
-  it('shows unlock dialog', () => {
-    renderWithTheme(<GoalsView />);
-    expect(screen.getByTestId('unlock-dialog')).toBeInTheDocument();
-  });
-});
 
 describe('GoalsView (loading)', () => {
   beforeEach(() => {
     vi.mocked(useInitializeData).mockReturnValue({
       isReady: false,
       isLoading: true,
-      needsUnlock: false,
-      handleUnlock: vi.fn(),
     });
   });
 
@@ -248,7 +225,7 @@ describe('GoalsView saved views', () => {
     privateMap.current = { planningViews: [view, { ...view, id: 'v2', name: 'Other', sort: 'oldest' }] };
     entriesState.decryptedEntries = [{ id: 10, content: 'Run a 10k', metadata: { _taxonomyId: 1, _customFields: { goalObjective: 'Run a 10k' } }, createdAt: new Date(), updatedAt: new Date() }];
     savePrivateSetting.mockClear();
-    vi.mocked(useInitializeData).mockReturnValue({ isReady: true, isLoading: false, needsUnlock: false, handleUnlock: vi.fn() } as any);
+    vi.mocked(useInitializeData).mockReturnValue({ isReady: true, isLoading: false } as any);
   });
   afterEach(() => { entriesState.decryptedEntries = []; privateMap.current = {}; });
 

@@ -17,8 +17,6 @@ vi.mock('@/hooks/useInitializeData', () => ({
   useInitializeData: vi.fn(() => ({
     isReady: true,
     isLoading: false,
-    needsUnlock: false,
-    handleUnlock: vi.fn(),
   })),
 }));
 
@@ -75,18 +73,12 @@ vi.mock('@/components/molecules/TopicEditForm', () => ({
   TopicEditForm: () => <div data-testid="topic-edit-form" />,
 }));
 
-vi.mock('@/components/organisms/UnlockDialog', () => ({
-  UnlockDialog: () => <div data-testid="unlock-dialog" />,
-}));
-
 describe('TopicsView', () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     vi.mocked(useInitializeData).mockReturnValue({
       isReady: true,
       isLoading: false,
-      needsUnlock: false,
-      handleUnlock: vi.fn(),
     });
   });
 
@@ -128,29 +120,12 @@ describe('TopicsView', () => {
   });
 });
 
-describe('TopicsView (needs unlock)', () => {
-  beforeEach(() => {
-    vi.mocked(useInitializeData).mockReturnValue({
-      isReady: false,
-      isLoading: false,
-      needsUnlock: true,
-      handleUnlock: vi.fn(),
-    });
-  });
-
-  it('shows unlock dialog', () => {
-    renderWithTheme(<TopicsView />);
-    expect(screen.getByTestId('unlock-dialog')).toBeInTheDocument();
-  });
-});
 
 describe('TopicsView (loading)', () => {
   beforeEach(() => {
     vi.mocked(useInitializeData).mockReturnValue({
       isReady: false,
       isLoading: true,
-      needsUnlock: false,
-      handleUnlock: vi.fn(),
     });
   });
 

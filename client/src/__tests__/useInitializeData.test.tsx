@@ -164,33 +164,4 @@ describe('useInitializeData', () => {
     });
   });
 
-  describe('needsUnlock', () => {
-    it('asks for the password when encrypted and locked', () => {
-      encryptionState.isUnlocked = false;
-      const { result } = renderHook(() => useInitializeData());
-      expect(result.current.needsUnlock).toBe(true);
-    });
-
-    it('does not ask while a remembered unlock is being restored', () => {
-      Object.assign(encryptionState, { isUnlocked: false, isRestoring: true });
-      const { result } = renderHook(() => useInitializeData());
-      expect(result.current.needsUnlock).toBe(false);
-    });
-  });
-
-  describe('handleUnlock', () => {
-    it('unlocks with the account params', async () => {
-      encryptionState.isUnlocked = false;
-      const { result } = renderHook(() => useInitializeData());
-      await result.current.handleUnlock('pw', true);
-      expect(encryptionState.unlock).toHaveBeenCalledWith('pw', 's', 'k', 'i', 600000, true);
-    });
-
-    it('refuses without encryption params', async () => {
-      encryptionState.isUnlocked = false;
-      authState.encryptionData = { encryptionEnabled: true };
-      const { result } = renderHook(() => useInitializeData());
-      await expect(result.current.handleUnlock('pw')).rejects.toThrow('Missing encryption data');
-    });
-  });
 });

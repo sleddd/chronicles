@@ -114,7 +114,7 @@ function ensureLive(): void {
   if (activeRun !== epoch
     || !useEntriesStore.getState().isInitialized
     || !useUIStore.getState().calendarSyncEnabled) {
-    throw new SyncAborted('Paused — unlock your journal to resume syncing');
+    throw new SyncAborted('Paused. Sign in again to resume syncing');
   }
 }
 
@@ -708,7 +708,7 @@ export async function runCalendarSync(deps: SyncRuntimeDeps): Promise<void> {
     if (message === 'Encryption not unlocked') {
       // The journal auto-locked mid-run (tab hidden / inactivity) — not an
       // error; the next unlock triggers a fresh sync that resumes cleanly
-      uiState.lastError = 'Paused — unlock your journal to resume syncing';
+      uiState.lastError = 'Paused. Sign in again to resume syncing';
     } else {
       uiState.lastError = message;
       if (!(err instanceof SyncAborted)) {

@@ -1,3 +1,5 @@
+import { useAuth } from '../contexts/AuthContext.js';
+import { Checkbox } from '../components/atoms/Checkbox.js';
 import { useState, type FormEvent } from 'react';
 import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import { useNavigate, Link } from 'react-router-dom';
@@ -18,7 +20,10 @@ import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthM
 
 export function RecoverView() {
   const navigate = useNavigate();
-  const { recoverAndRewrap } = useEncryption();
+  const { recoverAndRewrap, clearKey } = useEncryption();
+  const { adoptSession } = useAuth();
+  // A lost or stolen device is a common reason to be here: its passkeys can go too
+  const [removePasskeys, setRemovePasskeys] = useState(false);
   const [step, setStep] = useState<RecoverStep>('email');
   const [email, setEmail] = useState('');
   const [recoveryKey, setRecoveryKey] = useState('');
@@ -82,7 +87,7 @@ export function RecoverView() {
     setLoading(true);
     try {
       // Nothing of whoever used this browser last may carry over
-      await freshSignIn();
+      await freshSignIn(email);
       // Unwrap with recovery key and rewrap with new password in one atomic step —
       // avoids the auto-lock race that cleared the key between separate steps.
       const cleanKey = recoveryKey.replace(/[-\s]/g, '');
@@ -102,7 +107,7 @@ export function RecoverView() {
       ]);
 
       // Send to server
-      await authApi.recover({
+      const { user } = await authApi.recover({
         email,
         recoveryProof,
         newAuthSecret,
@@ -114,12 +119,17 @@ export function RecoverView() {
         newRecoveryKeyHash,
         newRecoveryKeySalt,
         ...(needs2FA && twoFACode.trim() && { code: twoFACode.trim() }),
+        ...(removePasskeys && { removePasskeys: true }),
       });
+      // The server signed this browser in, and the key is open here: carry on signed in
+      adoptSession({ ...user, totpEnabled: needs2FA });
 
       // Show the new recovery key before navigating away
       setNewRecoveryKey(freshRecoveryKey);
       setStep('newKey');
     } catch (err) {
+      // No session came of it: the key opened for the attempt goes again
+      clearKey();
       if (err instanceof ApiError && err.body.requires2FA) setNeeds2FA(true);
       setError(err instanceof Error ? err.message : 'Invalid recovery key or recovery failed');
     } finally {
@@ -204,6 +214,11 @@ export function RecoverView() {
               />
             </FormField>
           )}
+          <Checkbox
+            checked={removePasskeys}
+            onChange={setRemovePasskeys}
+            label="Also remove every passkey (choose this if a device was lost or stolen)"
+          />
           <Button type="submit" fullWidth disabled={loading}>
             {loading ? <Spinner size={18} /> : 'Reset password'}
           </Button>

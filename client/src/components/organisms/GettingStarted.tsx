@@ -95,7 +95,7 @@ const ActionBtn = styled.button`
 
 /** What each open item's action is called */
 const ACTION: Record<ChecklistKey, string> = {
-  name: 'Show me', city: 'Show me', entry: 'Show me', health: 'Show me', voice: 'Try it', recovery: 'I’ve saved it',
+  name: 'Show me', city: 'Show me', entry: 'Show me', health: 'Show me', voice: 'Try it', passkey: 'Show me', recovery: 'I’ve saved it',
 };
 
 export function GettingStarted({ items, onAction, onToggle, onDismiss }: {

@@ -108,7 +108,7 @@ export async function importRawKey(keyBytes: Uint8Array): Promise<CryptoKey> {
 }
 
 /** Wrap purpose identifiers for Additional Authenticated Data (AAD) */
-export type WrapPurpose = 'kek-wrap' | 'recovery-wrap' | 'device-wrap';
+export type WrapPurpose = 'kek-wrap' | 'recovery-wrap';
 
 /** Encode a wrap purpose string as AAD bytes for AES-GCM */
 function purposeToAAD(purpose: WrapPurpose): ArrayBuffer {
@@ -171,34 +171,51 @@ export async function unwrapKey(
   }
 }
 
-/**
- * "Remember me" wrapping key, imported from a 32-byte per-sign-in secret the
- * server holds only in memory. Non-extractable and limited to wrap/unwrap.
- */
-export async function importDeviceWrapKey(secret: Uint8Array): Promise<CryptoKey> {
-  if (secret.byteLength !== 32) throw new Error('Device secret must be 32 bytes');
-  return crypto.subtle.importKey(
+// ---------------------------------------------------------------------------
+// Passkeys. A passkey with the PRF extension returns 32 secret bytes, the same
+// each time for that passkey and only after its user check (fingerprint, face,
+// device PIN). Those bytes derive the key that wraps the master key for that
+// passkey — one more wrap beside the password's and the recovery key's.
+// ---------------------------------------------------------------------------
+
+/** What every passkey ceremony asks the authenticator to evaluate (32 bytes, fixed for the app) */
+export async function passkeyPrfInput(): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('chronicles:passkey-prf:v1')));
+}
+
+/** The wrapping key for one passkey, from its PRF output. Non-extractable, wrap/unwrap only. */
+export async function derivePasskeyKek(prfOutput: Uint8Array): Promise<CryptoKey> {
+  if (prfOutput.byteLength !== 32) throw new Error('Passkey secret must be 32 bytes');
+  const base = await crypto.subtle.importKey(
     'raw',
-    secret.buffer.slice(secret.byteOffset, secret.byteOffset + secret.byteLength) as ArrayBuffer,
+    prfOutput.buffer.slice(prfOutput.byteOffset, prfOutput.byteOffset + prfOutput.byteLength) as ArrayBuffer,
+    'HKDF', false, ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('chronicles:passkey-wrap:v1') },
+    base,
     { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
     false,
-    ['wrapKey', 'unwrapKey']
+    ['wrapKey', 'unwrapKey'],
   );
 }
 
-/**
- * Unwrap a "remember me" blob straight into a NON-extractable master key.
- * No legacy no-AAD fallback: the purpose AAD must match.
- */
-export async function unwrapDeviceKey(wrappedKey: ArrayBuffer, wrappingKey: CryptoKey, iv: Uint8Array): Promise<CryptoKey> {
+// Bound to its purpose and to the passkey it was made for, so one passkey's
+// wrap filed under another (or under the password's) never opens
+const passkeyAad = (credentialId: string) => new TextEncoder().encode(`passkey-wrap:${credentialId}`).buffer as ArrayBuffer;
+
+export async function wrapKeyForPasskey(masterKey: CryptoKey, kek: CryptoKey, iv: Uint8Array, credentialId: string): Promise<ArrayBuffer> {
+  return crypto.subtle.wrapKey('raw', masterKey, kek, { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, additionalData: passkeyAad(credentialId) });
+}
+
+/** Open a passkey's wrap. No fallback form: the AAD must match. */
+export async function unwrapKeyFromPasskey(wrappedKey: ArrayBuffer, kek: CryptoKey, iv: Uint8Array, credentialId: string, extractable = false): Promise<CryptoKey> {
   return crypto.subtle.unwrapKey(
-    'raw',
-    wrappedKey,
-    wrappingKey,
-    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, additionalData: purposeToAAD('device-wrap') },
+    'raw', wrappedKey, kek,
+    { name: AES_ALGORITHM, iv: iv.buffer as ArrayBuffer, additionalData: passkeyAad(credentialId) },
     { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
-    false,
-    ['encrypt', 'decrypt']
+    extractable,
+    ['encrypt', 'decrypt'],
   );
 }
 

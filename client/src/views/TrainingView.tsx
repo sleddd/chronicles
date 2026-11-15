@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { HealthTabBar } from '../components/molecules/HealthTabBar.js';
 import { ExerciseSubTabs } from '../components/molecules/ExerciseSubTabs.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
@@ -430,7 +428,7 @@ function plannedIn(routines: Routine[], start: string, today: string, logged: Se
 const chipText = (name: string, minutes: number) => (minutes ? `${name} · ${formatShort(minutes)}` : name);
 
 export function TrainingView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const openInJournal = useOpenInJournal();
@@ -480,12 +478,6 @@ export function TrainingView() {
       { performedDate: date, trainingCategory: c.name, exerciseType: c.exerciseTypes?.[0] ?? 'other' });
   };
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

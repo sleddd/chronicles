@@ -46,15 +46,27 @@ export const loginSchema = z.object({
   authSecret: authSecretSchema,
 }).strict();
 
+// The sensitive actions are confirmed one of two ways: the current password
+// (as its derived secret, plus an authenticator or backup code when 2FA is on)
+// or a single-use token from a passkey touch (POST /api/auth/confirm/verify),
+// which stands in for both. Exactly one of the two.
+export const CONFIRM_ACTIONS = ['change-password', 'recovery-key', 'passkey-add', 'passkey-remove', '2fa-enable', '2fa-disable', 'delete-account'] as const;
+export type ConfirmAction = typeof CONFIRM_ACTIONS[number];
+const confirmTokenSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid confirmation');
+const codeSchema = z.string().min(1).max(64);
+const oneConfirmation = (secretKey: 'currentAuthSecret' | 'authSecret') =>
+  [(v: Record<string, unknown>) => (v[secretKey] === undefined) !== (v.confirmToken === undefined), { message: 'Enter your account password' }] as const;
+
 export const changePasswordSchema = z.object({
-  currentAuthSecret: authSecretSchema,
+  currentAuthSecret: authSecretSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
   newAuthSecret: authSecretSchema,
   newEncryptedMasterKey: wrappedKeySchema,
   newKekSalt: kekSaltSchema,
   newKekWrapIv: saltOrIvSchema,
-  // Authenticator or backup code — required when the account has 2FA on
-  code: z.string().min(1).max(64).optional(),
-});
+  // Authenticator or backup code — required with the password when the account has 2FA on
+  code: codeSchema.optional(),
+}).refine(...oneConfirmation('currentAuthSecret'));
 
 export const recoverSchema = z.object({
   email: emailSchema,
@@ -70,12 +82,17 @@ export const recoverSchema = z.object({
   // Authenticator or backup code — required when the account has 2FA on, so a
   // recovery key alone can't bypass two-factor
   code: z.string().min(1).max(64).optional(),
+  // Also remove every passkey (a lost device is a common reason to recover)
+  removePasskeys: z.boolean().optional(),
 });
 
 // 2FA / TOTP validation
 export const twoFALoginSchema = z.object({
   pendingToken: z.string().min(1).max(128),
   code: z.string().min(1).max(64),
+  // "Don't ask for a code on this browser for 30 days" — honoured only after
+  // an authenticator code, never a backup code
+  trustBrowser: z.boolean().optional(),
 });
 
 // Turning 2FA on replaces the authenticator secret and backup codes, so it
@@ -84,21 +101,25 @@ export const twoFALoginSchema = z.object({
 export const enable2FASchema = z.object({
   secret: z.string().regex(/^[A-Z2-7]{16,128}=*$/, 'Invalid secret'),
   code: z.string().length(6),
-  currentAuthSecret: authSecretSchema,
-});
+  currentAuthSecret: authSecretSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
+}).refine(...oneConfirmation('currentAuthSecret'));
 
 // Turning 2FA off needs the password AND a current authenticator/backup code,
 // so a stolen session plus a phished password isn't enough to strip it
 export const disable2FASchema = z.object({
-  authSecret: authSecretSchema,
-  code: z.string().min(1).max(64),
-});
+  authSecret: authSecretSchema.optional(),
+  code: codeSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
+}).refine(...oneConfirmation('authSecret'))
+  .refine(v => v.confirmToken !== undefined || v.code !== undefined, { message: 'A code is required' });
 
 // Deleting the account is permanent: password, plus a 2FA code when 2FA is on
 export const deleteAccountSchema = z.object({
-  authSecret: authSecretSchema,
-  code: z.string().min(1).max(64).optional(),
-});
+  authSecret: authSecretSchema.optional(),
+  code: codeSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
+}).refine(...oneConfirmation('authSecret'));
 
 // Account changes that could lock the owner out require the current password
 // (and, with 2FA on, an authenticator or backup code),
@@ -112,13 +133,95 @@ export const changeEmailSchema = z.object({
 });
 
 export const saveRecoveryKeySchema = z.object({
-  currentAuthSecret: authSecretSchema,
+  currentAuthSecret: authSecretSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
   recoveryWrappedMK: wrappedKeySchema,
   recoveryWrapIv: saltOrIvSchema,
   recoveryKeyHash: recoveryProofSchema,
   recoveryKeySalt: recoverySaltSchema,
-  code: z.string().min(1).max(64).optional(),
+  code: codeSchema.optional(),
+}).refine(...oneConfirmation('currentAuthSecret'));
+
+// The password wrap, for a tab that holds the key but not the wrap (it signed
+// in with a passkey, or took the key from another tab): password-confirmed
+// It is what opens the journal, so it is confirmed like the action it is for:
+// the password and, with 2FA on, a code. The answer carries a single-use token
+// for that action, so the action itself doesn't ask for the (one-use) code again
+export const keyWrapSchema = z.object({
+  currentAuthSecret: authSecretSchema,
+  code: codeSchema.optional(),
+  action: z.enum(CONFIRM_ACTIONS),
+}).strict();
+
+// ---------------------------------------------------------------------------
+// Passkeys (WebAuthn). The browser's answers are checked in full by the
+// server's verifier; these only bound their shape and size. A passkey's PRF
+// output is the secret that opens its wrap of the master key, so the client
+// never sends `clientExtensionResults` and the server drops any that arrive.
+// ---------------------------------------------------------------------------
+const b64url = (max: number) => z.string().min(1).max(max).regex(/^[A-Za-z0-9_-]+$/, 'Invalid passkey data');
+const dropExtensions = () => z.unknown().optional().transform(() => ({}));
+
+export const passkeyAssertionSchema = z.object({
+  id: b64url(1024),
+  rawId: b64url(1024),
+  type: z.literal('public-key'),
+  response: z.object({
+    clientDataJSON: b64url(8192),
+    authenticatorData: b64url(8192),
+    signature: b64url(2048),
+    userHandle: b64url(256).nullish().transform(v => v ?? undefined),
+  }),
+  authenticatorAttachment: z.enum(['platform', 'cross-platform']).nullish().transform(v => v ?? undefined),
+  clientExtensionResults: dropExtensions(),
 });
+
+export const passkeyAttestationSchema = z.object({
+  id: b64url(1024),
+  rawId: b64url(1024),
+  type: z.literal('public-key'),
+  response: z.object({
+    clientDataJSON: b64url(8192),
+    attestationObject: b64url(65536),
+    transports: z.array(z.string().max(32)).max(8).optional(),
+  }),
+  authenticatorAttachment: z.enum(['platform', 'cross-platform']).nullish().transform(v => v ?? undefined),
+  clientExtensionResults: dropExtensions(),
+});
+
+/** A name the owner gives a passkey ("MacBook", "Phone"): one line, no control characters */
+export const passkeyNameSchema = z.string().trim().min(1, 'Give it a name').max(60)
+  // eslint-disable-next-line no-control-regex
+  .regex(/^[^\u0000-\u001f\u007f]*$/, 'Invalid name');
+
+// A wrapped 32-byte key is 48 bytes (key + GCM tag): 64 base64 characters
+const passkeyWrapSchema = z.string().regex(/^[A-Za-z0-9+/]{64}$/, 'Invalid key wrap');
+
+export const passkeyRegisterSchema = z.object({
+  response: passkeyAttestationSchema,
+  wrappedMK: passkeyWrapSchema,
+  wrapIv: z.string().regex(/^[A-Za-z0-9+/]{16}$/, 'Invalid IV'),
+  name: passkeyNameSchema,
+  currentAuthSecret: authSecretSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
+  code: codeSchema.optional(),
+}).refine(...oneConfirmation('currentAuthSecret'));
+
+export const passkeyRenameSchema = z.object({ name: passkeyNameSchema }).strict();
+
+export const passkeyRemoveSchema = z.object({
+  currentAuthSecret: authSecretSchema.optional(),
+  confirmToken: confirmTokenSchema.optional(),
+  code: codeSchema.optional(),
+}).refine(...oneConfirmation('currentAuthSecret'));
+
+export const passkeyLoginSchema = z.object({ response: passkeyAssertionSchema }).strict();
+
+export const confirmOptionsSchema = z.object({ action: z.enum(CONFIRM_ACTIONS) }).strict();
+export const confirmVerifySchema = z.object({
+  action: z.enum(CONFIRM_ACTIONS),
+  response: passkeyAssertionSchema,
+}).strict();
 
 // Shares validation — shared content is stored as plaintext by design; the
 // user opts into that risk when creating a public link

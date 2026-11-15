@@ -58,7 +58,7 @@ Off until you turn it on in Settings. A manual budget by category with a chart o
 <img width="1268" height="1440" alt="The budget with the current balance, and planned, bills, spending and what's left by category" src="client/src/assets/landing/features/finance-dark.jpg" />
 
 ### Settings
-Your account, theme (light or dark and 30 accent colors), which features are on, calendar sync, entry images, In-App AI, security (two-factor authentication, Remember me, active sessions, recovery key) and data import and export. Every section folds away.
+Your account, theme (light or dark and 30 accent colors), which features are on, calendar sync, entry images, In-App AI, security (passkeys, two-factor authentication, trusted browsers, active sessions, recovery key) and data import and export. Every section folds away.
 
 <img width="1600" height="1000" alt="Settings with the Theme section open: light, dark or auto, and the background photos" src="client/src/assets/landing/settings-dark.jpg" />
 
@@ -76,7 +76,10 @@ Your account, theme (light or dark and 30 accent colors), which features are on,
 - Session management — view and revoke active sessions from any device
 - Non-extractable CryptoKeys — master key cannot be exported from the browser's crypto subsystem
 - Split-token sessions — database leaks cannot reconstruct valid session tokens
-- **Remember me** (opt-in, for personal devices) — stay unlocked until the browser closes; the browser keeps only an encrypted copy of the key, and the server holds the matching secret in memory only, never on disk
+- **Passkeys** — sign in and open your journal with a fingerprint, face or device PIN. The passkey's own secret opens its copy of your key, and that secret never leaves your device
+- **Nothing that opens your journal is stored** — the key lives only in the open tab's memory. A new tab takes it from one that's already open, and 15 minutes away signs you out
+- **Trusted browsers** (opt-in, with two-factor on) — skip the code on a browser you use for 30 days. Your password is still asked every time
+- **Unsaved writing survives** — what you're typing is sealed with your key as you go and offered back after you sign in again
 - **Finance data is zero-knowledge too** — budgets, bills, payments, savings, goals and paydays are encrypted in the browser and stored in their own tables as ciphertext; the server never sees an amount, name or date. There are no bank connections. Chronicles is still not a banking app — see the [Finance disclaimer](#finance)
 - **AI is optional and bring-your-own** — when you turn it on, the meal or exercise description you're estimating (or your chat message) goes from your browser straight to the provider you chose; nothing passes through the Chronicles server
 
@@ -151,7 +154,7 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
 - **Calendar Sync** - Connect Google Calendar, choose the target calendar, toggle imports, manage the Apple ICS feed, and clean up old events
 - **Entry Images** - Toggle the feature, enter your Cloudflare R2 credentials (autosaved and master-key encrypted), test the connection, and follow the built-in setup guide
 - **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant
-- **Security** - Remember me, change password, active sessions, recovery key, and two-factor authentication (TOTP setup wizard with QR code and backup codes)
+- **Security** - Passkeys, change password, active sessions, recovery key, two-factor authentication (TOTP setup wizard with QR code and backup codes) and trusted browsers
 - **Data** - Default topics, seed test data (and sample Finance data when Finance is on), export to CSV, export all Finance data (a ZIP of spreadsheets plus a JSON backup), import entries (CSV) and a Daily Log (JSON) — each import has a downloadable example file
 - **Privacy** and **Sign Out**
 

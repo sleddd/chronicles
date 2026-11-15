@@ -16,6 +16,18 @@ vi.mock('../../db/prisma.js', () => ({
 }));
 
 // Mock auth helpers
+// Plain functions, not vi.fn: a test's resetAllMocks must not leave them returning undefined
+vi.mock('../../db/trustedDeviceQueries.js', () => ({
+  TRUST_DAYS: 30,
+  trustDevice: async () => 't'.repeat(43),
+  useTrustedDevice: async () => false,
+  forgetTrustToken: async () => undefined,
+  forgetAllTrustedDevices: async () => undefined,
+  listTrustedDevices: async () => [],
+  forgetTrustedDevice: async () => true,
+}));
+vi.mock('../../db/passkeyQueries.js', () => ({ removeAllPasskeys: async () => 0 }));
+
 vi.mock('../../middleware/auth.js', () => ({
   revokeAllSessions: vi.fn().mockResolvedValue(undefined),
   SESSION_IDLE_MS: 24 * 60 * 60 * 1000,

@@ -5,7 +5,6 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
-import { UnlockDialog } from '../components/organisms/UnlockDialog.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
 import { renamePublicShelf } from '../hooks/usePublicShelfSync.js';
@@ -279,7 +278,7 @@ function OwnerCard({ item, onOpen, onRate, onShelve, onProgress, onBookmark }: {
 /* ── View ── */
 
 export function MediaView() {
-  const { isReady, isLoading, needsUnlock, handleUnlock } = useInitializeData();
+  const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const publicShelf = usePublicShelfStore(s => s.publicShelf);
@@ -348,12 +347,6 @@ export function MediaView() {
     setPendingItemId(null);
   }, [patch, setPendingItemId]);
 
-  if (needsUnlock) return (
-    <>
-      <ContentTemplate><EmptyState message="Unlock your journal to continue" /></ContentTemplate>
-      <UnlockDialog onUnlock={handleUnlock} />
-    </>
-  );
 
   if (isLoading || !isReady) return (
     <ContentTemplate>

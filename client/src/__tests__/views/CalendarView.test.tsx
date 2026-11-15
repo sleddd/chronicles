@@ -21,8 +21,6 @@ vi.mock('@/hooks/useInitializeData', () => ({
   useInitializeData: vi.fn(() => ({
     isReady: true,
     isLoading: false,
-    needsUnlock: false,
-    handleUnlock: vi.fn(),
   })),
 }));
 
@@ -69,10 +67,6 @@ vi.mock('@/components/atoms/Spinner', () => ({
   Spinner: () => <span data-testid="spinner">Loading...</span>,
 }));
 
-vi.mock('@/components/organisms/UnlockDialog', () => ({
-  UnlockDialog: () => <div data-testid="unlock-dialog" />,
-}));
-
 vi.mock('@/utils/topicIcons', () => ({
   getTopicIcon: vi.fn(() => null),
 }));
@@ -93,36 +87,14 @@ describe('CalendarView', () => {
     expect(screen.getByTestId('calendar-grid')).toBeInTheDocument();
   });
 
-  it('does not show unlock dialog when not needed', () => {
-    renderWithTheme(<CalendarView />);
-    expect(screen.queryByTestId('unlock-dialog')).not.toBeInTheDocument();
-  });
 });
 
-describe('CalendarView (needs unlock)', () => {
-  beforeEach(() => {
-    vi.mocked(useInitializeData).mockReturnValue({
-      isReady: false,
-      isLoading: false,
-      needsUnlock: true,
-      handleUnlock: vi.fn(),
-    });
-  });
-
-  it('shows unlock dialog when encryption needs unlocking', () => {
-    renderWithTheme(<CalendarView />);
-    expect(screen.getByTestId('unlock-dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-  });
-});
 
 describe('CalendarView (loading)', () => {
   beforeEach(() => {
     vi.mocked(useInitializeData).mockReturnValue({
       isReady: false,
       isLoading: true,
-      needsUnlock: false,
-      handleUnlock: vi.fn(),
     });
   });
 

@@ -21,8 +21,9 @@ import {
   decrypt,
   encryptBytes,
   decryptBytes,
-  importDeviceWrapKey,
-  unwrapDeviceKey,
+  derivePasskeyKek,
+  wrapKeyForPasskey,
+  unwrapKeyFromPasskey,
 } from './primitives.js';
 import { uint8ArrayToBase64, base64ToUint8Array } from './encoding.js';
 import type {
@@ -100,42 +101,50 @@ class EncryptionService {
   }
 
   /**
-   * Password unlock that also produces a "remember me" blob: the master key
-   * wrapped (AES-GCM, purpose AAD 'device-wrap') under a key imported from a
-   * per-sign-in device secret. The KEK is derived once; the extractable copy
-   * used for wrapping never leaves this function and raw key bytes are never
-   * exposed to JavaScript. The returned master key is non-extractable.
+   * The master key as an EXTRACTABLE key, from the password wrap — only for
+   * making another wrap of it (a new password, a recovery key, a passkey).
+   * The caller wraps and lets it go; it is never installed for use.
    */
-  async unwrapMasterKeyForDevice(
+  async extractableFromPassword(
     password: string,
     saltBase64: string,
     wrappedMKBase64: string,
     wrapIvBase64: string,
-    iterations: number,
-    deviceSecret: Uint8Array
-  ): Promise<{ masterKey: CryptoKey; deviceWrapped: string; deviceIv: string }> {
+    iterations: number
+  ): Promise<CryptoKey> {
     const salt = base64ToUint8Array(saltBase64);
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
     checkKekIterations(iterations);
     const kek = await deriveKEK(password, salt, iterations);
-    const masterKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
-    const extractable = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
-    const deviceKey = await importDeviceWrapKey(deviceSecret);
-    const deviceIv = generateIv();
-    const deviceWrapped = await wrapKey(extractable, deviceKey, deviceIv, 'device-wrap');
-    return {
-      masterKey,
-      deviceWrapped: uint8ArrayToBase64(new Uint8Array(deviceWrapped)),
-      deviceIv: uint8ArrayToBase64(deviceIv),
-    };
+    return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
   }
 
-  /** Restore a remembered unlock: device secret + blob → non-extractable master key. */
-  async unwrapFromDevice(deviceSecret: Uint8Array, deviceWrappedBase64: string, deviceIvBase64: string): Promise<CryptoKey> {
-    const deviceKey = await importDeviceWrapKey(deviceSecret);
-    const wrapped = base64ToUint8Array(deviceWrappedBase64);
-    return unwrapDeviceKey(wrapped.buffer as ArrayBuffer, deviceKey, base64ToUint8Array(deviceIvBase64));
+  /**
+   * Wrap the master key for a passkey, under the key its PRF output derives.
+   * The wrap is opened once before it is returned, so one that could never
+   * open the journal is never stored.
+   */
+  async wrapForPasskey(extractableKey: CryptoKey, prfOutput: Uint8Array, credentialId: string): Promise<{ wrappedMK: string; wrapIv: string }> {
+    const kek = await derivePasskeyKek(prfOutput);
+    const iv = generateIv();
+    const wrapped = await wrapKeyForPasskey(extractableKey, kek, iv, credentialId);
+    await unwrapKeyFromPasskey(wrapped, kek, iv, credentialId);
+    return { wrappedMK: uint8ArrayToBase64(new Uint8Array(wrapped)), wrapIv: uint8ArrayToBase64(iv) };
+  }
+
+  /** Open a passkey's wrap: PRF output + wrap → the non-extractable master key (sign-in). */
+  async unwrapWithPasskey(prfOutput: Uint8Array, wrappedMKBase64: string, wrapIvBase64: string, credentialId: string): Promise<CryptoKey> {
+    const kek = await derivePasskeyKek(prfOutput);
+    const wrapped = base64ToUint8Array(wrappedMKBase64);
+    return unwrapKeyFromPasskey(wrapped.buffer as ArrayBuffer, kek, base64ToUint8Array(wrapIvBase64), credentialId);
+  }
+
+  /** As `extractableFromPassword`, from a passkey's wrap (confirming a sensitive action with a touch). */
+  async extractableFromPasskey(prfOutput: Uint8Array, wrappedMKBase64: string, wrapIvBase64: string, credentialId: string): Promise<CryptoKey> {
+    const kek = await derivePasskeyKek(prfOutput);
+    const wrapped = base64ToUint8Array(wrappedMKBase64);
+    return unwrapKeyFromPasskey(wrapped.buffer as ArrayBuffer, kek, base64ToUint8Array(wrapIvBase64), credentialId, true);
   }
 
   /**
