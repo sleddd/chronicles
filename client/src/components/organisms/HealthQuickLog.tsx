@@ -883,7 +883,7 @@ export function QuickLog({ meal = true, exercise = true, bare = false }: { meal?
   if (!meal && !exercise) return null;
   const title = kind === 'meal' ? 'Quick meal log' : 'Quick exercise log';
   const toggle = meal && exercise ? (
-    <Switch role="tablist" aria-label="Log a">
+    <Switch role="tablist" aria-label="Log a" data-fold-hide="">
       <SwitchBtn type="button" role="tab" aria-selected={kind === 'meal'} $active={kind === 'meal'} onClick={() => setKind('meal')}>Meal</SwitchBtn>
       <SwitchBtn type="button" role="tab" aria-selected={kind === 'exercise'} $active={kind === 'exercise'} onClick={() => setKind('exercise')}>Exercise</SwitchBtn>
     </Switch>

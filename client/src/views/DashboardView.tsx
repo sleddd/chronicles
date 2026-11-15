@@ -531,6 +531,8 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
     & > button[aria-label^="Move"] { right: 28px; }
     & > section > :not(:first-child) { display: none; }
     && > section > :first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
+    /* Controls that only make sense open (the Quick log's Meal | Exercise) go too */
+    & [data-fold-hide] { display: none; }
     /* Grip and chevron centred on the folded card's one row */
     & > button { top: 50% !important; transform: translateY(-50%); }
   ` : '')}

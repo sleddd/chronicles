@@ -387,8 +387,10 @@ const Quad = styled.div`
   /* No outline: a soft shadow, like the dashboard's cards (the rules between cells stay) */
   border: 1px solid transparent;
   box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
+  /* The same see-through panel as the dashboard's other cards under a wallpaper */
+  ${glassCard}
   --cell-x: 26px;
   & > * {
     min-width: 0;

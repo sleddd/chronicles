@@ -70,7 +70,8 @@ const Viewport = styled.div`
   @media (max-width: 768px) { border-width: 5px; border-radius: 11px; }
 `;
 
-/* White round buttons centred on the image's left and right edges */
+/* Round buttons centred on the image's left and right edges, in the frame's
+   dark grey with white chevrons */
 const Arrow = styled.button<{ $side: 'left' | 'right' }>`
   position: absolute;
   top: 50%;
@@ -84,13 +85,13 @@ const Arrow = styled.button<{ $side: 'left' | 'right' }>`
   justify-content: center;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.94);
-  color: ${PAGE_INK};
+  background: #2b2e36;
+  color: #ffffff;
   cursor: pointer;
   box-shadow: var(--shadow-lg, 0 8px 28px rgba(20, 20, 30, 0.14));
   transition: background 150ms, transform 150ms;
-  &:hover { background: #ffffff; }
-  &:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+  &:hover { background: #383c46; }
+  &:focus-visible { outline: 2px solid ${PAGE_INK}; outline-offset: 3px; }
   /* Phones: 32px so the half that hangs off fits the 16px gutter */
   @media (max-width: 768px) { width: 32px; height: 32px; ${({ $side }) => $side}: -16px; span { font-size: 20px !important; } }
 `;
