@@ -526,6 +526,13 @@ async function loadTopics(seed: boolean): Promise<TopicRecord[]> {
   return loadTopics(false);
 }
 
+/** A single topic from the server, only if it is the one asked for: the id goes into the
+ *  AAD as text, so an id like "v1" would open a payload from before topics were bound */
+function sameTopic(w: TopicWire, id: number): TopicWire {
+  if (!w || !Number.isSafeInteger(w.id) || w.id !== id) throw new Error('Topic answer doesn’t match the topic asked for');
+  return w;
+}
+
 export const topics = {
   getAll: () => loadTopics(true),
 
@@ -544,14 +551,14 @@ export const topics = {
       // The payload holds both, so fill in whichever wasn't given
       if (name === undefined || icon === undefined) {
         const migrated = await sealMarkerPresent(TOPICS_SEAL_MARKER);
-        const current = (await openTopic(await request<TopicWire>(`/topics/${id}`), !migrated)).topic;
+        const current = (await openTopic(sameTopic(await request<TopicWire>(`/topics/${id}`), id), !migrated)).topic;
         name ??= current.name;
         if (icon === undefined) icon = current.icon;
       }
       body = { ...body, ...(await sealTopic(id, name, icon)) };
     }
     const w = await request<TopicWire>(`/topics/${id}`, { method: 'PUT', body });
-    return (await openTopic(w, !(await sealMarkerPresent(TOPICS_SEAL_MARKER)))).topic;
+    return (await openTopic(sameTopic(w, id), !(await sealMarkerPresent(TOPICS_SEAL_MARKER)))).topic;
   },
 
   delete: (id: number) =>

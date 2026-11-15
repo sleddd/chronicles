@@ -1,6 +1,7 @@
 /* Weather + places for the dashboard, from Open-Meteo (no key; allowed in the
    CSP). City names and coordinates are the user's own and stay in their
-   encrypted dashboard settings — only the coordinates are sent to Open-Meteo. */
+   encrypted dashboard settings. Open-Meteo gets the typed city name once, when a
+   city is looked up (geocoding), then only coordinates for the weather. */
 
 export interface Place {
   name: string;

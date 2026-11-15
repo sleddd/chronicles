@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { auth as authApi, ApiError } from '../services/api.js';
 import { deriveAuthSecret } from '@chronicles/shared';
 import { clearEntryCache } from '../services/entryCache.js';
+import { announceLocalReset, onRemoteReset } from '../services/signOutBroadcast.js';
 import { setEgressAccount, EGRESS_STORE } from '../services/deviceConsent.js';
 import { SETTING_REVS_STORE } from '../services/settingCipher.js';
 import { SEEN_MARKERS_STORE } from '../services/sealedFormats.js';
@@ -146,10 +147,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ ...result.user, totpEnabled: false });
   }, []);
 
-  /** Everything this browser holds for the signed-in person, gone — the session itself is the server's */
-  const resetLocal = useCallback(async () => {
+  /** What this tab holds in memory for the signed-in person: auth state and the decrypted stores */
+  const clearMemory = useCallback(async () => {
     setUser(null);
     setEncryptionData(null);
+    setPending2FA(null);
+    try {
+      const { useEntriesStore } = await import('../stores/entriesStore.js');
+      const { usePublicShelfStore } = await import('../stores/publicShelfStore.js');
+      const { useUIStore } = await import('../stores/uiStore.js');
+      const { resetCalendarSyncSession } = await import('../services/calendarSync.js');
+      const { setAiConfig } = await import('../services/aiAssistant.js');
+      const { setImageStorageConfig, setImageStorageDraft, clearImageCache } = await import('../services/imageStorage.js');
+      // The AI and image-bucket settings (even their sealed copies and unsaved drafts) were the last person's
+      setAiConfig(null, null);
+      clearImageCache();
+      setImageStorageConfig(null, null);
+      setImageStorageDraft(null);
+      useEntriesStore.getState().clearAll();
+      useUIStore.getState().clearSearch();
+      useUIStore.getState().clearPrivateState();
+      usePublicShelfStore.getState().reset();
+      resetCalendarSyncSession();
+    } catch {
+      // Non-critical — stores may not be loaded
+    }
+  }, []);
+
+  // Another tab signed out (or is starting a fresh sign-in): this tab's copy of
+  // the last person goes too, rather than staying on screen. The encryption
+  // provider drops the master key on the same signal.
+  useEffect(() => onRemoteReset(() => { void clearMemory(); }), [clearMemory]);
+
+  /** Everything this browser holds for the signed-in person, gone — the session itself is the server's */
+  const resetLocal = useCallback(async () => {
+    announceLocalReset();
+    await clearMemory();
 
     // The browser's copy of the journal (ciphertext) goes first: its open
     // connection would otherwise block deleting the database below
@@ -200,29 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       })(),
     ]);
-
-    // Clear in-memory stores
-    try {
-      const { useEntriesStore } = await import('../stores/entriesStore.js');
-      const { usePublicShelfStore } = await import('../stores/publicShelfStore.js');
-      const { useUIStore } = await import('../stores/uiStore.js');
-      const { resetCalendarSyncSession } = await import('../services/calendarSync.js');
-      const { setAiConfig } = await import('../services/aiAssistant.js');
-      const { setImageStorageConfig, setImageStorageDraft, clearImageCache } = await import('../services/imageStorage.js');
-      // The AI and image-bucket settings (even their sealed copies and unsaved drafts) were the last person's
-      setAiConfig(null, null);
-      clearImageCache();
-      setImageStorageConfig(null, null);
-      setImageStorageDraft(null);
-      useEntriesStore.getState().clearAll();
-      useUIStore.getState().clearSearch();
-      useUIStore.getState().clearPrivateState();
-      usePublicShelfStore.getState().reset();
-      resetCalendarSyncSession();
-    } catch {
-      // Non-critical — stores may not be loaded
-    }
-  }, []);
+  }, [clearMemory]);
 
   const logout = useCallback(async () => {
     // End the session on the server; if that can't be reached, remember to end it on the next load

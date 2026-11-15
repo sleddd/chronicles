@@ -87,7 +87,8 @@ router.get('/:token', publicShelfLimiter, async (req, res) => {
     // A link opened by many people: a minute of shared cache and a 304 for a
     // page the browser already holds. Nothing private is in this response.
     const etag = `"${crypto.createHash('sha256').update(`${result.updatedAt.toISOString()}|${result.page}|${result.total}|${JSON.stringify(query)}`).digest('base64url').slice(0, 24)}"`;
-    res.setHeader('Cache-Control', 'public, max-age=60');
+    // private: a shared cache (CDN) must not keep serving a shelf after Turn off or Reset link
+    res.setHeader('Cache-Control', 'private, max-age=60');
     res.setHeader('ETag', etag);
     if (req.headers['if-none-match'] === etag) {
       res.status(304).end();

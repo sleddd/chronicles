@@ -958,10 +958,11 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
       return;
     }
 
-    // Every try counts (per account, across instances): the "already in use"
+    // Every try counts (per session, across instances): the "already in use"
     // answer below says whether an email has an account, so a session can't
-    // be used to test emails at the per-IP rate
-    if (!(await sharedState.claim(EMAIL_CHANGES, String(req.auth!.accountId), EMAIL_CHANGE_MAX, EMAIL_CHANGE_WINDOW_MS))) {
+    // be used to test emails at the per-IP rate. Per session, not per account,
+    // so a stolen session can't use up the owner's own tries
+    if (!(await sharedState.claim(EMAIL_CHANGES, confirmKey(req), EMAIL_CHANGE_MAX, EMAIL_CHANGE_WINDOW_MS))) {
       logSecurityEvent('email_change_limited', { accountId: req.auth!.accountId, ip: req.ip });
       res.status(429).json({ error: 'Too many email changes. Try again in an hour.' });
       return;

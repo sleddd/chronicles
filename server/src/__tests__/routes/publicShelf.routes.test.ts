@@ -57,7 +57,7 @@ describe('Public shelf routes', () => {
       expect(res.status).toBe(200);
       expect(Object.keys(res.body).sort()).toEqual(['items', 'page', 'pages', 'title', 'total', 'updatedAt']);
       expect(res.body.items).toHaveLength(1);
-      expect(res.headers['cache-control']).toBe('public, max-age=60');
+      expect(res.headers['cache-control']).toBe('private, max-age=60');
       expect(res.headers['etag']).toMatch(/^"[A-Za-z0-9_-]+"$/);
       expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 2, { type: null, shelf: null, minRating: null, q: null, sort: null });
     });
@@ -113,7 +113,7 @@ describe('Public shelf routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.publicShelf.token).toBe(TOKEN);
       expect(res.body.publicShelf.items).toBeUndefined();
-      expect(res.headers['cache-control']).not.toBe('public, max-age=60');
+      expect(res.headers['cache-control']).not.toBe('private, max-age=60');
       vi.mocked(getPublicShelfByAccount).mockResolvedValue(null);
       expect((await request(app).get('/api/public-shelf').set(AUTH)).body).toEqual({ publicShelf: null });
     });

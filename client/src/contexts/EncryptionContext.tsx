@@ -15,6 +15,7 @@ import { clearSealMarkers, clearIssuedTopicIds } from '../services/api.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { forgetPlannerKeyword, forgetPlanningTypeFilter } from '../types/planner.js';
 import { useTimeStore } from '../stores/timeStore.js';
+import { onRemoteReset } from '../services/signOutBroadcast.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
   hasRememberedUnlock, lastActivity, markActivity, startRemembering, storeRemembered,
@@ -343,6 +344,11 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [lockLocal]);
+
+  // Another tab signed out or is starting a fresh sign-in: drop the key here
+  // too, remembered or not — a second window must never keep the last
+  // person's journal open
+  useEffect(() => onRemoteReset(() => { if (masterKeyRef.current) lockLocal(); }), [lockLocal]);
 
   // Auto-lock when tab becomes hidden (user switches away) — unless this
   // browser is remembered, which is the point of Remember me
