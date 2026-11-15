@@ -578,3 +578,34 @@ describe('cleanupSessions', () => {
     });
   });
 });
+
+describe('which session cookie is read', () => {
+  const live = 'c'.repeat(12) + 'd'.repeat(32);
+  const stale = 'e'.repeat(12) + 'f'.repeat(32);
+  const lookedUp = async (nodeEnv: string) => {
+    const before = process.env.NODE_ENV;
+    process.env.NODE_ENV = nodeEnv;
+    vi.resetModules();
+    try {
+      const { authMiddleware: mw } = await import('../middleware/auth.js');
+      mockPrisma.session.findUnique.mockReset();
+      mockPrisma.session.findUnique.mockResolvedValue(null);
+      await mw(createMockReq({
+        cookies: { chronicle_session: live, '__Host-chronicle_session': stale },
+        headers: { 'x-requested-with': 'XMLHttpRequest' },
+      }), createMockRes(), vi.fn());
+      return mockPrisma.session.findUnique.mock.calls[0]?.[0]?.where?.selector;
+    } finally {
+      process.env.NODE_ENV = before;
+      vi.resetModules();
+    }
+  };
+
+  it('development reads the cookie it sets, not a __Host- one left by another run on localhost', async () => {
+    expect(await lookedUp('development')).toBe('c'.repeat(12));
+  });
+
+  it('anywhere else only the __Host- cookie counts', async () => {
+    expect(await lookedUp('production')).toBe('e'.repeat(12));
+  });
+});

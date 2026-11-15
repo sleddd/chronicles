@@ -1,5 +1,7 @@
 /* Bug reports go by email to support (no server storage, no telemetry): the
-   form builds a mailto: link the reporter's own email app sends. */
+   form posts the report to the server, which emails it through Resend
+   (`server/src/routes/bugReport.ts`). If that can't send, the form falls back
+   to this mailto: link, which the reporter's own email app sends. */
 
 export const SUPPORT_EMAIL = 'support@mydailychronicles.com';
 
@@ -8,7 +10,11 @@ export const BUG_AREAS = [
   'In-App AI', 'Settings', 'Signing in or signing up', 'Home page', 'Something else',
 ] as const;
 
+export type BugReportKind = 'feedback' | 'bug';
+
 export interface BugReport {
+  /** Feedback (an idea, a suggestion) or a bug report */
+  kind: BugReportKind;
   area: string;
   happened: string;
   steps: string;
@@ -34,11 +40,12 @@ export function deviceLabel(ua: string): string {
 
 /** The email the reporter's app opens with: subject + a plain-text body */
 export function bugEmail(r: BugReport): { subject: string; body: string; href: string } {
-  const subject = `Bug report: ${r.area}`;
+  const feedback = r.kind === 'feedback';
+  const subject = `${feedback ? 'Feedback' : 'Bug report'}: ${r.area}`;
   const lines = [
     `Where: ${r.area}`,
     '',
-    'What happened:',
+    feedback ? 'Feedback:' : 'What happened:',
     r.happened.trim(),
     ...(r.steps.trim() ? ['', 'What I was doing:', r.steps.trim()] : []),
     ...(r.device.trim() ? ['', `Device and browser: ${r.device.trim()}`] : []),

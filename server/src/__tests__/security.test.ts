@@ -122,7 +122,7 @@ describe('Password change session revocation', () => {
     // Should have createSession AFTER the transaction
     expect(changePasswordSection).toContain('createSession(account.id');
     // Should set cookie with new token
-    expect(changePasswordSection).toContain('res.cookie(COOKIE_NAME, token');
+    expect(changePasswordSection).toContain('setSessionCookie(res, token)');
   });
 });
 

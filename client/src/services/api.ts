@@ -19,6 +19,28 @@ interface RequestOptions {
   params?: Record<string, string>;
 }
 
+/* The session this browser holds was ended by the server (revoked — signed out
+   everywhere, a password change, signed in again elsewhere in this browser —
+   expired or idle). Every data request then answers 401 with one of these, and
+   retrying can't help, so the app is told once (SessionEndedGate in App.tsx)
+   and signs out here. Other 401s (a wrong password under /auth, calendar sync's
+   google_disconnected) are not this. */
+const SESSION_ENDED = /^(Session revoked|Session expired|Invalid session|Authentication required)$/;
+const SESSION_ENDED_EVENT = 'chronicles:session-ended';
+/* Moves on with every sign-in. Signing in revokes the session the browser held
+   before, so a request still in flight under the old one can come back
+   "Session revoked" after the new one exists — that answer is about the old
+   session and must not sign anyone out. */
+const SIGN_IN_PATHS = new Set(['/auth/login', '/auth/login/2fa', '/auth/register', '/auth/recover']);
+let sessionEpoch = 0;
+
+/** Listen for the server ending this browser's session. Returns unsubscribe. */
+export function onSessionEnded(listener: (reason: string) => void): () => void {
+  const handler = (e: Event) => listener((e as CustomEvent<string>).detail);
+  window.addEventListener(SESSION_ENDED_EVENT, handler);
+  return () => window.removeEventListener(SESSION_ENDED_EVENT, handler);
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -117,6 +139,7 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
   }
 
   const started = performance.now();
+  const epoch = sessionEpoch;
   const res = await fetch(url, {
     method,
     headers,
@@ -129,8 +152,15 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: 'Request failed' }));
+    // Only a request sent under the current sign-in speaks for it
+    if (res.status === 401 && epoch === sessionEpoch && !path.startsWith('/auth/') && typeof data.error === 'string' && SESSION_ENDED.test(data.error)) {
+      window.dispatchEvent(new CustomEvent(SESSION_ENDED_EVENT, { detail: data.error }));
+    }
     throw new ApiError(res.status, data.error || 'Request failed', res.status === 429 ? retryAfterFrom(res) : undefined, data);
   }
+
+  // A sign-in succeeded: answers to requests sent before it no longer speak for this session
+  if (SIGN_IN_PATHS.has(path)) sessionEpoch++;
 
   const contentType = res.headers.get('content-type');
   if (!contentType?.includes('application/json')) {
@@ -539,7 +569,9 @@ export const topics = {
   create: async (data: { name: string; icon?: string | null; color?: string }): Promise<TopicRecord> => {
     const id = await reserveTopicId();
     const sealed = await sealTopic(id, data.name, data.icon);
-    const w = await request<TopicWire>('/topics', { method: 'POST', body: { id, ...sealed, ...(data.color ? { color: data.color } : {}) } });
+    // The answer must be for the id the name was sealed to: another topic's id
+    // here would put the new name on that topic in this session
+    const w = sameTopic(await request<TopicWire>('/topics', { method: 'POST', body: { id, ...sealed, ...(data.color ? { color: data.color } : {}) } }), id);
     return { id: w.id, name: data.name, icon: data.icon ?? null, color: w.color, sort_order: w.sort_order };
   },
 
@@ -633,6 +665,15 @@ export interface BetaApplication {
 export const beta = {
   apply: (a: BetaApplication) =>
     request<{ ok: true }>('/beta/apply', { method: 'POST', body: { ...a, ageConfirmed: true, riskAccepted: true } }),
+};
+
+// Public bug form: sent on to support by email (Resend), never stored
+export interface BugReportBody {
+  kind: 'feedback' | 'bug';
+  area: string; happened: string; steps: string; device: string; replyTo: string; website?: string;
+}
+export const bugReports = {
+  send: (r: BugReportBody) => request<{ ok: true }>('/bug-report', { method: 'POST', body: r }),
 };
 
 export const analytics = {

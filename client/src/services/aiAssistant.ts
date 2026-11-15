@@ -47,6 +47,8 @@ export interface AiConfig {
   weightUnit: 'lb' | 'kg';
   /** The user's own notes for the AI chat (about them, how they like to be talked to) */
   chatNotes: string;
+  /** The floating AI chat — its own switch, off until chosen; estimates work without it */
+  chatEnabled: boolean;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -63,6 +65,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   bodyWeight: '',
   weightUnit: 'lb',
   chatNotes: '',
+  chatEnabled: false,
 };
 
 /** Suggested models per provider — the Settings form also accepts any model ID. */
@@ -143,6 +146,11 @@ export function hasCredentials(cfg: AiConfig): boolean {
 /** AI is switched on, unlocked, and fully configured. */
 export function isAiReady(): boolean {
   return !!aiConfig && aiConfig.enabled && hasCredentials(aiConfig);
+}
+
+/** The AI is on and its chat switched on — the chat bubble shows (setup may still be unfinished). */
+export function isAiChatEnabled(): boolean {
+  return !!aiConfig && aiConfig.enabled && aiConfig.chatEnabled === true;
 }
 
 /** Latest stored config for the Settings form (null when none / locked). */

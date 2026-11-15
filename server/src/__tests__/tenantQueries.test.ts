@@ -185,7 +185,7 @@ describe('Taxonomy queries', () => {
 
       const [sql, id, color, order, payload] = mockQueryRawUnsafe.mock.calls[1];
       expect(sql).toContain('INSERT INTO usr_1_abc123.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)');
-      expect(sql).toContain('WHERE $1 <= (SELECT last_value FROM usr_1_abc123.taxonomies_id_seq)');
+      expect(sql).toContain('WHERE EXISTS (SELECT 1 FROM usr_1_abc123.taxonomies_id_seq q WHERE q.is_called AND $1 <= q.last_value)');
       expect([id, color, order]).toEqual([1, '#333', 3]);
       expect(Buffer.isBuffer(payload)).toBe(true);
       expect(result).toEqual({ id: 1, name: null, icon: null, color: '#333', sort_order: 3, payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64') });

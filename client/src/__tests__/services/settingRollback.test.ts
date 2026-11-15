@@ -55,3 +55,28 @@ describe('rollback guard for the AI and image-bucket settings', () => {
     expect(await openSetting('imageStorageConfig', fresh, decryptBytes)).toEqual({ bucket: 'new' });
   });
 });
+
+describe('rollback guard for the calendar choices (plain strings)', () => {
+  it('a calendar the user moved away from no longer opens once the new choice is saved', async () => {
+    const shared = await sealSetting('googleCalendarId', 'family@group.calendar.google.com', encryptBytes);
+    await trackGuardedSave('googleCalendarId', async () => undefined);
+    const own = await sealSetting('googleCalendarId', 'primary', encryptBytes);
+    await trackGuardedSave('googleCalendarId', async () => undefined);
+    expect(await openSetting('googleCalendarId', own, decryptBytes)).toBe('primary');
+    await expect(openSetting('googleCalendarId', shared, decryptBytes)).rejects.toThrow(/older/);
+  });
+
+  it('a value from before revisions (a bare string) opens until a revised one has been seen', async () => {
+    const bare = async (v: string) => {
+      const { ciphertext, iv } = await rawEncryptBytes(key, new TextEncoder().encode(JSON.stringify(v)).buffer as ArrayBuffer, 'chronicles:setting:v2:calendarImportMode');
+      return { ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))), iv, v: 2 as const };
+    };
+    const old = await bare('all');
+    expect(await openSetting('calendarImportMode', old, decryptBytes)).toBe('all');
+    const next = await sealSetting('calendarImportMode', 'chroniclesOnly', encryptBytes);
+    await trackGuardedSave('calendarImportMode', async () => undefined);
+    expect(await openSetting('calendarImportMode', next, decryptBytes)).toBe('chroniclesOnly');
+    // "Import everything" can't be switched back on by replaying the old value
+    await expect(openSetting('calendarImportMode', old, decryptBytes)).rejects.toThrow(/older/);
+  });
+});

@@ -93,3 +93,27 @@ describe('generateIcs', () => {
     expect(generateIcs([baseEvent], now)).toBe(generateIcs([baseEvent], now));
   });
 });
+
+describe('dates and times that are not dates and times', () => {
+  const base = { uid: 'e1', summary: 'Dentist', location: '', startDate: '2026-12-01', startTime: '', endDate: '', endTime: '' };
+
+  it('leaves out an event whose start date carries lines of its own', () => {
+    const ics = generateIcs([
+      { ...base, startDate: '2026-12-01\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:x\r\nURL:https://evil.example' },
+      { ...base, uid: 'e2', summary: 'Kept' },
+    ]);
+    expect(ics).not.toContain('evil.example');
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(ics).toContain('SUMMARY:Kept');
+  });
+
+  it.each([
+    ['startDate', '12/01/2026'],
+    ['endDate', '2026-12-02\nX'],
+    ['startTime', '9am'],
+    ['endTime', '10:00\r\nATTACH:x'],
+  ])('leaves out an event with a malformed %s', (field, value) => {
+    const ics = generateIcs([{ ...base, startTime: '09:00', [field]: value }]);
+    expect(ics).not.toContain('BEGIN:VEVENT');
+  });
+});

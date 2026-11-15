@@ -255,10 +255,11 @@ router.post('/batch', async (req, res) => {
   }
 });
 
-// GET /api/entries/:id — Get single entry
-router.get('/:id', async (req, res) => {
+// GET /api/entries/:id — Get single entry (one can be over 2 MB as JSON, so
+// only a few at once per account)
+router.get('/:id', readGate('entry', 6), async (req, res) => {
   try {
-    const id = parseId(req.params.id);
+    const id = parseId(String(req.params.id));
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
     const post = await getPost(req.auth!.tenantSchemaName, id);
     if (!post) {

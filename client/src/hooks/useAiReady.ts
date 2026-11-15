@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { ensureAiConfig, isAiReady, subscribeAi } from '../services/aiAssistant.js';
+import { ensureAiConfig, isAiChatEnabled, isAiReady, subscribeAi } from '../services/aiAssistant.js';
 import { settings as settingsApi } from '../services/api.js';
 import { useOptionalEncryption } from '../contexts/EncryptionContext.js';
 
@@ -14,4 +14,10 @@ export function useAiReady(): boolean {
     if (isUnlocked && !ready && decryptBytes) void ensureAiConfig(decryptBytes, settingsApi.getAll);
   }, [isUnlocked, ready, decryptBytes]);
   return ready;
+}
+
+/** True when the AI is on and its chat is switched on (Settings → In-App AI). */
+export function useAiChatEnabled(): boolean {
+  useAiReady(); // loads the saved AI settings when unlocked
+  return useSyncExternalStore(subscribeAi, isAiChatEnabled, () => false);
 }

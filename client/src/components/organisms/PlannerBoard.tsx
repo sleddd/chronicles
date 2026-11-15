@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import {
   DndContext, DragOverlay, closestCenter, pointerWithin, KeyboardSensor, MouseSensor, TouchSensor, useDroppable,
@@ -7,6 +7,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { usePagePan } from '../../hooks/usePagePan.js';
 import { Kicker, CardTitle, Chip } from './KanbanBoard.js';
 import { DEFAULT_PART, PLANNER_ROWS, type DayPart } from '../../utils/planner.js';
 
@@ -146,9 +147,51 @@ const BacklogTitle = styled.h3`
   color: var(--text-primary);
 `;
 
-const Scroll = styled.div`
+/** Holding a card this close (px) to the days' left / right edge pages them, after a moment */
+const EDGE_ZONE = 56;
+const EDGE_DWELL_MS = 650;
+/** How far (px) past the days' left edge still counts as holding it there */
+const EDGE_SLACK = 32;
+
+const DaysArea = styled.div`
+  position: relative;
+  min-width: 0;
+`;
+
+/* While a card is held at an edge: a soft accent band with a chevron, the way it will go */
+/* While a card is in hand: the two places to hold it to change week — faint
+   until the card is over one, then a firmer accent band */
+const EdgeHint = styled.div<{ $side: 'prev' | 'next'; $active: boolean; $width: number }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  ${({ $side }) => ($side === 'prev' ? 'left: 0;' : 'right: 0;')}
+  z-index: 3;
+  width: ${({ $width }) => $width}px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  text-align: center;
+  color: var(--color-accent-soft, var(--color-accent));
+  opacity: ${({ $active }) => ($active ? 1 : 0.55)};
+  background: ${({ $active }) => `color-mix(in srgb, var(--color-accent) ${$active ? 16 : 6}%, transparent)`};
+  border-${({ $side }) => ($side === 'prev' ? 'left' : 'right')}: 2px ${({ $active }) => ($active ? 'solid' : 'dashed')} var(--color-accent-line, var(--color-accent));
+  transition: opacity 120ms, background 120ms;
+`;
+
+/* Drag empty space (mouse), swipe (touch) or scroll sideways (trackpad) to
+   move a week / day — usePagePan. Up-and-down scrolling stays the page's. */
+const Scroll = styled.div<{ $panning: boolean }>`
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  cursor: ${({ $panning }) => ($panning ? 'grabbing' : 'auto')};
+  user-select: ${({ $panning }) => ($panning ? 'none' : 'auto')};
 `;
 
 /* The grid: a narrow column naming the parts of the day, then a column per day.
@@ -544,9 +587,12 @@ interface PlannerBoardProps extends CardActions {
   folded?: boolean;
   /** Fold or open Unscheduled; omitted = no fold button */
   onFold?: (folded: boolean) => void;
+  /** The previous / next week (or day): dragging or swiping the days sideways */
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
-export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, onOpenEvent, onAdd, onPickDay, folded = false, onFold }: PlannerBoardProps) {
+export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
   const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
   const [foldedParts, setFoldedParts] = useState<DayPart[]>(loadFoldedParts);
   const toggleFoldedPart = (part: DayPart) => setFoldedParts(prev => {
@@ -566,7 +612,10 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
   const backlog = [...overdue, ...open];
   const all = [...backlog, ...lanes.flatMap(l => l.cards)];
   const [dragging, setDragging] = useState<number | null>(null);
-  const floating = dragging === null ? undefined : all.find(c => c.id === dragging);
+  // The card in hand, kept from the start: paging to another week while holding
+  // it takes its own day (and the card) off the screen
+  const dragCard = useRef<{ card: PlannerCard; from: { day: string; part: DayPart | '' } } | null>(null);
+  const floating = dragging === null ? undefined : (all.find(c => c.id === dragging) ?? dragCard.current?.card);
 
   // Where a card is showing: its day and part of the day, or day '' for Unscheduled
   const placeOf = (id: number): { day: string; part: DayPart | '' } | undefined => {
@@ -582,13 +631,75 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
   const dragUntil = useRef(0);
   const openCard = useCallback((id: number) => { if (Date.now() >= dragUntil.current) onOpen(id); }, [onOpen]);
 
-  const handleDragStart = ({ active }: DragStartEvent) => { dragUntil.current = Number.POSITIVE_INFINITY; setDragging(Number(active.id)); };
+  // Sideways drags and swipes page the days — never while a card is dragged
+  const pan = usePagePan(() => onPrev?.(), () => onNext?.(), () => !onPrev || Date.now() < dragUntil.current);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  // The new days slide in from the side they came from
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!pan.entered || !grid?.animate) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const from = pan.entered.from === 'right' ? 48 : -48;
+    grid.animate([{ transform: `translateX(${from}px)`, opacity: 0.35 }, { transform: 'none', opacity: 1 }], { duration: 220, easing: 'ease-out' });
+  }, [pan.entered]);
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    dragUntil.current = Number.POSITIVE_INFINITY;
+    const id = Number(active.id);
+    const card = all.find(c => c.id === id);
+    const from = placeOf(id);
+    dragCard.current = card && from ? { card, from } : null;
+    setDragging(id);
+  };
+
+  // Holding a card at the left or right edge of the days moves to the previous /
+  // next week (or day) after a moment, and on again while it's held there
+  const [edge, setEdge] = useState<'prev' | 'next' | null>(null);
+  const [leftWidth, setLeftWidth] = useState(EDGE_ZONE);
+  const pageRef = useRef(pan.page);
+  pageRef.current = pan.page;
+  const scrollEl = pan.el;
+  useEffect(() => {
+    if (dragging === null || !scrollEl || !onPrev || !onNext) return;
+    let pos: { x: number; y: number } | null = null;
+    const track = (e: PointerEvent | TouchEvent) => {
+      const p = 'touches' in e ? e.touches[0] : e;
+      if (p) pos = { x: p.clientX, y: p.clientY };
+    };
+    document.addEventListener('pointermove', track, { passive: true });
+    document.addEventListener('touchmove', track, { passive: true });
+    // Going back: the whole Morning / Noon / Night column (it takes no drops), at least EDGE_ZONE
+    const leftZone = Math.max(EDGE_ZONE, (scrollEl.querySelector('[role="rowheader"]') as HTMLElement | null)?.offsetWidth ?? 0);
+    setLeftWidth(leftZone);
+    let side: 'prev' | 'next' | null = null;
+    let since = 0;
+    const timer = setInterval(() => {
+      const r = scrollEl.getBoundingClientRect();
+      let now: 'prev' | 'next' | null = null;
+      if (pos && pos.y >= r.top && pos.y <= r.bottom) {
+        const max = scrollEl.scrollWidth - scrollEl.clientWidth;
+        // A wide week scrolls first (dnd-kit's auto-scroll); only at its end does it page
+        // A little past the left edge still counts (only the right side is open-ended otherwise)
+        if (pos.x >= r.left - EDGE_SLACK && pos.x <= r.left + leftZone && scrollEl.scrollLeft <= 1) now = 'prev';
+        else if (pos.x >= r.right - EDGE_ZONE && scrollEl.scrollLeft >= max - 1) now = 'next';
+      }
+      if (now !== side) { side = now; since = Date.now(); setEdge(now); return; }
+      if (side && Date.now() - since >= EDGE_DWELL_MS) { pageRef.current(side); since = Date.now(); }
+    }, 80);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('pointermove', track);
+      document.removeEventListener('touchmove', track);
+      setEdge(null);
+    };
+  }, [dragging, scrollEl, onPrev, onNext]);
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     dragUntil.current = Date.now() + 300;
     setDragging(null);
     if (!over) return;
     const id = Number(active.id);
-    const from = placeOf(id);
+    const from = placeOf(id) ?? (dragCard.current?.card.id === id ? dragCard.current.from : undefined);
+    dragCard.current = null;
     const onCard = typeof over.id === 'number';
     const overId = String(over.id);
     let to: { day: string; part: DayPart | '' } | undefined;
@@ -609,7 +720,7 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
 
   return (
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={handleDragStart}
-      onDragCancel={() => { dragUntil.current = Date.now() + 300; setDragging(null); }} onDragEnd={handleDragEnd}>
+      onDragCancel={() => { dragUntil.current = Date.now() + 300; dragCard.current = null; setDragging(null); }} onDragEnd={handleDragEnd}>
       <Wrap $day={single} $folded={folded}>
         <DropZone id={UNSCHEDULED}>
           {(over, ref) => (folded ? (
@@ -642,9 +753,16 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
           ))}
         </DropZone>
 
-        <div>
-          <Scroll>
-            <Grid $cols={lanes.length} $labels={!labelsFolded} role="table" aria-label="Planner">
+        <DaysArea>
+          {dragging !== null && onPrev && onNext && (['prev', 'next'] as const).map(side => (
+            <EdgeHint key={side} $side={side} $active={edge === side} $width={side === 'prev' ? leftWidth : EDGE_ZONE} aria-hidden="true">
+              <MaterialIcon $size={22}>{side === 'prev' ? 'chevron_left' : 'chevron_right'}</MaterialIcon>
+              {side === 'prev' && leftWidth > 90 && (single ? 'Previous day' : 'Previous week')}
+            </EdgeHint>
+          ))}
+          <Scroll ref={pan.ref} $panning={pan.panning} {...pan.bind}>
+            <Grid ref={gridRef} $cols={lanes.length} $labels={!labelsFolded} role="table" aria-label="Planner"
+              style={pan.pull ? { transform: `translateX(${pan.pull}px)` } : undefined}>
               <Corner>
                 <FoldBtn type="button" aria-expanded={!labelsFolded}
                   aria-label={labelsFolded ? 'Show morning, noon and night' : 'Hide morning, noon and night'}
@@ -720,7 +838,7 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
             </Grid>
           </Scroll>
           {lanes.map(lane => lane.extra && <Fragment key={lane.day}>{lane.extra}</Fragment>)}
-        </div>
+        </DaysArea>
       </Wrap>
       <DragOverlay dropAnimation={null}>
         {floating ? <Floating as="div"><CardBody card={floating} /></Floating> : null}

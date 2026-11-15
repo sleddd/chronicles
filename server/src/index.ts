@@ -24,6 +24,7 @@ import aiChatRoutes from './routes/aiChat.js';
 import consentRoutes from './routes/consent.js';
 import noticeRoutes from './routes/notice.js';
 import betaRoutes from './routes/beta.js';
+import bugReportRoutes from './routes/bugReport.js';
 import { initConsentTable } from './db/consentQueries.js';
 import { initBetaTable } from './db/betaQueries.js';
 import { initAppNoticeTable } from './db/appNoticeQueries.js';
@@ -134,6 +135,7 @@ app.use('/api/consent', authMiddleware, apiLimiter, consentRoutes);
 app.use('/api/notice', authMiddleware, apiLimiter, noticeRoutes);
 app.use('/api/analytics', authMiddleware, apiLimiter, analyticsRoutes); // never tied to the account
 app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist
+app.use('/api/bug-report', bugReportRoutes); // public: sent on to support by email (Resend), never stored
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 

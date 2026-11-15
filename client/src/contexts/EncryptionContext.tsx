@@ -16,9 +16,11 @@ import { useUIStore } from '../stores/uiStore.js';
 import { forgetPlannerKeyword, forgetPlanningTypeFilter } from '../types/planner.js';
 import { useTimeStore } from '../stores/timeStore.js';
 import { onRemoteReset } from '../services/signOutBroadcast.js';
+import { cancelCalendarSync } from '../services/calendarSync.js';
+import { clearEncryptedSettings } from '../hooks/useEncryptedSetting.js';
 import {
   REMEMBER_IDLE_MS, REMEMBER_STORE_KEY, fetchRemembered, forgetRemembered,
-  hasRememberedUnlock, lastActivity, markActivity, startRemembering, storeRemembered,
+  hasRememberedUnlock, lastActivity, markActivity, onRememberLost, startRemembering, storeRemembered,
 } from '../services/rememberDevice.js';
 
 export interface EncryptionParams {
@@ -52,6 +54,8 @@ interface EncryptionContextValue {
   encryptRecord: (kind: string, id: string, record: unknown) => Promise<{ payload: string; iv: string }>;
   decryptRecord: <T = unknown>(kind: string, id: string, payload: string, iv: string) => Promise<T>;
   rewrapMasterKey: (newPassword: string, currentPassword?: string, params?: EncryptionParams) => Promise<{ salt: string; wrappedMK: string; wrapIv: string }>;
+  /** The server took the new wrap from `rewrapMasterKey`: it is now the one this session unwraps. */
+  adoptKeyWrap: (wrap: { salt: string; wrappedMK: string; wrapIv: string }) => void;
   /** Generate a new recovery key wrapping using the current password to re-derive the extractable master key. */
   generateRecoveryKey: (currentPassword: string, externalParams?: EncryptionParams) => Promise<{ recoveryKey: string; recoveryWrappedMK: string; recoveryWrapIv: string }>;
   /** Atomic recovery: unwrap with recovery key + rewrap with new password + generate new recovery key in one step. */
@@ -141,6 +145,12 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearRecordCipher();
     // And the decrypted Finance records
     clearFinanceCache();
+    // And the app-wide copies of the sealed settings (habit log, time log,
+    // dashboard layout, chips…) held by useEncryptedSetting
+    clearEncryptedSettings();
+    // A calendar sync in flight must not go on against the emptied stores (it
+    // would read every event as deleted here), nor keep its Google token
+    cancelCalendarSync();
     // And every decrypted entry, topic and private setting held in the stores:
     // after an auto-lock nothing readable stays in memory; unlocking reloads
     useEntriesStore.getState().clearAll();
@@ -245,18 +255,25 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
         params.kekIterations,
         newPassword
       );
-      // Update stored params with new values
-      encryptionParamsRef.current = {
-        kekSalt: result.salt,
-        encryptedMasterKey: result.wrappedMK,
-        kekWrapIv: result.wrapIv,
-        kekIterations: params.kekIterations,
-      };
+      // Not kept yet: the server may still refuse the change (a wrong 2FA
+      // code, a 429), and a wrap it never stored would then be what the next
+      // try — and a new recovery key — unwraps. The caller hands it back with
+      // `adoptKeyWrap` once the server has taken it
       return result;
     }
     // Recovery has its own path (recoverAndRewrap), which never keeps an
     // extractable copy of the master key around
     throw new Error('Enter your current password to change it');
+  }, []);
+
+  const adoptKeyWrap = useCallback((wrap: { salt: string; wrappedMK: string; wrapIv: string }) => {
+    encryptionParamsRef.current = {
+      kekSalt: wrap.salt,
+      encryptedMasterKey: wrap.wrappedMK,
+      kekWrapIv: wrap.wrapIv,
+      // A new wrap is always made at the current count, whatever the old one used
+      kekIterations: PBKDF2_ITERATIONS,
+    };
   }, []);
 
   const generateRecoveryKey = useCallback(async (currentPassword: string, externalParams?: EncryptionParams) => {
@@ -345,6 +362,10 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', onStorage);
   }, [lockLocal]);
 
+  // The server ended this browser's remembered unlock (idle there, or the
+  // session was revoked from another device): this tab locks too
+  useEffect(() => onRememberLost(() => { if (rememberedRef.current && masterKeyRef.current) lockLocal(); }), [lockLocal]);
+
   // Another tab signed out or is starting a fresh sign-in: drop the key here
   // too, remembered or not — a second window must never keep the last
   // person's journal open
@@ -416,6 +437,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       encryptRecord,
       decryptRecord,
       rewrapMasterKey,
+      adoptKeyWrap,
       generateRecoveryKey,
       recoverAndRewrap,
     }}>

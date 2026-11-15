@@ -239,7 +239,9 @@ export async function createTaxonomy(
   const result = await db.$queryRawUnsafe<TaxonomyRow[]>(
     `INSERT INTO ${s}.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)
      SELECT $1, $2, $3, $4, $5
-     WHERE $1 <= (SELECT last_value FROM ${s}.taxonomies_id_seq)
+     -- only an id the sequence has handed out: a sequence never used reports
+     -- last_value 1 with is_called false, which would let id 1 in unreserved
+     WHERE EXISTS (SELECT 1 FROM ${s}.taxonomies_id_seq q WHERE q.is_called AND $1 <= q.last_value)
      ON CONFLICT (id) DO NOTHING
      RETURNING ${TAXONOMY_COLUMNS}`,
     data.id,

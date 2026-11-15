@@ -96,6 +96,8 @@ export function useFinance<K extends FinanceKind>(kind: K, { enabled = true }: {
       return next;
     } catch (err) {
       const s = useFinanceStore.getState();
+      // Locked meanwhile (the store was wiped): nothing decrypted goes back in
+      if (s.generation !== store.generation) return null;
       if (previous) s.upsertLocal(kind, previous); else s.removeLocal(kind, id);
       s.setError(err instanceof Error ? `Couldn't save: ${err.message}` : "Couldn't save");
       return null;
@@ -111,6 +113,8 @@ export function useFinance<K extends FinanceKind>(kind: K, { enabled = true }: {
       useFinanceStore.getState().setError(null);
       return true;
     } catch (err) {
+      // Locked meanwhile (the store was wiped): nothing decrypted goes back in
+      if (useFinanceStore.getState().generation !== store.generation) return false;
       if (previous) useFinanceStore.getState().upsertLocal(kind, previous);
       useFinanceStore.getState().setError(err instanceof Error ? `Couldn't delete: ${err.message}` : "Couldn't delete");
       return false;

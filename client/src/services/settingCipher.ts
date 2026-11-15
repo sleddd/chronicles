@@ -45,7 +45,14 @@ export const isBound = (v: SealedValue) => v.v === 2;
  * nothing passing only through the server can.
  */
 export const SETTING_REVS_STORE = 'chronicles.setting-rev.v1';
-const ROLLBACK_GUARDED = new Set(['aiConfig', 'imageStorageConfig']);
+// The calendar choices are guarded too: where events are sent
+// (`googleCalendarId` — an older value could be a shared calendar the user
+// moved away from) and whether Google's events are brought in
+// (`calendarImportMode`). Their values are plain strings, so the revision
+// rides in a small wrapper, `{ _rev, _value }`.
+const ROLLBACK_GUARDED = new Set(['aiConfig', 'imageStorageConfig', 'googleCalendarId', 'calendarImportMode']);
+const isWrapped = (v: unknown): v is { _rev: unknown; _value: unknown } =>
+  isPlainObject(v) && '_value' in v && Object.keys(v).every(k => k === '_rev' || k === '_value');
 
 function revs(): Record<string, number> {
   try {
@@ -129,11 +136,11 @@ export function noteSettingRemoved(key: string): void {
 
 /** Seal a setting's value for `key`. */
 export async function sealSetting(key: string, value: unknown, encryptBytes: EncryptBytes): Promise<SealedValue> {
-  if (ROLLBACK_GUARDED.has(key) && isPlainObject(value)) {
+  if (ROLLBACK_GUARDED.has(key)) {
     // Noted as seen once the server has taken it (trackGuardedSave) or when
     // it's next opened, not now: if this write never reaches the server, the
     // value it still holds keeps opening
-    value = { ...value, _rev: nextRev(key) };
+    value = isPlainObject(value) ? { ...value, _rev: nextRev(key) } : { _rev: nextRev(key), _value: value };
   }
   const data = new TextEncoder().encode(JSON.stringify(value));
   const { ciphertext, iv } = await encryptBytes(data.buffer as ArrayBuffer, settingAad(key));
@@ -145,11 +152,16 @@ export async function openSetting(key: string, sealed: SealedValue, decryptBytes
   if (!isBound(sealed)) throw new Error(`Setting "${key}" is not bound to its key`);
   const plain = await decryptBytes(base64ToArrayBuffer(sealed.ciphertext), sealed.iv, settingAad(key));
   const value: unknown = JSON.parse(new TextDecoder().decode(plain));
-  if (!ROLLBACK_GUARDED.has(key) || !isPlainObject(value)) return value;
-  const { _rev, ...rest } = value;
+  if (!ROLLBACK_GUARDED.has(key)) return value;
+  // A value from before revisions (a bare string, or an object without one)
+  // counts as revision 0: it opens until a revised one has been seen
+  const _rev = isPlainObject(value) ? value._rev : undefined;
   const rev = typeof _rev === 'number' && Number.isInteger(_rev) && _rev > 0 ? _rev : 0;
   if (rev < seenRev(key)) throw new Error(`Setting "${key}" is older than one this browser has already seen`);
   noteRev(key, rev);
+  if (isWrapped(value)) return value._value;
+  if (!isPlainObject(value)) return value;
+  const { _rev: _dropped, ...rest } = value;
   return rest;
 }
 

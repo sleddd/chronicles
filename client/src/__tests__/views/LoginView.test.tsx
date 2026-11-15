@@ -7,6 +7,7 @@ const mockNavigate = vi.fn();
 
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => mockNavigate),
+  useLocation: vi.fn(() => ({ pathname: '/login', state: null })),
   Link: ({ children, to, ...props }: any) => <a href={to} {...props}>{children}</a>,
 }));
 

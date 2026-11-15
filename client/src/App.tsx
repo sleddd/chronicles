@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme, darkTheme } from '@shared/theme/tokens';
 import { useUIStore } from './stores/uiStore.js';
 import { GlobalStyle } from './styles/GlobalStyle.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { onSessionEnded } from './services/api.js';
 import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.js';
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
 import { BugReportView } from './views/BugReportView.js';
@@ -47,6 +48,7 @@ import { MealsLogView } from './views/MealsLogView.js';
 import { KitchenDashboardView } from './views/KitchenDashboardView.js';
 import { DashboardView } from './views/DashboardView.js';
 import { AiChat } from './components/organisms/AiChat.js';
+import { useAiChatEnabled } from './hooks/useAiReady.js';
 import { FlashNotice } from './components/organisms/FlashNotice.js';
 import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
@@ -437,13 +439,55 @@ function PublicShelfSync() {
 }
 
 /** The floating AI chat — only for a signed-in, unlocked journal, never on public pages. */
+/** The server ended this browser's session (revoked, expired): retrying can't
+ *  help, so lock, clear what this browser holds and go to sign-in with a note —
+ *  instead of every load retrying behind a spinner.
+ *  Cookies are shared by every tab, so first ask whether the browser's session
+ *  is really over: another tab may already have signed in again, and then this
+ *  answer was about the old one (the next requests use the new cookie). And it
+ *  never calls the server's sign-out — the session is already dead, and that
+ *  call ends whichever session the cookie holds now, which could be the new one. */
+function SessionEndedGate() {
+  const { isAuthenticated, resetLocal } = useAuth();
+  const { lock } = useEncryption();
+  const navigate = useNavigate();
+  const ending = useRef(false);
+  useEffect(() => onSessionEnded(reason => {
+    if (!isAuthenticated || ending.current) return;
+    ending.current = true;
+    void (async () => {
+      try {
+        const me = await fetch('/api/auth/me', { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' });
+        if (me.ok) return; // signed in again (another tab): nothing to end
+        const note = reason === 'Session expired'
+          ? 'Your session expired. Sign in again to carry on.'
+          : 'You were signed out on this browser. Sign in again to carry on.';
+        lock();
+        await resetLocal();
+        navigate('/login', { replace: true, state: { signInNote: note } });
+      } catch {
+        // Offline: leave things as they are — the next answer will say again
+      } finally {
+        ending.current = false;
+      }
+    })();
+  }), [isAuthenticated, resetLocal, lock, navigate]);
+  return null;
+}
+
 function ChatGate() {
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
   const { pathname } = useLocation();
   const publicPage = isPublicPage(pathname);
   if (!isAuthenticated || !isUnlocked || publicPage) return null;
-  return <AiChat />;
+  return <ChatWhenOn />;
+}
+
+/** The chat shows only once it's switched on in Settings → In-App AI */
+function ChatWhenOn() {
+  const chatOn = useAiChatEnabled();
+  return chatOn ? <AiChat /> : null;
 }
 
 /** The saved wallpaper (the sealed `wallpaper` setting) into the store once
@@ -675,6 +719,7 @@ export function App() {
               {/* Anything else: sign-in when signed out, else a 404 page */}
               <Route path="*" element={<NotFoundView />} />
             </Routes>
+            <SessionEndedGate />
             <ChatGate />
             <PublicShelfSync />
             <TimeGate />

@@ -366,6 +366,43 @@ describe('2FA hardening', () => {
       expect(owner.status).toBe(200);
     }, 30000);
 
+    it('a device cookie from before 2FA was turned on gets no bucket of its own', async () => {
+      const secret = generateSecret();
+      const on = twoFAAccount(secret);
+      const off = { ...on, totpEnabled: false, totpSecret: null };
+      const wrong = () => generateSync({ secret }) === '000000' ? '111111' : '000000';
+
+      // Someone with the password signs in while 2FA is off: a password alone
+      // earns the cookie, as many times as they like
+      (prisma.account.findUnique as any).mockResolvedValue(off);
+      const first = await request(app).post('/api/auth/login').send({ email: off.email, authSecret: SECRET });
+      expect(first.status).toBe(200);
+      const oldCookie = (first.headers['set-cookie'] as unknown as string[]).find(c => /chronicle_device=/.test(c))!.split(';')[0];
+
+      // The owner turns 2FA on. Strangers' wrong codes fill the account's bucket…
+      for (let i = 0; i < 10; i++) {
+        await request(app).post('/api/auth/login/2fa').send({ pendingToken: await pendingTokenFor(app, on), code: wrong() });
+      }
+      // …and the old cookie is one of them: no fresh ten tries, even with a right code
+      const withOldCookie = await request(app).post('/api/auth/login/2fa').set('Cookie', oldCookie)
+        .send({ pendingToken: await pendingTokenFor(app, on), code: generateSync({ secret }) });
+      expect(withOldCookie.status).toBe(429);
+    }, 30000);
+
+    it('refuses a sign-in whose credentials changed while its session was being made', async () => {
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const pendingToken = await pendingTokenFor(app, account);
+      // The row read for the check, then the look after the session exists: the password moved on
+      (prisma.account.findUnique as any)
+        .mockResolvedValueOnce(account)
+        .mockResolvedValue({ ...account, passwordHash: 'auth1$$2a$12$otherhash' });
+      const res = await request(app).post('/api/auth/login/2fa').send({ pendingToken, code: generateSync({ secret }) });
+      expect(res.status).toBe(401);
+      expect(authMw.revokeSession).toHaveBeenCalledWith('aabbccddee11', 'credentials_changed');
+      expect((res.headers['set-cookie'] as unknown as string[] | undefined ?? []).some(c => /chronicle_session=/.test(c))).toBe(false);
+    });
+
     it('accepts and consumes a legacy SHA-256 backup code', async () => {
       const account = twoFAAccount(generateSecret(), [sha256('aaaaaa-bbbbbb'), sha256('cccccc-dddddd')]);
 

@@ -13,10 +13,16 @@ describe('deviceLabel', () => {
 
 describe('bugEmail', () => {
   it('addresses support and leaves out blank parts', () => {
-    const { subject, body, href } = bugEmail({ area: 'Journal', happened: ' Save did nothing ', steps: '', device: 'Safari on iPhone', replyTo: '' });
+    const { subject, body, href } = bugEmail({ kind: 'bug', area: 'Journal', happened: ' Save did nothing ', steps: '', device: 'Safari on iPhone', replyTo: '' });
     expect(subject).toBe('Bug report: Journal');
     expect(body).toBe('Where: Journal\n\nWhat happened:\nSave did nothing\n\nDevice and browser: Safari on iPhone');
     expect(href.startsWith(`mailto:${SUPPORT_EMAIL}?subject=Bug%20report%3A%20Journal&body=`)).toBe(true);
     expect(decodeURIComponent(href.split('body=')[1])).toBe(body);
+  });
+
+  it('labels feedback as feedback', () => {
+    const { subject, body } = bugEmail({ kind: 'feedback', area: 'Planning', happened: 'Love the roadmap', steps: '', device: '', replyTo: '' });
+    expect(subject).toBe('Feedback: Planning');
+    expect(body).toBe('Where: Planning\n\nFeedback:\nLove the roadmap');
   });
 });

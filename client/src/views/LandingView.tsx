@@ -51,24 +51,15 @@ interface Feature {
 const FEATURES: Feature[] = [
   {
     label: 'Journal', title: 'A journal that keeps up with you.',
-    body: 'Capture your thoughts however they come—with rich text, photos, voice dictation, or Apple Pencil handwriting and sketching. Chronicles automatically groups your entries by day and month, keeping your ideas, quotes, books, and films right beside your daily life.',
-    points: [
-      'Find anything fast: Search instantly by keyword, topic, or date, and bookmark the moments that matter.',
-      'Rich daily context: Weave books, movies, and passing ideas directly into your timeline without cluttering your day.',
-      'Zero-knowledge privacy: Every word and photo is encrypted before it ever leaves your browser.',
-    ],
+    body: 'Capture thoughts however they come with rich text, photos, voice dictation, or Apple Pencil sketching. Chronicles automatically groups entries by day and month, weaving books, films, quotes, and ideas seamlessly into your timeline. Search instantly by keyword, topic, or date and bookmark key moments, all protected by encryption before anything leaves your browser.',
+    points: [],
     shot: 'journal', size: [1268, 1000],
     alt: 'The journal with everyday entries by month and a Sunday entry open',
   },
   {
     label: 'Goals and planning', title: 'Plan your week around what matters.',
-    body: 'Drop tasks into your week, see how they fit around your calendar, and watch your roadmap show where it all leads. Goals, milestones, and tasks stay linked—so every day you plan moves something meaningful forward.',
-    points: [
-      'Weekly planner: Slot tasks into morning, noon, and night right beside your calendar events.',
-      'Roadmap timeline: View goals on a Gantt-style timeline by month, quarter, year, or five-year horizon—complete with a marker for today.',
-      'Flexible views: Switch between lists and Kanban boards, dragging tasks to update their status.',
-      'Built-in focus & tracking: Keep priorities and deadlines front and center, and track time across tasks and focus sessions.',
-    ],
+    body: 'Drop tasks into your week to see how they fit around your calendar while your Gantt roadmap maps out the bigger picture. By keeping goals, milestones, and tasks linked, every day moves you forward. Plan your days with morning, noon, and night slots beside calendar events, view goals across months and years with a today marker, switch between lists and Kanban boards to update task statuses instantly, and keep priorities front and center with built-in time tracking and focus sessions.',
+    points: [],
     shot: ['planning-tasks', 'planning-roadmap', 'planning-planner'], size: [1268, 900],
     alt: [
       'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
@@ -78,13 +69,8 @@ const FEATURES: Feature[] = [
   },
   {
     label: 'Health and wellness', title: 'Health, wellness, and fitness tracking.',
-    body: 'Build daily habits, plan structured exercise routines, and track nutrition against your personal goals. Manage medication schedules with easy check-off doses, and use smart health reporting to compare symptoms against food or daily triggers—plus generate clean allergy, symptom, and medication lists ready to print for your next doctor’s appointment.',
-    points: [
-      'Habit & wellness metrics: Build consistent habits while logging mood, sleep, water intake, and stress over time.',
-      'Training & exercise routines: Plan physical training schedules, build custom workout routines, and track your exercise history.',
-      'Nutrition & macros: Monitor meals, calories, vitamins, and daily nutrient targets.',
-      'Symptom & trigger reporting: Compare symptoms side-by-side with food logs and habits to spot hidden triggers.',
-    ],
+    body: 'Track your complete wellness picture by logging daily habits, mood, sleep, hydration, and stress alongside custom exercise routines and detailed meal, calorie, and macro goals. Stay on top of medication schedules with effortless dose tracking, use built-in reporting to spot symptom patterns and food triggers, and print organized allergy, symptom, and medication lists for your doctor’s visits.',
+    points: [],
     shot: ['health-dashboard', 'health-meals', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
     alt: [
@@ -96,13 +82,8 @@ const FEATURES: Feature[] = [
   },
   {
     label: 'Budget and finance', title: 'Know where your money goes.',
-    body: 'Set your monthly budget, track recurring bills and subscriptions, and watch your savings targets fill up. Visual reports compare planned versus actual spending in real time, so you can adjust before the month ends.',
-    points: [
-      'Budget vs. actual: See spending by category right next to what you planned.',
-      'Bills & subscriptions: Keep every recurring expense organized in one place.',
-      'Savings targets: Track visual progress toward each financial goal.',
-      'Privacy-first tracking: Built directly from your quick entries—no bank connections or third-party logins required.',
-    ],
+    body: 'Take control of your money by setting monthly budgets, organizing recurring bills and subscriptions, and tracking visual progress toward every savings target. Real time reports compare planned against actual spending by category so you can course correct before the month ends, built entirely from your own entries with zero bank connections or third party logins required.',
+    points: [],
     shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440],
     alt: [
       'The budget with planned, bills, spending and what’s left, and where the money goes by category',
@@ -607,7 +588,7 @@ export function LandingView() {
                   <div data-reveal>
                     <h3>{f.title}</h3>
                     <p>{f.body}</p>
-                    <TickList items={f.points} />
+                    {f.points.length > 0 && <TickList items={f.points} />}
                     {f.note && <em>{f.note}</em>}
                   </div>
                   <div data-reveal style={delay(1.5)}>

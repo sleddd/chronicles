@@ -715,6 +715,33 @@ export function JournalView() {
     }
   }, [selectedEntryId, decryptedEntries, pendingNewTopicId, pendingNewFields, showBlankEntry]);
 
+  // Locked: the stores drop every decrypted entry, but the open one's text and
+  // fields are also held here, and this view stays mounted behind the unlock
+  // dialog. Let them go too — unless there is writing not saved yet, which a
+  // lock (switching tabs locks) must never lose. Unlocking loads the entry
+  // again from the store (shownRef cleared).
+  const wasUnlockedRef = useRef(isUnlocked);
+  useEffect(() => {
+    const was = wasUnlockedRef.current;
+    wasUnlockedRef.current = isUnlocked;
+    if (!was || isUnlocked) return;
+    const saved = loadedStateRef.current;
+    const unsaved = editorContent !== saved.content
+      || JSON.stringify(customFields) !== saved.customFields
+      || imagesSig(entryImages, featuredKey) !== saved.images;
+    if (unsaved) return;
+    editSessionRef.current++;
+    shownRef.current = null;
+    setEditorContent('');
+    setCustomFields({});
+    setWidgetType(null);
+    setEntryImages([]);
+    setFeaturedKey(null);
+    loadedStateRef.current = { content: '', customFields: '{}', images: imagesSig([], null) };
+    // Only the moment of locking matters, with the editor as it is then
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnlocked]);
+
   const handleSave = useCallback(async () => {
     const userFieldDefs = editorTopicId != null ? (topicCustomFields[editorTopicId] ?? []) : [];
     if (!hasEntryData(editorContent, customFields, userFieldDefs, entryImages.length)) return;

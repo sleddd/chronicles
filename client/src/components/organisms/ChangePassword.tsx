@@ -8,6 +8,7 @@ import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { auth as authApi } from '../../services/api.js';
 import { deriveAuthSecret, newPasswordProblem } from '@chronicles/shared';
+import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import { PasswordStrengthMeter } from '../molecules/PasswordStrengthMeter.js';
 
 const Section = styled.div`
@@ -48,8 +49,8 @@ const Message = styled.div<{ $error?: boolean }>`
 `;
 
 export function ChangePassword() {
-  const { rewrapMasterKey } = useEncryption();
-  const { encryptionData, user } = useAuth();
+  const { rewrapMasterKey, adoptKeyWrap } = useEncryption();
+  const { encryptionData, user, updateEncryptionData } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -96,6 +97,10 @@ export function ChangePassword() {
         newKekSalt: salt,
         newKekWrapIv: wrapIv,
       });
+      // The server took it: from here this tab unwraps the new wrap, so after a
+      // lock it opens with the new password — and no longer with the old one
+      adoptKeyWrap({ salt, wrappedMK, wrapIv });
+      updateEncryptionData({ kekSalt: salt, encryptedMasterKey: wrappedMK, kekWrapIv: wrapIv, kekIterations: PBKDF2_ITERATIONS });
 
       setMessage('Password changed successfully');
       setIsError(false);

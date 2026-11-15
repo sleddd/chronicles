@@ -503,7 +503,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <h2 id="foot-help">Help</h2>
             <ul>
               <li><a href="#faq">FAQ</a></li>
-              <li><Link to="/report-a-bug">Report a bug</Link></li>
+              <li><Link to="/report-a-bug">Feedback/Report a Bug</Link></li>
               <li>{signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}</li>
             </ul>
           </nav>

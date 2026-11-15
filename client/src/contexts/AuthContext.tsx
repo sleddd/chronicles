@@ -169,6 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       useUIStore.getState().clearPrivateState();
       usePublicShelfStore.getState().reset();
       resetCalendarSyncSession();
+      // The app-wide copies of the last person's sealed settings
+      (await import('../hooks/useEncryptedSetting.js')).clearEncryptedSettings();
     } catch {
       // Non-critical — stores may not be loaded
     }

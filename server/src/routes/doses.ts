@@ -46,8 +46,9 @@ function serialize(row: DoseRecordRow) {
   };
 }
 
-// GET /api/doses?date=YYYY-MM-DD — that day's records
-router.get('/', async (req, res) => {
+// GET /api/doses?date=YYYY-MM-DD — that day's records. Gated like the other
+// lists: the caps are per account, not per day, so one day can hold all 20 MB
+router.get('/', readGate('doses-day', 4), async (req, res) => {
   const date = req.query.date as string;
   if (!date || !isCalendarDate(date)) {
     res.status(400).json({ error: 'date query parameter is required in YYYY-MM-DD format' });

@@ -190,7 +190,7 @@ describe('SettingsView', () => {
 
   it('displays user email', () => {
     renderWithTheme(<SettingsView />);
-    expect(screen.getByDisplayValue('test@example.com')).toBeInTheDocument();
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
   });
 
   it('renders account section', () => {
@@ -216,7 +216,7 @@ describe('SettingsView', () => {
     renderWithTheme(<SettingsView />);
     expect(screen.getByRole('button', { name: 'Security' })).toBeInTheDocument();
     expect(screen.getByText('Password')).toBeInTheDocument();
-    expect(screen.getByText('Active Sessions')).toBeInTheDocument();
+    expect(screen.getByText('Active sessions')).toBeInTheDocument();
   });
 
   it('renders features section with toggles', () => {

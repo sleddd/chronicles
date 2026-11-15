@@ -4,10 +4,10 @@ import { SettingsTemplate } from '../components/templates/SettingsTemplate.js';
 import { SettingsCard, SettingsRow } from '../components/molecules/SettingsCard.js';
 import {
   HeaderRow, Title, SectionDescription,
-  PasswordForm, SessionsList, SessionItem,
+  SessionsList, SessionItem,
   ColorSection, ColorSectionTitle, ColorSectionDesc,
 } from '../components/molecules/SettingsSection.js';
-import { ActionButton, SignOutButton, RowLink, OutlinedSection } from '../components/atoms/SettingsAtoms.js';
+import { ActionButton, SignOutButton, RowLink } from '../components/atoms/SettingsAtoms.js';
 import { Toggle } from '../components/atoms/Toggle.js';
 import { Select } from '../components/atoms/Select.js';
 import { PasswordInput } from '../components/atoms/PasswordInput.js';
@@ -18,6 +18,7 @@ import { FormField } from '../components/molecules/FormField.js';
 import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import { deriveAuthSecret, newRecoveryProof, newPasswordProblem } from '@chronicles/shared';
+import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthMeter.js';
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
@@ -40,12 +41,18 @@ import { usePrivateSettings, type PrivateSettingKey } from '../services/privateS
 import { auth as authApi, settings as settingsApi, sessions as sessionsApi, topics as topicsApi, entries as entriesApi, finance as financeApi, doses as dosesApi, ApiError } from '../services/api.js';
 import { buildFullExport, openAllSettings } from '../utils/fullExport.js';
 import { BreachNoticeSetting } from '../components/organisms/BreachNoticeSetting.js';
+import {
+  SettingsGroup, SettingsGroupRow, SettingsLinkRow, SettingsGroupBody, SettingsActionRow,
+  SettingsFoot, RowPill, RowNote, InPlaceInput, FormActions, StatusOk,
+} from '../components/molecules/SettingsGroup.js';
 import { BugReportForm } from '../components/organisms/BugReportForm.js';
 import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly, seedPlanningOnly } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
-import { parseCsvRow, splitCsvLines, csvCell, isReservedImportColumn } from '../utils/csv.js';
+import { parseCsvRow, splitCsvLines, csvCell, isReservedImportColumn, guardImportedFields } from '../utils/csv.js';
+import { getSyncTopicMap } from '../services/calendarSync.js';
+import { showFlash } from '../services/flashNotice.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
 import { collectFinanceData, financeExportZip } from '../utils/financeExport.js';
 import { parseThemePreference, type ThemePreference } from '../utils/autoTheme.js';
@@ -127,14 +134,6 @@ const FEATURES = [
   { key: 'financeEnabled', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)' },
 ];
 
-/* Settings → Account → Welcome tour: plain text (no box) beside Show it again */
-const TourNote = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--text-secondary);
-`;
 
 /* ── Layout: each section is a bordered, collapsible card like the dashboards ── */
 
@@ -160,24 +159,11 @@ const SETTINGS_CARDS_KEY = 'settings-collapsed-v1';
 const IMPORT_BATCH = 50;
 
 /* All sections start collapsed; each card remembers being opened */
-function Section(props: { id: string; title: string; children: ReactNode }) {
+function Section(props: { id: string; title: string; subtitle?: string; children: ReactNode }) {
   return <CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} />;
 }
 
-/* A field plus its small actions on one line (value + Change / Save) */
-const InlineControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  & > :first-child { flex: 1; min-width: 0; }
-`;
 
-const EditActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 4px 0 12px;
-`;
 
 /* Links to the Health Data Privacy Policy and Terms, under the privacy note */
 const PolicyLinks = styled.span`
@@ -200,8 +186,8 @@ const GuideBody = styled.div`
 /* ── View ── */
 
 export function SettingsView() {
-  const { user, logout, encryptionData } = useAuth();
-  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, generateRecoveryKey, encryptNewPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
+  const { user, logout, encryptionData, updateEncryptionData } = useAuth();
+  const { lock, forgetBrowser, isRemembered, rewrapMasterKey, adoptKeyWrap, generateRecoveryKey, encryptNewPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   // Same unlock gate as every other view — Settings exposes encrypted-at-rest
   // preferences and master-key operations, so it locks with the journal
@@ -254,7 +240,7 @@ export function SettingsView() {
   const setCycleTrackingEnabled = useUIStore(s => s.setCycleTrackingEnabled);
   const handleCycleTrackingToggle = async (enabled: boolean) => {
     setCycleTrackingEnabled(enabled);
-    await savePrivateSetting('cycleTrackingEnabled', enabled).catch(() => {});
+    await savePrivateSetting('cycleTrackingEnabled', enabled).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
   // Password
@@ -378,19 +364,19 @@ export function SettingsView() {
 
   const handleTimezoneChange = async (tz: string) => {
     setTimezone(tz);
-    await savePrivateSetting('timezone', tz).catch(() => {});
+    await savePrivateSetting('timezone', tz).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
   // Light / Dark / Auto (light 7 AM – 7 PM, dark otherwise); saved as `themeMode`
   const handleThemeModeChange = async (pref: ThemePreference) => {
     setThemePreference(pref);
-    await settingsApi.upsert('themeMode', pref).catch(() => {});
+    await settingsApi.upsert('themeMode', pref).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
   const handleAccentColorChange = async (color: string) => {
     setAccentColor(color);
     document.documentElement.style.setProperty('--color-accent', color);
-    await settingsApi.upsert('accentColor', color).catch(() => {});
+    await settingsApi.upsert('accentColor', color).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
   const handleFeatureToggle = async (key: string, value: boolean) => {
@@ -398,7 +384,7 @@ export function SettingsView() {
     setFeatures(updated);
     setFeatureFlags(updated);
     // Encrypted: the switches alone say which health features someone uses
-    await savePrivateSetting(key as PrivateSettingKey, value).catch(() => {});
+    await savePrivateSetting(key as PrivateSettingKey, value).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
   const handleChangePassword = async () => {
@@ -408,12 +394,21 @@ export function SettingsView() {
     if (pwProblem) { setPwMessage(pwProblem); setPwError(true); return; }
     setPwLoading(true);
     try {
-      const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPw, currentPw);
+      // A tab opened by Remember me never unlocked with the password, so the
+      // encryption context holds no wrap: hand it the one from sign-in
+      const fallbackParams = encryptionData?.kekSalt && encryptionData?.encryptedMasterKey && encryptionData?.kekWrapIv
+        ? { kekSalt: encryptionData.kekSalt, encryptedMasterKey: encryptionData.encryptedMasterKey, kekWrapIv: encryptionData.kekWrapIv, kekIterations: encryptionData.kekIterations }
+        : undefined;
+      const { salt, wrappedMK, wrapIv } = await rewrapMasterKey(newPw, currentPw, fallbackParams);
       const [currentAuthSecret, newAuthSecret] = await Promise.all([
         deriveAuthSecret(currentPw, user?.email ?? ''),
         deriveAuthSecret(newPw, user?.email ?? ''),
       ]);
       await authApi.changePassword({ currentAuthSecret, newAuthSecret, newEncryptedMasterKey: wrappedMK, newKekSalt: salt, newKekWrapIv: wrapIv, ...withCode(pwCode) });
+      // The server took it: from here this tab unwraps the new wrap, so after a
+      // lock it opens with the new password — and no longer with the old one
+      adoptKeyWrap({ salt, wrappedMK, wrapIv });
+      updateEncryptionData({ kekSalt: salt, encryptedMasterKey: wrappedMK, kekWrapIv: wrapIv, kekIterations: PBKDF2_ITERATIONS });
       setPwMessage('Password changed'); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setShowPassword(false);
     } catch (err) { setPwMessage(err instanceof Error ? err.message : 'Failed'); setPwError(true); }
     finally { setPwLoading(false); }
@@ -448,14 +443,20 @@ export function SettingsView() {
   const handleLoadSessions = async () => {
     setShowSessions(!showSessions);
     if (!showSessions) {
-      const data = await sessionsApi.getAll().catch(() => []);
-      setSessionList(data as typeof sessionList);
+      // A failed load must not read as "no sessions"
+      const data = await sessionsApi.getAll().catch(() => { showFlash('Couldn’t load your sessions. Try again.'); return null; });
+      if (data) setSessionList(data as typeof sessionList);
+      else setShowSessions(false);
     }
   };
 
   const handleRevokeSession = async (id: number) => {
-    await sessionsApi.revoke(id);
-    setSessionList(prev => prev.filter(s => s.id !== id));
+    try {
+      await sessionsApi.revoke(id);
+      setSessionList(prev => prev.filter(s => s.id !== id));
+    } catch {
+      showFlash('Couldn’t sign that session out. Try again.');
+    }
   };
 
   const handleStart2FASetup = async () => {
@@ -484,6 +485,9 @@ export function SettingsView() {
       setTwoFAStep('codes');
       setTwoFACode('');
       setTwoFAPassword('');
+      // It's on: the authenticator secret and its QR have done their job
+      setTwoFASecret('');
+      setTwoFAQrUrl('');
     } catch (err) {
       setTwoFAError(err instanceof ApiError ? err.message : 'Invalid code');
     } finally {
@@ -766,6 +770,8 @@ export function SettingsView() {
 
       // Build topic name → id map (case-insensitive)
       const topicNameMap = new Map<string, number>();
+      // The topics whose entries go to the calendar (Event, Meeting)
+      const calendarTopicIds = new Set(getSyncTopicMap().keys());
       for (const t of allTopics) {
         topicNameMap.set(t.name.toLowerCase(), t.id);
       }
@@ -832,8 +838,13 @@ export function SettingsView() {
           else customFields[headers[h]] = val;
         }
 
-        if (Object.keys(customFields).length > 0) {
-          metadata._customFields = customFields;
+        // Dates and times must be dates and times, and a row filed under Event
+        // or Meeting starts with calendar sync off (see guardImportedFields)
+        const guarded = guardImportedFields(customFields, {
+          calendarTopic: typeof metadata._taxonomyId === 'number' && calendarTopicIds.has(metadata._taxonomyId),
+        });
+        if (Object.keys(guarded).length > 0) {
+          metadata._customFields = guarded;
         }
 
         // Wrap plain text in HTML paragraphs for TipTap. The CSV is text, so
@@ -888,6 +899,21 @@ export function SettingsView() {
 
   const handleSignOut = useSignOut();
 
+  // This view stays mounted behind the unlock dialog, so what was typed into
+  // its password and code boxes would wait in memory through a lock and show
+  // again after it. A recovery key or backup codes just issued are kept: a
+  // lock (switching to a password manager to save them does it) must not
+  // lose the only copy.
+  useEffect(() => {
+    if (!needsUnlock) return;
+    setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode('');
+    setEmailPassword(''); setEmailCode('');
+    setDeletePassword(''); setDeleteCode('');
+    setRecoveryKeyPw(''); setRecoveryCode('');
+    setTwoFAPassword(''); setTwoFACode('');
+    setDisable2FAPassword(''); setDisable2FACode('');
+  }, [needsUnlock]);
+
   if (needsUnlock) return (
     <>
       <SettingsTemplate title="">
@@ -904,142 +930,147 @@ export function SettingsView() {
       </HeaderRow>
 
       <Sections>
-      <Section id="account" title="Account">
-      <SettingsCard>
-        <FormField label="Username">
-          <TextInput value={user?.username || ''} readOnly aria-label="Username" />
-        </FormField>
-        {/* Display name edits in place — Save appears once it differs */}
-        <FormField label="Display name">
-          <InlineControls>
-            <TextInput
+      {/* Account — mockup 1: label-left groups that save as they change, kept in its own card */}
+      <Section id="account" title="Account" subtitle="Changes save as you make them.">
+
+        <SettingsGroup label="Profile">
+          <SettingsGroupRow label="Username">{user?.username || ''}</SettingsGroupRow>
+          {/* Display name edits in place and saves when the box is left (Enter too; Escape puts it back) */}
+          <SettingsGroupRow label="Display name">
+            <InPlaceInput
               value={editingDisplayName ? draftDisplayName : displayName}
+              onFocus={() => { if (!editingDisplayName) { setEditingDisplayName(true); setDraftDisplayName(displayName); } }}
               onChange={e => { setEditingDisplayName(true); setDraftDisplayName(e.target.value); }}
+              onBlur={() => {
+                if (!editingDisplayName) return;
+                if (draftDisplayName.trim() !== displayName) void handleSaveDisplayName();
+                else { setEditingDisplayName(false); setDraftDisplayName(''); }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') { setEditingDisplayName(false); setDraftDisplayName(''); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); }
+              }}
+              disabled={displayNameSaving}
               placeholder="Your first name or nickname"
               aria-label="Display name"
+              maxLength={80}
             />
-            {editingDisplayName && draftDisplayName.trim() !== displayName && (
-              <>
-                <ActionButton onClick={handleSaveDisplayName} disabled={displayNameSaving}>
-                  {displayNameSaving ? <Spinner size={14} /> : 'Save'}
-                </ActionButton>
-                <ActionButton onClick={() => { setEditingDisplayName(false); setDraftDisplayName(''); }}>Cancel</ActionButton>
-              </>
+          </SettingsGroupRow>
+        </SettingsGroup>
+
+        <SettingsGroup label="Sign-in and notices">
+          {/* Email changes need the current password, so it stays a Change flow */}
+          <SettingsGroupRow
+            label="Email"
+            action={!editingEmail && (
+              <RowPill type="button" onClick={() => { setEditingEmail(true); setNewEmail(user?.email || ''); setEmailMessage(''); }}>Change</RowPill>
             )}
-          </InlineControls>
-        </FormField>
-        {/* The dashboard's first-visit tour, and its Getting started checklist again */}
-        <FormField label="Welcome tour">
-          <InlineControls>
-            <TourNote>A quick look around Chronicles</TourNote>
-            <ActionButton onClick={() => navigate('/dashboard', { state: { showTour: true } })}>Show it again</ActionButton>
-          </InlineControls>
-        </FormField>
-        {/* Email changes need the current password, so it stays a Change flow */}
-        {!editingEmail ? (
-          <FormField label="Email">
-            <InlineControls>
-              <TextInput value={user?.email || ''} readOnly aria-label="Email" />
-              <ActionButton onClick={() => { setEditingEmail(true); setNewEmail(user?.email || ''); setEmailMessage(''); }}>
-                Change
-              </ActionButton>
-            </InlineControls>
-          </FormField>
-        ) : (
-          <>
-            <FormField label="New email">
+          >
+            {user?.email || ''}
+            {!editingEmail && emailMessage && <RowNote $error={emailError}>{emailMessage}</RowNote>}
+          </SettingsGroupRow>
+          {editingEmail && (
+            <SettingsGroupBody>
               <TextInput
                 value={newEmail}
                 onChange={e => setNewEmail(e.target.value)}
                 placeholder="New email address"
+                aria-label="New email"
                 type="email"
                 autoFocus
               />
-            </FormField>
-            <FormField label="Password">
               <PasswordInput
                 value={emailPassword}
                 onChange={e => setEmailPassword(e.target.value)}
                 placeholder="Current password"
+                aria-label="Current password"
                 autoComplete="current-password"
               />
-            </FormField>
-            {totpEnabled && (
-              <FormField label="2FA code">
+              {totpEnabled && (
                 <TextInput
                   value={emailCode}
                   onChange={e => setEmailCode(e.target.value.slice(0, 64))}
                   placeholder="Authenticator or backup code"
+                  aria-label="2FA code"
                   autoComplete="one-time-code"
                 />
-              </FormField>
-            )}
-            <EditActions>
-              <ActionButton onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailCode(''); setEmailMessage(''); }}>
-                Cancel
-              </ActionButton>
-              <ActionButton onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword || (totpEnabled && !emailCode.trim())}>
-                {emailLoading ? <Spinner size={14} /> : 'Save email'}
-              </ActionButton>
-            </EditActions>
-          </>
-        )}
-        {emailMessage && <div style={{ padding: '0 0 12px', fontSize: 13, color: emailError ? '#9B4444' : '#5A8A6A' }}>{emailMessage}</div>}
-        <BreachNoticeSetting />
-        <OutlinedSection>
-          <FormField label="Privacy and terms">
-            <PolicyLinks style={{ marginTop: 0 }}>
-              <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a>
-              <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
-            </PolicyLinks>
-          </FormField>
-        </OutlinedSection>
-        {!deletingAccount ? (
-          <FormField label="Delete account">
-            <ActionButton onClick={() => { setDeletingAccount(true); setDeletePassword(''); setDeleteCode(''); setDeleteError(''); }}>
-              Delete account…
-            </ActionButton>
-          </FormField>
-        ) : (
-          <>
-            <div style={{ padding: '4px 0 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+              )}
+              {emailMessage && <RowNote $error={emailError}>{emailMessage}</RowNote>}
+              <FormActions>
+                <RowPill type="button" onClick={() => { setEditingEmail(false); setNewEmail(''); setEmailPassword(''); setEmailCode(''); setEmailMessage(''); }}>
+                  Cancel
+                </RowPill>
+                <RowPill type="button" $tone="accent" onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim() || !emailPassword || (totpEnabled && !emailCode.trim())}>
+                  {emailLoading ? <Spinner size={14} /> : 'Save email'}
+                </RowPill>
+              </FormActions>
+            </SettingsGroupBody>
+          )}
+          <BreachNoticeSetting />
+        </SettingsGroup>
+
+        {/* The dashboard's first-visit tour, and its Getting started checklist again */}
+        <SettingsGroup label="Help">
+          <SettingsGroupRow
+            label="Welcome tour"
+            action={<RowPill type="button" onClick={() => navigate('/dashboard', { state: { showTour: true } })}>Show again</RowPill>}
+          >
+            A quick look around Chronicles
+          </SettingsGroupRow>
+        </SettingsGroup>
+
+        <SettingsGroup label="Privacy and terms">
+          <SettingsLinkRow href="/health-privacy" newTab>Health Data Privacy Policy</SettingsLinkRow>
+          <SettingsLinkRow href="/terms" newTab>Terms of Service</SettingsLinkRow>
+        </SettingsGroup>
+
+        <SettingsFoot>
+          <span>Deleting your account removes your entries and settings for good. You'll be asked to confirm.</span>
+          {!deletingAccount && (
+            <RowPill type="button" $tone="danger" onClick={() => { setDeletingAccount(true); setDeletePassword(''); setDeleteCode(''); setDeleteError(''); }}>
+              Delete account
+            </RowPill>
+          )}
+        </SettingsFoot>
+        {deletingAccount && (
+          <SettingsGroupBody style={{ padding: '18px 4px 0' }}>
+            <RowNote style={{ marginTop: 0, lineHeight: 1.55 }}>
               This permanently deletes your account, every entry, topic and setting, your share links and your calendar feed. It can't be undone.
-              Images in your own R2 bucket and events already synced to Google Calendar are not touched — remove those yourself if you want them gone.
-            </div>
-            <FormField label="Password">
-              <PasswordInput
-                value={deletePassword}
-                onChange={e => setDeletePassword(e.target.value)}
-                placeholder="Current password"
-                autoComplete="current-password"
-                autoFocus
-              />
-            </FormField>
+              Images in your own R2 bucket and events already synced to Google Calendar are not touched. Remove those yourself if you want them gone.
+            </RowNote>
+            <PasswordInput
+              value={deletePassword}
+              onChange={e => setDeletePassword(e.target.value)}
+              placeholder="Current password"
+              aria-label="Current password"
+              autoComplete="current-password"
+              autoFocus
+            />
             {totpEnabled && (
-              <FormField label="2FA code">
-                <TextInput
-                  value={deleteCode}
-                  onChange={e => setDeleteCode(e.target.value.slice(0, 64))}
-                  placeholder="Authenticator or backup code"
-                  autoComplete="one-time-code"
-                />
-              </FormField>
+              <TextInput
+                value={deleteCode}
+                onChange={e => setDeleteCode(e.target.value.slice(0, 64))}
+                placeholder="Authenticator or backup code"
+                aria-label="2FA code"
+                autoComplete="one-time-code"
+              />
             )}
-            {deleteError && <div style={{ padding: '0 0 8px', fontSize: 13, color: '#9B4444' }}>{deleteError}</div>}
-            <EditActions>
-              <ActionButton onClick={() => setDeletingAccount(false)} disabled={deleteLoading}>Cancel</ActionButton>
-              <ActionButton
+            {deleteError && <RowNote $error>{deleteError}</RowNote>}
+            <FormActions>
+              <RowPill type="button" onClick={() => setDeletingAccount(false)} disabled={deleteLoading}>Cancel</RowPill>
+              <RowPill
+                type="button"
+                $tone="danger"
                 onClick={handleDeleteAccount}
                 disabled={deleteLoading || !deletePassword || (totpEnabled && !deleteCode.trim())}
-                style={{ background: '#9B4444', color: '#fff' }}
               >
                 {deleteLoading ? <Spinner size={14} /> : 'Delete forever'}
-              </ActionButton>
-            </EditActions>
-          </>
+              </RowPill>
+            </FormActions>
+          </SettingsGroupBody>
         )}
-      </SettingsCard>
       </Section>
+
 
       {/* Preferences */}
       <Section id="preferences" title="Preferences">
@@ -1134,6 +1165,8 @@ export function SettingsView() {
                 keeping it here.
               </FinanceDisclaimer>
             )}
+            {/* The public shelf belongs with Media — shown even with Media off, so it can still be turned off */}
+            {feat.key === 'entertainmentEnabled' && <PublicShelfSettingsRow />}
             {feat.key === 'allergiesEnabled' && (
               <SettingsRow
                 title="Cycle Tracking"
@@ -1156,260 +1189,247 @@ export function SettingsView() {
         <CalendarSyncSettings themeMode={themeMode} />
       </Section>
 
-      <Section id="entry-images" title="Entry Images">
+      <Section id="entry-images" title="Entry Images" subtitle="Up to 7 encrypted images per entry, kept in your own Cloudflare R2 bucket.">
         <ImageStorageSettings themeMode={themeMode} />
       </Section>
 
-      <Section id="ai" title="In-App AI">
+      <Section id="ai" title="In-App AI" subtitle="Calorie estimates for food and workouts, plus chat, using your own AI account.">
         <AiSettings themeMode={themeMode} />
       </Section>
 
-      <Section id="security" title="Security">
-      <SettingsCard>
-        <SettingsRow
-          title="Remember me"
-          description={isRemembered
-            ? 'This browser stays unlocked until you close it, lock, or sign out (an hour idle or 12 hours at most).'
-            : 'Off on this browser. Tick “Remember me” when you sign in or unlock to stay unlocked until you close the browser.'}
-          action={isRemembered ? <ActionButton onClick={forgetBrowser}>Forget this browser</ActionButton> : undefined}
-        />
-        <SettingsRow
-          title="Password"
-          description="Change your account password"
-          action={<ActionButton onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Cancel' : 'Change'}</ActionButton>}
-        />
-        {showPassword && (
-          <PasswordForm>
-            {pwMessage && <div style={{ fontSize: 13, color: pwError ? '#9B4444' : '#5A8A6A' }}>{pwMessage}</div>}
-            <FormField label="Current Password">
-              <PasswordInput value={currentPw} onChange={e => setCurrentPw(e.target.value)} autoComplete="current-password" />
-            </FormField>
-            <FormField label="New Password">
-              <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 12 characters" autoComplete="new-password" />
-              <PasswordStrengthMeter password={newPw} email={user?.email} username={user?.username} />
-            </FormField>
-            <FormField label="Confirm New Password">
-              <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} autoComplete="new-password" />
-            </FormField>
-            {totpEnabled && (
-              <FormField label="2FA code">
+      <Section id="security" title="Security" subtitle="How you sign in and get back in.">
+        <SettingsGroup>
+          {/* ── 2FA ── */}
+          <SettingsActionRow
+            title="Two-factor authentication"
+            description={totpEnabled
+              ? <StatusOk>On, using an authenticator app</StatusOk>
+              : twoFAStep === 'idle' ? 'Off. Add a code from an authenticator app when you sign in.' : undefined}
+            action={totpEnabled ? (
+              !disabling2FA && (
+                <RowPill type="button" onClick={() => { setDisabling2FA(true); setDisable2FAPassword(''); setDisable2FACode(''); setDisable2FAError(''); }}>
+                  Turn off
+                </RowPill>
+              )
+            ) : twoFAStep === 'idle' ? (
+              <RowPill type="button" onClick={handleStart2FASetup} disabled={twoFALoading}>
+                {twoFALoading ? <Spinner size={14} /> : 'Turn on'}
+              </RowPill>
+            ) : null}
+          >
+            {/* Turning it off: password and a current code */}
+            {totpEnabled && disabling2FA && (
+              <>
+                {disable2FAError && <RowNote $error style={{ marginTop: 0 }}>{disable2FAError}</RowNote>}
+                <PasswordInput
+                  value={disable2FAPassword}
+                  onChange={e => setDisable2FAPassword(e.target.value)}
+                  placeholder="Current password"
+                  aria-label="Current password"
+                  autoFocus
+                  autoComplete="current-password"
+                />
                 <TextInput
-                  value={pwCode}
-                  onChange={e => setPwCode(e.target.value.slice(0, 64))}
+                  value={disable2FACode}
+                  onChange={e => setDisable2FACode(e.target.value.slice(0, 64))}
                   placeholder="Authenticator or backup code"
-                  autoComplete="one-time-code"
-                />
-              </FormField>
-            )}
-            <ActionButton onClick={handleChangePassword} disabled={pwLoading || (totpEnabled && !pwCode.trim())}>
-              {pwLoading ? <Spinner size={14} /> : 'Update Password'}
-            </ActionButton>
-          </PasswordForm>
-        )}
-        <SettingsRow
-          title="Active Sessions"
-          description="Manage your logged-in devices"
-          action={<ActionButton onClick={handleLoadSessions}>{showSessions ? 'Hide' : 'View'}</ActionButton>}
-        />
-        {showSessions && (
-          <SessionsList>
-            {sessionList.map(s => (
-              <SessionItem key={s.id}>
-                <SessionRow
-                  deviceInfo={s.deviceInfo}
-                  ipAddress={s.ipAddress}
-                  lastActiveAt={s.lastActiveAt}
-                  isCurrent={s.isCurrent}
-                  onRevoke={() => handleRevokeSession(s.id)}
-                />
-              </SessionItem>
-            ))}
-          </SessionsList>
-        )}
-
-        {/* ── Recovery Key ── */}
-        <SettingsRow
-          title="Recovery Key"
-          description="Generate a new recovery key for emergency account access"
-          action={
-            !generatedRecoveryKey && (
-              <ActionButton onClick={() => { setShowRecoveryKey(!showRecoveryKey); setRecoveryKeyError(''); setRecoveryKeyPw(''); setRecoveryCode(''); }}>
-                {showRecoveryKey ? 'Cancel' : 'Generate'}
-              </ActionButton>
-            )
-          }
-        >
-          {showRecoveryKey && !generatedRecoveryKey && (
-            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted, #6b7280)' }}>
-                Enter your password to generate a new recovery key. Your old recovery key will be replaced.
-              </div>
-              {recoveryKeyError && <div style={{ fontSize: 13, color: '#9B4444' }}>{recoveryKeyError}</div>}
-              <PasswordInput
-                value={recoveryKeyPw}
-                onChange={e => setRecoveryKeyPw(e.target.value)}
-                placeholder="Current password"
-                autoComplete="current-password"
-                autoFocus
-              />
-              {totpEnabled && (
-                <TextInput
-                  value={recoveryCode}
-                  onChange={e => setRecoveryCode(e.target.value.slice(0, 64))}
-                  placeholder="2FA code (authenticator or backup)"
                   aria-label="2FA code"
                   autoComplete="one-time-code"
                 />
-              )}
-              <ActionButton onClick={handleGenerateRecoveryKey} disabled={recoveryKeyLoading || !recoveryKeyPw || (totpEnabled && !recoveryCode.trim())}>
-                {recoveryKeyLoading ? <Spinner size={14} /> : 'Generate recovery key'}
-              </ActionButton>
-            </div>
-          )}
-          {generatedRecoveryKey && (
-            <div style={{ marginTop: 10 }}>
+                <FormActions>
+                  <RowPill type="button" onClick={() => setDisabling2FA(false)}>Cancel</RowPill>
+                  <RowPill type="button" $tone="danger" onClick={handleDisable2FA} disabled={twoFALoading || !disable2FAPassword || !disable2FACode.trim()}>
+                    {twoFALoading ? <Spinner size={14} /> : 'Turn off 2FA'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+
+            {/* Step 1: QR code */}
+            {!totpEnabled && twoFAStep === 'qr' && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>Scan this QR code with your authenticator app, then press Next.</RowNote>
+                {twoFAQrUrl && (
+                  <img src={twoFAQrUrl} alt="2FA QR code" style={{ width: 180, height: 180, borderRadius: 8, border: '1px solid var(--border-card)', background: '#fff' }} />
+                )}
+                <RowNote style={{ marginTop: 0 }}>
+                  Manual entry code: <code style={{ userSelect: 'all', letterSpacing: 2, color: 'var(--text-primary)' }}>{twoFASecret}</code>
+                </RowNote>
+                <FormActions>
+                  <RowPill type="button" onClick={() => { setTwoFAStep('idle'); setTwoFASecret(''); setTwoFAQrUrl(''); }}>Cancel</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => setTwoFAStep('confirm')}>Next</RowPill>
+                </FormActions>
+              </>
+            )}
+
+            {/* Step 2: confirm the code */}
+            {!totpEnabled && twoFAStep === 'confirm' && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>Enter the 6-digit code from your authenticator app and your password to finish.</RowNote>
+                {twoFAError && <RowNote $error style={{ marginTop: 0 }}>{twoFAError}</RowNote>}
+                <TextInput
+                  autoFocus
+                  value={twoFACode}
+                  onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  aria-label="6-digit code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  style={{ fontSize: 20, letterSpacing: 6, textAlign: 'center', width: 180 }}
+                />
+                <PasswordInput
+                  value={twoFAPassword}
+                  onChange={e => setTwoFAPassword(e.target.value)}
+                  placeholder="Current password"
+                  aria-label="Current password"
+                  autoComplete="current-password"
+                  onKeyDown={e => e.key === 'Enter' && twoFACode.length === 6 && twoFAPassword && handleConfirm2FA()}
+                />
+                <FormActions>
+                  <RowPill type="button" onClick={() => { setTwoFAStep('qr'); setTwoFACode(''); setTwoFAPassword(''); setTwoFAError(''); }}>Back</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={handleConfirm2FA} disabled={twoFALoading || twoFACode.length !== 6 || !twoFAPassword}>
+                    {twoFALoading ? <Spinner size={14} /> : 'Confirm'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+
+            {/* Step 3: the backup codes, shown once */}
+            {twoFAStep === 'codes' && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Save these backup codes.</strong> They're shown only once. Each works once if you lose your authenticator app.
+                </RowNote>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px',
+                  fontFamily: 'monospace', fontSize: 14, padding: '12px 16px', color: 'var(--text-primary)',
+                  background: 'var(--bg-app)', border: '1px solid var(--border-card)', borderRadius: 8,
+                }}>
+                  {twoFABackupCodes.map(code => (
+                    <span key={code} style={{ userSelect: 'all' }}>{code}</span>
+                  ))}
+                </div>
+                <FormActions>
+                  <RowPill type="button" onClick={() => { navigator.clipboard.writeText(twoFABackupCodes.join('\n')).catch(() => {}); }}>Copy all</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => { setTwoFAStep('idle'); setTwoFABackupCodes([]); }}>Done</RowPill>
+                </FormActions>
+              </>
+            )}
+          </SettingsActionRow>
+
+          {/* ── Password ── */}
+          <SettingsActionRow
+            title="Password"
+            action={!showPassword && <RowPill type="button" onClick={() => setShowPassword(true)}>Change</RowPill>}
+          >
+            {showPassword && (
+              <>
+                {pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
+                <PasswordInput value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Current password" aria-label="Current password" autoComplete="current-password" />
+                <div>
+                  <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password, at least 12 characters" aria-label="New password" autoComplete="new-password" />
+                  <PasswordStrengthMeter password={newPw} email={user?.email} username={user?.username} />
+                </div>
+                <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Confirm new password" aria-label="Confirm new password" autoComplete="new-password" />
+                {totpEnabled && (
+                  <TextInput
+                    value={pwCode}
+                    onChange={e => setPwCode(e.target.value.slice(0, 64))}
+                    placeholder="Authenticator or backup code"
+                    aria-label="2FA code"
+                    autoComplete="one-time-code"
+                  />
+                )}
+                <FormActions>
+                  <RowPill type="button" onClick={() => { setShowPassword(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setPwMessage(''); }}>Cancel</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={handleChangePassword} disabled={pwLoading || (totpEnabled && !pwCode.trim())}>
+                    {pwLoading ? <Spinner size={14} /> : 'Update password'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+            {!showPassword && pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
+          </SettingsActionRow>
+
+          {/* ── Recovery key ── */}
+          <SettingsActionRow
+            title="Recovery key"
+            description="For emergency access if you lose your password."
+            action={!generatedRecoveryKey && !showRecoveryKey && (
+              <RowPill type="button" onClick={() => { setShowRecoveryKey(true); setRecoveryKeyError(''); setRecoveryKeyPw(''); setRecoveryCode(''); }}>
+                Generate new
+              </RowPill>
+            )}
+          >
+            {showRecoveryKey && !generatedRecoveryKey && (
+              <>
+                <RowNote style={{ marginTop: 0 }}>Enter your password to make a new recovery key. Your old one stops working.</RowNote>
+                {recoveryKeyError && <RowNote $error style={{ marginTop: 0 }}>{recoveryKeyError}</RowNote>}
+                <PasswordInput
+                  value={recoveryKeyPw}
+                  onChange={e => setRecoveryKeyPw(e.target.value)}
+                  placeholder="Current password"
+                  aria-label="Current password"
+                  autoComplete="current-password"
+                  autoFocus
+                />
+                {totpEnabled && (
+                  <TextInput
+                    value={recoveryCode}
+                    onChange={e => setRecoveryCode(e.target.value.slice(0, 64))}
+                    placeholder="Authenticator or backup code"
+                    aria-label="2FA code"
+                    autoComplete="one-time-code"
+                  />
+                )}
+                <FormActions>
+                  <RowPill type="button" onClick={() => setShowRecoveryKey(false)}>Cancel</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={handleGenerateRecoveryKey} disabled={recoveryKeyLoading || !recoveryKeyPw || (totpEnabled && !recoveryCode.trim())}>
+                    {recoveryKeyLoading ? <Spinner size={14} /> : 'Generate recovery key'}
+                  </RowPill>
+                </FormActions>
+              </>
+            )}
+            {generatedRecoveryKey && (
               <RecoveryKeyDisplay
                 recoveryKey={generatedRecoveryKey}
                 onConfirm={() => { setGeneratedRecoveryKey(''); setShowRecoveryKey(false); }}
               />
-            </div>
-          )}
-        </SettingsRow>
+            )}
+          </SettingsActionRow>
 
-        {/* ── 2FA ── */}
-        <SettingsRow
-          title="Two-Factor Authentication"
-          description={
-            totpEnabled
-              ? 'Active — using authenticator app'
-              : twoFAStep === 'idle'
-              ? 'Add an extra layer of security with an authenticator app'
-              : undefined
-          }
-          action={
-            totpEnabled ? (
-              !disabling2FA ? (
-                <ActionButton onClick={() => { setDisabling2FA(true); setDisable2FAPassword(''); setDisable2FACode(''); setDisable2FAError(''); }}>
-                  Disable
-                </ActionButton>
-              ) : (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <ActionButton
-                    onClick={handleDisable2FA}
-                    disabled={twoFALoading || !disable2FAPassword || !disable2FACode.trim()}
-                    style={{ background: '#9B4444', color: '#fff' }}
-                  >
-                    {twoFALoading ? <Spinner size={14} /> : 'Confirm disable'}
-                  </ActionButton>
-                  <ActionButton onClick={() => setDisabling2FA(false)}>Cancel</ActionButton>
-                </div>
-              )
-            ) : twoFAStep === 'idle' ? (
-              <ActionButton onClick={handleStart2FASetup} disabled={twoFALoading}>
-                {twoFALoading ? <Spinner size={14} /> : 'Enable'}
-              </ActionButton>
-            ) : null
-          }
-        >
-          {/* Disable confirmation — password input */}
-          {totpEnabled && disabling2FA && (
-            <div style={{ marginTop: 8 }}>
-              {disable2FAError && <div style={{ fontSize: 13, color: '#9B4444', marginBottom: 6 }}>{disable2FAError}</div>}
-              <PasswordInput
-                value={disable2FAPassword}
-                onChange={e => setDisable2FAPassword(e.target.value)}
-                placeholder="Enter your password to confirm"
-                autoFocus
-                autoComplete="current-password"
-              />
-              <TextInput
-                value={disable2FACode}
-                onChange={e => setDisable2FACode(e.target.value.slice(0, 64))}
-                placeholder="Authenticator or backup code"
-                autoComplete="one-time-code"
-                style={{ marginTop: 8 }}
-              />
-            </div>
-          )}
-
-          {/* Step 1: QR code */}
-          {!totpEnabled && twoFAStep === 'qr' && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted, #6b7280)' }}>
-                Scan this QR code with your authenticator app, then click Next.
-              </div>
-              {twoFAQrUrl && (
-                <img src={twoFAQrUrl} alt="2FA QR code" style={{ width: 180, height: 180, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-              )}
-              <div style={{ fontSize: 12, color: 'var(--text-muted, #6b7280)' }}>
-                Manual entry code: <code style={{ userSelect: 'all', letterSpacing: 2 }}>{twoFASecret}</code>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ActionButton onClick={() => setTwoFAStep('confirm')}>Next</ActionButton>
-                <ActionButton onClick={() => { setTwoFAStep('idle'); setTwoFASecret(''); setTwoFAQrUrl(''); }}>Cancel</ActionButton>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Confirm code */}
-          {!totpEnabled && twoFAStep === 'confirm' && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted, #6b7280)' }}>
-                Enter the 6-digit code from your authenticator app and your password to confirm setup.
-              </div>
-              {twoFAError && <div style={{ fontSize: 13, color: '#9B4444' }}>{twoFAError}</div>}
-              <TextInput
-                autoFocus
-                value={twoFACode}
-                onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
-                inputMode="numeric"
-                maxLength={6}
-                style={{ fontSize: 20, letterSpacing: 6, textAlign: 'center', width: 160 }}
-              />
-              <PasswordInput
-                value={twoFAPassword}
-                onChange={e => setTwoFAPassword(e.target.value)}
-                placeholder="Your password"
-                autoComplete="current-password"
-                onKeyDown={e => e.key === 'Enter' && twoFACode.length === 6 && twoFAPassword && handleConfirm2FA()}
-              />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ActionButton onClick={handleConfirm2FA} disabled={twoFALoading || twoFACode.length !== 6 || !twoFAPassword}>
-                  {twoFALoading ? <Spinner size={14} /> : 'Confirm'}
-                </ActionButton>
-                <ActionButton onClick={() => { setTwoFAStep('qr'); setTwoFACode(''); setTwoFAPassword(''); setTwoFAError(''); }}>Back</ActionButton>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Show backup codes */}
-          {twoFAStep === 'codes' && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted, #6b7280)' }}>
-                <strong>Save these backup codes</strong> — they're shown only once. Each can be used once if you lose access to your authenticator app.
-              </div>
-              <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px',
-                fontFamily: 'monospace', fontSize: 14, padding: '12px 16px',
-                background: 'rgba(0,0,0,0.04)', borderRadius: 6,
-              }}>
-                {twoFABackupCodes.map(code => (
-                  <span key={code} style={{ userSelect: 'all' }}>{code}</span>
+          {/* ── Active sessions ── */}
+          <SettingsActionRow
+            title="Active sessions"
+            description="Devices signed in to your account."
+            action={<RowPill type="button" onClick={handleLoadSessions}>{showSessions ? 'Hide' : 'View'}</RowPill>}
+          >
+            {showSessions && (
+              <SessionsList>
+                {sessionList.map(s => (
+                  <SessionItem key={s.id}>
+                    <SessionRow
+                      deviceInfo={s.deviceInfo}
+                      ipAddress={s.ipAddress}
+                      lastActiveAt={s.lastActiveAt}
+                      isCurrent={s.isCurrent}
+                      onRevoke={() => handleRevokeSession(s.id)}
+                    />
+                  </SessionItem>
                 ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ActionButton onClick={() => {
-                  navigator.clipboard.writeText(twoFABackupCodes.join('\n')).catch(() => {});
-                }}>
-                  Copy all
-                </ActionButton>
-                <ActionButton onClick={() => { setTwoFAStep('idle'); setTwoFABackupCodes([]); }}>Done</ActionButton>
-              </div>
-            </div>
-          )}
-        </SettingsRow>
-      </SettingsCard>
+              </SessionsList>
+            )}
+          </SettingsActionRow>
+
+          {/* ── Remember me on this browser ── */}
+          <SettingsActionRow
+            title="This browser"
+            description={isRemembered
+              ? 'Stays unlocked until you close it, lock, or sign out. One hour idle or 12 hours at most.'
+              : 'Locks when you step away. Tick “Remember me” when you sign in or unlock to stay unlocked until you close the browser.'}
+            action={isRemembered ? <RowPill type="button" onClick={forgetBrowser}>Forget</RowPill> : undefined}
+          />
+        </SettingsGroup>
       </Section>
 
       <Section id="data" title="Data">
@@ -1424,7 +1444,6 @@ export function SettingsView() {
           }
         />
         {exportAllResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: exportAllResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{exportAllResult}</div>}
-        <PublicShelfSettingsRow />
         <SettingsRow
           title="Default Topics"
           description="Create default journal topics if missing"
@@ -1587,9 +1606,9 @@ export function SettingsView() {
         </GuideBody>
       </Section>
 
-      <Section id="report-a-bug" title="Report a Bug">
+      <Section id="report-a-bug" title="Feedback/Report a Bug">
         <GuideBody>
-          Something broken or confusing? Tell us here. Chronicles has no crash reporting, so a report is how we find out.
+          Have an idea, a suggestion, or something that’s broken or confusing? Tell us here. You can send feedback as well as report a bug. Chronicles has no crash reporting, so this is how we find out.
           <div style={{ marginTop: 16 }}><BugReportForm /></div>
         </GuideBody>
       </Section>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -104,7 +104,17 @@ export function LoginView() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
   // Shown over the sign-in form after leaving the code screen
-  const [signInNote, setSignInNote] = useState('');
+  const location = useLocation();
+  // Sent here because the server ended the session (SessionEndedGate in App.tsx)
+  const [signInNote, setSignInNote] = useState(() => {
+    const note = (location.state as { signInNote?: unknown } | null)?.signInNote;
+    return typeof note === 'string' ? note : '';
+  });
+  // …or after this page is already showing (signing out clears the user first, which lands here)
+  useEffect(() => {
+    const note = (location.state as { signInNote?: unknown } | null)?.signInNote;
+    if (typeof note === 'string') setSignInNote(note);
+  }, [location.state]);
 
   // Back to the sign-in form (the code screen's link, or a timed-out session)
   const leave2FA = (note = '') => {

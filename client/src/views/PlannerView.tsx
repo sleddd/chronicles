@@ -132,7 +132,9 @@ export function PlannerView() {
     return map;
   }, [entries, allTopics, days]);
 
-  const byDay = useMemo(() => tasksByDay(planned, days, today, order), [planned, days, today, order]);
+  // Finished tasks clear off the planner (they keep their place in the day's order,
+  // and still show struck through in the dashboard's Today's plan)
+  const byDay = useMemo(() => tasksByDay(planned.filter(t => !t.done), days, today, order), [planned, days, today, order]);
   const lanes: PlannerLane[] = days.map(day => ({
     day, label: laneLabel(day), today: day === today,
     events: eventsByDay.get(day) ?? [], cards: (byDay.get(day) ?? []).map(card),
@@ -211,6 +213,7 @@ export function PlannerView() {
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)}
         onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onAdd={add}
         folded={folded} onFold={setFolded}
+        onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}
         tools={(
           <Tools>

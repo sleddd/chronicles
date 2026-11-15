@@ -37,7 +37,13 @@ export function isSessionIdle(session: { lastActiveAt: Date }, now = Date.now())
 const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 function sessionCookie(req: Request): string | undefined {
   const c = req.cookies ?? {};
-  return c['__Host-chronicle_session'] || (IS_DEVELOPMENT ? c.chronicle_session : undefined);
+  // Development sets (and so reads) the plain-named cookie. It comes first
+  // there: a `__Host-` one left in the browser by a run on localhost without
+  // NODE_ENV=development is never replaced by a dev sign-in, and once its
+  // session was revoked every request answered "Session revoked" for good
+  return IS_DEVELOPMENT
+    ? c.chronicle_session || c['__Host-chronicle_session']
+    : c['__Host-chronicle_session'];
 }
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {

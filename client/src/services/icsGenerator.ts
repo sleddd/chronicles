@@ -74,6 +74,22 @@ function addDaysDateValue(date: string, days: number): string {
   return `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}`;
 }
 
+const ICS_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ICS_TIME = /^\d{2}:\d{2}$/;
+
+/**
+ * Dates and times are written into the file as they are, so they must be
+ * exactly a date and a time. Anything else (an imported row can carry any
+ * text, line breaks included, which would add lines of its own to the feed)
+ * leaves the event out.
+ */
+export function hasValidIcsTimes(ev: IcsEventInput): boolean {
+  return ICS_DATE.test(ev.startDate)
+    && (!ev.endDate || ICS_DATE.test(ev.endDate))
+    && (!ev.startTime || ICS_TIME.test(ev.startTime))
+    && (!ev.endTime || ICS_TIME.test(ev.endTime));
+}
+
 export function generateIcs(events: IcsEventInput[], now: Date = new Date()): string {
   const dtstamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
 
@@ -87,7 +103,7 @@ export function generateIcs(events: IcsEventInput[], now: Date = new Date()): st
   ];
 
   for (const ev of events) {
-    if (!ev.startDate) continue;
+    if (!ev.startDate || !hasValidIcsTimes(ev)) continue;
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${escapeIcsText(ev.uid)}`);
     lines.push(`DTSTAMP:${dtstamp}`);

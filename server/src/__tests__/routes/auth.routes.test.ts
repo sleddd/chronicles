@@ -233,12 +233,28 @@ describe('Auth Routes', () => {
         expect(registerTenant).not.toHaveBeenCalled();
       });
 
-      it('needs no code for an email on REGISTRATION_WHITELIST', async () => {
+      it('needs no code for an email on REGISTRATION_WHITELIST, in development', async () => {
+        const env = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'development';
         process.env.REGISTRATION_WHITELIST = 'test@example.com';
-        ok();
-        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
-        expect(res.status).toBe(201);
-        expect(spendInvite).not.toHaveBeenCalled();
+        try {
+          ok();
+          const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+          expect(res.status).toBe(201);
+          expect(spendInvite).not.toHaveBeenCalled();
+        } finally { process.env.NODE_ENV = env; }
+      });
+
+      it.each(['production', 'staging', undefined])('ignores REGISTRATION_WHITELIST when NODE_ENV is %s', async (nodeEnv) => {
+        const env = process.env.NODE_ENV;
+        if (nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = nodeEnv;
+        process.env.REGISTRATION_WHITELIST = 'test@example.com';
+        try {
+          (isApproved as any).mockResolvedValue(false);
+          const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+          expect(res.status).toBe(403);
+          expect(registerTenant).not.toHaveBeenCalled();
+        } finally { process.env.NODE_ENV = env; }
       });
 
       it('answers a taken username the same whether or not the email is approved', async () => {
@@ -264,10 +280,14 @@ describe('Auth Routes', () => {
       });
 
       it('still lets in an email on the list', async () => {
+        const env = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'development';
         process.env.REGISTRATION_WHITELIST = 'Test@Example.com, owner@example.com';
-        ok();
-        const res = await request(app).post('/api/auth/register').send(validRegisterBody);
-        expect(res.status).toBe(201);
+        try {
+          ok();
+          const res = await request(app).post('/api/auth/register').send(validRegisterBody);
+          expect(res.status).toBe(201);
+        } finally { process.env.NODE_ENV = env; }
       });
     });
 

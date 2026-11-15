@@ -1,0 +1,89 @@
+/* The beta welcome email (the owner's "Chronicles welcome email" design): sent by
+   `npm run beta -- --approve <email>` through Resend with the person's one-time
+   sign-up link. Table layout with inline styles, so Gmail / Outlook / Apple Mail
+   draw it the same; fonts fall back to Helvetica / Arial (no web fonts in email).
+   Everything typed by an applicant (their name) is escaped. */
+
+const SUPPORT = 'support@mydailychronicles.com';
+export const WELCOME_SUBJECT = 'Your seat in the Chronicles beta is ready';
+
+const esc = (s: string) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+/** The first word of the name an applicant typed ("Sam Lee" → "Sam"); '' for none */
+export function firstName(name: string | null | undefined): string {
+  // eslint-disable-next-line no-control-regex
+  const clean = (name ?? '').replace(/[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/g, '').trim();
+  return clean.split(/\s+/)[0]?.slice(0, 60) ?? '';
+}
+
+const F = "font-family:'Open Sans',Helvetica,Arial,sans-serif;";
+const LABEL = F + 'font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#575d68;padding:0 0 12px;border-bottom:1px solid #e6e8ec;';
+
+function step(n: number, title: string, body: string): string {
+  return `<tr>
+    <td valign="top" width="34" style="padding:18px 0 0;">
+      <div style="${F}width:24px;height:24px;line-height:24px;border-radius:12px;background:#e4f3f2;color:#1d6563;font-size:12px;font-weight:600;text-align:center;">${n}</div>
+    </td>
+    <td valign="top" style="padding:18px 0 0;${F}font-size:15px;line-height:1.6;color:#2e333b;">
+      <strong style="color:#1f2128;font-weight:600;">${title}</strong><br>${body}
+    </td></tr>`;
+}
+
+export interface WelcomeEmailInput {
+  /** Their first name, or '' */
+  name: string;
+  email: string;
+  /** Their one-time sign-up link */
+  link: string;
+  /** The sign-off under "Happy writing," */
+  sig: string;
+  /** The app's address, e.g. https://mydailychronicles.com (the logo and links) */
+  site: string;
+}
+
+export function welcomeEmail({ name, email, link, sig, site }: WelcomeEmailInput): { subject: string; html: string; text: string } {
+  const hello = name ? `Welcome to Chronicles, ${esc(name)}.` : 'Welcome to Chronicles.';
+  const href = esc(link);
+  const logo = esc(`${site}/icons/icon-192x192.png`);
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(WELCOME_SUBJECT)}</title></head><body style="margin:0;background:#f4f5f7;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f5f7;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+  <tr><td style="padding:0 4px 20px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td valign="middle"><img src="${logo}" width="40" height="40" alt="" style="display:block;border:0;border-radius:9px;"></td>
+      <td valign="middle" style="padding-left:12px;${F}font-size:19px;font-weight:600;color:#1f2128;letter-spacing:-.01em;">Chronicles</td>
+    </tr></table>
+  </td></tr>
+  <tr><td style="background:#ffffff;border-radius:14px;padding:40px 40px 36px;">
+    <div style="${LABEL}">Beta invite</div>
+    <h1 style="margin:22px 0 14px;${F}font-size:26px;line-height:1.25;font-weight:600;color:#1f2128;">${hello}</h1>
+    <p style="margin:0 0 14px;${F}font-size:16px;line-height:1.6;color:#2e333b;">Thank you for signing up for Chronicles. I'm so excited to share it with you.</p>
+    <p style="margin:0 0 14px;${F}font-size:16px;line-height:1.6;color:#2e333b;">This app has been a labor of love. I built it to meet my own needs: tracking my health, budget and fitness, and keeping my journal and media all in one place. I use it every day, and I'm open to new ideas. Your feedback means a lot to me.</p>
+    <p style="margin:0 0 28px;${F}font-size:16px;line-height:1.6;color:#2e333b;">Your account is ready whenever you are.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="border-radius:999px;background:#2b8784;">
+        <a href="${href}" target="_blank" style="display:inline-block;padding:14px 30px;${F}font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px;">Create your account</a>
+      </td></tr></table>
+    <p style="margin:16px 0 0;${F}font-size:13px;line-height:1.5;color:#575d68;">This link is made for <span style="color:#1f2128;">${esc(email)}</span> and works for 30 days.</p>
+
+    <div style="${LABEL}margin-top:36px;">Before you start</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      ${step(1, 'Keep your recovery key safe.', 'Sign-up gives you a recovery key. Your entries are encrypted on your device before they reach the server, so nobody can read them and nobody can reset them for you. If you lose your password, that key is the way back in.')}
+      ${step(2, 'Make it yours.', 'Turn modules on and off in Settings, and arrange the dashboard widgets in any order. Keep only what you use.')}
+      ${step(3, 'Tell me what breaks.', `Use <a href="${esc(site)}/report-a-bug" style="color:#2b8784;text-decoration:underline;">Report a bug</a> or reply to this email. Every report gets read.`)}
+    </table>
+
+    <p style="margin:32px 0 0;padding-top:20px;border-top:1px solid #e6e8ec;${F}font-size:13px;line-height:1.55;color:#575d68;">The beta is free. Billing starts when Chronicles releases, at no more than $20 a month. No ads, no tracking, and no marketing email.</p>
+    <p style="margin:24px 0 0;${F}font-size:16px;line-height:1.6;color:#2e333b;">Happy writing,<br><span style="color:#1f2128;font-weight:600;">${esc(sig || 'Chronicles')}</span></p>
+  </td></tr>
+  <tr><td align="center" style="padding:22px 16px 0;${F}font-size:12px;line-height:1.6;color:#7a808a;">
+    You're receiving this because you applied for the Chronicles beta.<br>
+    <a href="${esc(site)}" style="color:#575d68;text-decoration:none;">mydailychronicles.com</a> &nbsp;·&nbsp; <a href="mailto:${SUPPORT}" style="color:#575d68;text-decoration:none;">${SUPPORT}</a>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+  const text = `${name ? `Welcome to Chronicles, ${name}.` : 'Welcome to Chronicles.'}\n\nThank you for signing up for Chronicles. I'm so excited to share it with you.\n\nThis app has been a labor of love. I built it to meet my own needs: tracking my health, budget and fitness, and keeping my journal and media all in one place. I use it every day, and I'm open to new ideas. Your feedback means a lot to me.\n\nCreate your account here:\n${link}\n\nThis link is made for ${email} and works for 30 days.\n\nHappy writing,\n${sig || 'Chronicles'}`;
+  return { subject: WELCOME_SUBJECT, html, text };
+}

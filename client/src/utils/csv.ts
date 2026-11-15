@@ -83,3 +83,35 @@ export function isReservedImportColumn(header: string): boolean {
   const name = header.trim();
   return name.startsWith('_') || ['onpublicshelf', 'constructor', 'prototype'].includes(name.toLowerCase());
 }
+
+const IMPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const IMPORT_TIME = /^\d{2}:\d{2}(:\d{2})?$/;
+
+/**
+ * An imported row's custom fields, made safe to file. The file may be someone
+ * else's, and its columns land in the same fields the forms write, so:
+ *
+ * - a date or time field (a name ending in Date / Time, or one of the other
+ *   date keys) keeps its value only when it is a date or a time. Those values
+ *   are written as they are into the calendar feed and compared as text
+ *   elsewhere, so free text there is dropped;
+ * - a row filed under Event or Meeting (`calendarTopic`) never goes to Google
+ *   Calendar or the Apple feed on its own: it starts with "Sync to calendar"
+ *   off, whatever the file says, and the owner turns it on per entry. A file
+ *   from elsewhere can't put events on the owner's calendar, and an export
+ *   brought back in doesn't push every event a second time.
+ */
+export function guardImportedFields(fields: Record<string, unknown>, { calendarTopic }: { calendarTopic: boolean }): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value === 'string') {
+      const isDate = /Date$/.test(key) || key === 'startOn' || key === 'repeatUntil';
+      const isTime = /Time$/.test(key);
+      if (isDate && !IMPORT_DATE.test(value)) continue;
+      if (isTime && !IMPORT_TIME.test(value)) continue;
+    }
+    out[key] = value;
+  }
+  if (calendarTopic) out.noCalendarSync = true;
+  return out;
+}

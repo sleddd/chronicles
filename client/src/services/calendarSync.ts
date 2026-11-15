@@ -94,8 +94,34 @@ export function invalidateCalendarStatus(): void {
   notify();
 }
 
+// A run reads the entries store again and again between network calls. If the
+// journal locks (or the account changes) meanwhile, the store is empty — and
+// "no local entry for this event" then reads as "deleted here": the run would
+// delete the user's events at Google, and the next sync, seeing them cancelled,
+// would delete the journal entries too. So a run stops the moment the journal
+// it started on is no longer the one loaded.
+let epoch = 0;
+let activeRun = -1;
+
+/** Lock or sign-out: stop any run in flight, and drop the Google token. */
+export function cancelCalendarSync(): void {
+  epoch++;
+  tokenCache = null;
+}
+
+/** Throws unless the run in flight still has its journal: unlocked, loaded, sync on. */
+function ensureLive(): void {
+  if (activeRun !== epoch
+    || !useEntriesStore.getState().isInitialized
+    || !useUIStore.getState().calendarSyncEnabled) {
+    throw new SyncAborted('Paused — unlock your journal to resume syncing');
+  }
+}
+
 /** Call on logout — clears all in-memory sync session state. */
 export function resetCalendarSyncSession(): void {
+  cancelCalendarSync();
+  keptRemote = null; // read again from storage (sign-out empties it)
   invalidateCalendarStatus();
   uiState.lastSyncAt = null;
   uiState.lastError = null;
@@ -235,7 +261,39 @@ function writePendingDeletes(items: StoredPendingDelete[]): void {
   } catch { /* storage full/unavailable — deletes will be reconciled on full resync */ }
 }
 
+// Events whose entries were removed from Chronicles with "they stay in Google
+// Calendar": this browser never deletes them there, queues no delete for them
+// and doesn't import them back. Ids only, like the queue above.
+const KEEP_REMOTE_KEY = 'chronicles.calendarKeepRemote';
+const KEEP_REMOTE_MAX = 5000;
+let keptRemote: Set<string> | null = null;
+
+function keptRemoteIds(): Set<string> {
+  if (keptRemote) return keptRemote;
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(KEEP_REMOTE_KEY) ?? '[]');
+    keptRemote = new Set(Array.isArray(parsed) ? parsed.filter((i): i is string => typeof i === 'string') : []);
+  } catch {
+    keptRemote = new Set();
+  }
+  return keptRemote;
+}
+
+export function isKeptRemote(googleEventId: string): boolean {
+  return keptRemoteIds().has(googleEventId);
+}
+
+function keepRemote(googleEventId: string): void {
+  const ids = keptRemoteIds();
+  ids.add(googleEventId);
+  // The oldest go first once it's long (a Set keeps the order they were added)
+  while (ids.size > KEEP_REMOTE_MAX) ids.delete(ids.values().next().value as string);
+  try { localStorage.setItem(KEEP_REMOTE_KEY, JSON.stringify([...ids])); } catch { /* kept in memory for this tab */ }
+}
+
 export function enqueuePendingDelete(item: PendingCalendarDelete): void {
+  // Its entry went with "keep it in Google": no delete is ever queued
+  if (isKeptRemote(item.googleEventId)) return;
   const items = readStored();
   if (!items.some(i => i.googleEventId === item.googleEventId)) {
     items.push({ googleEventId: item.googleEventId, calendar: item.calendarId === 'primary' ? 'primary' : 'synced' });
@@ -248,6 +306,9 @@ async function drainPendingDeletes(calendarId: string): Promise<void> {
   if (!items.length) return;
   const remaining: StoredPendingDelete[] = [];
   for (const item of items) {
+    ensureLive();
+    // Queued before it was marked "keep in Google" (or by an older build)
+    if (isKeptRemote(item.googleEventId)) continue;
     try {
       await gcalDeleteEvent(item.calendar === 'primary' ? 'primary' : calendarId, item.googleEventId);
     } catch (err) {
@@ -276,6 +337,11 @@ async function persistEntryMetadata(
 
 // ── Pull: Google → Chronicles ────────────────────────────────────────────────
 
+/** 250 events a page: 20,000 events in one listing */
+const MAX_LIST_PAGES = 80;
+/** New entries made from Google events in one run. The rest follow in later runs */
+const IMPORTS_PER_RUN = 100;
+
 interface EventListPage {
   items?: GoogleEvent[];
   nextPageToken?: string;
@@ -286,7 +352,11 @@ async function listEvents(calendarId: string, syncToken: string | null): Promise
   const events: GoogleEvent[] = [];
   let pageToken: string | undefined;
   let nextSyncToken = '';
+  let pages = 0;
   do {
+    // A calendar (or someone filling it with invitations) can't make a run
+    // hold an unbounded list in memory
+    if (++pages > MAX_LIST_PAGES) throw new SyncAborted('This calendar has too many events to sync');
     const params = new URLSearchParams({ maxResults: '250' });
     if (syncToken) params.set('syncToken', syncToken);
     if (pageToken) params.set('pageToken', pageToken);
@@ -350,21 +420,22 @@ function todayLocalDate(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Returns whether an entry was made. */
 async function importForeignEvent(
   deps: SyncRuntimeDeps,
   event: GoogleEvent,
   calendarId: string,
-): Promise<void> {
+): Promise<boolean> {
   const topicMap = getSyncTopicMap();
   const eventTopicId = [...topicMap.entries()].find(([, type]) => type === 'event')?.[0];
-  if (!eventTopicId) return; // no Event topic to attach imports to
+  if (!eventTopicId) return false; // no Event topic to attach imports to
 
   const remoteFields = fromGoogleEvent(event, 'event', { withDetails: true });
-  if (!remoteFields.startDate) return;
+  if (!remoteFields.startDate) return false;
   // Only import events from today onward — never a calendar's history. Already
   // synced past events keep updating via their _sync link; this only gates
   // the creation of NEW entries from foreign events.
-  if (remoteFields.startDate < todayLocalDate()) return;
+  if (remoteFields.startDate < todayLocalDate()) return false;
 
   const summary = event.summary || 'Event';
   const descriptionHtml = (event.description || '')
@@ -397,6 +468,24 @@ async function importForeignEvent(
     createdAt: resp.createdAt ? new Date(resp.createdAt as string) : new Date(),
     updatedAt: resp.updatedAt ? new Date(resp.updatedAt as string) : new Date(),
   });
+  return true;
+}
+
+/**
+ * The event is gone at Google (cancelled, or missing from a full listing).
+ * The entry is NOT deleted: whoever organises an event the user was invited to
+ * can cancel it, and the entry may hold writing that never went to Google.
+ * It loses its link and is taken out of calendar sync (so it isn't pushed
+ * back as a new event) — "Sync to calendar" on the entry turns that back on.
+ */
+async function unlinkEntry(deps: SyncRuntimeDeps, candidate: SyncCandidate): Promise<void> {
+  const current = useEntriesStore.getState().decryptedEntries.find(e => e.id === candidate.entry.id);
+  if (!current) return;
+  const { _sync, ...rest } = (current.metadata?._customFields || {}) as Record<string, unknown>;
+  const sync = _sync as EntrySyncState | undefined;
+  // Nothing to remove there, and the tracker must not queue a delete for it
+  if (sync?.googleEventId) keepRemote(sync.googleEventId);
+  await persistEntryMetadata(deps, current, { ...rest, noCalendarSync: true });
 }
 
 async function pullPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<void> {
@@ -413,6 +502,8 @@ async function pullPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
     }
   }
 
+  // The listing took a while: the journal must still be the one it began with
+  ensureLive();
   const candidates = getSyncCandidates();
   const byGoogleId = new Map<string, SyncCandidate>();
   for (const c of candidates) {
@@ -420,17 +511,22 @@ async function pullPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
     if (sync?.googleEventId) byGoogleId.set(sync.googleEventId, c);
   }
   const importMode = ui.calendarImportMode;
+  let imported = 0;
+  let moreToImport = false;
 
   for (const event of result.events) {
     // Recurring events are out of scope for v1
     if (event.recurringEventId || event.recurrence?.length) continue;
 
+    ensureLive();
     const match = byGoogleId.get(event.id);
+    // Removed from Chronicles on purpose with "keep it in Google": left alone
+    // there, and not brought back in as an import
+    if (!match && isKeptRemote(event.id)) continue;
 
     if (event.status === 'cancelled') {
       if (match) {
-        await entriesApi.delete(match.entry.id);
-        useEntriesStore.getState().removeEntry(match.entry.id);
+        await unlinkEntry(deps, match);
         byGoogleId.delete(event.id);
       }
       continue;
@@ -455,7 +551,10 @@ async function pullPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
       // Created by Chronicles but the local entry no longer exists — remove remotely
       await gcalDeleteEvent(calendarId, event.id);
     } else if (importMode === 'all') {
-      await importForeignEvent(deps, event, calendarId);
+      // So many at once (a calendar filled with invitations) come in over
+      // several runs: the listing is asked for again from the same point
+      if (imported >= IMPORTS_PER_RUN) { moreToImport = true; continue; }
+      if (await importForeignEvent(deps, event, calendarId)) imported++;
     }
   }
 
@@ -466,12 +565,16 @@ async function pullPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
     for (const c of candidates) {
       const sync = c.fields._sync;
       if (sync?.googleEventId && sync.calendarId === calendarId && !returnedIds.has(sync.googleEventId)) {
-        await entriesApi.delete(c.entry.id);
-        useEntriesStore.getState().removeEntry(c.entry.id);
+        ensureLive();
+        await unlinkEntry(deps, c);
       }
     }
   }
 
+  ensureLive();
+  // Events still waiting to be imported: keep the old token, so the next run
+  // is handed the same changes again and carries on
+  if (moreToImport) return;
   if (result.nextSyncToken && result.nextSyncToken !== ui.googleSyncToken) {
     useUIStore.getState().setGoogleSyncToken(result.nextSyncToken);
     await settingsApi.upsert('googleSyncToken', result.nextSyncToken);
@@ -484,6 +587,7 @@ async function pushPhase(deps: SyncRuntimeDeps, calendarId: string): Promise<voi
   await drainPendingDeletes(calendarId);
 
   for (const candidate of getSyncCandidates()) {
+    ensureLive();
     const { entry, topicType } = candidate;
     // Re-read fields from the store — the pull phase may have updated them
     const current = useEntriesStore.getState().decryptedEntries.find(e => e.id === entry.id);
@@ -563,6 +667,8 @@ async function icsPhase(): Promise<void> {
   // Deterministic timestamp input so unchanged content produces identical ICS
   const ics = generateIcs(events, new Date(0));
   if (ics === lastUploadedIcs) return;
+  // Never upload a feed built from a store that was emptied by a lock
+  ensureLive();
   await calendarApi.uploadIcs(ics);
   lastUploadedIcs = ics;
 }
@@ -576,12 +682,14 @@ export async function runCalendarSync(deps: SyncRuntimeDeps): Promise<void> {
   if (!ui.calendarSyncEnabled || !entriesState.isInitialized) return;
 
   running = true;
+  activeRun = epoch;
   uiState.syncing = true;
   uiState.lastError = null;
   notify();
 
   try {
     const status = await getCachedStatus();
+    ensureLive();
 
     if (status.googleConnected && !googleDisconnected && ui.googleCalendarId) {
       await pullPhase(deps, ui.googleCalendarId);
@@ -590,6 +698,7 @@ export async function runCalendarSync(deps: SyncRuntimeDeps): Promise<void> {
 
     // Both: the feed as this account switched it on (sealed) and as the server has it
     if (status.icsEnabled && ui.icsFeedEnabled) {
+      ensureLive();
       await icsPhase();
     }
 
@@ -623,13 +732,30 @@ export function getImportedEntries(): DecryptedPost[] {
 
 /**
  * Delete entries from Chronicles WITHOUT deleting any linked Google events.
- * The _sync link is stripped in the store before each delete so the deletion
- * tracker never queues a remote delete for it.
+ *
+ * The deletion tracker (useCalendarSync) queues a Google delete for every
+ * entry that stops carrying a sync link — which is what stripping the link
+ * here used to trigger, so "they stay in Google Calendar" deleted them there.
+ * Each event is therefore marked kept first (`keepRemote`: no delete queued,
+ * none sent, not imported back), and an event Chronicles made also has its
+ * `chroniclesId` mark taken off at Google, so no browser's later listing
+ * mistakes it for one whose entry was deleted and removes it.
  */
 export async function removeEntriesLocally(entries: DecryptedPost[]): Promise<number> {
   let removed = 0;
   for (const entry of entries) {
     const { _sync, ...rest } = (entry.metadata._customFields || {}) as Record<string, unknown>;
+    const sync = _sync as EntrySyncState | undefined;
+    if (sync?.googleEventId) {
+      keepRemote(sync.googleEventId);
+      if (!sync.imported && sync.calendarId) {
+        // Best effort: without it the event still stays as far as this browser goes
+        await gcalFetch(
+          `/calendars/${encodeURIComponent(sync.calendarId)}/events/${encodeURIComponent(sync.googleEventId)}`,
+          { method: 'PATCH', body: JSON.stringify({ extendedProperties: { private: { chroniclesId: null } } }) },
+        ).catch(() => undefined);
+      }
+    }
     useEntriesStore.getState().updateDecryptedEntry(entry.id, {
       metadata: { ...entry.metadata, _customFields: rest },
     });

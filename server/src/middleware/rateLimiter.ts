@@ -9,7 +9,8 @@ import { sharedRateLimitStore } from '../services/sharedState.js';
 export const authLimiter = rateLimit({
   store: sharedRateLimitStore('auth'),
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  // A sign-in with 2FA takes two (password, then code)
+  max: 36,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
@@ -141,6 +142,16 @@ export const betaLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many sign-ups from here, please try again later' },
+});
+
+/** Public bug reports (sent on to support by email): a handful an hour per IP */
+export const bugReportLimiter = rateLimit({
+  store: sharedRateLimitStore('bug-report'),
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many reports from here. Please try again in an hour.' },
 });
 
 /**

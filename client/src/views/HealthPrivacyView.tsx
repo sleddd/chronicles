@@ -79,11 +79,12 @@ export function HealthPrivacyView() {
           <tr><td>Google</td><td>Titles, times and locations of event and meeting entries (never notes, attendees or phone numbers)</td><td>Only if you connect Google Calendar</td><td><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a></td></tr>
           <tr><td>Your AI provider (Anthropic, OpenAI or Amazon Bedrock)</td><td>Only what you type into the chat or ask it to estimate, sent straight from your browser with your own key</td><td>Only if you turn on In-App AI and give consent</td><td>Your provider’s privacy page</td></tr>
           <tr><td>Your own Cloudflare R2 bucket</td><td>Encrypted photos, which only you can see. Photos are never shared.</td><td>Only if you add your bucket</td><td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">Cloudflare Privacy Policy</a></td></tr>
+          <tr><td>Resend</td><td>Feedback or a bug report you send: what you wrote, the part of the app, your device and browser, and a reply address if you gave one. For a beta invitation, your email address and first name.</td><td>When you send feedback or a bug report, or when we invite you to the beta</td><td><a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Resend Privacy Policy</a></td></tr>
           <tr><td>Open-Meteo</td><td>The city you enter, to show weather</td><td>When the dashboard shows weather</td><td><a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener noreferrer">Open-Meteo terms</a></td></tr>
         </tbody>
       </table>
       <p>
-        Open-Meteo never receives health data. We list it so you can see every place your information goes. Chronicles
+        Open-Meteo never receives health data, and neither does Resend unless you write some into feedback or a bug report. We list them so you can see every place your information goes. Chronicles
         loads its fonts and icons from our own server, not from Google. We give data to law enforcement only when the law
         requires it, and we can only hand over what we are able to read.
       </p>
@@ -170,6 +171,14 @@ export function HealthPrivacyView() {
         waitlist. This isn’t health data and isn’t linked to an account. We use it only to offer you a beta seat or to send
         one email when Chronicles opens to everyone, never for marketing, and we don’t share it. We delete it after that
         email is sent, or sooner if you ask at <a href={`mailto:${D.contactEmail}`}>{D.contactEmail}</a>.
+      </p>
+
+      <h2>Feedback and bug reports</h2>
+      <p>
+        When you send feedback or a bug report, our server passes it straight to our email provider, Resend, which delivers it to
+        our support inbox. Our server doesn’t store the report or log what it says. Email isn’t encrypted, so please leave
+        out passwords, recovery keys and health details. We keep a message only as long as we need it to answer you and
+        act on it. To have one deleted sooner, write to <a href={`mailto:${D.contactEmail}`}>{D.contactEmail}</a>.
       </p>
 
       <h2>Age limit</h2>

@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { settings as settingsApi } from './api.js';
-import { isSealed, isBound, sealSetting, openSetting, openUnbound, type SealedValue, type EncryptBytes, type DecryptBytes } from './settingCipher.js';
+import { isSealed, isBound, sealSetting, openSetting, openUnbound, trackGuardedSave, type SealedValue, type EncryptBytes, type DecryptBytes } from './settingCipher.js';
 import { PRIVATE_SETTING_KEYS } from '@shared/validation/sealedSettings.js';
 import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
-import { EGRESS_KEYS, egressOn, type EgressKey } from './deviceConsent.js';
+import { EGRESS_KEYS, egressOn, reconcileEgress, type EgressKey } from './deviceConsent.js';
 
 /**
  * Encrypted settings.
@@ -146,6 +146,9 @@ export async function openStartupSettings(
 /** The off-device switches as this browser honours them (see deviceConsent.ts). */
 function honourEgress(map: Record<string, unknown>): void {
   for (const key of EGRESS_KEYS) {
+    // Off, missing or unopenable here means it was turned off somewhere: this
+    // browser's own record goes too, so a `true` replayed later finds none
+    reconcileEgress(key as EgressKey, map[key]);
     if (key in map) map[key] = egressOn(key as EgressKey, map[key]);
   }
 }
@@ -164,7 +167,10 @@ export async function loadSettingsMap(decryptBytes: DecryptBytes): Promise<Recor
 export function usePrivateSettings() {
   const { encryptBytes, decryptBytes } = useEncryption();
   const savePrivateSetting = useCallback(async (key: PrivateSettingKey, value: unknown) => {
-    await settingsApi.upsert(key, await sealSetting(key, value, encryptBytes));
+    // Tracked, so a rollback-guarded one (the calendar choices) counts as seen
+    // the moment the server has taken it (a no-op for the rest)
+    const sealed = await sealSetting(key, value, encryptBytes);
+    await trackGuardedSave(key, () => settingsApi.upsert(key, sealed));
   }, [encryptBytes]);
   const loadPrivateSettings = useCallback(() => loadSettingsMap(decryptBytes), [decryptBytes]);
   return { savePrivateSetting, loadPrivateSettings };

@@ -7,6 +7,14 @@
  * A switch turned off here drops the record; a browser with no record treats
  * it as off until it's switched on there (also when the account id it's
  * given is wrong, which only ever fails towards off).
+ *
+ * A switch turned off in ANOTHER browser must end this one's record too, or
+ * the server could later replay the old `true` here, where the record still
+ * stood. So whenever the settings are read and a switch isn't on (off, missing
+ * or unopenable), this browser's record for it is dropped (`reconcileEgress`),
+ * and the same when the server says there is no public shelf
+ * (`reconcilePublicShelf`). Both only ever fail towards off: at worst the
+ * switch has to be turned on here again.
  */
 
 export const EGRESS_STORE = 'chronicles.egress.v1';
@@ -47,13 +55,41 @@ function records(): Record<string, true> {
 
 const recordKey = (key: EgressKey | typeof PUBLIC_SHELF_RECORD) => `${account}|${key}`;
 
-/** The user switched it on or off in this browser. */
-export function recordEgressChoice(key: EgressKey, on: boolean): void {
+// A switch turned on a moment ago: its save may not have reached the server
+// yet, so a settings read answered just before it must not drop the record
+const JUST_ON_MS = 60_000;
+const turnedOnAt = new Map<string, number>();
+
+function setRecord(key: EgressKey | typeof PUBLIC_SHELF_RECORD, on: boolean): void {
   if (!account) return;
   const all = records();
-  if (on) all[recordKey(key)] = true;
-  else delete all[recordKey(key)];
+  const k = recordKey(key);
+  if (on) { all[k] = true; turnedOnAt.set(k, Date.now()); }
+  else { delete all[k]; turnedOnAt.delete(k); }
   try { localStorage.setItem(EGRESS_STORE, JSON.stringify(all)); } catch { /* private mode */ }
+}
+
+function dropIfStale(key: EgressKey | typeof PUBLIC_SHELF_RECORD): void {
+  if (!account) return;
+  const k = recordKey(key);
+  if (records()[k] !== true) return;
+  if (Date.now() - (turnedOnAt.get(k) ?? 0) < JUST_ON_MS) return;
+  setRecord(key, false);
+}
+
+/** The settings were read: a switch that isn't on there ends this browser's record of it. */
+export function reconcileEgress(key: EgressKey, saved: unknown): void {
+  if (saved !== true) dropIfStale(key);
+}
+
+/** The server was asked about the public shelf: none there ends this browser's record. */
+export function reconcilePublicShelf(exists: boolean): void {
+  if (!exists) dropIfStale(PUBLIC_SHELF_RECORD);
+}
+
+/** The user switched it on or off in this browser. */
+export function recordEgressChoice(key: EgressKey, on: boolean): void {
+  setRecord(key, on);
 }
 
 /** The saved value as honoured here: on only if saved on and switched on in this browser. */
@@ -68,11 +104,7 @@ const PUBLIC_SHELF_RECORD = 'publicShelf';
 
 /** The owner turned the public shelf on (Turn on) or off in this browser. */
 export function recordPublicShelfChoice(on: boolean): void {
-  if (!account) return;
-  const all = records();
-  if (on) all[recordKey(PUBLIC_SHELF_RECORD)] = true;
-  else delete all[recordKey(PUBLIC_SHELF_RECORD)];
-  try { localStorage.setItem(EGRESS_STORE, JSON.stringify(all)); } catch { /* private mode */ }
+  setRecord(PUBLIC_SHELF_RECORD, on);
 }
 
 /** Whether this browser may publish the shelf: only after its own Turn on. */

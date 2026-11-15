@@ -3,22 +3,34 @@
  *
  *   npm run beta                          # seats, the waitlist and invites, with who's approved / signed up
  *   npm run beta -- --approve <email>     # may create an account now (no restart); adds them if they never applied;
- *                                         # prints their one-time sign-up link (running it again issues a new one)
+ *                                         # emails them the welcome email with their one-time sign-up link (Resend)
+ *                                         # and prints the link (running it again issues a new one)
+ *        [--name <first name>]            #   the name in "Welcome to Chronicles, Sam." (default: the first word they applied with)
+ *        [--no-email]                     #   just print the link, send nothing
  *   npm run beta -- --unapprove <email>   # takes that back (an account already made stays)
  *   npm run beta -- --csv                 # everything as CSV (redirect to a file)
  *   npm run beta -- --remove <email>      # delete someone (on request, or after launch)
  *
  * Sign-up is closed to everyone not approved here (or listed in the optional
- * REGISTRATION_WHITELIST), unless the server sets REGISTRATION_OPEN=true. Send
- * approved testers the sign-up link --approve prints, yourself: it carries their
- * invite code, which sign-up needs (only its hash is stored, so it can't be
- * shown again — approve again for a new one). Set APP_URL (else CLIENT_URL)
- * to the app's address so the link is complete.
+ * REGISTRATION_WHITELIST), unless the server sets REGISTRATION_OPEN=true.
+ * --approve emails the person their sign-up link (services/welcomeEmail.ts,
+ * through Resend: RESEND_API_KEY, from WELCOME_EMAIL_FROM, signed
+ * WELCOME_EMAIL_SIGNOFF, replies to support) and prints it too, so it can be
+ * sent by hand when the email can't go. The link carries their invite code,
+ * which sign-up needs (only its hash is stored, so it can't be shown again —
+ * approve again for a new one). The link is built on APP_URL (else CLIENT_URL,
+ * else the site, https://mydailychronicles.com).
  */
 import './scriptEnv.js';
 import { BETA_DETAILS } from '@chronicles/shared';
 import { prisma } from './prisma.js';
 import { approve, initBetaTable, listSignups, printable, removeSignup, unapprove, type BetaSignup } from './betaQueries.js';
+import { sendEmail } from '../services/resend.js';
+import { firstName, welcomeEmail } from '../services/welcomeEmail.js';
+
+const WELCOME_FROM = 'Chronicles <hello@mydailychronicles.com>';
+const SUPPORT = 'support@mydailychronicles.com';
+const SITE = 'https://mydailychronicles.com';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -44,15 +56,41 @@ async function main(): Promise<void> {
   if (toApprove) {
     const { how, inviteCode } = await approve(toApprove);
     const email = toApprove.trim().toLowerCase();
-    const base = (process.env.APP_URL || process.env.CLIENT_URL || '').replace(/\/$/, '');
+    // The site itself when neither is set: an invitation always goes to the
+    // real app, and without an address the link was incomplete and no email went
+    const base = (process.env.APP_URL || process.env.CLIENT_URL || SITE).replace(/\/$/, '');
     // After the #: a browser never sends that part, so the code stays out of
     // the host's access logs (the sign-up page still reads older ?… links)
     const link = `${base}/sign-up#${new URLSearchParams({ email, invite: inviteCode }).toString()}`;
     console.log(how === 'invited'
       ? `Approved ${email} (added as an invite — they hadn't applied).`
       : `Approved ${email}.`);
-    console.log(`Send them this sign-up link (it only works for this email, lasts 30 days, and isn't stored — approve again for a new one):\n  ${link}`);
-    if (!base) console.log('(Set APP_URL to the app\'s address to get a full link.)');
+    if (!base) {
+      console.log(`Their sign-up link (incomplete — set APP_URL to the app's address; no email sent):\n  ${link}`);
+      return;
+    }
+    if (process.argv.includes('--no-email')) {
+      console.log(`Send them this sign-up link (it only works for this email, lasts 30 days, and isn't stored — approve again for a new one):\n  ${link}`);
+      return;
+    }
+    const applied = (await listSignups()).find(r => r.email === email);
+    const name = firstName(arg('name') ?? applied?.name);
+    const mail = welcomeEmail({ name, email, link, sig: process.env.WELCOME_EMAIL_SIGNOFF || 'Chronicles', site: base });
+    const sent = await sendEmail({
+      from: process.env.WELCOME_EMAIL_FROM || WELCOME_FROM,
+      to: email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+      replyTo: process.env.BUG_REPORT_TO || SUPPORT,
+    });
+    if (sent.ok) {
+      console.log(`Emailed them the welcome email${name ? ` (to ${printable(name)})` : ''} with their sign-up link. The link, in case they ask (only works for this email, lasts 30 days):\n  ${link}`);
+    } else {
+      const why = sent.reason === 'not-configured' ? 'RESEND_API_KEY isn\'t set' : sent.reason === 'refused' ? `Resend answered ${sent.status}` : 'Resend couldn\'t be reached';
+      console.log(`The welcome email didn't send (${why}). Send them this sign-up link yourself (only works for this email, lasts 30 days):\n  ${link}`);
+      process.exitCode = 1;
+    }
     return;
   }
   const toUnapprove = arg('unapprove');

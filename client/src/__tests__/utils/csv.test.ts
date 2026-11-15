@@ -22,3 +22,21 @@ describe('safeAccent', () => {
     }
   });
 });
+
+describe('guardImportedFields', () => {
+  it('starts an Event / Meeting row with calendar sync off, whatever the file says', async () => {
+    const { guardImportedFields } = await import('../../utils/csv.js');
+    const out = guardImportedFields({ startDate: '2026-12-01', location: 'Cafe', noCalendarSync: false }, { calendarTopic: true });
+    expect(out).toEqual({ startDate: '2026-12-01', location: 'Cafe', noCalendarSync: true });
+    expect(guardImportedFields({ dueDate: '2026-12-01' }, { calendarTopic: false })).toEqual({ dueDate: '2026-12-01' });
+  });
+
+  it('drops a date or time field that is not a date or a time', async () => {
+    const { guardImportedFields } = await import('../../utils/csv.js');
+    const out = guardImportedFields({
+      startDate: '2026-12-01\r\nEND:VEVENT', endDate: '12/02/2026', startTime: '9am', endTime: '10:30',
+      repeatUntil: 'never', startOn: '2026-01-05', notes: 'Bring 2026-12-01\nnotes', allDay: true,
+    }, { calendarTopic: false });
+    expect(out).toEqual({ endTime: '10:30', startOn: '2026-01-05', notes: 'Bring 2026-12-01\nnotes', allDay: true });
+  });
+});

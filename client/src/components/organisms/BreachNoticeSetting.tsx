@@ -1,27 +1,18 @@
 import { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { FormField } from '../molecules/FormField.js';
-import { ActionButton, OutlinedSection } from '../atoms/SettingsAtoms.js';
-import { Spinner } from '../atoms/Spinner.js';
+import { SettingsGroupRow, PillChoice, PillChoiceBtn, RowNote } from '../molecules/SettingsGroup.js';
 import { useConsentStore } from '../../stores/consentStore.js';
 
-/* Settings → Account: how a security-incident notice reaches you — email, or a
-   mailed letter (the postal address is stored readable, only for that). */
-
-const Radios = styled.div`
-  display: flex;
-  gap: 18px;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--text-secondary);
-  label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-  input { accent-color: var(--color-accent); }
-`;
+/* Settings → Account → Sign-in and notices: how a security-incident notice
+   reaches you — email, or a mailed letter (the postal address is stored
+   readable, only for that). Saves as it changes: Email at once, a letter once
+   its address is typed and the box is left. */
 
 const Address = styled.textarea`
+  display: block;
   width: 100%;
   min-height: 72px;
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 10px 12px;
   border: 1px solid var(--border-card);
   border-radius: 10px;
@@ -30,17 +21,7 @@ const Address = styled.textarea`
   font-size: 15px;
   color: var(--text-primary);
   resize: vertical;
-  &:focus { outline: none; border-color: var(--color-accent); }
-`;
-
-const Row = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
+  &:focus { outline: none; border-color: var(--color-accent-line); }
 `;
 
 export function BreachNoticeSetting() {
@@ -59,35 +40,38 @@ export function BreachNoticeSetting() {
   }, [saved]);
 
   if (!saved) return null;
-  const changed = choice !== saved.breachNotice || (choice === 'mail' && address.trim() !== (saved.postalAddress ?? ''));
-  const valid = choice === 'email' || address.trim().length >= 8;
 
-  const submit = async () => {
+  const submit = async (to: 'email' | 'mail', addr: string) => {
+    if (to === saved.breachNotice && (to === 'email' || addr === (saved.postalAddress ?? ''))) return;
+    if (to === 'mail' && addr.length < 8) return;
     setState('saving'); setError('');
-    try { await save(choice, choice === 'mail' ? address.trim() : undefined); setState('saved'); }
+    try { await save(to, to === 'mail' ? addr : undefined); setState('saved'); }
     catch (err) { setError(err instanceof Error ? err.message : 'That didn’t save'); setState('error'); }
   };
 
+  const pick = (to: 'email' | 'mail') => {
+    setChoice(to); setState('idle');
+    void submit(to, address.trim());
+  };
+
+  const note = state === 'saving' ? 'Saving…'
+    : state === 'error' ? error
+    : choice === 'mail'
+      ? (address.trim().length < 8 ? 'Add the address to mail a notice to.' : 'Stored readable on our server, only to mail you a notice.')
+      : 'Sent to your account email.';
+
   return (
-    <OutlinedSection>
-    <FormField label="Security notices">
-      <Radios role="radiogroup" aria-label="Send security incident notices by">
-        <label><input type="radio" name="settings-breach-notice" checked={choice === 'email'} onChange={() => { setChoice('email'); setState('idle'); }} /> Email</label>
-        <label><input type="radio" name="settings-breach-notice" checked={choice === 'mail'} onChange={() => { setChoice('mail'); setState('idle'); }} /> Mailed letter</label>
-      </Radios>
+    <SettingsGroupRow label="Security notices" labelId="settings-breach-notice">
+      <PillChoice role="radiogroup" aria-labelledby="settings-breach-notice">
+        <PillChoiceBtn type="button" role="radio" aria-checked={choice === 'email'} $active={choice === 'email'} onClick={() => pick('email')}>Email</PillChoiceBtn>
+        <PillChoiceBtn type="button" role="radio" aria-checked={choice === 'mail'} $active={choice === 'mail'} onClick={() => pick('mail')}>Mailed letter</PillChoiceBtn>
+      </PillChoice>
       {choice === 'mail' && (
         <Address aria-label="Postal address for mailed notices" placeholder="Postal address" value={address} maxLength={500}
-          onChange={e => { setAddress(e.target.value); setState('idle'); }} />
+          onChange={e => { setAddress(e.target.value); setState('idle'); }}
+          onBlur={() => void submit('mail', address.trim())} />
       )}
-      <Row>
-        <span>{state === 'saved' ? 'Saved' : state === 'error' ? error : choice === 'mail' ? 'Stored readable on our server, only to mail you a notice.' : 'Sent to your account email.'}</span>
-        {changed && (
-          <ActionButton onClick={() => void submit()} disabled={!valid || state === 'saving'}>
-            {state === 'saving' ? <Spinner size={14} /> : 'Save'}
-          </ActionButton>
-        )}
-      </Row>
-    </FormField>
-    </OutlinedSection>
+      <RowNote $error={state === 'error'} role="status">{note}</RowNote>
+    </SettingsGroupRow>
   );
 }

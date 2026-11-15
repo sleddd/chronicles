@@ -50,13 +50,23 @@ export function lastActivity(): number {
 const TOUCH_EVERY_MS = 5 * 60 * 1000;
 let lastTouch = 0;
 
+// The tab that learns the grant is gone must lock itself: removing the blob
+// fires `storage` in the OTHER tabs only, so without this it would stay
+// unlocked (and exempt from the hidden-tab lock) with no grant behind it
+let onLost: (() => void) | null = null;
+/** Called when the server says the remembered unlock is gone. Returns the unsubscribe. */
+export function onRememberLost(handler: () => void): () => void {
+  onLost = handler;
+  return () => { if (onLost === handler) onLost = null; };
+}
+
 export function markActivity(now = Date.now()): void {
   try { localStorage.setItem(ACTIVITY_STORE_KEY, String(now)); } catch { /* storage unavailable */ }
   if (now - lastTouch >= TOUCH_EVERY_MS && read() !== null) {
     lastTouch = now;
     void authApi.rememberTouch().catch((err: unknown) => {
       // Gone on the server (idle there, revoked): stop pretending locally
-      if (err instanceof ApiError && [401, 403, 404].includes(err.status)) clearLocal();
+      if (err instanceof ApiError && [401, 403, 404].includes(err.status)) { clearLocal(); onLost?.(); }
     });
   }
 }

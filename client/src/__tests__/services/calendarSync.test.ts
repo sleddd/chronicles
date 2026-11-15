@@ -322,18 +322,28 @@ describe('calendarSync pull', () => {
     expect((patch!.body as Record<string, unknown>).location).toBe('Local wins');
   });
 
-  it('deletes the local entry when the remote event was cancelled', async () => {
+  const fieldsOf = (id: number) =>
+    (useEntriesStore.getState().decryptedEntries.find(e => e.id === id)?.metadata._customFields ?? {}) as Record<string, unknown>;
+
+  it('a cancelled event keeps its entry: unlinked and out of sync, never deleted (an organiser can cancel)', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
-    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })], { googleSyncToken: 'tok-incremental' });
+    setupStores([makeEntry(10, { ...eventFields, notes: 'what I wrote', _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true, imported: true } })], { googleSyncToken: 'tok-incremental' });
     stubGoogleFetch([{ id: 'g-10', status: 'cancelled' }]);
 
     await runCalendarSync(deps);
 
-    expect(entriesApi.delete).toHaveBeenCalledWith(10);
-    expect(useEntriesStore.getState().decryptedEntries).toHaveLength(0);
+    expect(entriesApi.delete).not.toHaveBeenCalled();
+    expect(useEntriesStore.getState().decryptedEntries).toHaveLength(1);
+    expect(fieldsOf(10)._sync).toBeUndefined();
+    expect(fieldsOf(10).noCalendarSync).toBe(true);
+    expect(fieldsOf(10).notes).toBe('what I wrote');
+    // Not pushed back to Google as a new event, and no delete sent for it
+    expect(fetchCalls.filter(c => c.method === 'POST' || c.method === 'DELETE')).toHaveLength(0);
+    enqueuePendingDelete({ googleEventId: 'g-10', calendarId: CAL_ID });
+    expect(readPendingDeletes()).toHaveLength(0);
   });
 
-  it('reconciles deletions on a full listing (tracked event missing remotely)', async () => {
+  it('a tracked event missing from a full listing keeps its entry too, unlinked', async () => {
     const { syncedHash } = await syncedFieldsFor(10, eventFields);
     // No sync token → full listing; the tracked event is absent, meaning it was deleted remotely
     setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })]);
@@ -341,7 +351,30 @@ describe('calendarSync pull', () => {
 
     await runCalendarSync(deps);
 
-    expect(entriesApi.delete).toHaveBeenCalledWith(10);
+    expect(entriesApi.delete).not.toHaveBeenCalled();
+    expect(fieldsOf(10)._sync).toBeUndefined();
+    expect(fieldsOf(10).noCalendarSync).toBe(true);
+    expect(fetchCalls.filter(c => c.method === 'POST')).toHaveLength(0);
+  });
+
+  it('brings in at most 100 new events a run, and asks again from the same point', async () => {
+    setupStores([], { calendarImportMode: 'all', googleSyncToken: 'tok-incremental' });
+    let nextId = 1000;
+    (entriesApi.create as ReturnType<typeof vi.fn>).mockImplementation(async () => ({
+      id: nextId++, createdAt: '2026-07-13T00:00:00Z', updatedAt: '2026-07-13T00:00:00Z',
+    }));
+    deps.encryptNewPost.mockImplementation(async () => ({ id: nextId, contentEncrypted: 'enc', contentIv: 'iv', metadataEncrypted: 'enc', metadataIv: 'iv' }));
+    stubGoogleFetch(Array.from({ length: 130 }, (_, i) => ({
+      id: `spam-${i}`, status: 'confirmed', summary: `Invite ${i}`,
+      start: { dateTime: '2026-07-20T10:00:00Z' }, end: { dateTime: '2026-07-20T11:00:00Z' },
+    })));
+
+    await runCalendarSync(deps);
+
+    expect(entriesApi.create).toHaveBeenCalledTimes(100);
+    // The token stays, so the next run is handed the other thirty
+    expect(settingsApi.upsert).not.toHaveBeenCalledWith('googleSyncToken', expect.anything());
+    deps.encryptNewPost.mockResolvedValue({ id: 900, contentEncrypted: 'enc', contentIv: 'iv', metadataEncrypted: 'enc', metadataIv: 'iv' });
   });
 
   it('imports a foreign event when import mode is "all"', async () => {
@@ -428,6 +461,63 @@ describe('calendarSync pull', () => {
     expect(entriesApi.delete).toHaveBeenCalledWith(10);
     expect(useEntriesStore.getState().decryptedEntries.map(e => e.id).sort()).toEqual([11, 12, 13]);
     expect(readPendingDeletes()).toHaveLength(0); // linked entry deleted without queueing a Google delete
+  });
+
+  it('a lock while Google is answering stops the run: no event is deleted for "having no entry"', async () => {
+    const { syncedHash } = await syncedFieldsFor(10, eventFields);
+    setupStores([makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, detailsCleared: true } })]);
+    fetchCalls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method || 'GET';
+      fetchCalls.push({ url: String(url), method });
+      if (String(url).includes('/events?')) {
+        // The journal locks while the listing is on its way (a tab switch does it)
+        useEntriesStore.getState().clearAll();
+        useUIStore.getState().clearPrivateState();
+        return new Response(JSON.stringify({
+          items: [{ id: 'g-10', status: 'confirmed', summary: 'Coffee', extendedProperties: { private: { chroniclesId: '10' } } }],
+          nextSyncToken: 'token-next',
+        }), { status: 200 });
+      }
+      return new Response(null, { status: 204 });
+    }));
+
+    await runCalendarSync(deps);
+
+    expect(fetchCalls.filter(c => c.method === 'DELETE')).toHaveLength(0);
+    expect(entriesApi.delete).not.toHaveBeenCalled();
+    expect(settingsApi.upsert).not.toHaveBeenCalled(); // the sync token doesn't move on either
+    expect(getCalendarSyncUiState().lastError).toMatch(/unlock your journal/);
+  });
+
+  it('"they stay in Google Calendar": the deletion tracker cannot queue them, and a Chronicles-made one loses its mark there', async () => {
+    const { syncedHash } = await syncedFieldsFor(10, eventFields);
+    const imported = makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, imported: true } });
+    const own = makeEntry(11, { ...eventFields, _sync: { googleEventId: 'g-11', calendarId: CAL_ID, syncedHash } });
+    setupStores([imported, own]);
+    stubGoogleFetch([]);
+
+    await removeEntriesLocally([imported, own]);
+
+    // What useCalendarSync does when an entry stops carrying its sync link
+    enqueuePendingDelete({ googleEventId: 'g-10', calendarId: CAL_ID });
+    enqueuePendingDelete({ googleEventId: 'g-11', calendarId: CAL_ID });
+    expect(readPendingDeletes()).toHaveLength(0);
+
+    // The event Chronicles made is unmarked at Google, so no later listing removes it
+    const patches = fetchCalls.filter(c => c.method === 'PATCH');
+    expect(patches).toHaveLength(1);
+    expect(patches[0].url).toContain('/events/g-11');
+    expect(patches[0].body).toEqual({ extendedProperties: { private: { chroniclesId: null } } });
+
+    // And the next sync neither deletes it there nor imports it back
+    setupStores([], { calendarImportMode: 'all' });
+    stubGoogleFetch([
+      { id: 'g-11', status: 'confirmed', summary: 'Coffee', start: { dateTime: '2026-07-20T10:00:00Z' }, end: { dateTime: '2026-07-20T11:00:00Z' }, extendedProperties: { private: { chroniclesId: '11' } } },
+    ]);
+    await runCalendarSync(deps);
+    expect(fetchCalls.filter(c => c.method === 'DELETE')).toHaveLength(0);
+    expect(entriesApi.create).not.toHaveBeenCalled();
   });
 
   it('ignores foreign events in "chroniclesOnly" mode', async () => {

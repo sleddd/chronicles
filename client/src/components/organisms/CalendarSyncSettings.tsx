@@ -115,6 +115,9 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
     recordEgressChoice('calendarSyncEnabled', enabled);
     await savePrivateSetting('calendarSyncEnabled', enabled).catch(() => {});
     if (enabled) kickSync();
+    // Off means off: the Apple feed's readable copy on the server goes too
+    // (its own switch is hidden while sync is off, so it could never be deleted)
+    else if (useUIStore.getState().icsFeedEnabled || status?.icsEnabled) await handleIcsToggle(false);
   };
 
   const handleConnect = async () => {
@@ -252,7 +255,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
     <SettingsCard>
       <SettingsRow
         title="Sync events & meetings"
-        description="Keep Event and Meeting entries in sync with an external calendar. Synced events leave end-to-end encryption: Google stores them, and the Apple feed keeps an unencrypted copy on the Chronicles server so your calendar app can read it."
+        description="Keep Event and Meeting entries in sync with an external calendar. Synced events leave end-to-end encryption: Google stores them, and the Apple feed keeps an unencrypted copy on the Chronicles server so your calendar app can read it. Turning sync off also turns the Apple feed off and deletes that copy, so its link stops working."
         action={<Toggle checked={calendarSyncEnabled} onChange={handleSyncToggle} activeColor={toggleColor} />}
       />
       {statusError && calendarSyncEnabled && <div style={msgStyle(true)}>{statusError}</div>}

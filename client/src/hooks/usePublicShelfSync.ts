@@ -6,7 +6,7 @@ import { buildPublicShelfItems, ON_PUBLIC_SHELF } from '../services/publicShelf.
 import { mediaItems, mediaTopicIds } from '../utils/media.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { showFlash } from '../services/flashNotice.js';
-import { recordPublicShelfChoice } from '../services/deviceConsent.js';
+import { recordPublicShelfChoice, reconcilePublicShelf } from '../services/deviceConsent.js';
 import { PUBLIC_SHELF_TITLE_DEFAULT } from '@shared/validation/schemas';
 
 /*
@@ -43,7 +43,13 @@ export function usePublicShelfSync(active: boolean): void {
     if (!active || loaded) return;
     let cancelled = false;
     publicShelfApi.mine()
-      .then(({ publicShelf }) => { if (!cancelled) usePublicShelfStore.getState().setLoaded(publicShelf); })
+      .then(({ publicShelf }) => {
+        if (cancelled) return;
+        // Turned off in another browser: this one's go-ahead ends too, so a
+        // shelf the server brings back later is never published to from here
+        reconcilePublicShelf(publicShelf !== null);
+        usePublicShelfStore.getState().setLoaded(publicShelf);
+      })
       .catch(() => { /* a signed-out or offline start — asked again next time */ });
     return () => { cancelled = true; };
   }, [active, loaded]);
@@ -120,8 +126,11 @@ export async function enablePublicShelf(title: string): Promise<OwnedPublicShelf
 
 /** Turn the shelf off: the row is deleted; the bookmarks stay on the entries */
 export async function disablePublicShelf(): Promise<void> {
-  await publicShelfApi.remove();
+  // This browser stops publishing first, whatever the server then answers: a
+  // delete that fails must not leave bookmark changes going up
   recordPublicShelfChoice(false);
+  usePublicShelfStore.getState().setEnabledHere(false);
+  await publicShelfApi.remove();
   const store = usePublicShelfStore.getState();
   store.setEnabledHere(false);
   store.setPublicShelf(null);

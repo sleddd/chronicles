@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -9,6 +9,9 @@ import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.j
 import { ConsentCard, EMPTY_CONSENT, consentComplete, type ConsentValue } from '../components/molecules/ConsentCard.js';
 import { useConsentStore } from '../stores/consentStore.js';
 import { deriveAuthSecret, newRecoveryProof, LEGAL_VERSIONS } from '@chronicles/shared';
+
+/** This tab's copy of the sign-up link's email and one-time code (sessionStorage). */
+const INVITE_KEY = 'chronicles.invite-v1';
 
 export function RegisterView() {
   const navigate = useNavigate();
@@ -21,9 +24,30 @@ export function RegisterView() {
   // — after the # (never sent to the server, so it stays out of access logs);
   // links sent before that carry them in the query
   const [query] = useSearchParams();
-  const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  const inviteCode = (fragment.get('invite') ?? query.get('invite'))?.trim() || undefined;
-  const invitedEmail = (fragment.get('email') ?? query.get('email'))?.trim() ?? '';
+  // Read once, then taken out of the address bar (below) so the one-time code
+  // doesn't sit in the browser's history. Kept for this tab only, so a reload
+  // of the page still has it
+  const [{ inviteCode, invitedEmail }] = useState(() => {
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    let invite = (fragment.get('invite') ?? query.get('invite'))?.trim() || undefined;
+    let email = (fragment.get('email') ?? query.get('email'))?.trim() ?? '';
+    try {
+      if (invite) sessionStorage.setItem(INVITE_KEY, JSON.stringify({ invite, email }));
+      else {
+        const kept = JSON.parse(sessionStorage.getItem(INVITE_KEY) ?? 'null') as { invite?: unknown; email?: unknown } | null;
+        if (kept && typeof kept.invite === 'string') {
+          invite = kept.invite;
+          if (!email && typeof kept.email === 'string') email = kept.email;
+        }
+      }
+    } catch { /* no session storage: the link still works until a reload */ }
+    return { inviteCode: invite, invitedEmail: email };
+  });
+  useEffect(() => {
+    if (window.location.hash || query.has('invite') || query.has('email')) {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+    }
+  }, [query]);
 
   const freshSignIn = useFreshSignIn();
   const handleRegister = async ({ email, username, password }: { email: string; username: string; password: string }) => {

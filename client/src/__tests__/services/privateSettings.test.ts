@@ -126,6 +126,36 @@ describe('the one-time move to v2', () => {
     expect((await openStartupSettings(await rows(), decryptBytes, encryptBytes)).map.icsFeedEnabled).toBe(false);
   });
 
+  it('turned off in another browser ends this one\'s record too, so the old true replayed later stays off', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      setEgressAccount('acct');
+      const rows = async (on: boolean | null) => [
+        { key: SEAL_MARKER_KEY, value: await sealSetting(SEAL_MARKER_KEY, true, encryptBytes) },
+        ...(on === null ? [] : [{ key: 'icsFeedEnabled', value: await sealSetting('icsFeedEnabled', on, encryptBytes) }]),
+      ];
+      const opened = async (on: boolean | null) => (await openStartupSettings(await rows(on), decryptBytes, encryptBytes)).map.icsFeedEnabled;
+
+      // Switched on here, and its save not yet at the server: a read answered
+      // from before keeps the record
+      recordEgressChoice('icsFeedEnabled', true);
+      await opened(false);
+      expect(await opened(true)).toBe(true);
+
+      // Later, another browser turns it off: this one reads the sealed false…
+      vi.setSystemTime(Date.now() + 5 * 60_000);
+      expect(await opened(false)).toBe(false);
+      // …and the server's kept copy of the old true no longer switches it on
+      expect(await opened(true)).toBe(false);
+
+      // The same when the server just leaves the value out
+      recordEgressChoice('icsFeedEnabled', true);
+      vi.setSystemTime(Date.now() + 5 * 60_000);
+      await opened(null);
+      expect(await opened(true)).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('writes no marker when a re-seal fails, so the next load tries again', async () => {
     upsert.mockRejectedValueOnce(new Error('offline'));
     const map: Record<string, unknown> = { dashboardConfig: await unbound({ hidden: [] }) };

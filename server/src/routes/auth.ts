@@ -131,7 +131,10 @@ async function countTwoFAFailure(accountId: number, bucket: string): Promise<voi
  * then lock only the strangers' bucket — not the owner's own browsers, where
  * they still need to change the password and recover. A session or a known
  * device can only be had by passing 2FA once, so the extra buckets don't give
- * a guesser more tries.
+ * a guesser more tries: the device cookie is signed over the account's 2FA
+ * state (`deviceMac`), so one handed out before 2FA was turned on — when a
+ * password alone earned it, as many times as wanted — stops verifying the
+ * moment it is.
  */
 function twoFABucket(req: Request, account: DeviceAccount): string {
   if (req.auth?.accountId === account.id) return `${account.id}:s:${req.auth.selector}`;
@@ -381,6 +384,17 @@ const COOKIE_OPTIONS = {
   path: '/',
 };
 
+// The other name's cookie, in development only: one left by a run on localhost
+// in the other mode would shadow or outlive the one this server sets
+const OTHER_COOKIE_NAME = IS_PRODUCTION ? null : '__Host-chronicle_session';
+function clearOtherSessionCookie(res: Response): void {
+  if (OTHER_COOKIE_NAME) res.clearCookie(OTHER_COOKIE_NAME, { path: '/', httpOnly: true, secure: true, sameSite: 'strict' as const });
+}
+function setSessionCookie(res: Response, token: string): void {
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+  clearOtherSessionCookie(res);
+}
+
 // A server key for one purpose, from the server secret when configured.
 // Without one it's derived from DATABASE_URL (it holds the DB password) so it
 // stays the same across restarts; random only when neither is set (dev/tests).
@@ -414,12 +428,24 @@ const DEVICE_COOKIE_OPTIONS = {
   maxAge: 90 * 24 * 60 * 60 * 1000,
   path: '/',
 };
-interface DeviceAccount { id: number; email: string; passwordHash: string }
+interface DeviceAccount {
+  id: number; email: string; passwordHash: string;
+  totpEnabled: boolean | null; totpSecret: string | null;
+}
 
+/**
+ * Signed over the credential AND the second factor as stored: a cookie is
+ * good only for the password and the 2FA setup it was earned under. Turning
+ * 2FA on (or replacing it) therefore ends every cookie from before, which
+ * had only ever needed the password.
+ */
 const deviceMac = (account: DeviceAccount, nonce: string) => {
   const credential = crypto.createHash('sha256').update(account.passwordHash).digest('hex');
+  const secondFactor = account.totpEnabled && account.totpSecret
+    ? crypto.createHash('sha256').update(account.totpSecret).digest('hex')
+    : 'off';
   return crypto.createHmac('sha256', DEVICE_KEY)
-    .update(`${account.id}\n${credential}\n${account.email}\n${nonce}`).digest('base64url');
+    .update(`${account.id}\n${credential}\n${account.email}\n${nonce}\n${secondFactor}`).digest('base64url');
 };
 
 function rememberKnownDevice(res: Response, account: DeviceAccount): void {
@@ -438,13 +464,35 @@ function knownDeviceNonce(req: Request, account: DeviceAccount): string | null {
   return a.length === b.length && crypto.timingSafeEqual(a, b) ? nonce : null;
 }
 
+/**
+ * A sign-in checks the credentials it read, then makes its session a moment
+ * later (the hash alone takes ~0.4 s). A password change, recovery or 2FA
+ * change landing in between revokes the sessions that exist — not the one
+ * about to be made, which would outlive "sign out everywhere". So once the
+ * session exists, look again: if the credentials it was earned with are no
+ * longer the stored ones, it is revoked and the sign-in refused. Either the
+ * change committed before the session did (seen here) or after (its own
+ * revocation covers the session), so none slips through.
+ */
+async function sessionStillEarned(token: string, account: { id: number; passwordHash: string; totpEnabled: boolean | null; totpSecret: string | null }): Promise<boolean> {
+  const now = await prisma.account.findUnique({
+    where: { id: account.id },
+    select: { passwordHash: true, totpEnabled: true, totpSecret: true },
+  });
+  if (now && now.passwordHash === account.passwordHash
+    && !!now.totpEnabled === !!account.totpEnabled && now.totpSecret === account.totpSecret) return true;
+  try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
+  logSecurityEvent('login_superseded', { accountId: account.id });
+  return false;
+}
+
 /** The failure bucket for this attempt: the device's own when it's known for this account. */
 async function loginFailureKey(req: Request, email: string): Promise<string> {
   const raw = req.cookies?.[DEVICE_COOKIE];
   if (typeof raw !== 'string' || raw.length > 128) return email;
   // Only browsers carrying a cookie pay for this lookup; without an account
   // there's nothing to be known for
-  const account = await prisma.account.findUnique({ where: { email }, select: { id: true, email: true, passwordHash: true } });
+  const account = await prisma.account.findUnique({ where: { email }, select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true } });
   if (!account) return email;
   const nonce = knownDeviceNonce(req, account);
   return nonce ? `${email}#${nonce}` : email;
@@ -657,13 +705,15 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
 
     // Who may sign up: closed unless REGISTRATION_OPEN=true. Emails approved on
     // the beta list (`npm run beta -- --approve`, no restart) with their invite
-    // code, or (outside production) listed in the optional
+    // code, or (in development only) listed in the optional
     // REGISTRATION_WHITELIST, may; anyone else is refused
     let invited = false;
     if (process.env.REGISTRATION_OPEN !== 'true') {
       // The whitelist needs no code, so anyone who learns a listed email can
-      // claim it first: in production only approvals (with their code) count
-      const listed = process.env.NODE_ENV === 'production' ? [] : registrationWhitelist();
+      // claim it first: only approvals (with their code) count anywhere but
+      // development — the same test that marks cookies Secure, so a host with
+      // NODE_ENV unset or "staging" never honours the list
+      const listed = process.env.NODE_ENV !== 'development' ? [] : registrationWhitelist();
       invited = !listed.includes(email) && await isApproved(email, inviteCode).catch(() => false);
       if (!listed.includes(email) && !invited) {
         logSecurityEvent('register_not_whitelisted', { ip: req.ip });
@@ -703,8 +753,8 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
       try { await spendInvite(email); } catch { /* the account exists; a code left unspent is refused by the 409 anyway */ }
     }
     logSecurityEvent('register_success', { accountId: account.id, ip: req.ip });
-    rememberKnownDevice(res, { id: account.id, email, passwordHash });
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    rememberKnownDevice(res, { id: account.id, email, passwordHash, totpEnabled: false, totpSecret: null });
+    setSessionCookie(res, token);
     res.status(201).json({
       user: { email: account.email, username: account.username },
     });
@@ -811,11 +861,15 @@ router.post('/login', authLimiter, async (req, res) => {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });
+    if (!(await sessionStillEarned(token, account))) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    setSessionCookie(res, token);
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
       encryption: buildEncryptionResponse(account),
@@ -836,6 +890,7 @@ router.post('/login', authLimiter, async (req, res) => {
 // header; Bearer clients go through the usual check.
 const clearSessionCookies = (res: Response) => {
   res.clearCookie(COOKIE_NAME, { path: '/', httpOnly: true, secure: IS_PRODUCTION, sameSite: 'strict' as const });
+  clearOtherSessionCookie(res);
   clearRememberCookie(res);
 };
 
@@ -930,8 +985,8 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
 
     logSecurityEvent('password_change', { accountId: account.id, ip: req.ip });
     // The old known-device cookie no longer verifies; this browser stays known
-    rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash });
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash, totpEnabled: account.totpEnabled, totpSecret: account.totpSecret });
+    setSessionCookie(res, token);
     res.json({ success: true });
   } catch (err) {
     if (sendIfHasherBusy(err, res)) return;
@@ -971,7 +1026,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     // The email is the login identifier — changing it needs the password
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+      select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account || !(await checkConfirmSecret(account, parsed.data.currentAuthSecret, confirmKey(req)))) {
       logSecurityEvent('email_change_failed', { accountId: req.auth!.accountId, ip: req.ip });
@@ -1001,7 +1056,7 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     await cancelPendingTwoFA(account.id);
 
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
-    rememberKnownDevice(res, { id: account.id, email: normalizedEmail, passwordHash });
+    rememberKnownDevice(res, { id: account.id, email: normalizedEmail, passwordHash, totpEnabled: account.totpEnabled, totpSecret: account.totpSecret });
     res.json({ success: true, email: normalizedEmail });
   } catch (err) {
     if (sendIfHasherBusy(err, res)) return;
@@ -1121,7 +1176,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
     await revokeGrantsForAccount(account.id);
     await cancelPendingTwoFA(account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
-    rememberKnownDevice(res, { id: account.id, email, passwordHash });
+    rememberKnownDevice(res, { id: account.id, email, passwordHash, totpEnabled: account.totpEnabled, totpSecret: account.totpSecret });
 
     // Create new session after revoking all old ones
     const token = await createSession(account.id, account.tenantSchemaName, {
@@ -1129,7 +1184,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
       userAgent: req.headers['user-agent'],
     });
 
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    setSessionCookie(res, token);
     res.json({
       user: { email: account.email, username: account.username },
       encryption: {
@@ -1222,11 +1277,15 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });
+    if (!(await sessionStillEarned(token, account))) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    setSessionCookie(res, token);
     res.json({
       user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
       encryption: buildEncryptionResponse(account),
@@ -1276,7 +1335,7 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true, totpEnabled: true },
+      select: { id: true, email: true, passwordHash: true, totpEnabled: true },
     });
     if (!account || !(await checkConfirmSecret(account, currentAuthSecret, confirmKey(req)))) {
       logSecurityEvent('2fa_enable_failed', { accountId: req.auth!.accountId, ip: req.ip });
@@ -1311,9 +1370,10 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
       hashedCodes.push(await hashBackupCode(formatted));
     }
 
+    const sealedSecret = sealTotpSecret(secret, req.auth!.accountId);
     await prisma.account.update({
       where: { id: req.auth!.accountId },
-      data: { totpSecret: sealTotpSecret(secret, req.auth!.accountId), totpEnabled: true, totpBackupCodes: hashedCodes },
+      data: { totpSecret: sealedSecret, totpEnabled: true, totpBackupCodes: hashedCodes },
     });
     // A fresh count, then the enabling code's step marked used, so that same
     // code can't then finish a sign-in (replay)
@@ -1323,6 +1383,10 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
     // is signed out and pending sign-ins are cancelled; this one stays
     await revokeAllSessions(account.id, req.auth!.selector, '2fa_enabled');
     await cancelPendingTwoFA(account.id);
+
+    // Every known-device cookie from before is void now (they needed only the
+    // password); this browser, which just showed the authenticator, stays known
+    rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash: account.passwordHash, totpEnabled: true, totpSecret: sealedSecret });
 
     logSecurityEvent('2fa_enabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ backupCodes });
@@ -1346,7 +1410,7 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+      select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
@@ -1385,6 +1449,8 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
     // signed out, so one that was let in before stays out; this one stays
     await revokeAllSessions(req.auth!.accountId, req.auth!.selector, '2fa_disabled');
 
+    rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash: account.passwordHash, totpEnabled: false, totpSecret: null });
+
     logSecurityEvent('2fa_disabled', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
   } catch (err) {
@@ -1407,7 +1473,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
 
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+      select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
@@ -1428,6 +1494,7 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
 
     logSecurityEvent('account_deleted', { accountId: account.id, ip: req.ip });
     res.clearCookie(COOKIE_NAME, { path: '/', secure: IS_PRODUCTION, sameSite: 'strict' as const });
+    clearOtherSessionCookie(res);
     clearRememberCookie(res);
     res.json({ success: true });
   } catch (err) {
@@ -1506,7 +1573,7 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
     // a signed-in session alone must not be enough to replace it
     const account = await prisma.account.findUnique({
       where: { id: req.auth!.accountId },
-      select: { id: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+      select: { id: true, email: true, passwordHash: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
     });
     if (!account || !(await checkConfirmSecret(account, currentAuthSecret, confirmKey(req)))) {
       logSecurityEvent('recovery_key_regenerate_failed', { accountId: req.auth!.accountId, ip: req.ip });
