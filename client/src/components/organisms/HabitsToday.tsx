@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { cardLabel } from '../../styles/cardLabel.js';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
-import { DashPanel } from '../molecules/DashPanel.js';
+import { DashPanel } from './FoldingDashPanel.js';
 import { useHabits } from '../../hooks/useHabits.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { toDateStr } from '../../utils/dateUtils.js';

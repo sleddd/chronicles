@@ -21,7 +21,7 @@ import { estimateEntryCalories } from '../../services/aiAssistant.js';
 import { exerciseSummary, EXERCISE_TYPES } from '../../utils/exerciseSummary.js';
 import { useFoodLogActions } from './FoodLog.js';
 import { PillButton } from '../atoms/PillButton.js';
-import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { DashPanel, DashPanelHead } from './FoldingDashPanel.js';
 import {
   Section, Chips, Chip, DateTimeBox, DateTimeField, Unit, BoxText, FieldNote,
 } from '../molecules/fields/formKit.js';

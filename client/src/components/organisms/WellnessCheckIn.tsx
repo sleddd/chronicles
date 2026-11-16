@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { WellnessPanel, WATER_GOAL, type FlowIntensity } from '../molecules/WellnessPanel.js';
-import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { DashPanel, DashPanelHead } from './FoldingDashPanel.js';
 import { DayInventory, type DayInventoryValues } from '../molecules/DayInventory.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';

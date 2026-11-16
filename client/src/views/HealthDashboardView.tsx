@@ -74,12 +74,12 @@ const Pair = styled.div`
 `;
 
 /* The quick log on the left, Wellness check-in on the right — side by side
-   on tablets too, stacked only on phones. The two columns are the same height. */
+   on tablets too, stacked only on phones. Each is its own height (no stretching to match). */
 const TopPair = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  align-items: stretch;
+  align-items: start;
   @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 `;
 
@@ -90,11 +90,6 @@ const Column = styled.div`
   gap: 24px;
   min-width: 0;
   ${NAV_COMPACT} { gap: 16px; }
-`;
-
-/* A column whose card stretches to the row's height (the quick log beside the taller check-in) */
-const FillColumn = styled(Column)`
-  & > * { flex: 1; }
 `;
 
 /* "Today" + the date, then the nutrient strip */
@@ -204,14 +199,30 @@ export function HealthDashboardView() {
           {food && <FoodGlance />}
 
           <Stack>
-            {food ? (
+            {food && hasMeds && medsOn ? (
+              /* Two columns that each flow straight down, so what's under the quick log sits
+                 right under it whatever the check-in's height (stacked on phones) */
+              <TopPair>
+                <Column>
+                  <QuickLog meal={food} exercise={exercise} />
+                  <QuickChange />
+                  <QuickSymptom />
+                  {routines && <ExerciseToday panel />}
+                </Column>
+                <Column>
+                  <WellnessCheckIn title="Wellness check-in" quad bare />
+                  <HabitsToday panel />
+                  <MedicationsToday doses={doses} panel />
+                </Column>
+              </TopPair>
+            ) : food ? (
               <TopPair>
                 {/* The quick log leads, beside the check-in (the macro chart is on the Meals page only) */}
-                <FillColumn><QuickLog meal={food} exercise={exercise} /></FillColumn>
+                <Column><QuickLog meal={food} exercise={exercise} /></Column>
                 <Column><WellnessCheckIn title="Wellness check-in" quad bare /></Column>
               </TopPair>
             ) : <WellnessCheckIn title="Wellness check-in" quad bare />}
-            {hasMeds && medsOn && (food || exercise) ? (
+            {food && hasMeds && medsOn ? null : hasMeds && medsOn && exercise ? (
               <Pair>
                 <Column>
                   {!food && <QuickLog meal={food} exercise={exercise} />}

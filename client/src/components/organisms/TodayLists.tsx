@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { AsNeededList } from './AsNeededMeds.js';
-import { DashPanel } from '../molecules/DashPanel.js';
+import { DashPanel } from './FoldingDashPanel.js';
 import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
 import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import type { RoutineSlot } from '../../utils/routines.js';

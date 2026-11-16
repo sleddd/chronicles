@@ -37,6 +37,8 @@ import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { NotificationBell, BellBadge } from '../components/organisms/NotificationBell.js';
 import { ErrorBoundary } from '../components/atoms/ErrorBoundary.js';
+import { useSaveCommand } from '../hooks/useSaveCommand.js';
+import { useAiReady } from '../hooks/useAiReady.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
 import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
@@ -519,14 +521,15 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
       letter-spacing: 0;
       text-transform: none;
       line-height: 40px;
-      color: var(--text-primary);
+      /* A step back from full strength, so the cards' content leads */
+      color: color-mix(in srgb, var(--text-primary) 82%, transparent);
     }
     /* A little less room above the title than the card's usual padding */
-    padding-top: 26px;
-    @media (max-width: 480px) { padding-top: 18px; }
+    padding-top: 20px;
+    @media (max-width: 480px) { padding-top: 14px; }
     /* Grip and chevron centred on the title's 40px line */
-    & > button { top: 31px; }
-    @media (max-width: 480px) { & > button { top: 23px; } }
+    & > button { top: 25px; }
+    @media (max-width: 480px) { & > button { top: 19px; } }
   ` : '')}
   /* $plain (Wellness check-in): no panel, title or fold — its four-square box as it is,
      with only the grip, tucked into the box's top-right corner */
@@ -2276,6 +2279,134 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
   );
 }
 
+/* ── The add row: one pill each to add a priority, a win, a mantra or start a timer ── */
+
+/* Equal pills across the page; phones: the first on its own, then two a row
+   (a last one left alone takes the whole row) */
+const AddRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 28px;
+  /* Straight under the Quick entry (its own 24px of room below adds to this) */
+  margin-top: 8px;
+  /* Room under the lines before the cards start */
+  margin-bottom: 16px;
+  /* Phones: one full-width line each, stacked */
+  @media (max-width: 768px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 12px;
+  }
+`;
+
+/* The add row's lines (Add a priority, Log a meal…): underlined only, no box */
+const AddPill = styled.form`
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 44px;
+  /* Just an underline: no fill, shadow or corners; the line turns accent while typing */
+  padding: 0 2px 0 0;
+  border: none;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  background: transparent;
+  && input::placeholder { color: var(--text-muted); opacity: 1; }
+  &:focus-within { border-bottom-color: var(--color-accent-line); }
+`;
+
+const EnterBtn = styled.button`
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  /* Barely there until the line is in use: it blends into the page */
+  opacity: 0.2;
+  cursor: pointer;
+  transition: opacity 120ms, color 120ms;
+  &:hover:not(:disabled), ${AddPill}:focus-within &:not(:disabled) { opacity: 1; color: var(--color-accent-link); }
+  &:disabled { cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
+const AddRowError = styled(Muted)`
+  color: var(--color-danger);
+`;
+
+interface AddField { key: string; placeholder: string; label: string; failed: string; run: (text: string) => Promise<unknown> }
+
+function AddPillInput({ field, onError }: { field: AddField; onError: (message: string) => void }) {
+  const [draft, setDraft] = useState('');
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    onError('');
+    field.run(text).catch(err => {
+      console.error(`${field.label} failed:`, err);
+      setDraft(text);
+      onError(field.failed);
+    });
+  };
+  return (
+    <AddPill onSubmit={submit}>
+      <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
+        placeholder={field.placeholder} aria-label={field.label}
+        onKeyDown={e => { if (e.key === 'Escape') setDraft(''); }} />
+      {/* The return key, faded: press Enter (or tap it) to save */}
+      <EnterBtn type="submit" aria-label={`Save: ${field.label}`} title="Press Enter to save" disabled={!draft.trim()}>
+        <Icon name="corner-down-left" size={16} strokeWidth={1.8} />
+      </EnterBtn>
+    </AddPill>
+  );
+}
+
+/** Logs a meal or a symptom from a line of text, shaped like its form (the AI chat's /save):
+ *  a meal dated now with its type by the time of day (and its nutrients filled by In-App AI
+ *  when it's set up), a symptom dated now with its name — in the account's Meals / Symptom
+ *  topic, made on first use */
+function useQuickLog() {
+  const saveCommand = useSaveCommand();
+  const aiReady = useAiReady();
+  return async (kind: 'meal' | 'symptom', text: string) => {
+    const [name, icon] = kind === 'meal' ? ['Meals', 'utensils'] : ['Symptom', 'flask'];
+    const id = await getOrCreateTopic(name, icon);
+    await saveCommand({ id, name }, text, { estimateNutrition: kind === 'meal' && aiReady });
+  };
+}
+
+function QuickAdds({ priorities, wins, mantra, timer, meal, symptom }: {
+  priorities: boolean; wins: boolean; mantra: boolean; timer: boolean; meal: boolean; symptom: boolean;
+}) {
+  const prioritiesList = usePriorityList();
+  const winsList = useWinsActions();
+  const addMantra = useAddMantra();
+  const startFor = useStartTimerFor();
+  const quickLog = useQuickLog();
+  const [error, setError] = useState('');
+  const fields: (AddField | false)[] = [
+    priorities && { key: 'priority', placeholder: 'Add a priority', label: 'Add a priority', failed: 'That priority didn’t save. Try again.', run: prioritiesList.add },
+    wins && { key: 'win', placeholder: 'Add a win', label: 'Add a win', failed: 'That win didn’t save. Try again.', run: winsList.add },
+    meal && { key: 'meal', placeholder: 'Log a meal', label: 'Log a meal', failed: 'That meal didn’t save. Try again.', run: (t: string) => quickLog('meal', t) },
+    symptom && { key: 'symptom', placeholder: 'Log a symptom', label: 'Log a symptom', failed: 'That symptom didn’t save. Try again.', run: (t: string) => quickLog('symptom', t) },
+    mantra && { key: 'mantra', placeholder: 'Write a mantra', label: 'Write a mantra', failed: 'That mantra didn’t save. Try again.', run: addMantra },
+    timer && { key: 'timer', placeholder: 'Start a timer for…', label: 'Start a timer for an activity', failed: 'That timer didn’t start. Try again.', run: startFor },
+  ];
+  const shown = fields.filter((f): f is AddField => !!f);
+  if (!shown.length) return null;
+  return (<>
+    <AddRow>{shown.map(f => <AddPillInput key={f.key} field={f} onError={setError} />)}</AddRow>
+    {error && <AddRowError role="alert">{error}</AddRowError>}
+  </>);
+}
+
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
@@ -2724,6 +2855,11 @@ export function DashboardView() {
               <div ref={photoEndRef}><QuickEntry /></div>
             </QuickWrap>
           )}
+          {/* The add row (alongside each card's own add box): one line each for a priority,
+              a win, a meal, a symptom, a mantra or a timer */}
+          <QuickAdds priorities={shown('priorities')} wins={shown('wins')} mantra={shown('mantra')} timer={shown('time')}
+            meal={shown('quickLog') && ff.foodEnabled !== false} symptom={shown('symptom')} />
+
           {showChecklist(onboarding) && (
             <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
           )}

@@ -10,7 +10,7 @@ import { stripHtml } from '../../utils/stripHtml.js';
 import { toDateStr, formatTime12h, formatDateDisplay } from '../../utils/dateUtils.js';
 import type { DoseLogRecord } from '../../services/api.js';
 import type { ScheduledDose } from '../../types/health.js';
-import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { DashPanel, DashPanelHead } from './FoldingDashPanel.js';
 import { TickMark } from '../atoms/TickMark.js';
 
 /* ── Styled ── */

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
+import { Icon } from '../components/atoms/core/Icon.jsx';
+import { FoldBtn } from '../components/molecules/DashPanel.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
 import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -117,6 +119,21 @@ const CardHead = styled.div`
   border-bottom: 1px solid var(--border-subtle);
 `;
 
+/* "This week" folds like the dashboards' cards: a chevron at the top right; folded it's
+   just its title, with no fill (remembered per browser) */
+const FOLD_KEY = 'exercise-this-week-folded-v1';
+const FoldCard = styled(Card)<{ $folded: boolean }>`
+  position: relative;
+  & > [data-fold-head] { padding-right: 44px; }
+  ${({ $folded }) => ($folded ? css`
+    && { padding: 16px 0; background: none !important; box-shadow: none !important; }
+    && > :not([data-fold-head]):not([data-fold-btn]) { display: none; }
+    && > [data-fold-head] { color: var(--text-muted); opacity: 0.75; }
+    /* The chevron centred on the folded title's line */
+    && > [data-fold-btn] { top: 16px !important; }
+  ` : '')}
+`;
+
 const CardTitle = styled.h2`
   margin: 0;
   font-family: var(--font-display);
@@ -152,7 +169,8 @@ const ScheduleRow = styled.button<{ $paused: boolean }>`
 `;
 
 const Eyebrow = styled.p`
-  margin: 0 0 10px;
+  /* Room between the plan line and "This week" */
+  margin: 0 0 20px;
   font-family: var(--font-label);
   font-size: 13px;
   letter-spacing: 0.12em;
@@ -242,10 +260,16 @@ function ThisWeek({ planName, week, leftToday, onOpenPlan }: {
   leftToday: Record<string, number>;
   onOpenPlan: () => void;
 }) {
+  const [folded, setFolded] = useState(() => { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch { return false; } });
+  const toggleFold = () => {
+    const next = !folded;
+    setFolded(next);
+    try { if (next) localStorage.setItem(FOLD_KEY, '1'); else localStorage.removeItem(FOLD_KEY); } catch { /* not remembered */ }
+  };
   return (
-    <Card aria-label="This week">
+    <FoldCard aria-label="This week" $folded={folded}>
       <Eyebrow>{planName} · {week.phase.name} · Week {week.weekNo}</Eyebrow>
-      <CardTitle>This week</CardTitle>
+      <CardTitle data-fold-head="">This week</CardTitle>
       <WeekMeta>{weekRange(week.start, week.end)} · {week.done} of {week.target} min</WeekMeta>
       {week.rows.map(({ category, done, target }) => {
         const left = leftToday[category.id] ?? 0;
@@ -266,7 +290,11 @@ function ThisWeek({ planName, week, leftToday, onOpenPlan }: {
         );
       })}
       <Footer><Link type="button" onClick={onOpenPlan}>Open training plan</Link></Footer>
-    </Card>
+      <FoldBtn type="button" data-fold-btn="" $folded={folded} aria-expanded={!folded}
+        aria-label={folded ? 'Show this week' : 'Fold this week'} onClick={toggleFold}>
+        <Icon name="chevron-down" size={18} strokeWidth={1.8} />
+      </FoldBtn>
+    </FoldCard>
   );
 }
 

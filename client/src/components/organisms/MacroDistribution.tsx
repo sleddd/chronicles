@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import styled from 'styled-components';
-import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { DashPanel, DashPanelHead } from './FoldingDashPanel.js';
 import { MacroDonut, type MacroSlice } from '../molecules/charts/MacroDonut.js';
 import { summarizeDay, type FoodRow } from '../../utils/foodLog.js';
 import { KCAL_PER_GRAM } from '../../types/nutrition.js';

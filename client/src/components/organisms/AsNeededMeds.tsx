@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
-import { DashPanel, DashPanelHead } from '../molecules/DashPanel.js';
+import { DashPanel, DashPanelHead } from './FoldingDashPanel.js';
 import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
 import type { DoseLogRecord } from '../../services/api.js';
 
