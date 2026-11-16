@@ -22,6 +22,7 @@ vi.mock('@/hooks/useFreshSignIn', () => ({ useFreshSignIn: () => freshSignIn }))
 vi.mock('@/components/templates/AuthTemplate', () => ({ AuthTemplate: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock('@/services/passkeys', () => ({
   passkeysAvailable: available,
+  knownPasskeys: () => [], rememberPasskey: () => {}, keepOnlyPasskeys: () => {},
   PasskeyCancelled: class PasskeyCancelled extends Error {},
   PasskeyCannotUnlock: class PasskeyCannotUnlock extends Error { constructor() { super('This passkey can’t open your journal on this device.'); } },
 }));

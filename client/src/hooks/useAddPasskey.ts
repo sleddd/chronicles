@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useEncryption, type KeySource } from '../contexts/EncryptionContext.js';
 import { auth as authApi, type PasskeyInfo } from '../services/api.js';
-import { PasskeyCancelled, PasskeyCannotUnlock, createPasskey, suggestedPasskeyName } from '../services/passkeys.js';
+import { PasskeyCancelled, PasskeyCannotUnlock, createPasskey, rememberPasskey, suggestedPasskeyName } from '../services/passkeys.js';
 
 /**
  * Make a passkey on this device and store it with its wrap of the master key.
@@ -23,6 +23,8 @@ export function useAddPasskey(): (source: KeySource, confirmToken: string, name:
     try {
       const wrap = await passkeyWrapWith(source, made.prf, made.credentialId);
       const { passkeys } = await authApi.passkeyRegister({ response: made.response, ...wrap, name: name.trim() || suggestedPasskeyName(), confirmToken });
+      // It works here: sign-in asks for it by name from now on
+      rememberPasskey(made.credentialId);
       return passkeys;
     } catch (err) {
       made.forget();

@@ -2,6 +2,7 @@ import { clearEntryCache } from './entryCache.js';
 import { EGRESS_STORE } from './deviceConsent.js';
 import { SETTING_REVS_STORE } from './settingCipher.js';
 import { SEEN_MARKERS_STORE } from './sealedFormats.js';
+import { KNOWN_PASSKEYS_STORE } from './passkeys.js';
 
 /*
  * What this browser keeps on disk for whoever uses Chronicles in it: the
@@ -16,7 +17,9 @@ import { SEEN_MARKERS_STORE } from './sealedFormats.js';
  */
 
 /** Kept through a wipe: they hold no data, and dropping them would weaken what they guard. */
-const KEPT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE];
+// (The passkey ids are random and name nobody; without them sign-in can't ask
+// the device for its own passkey ahead of a password manager's)
+const KEPT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE, KNOWN_PASSKEYS_STORE];
 const OWNER_STORE = 'chronicles.owner-v1';
 
 /** A mark for the account, from a tag only its master key can make (never the email). */

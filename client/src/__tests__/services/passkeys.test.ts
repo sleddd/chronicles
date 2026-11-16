@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/services/api', () => ({ auth: api }));
 
 import {
-  PasskeyCancelled, PasskeyCannotUnlock, confirmWithPasskey, createPasskey, passkeysAvailable, signInWithPasskey, suggestedPasskeyName,
+  PasskeyCancelled, PasskeyCannotUnlock, confirmWithPasskey, createPasskey, keepOnlyPasskeys, knownPasskeys, passkeysAvailable, rememberPasskey, signInWithPasskey, suggestedPasskeyName,
 } from '@/services/passkeys';
 
 const SECRET = new Uint8Array(32).fill(5);
@@ -38,6 +38,7 @@ const CREATION = {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   get.mockReset(); create.mockReset();
   Object.values(api).forEach(f => f.mockReset());
   Object.defineProperty(navigator, 'credentials', { configurable: true, value: { get, create } });
@@ -60,6 +61,50 @@ describe('signing in with a passkey', () => {
     expect(new Uint8Array(asked.extensions.prf.eval.first).byteLength).toBe(32);
     expect(Array.from(result.prf)).toEqual(Array.from(SECRET));
     expect(result.wrap.credentialId).toBe('Y3JlZA');
+  });
+
+  it('asks for the passkeys that worked here before, so a password manager has nothing to answer with', async () => {
+    api.passkeyLoginOptions.mockResolvedValue({ options: OPTIONS });
+    api.passkeyLogin.mockResolvedValue({ user: {}, passkey: {} });
+    get.mockResolvedValue(assertionCred({ results: { first: SECRET.buffer } }));
+
+    await signInWithPasskey();
+    expect(knownPasskeys()).toEqual(['Y3JlZA']);
+
+    await signInWithPasskey();
+    const asked = get.mock.calls[1][0].publicKey.allowCredentials;
+    expect(asked).toHaveLength(1);
+    expect(Array.from(new Uint8Array(asked[0].id))).toEqual(Array.from(new TextEncoder().encode('cred')));
+
+    // "Use a different passkey": whichever one the person picks
+    await signInWithPasskey({ any: true });
+    expect(get.mock.calls[2][0].publicKey.allowCredentials).toBeUndefined();
+  });
+
+  it('a passkey that gave no secret, or that the server never stored, is not remembered', async () => {
+    api.passkeyLoginOptions.mockResolvedValue({ options: OPTIONS });
+    get.mockResolvedValue(assertionCred(undefined));
+    await expect(signInWithPasskey()).rejects.toBeInstanceOf(PasskeyCannotUnlock);
+    expect(knownPasskeys()).toEqual([]);
+
+    rememberPasskey('Y3JlZA');
+    get.mockResolvedValue(assertionCred({ results: { first: SECRET.buffer } }));
+    api.passkeyLogin.mockRejectedValue(Object.assign(new Error('not on your account'), { body: { unknownCredential: true } }));
+    await expect(signInWithPasskey()).rejects.toThrow('not on your account');
+    expect(knownPasskeys()).toEqual([]);
+  });
+
+  it('forgets passkeys the account no longer has', () => {
+    rememberPasskey('YQ'); rememberPasskey('Yg');
+    keepOnlyPasskeys(['Yg', 'Yw']);
+    expect(knownPasskeys()).toEqual(['Yg']);
+  });
+
+  it('reads a secret handed back as a view or as a buffer from elsewhere', async () => {
+    api.passkeyLoginOptions.mockResolvedValue({ options: OPTIONS });
+    api.passkeyLogin.mockResolvedValue({ user: {}, passkey: {} });
+    get.mockResolvedValue(assertionCred({ results: { first: new DataView(SECRET.buffer.slice(0)) } }));
+    expect(Array.from((await signInWithPasskey({ any: true })).prf)).toEqual(Array.from(SECRET));
   });
 
   it('never sends the PRF secret, or any extension result, to the server', async () => {
@@ -136,6 +181,12 @@ describe('making a passkey', () => {
     expect(second.rpId).toBe('chronicles.test');
     expect(second.challenge.byteLength).toBe(32);
     expect(Array.from(made.prf)).toEqual(Array.from(SECRET));
+  });
+
+  it('refuses at once, with no second prompt, when nothing answers about PRF (a password manager made it)', async () => {
+    create.mockResolvedValue(createdCred(undefined));
+    await expect(createPasskey(CREATION)).rejects.toThrow('password manager');
+    expect(get).not.toHaveBeenCalled();
   });
 
   it('refuses an authenticator with no PRF: it could sign in but never open the journal', async () => {

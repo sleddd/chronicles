@@ -198,7 +198,7 @@ export interface KeyWrapData {
 }
 /** A passkey's wrap of the master key: what its PRF secret opens */
 export interface PasskeyWrap { credentialId: string; wrappedMK: string; wrapIv: string }
-export interface PasskeyInfo { id: number; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }
+export interface PasskeyInfo { id: number; credentialId?: string; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }
 export interface TrustedBrowserInfo { id: number; label: string; isCurrent: boolean; createdAt: string; expiresAt: string; lastUsedAt: string | null }
 /** WebAuthn options as the server sends them (base64url strings where the browser wants bytes) */
 export interface PasskeyRequestOptions {

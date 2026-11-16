@@ -54,7 +54,7 @@ interface AuthContextValue {
   /** `trustBrowser`: don't ask this browser for a code for 30 days */
   submitTotpCode: (code: string, trustBrowser?: boolean) => Promise<EncryptionData>;
   /** Sign in with a passkey: one touch. Returns its wrap and the secret that opens it. */
-  loginWithPasskey: () => Promise<PasskeySignIn>;
+  loginWithPasskey: (opts?: { any?: boolean }) => Promise<PasskeySignIn>;
   /** Leave the 2FA code screen and go back to the sign-in form */
   cancel2FA: () => void;
   /** Recovery signed this browser in (the server set its session): this tab now shows that person */
@@ -152,8 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result.encryption;
   }, [pending2FA]);
 
-  const loginWithPasskey = useCallback(async (): Promise<PasskeySignIn> => {
-    const result = await signInWithPasskey();
+  const loginWithPasskey = useCallback(async (opts?: { any?: boolean }): Promise<PasskeySignIn> => {
+    const result = await signInWithPasskey(opts);
     // The browser's session is this person's now: a tab showing anyone else lets go
     announceSigningIn(result.user.email);
     clearPendingSignOut();

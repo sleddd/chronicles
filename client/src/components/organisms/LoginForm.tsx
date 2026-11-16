@@ -73,10 +73,12 @@ interface LoginFormProps {
   onSubmit: (email: string, password: string) => Promise<void>;
   onForgotPassword?: () => void;
   /** Sign in with a passkey: shown when given (the browser can do it). Rejects with a message to show, or resolves. */
-  onPasskey?: () => Promise<void>;
+  onPasskey?: (any?: boolean) => Promise<void>;
+  /** This browser asks for the passkeys it knows first: offer a way to pick another once that didn't sign in */
+  passkeyChoice?: boolean;
 }
 
-export function LoginForm({ onSubmit, onForgotPassword, onPasskey }: LoginFormProps) {
+export function LoginForm({ onSubmit, onForgotPassword, onPasskey, passkeyChoice }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -84,13 +86,18 @@ export function LoginForm({ onSubmit, onForgotPassword, onPasskey }: LoginFormPr
   const [loading, setLoading] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
 
-  const handlePasskey = async () => {
+  const [passkeyTried, setPasskeyTried] = useState(false);
+
+  const handlePasskey = async (any = false) => {
     if (!onPasskey) return;
     setError('');
     setPasskeyBusy(true);
     try {
-      await onPasskey();
+      await onPasskey(any);
+      // Still here: the sheet was closed, or the passkey it asked for isn't on this device
+      setPasskeyTried(true);
     } catch (err) {
+      setPasskeyTried(true);
       setError(err instanceof Error ? err.message : 'That passkey didn’t work');
     } finally {
       setPasskeyBusy(false);
@@ -154,9 +161,14 @@ export function LoginForm({ onSubmit, onForgotPassword, onPasskey }: LoginFormPr
       {onPasskey && (
         <>
           <Or>or</Or>
-          <Button type="button" fullWidth variant="secondary" disabled={passkeyBusy || loading} onClick={handlePasskey}>
+          <Button type="button" fullWidth variant="secondary" disabled={passkeyBusy || loading} onClick={() => void handlePasskey()}>
             {passkeyBusy ? <Spinner size={18} /> : 'Sign in with a passkey'}
           </Button>
+          {passkeyChoice && passkeyTried && (
+            <Button type="button" variant="ghost" disabled={passkeyBusy || loading} onClick={() => void handlePasskey(true)}>
+              Use a different passkey
+            </Button>
+          )}
         </>
       )}
 

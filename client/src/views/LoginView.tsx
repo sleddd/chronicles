@@ -9,7 +9,8 @@ import { LoginForm } from '../components/organisms/LoginForm.js';
 import { Button } from '../components/atoms/Button.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { TrustBrowser } from '../components/molecules/TrustBrowser.js';
-import { PasskeyCancelled, PasskeyCannotUnlock, passkeysAvailable } from '../services/passkeys.js';
+import { PasskeyCancelled, PasskeyCannotUnlock, knownPasskeys, passkeysAvailable } from '../services/passkeys.js';
+import { passkeySignInProblem } from '../utils/passkeyProblem.js';
 
 const OtpWrap = styled.div`
   display: flex;
@@ -172,12 +173,12 @@ export function LoginView() {
   };
 
   /** One touch: the passkey signs in, and its secret opens the key */
-  const handlePasskey = async () => {
+  const handlePasskey = async (any = false) => {
     setSignInNote('');
     await freshSignIn();
     let signedIn = false;
     try {
-      const result = await loginWithPasskey();
+      const result = await loginWithPasskey({ any });
       signedIn = true;
       try {
         await unlockWithPasskey(result.prf, result.wrap);
@@ -189,9 +190,7 @@ export function LoginView() {
       if (signedIn) await abandon(); else clearKey();
       if (err instanceof PasskeyCancelled) return;
       if (err instanceof PasskeyCannotUnlock) throw err;
-      throw new Error(signedIn
-        ? 'Your journal couldn’t be opened with that passkey. Sign in with your password.'
-        : err instanceof Error && /didn’t work|unavailable/.test(err.message) ? err.message : 'That passkey didn’t work. Try again, or sign in with your password.');
+      throw new Error(passkeySignInProblem(err, signedIn));
     }
   };
 
@@ -304,6 +303,7 @@ export function LoginView() {
         onSubmit={async (email, password) => { setSignInNote(''); await handleLogin(email, password); }}
         onForgotPassword={() => navigate('/recover')}
         onPasskey={canPasskey ? handlePasskey : undefined}
+        passkeyChoice={canPasskey && knownPasskeys().length > 0}
       />
     </AuthTemplate>
   );
