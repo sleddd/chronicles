@@ -88,10 +88,10 @@ export const UNSPLASH_LINK = `https://unsplash.com/${UTM}`;
    sealed `wallpaper` setting is the record; this is only a head start) */
 const KEY = 'chronicles.wallpaper-v1';
 
-/** The background everyone starts with (Justin Fisher, qrga71KYbgM). Madison
- *  Kuhn's river valley, the default before, stays in the list and is still the
- *  landing page's hero photo (HERO_PHOTO in LandingTemplate) */
-export const DEFAULT_WALLPAPER = 'justin-fisher-qrga71KYbgM';
+/** The background everyone starts with: Madison Kuhn's river valley (aV7_rCZpvGY),
+ *  also the landing page's hero photo (HERO_PHOTO in LandingTemplate). Justin
+ *  Fisher's qrga71KYbgM, the default for a while, stays in the list */
+export const DEFAULT_WALLPAPER = 'madison-kuhn-aV7_rCZpvGY';
 
 /** What's saved when someone picks None — kept apart from "never chosen",
  *  which means the default */

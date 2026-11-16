@@ -449,9 +449,12 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     /* Open: the form fades in under the question */
     &[data-quick-open] { animation: ${quickFade} 320ms ease-out; }
     @media (prefers-reduced-motion: reduce) { &[data-quick-open] { animation: none; } }
-    /* The dashboard cards' --bg-panel, very slightly see-through (a touch of the photo
-       or page shows); the formatting bar paints the same */
-    background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
+    /* Frosted glass: the panel colour at 70% with the photo blurred behind it, so it
+       reads as glass on the photo rather than a grey slab over it (the other cards sit
+       off the photo and stay solid); the formatting bar stays clear on it */
+    background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
     && ${EditorArea} { --editor-surface: transparent; }
     /* No outline: the same soft shadow as the other dashboard cards
        */
@@ -501,8 +504,10 @@ const QuickExtraBox = styled.div`
   position: relative;
   z-index: 6;
   border-radius: 14px;
-  /* Like the Quick entry card: the panel colour very slightly see-through, no outline, its shadow */
-  background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
+  /* Frosted like the Quick entry card: the panel colour at 70%, the photo blurred behind */
+  background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  backdrop-filter: blur(16px) saturate(1.1);
   box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
   /* Its joined switches (Bill | Subscription, Active / Paused / Cancelled): clear on the
      glass, no frosted fill of their own */
