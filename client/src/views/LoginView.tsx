@@ -10,6 +10,7 @@ import { Button } from '../components/atoms/Button.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { TrustBrowser } from '../components/molecules/TrustBrowser.js';
 import { PasskeyCancelled, PasskeyCannotUnlock, passkeysAvailable } from '../services/passkeys.js';
+import { passkeySignInProblem } from '../utils/passkeyProblem.js';
 
 const OtpWrap = styled.div`
   display: flex;
@@ -189,9 +190,7 @@ export function LoginView() {
       if (signedIn) await abandon(); else clearKey();
       if (err instanceof PasskeyCancelled) return;
       if (err instanceof PasskeyCannotUnlock) throw err;
-      throw new Error(signedIn
-        ? 'Your journal couldn’t be opened with that passkey. Sign in with your password.'
-        : err instanceof Error && /didn’t work|unavailable/.test(err.message) ? err.message : 'That passkey didn’t work. Try again, or sign in with your password.');
+      throw new Error(passkeySignInProblem(err, signedIn));
     }
   };
 

@@ -29,9 +29,18 @@ interface PrfResults { enabled?: boolean; results?: { first?: BufferSource } }
 const prfOf = (cred: PublicKeyCredential): PrfResults =>
   ((cred.getClientExtensionResults() as { prf?: PrfResults }).prf) ?? {};
 const prfBytes = (r: PrfResults): Uint8Array | null => {
-  const first = r.results?.first;
-  if (!first) return null;
-  const u8 = first instanceof ArrayBuffer ? new Uint8Array(first) : new Uint8Array(first.buffer, first.byteOffset, first.byteLength);
+  const first = r.results?.first as unknown;
+  if (!first || typeof first !== 'object') return null;
+  // Not `instanceof ArrayBuffer`: a password manager's extension can hand back
+  // a buffer made in another frame, which fails that test and read as "no secret"
+  let u8: Uint8Array;
+  try {
+    u8 = ArrayBuffer.isView(first)
+      ? new Uint8Array(first.buffer, first.byteOffset, first.byteLength)
+      : new Uint8Array(first as ArrayBuffer);
+  } catch {
+    return null;
+  }
   return u8.byteLength === 32 ? new Uint8Array(u8) : null;
 };
 
