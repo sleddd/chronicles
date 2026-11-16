@@ -71,7 +71,7 @@ export function useInitializeData() {
         const { map: settingsMap, sealed } = await openStartupSettings(settingsData, decryptBytes, encryptBytes);
         step('settings opened');
         if (cancelled) return;
-        // No saved accent → the default, Taupe (never the previous account's colour)
+        // No saved accent → the default, Teal (never the previous account's colour)
         const accent = safeAccent(settingsMap.accentColor);
         setAccentColor(accent);
         document.documentElement.style.setProperty('--color-accent', accent);
