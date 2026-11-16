@@ -93,6 +93,8 @@ export interface TaskFieldValues {
   scheduledDate?: string;
   /** The part of that day: 'morning' | 'noon' | 'night'; unset = any time */
   scheduledPart?: string;
+  /** The last part of the day it covers, when stretched over more than one ('night' from 'morning' = all day) */
+  scheduledPartEnd?: string;
   deadline: string;
   priority: TaskPriority;
   /** "Regular task", "Small victory" or one of the person's own; '' = none */

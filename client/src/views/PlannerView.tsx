@@ -24,7 +24,7 @@ import { entryTitleText } from '../utils/entryTitle.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, categoriesInUse, sameCategory, type GoalCategoryConfig } from '../utils/goalCategories.js';
 import {
-  addDays, dayLabel, hasMigrated, laneLabel, longDayLabel, monthDay, movedOrder, parsePlannerOrder, DEFAULT_PART, partOfTime, plannerFacts,
+  addDays, dayLabel, hasMigrated, movedEnd, laneLabel, longDayLabel, monthDay, movedOrder, parsePlannerOrder, DEFAULT_PART, partOfTime, plannerFacts,
   tasksByDay, unscheduled, weekLabel, weekOf, type DayPart, type PlannerOrder, type PlannerTask,
 } from '../utils/planner.js';
 
@@ -97,7 +97,7 @@ export function PlannerView() {
   const milestoneTitle = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
 
   const card = (t: Planned): PlannerCard => ({
-    id: t.id, title: t.title, done: t.done, day: t.scheduled, part: t.part ?? '',
+    id: t.id, title: t.title, done: t.done, day: t.scheduled, part: t.part ?? '', partEnd: t.partEnd ?? '',
     kicker: (t.milestoneId && milestoneTitle.get(t.milestoneId)) || (t.goalId && goalTitle.get(t.goalId)) || undefined,
     due: t.deadline ? `Due ${monthDay(t.deadline)}` : undefined,
     note: hasMigrated(t, today) ? `From ${monthDay(t.scheduled)}` : !t.done && t.scheduled && t.scheduled < today ? dayLabel(t.scheduled) : undefined,
@@ -175,8 +175,13 @@ export function PlannerView() {
     const t = planned.find(x => x.id === id);
     if (!t) return;
     const nextPart = !day ? '' : part || t.part || DEFAULT_PART;
+    // A stretched task keeps its length where it lands (cut off at Night); '' = just its own part
+    const end = nextPart ? movedEnd(t.part || DEFAULT_PART, t.partEnd, nextPart) : '';
+    const nextEnd = end === nextPart ? '' : end;
     if (t.scheduled !== day || (t.part ?? '') !== nextPart) {
-      void saveFields(t.entry, { ...t.fields, scheduledDate: day, scheduledPart: nextPart }).then(ok => {
+      // Dropped somewhere, a task that was on its deadline's day gets a planned day of its own;
+      // taken off its day, it loses its time of day too (or its deadline would put it straight back)
+      void saveFields(t.entry, { ...t.fields, scheduledDate: day, scheduledPart: nextPart, scheduledPartEnd: nextEnd }).then(ok => {
         if (!ok) showFlash('Couldn’t save that task’s day, so it’s back where it was. Try again.');
       });
     }
@@ -184,6 +189,16 @@ export function PlannerView() {
     // The day's cards as they show now (whether or not that day is on screen)
     const dayIds = day ? (tasksByDay(planned, [day], today, order).get(day) ?? []).map(x => x.id) : [];
     void saveOrder(movedOrder(order, id, day, dayIds, overId, today)).catch(err => console.error('Failed to save the day’s order:', err));
+  };
+
+  // The grip at a card's foot: the last part of the day it covers
+  const span = (id: number, end: DayPart) => {
+    const t = planned.find(x => x.id === id);
+    if (!t || !t.scheduled) return;
+    const start = t.part || DEFAULT_PART;
+    void saveFields(t.entry, { ...t.fields, scheduledPart: start, scheduledPartEnd: end === start ? '' : end }).then(ok => {
+      if (!ok) showFlash('Couldn’t save that, so the task is back as it was. Try again.');
+    });
   };
 
   const add = (day: string, text: string) => {
@@ -211,7 +226,7 @@ export function PlannerView() {
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
       <PlannerBoard
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)}
-        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onAdd={add}
+        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onSpan={span} onAdd={add}
         folded={folded} onFold={setFolded}
         onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}

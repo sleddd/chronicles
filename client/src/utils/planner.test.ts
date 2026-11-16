@@ -12,7 +12,7 @@ const task = (id: number, over: Partial<PlannerTask> = {}): PlannerTask => ({
 describe('planner', () => {
   it('reads a task’s facts from its fields', () => {
     expect(plannerFacts(3, { scheduledDate: '2026-11-13', isCompleted: true, isAutoMigrating: 1, deadline: 'x', priority: 'high' }, 9))
-      .toEqual({ id: 3, created: 9, scheduled: '2026-11-13', part: 'morning', done: true, backlog: false, autoMigrate: true, deadline: '', priority: 'high' });
+      .toEqual({ id: 3, created: 9, scheduled: '2026-11-13', part: 'morning', partEnd: 'morning', fromDeadline: false, done: true, backlog: false, autoMigrate: true, deadline: '', priority: 'high' });
     expect(plannerFacts(1, undefined, 0).scheduled).toBe('');
     expect(plannerFacts(1, { scheduledDate: '2026-11-13', scheduledPart: 'noon' }, 0).part).toBe('noon');
     // No day, no part of it; with a day and no (or an unknown) part it sits under Morning

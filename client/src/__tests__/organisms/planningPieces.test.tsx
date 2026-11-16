@@ -200,3 +200,50 @@ describe('habit and category pieces', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ parentGoalId: 5 }));
   });
 });
+
+describe('PlannerBoard — stretching a task over more of the day', () => {
+  const lanes = (partEnd: PlannerCard['partEnd'] = '') => [{
+    day: '2026-11-12', label: 'Thu 12', today: true, events: [],
+    cards: [{ id: 3, title: 'Deep work', done: false, day: '2026-11-12', part: 'morning' as const, partEnd }],
+  }];
+  const props = () => ({ onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onSpan: vi.fn(), overdue: [], open: [] });
+
+  it('shows a stretched task in every part it covers, the later ones as "continued"', () => {
+    renderWithTheme(<PlannerBoard {...props()} lanes={lanes('night')} />);
+    const cell = (name: string) => screen.getByRole('cell', { name: `Thu 12, ${name}` });
+    expect(cell('Morning').textContent).toContain('Deep work');
+    expect(cell('Morning').textContent).toContain('All day');
+    expect(screen.getAllByRole('button', { name: 'Deep work, continued' })).toHaveLength(2);
+    expect(cell('Noon').textContent).toContain('continued');
+    expect(cell('Night').textContent).toContain('continued');
+    // one grip, at the foot of its last part
+    expect(screen.getAllByRole('button', { name: /^Stretch Deep work/ })).toHaveLength(1);
+    expect(cell('Night').querySelector('button[title="Drag to cover more of the day"]')).not.toBeNull();
+  });
+
+  it('the grip\'s arrow keys lengthen and shorten it, never before its own part', () => {
+    const p = props();
+    const { unmount } = renderWithTheme(<PlannerBoard {...p} lanes={lanes()} />);
+    const grip = () => screen.getByRole('button', { name: /^Stretch Deep work/ });
+    fireEvent.keyDown(grip(), { key: 'ArrowDown' });
+    expect(p.onSpan).toHaveBeenLastCalledWith(3, 'noon');
+    fireEvent.keyDown(grip(), { key: 'ArrowUp' });
+    expect(p.onSpan).toHaveBeenCalledTimes(1); // already one part
+    expect(p.onOpen).not.toHaveBeenCalled();
+    unmount();
+    const q = props();
+    renderWithTheme(<PlannerBoard {...q} lanes={lanes('night')} />);
+    fireEvent.keyDown(grip(), { key: 'ArrowUp' });
+    expect(q.onSpan).toHaveBeenLastCalledWith(3, 'noon');
+    fireEvent.keyDown(grip(), { key: 'ArrowDown' });
+    expect(q.onSpan).toHaveBeenCalledTimes(1); // Night is the end of the day
+  });
+
+  it('a continued strip opens the task, and cards off a day have no grip', () => {
+    const p = props();
+    renderWithTheme(<PlannerBoard {...p} lanes={lanes('noon')} open={[{ id: 8, title: 'Someday', done: false, day: '' }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Deep work, continued' }));
+    expect(p.onOpen).toHaveBeenCalledWith(3);
+    expect(screen.queryByRole('button', { name: /^Stretch Someday/ })).toBeNull();
+  });
+});

@@ -1,6 +1,9 @@
 /* The week / day planner: tasks put on a day (`scheduledDate`, YYYY-MM-DD —
    by day and, if you like, a part of it — `scheduledPart`: morning (the default), noon
-   or night — never hours). An unfinished task set to auto-migrate ("Move to
+   or night — never hours). A task can cover more than one part: through
+   `scheduledPartEnd` (morning to night = the whole day). A task with no
+   planned day but a deadline AND a time of day chosen shows on its deadline's
+   day, in that part (`plannedDay`). An unfinished task set to auto-migrate ("Move to
    tomorrow if unfinished") whose day has passed shows under today — worked out
    when read, nothing is rewritten. Without it the task stays on its day and
    is listed as overdue. The order within a day is the sealed setting
@@ -29,6 +32,50 @@ export const DEFAULT_PART: DayPart = 'morning';
 export const partOf = (cf: Record<string, unknown> | undefined): DayPart =>
   (DAY_PARTS.some(p => p.value === cf?.scheduledPart) ? cf!.scheduledPart as DayPart : DEFAULT_PART);
 
+/** The time of day the task itself names ('' when none was chosen) */
+export const chosenPart = (cf: Record<string, unknown> | undefined): DayPart | '' =>
+  (DAY_PARTS.some(p => p.value === cf?.scheduledPart) ? cf!.scheduledPart as DayPart : '');
+
+const partIndex = (p: DayPart): number => DAY_PARTS.findIndex(x => x.value === p);
+
+/** The last part of the day a task covers: its `scheduledPartEnd` when that is its part or a later one, else its part */
+export function partEndOf(cf: Record<string, unknown> | undefined): DayPart {
+  const start = partOf(cf);
+  const end = DAY_PARTS.find(p => p.value === cf?.scheduledPartEnd)?.value;
+  return end && partIndex(end) >= partIndex(start) ? end : start;
+}
+
+/** The parts from `start` through `end` (just `start` when `end` is missing or earlier) */
+export function partsCovered(start: DayPart, end?: DayPart | ''): DayPart[] {
+  const a = partIndex(start);
+  const b = end ? Math.max(a, partIndex(end)) : a;
+  return DAY_PARTS.slice(a, b + 1).map(p => p.value);
+}
+
+/** Where a task that covered `start`–`end` ends once moved to begin at `to`: the same length, cut off at Night */
+export function movedEnd(start: DayPart, end: DayPart | '' | undefined, to: DayPart): DayPart {
+  const length = partsCovered(start, end).length;
+  return DAY_PARTS[Math.min(DAY_PARTS.length - 1, partIndex(to) + length - 1)].value;
+}
+
+/** "Morning – Noon", "All day"; '' for a single part */
+export function spanLabel(start: DayPart, end?: DayPart | ''): string {
+  const covered = partsCovered(start, end);
+  if (covered.length < 2) return '';
+  if (covered.length === DAY_PARTS.length) return 'All day';
+  const name = (p: DayPart) => DAY_PARTS[partIndex(p)].label;
+  return `${name(covered[0])} – ${name(covered[covered.length - 1])}`;
+}
+
+/**
+ * The day a task is planned for: the one it was given ("Planned for"), else
+ * its deadline once a time of day was chosen for it — a deadline with
+ * "Morning" is something to do that morning. A bare deadline plans nothing.
+ */
+export function plannedDay(cf: Record<string, unknown> | undefined): string {
+  return dayOf(cf?.scheduledDate) || (chosenPart(cf) ? dayOf(cf?.deadline) : '');
+}
+
 /** The part of the day a clock time falls in: before noon, noon to 5 PM, after ('' for no time) */
 export function partOfTime(hhmm: unknown): DayPart | '' {
   const h = typeof hhmm === 'string' && /^\d{1,2}:\d{2}/.test(hhmm) ? Number(hhmm.split(':')[0]) : NaN;
@@ -42,6 +89,10 @@ export interface PlannerTask {
   scheduled: string;
   /** Where in that day ('' only when it has no day) */
   part?: DayPart | '';
+  /** The last part of the day it covers (its part, unless it was stretched) */
+  partEnd?: DayPart | '';
+  /** On its day through its deadline and time of day, not a "Planned for" day */
+  fromDeadline?: boolean;
   done: boolean;
   /** An idea kept for later (the "Idea / Backlog" status): never listed as Unscheduled */
   backlog?: boolean;
@@ -54,10 +105,13 @@ export interface PlannerTask {
 
 /** A task's planner facts from its custom fields */
 export function plannerFacts(id: number, cf: Record<string, unknown> | undefined, created: number): PlannerTask {
+  const scheduled = plannedDay(cf);
   return {
     id, created,
-    scheduled: dayOf(cf?.scheduledDate),
-    part: dayOf(cf?.scheduledDate) ? partOf(cf) : '',
+    scheduled,
+    part: scheduled ? partOf(cf) : '',
+    partEnd: scheduled ? partEndOf(cf) : '',
+    fromDeadline: !!scheduled && !dayOf(cf?.scheduledDate),
     done: !!cf?.isCompleted,
     backlog: !!cf && taskStatusOf(cf) === 'backlog',
     autoMigrate: !!cf?.isAutoMigrating,

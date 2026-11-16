@@ -9,14 +9,17 @@ import { CSS } from '@dnd-kit/utilities';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { usePagePan } from '../../hooks/usePagePan.js';
 import { Kicker, CardTitle, Chip } from './KanbanBoard.js';
-import { DEFAULT_PART, PLANNER_ROWS, type DayPart } from '../../utils/planner.js';
+import { DEFAULT_PART, PLANNER_ROWS, partsCovered, spanLabel, type DayPart } from '../../utils/planner.js';
 
 /* The week / day planner: an Unscheduled list beside a ruled grid — a column
    per day, a row per part of the day (Morning, Noon, Night) — like
    the roadmap: hairlines, no panels. Tasks are shaded cards. Drag one onto a
    day's Morning / Noon / Night, between days, up and down within
    a cell, or back to Unscheduled. Every card also has a small calendar button
-   that sets its day without dragging (phones, keyboards). No hours. Props only. */
+   that sets its day without dragging (phones, keyboards). A card on a day can
+   be stretched over more of it — drag the grip at its foot down through Noon
+   and Night (or use the arrow keys on it): it then shows in every part it
+   covers, the later ones as a short "continued" strip. No hours. Props only. */
 
 export interface PlannerCard {
   id: number;
@@ -32,6 +35,8 @@ export interface PlannerCard {
   day: string;
   /** The part of that day (none given = Morning) */
   part?: DayPart | '';
+  /** The last part it covers, when stretched past its own (none = just its part) */
+  partEnd?: DayPart | '';
 }
 
 /** An event or meeting on the day: shown at the top of its part of the day, not draggable */
@@ -388,13 +393,14 @@ const Empty = styled.div`
 `;
 
 /* A task: a shaded card on the ruled grid */
-const TaskCard = styled.article<{ $dragging?: boolean }>`
+const TaskCard = styled.article<{ $dragging?: boolean; $stretched?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px 10px 8px;
   background: var(--bg-lane);
   border: 1px solid var(--border-subtle);
+  ${({ $stretched }) => ($stretched ? 'border-left: 3px solid var(--border-strong);' : '')}
   border-radius: var(--r-lg, 6px);
   cursor: pointer;
   opacity: ${({ $dragging }) => ($dragging ? 0.4 : 1)};
@@ -403,6 +409,55 @@ const TaskCard = styled.article<{ $dragging?: boolean }>`
   -webkit-touch-callout: none;
   user-select: none;
   transition: border-color 120ms;
+  &:hover { border-color: var(--border-strong); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* The grip at the foot of a card on a day: drag it down (or up) to stretch the
+   task over more of the day. Drawn, not an icon; wide enough for a thumb */
+const Grip = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% + 20px);
+  height: 14px;
+  margin: -4px -10px -8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: ns-resize;
+  touch-action: none;
+  &::before {
+    content: '';
+    width: 28px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--text-faint, var(--border-strong));
+    transition: background 120ms, width 120ms;
+  }
+  &:hover::before, &:focus-visible::before, &[data-active='true']::before { background: var(--color-accent-line, var(--color-accent)); width: 40px; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: 4px; }
+`;
+
+/* A stretched task in a later part of its day: a short strip that reads as
+   the same card going on (the same fill, a firmer left edge on both) */
+const Continued = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-lane);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--r-lg, 6px);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  user-select: none;
+  small { font-size: 12px; color: var(--text-muted); }
   &:hover { border-color: var(--border-strong); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
@@ -504,6 +559,28 @@ function DropZone({ id, children }: { id: string; children: (over: boolean, ref:
   return <>{children(isOver, setNodeRef)}</>;
 }
 
+/** Starts stretching a card (pointer), or moves its end one part (keys) */
+interface Stretching {
+  onGripDown: (card: PlannerCard, day: string, e: React.PointerEvent) => void;
+  onGripKey: (card: PlannerCard, e: React.KeyboardEvent) => void;
+  /** The card being stretched right now */
+  activeId: number | null;
+}
+
+/* The grip. Inside a draggable card, so nothing it does may start a drag or open the card */
+function StretchGrip({ card, day, stretch }: { card: PlannerCard; day: string; stretch: Stretching }) {
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const covers = spanLabel(card.part || DEFAULT_PART, card.partEnd);
+  return (
+    <Grip type="button" data-active={stretch.activeId === card.id}
+      aria-label={`Stretch ${card.title} over more of the day${covers ? ` (now ${covers.toLowerCase()})` : ''}. Arrow down for more, arrow up for less`}
+      title="Drag to cover more of the day"
+      onPointerDown={e => stretch.onGripDown(card, day, e)}
+      onMouseDown={stop} onTouchStart={stop} onClick={stop}
+      onKeyDown={e => { e.stopPropagation(); stretch.onGripKey(card, e); }} />
+  );
+}
+
 interface CardActions {
   onOpen: (id: number) => void;
   /** Plan a task for a day ('' = take it off). `part` is where in the day it was dropped; undefined = leave that as it is */
@@ -524,6 +601,7 @@ function CardBody({ card, onSchedule }: { card: PlannerCard } & Partial<CardActi
     <Foot>
       {card.due && <Chip><MaterialIcon $size={15} aria-hidden="true">flag</MaterialIcon>{card.due}</Chip>}
       {card.note && <Note>{card.note}</Note>}
+      {card.day && spanLabel(card.part || DEFAULT_PART, card.partEnd) && <Note>{spanLabel(card.part || DEFAULT_PART, card.partEnd)}</Note>}
       <DayBtn title={card.day ? 'Change the day' : 'Plan for a day'} {...quiet}>
         <MaterialIcon $size={18} aria-hidden="true">event</MaterialIcon>
         <input type="date" value={card.day} aria-label={`Day for ${card.title}`}
@@ -534,15 +612,30 @@ function CardBody({ card, onSchedule }: { card: PlannerCard } & Partial<CardActi
   </>);
 }
 
-function SortableCard({ card, ...actions }: { card: PlannerCard } & CardActions) {
+/* `grip`: the card is on a day and ends in this part, so its foot carries the stretch grip */
+function SortableCard({ card, grip, ...actions }: { card: PlannerCard; grip?: { day: string; stretch: Stretching } } & CardActions) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
+  const stretched = !!card.day && partsCovered(card.part || DEFAULT_PART, card.partEnd).length > 1;
   return (
-    <TaskCard ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging}
+    <TaskCard ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging} $stretched={stretched}
       {...attributes} {...listeners}
       onClick={() => actions.onOpen(card.id)}
       onKeyDown={e => { if (e.key === 'Enter') actions.onOpen(card.id); }}>
       <CardBody card={card} {...actions} />
+      {grip && <StretchGrip card={card} day={grip.day} stretch={grip.stretch} />}
     </TaskCard>
+  );
+}
+
+/* A stretched task where it goes on: opens the task; its last part carries the grip */
+function ContinuedCard({ card, grip, onOpen }: { card: PlannerCard; grip?: { day: string; stretch: Stretching }; onOpen: (id: number) => void }) {
+  return (
+    <Continued role="button" tabIndex={0} aria-label={`${card.title}, continued`}
+      onClick={() => onOpen(card.id)}
+      onKeyDown={e => { if (e.key === 'Enter') onOpen(card.id); }}>
+      <span>{card.title}<br /><small>continued</small></span>
+      {grip && <StretchGrip card={card} day={grip.day} stretch={grip.stretch} />}
+    </Continued>
   );
 }
 
@@ -571,6 +664,8 @@ const collisions: CollisionDetection = args => {
 /* ── Board ── */
 
 interface PlannerBoardProps extends CardActions {
+  /** A card was stretched (or shortened) to end in `end` — its own part = one part again. Omitted = no grip */
+  onSpan?: (id: number, end: DayPart) => void;
   lanes: PlannerLane[];
   /** Unfinished tasks whose day has passed */
   overdue: PlannerCard[];
@@ -592,7 +687,7 @@ interface PlannerBoardProps extends CardActions {
   onNext?: () => void;
 }
 
-export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
+export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, onSchedule, onSpan, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
   const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
   const [foldedParts, setFoldedParts] = useState<DayPart[]>(loadFoldedParts);
   const toggleFoldedPart = (part: DayPart) => setFoldedParts(prev => {
@@ -609,6 +704,11 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  // Stretching a card: while the grip is held, the card shows the length it would get
+  const [stretching, setStretching] = useState<{ id: number; end: DayPart } | null>(null);
+  const lanes = stretching
+    ? givenLanes.map(l => ({ ...l, cards: l.cards.map(c => (c.id === stretching.id ? { ...c, partEnd: stretching.end } : c)) }))
+    : givenLanes;
   const backlog = [...overdue, ...open];
   const all = [...backlog, ...lanes.flatMap(l => l.cards)];
   const [dragging, setDragging] = useState<number | null>(null);
@@ -715,6 +815,56 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
     onSchedule(id, to.day, onCard ? Number(over.id) : null, to.part);
   };
 
+  const partAt = (i: number): DayPart => PLANNER_ROWS[Math.max(0, Math.min(PLANNER_ROWS.length - 1, i))].value;
+  const rowOf = (part: DayPart | '' | undefined) => Math.max(0, PLANNER_ROWS.findIndex(r => r.value === (part || DEFAULT_PART)));
+  const stretch: Stretching = {
+    activeId: stretching?.id ?? null,
+    // Hold the grip and move down or up: the card ends in whichever part of its
+    // day the pointer is level with (never before its own part)
+    onGripDown: (card, day, e) => {
+      if (e.button > 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = rowOf(card.part);
+      const was = partAt(Math.max(first, rowOf(card.partEnd || card.part)));
+      let end = was;
+      setStretching({ id: card.id, end });
+      const endAt = (y: number): DayPart => {
+        const cells = [...(gridRef.current?.querySelectorAll<HTMLElement>('[data-part]') ?? [])].filter(el => el.dataset.day === day);
+        let row = first;
+        for (const el of cells) {
+          const r = el.getBoundingClientRect();
+          const i = rowOf(el.dataset.part as DayPart);
+          if (y >= r.top && i > row) row = i;
+        }
+        return partAt(Math.max(first, row));
+      };
+      const move = (ev: PointerEvent) => {
+        const next = endAt(ev.clientY);
+        if (next !== end) { end = next; setStretching({ id: card.id, end }); }
+      };
+      const done = (ev: PointerEvent) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', done);
+        window.removeEventListener('pointercancel', done);
+        // The click this release fires must not open the card
+        dragUntil.current = Date.now() + 300;
+        setStretching(null);
+        if (ev.type === 'pointerup' && end !== was) onSpan?.(card.id, end);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', done);
+      window.addEventListener('pointercancel', done);
+    },
+    onGripKey: (card, e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      const first = rowOf(card.part);
+      const now = Math.max(first, rowOf(card.partEnd || card.part));
+      const next = Math.max(first, Math.min(PLANNER_ROWS.length - 1, now + (e.key === 'ArrowDown' ? 1 : -1)));
+      if (next !== now) onSpan?.(card.id, partAt(next));
+    },
+  };
   const actions = { onOpen: openCard, onSchedule };
   const single = lanes.length === 1;
 
@@ -795,13 +945,19 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
                     )}
                   {lanes.map(lane => {
                     const cards = lane.cards.filter(c => (c.part || DEFAULT_PART) === row.value);
+                    // Tasks stretched into this part from an earlier one
+                    const going = lane.cards.filter(c => (c.part || DEFAULT_PART) !== row.value && partsCovered(c.part || DEFAULT_PART, c.partEnd).includes(row.value));
+                    // The grip sits at the foot of a task's last part
+                    const endsHere = (c: PlannerCard) => (c.partEnd || c.part || DEFAULT_PART) === row.value || partsCovered(c.part || DEFAULT_PART, c.partEnd).at(-1) === row.value;
+                    const grip = onSpan ? { day: lane.day, stretch } : undefined;
                     const events = lane.events.filter(ev => (ev.part || DEFAULT_PART) === row.value);
                     if (foldedParts.includes(row.value)) {
-                      const summary = [cards.length && plural(cards.length, 'task'), events.length && plural(events.length, 'event')].filter(Boolean).join(' · ');
+                      const tasksHere = cards.length + going.length;
+                      const summary = [tasksHere && plural(tasksHere, 'task'), events.length && plural(events.length, 'event')].filter(Boolean).join(' · ');
                       return (
                         <DropZone key={lane.day} id={cellId(lane.day, row.value)}>
                           {(over, ref) => (
-                            <Cell ref={ref} $first={r === 0} $over={over} $folded role="cell" aria-label={`${lane.label}, ${row.label}, folded`}>
+                            <Cell ref={ref} $first={r === 0} $over={over} $folded role="cell" aria-label={`${lane.label}, ${row.label}, folded`} data-day={lane.day} data-part={row.value}>
                               {summary && <FoldedNote>{summary}</FoldedNote>}
                             </Cell>
                           )}
@@ -811,16 +967,17 @@ export function PlannerBoard({ lanes, overdue, open, tools, onOpen, onSchedule, 
                     return (
                       <DropZone key={lane.day} id={cellId(lane.day, row.value)}>
                         {(over, ref) => (
-                          <Cell ref={ref} $first={r === 0} $over={over} role="cell" aria-label={`${lane.label}, ${row.label}`}>
+                          <Cell ref={ref} $first={r === 0} $over={over} role="cell" aria-label={`${lane.label}, ${row.label}`} data-day={lane.day} data-part={row.value}>
+                            {going.map(c => <ContinuedCard key={c.id} card={c} grip={grip && endsHere(c) ? grip : undefined} onOpen={openCard} />)}
                             {events.map(ev => (
                               <EventRow key={ev.key} type="button" onClick={() => onOpenEvent(ev.id)}>
                                 {ev.title}<small>{ev.when}</small>
                               </EventRow>
                             ))}
                             <SortableContext items={cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                              {cards.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
+                              {cards.map(c => <SortableCard key={c.id} card={c} grip={grip && endsHere(c) ? grip : undefined} {...actions} />)}
                             </SortableContext>
-                            {cards.length === 0 && events.length === 0 && <Blank aria-hidden="true">{row.label}</Blank>}
+                            {cards.length === 0 && going.length === 0 && events.length === 0 && <Blank aria-hidden="true">{row.label}</Blank>}
                           </Cell>
                         )}
                       </DropZone>
