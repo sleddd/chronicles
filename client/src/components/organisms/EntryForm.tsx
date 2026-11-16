@@ -569,6 +569,8 @@ const JournalPrompt = styled(PromptLine)`
 
 /* The Quick entry's: on the photo — white text, its picker's menu dark */
 const QuickPrompt = styled(PromptLine)`
+  /* A touch more room between the question and the card under it */
+  margin-bottom: 2px;
   /* Phones: a little smaller */
   @media (max-width: 768px) { font-size: 18px; }
   @media (max-width: 400px) { font-size: 17px; }
