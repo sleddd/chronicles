@@ -14,7 +14,7 @@ import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
    bookmark that was tapped: "Put X on your public shelf?", what that means,
    a title, Turn on / Not now. Nothing is published until Turn on. Once the
    shelf exists, bookmarks just toggle; the link sits by the page title and
-   the title, Reset link and Turn off live in Settings → Data. */
+   the title, Reset link and Turn off live in Settings → Features (under Media). */
 
 export const PUBLIC_SHELF_PRIVACY_LINE = 'Anyone with the link can see the covers, titles, makers, years, ratings and shelves of bookmarked items. Notes and progress stay private. The public shelf is stored readable on the server, like a shared entry.';
 

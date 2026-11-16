@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { publicShelf as publicShelfApi, ApiError, retryDelayMs, type OwnedPublicShelf } from '../services/api.js';
@@ -37,6 +37,12 @@ export function usePublicShelfSync(active: boolean): void {
   const attemptRef = useRef(0);
   const failedBodyRef = useRef<string | null>(null);
   const flashedRef = useRef(false);
+  // Bumped to run the publish effect again with nothing else changed: after a
+  // failed try (its retry) and when the browser comes back online. The effect
+  // used to list the store's status among its deps without this hook ever
+  // re-rendering on it, so a publish that failed once was never tried again
+  // until the shelf changed — the public page stayed as it was
+  const [again, setAgain] = useState(0);
 
   // Ask once per unlock whether this account has a shelf
   useEffect(() => {
@@ -67,9 +73,9 @@ export function usePublicShelfSync(active: boolean): void {
     const store = usePublicShelfStore.getState();
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       store.setStatus('offline');
-      const again = () => usePublicShelfStore.setState({ status: 'idle' }); // re-runs this effect
-      window.addEventListener('online', again, { once: true });
-      return () => window.removeEventListener('online', again);
+      const online = () => { usePublicShelfStore.setState({ status: 'idle' }); setAgain(n => n + 1); };
+      window.addEventListener('online', online, { once: true });
+      return () => window.removeEventListener('online', online);
     }
     const delay = attemptRef.current === 0 ? DEBOUNCE_MS : retryDelayMs(null, attemptRef.current);
     const timer = setTimeout(async () => {
@@ -98,13 +104,13 @@ export function usePublicShelfSync(active: boolean): void {
           flashedRef.current = true;
           showFlash('Couldn’t update your public shelf — will try again');
         }
-        // Nudge the effect to schedule the retry (the body is unchanged)
-        usePublicShelfStore.setState({ status: 'error' });
+        // Schedule the retry (the body is unchanged, so nothing else re-runs the effect)
+        setAgain(n => n + 1);
       }
     }, delay);
     return () => clearTimeout(timer); // a lock or unmount drops a pending publish
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, loaded, shelf?.token, enabledHere, isInitialized, body, lastSentBody, usePublicShelfStore.getState().status]);
+  }, [active, loaded, shelf?.token, enabledHere, isInitialized, body, lastSentBody, again]);
 }
 
 /* ── Owner actions (used by the Media Journal's panel and Settings) ── */

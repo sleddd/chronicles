@@ -11,7 +11,7 @@ import { copyText } from '../../utils/clipboard.js';
 import { PUBLIC_SHELF_PRIVACY_LINE } from './PublicShelfControl.js';
 import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
 
-/* Settings → Data: the public shelf's state and count, its title (saved on
+/* Settings → Features (under Media): the public shelf's state and count, its title (saved on
    blur / Enter), Copy link, Reset link and Turn off (both ask twice). Always
    shown, so a shelf can be switched off even with the Media feature off. */
 

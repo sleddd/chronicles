@@ -51,6 +51,70 @@ Follow-up work (same branch), each verified locally:
 | 5. Every open downloads the journal | Encrypted IndexedDB copy in the browser + `GET /api/entries/changes` (trigger-tracked) | Real Chromium, 3,000-entry user: first open 7.44 MB / 1.9 s, later opens ~0 MB / 0.2–0.3 s; a stress check (~5,000 concurrent writes) left the synced copy identical to a fresh download |
 | 7. One instance only | Sign-in state and security rate limits in Postgres (`services/sharedState.ts`); Remember me grants sealed with `SECRETS_ENCRYPTION_KEY` | Two instances behind a round-robin proxy: lockouts, per-IP limits, 2FA (split across instances, replay refused) and Remember me all pass; the same check fails 5/8 with the old in-memory state |
 
+## Re-run — November 2026
+
+The same harness and data shape (1,000 users, about 240,000 entries, 4 cores, the
+load generator on the same machine, pool of 5), on the code as it stands after the
+November security work. `loadtest/scenarios-extra.mjs` adds one-path-at-a-time
+scenarios, which is how the finding below was found.
+
+**What still holds from October:** sign-ins don't stall other requests (health probe
+p99 6–7 ms during 16 simultaneous sign-ins; 11–13 sign-ins/s), app opens with a cold
+browser cache are bound by bandwidth as before (about 55 a second at 70 MB/s; heavy
+users about 12 a second), no request errored in any run, and the server's memory
+levels off (159 MB idle, 472 MB after several minutes at saturation, unchanged
+across the last two minutes).
+
+**New finding: writes had become the bottleneck.** Mixed read/save traffic had
+dropped from about 1,150 req/s in October to about 800. Reads alone ran at 1,470/s;
+entry saves at only 300–410/s. A capped write ran as five separate trips from Node
+to Postgres (BEGIN, the account lock, the storage sum, the write, COMMIT), each
+through the database client, holding one of the five pooled connections throughout.
+The storage caps and the lock were added after October; each was right, and
+together they made a save cost five times a read.
+
+**Fix:** the lock and one statement that checks the cap and writes now go as a
+single trip (`lockedStatement` in `tenantQueries.ts`). The guarantee is unchanged —
+the statement starts after the lock is held — and was checked live under parallel
+writes: entries stop exactly at the storage cap, settings at 500 keys and 8 MB,
+dose records at their row cap, and "not found" / "id taken" / "full" answer as
+before.
+
+| Path (50 concurrent unless noted) | Before | After |
+|---|---|---|
+| Entry saves | 300–410/s, p95 132 ms | **450–680/s, p95 89–102 ms** |
+| New entries (reserve + create) | 600 req/s | **835–855 req/s** |
+| Settings saves (habit ticks, timers, layout) | 453/s, p95 133 ms | **920/s, p95 77 ms** |
+| Dose ticks | 547/s, p95 113 ms | **941/s, p95 72 ms** |
+| Mixed reads and saves, 100 concurrent | 805 req/s, p95 153 ms | **1,060–1,160 req/s, p95 116–132 ms** |
+| Mixed with 2% sign-ins, 100 concurrent | 406 req/s, p95 272 ms | 482 req/s, p95 198 ms |
+
+**Measured and left alone:**
+
+- *App open with a warm browser cache* (`syncboot`: the cursor + changes sync in
+  place of the full download) runs at about 1,660 req/s with 1.6 MB/s, against
+  420 req/s and 74 MB/s for a cold open. The sync work from October does what it
+  was meant to.
+- *A busy public shelf.* One shelf of 200 items with covers, paged flat out, costs
+  everyone else about 10–15% while it lasts. It is already held to two readers per
+  shelf and 240 requests per address. The cost is Postgres expanding the shelf's
+  whole JSON for each page; storing covers apart from the list would remove it,
+  and isn't worth doing until shelves are large and popular.
+- *A flood of anonymous requests* to a rate-limited public route costs one small
+  Postgres write per request (the shared limiter), about 20% of throughput at 750
+  requests a second. That is the price of limits that hold across instances.
+- *Pool size.* Going from 5 to 20 connections lifted saves by about a third before
+  the fix and does nothing for reads. With saves now one trip, 5 remains the right
+  default for the memory reasons in finding 3.
+
+**Still true, by design:** every request starts with one session lookup, so reads
+cost two database trips. A short in-process session cache would lift read
+throughput, at the price of sign-out and revocation taking effect a few seconds
+late on other instances — not taken, since immediate revocation is a security
+property of the app. The per-save storage check still reads the size of every
+entry the account has (about 2 ms at 3,000 entries); a running total would remove
+it and isn't needed at these sizes.
+
 ## Deploying these changes
 
 1. **Set `SECRETS_ENCRYPTION_KEY`** (32 random bytes, base64: `openssl rand -base64 32`) if it isn't set already. Remember me only works across instances with it.
