@@ -26,6 +26,7 @@ DATABASE_URL=postgresql://postgres@127.0.0.1:5432/chronicles NODE_ENV=developmen
 | `node seed-users.mjs <n> <concurrency> <startIndex>` | Signs up `n` users through the API (also measures sign-up throughput). Saves credentials to `users.json` |
 | `psql chronicles -f seed-entries.sql` | Loads random-byte "ciphertext" entries into every user: 1 in 20 users get 3,000, 5 in 20 get 1,000, the rest 150 |
 | `node scenarios.mjs <scenario> <seconds> <c1,c2,…>` | Closed-loop load at each concurrency. Scenarios: `boot` (app open), `heavyboot` (app open, 3,000-entry users), `steady` (reads + saves), `login`, `mixed` (2% sign-ins) |
+| `node scenarios-extra.mjs <scenario> <seconds> <c1,c2,…>` | One path at a time, to see which request types cost the most: `reads`, `saves` (entry updates), `creates`, `settings`, `doses`, `sync` (cursor + changes), `syncboot` (app open with a warm browser cache), `loginfail` (wrong passwords), `shelf` (anonymous visitors paging one public shelf — first `node scenarios-extra.mjs shelf-setup <items> <coverKB>`) |
 | `node starvation.mjs <loginConcurrency> <seconds>` | Runs sign-ins while timing `/api/health`: shows how long every other request waits behind bcrypt |
 | `node smoke.mjs` | One user end to end, to check the harness works |
 

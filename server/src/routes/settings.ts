@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
-import { getAllSettings, upsertSetting, countSettings, settingExists, settingsStorageBytes, deleteSetting, withTenantLock } from '../db/tenantQueries.js';
+import { getAllSettings, upsertSettingCapped, deleteSetting } from '../db/tenantQueries.js';
 import { upsertSettingSchema, settingKeySchema, SEALED_SETTING_KEYS, isBoundSealedValue } from '@chronicles/shared';
 
 const SEALED = new Set(SEALED_SETTING_KEYS);
@@ -40,13 +40,9 @@ router.put('/', async (req, res) => {
       return;
     }
     const schema = req.auth!.tenantSchemaName;
-    // The caps are a read then a write: under the account's lock, so two
-    // requests at once can't both see room
-    const result = await withTenantLock(schema, async (tx) => {
-      if (!(await settingExists(schema, key, tx)) && (await countSettings(schema, tx)) >= MAX_SETTING_KEYS) return 'Too many settings';
-      if (await settingsStorageBytes(schema, key, tx) + Buffer.byteLength(JSON.stringify(value), 'utf8') > MAX_SETTINGS_BYTES) return 'Settings storage is full';
-      return upsertSetting(schema, key, value, tx);
-    });
+    // Lock, both caps and the write in one trip, so two requests at once
+    // can't both see room
+    const result = await upsertSettingCapped(schema, key, value, { maxKeys: MAX_SETTING_KEYS, maxBytes: MAX_SETTINGS_BYTES });
     if (typeof result === 'string') {
       res.status(400).json({ error: result });
       return;

@@ -92,6 +92,46 @@ async function lockedWrite<T>(schemaName: string, s: string, fn: (tx: TenantClie
   }
 }
 
+/**
+ * A capped write as ONE trip to the database: the account's lock, then a
+ * single statement that checks the cap and writes. `withTenantLock` runs its
+ * callback between statements, so every statement is its own trip from Node
+ * (BEGIN, lock, sum, write, COMMIT) with a pooled connection held throughout;
+ * an entry save — the most common write there is — spent most of its time
+ * there, and saves topped out at about a quarter of what reads do.
+ *
+ * The guarantee is the same: the statement starts after the lock is held, so
+ * its snapshot sees every write the previous holder committed, and its cap
+ * check and its write are one statement. Writes for one account still queue
+ * in the process first, like `withTenantLock`.
+ */
+export async function lockedStatement<T>(schemaName: string, sql: string, values: unknown[]): Promise<T[]> {
+  const s = escapeSchema(schemaName);
+  const once = async (): Promise<T[]> => {
+    const db = await tenantDb(schemaName);
+    const [, rows] = await db.$transaction([
+      db.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text', s),
+      db.$queryRawUnsafe<T[]>(sql, ...values),
+    ]);
+    return rows;
+  };
+  const run = (tenantWriteQueues.get(s) ?? Promise.resolve()).then(async () => {
+    try {
+      return await once();
+    } catch (err) {
+      // No connection in time (the pool busy or just recycled): nothing ran, so once more
+      const code = (err as { code?: string }).code;
+      if (code !== 'P2024' && code !== 'P2028') throw err;
+      console.warn('Tenant write could not start, retrying:', err instanceof Error ? err.message : err);
+      return once();
+    }
+  });
+  const tail = run.catch(() => undefined);
+  tenantWriteQueues.set(s, tail);
+  void tail.then(() => { if (tenantWriteQueues.get(s) === tail) tenantWriteQueues.delete(s); });
+  return run;
+}
+
 // =============================================================================
 // Settings
 // =============================================================================
@@ -149,6 +189,30 @@ export async function upsertSetting(schemaName: string, key: string, value: unkn
     JSON.stringify(value)
   );
   return result[0];
+}
+
+/**
+ * Save a setting if the account has room for it — lock, both caps and the
+ * write in one trip (`lockedStatement`). A key that already exists never
+ * counts against the key cap; `bytes` is the value's stored size.
+ */
+export async function upsertSettingCapped(
+  schemaName: string, key: string, value: unknown, caps: { maxKeys: number; maxBytes: number },
+): Promise<TenantSetting | 'Too many settings' | 'Settings storage is full'> {
+  const s = escapeSchema(schemaName);
+  const json = JSON.stringify(value);
+  const rows = await lockedStatement<TenantSetting>(schemaName,
+    `INSERT INTO ${s}.settings (key, value, updated_at)
+     SELECT $1, $2::jsonb, NOW()
+     WHERE (EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) OR (SELECT COUNT(*) FROM ${s}.settings) < $3::bigint)
+       AND (SELECT COALESCE(SUM(octet_length(value::text)), 0) FROM ${s}.settings WHERE key <> $1) + $4::bigint <= $5::bigint
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+     RETURNING key, value, updated_at as "updatedAt"`,
+    [key, json, caps.maxKeys, Buffer.byteLength(json, 'utf8'), caps.maxBytes]);
+  if (rows[0]) return rows[0];
+  // Refused: say which cap (the rare path pays for the second look)
+  return !(await settingExists(schemaName, key)) && (await countSettings(schemaName)) >= caps.maxKeys
+    ? 'Too many settings' : 'Settings storage is full';
 }
 
 /** Returns true when a row was deleted. */
@@ -554,6 +618,55 @@ export async function updatePost(
     ...values
   );
   return result[0];
+}
+
+/** What a capped entry write found: the entry as saved, that the journal is full, or no such entry / id. */
+export type CappedWrite = TenantPost | 'full' | null;
+
+/** Every entry's stored size but one's, as SQL (the cap counts what the journal would hold after the write). */
+const usedExcept = (s: string, idParam: string) =>
+  `(SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0) + ${ROW_OVERHEAD_BYTES}), 0) FROM ${s}.posts WHERE id <> ${idParam})`;
+
+/**
+ * Save an entry's encrypted fields if the journal has room for them: lock,
+ * cap check and write in one trip (`lockedStatement`). `size` is what the
+ * entry will count toward `capBytes`.
+ */
+export async function updatePostCapped(
+  schemaName: string, id: number, fields: EncryptedPostFields, size: number, capBytes: number,
+): Promise<CappedWrite> {
+  const s = escapeSchema(schemaName);
+  const rows = await lockedStatement<TenantPost>(schemaName,
+    `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4, updated_at = NOW()
+     WHERE id = $5 AND ${usedExcept(s, '$5')} + $6::bigint <= $7::bigint
+     RETURNING ${POST_SELECT}`,
+    [fields.contentEncrypted, fields.contentIv, fields.metadataEncrypted, fields.metadataIv, id, size, capBytes]);
+  if (rows[0]) return rows[0];
+  // Nothing written: no such entry, or no room (the rare path pays for the second look)
+  return (await postExists(schemaName, id)) ? 'full' : null;
+}
+
+/**
+ * Create an entry under its reserved id if the journal has room, in one trip.
+ * With no room the reservation is left alone (the cap is part of the
+ * statement that would use it up), so the same id can be tried again.
+ */
+export async function createPostCapped(schemaName: string, input: CreatePostInput, size: number, capBytes: number): Promise<CappedWrite> {
+  const s = escapeSchema(schemaName);
+  const room = `${usedExcept(s, '$1')} + $7::bigint <= $8::bigint`;
+  const rows = await lockedStatement<TenantPost>(schemaName,
+    `WITH reservation AS (
+       DELETE FROM ${s}.post_id_reservations WHERE id = $1 AND ${room} RETURNING id
+     )
+     INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+     SELECT reservation.id, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
+     FROM reservation
+     WHERE NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = $1)
+     ON CONFLICT (id) DO NOTHING
+     RETURNING ${POST_SELECT}`,
+    [...insertPostArgs(input), size, capBytes]);
+  if (rows[0]) return rows[0];
+  return (await postStorageBytes(schemaName)) + size > capBytes ? 'full' : null;
 }
 
 /** Bytes of encrypted content + metadata (+ the per-row overhead) over all entries (leaving out the ones being replaced). */
@@ -999,6 +1112,26 @@ export async function upsertDoseRecord(schemaName: string, id: string, date: str
     id, date, payload, iv
   );
   return rows[0];
+}
+
+/**
+ * Save a dose record if the account has room (rows and bytes, leaving out the
+ * record being replaced) — lock, caps and write in one trip. Null when full.
+ */
+export async function upsertDoseRecordCapped(
+  schemaName: string, id: string, date: string, payload: Buffer, iv: Buffer, caps: { maxRows: number; maxBytes: number },
+): Promise<DoseRecordRow | null> {
+  const s = escapeSchema(schemaName);
+  const rows = await lockedStatement<DoseRecordRow>(schemaName,
+    `INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
+     SELECT $1, $2::date, $3, $4
+     WHERE (SELECT count(*) FROM ${s}.medication_dose_records WHERE id <> $1) + 1 <= $5::bigint
+       AND (SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) FROM ${s}.medication_dose_records WHERE id <> $1) + $6::bigint <= $7::bigint
+     ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date, payload_encrypted = EXCLUDED.payload_encrypted,
+       payload_iv = EXCLUDED.payload_iv, updated_at = NOW()
+     RETURNING ${DOSE_RECORD_COLUMNS}`,
+    [id, date, payload, iv, caps.maxRows, payload.length, caps.maxBytes]);
+  return rows[0] ?? null;
 }
 
 /** Rows and payload bytes of an account's dose records (leaving out the ones being replaced). */
