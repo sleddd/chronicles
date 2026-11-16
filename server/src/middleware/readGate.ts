@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { releaseWhenSettled } from './slot.js';
 
 /**
  * Big list reads running at once per account, in this process. A list answer
@@ -6,9 +7,10 @@ import type { Request, Response, NextFunction } from 'express';
  * taken it, so without a cap one account firing many at once (well under
  * `apiLimiter`) could hold gigabytes and every pooled connection.
  *
- * The slot is given back when the response has been sent or the connection
- * closed — not when the handler returns: `res.json` only queues the body, and
- * a client that doesn't read it keeps it in memory.
+ * The slot is given back when the response has been sent — not when the
+ * handler returns: `res.json` only queues the body, and a client that doesn't
+ * read it keeps it in memory — or, for a client that hung up, once the handler
+ * has finished its work (`releaseWhenSettled`).
  *
  * Each kind of list (`lane`) has its own count, so loading the journal never
  * holds up the topics. The app asks for each list once at a time (identical
@@ -36,8 +38,7 @@ export function readGate(lane: string, max: number) {
       if (left <= 0) inFlight.delete(key);
       else inFlight.set(key, left);
     };
-    res.on('finish', release);
-    res.on('close', release);
+    releaseWhenSettled(res, release);
     next();
   };
 }

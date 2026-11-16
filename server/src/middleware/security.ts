@@ -78,6 +78,10 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
+  // A page that opened this one (or that this one opens) on another site gets
+  // no handle on its window. Google sign-in for the calendar is a full
+  // redirect, not a pop-up, so nothing here needs one
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   // Control referrer leakage — no-referrer keeps share-link tokens and in-app paths out of other sites' logs
   res.setHeader('Referrer-Policy', 'no-referrer');
   // Disable browser features we don't need. The microphone stays available to

@@ -461,11 +461,11 @@ describe('2FA hardening', () => {
       email: 'test@example.com',
       recoveryProof,
       newAuthSecret: 'b'.repeat(64),
-      newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
+      newEncryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
       newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
-      newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
-      newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
-      newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
+      newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
+      newRecoveryWrappedMK: Buffer.alloc(48, 1).toString('base64'),
+      newRecoveryWrapIv: Buffer.alloc(12, 3).toString('base64'),
       newRecoveryKeyHash: 'e'.repeat(64),
       newRecoveryKeySalt: 'f'.repeat(32),
     };
@@ -696,7 +696,7 @@ describe('2FA hardening', () => {
       (prisma.$transaction as any).mockResolvedValue([]);
       const changed = await request(app).post('/api/auth/change-password').send({
         currentAuthSecret: SECRET, newAuthSecret: 'b'.repeat(64),
-        newEncryptedMasterKey: Buffer.alloc(40, 1).toString('base64'),
+        newEncryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
         newKekSalt: Buffer.alloc(16, 2).toString('base64'), newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
         code: 'BACKUP-0001',
       });
@@ -712,14 +712,14 @@ describe('2FA hardening', () => {
   describe('account changes with 2FA on', () => {
     const passwordBody = {
       currentAuthSecret: SECRET, newAuthSecret: 'b'.repeat(64),
-      newEncryptedMasterKey: Buffer.alloc(40, 1).toString('base64'),
+      newEncryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
       newKekSalt: Buffer.alloc(16, 2).toString('base64'), newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
     };
     const emailBody = { newEmail: 'new@example.com', currentAuthSecret: SECRET, newAuthSecret: 'c'.repeat(64) };
     const recoveryBody = {
       currentAuthSecret: SECRET,
-      recoveryWrappedMK: Buffer.alloc(40, 4).toString('base64'),
-      recoveryWrapIv: Buffer.alloc(12, 5).toString('base64'),
+      recoveryWrappedMK: Buffer.alloc(48, 1).toString('base64'),
+      recoveryWrapIv: Buffer.alloc(12, 3).toString('base64'),
       recoveryKeyHash: 'd'.repeat(64),
       recoveryKeySalt: 'e'.repeat(32),
     };

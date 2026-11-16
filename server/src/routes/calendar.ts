@@ -141,6 +141,8 @@ router.get('/google/callback', async (req, res) => {
 
     // Exchange authorization code for tokens
     const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
+      // Google out of reach must not leave the request hanging for minutes
+      signal: AbortSignal.timeout(10_000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -212,6 +214,8 @@ router.post('/google/token', authMiddleware, apiLimiter, async (req, res) => {
       });
     }
     const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
+      // Google out of reach must not leave the request hanging for minutes
+      signal: AbortSignal.timeout(10_000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -275,6 +279,8 @@ router.delete('/google', authMiddleware, apiLimiter, async (req, res) => {
       try {
         const refreshToken = decryptToken(integration.googleRefreshToken, googleTokenAad(req.auth!.accountId));
         await fetch(GOOGLE_REVOKE_URL, {
+      // Google out of reach must not leave the request hanging for minutes
+      signal: AbortSignal.timeout(10_000),
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ token: refreshToken }),
@@ -356,7 +362,7 @@ router.delete('/ics', authMiddleware, apiLimiter, async (req, res) => {
 // PUT /api/calendar/ics — upload the regenerated feed content (protected)
 router.put('/ics', authMiddleware, apiLimiter, async (req, res) => {
   try {
-    const { ics } = req.body as { ics?: unknown };
+    const { ics } = (req.body ?? {}) as { ics?: unknown };
     if (typeof ics !== 'string' || !ics.startsWith('BEGIN:VCALENDAR') || Buffer.byteLength(ics, 'utf8') > ICS_MAX_BYTES) {
       res.status(400).json({ error: 'Invalid calendar payload' });
       return;

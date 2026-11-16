@@ -118,11 +118,11 @@ const validRegisterBody = {
   email: 'test@example.com',
   username: 'testuser',
   authSecret: SECRET,
-  encryptedMasterKey: Buffer.from('masterkey').toString('base64'),
+  encryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
   kekSalt: Buffer.from('saltsaltsaltsalt').toString('base64'),
-  kekWrapIv: Buffer.from('iviviviviviv').toString('base64'),
-  recoveryWrappedMK: Buffer.from('recoverymk').toString('base64'),
-  recoveryWrapIv: Buffer.from('recoveryiv12').toString('base64'),
+  kekWrapIv: Buffer.alloc(12, 3).toString('base64'),
+  recoveryWrappedMK: Buffer.alloc(48, 1).toString('base64'),
+  recoveryWrapIv: Buffer.alloc(12, 3).toString('base64'),
   recoveryKeyHash: PROOF,
   recoveryKeySalt: 'd'.repeat(32),
 };
@@ -736,8 +736,8 @@ describe('Auth Routes', () => {
   describe('POST /api/auth/recovery-key', () => {
     const body = {
       currentAuthSecret: SECRET,
-      recoveryWrappedMK: Buffer.from('wrapped').toString('base64'),
-      recoveryWrapIv: Buffer.from('iv12345678ab').toString('base64'),
+      recoveryWrappedMK: Buffer.alloc(48, 1).toString('base64'),
+      recoveryWrapIv: Buffer.alloc(12, 3).toString('base64'),
       recoveryKeyHash: 'a'.repeat(64),
       recoveryKeySalt: 'b'.repeat(32),
     };
@@ -788,9 +788,9 @@ describe('Auth Routes', () => {
     const changePasswordBody = {
       currentAuthSecret: SECRET,
       newAuthSecret: NEW_SECRET,
-      newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
+      newEncryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
       newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
-      newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
+      newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
     };
 
     const mockAccount = {
@@ -867,12 +867,12 @@ describe('Auth Routes', () => {
       email: 'test@example.com',
       recoveryProof: PROOF,
       newAuthSecret: NEW_SECRET,
-      newEncryptedMasterKey: Buffer.from('newkey').toString('base64'),
+      newEncryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
       newKekSalt: Buffer.from('newsalt123456789').toString('base64'),
-      newKekWrapIv: Buffer.from('newiv1234567').toString('base64'),
+      newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
       // Recovery rotates in a fresh recovery key so it can be used again
-      newRecoveryWrappedMK: Buffer.from('newrecoverymk').toString('base64'),
-      newRecoveryWrapIv: Buffer.from('newrecoveryiv').toString('base64'),
+      newRecoveryWrappedMK: Buffer.alloc(48, 1).toString('base64'),
+      newRecoveryWrapIv: Buffer.alloc(12, 3).toString('base64'),
       newRecoveryKeyHash: 'e'.repeat(64),
       newRecoveryKeySalt: 'f'.repeat(32),
     };

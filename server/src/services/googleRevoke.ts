@@ -18,6 +18,8 @@ export async function revokeGoogleAccess(accountId: number): Promise<boolean> {
   try {
     const token = decryptToken(integration.googleRefreshToken, googleTokenAad(accountId));
     const res = await fetch(GOOGLE_REVOKE_URL, {
+      // Google out of reach must not leave the request hanging for minutes
+      signal: AbortSignal.timeout(10_000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ token }),

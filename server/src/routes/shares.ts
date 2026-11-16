@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { apiLimiter, shareLimiter } from '../middleware/rateLimiter.js';
-import { createShareWithinLimit, getShareByToken, revokeShare, getSharesByAccount, type Share } from '../db/shareQueries.js';
+import { createShareWithinLimit, getShareByToken, revokeShare, getSharesByAccount, deleteSharesForEntry, type Share } from '../db/shareQueries.js';
 import { postExists } from '../db/tenantQueries.js';
 import { createShareSchema } from '@chronicles/shared';
 
@@ -85,6 +85,14 @@ router.post('/', authMiddleware, apiLimiter, async (req, res) => {
       return;
     }
 
+    // The entry may have been deleted while the link was being made (its
+    // delete removes the links it can see): a link must never outlive its entry
+    if (!(await postExists(req.auth!.tenantSchemaName, entryId))) {
+      await deleteSharesForEntry(req.auth!.accountId, entryId);
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
+
     res.status(201).json(ownedShare(share));
   } catch (err) {
     console.error('Create share error:', err);
@@ -95,7 +103,12 @@ router.post('/', authMiddleware, apiLimiter, async (req, res) => {
 // DELETE /api/shares/:token — Revoke a share (protected)
 router.delete('/:token', authMiddleware, apiLimiter, async (req, res) => {
   try {
-    const revoked = await revokeShare(String(req.params.token), req.auth!.accountId);
+    const token = String(req.params.token);
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(token)) {
+      res.status(404).json({ error: 'Share not found or not owned by you' });
+      return;
+    }
+    const revoked = await revokeShare(token, req.auth!.accountId);
     if (!revoked) {
       res.status(404).json({ error: 'Share not found or not owned by you' });
       return;

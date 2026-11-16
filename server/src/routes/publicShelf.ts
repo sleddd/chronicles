@@ -1,4 +1,5 @@
 import { Router, json as jsonBody } from 'express';
+import { releaseWhenSettled } from '../middleware/slot.js';
 import crypto from 'crypto';
 import { authMiddleware } from '../middleware/auth.js';
 import { apiLimiter, publicShelfLimiter, writeGate } from '../middleware/rateLimiter.js';
@@ -75,8 +76,7 @@ router.get('/:token', publicShelfLimiter, async (req, res) => {
       if (left <= 0) shelfReads.delete(token);
       else shelfReads.set(token, left);
     };
-    res.on('finish', release);
-    res.on('close', release);
+    releaseWhenSettled(res, release);
     const page = Number.parseInt(String(req.query.page ?? '1'), 10);
     const query = readQuery(req.query as Record<string, unknown>);
     const result = await getPublicShelfPage(token, Number.isFinite(page) ? page : 1, query);

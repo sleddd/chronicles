@@ -160,11 +160,11 @@ describe('registerSchema', () => {
     email: 'user@example.com',
     username: 'testuser',
     authSecret: 'a'.repeat(64),
-    encryptedMasterKey: 'abc123',
+    encryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     kekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
-    kekWrapIv: 'iv123',
-    recoveryWrappedMK: 'recovmk',
-    recoveryWrapIv: 'recoviv',
+    kekWrapIv: 'AAAAAAAAAAAAAAAA',
+    recoveryWrappedMK: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    recoveryWrapIv: 'AAAAAAAAAAAAAAAA',
     recoveryKeyHash: 'b'.repeat(64),
     recoveryKeySalt: 'c'.repeat(32),
   };
@@ -258,9 +258,9 @@ describe('changePasswordSchema', () => {
   const valid = {
     currentAuthSecret: 'a'.repeat(64),
     newAuthSecret: 'b'.repeat(64),
-    newEncryptedMasterKey: 'enc123',
+    newEncryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     newKekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
-    newKekWrapIv: 'iv123',
+    newKekWrapIv: 'AAAAAAAAAAAAAAAA',
   };
 
   it('accepts valid change password data', () => {
@@ -291,11 +291,11 @@ describe('recoverSchema', () => {
     email: 'user@example.com',
     recoveryProof: 'a'.repeat(64),
     newAuthSecret: 'b'.repeat(64),
-    newEncryptedMasterKey: 'enc123',
+    newEncryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     newKekSalt: 'c2FsdHNhbHRzYWx0c2FsdA==',
-    newKekWrapIv: 'iv123',
-    newRecoveryWrappedMK: 'rwmk123',
-    newRecoveryWrapIv: 'riv123',
+    newKekWrapIv: 'AAAAAAAAAAAAAAAA',
+    newRecoveryWrappedMK: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    newRecoveryWrapIv: 'AAAAAAAAAAAAAAAA',
     newRecoveryKeyHash: 'c'.repeat(64),
     newRecoveryKeySalt: 'd'.repeat(32),
   };

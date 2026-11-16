@@ -1,6 +1,7 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response, NextFunction } from 'express';
 import { sharedRateLimitStore } from '../services/sharedState.js';
+import { releaseWhenSettled } from './slot.js';
 
 /**
  * General auth rate limiter — login, register, salt lookups
@@ -182,7 +183,6 @@ export function writeGate(req: Request, res: Response, next: NextFunction): void
     if (left <= 0) writesInFlight.delete(accountId);
     else writesInFlight.set(accountId, left);
   };
-  res.on('finish', release);
-  res.on('close', release);
+  releaseWhenSettled(res, release);
   next();
 }

@@ -2,7 +2,11 @@ import { z } from 'zod';
 
 // Auth validation
 export const emailSchema = z.string().max(254, 'Invalid email address').email('Invalid email address');
-export const usernameSchema = z.string().min(3, 'Username must be at least 3 characters').max(30);
+// No control characters: a zero byte can't be stored as text (it failed the
+// insert as a 500), and the others have no place in a name
+export const usernameSchema = z.string().min(3, 'Username must be at least 3 characters').max(30)
+  // eslint-disable-next-line no-control-regex
+  .regex(/^[^\u0000-\u001f\u007f]*$/, 'Invalid username');
 export const passwordSchema = z.string()
   .min(12, 'Password must be at least 12 characters')
   .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
@@ -17,9 +21,13 @@ export const passwordSchema = z.string()
 export const authSecretSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid credentials');
 const recoveryProofSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Invalid recovery key hash');
 const recoverySaltSchema = z.string().regex(/^[a-f0-9]{32}$/, 'Invalid recovery key salt');
-// Base64 key material: a wrapped 32-byte key is ~64 chars, salts and IVs ~24
-const wrappedKeySchema = z.string().min(1).max(1024);
-const saltOrIvSchema = z.string().min(1).max(64);
+// Key material in exactly the shape the client writes: a wrapped 32-byte key
+// is 48 bytes (key + GCM tag, 64 base64 characters) and its IV 12 bytes (16).
+// Anything else is a wrap no password could ever open — stored at sign-up it
+// made an account that can't be opened, and at a password change or recovery
+// it would have replaced the only way into the journal
+const wrappedKeySchema = z.string().regex(/^[A-Za-z0-9+/]{64}$/, 'Invalid key wrap');
+const saltOrIvSchema = z.string().regex(/^[A-Za-z0-9+/]{16}$/, 'Invalid IV');
 // KEK salts are exactly 16 random bytes (24 base64 chars); the client refuses
 // any other length at unlock, so the server never stores one it couldn't use
 const kekSaltSchema = z.string().regex(/^[A-Za-z0-9+/]{22}==$/, 'Invalid key salt');
@@ -240,6 +248,7 @@ export function shareContentHasMedia(content: string): boolean {
 
 export const createShareSchema = z.object({
   content: z.string().min(1, 'content is required').max(SHARE_CONTENT_MAX, 'Content too large')
+    .refine(c => !c.includes('\u0000'), 'Invalid content')
     // zod still runs a refine after .max fails, so the length is checked
     // here too: the media scan never sees more than the cap
     .refine(c => c.length <= SHARE_CONTENT_MAX && !shareContentHasMedia(c), 'Shared entries cannot include images or drawings'),
@@ -434,13 +443,25 @@ export const imageStorageConfigSchema = z.object({
 });
 
 // Settings validation
-export const settingKeySchema = z.string().min(1).max(100);
+// eslint-disable-next-line no-control-regex
+export const settingKeySchema = z.string().min(1).max(100).regex(/^[^\u0000-\u001f\u007f]*$/, 'Invalid setting key');
+/** A setting's value as stored, or null when it can't be: nested too deep to
+ *  serialize, or holding a zero byte (Postgres refuses one in JSON) */
+function storableJson(value: unknown): string | null {
+  let json: string | undefined;
+  try { json = JSON.stringify(value); } catch { return null; }
+  if (json === undefined || json.includes('\\u0000')) return null;
+  return json;
+}
 export const upsertSettingSchema = z.object({
   key: settingKeySchema,
   value: z.unknown().refine(v => v !== undefined, 'value is required'),
 }).refine(
+  (data) => data.value === undefined || storableJson(data.value) !== null,
+  { message: 'Invalid setting value', path: ['value'] }
+).refine(
   // UTF-8 bytes, the unit the stored-settings cap counts in
-  (data) => data.value === undefined || new TextEncoder().encode(JSON.stringify(data.value) ?? '').length <= 65536,
+  (data) => data.value === undefined || new TextEncoder().encode(storableJson(data.value) ?? '').length <= 65536,
   { message: 'Setting value too large (max 64KB)', path: ['value'] }
 );
 
@@ -470,7 +491,7 @@ export const accountConsentSchema = z.object({
   termsVersion: z.string().min(1).max(20),
   healthVersion: z.string().min(1).max(20),
   breachNotice: z.enum(['email', 'mail']),
-  postalAddress: z.string().trim().max(500).optional(),
+  postalAddress: z.string().trim().max(500).refine(v => !v.includes('\u0000'), 'Invalid address').optional(),
 }).strict().refine(
   d => d.breachNotice === 'email' || (d.postalAddress ?? '').length >= 8,
   { message: 'Add a postal address for mailed notices', path: ['postalAddress'] },
@@ -478,7 +499,7 @@ export const accountConsentSchema = z.object({
 
 export const breachNoticeSchema = z.object({
   breachNotice: z.enum(['email', 'mail']),
-  postalAddress: z.string().trim().max(500).optional(),
+  postalAddress: z.string().trim().max(500).refine(v => !v.includes('\u0000'), 'Invalid address').optional(),
 }).strict().refine(
   d => d.breachNotice === 'email' || (d.postalAddress ?? '').length >= 8,
   { message: 'Add a postal address for mailed notices', path: ['postalAddress'] },

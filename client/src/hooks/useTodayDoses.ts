@@ -51,7 +51,8 @@ export function useTodayDoses(enabled: boolean) {
       const cf = (meta._customFields as Record<string, unknown>) ?? {};
       if (cf.isActive === false) continue;
       const name = String(cf.medicationName ?? '').trim() || stripHtml(e.content).slice(0, 120) || 'Unnamed medication';
-      for (const time of (cf.scheduleTimes as string[] | undefined) ?? []) {
+      // Only a list of times: anything else here (an imported column of that name) is not a schedule
+      for (const time of Array.isArray(cf.scheduleTimes) ? (cf.scheduleTimes as unknown[]).filter((t): t is string => typeof t === 'string') : []) {
         out.push({ medicationPostId: e.id, medicationName: name, dosage: String(cf.dosage ?? ''), time });
       }
     }

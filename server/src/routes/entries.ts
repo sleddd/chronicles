@@ -327,6 +327,8 @@ router.delete('/:id', async (req, res) => {
     // an entry that's gone
     await deleteSharesForEntry(req.auth!.accountId, id);
     await deletePost(req.auth!.tenantSchemaName, id);
+    // Again: a link made between the two steps above would outlive the entry
+    await deleteSharesForEntry(req.auth!.accountId, id);
     res.json({ success: true });
   } catch (err) {
     console.error('Delete entry error:', err);
