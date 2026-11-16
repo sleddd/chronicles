@@ -103,6 +103,15 @@ describe('useIdleSignOut', () => {
     expect(endSession).toHaveBeenCalledTimes(1);
   });
 
+  it('typing with no key event (Scribble, on-screen suggestions, paste, IME) counts as being here', async () => {
+    renderHook(() => useIdleSignOut());
+    for (let i = 0; i < 4; i++) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(10 * MIN); });
+      act(() => { document.dispatchEvent(new Event(i % 2 ? 'input' : 'beforeinput')); });
+    }
+    expect(endSession).not.toHaveBeenCalled();
+  });
+
   it('dictation counts as being here, though no key or pointer says so', async () => {
     renderHook(() => useIdleSignOut());
     for (let i = 0; i < 4; i++) {

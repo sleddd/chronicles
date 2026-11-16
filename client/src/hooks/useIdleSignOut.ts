@@ -76,7 +76,11 @@ export function useIdleSignOut(): void {
     // the background after a long sleep must not stay signed in back there)
     const back = () => { check(); };
 
-    const events = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'];
+    // Typing counts however it arrives: Apple Pencil Scribble, the on-screen keyboard's
+    // suggestions and autocorrect, pasting from the menu and IME input send input
+    // events but no keydown, so someone writing that way was signed out mid-entry
+    const events = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll',
+      'beforeinput', 'input', 'compositionend', 'click', 'focusin'];
     // Capture: scrolling happens inside the pages' own panels, which don't bubble
     events.forEach(e => document.addEventListener(e, active, { capture: true, passive: true }));
     window.addEventListener(ACTIVITY_EVENT, active);
