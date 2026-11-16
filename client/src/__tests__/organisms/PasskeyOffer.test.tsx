@@ -12,6 +12,7 @@ vi.mock('@/hooks/useAddPasskey', async (importOriginal) => ({
 }));
 vi.mock('@/services/passkeys', () => ({
   suggestedPasskeyName: () => 'Safari on macOS',
+  knownPasskeys: () => [], rememberPasskey: () => {}, keepOnlyPasskeys: () => {},
   PasskeyCancelled: class PasskeyCancelled extends Error {},
   PasskeyCannotUnlock: class PasskeyCannotUnlock extends Error {},
   createPasskey: vi.fn(),

@@ -30,6 +30,7 @@ vi.mock('@/services/api', () => ({
 vi.mock('@/services/passkeys', () => ({
   ...svc,
   suggestedPasskeyName: () => 'Safari on macOS',
+  knownPasskeys: () => [], rememberPasskey: () => {}, keepOnlyPasskeys: () => {},
   PasskeyCancelled: class PasskeyCancelled extends Error {},
   PasskeyCannotUnlock: class PasskeyCannotUnlock extends Error {},
 }));

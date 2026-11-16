@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { deriveAuthSecret } from '@chronicles/shared';
 import type { KeySource } from '../../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError, type PasskeyInfo } from '../../services/api.js';
-import { PasskeyCancelled, confirmWithPasskey, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
+import { PasskeyCancelled, confirmWithPasskey, keepOnlyPasskeys, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
 import { useAddPasskey, usePasskeyAddConfirmation } from '../../hooks/useAddPasskey.js';
 import { TextInput } from '../atoms/TextInput.js';
 import { Spinner } from '../atoms/Spinner.js';
@@ -88,6 +88,11 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
   const confirmation = usePasskeyAddConfirmation();
   const addPasskey = useAddPasskey();
   const [passkeys, setPasskeys] = useState<PasskeyInfo[] | null>(null);
+  /** The account's list as the server gave it: a passkey no longer on it stops being asked for at sign-in here */
+  const took = useCallback((list: PasskeyInfo[]) => {
+    if (list.every(p => typeof p.credentialId === 'string')) keepOnlyPasskeys(list.map(p => p.credentialId as string));
+    setPasskeys(list);
+  }, []);
   const [supported, setSupported] = useState(false);
   const [open, setOpen] = useState<Open>(null);
   const [name, setName] = useState('');
@@ -101,7 +106,7 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
 
   useEffect(() => { void passkeysAvailable().then(setSupported); }, []);
   useEffect(() => {
-    void authApi.passkeys().then(setPasskeys).catch(() => setPasskeys([]));
+    void authApi.passkeys().then(took).catch(() => setPasskeys([]));
   }, []);
   const count = passkeys?.length ?? 0;
   useEffect(() => { onUsable?.(supported && count > 0); }, [supported, count, onUsable]);
@@ -161,7 +166,7 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
       const { passkeys: list } = open.kind === 'remove'
         ? await authApi.passkeyRemove(open.id, confirmation)
         : await authApi.passkeyRemoveAll(confirmation);
-      setPasskeys(list);
+      took(list);
       close();
       setNote(open.kind === 'remove' ? 'Passkey removed. It can no longer sign in.' : 'All passkeys removed. None of them can sign in any more.');
     } catch (err) {

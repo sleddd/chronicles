@@ -50,12 +50,59 @@ export class PasskeyCancelled extends Error {
 }
 /** This passkey (or this browser) can't produce the secret that opens the journal */
 export class PasskeyCannotUnlock extends Error {
-  constructor() { super('This passkey can’t open your journal. If a password manager such as LastPass saved it, try again and choose your device instead (Touch ID, Windows Hello or your phone).'); this.name = 'PasskeyCannotUnlock'; }
+  constructor(when: 'sign-in' | 'add' = 'sign-in') {
+    super(when === 'add'
+      ? 'That passkey was saved somewhere that can’t open your journal, most likely a password manager such as LastPass. Try again and, when it offers to save the passkey, close its pop-up and choose this device (Touch ID, Windows Hello) or your phone. Then delete the Chronicles passkey it just saved from the password manager, or it will keep answering at sign-in.'
+      : 'A password manager (such as LastPass) answered with a passkey that can’t open your journal. Try again and, in its pop-up, choose to use your device or another passkey. Deleting the Chronicles passkey from the password manager stops this for good.');
+    this.name = 'PasskeyCannotUnlock';
+  }
 }
 
 function rethrow(err: unknown): never {
   if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'AbortError')) throw new PasskeyCancelled();
   throw err;
+}
+
+/*
+ * The passkeys that have worked in this browser (their ids: random, not secret,
+ * and they say nothing about whose they are). Sign-in asks for these by name,
+ * so the device's own prompt opens straight away. Without it, a password
+ * manager holding ANY passkey for this site (LastPass keeps the ones whose
+ * adding failed, and can't be told to drop them) answers first with one that
+ * can't open the journal, and the device never gets asked.
+ */
+export const KNOWN_PASSKEYS_STORE = 'chronicles.passkeys-here-v1';
+const MAX_KNOWN = 10;
+const ID_SHAPE = /^[A-Za-z0-9_-]{1,1024}$/;
+
+export function knownPasskeys(): string[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(KNOWN_PASSKEYS_STORE) ?? '[]') as unknown;
+    return Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string' && ID_SHAPE.test(id)).slice(0, MAX_KNOWN) : [];
+  } catch {
+    return [];
+  }
+}
+const saveKnown = (ids: string[]): void => {
+  try {
+    if (ids.length) localStorage.setItem(KNOWN_PASSKEYS_STORE, JSON.stringify(ids.slice(0, MAX_KNOWN)));
+    else localStorage.removeItem(KNOWN_PASSKEYS_STORE);
+  } catch { /* storage unavailable: sign-in just asks for any passkey */ }
+};
+/** This passkey gave its secret here: ask for it first next time */
+export function rememberPasskey(credentialId: string): void {
+  if (!ID_SHAPE.test(credentialId)) return;
+  saveKnown([credentialId, ...knownPasskeys().filter(id => id !== credentialId)]);
+}
+export function forgetPasskey(credentialId: string): void {
+  saveKnown(knownPasskeys().filter(id => id !== credentialId));
+}
+/** The account's passkeys are exactly these: forget any other (removed in Settings) */
+export function keepOnlyPasskeys(credentialIds: string[]): void {
+  const on = new Set(credentialIds);
+  const known = knownPasskeys();
+  const kept = known.filter(id => on.has(id));
+  if (kept.length !== known.length) saveKnown(kept);
 }
 
 /**
@@ -113,19 +160,32 @@ export interface PasskeySignIn {
   prf: Uint8Array;
 }
 
-/** Sign in with a passkey: one touch, then the session and this passkey's wrap. */
-export async function signInWithPasskey(): Promise<PasskeySignIn> {
+/**
+ * Sign in with a passkey: one touch, then the session and this passkey's wrap.
+ *
+ * It asks for the passkeys that have worked in this browser, when there are
+ * any, which takes a password manager's passkeys out of the running. `any`
+ * asks for whichever passkey the person picks (a new phone, someone else's).
+ */
+export async function signInWithPasskey({ any = false }: { any?: boolean } = {}): Promise<PasskeySignIn> {
   const { options } = await authApi.passkeyLoginOptions();
-  const { response, prf, credentialId } = await assert(options);
+  const known = any ? [] : knownPasskeys();
+  const { response, prf, credentialId } = await assert(known.length
+    ? { ...options, allowCredentials: known.map(id => ({ id, type: 'public-key' as const })) }
+    : options);
   if (!prf) throw new PasskeyCannotUnlock();
   try {
     const { user, passkey } = await authApi.passkeyLogin(response);
+    rememberPasskey(credentialId);
     return { user, wrap: passkey, prf };
   } catch (err) {
     prf.fill(0);
     // The server has never stored this passkey (its adding never finished):
     // ask the device to drop it, so it stops being offered at sign-in
-    if ((err as { body?: { unknownCredential?: unknown } } | null)?.body?.unknownCredential === true) forgetOnDevice(options.rpId, credentialId);
+    if ((err as { body?: { unknownCredential?: unknown } } | null)?.body?.unknownCredential === true) {
+      forgetPasskey(credentialId);
+      forgetOnDevice(options.rpId, credentialId);
+    }
     throw err;
   }
 }
@@ -163,8 +223,8 @@ export interface NewPasskey {
 /**
  * Make a passkey on this device and get its secret. Many authenticators only
  * say "PRF supported" when the passkey is made and give the secret on first
- * use, so a second touch may follow (once). One that can't do PRF at all is
- * refused: it could sign in but never open the journal.
+ * use, so a second touch may follow (once). One that can't do PRF, or says
+ * nothing about it, is refused: it could sign in but never open the journal.
  */
 export async function createPasskey(options: PasskeyCreationOptions, onSecondTouch?: () => void): Promise<NewPasskey> {
   const first = await passkeyPrfInput();
@@ -186,7 +246,11 @@ export async function createPasskey(options: PasskeyCreationOptions, onSecondTou
   const made = prfOf(cred);
   let prf = prfBytes(made);
   if (!prf) {
-    if (made.enabled === false) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock(); }
+    // Every browser that knows the PRF extension answers `enabled` true or
+    // false when a passkey is made. No answer at all means something else made
+    // it (a password manager's extension), and a second prompt would only be
+    // that same pop-up again, with the same result
+    if (made.enabled !== true) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock('add'); }
     // The secret comes on first use. This touch is only for the secret: its
     // signature goes nowhere, so the challenge is made here
     // Say so first: a second sheet with no word of why reads as a stall. It
@@ -203,7 +267,7 @@ export async function createPasskey(options: PasskeyCreationOptions, onSecondTou
       },
     }).catch(rethrow) as PublicKeyCredential | null;
     prf = used ? prfBytes(prfOf(used)) : null;
-    if (!prf) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock(); }
+    if (!prf) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock('add'); }
   }
 
   const r = cred.response as AuthenticatorAttestationResponse;
