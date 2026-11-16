@@ -445,9 +445,10 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     /* See-through, so its lines and placeholders a step stronger than on a solid card */
     --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
     --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
-    /* No outline: the dashboard cards' shadow instead */
+    /* No outline: a firmer shadow all round than the other dashboard cards
+       */
     border-color: transparent;
-    box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+    box-shadow: rgba(0, 0, 0, 0.3) 0 12px 32px -6px, rgba(0, 0, 0, 0.16) 0 2px 8px;
     /* "Enter title/text..." a step brighter than the tools beside it */
     && input::placeholder, && textarea::placeholder, && .tiptap p.is-editor-empty:first-child::before { color: var(--text-secondary); opacity: 0.8; }
     @media (max-width: 768px) { margin-top: 18px; }
@@ -485,7 +486,7 @@ const QuickExtraBox = styled.div`
   background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
-  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+  box-shadow: rgba(0, 0, 0, 0.3) 0 12px 32px -6px, rgba(0, 0, 0, 0.16) 0 2px 8px;
   --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
   --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
   /* Its joined switches (Bill | Subscription, Active / Paused / Cancelled): clear on the
