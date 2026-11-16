@@ -124,7 +124,14 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const tag = await encryptionService.accountTag(key, 'egress');
     // What this browser has stored is kept for the same person and wiped for
     // anyone else — decided by the key, before any of it is read
-    if (await claimBrowserFor(tag)) announceLocalReset();
+    if (await claimBrowserFor(tag)) {
+      announceLocalReset();
+      // The wipe took the shared "someone is here" record with it. Without it a
+      // second tab (which takes the key but has seen nobody itself) read the
+      // browser as idle and ended the session for every tab — e.g. opening the
+      // public shelf right after signing in on a new browser signed you out
+      if (signedIn) markActivity();
+    }
     setEgressAccount(tag);
     masterKeyRef.current = key;
     claimKeyHolder();

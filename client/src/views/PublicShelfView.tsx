@@ -131,6 +131,23 @@ export function PublicShelfView() {
     return () => { cancelled = true; };
   }, [token, filters, sent]);
 
+  // Back at a tab that was left open: look again, quietly — the list is
+  // swapped only when the shelf has changed since (no flash of "loading")
+  useEffect(() => {
+    const look = () => {
+      if (document.visibilityState !== 'visible' || inFlight.current) return;
+      publicShelfApi.getPage(token, 1, toQuery(filters, sent))
+        .then(data => setState(s => (
+          s.status === 'done' && (String(s.data.updatedAt) !== String(data.updatedAt) || s.data.total !== data.total)
+            ? { status: 'done', data, items: data.items, loadingMore: false } : s
+        )))
+        .catch(() => { /* keep what's showing */ });
+    };
+    document.addEventListener('visibilitychange', look);
+    window.addEventListener('focus', look);
+    return () => { document.removeEventListener('visibilitychange', look); window.removeEventListener('focus', look); };
+  }, [token, filters, sent]);
+
   const loadMore = () => {
     if (state.status !== 'done' || inFlight.current || state.data.page >= state.data.pages) return;
     const next = state.data.page + 1;
