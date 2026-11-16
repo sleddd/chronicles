@@ -5,16 +5,13 @@ import { createTestApp, TEST_AUTH } from './testHelper.js';
 // Mock tenantQueries
 vi.mock('../../db/tenantQueries.js', () => ({
   getAllSettings: vi.fn(),
-  upsertSetting: vi.fn(),
-  countSettings: vi.fn(),
-  settingExists: vi.fn(),
-  settingsStorageBytes: vi.fn(),
+  // Lock, caps and write in one trip
+  upsertSettingCapped: vi.fn(),
   deleteSetting: vi.fn(),
-  withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 import settingsRouter from '../../routes/settings.js';
-import { getAllSettings, upsertSetting, countSettings, settingExists, settingsStorageBytes, deleteSetting, withTenantLock } from '../../db/tenantQueries.js';
+import { getAllSettings, upsertSettingCapped, deleteSetting } from '../../db/tenantQueries.js';
 
 const app = createTestApp('/api/settings', settingsRouter);
 
@@ -26,9 +23,6 @@ const mockSettings = [
 describe('Settings Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (countSettings as any).mockResolvedValue(2);
-    (settingExists as any).mockResolvedValue(false);
-    (settingsStorageBytes as any).mockResolvedValue(1000);
   });
 
   // =========================================================================
@@ -74,51 +68,28 @@ describe('Settings Routes', () => {
     });
 
     it('refuses a new key once the account has 500 settings', async () => {
-      (countSettings as any).mockResolvedValue(500);
-
-      const res = await request(app)
-        .put('/api/settings')
-        .send({ key: 'brandNew', value: 1 });
-
+      (upsertSettingCapped as any).mockResolvedValue('Too many settings');
+      const res = await request(app).put('/api/settings').send({ key: 'brandNew', value: 1 });
       expect(res.status).toBe(400);
-      expect(upsertSetting).not.toHaveBeenCalled();
-    });
-
-    it('still updates an existing key at the cap', async () => {
-      (countSettings as any).mockResolvedValue(500);
-      (settingExists as any).mockResolvedValue(true);
-      (upsertSetting as any).mockResolvedValue({ key: 'k3', value: 9, updatedAt: new Date() });
-
-      const res = await request(app)
-        .put('/api/settings')
-        .send({ key: 'k3', value: 9 });
-
-      expect(res.status).toBe(200);
+      expect(res.body.error).toBe('Too many settings');
     });
 
     it('refuses a write that would take the settings past their total size', async () => {
-      (settingsStorageBytes as any).mockResolvedValue(8 * 1024 * 1024 - 10);
-
-      const res = await request(app)
-        .put('/api/settings')
-        .send({ key: 'headerColor', value: 'x'.repeat(100) });
-
+      (upsertSettingCapped as any).mockResolvedValue('Settings storage is full');
+      const res = await request(app).put('/api/settings').send({ key: 'headerColor', value: 'x'.repeat(100) });
       expect(res.status).toBe(400);
-      expect(upsertSetting).not.toHaveBeenCalled();
-      // the size of the key being replaced doesn't count against it
-      expect(settingsStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'headerColor', 'TX');
+      expect(res.body.error).toBe('Settings storage is full');
     });
 
-    it('checks the caps and writes under the account lock', async () => {
-      (upsertSetting as any).mockResolvedValue({ key: 'a', value: 1, updatedAt: new Date() });
+    it('hands the caps and the write to one locked statement', async () => {
+      (upsertSettingCapped as any).mockResolvedValue({ key: 'a', value: 1, updatedAt: new Date() });
       await request(app).put('/api/settings').send({ key: 'a', value: 1 });
-      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
-      expect(countSettings).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'TX');
+      expect(upsertSettingCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'a', 1, { maxKeys: 500, maxBytes: 8 * 1024 * 1024 });
     });
 
     it('upserts a string setting', async () => {
       const result = { key: 'headerColor', value: '#FF0000', updatedAt: new Date() };
-      (upsertSetting as any).mockResolvedValue(result);
+      (upsertSettingCapped as any).mockResolvedValue(result);
 
       const res = await request(app)
         .put('/api/settings')
@@ -126,25 +97,25 @@ describe('Settings Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.key).toBe('headerColor');
-      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'headerColor', '#FF0000', 'TX');
+      expect(upsertSettingCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'headerColor', '#FF0000', expect.any(Object));
     });
 
     it('upserts a boolean setting', async () => {
       const result = { key: 'darkMode', value: true, updatedAt: new Date() };
-      (upsertSetting as any).mockResolvedValue(result);
+      (upsertSettingCapped as any).mockResolvedValue(result);
 
       const res = await request(app)
         .put('/api/settings')
         .send({ key: 'darkMode', value: true });
 
       expect(res.status).toBe(200);
-      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'darkMode', true, 'TX');
+      expect(upsertSettingCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'darkMode', true, expect.any(Object));
     });
 
     it('upserts an object setting', async () => {
       const complexValue = { nested: { data: [1, 2, 3] } };
       const result = { key: 'preferences', value: complexValue, updatedAt: new Date() };
-      (upsertSetting as any).mockResolvedValue(result);
+      (upsertSettingCapped as any).mockResolvedValue(result);
 
       const res = await request(app)
         .put('/api/settings')
@@ -154,7 +125,7 @@ describe('Settings Routes', () => {
     });
 
     it('counts keys without loading every value', async () => {
-      (upsertSetting as any).mockResolvedValue({ key: 'headerColor', value: '#000', updatedAt: new Date() });
+      (upsertSettingCapped as any).mockResolvedValue({ key: 'headerColor', value: '#000', updatedAt: new Date() });
       await request(app).put('/api/settings').send({ key: 'headerColor', value: '#000' });
       expect(getAllSettings).not.toHaveBeenCalled();
     });
@@ -167,15 +138,15 @@ describe('Settings Routes', () => {
       for (const key of ['displayName', 'financeEnabled', 'calendarSyncEnabled', 'nutritionGoals', 'aiConfig', 'settingsSealV2']) {
         expect((await request(app).put('/api/settings').send({ key, value: false })).status).toBe(409);
       }
-      expect(upsertSetting).not.toHaveBeenCalled();
+      expect(upsertSettingCapped).not.toHaveBeenCalled();
     });
 
     it('stores a private setting sealed and bound', async () => {
       const value = { ciphertext: 'abc', iv: 'def', v: 2 };
-      (upsertSetting as any).mockResolvedValue({ key: 'displayName', value, updatedAt: new Date() });
+      (upsertSettingCapped as any).mockResolvedValue({ key: 'displayName', value, updatedAt: new Date() });
       const res = await request(app).put('/api/settings').send({ key: 'displayName', value });
       expect(res.status).toBe(200);
-      expect(upsertSetting).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'displayName', value, 'TX');
+      expect(upsertSettingCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'displayName', value, expect.any(Object));
     });
 
     it('returns 400 when key is missing', async () => {
@@ -195,7 +166,7 @@ describe('Settings Routes', () => {
     });
 
     it('returns 500 on database error', async () => {
-      (upsertSetting as any).mockRejectedValue(new Error('DB error'));
+      (upsertSettingCapped as any).mockRejectedValue(new Error('DB error'));
 
       const res = await request(app)
         .put('/api/settings')

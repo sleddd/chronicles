@@ -326,7 +326,7 @@ export function MediaView() {
     if (isOnPublicShelf(item)) {
       void patch(item, { [ON_PUBLIC_SHELF]: false });
       // A shelf this browser doesn't publish to keeps the item until it's turned on here
-      if (publicShelf && !shelfOnHere) showFlash('Taken off here. Turn your public shelf on in this browser (Settings → Data) to update the public page.');
+      if (publicShelf && !shelfOnHere) showFlash('Taken off here, but your public page won’t change yet: this browser isn’t set to update it. Go to Settings → Features → Public shelf and press Turn on here.');
       return;
     }
     // Only a browser the owner turned the shelf on in skips the prompt: the

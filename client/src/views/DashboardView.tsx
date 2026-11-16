@@ -182,6 +182,9 @@ const Head = styled.div`
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 16px 40px;
+  /* The greeting row sits a little lower under the top of the photo (phones keep theirs) */
+  margin-top: 25px;
+  @media (max-width: 640px) { margin-top: 0; }
 `;
 
 /* "Good evening, Olivia." over "Saturday, November 14 · 56° and cloudy in Portland",
@@ -348,7 +351,7 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
-  margin-top: 56px;
+  margin-top: 76px;
   @media (max-width: 640px) { margin-top: 40px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`

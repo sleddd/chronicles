@@ -7,6 +7,9 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getPostPage: vi.fn(),
   getPost: vi.fn(),
   createPost: vi.fn(),
+  // A single entry's save and create: lock, cap check and write in one trip
+  createPostCapped: vi.fn(),
+  updatePostCapped: vi.fn(),
   createPosts: vi.fn(),
   ensurePostSync: vi.fn().mockResolvedValue(undefined),
   ensurePostReservations: vi.fn().mockResolvedValue(undefined),
@@ -38,7 +41,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getPostPage, getPost, createPost, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
+import { getPostPage, getPost, createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -154,21 +157,20 @@ describe('Entry Routes', () => {
     };
 
     it('refuses an entry once the account is at its storage cap', async () => {
-      (postStorageBytes as any).mockResolvedValueOnce(ENTRY_STORAGE_LIMIT_BYTES - 4);
+      (createPostCapped as any).mockResolvedValueOnce('full');
       const res = await request(app).post('/api/entries').send(ENCRYPTED_BODY);
       expect(res.status).toBe(413);
-      expect(createPost).not.toHaveBeenCalled();
     });
 
-    it('checks the cap and writes in one transaction under the account lock', async () => {
-      (createPost as any).mockResolvedValue(mockPost);
+    it('hands the cap check and the write to one locked statement, with the entry\'s size and the cap', async () => {
+      (createPostCapped as any).mockResolvedValue(mockPost);
       await request(app).post('/api/entries').send(ENCRYPTED_BODY);
-      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
-      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, [], 'TX');
+      const size = Buffer.from('encrypted-content-with-tag').length + Buffer.from('metadata-content-with-tag').length + 512;
+      expect(createPostCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ id: 2 }), size, ENTRY_STORAGE_LIMIT_BYTES);
     });
 
     it('counts an update without the old copy of the same entry, and 404s a missing one', async () => {
-      (updatePost as any).mockResolvedValueOnce(undefined);
+      (updatePostCapped as any).mockResolvedValueOnce(null);
       const res = await request(app).put('/api/entries/7').send({
         format: 3,
         contentEncrypted: Buffer.from('encrypted-content-with-tag').toString('base64'),
@@ -176,8 +178,18 @@ describe('Entry Routes', () => {
         metadataEncrypted: Buffer.from('metadata-content-with-tag').toString('base64'),
         metadataIv: Buffer.from('metaiv123456').toString('base64'),
       });
-      expect(postStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7, 'TX');
+      const size = Buffer.from('encrypted-content-with-tag').length + Buffer.from('metadata-content-with-tag').length + 512;
+      expect(updatePostCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 7, expect.objectContaining({ contentIv: expect.any(Buffer) }), size, ENTRY_STORAGE_LIMIT_BYTES);
       expect(res.status).toBe(404);
+      (updatePostCapped as any).mockResolvedValueOnce('full');
+      const full = await request(app).put('/api/entries/7').send({
+        format: 3,
+        contentEncrypted: Buffer.from('encrypted-content-with-tag').toString('base64'),
+        contentIv: Buffer.from('iv12345678ab').toString('base64'),
+        metadataEncrypted: Buffer.from('metadata-content-with-tag').toString('base64'),
+        metadataIv: Buffer.from('metaiv123456').toString('base64'),
+      });
+      expect(full.status).toBe(413);
     });
 
     it('creates a batch of entries in one request, all or none', async () => {
@@ -228,7 +240,7 @@ describe('Entry Routes', () => {
 
     it('creates an encrypted entry', async () => {
       const newPost = { ...mockPost, id: 2 };
-      (createPost as any).mockResolvedValue(newPost);
+      (createPostCapped as any).mockResolvedValue(newPost);
       (getAllTaxonomies as any).mockResolvedValue([]);
 
       const res = await request(app)
@@ -236,13 +248,13 @@ describe('Entry Routes', () => {
         .send(ENCRYPTED_BODY);
 
       expect(res.status).toBe(201);
-      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ id: 2 }), 'TX');
+      expect(createPostCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.objectContaining({ id: 2 }), expect.any(Number), ENTRY_STORAGE_LIMIT_BYTES);
     });
 
     it('needs the reserved id the entry was encrypted for', async () => {
       const { id: _id, ...noId } = ENCRYPTED_BODY;
       expect((await request(app).post('/api/entries').send(noId)).status).toBe(400);
-      expect(createPost).not.toHaveBeenCalled();
+      expect(createPostCapped).not.toHaveBeenCalled();
     });
 
     it('refuses an older client (no format 3) instead of saving an entry that would stop opening', async () => {
@@ -255,7 +267,7 @@ describe('Entry Routes', () => {
     });
 
     it('answers 409 for an id that was never reserved or is taken', async () => {
-      (createPost as any).mockResolvedValue(null);
+      (createPostCapped as any).mockResolvedValue(null);
       const res = await request(app).post('/api/entries').send(ENCRYPTED_BODY);
       expect(res.status).toBe(409);
     });
@@ -271,7 +283,7 @@ describe('Entry Routes', () => {
         .send({ content: 'Hello', metadata: { title: 'Test' } });
 
       expect(res.status).toBe(400);
-      expect(createPost).not.toHaveBeenCalled();
+      expect(createPostCapped).not.toHaveBeenCalled();
     });
 
     it('rejects isEncrypted: false even with ciphertext fields', async () => {
@@ -280,11 +292,11 @@ describe('Entry Routes', () => {
         .send({ ...ENCRYPTED_BODY, isEncrypted: false });
 
       expect(res.status).toBe(400);
-      expect(createPost).not.toHaveBeenCalled();
+      expect(createPostCapped).not.toHaveBeenCalled();
     });
 
     it('accepts but never stores a plaintext topic link', async () => {
-      (createPost as any).mockResolvedValue({ ...mockPost, id: 4 });
+      (createPostCapped as any).mockResolvedValue({ ...mockPost, id: 4 });
 
       const res = await request(app)
         .post('/api/entries')
@@ -292,7 +304,7 @@ describe('Entry Routes', () => {
 
       expect(res.status).toBe(201);
       expect(setPostTaxonomies).not.toHaveBeenCalled();
-      expect(createPost).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.not.objectContaining({ taxonomyIds: expect.anything() }), 'TX');
+      expect(createPostCapped).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.not.objectContaining({ taxonomyIds: expect.anything() }), expect.any(Number), ENTRY_STORAGE_LIMIT_BYTES);
     });
 
     it('returns 400 when encrypted post is missing required fields', async () => {
@@ -308,7 +320,7 @@ describe('Entry Routes', () => {
     });
 
     it('returns 500 on database error', async () => {
-      (createPost as any).mockRejectedValue(new Error('DB error'));
+      (createPostCapped as any).mockRejectedValue(new Error('DB error'));
 
       const res = await request(app)
         .post('/api/entries')

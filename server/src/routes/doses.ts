@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import { doseRecordIdSchema, putDoseRecordSchema, resealDoseRecordsSchema } from '@chronicles/shared';
 import {
-  ensureDoseRecordsTable, getDoseRecords, upsertDoseRecord, deleteDoseRecord, resealDoseRecords, doseRecordStorage, withTenantLock,
+  ensureDoseRecordsTable, getDoseRecords, upsertDoseRecordCapped, deleteDoseRecord, resealDoseRecords, doseRecordStorage, withTenantLock,
   type DoseRecordRow,
 } from '../db/tenantQueries.js';
 
@@ -136,12 +136,9 @@ router.put('/:id', async (req, res) => {
     const schema = req.auth!.tenantSchemaName;
     await ensureDoseRecordsTable(schema);
     const payload = Buffer.from(body.data.payload, 'base64');
-    // Check and write under the account's lock, so parallel saves can't both fit
-    const row = await withTenantLock(schema, async (tx) => {
-      const used = await doseRecordStorage(schema, [id.data], tx);
-      if (used.count + 1 > DOSE_RECORD_LIMIT || used.bytes + payload.length > DOSE_STORAGE_LIMIT_BYTES) return null;
-      return upsertDoseRecord(schema, id.data, body.data.date, payload, Buffer.from(body.data.iv, 'base64'), tx);
-    });
+    // Lock, caps and write in one trip, so parallel saves can't both fit
+    const row = await upsertDoseRecordCapped(schema, id.data, body.data.date, payload, Buffer.from(body.data.iv, 'base64'),
+      { maxRows: DOSE_RECORD_LIMIT, maxBytes: DOSE_STORAGE_LIMIT_BYTES });
     if (!row) {
       res.status(413).json(DOSES_FULL);
       return;

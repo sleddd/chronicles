@@ -10,7 +10,7 @@ import {
 } from './formKit.js';
 import { isDefaultTaskType, sameTaskType } from '../../../utils/taskTypes.js';
 import { checklistOf } from '../../../utils/taskLists.js';
-import { DAY_PARTS, partOf } from '../../../utils/planner.js';
+import { DAY_PARTS, chosenPart, partEndOf, partOf, partsCovered } from '../../../utils/planner.js';
 import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 export type { TaskFieldValues } from '../../../types/fields.js';
@@ -263,32 +263,47 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
         <DateRow>
           <DateHalf>
             <RowLabel as="label" htmlFor={deadlineId}>Deadline</RowLabel>
-            <BareDate id={deadlineId} type="date" value={values.deadline} onChange={e => set({ deadline: e.target.value })} />
+            <BareDate id={deadlineId} type="date" value={values.deadline}
+              onChange={e => set({ deadline: e.target.value, ...(e.target.value || values.scheduledDate ? {} : { scheduledPart: '', scheduledPartEnd: '' }) })} />
           </DateHalf>
           <DateHalf>
             <RowLabel as="label" htmlFor={scheduledId}>Planned for</RowLabel>
             <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
-              onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value ? {} : { scheduledPart: '' }) })} />
+              onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value || values.deadline ? {} : { scheduledPart: '', scheduledPartEnd: '' }) })} />
           </DateHalf>
         </DateRow>
 
-        {values.scheduledDate && (
-          <LabelledRow>
-            <RowLabel>Time of day</RowLabel>
-            <Chips role="radiogroup" aria-label="Time of day">
-              {DAY_PARTS.map(p => {
-                // None chosen yet = Morning, where the planner shows it
-                const on = partOf(values as unknown as Record<string, unknown>) === p.value;
-                return (
-                  <Chip key={p.value} type="button" role="radio" aria-checked={on} $active={on}
-                    onClick={() => set({ scheduledPart: p.value })}>
-                    {p.label}
-                  </Chip>
-                );
-              })}
-            </Chips>
-          </LabelledRow>
-        )}
+        {/* A time of day for the planned day — or, with only a deadline, what puts
+            the task on the deadline's day in the planner (none chosen = not on it) */}
+        {(values.scheduledDate || values.deadline) && (() => {
+          const cf = values as unknown as Record<string, unknown>;
+          const byDeadline = !values.scheduledDate;
+          // With a planned day, none chosen yet = Morning, where the planner shows it
+          const start = byDeadline ? chosenPart(cf) : partOf(cf);
+          const covered = start ? partsCovered(start, partEndOf(cf)) : [];
+          const allDay = covered.length === DAY_PARTS.length;
+          return (
+            <LabelledRow>
+              <RowLabel>Time of day</RowLabel>
+              <Chips role="group" aria-label="Time of day">
+                {DAY_PARTS.map(p => {
+                  const on = !allDay && covered.includes(p.value);
+                  return (
+                    <Chip key={p.value} type="button" aria-pressed={on} $active={on}
+                      // Tapping the one chosen takes a deadline-only task back off the planner
+                      onClick={() => set(byDeadline && covered.length === 1 && on ? { scheduledPart: '', scheduledPartEnd: '' } : { scheduledPart: p.value, scheduledPartEnd: '' })}>
+                      {p.label}
+                    </Chip>
+                  );
+                })}
+                <Chip type="button" aria-pressed={allDay} $active={allDay}
+                  onClick={() => set(allDay ? { scheduledPart: byDeadline ? '' : 'morning', scheduledPartEnd: '' } : { scheduledPart: 'morning', scheduledPartEnd: 'night' })}>
+                  All day
+                </Chip>
+              </Chips>
+            </LabelledRow>
+          );
+        })()}
 
         <LabelledRow>
           <RowLabel>Auto-migrate</RowLabel>

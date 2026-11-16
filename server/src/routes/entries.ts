@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import crypto from 'crypto';
-import { createPost, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
+import { createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
@@ -199,11 +199,9 @@ router.post('/', async (req, res) => {
     const input = toCreateInput(parsed.data);
     const size = input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES;
     const schema = req.auth!.tenantSchemaName;
-    const post = await withTenantLock(schema, async (tx) => {
-      if (await postStorageBytes(schema, [], tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
-      return createPost(schema, input, tx);
-    });
-    if (post === FULL) {
+    // Lock, cap check and insert in one trip to the database
+    const post = await createPostCapped(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES);
+    if (post === 'full') {
       res.status(413).json(JOURNAL_FULL);
       return;
     }
@@ -294,14 +292,14 @@ router.put('/:id', async (req, res) => {
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
     const schema = req.auth!.tenantSchemaName;
-    const post = await withTenantLock(schema, async (tx) => {
-      if (input.contentEncrypted && input.metadataEncrypted) {
-        const size = input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES;
-        if (await postStorageBytes(schema, id, tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return FULL;
-      }
-      return updatePost(schema, id, input, tx);
-    });
-    if (post === FULL) {
+    // A save of the entry itself (the usual case): lock, cap check and write
+    // in one trip. A body with no encrypted fields only touches updated_at
+    const post = input.contentEncrypted && input.contentIv && input.metadataEncrypted && input.metadataIv
+      ? await updatePostCapped(schema, id,
+        { contentEncrypted: input.contentEncrypted, contentIv: input.contentIv, metadataEncrypted: input.metadataEncrypted, metadataIv: input.metadataIv },
+        input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES, ENTRY_STORAGE_LIMIT_BYTES)
+      : await withTenantLock(schema, tx => updatePost(schema, id, input, tx));
+    if (post === 'full') {
       res.status(413).json(JOURNAL_FULL);
       return;
     }

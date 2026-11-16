@@ -1,6 +1,6 @@
 import type { DecryptedPost } from '@shared/crypto/types';
 import { toDateStr } from './dateUtils.js';
-import { effectiveDay } from './planner.js';
+import { effectiveDay, plannedDay } from './planner.js';
 
 /**
  * What the calendar shows: events and meetings (on `startDate`, else the day
@@ -27,7 +27,8 @@ export function calendarDayFor(entry: DecryptedPost, topicName: string | undefin
   const created = () => toDateStr(entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt));
   if (isEventTopic(topicName)) return day(cf.startDate) ?? created();
   if (isTaskTopic(topicName)) {
-    const scheduled = day(cf.scheduledDate);
+    // Its planned day, or its deadline once it has a time of day (as the planner shows it)
+    const scheduled = plannedDay(cf);
     return scheduled ? effectiveDay({ scheduled, done: !!cf.isCompleted, autoMigrate: !!cf.isAutoMigrating }, today) : null;
   }
   return null;
