@@ -50,8 +50,10 @@ export class PasskeyCancelled extends Error {
 }
 /** This passkey (or this browser) can't produce the secret that opens the journal */
 export class PasskeyCannotUnlock extends Error {
-  constructor(when: 'sign-in' | 'add' = 'sign-in') {
-    super(when === 'add'
+  constructor(when: 'sign-in' | 'add' | 'device' = 'sign-in') {
+    super(when === 'device'
+      ? 'This device’s passkeys can’t open your journal (it has no way to keep the secret that unlocks it). Try your phone or a security key, or keep signing in with your password.'
+      : when === 'add'
       ? 'That passkey was saved somewhere that can’t open your journal, most likely a password manager such as LastPass. Try again and, when it offers to save the passkey, close its pop-up and choose this device (Touch ID, Windows Hello) or your phone. Then delete the Chronicles passkey it just saved from the password manager, or it will keep answering at sign-in.'
       : 'A password manager (such as LastPass) answered with a passkey that can’t open your journal. Try again and, in its pop-up, choose to use your device or another passkey. Deleting the Chronicles passkey from the password manager stops this for good.');
     this.name = 'PasskeyCannotUnlock';
@@ -124,10 +126,48 @@ export async function passkeysAvailable(): Promise<boolean> {
   return true;
 }
 
+/*
+ * The browser's own passkey call, not the page's copy of it.
+ *
+ * A password manager's extension replaces `navigator.credentials.get / create`
+ * on the page with its own. One that can't do what is asked here (LastPass has
+ * no PRF) then fails the call at once, or answers with a passkey of its own
+ * that can't open the journal — and the device's prompt never shows. A fresh
+ * frame still has the browser's untouched functions, so they are taken from
+ * there and called on this page's `navigator.credentials`: the request goes
+ * straight to the browser, which offers the device, a phone or a security key.
+ * Where a frame can't give them (or an extension got there too) the page's
+ * own are used, as before.
+ */
+async function browserCredentials(kind: 'get' | 'create', options: CredentialRequestOptions | CredentialCreationOptions): Promise<Credential | null> {
+  let frame: HTMLIFrameElement | null = null;
+  let own: ((o: unknown) => Promise<Credential | null>) | null = null;
+  try {
+    frame = document.createElement('iframe');
+    frame.hidden = true;
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    document.body.appendChild(frame);
+    const proto = (frame.contentWindow as unknown as { CredentialsContainer?: { prototype?: Record<string, unknown> } } | null)?.CredentialsContainer?.prototype;
+    const fn = proto?.[kind];
+    if (typeof fn === 'function') own = fn as (o: unknown) => Promise<Credential | null>;
+  } catch { /* no frame here: the page's own call below */ }
+  try {
+    // Whatever the browser answers (cancelled, refused) is the answer: no second try
+    if (own) return await own.call(navigator.credentials, options);
+  } finally {
+    // Kept in the page until the call settled: a removed frame's functions stop working
+    frame?.remove();
+  }
+  return kind === 'get'
+    ? navigator.credentials.get(options as CredentialRequestOptions)
+    : navigator.credentials.create(options as CredentialCreationOptions);
+}
+
 /** One sign-in / confirmation ceremony: the answer for the server, and the PRF secret (or null). */
 async function assert(options: PasskeyRequestOptions): Promise<{ response: Record<string, unknown>; prf: Uint8Array | null; credentialId: string }> {
   const first = await passkeyPrfInput();
-  const cred = await navigator.credentials.get({
+  const cred = await browserCredentials('get', {
     publicKey: {
       challenge: fromB64u(options.challenge),
       rpId: options.rpId,
@@ -232,7 +272,7 @@ export interface NewPasskey {
  */
 export async function createPasskey(options: PasskeyCreationOptions, onSecondTouch?: () => void): Promise<NewPasskey> {
   const first = await passkeyPrfInput();
-  const cred = await navigator.credentials.create({
+  const cred = await browserCredentials('create', {
     publicKey: {
       challenge: fromB64u(options.challenge),
       rp: options.rp,
@@ -254,13 +294,13 @@ export async function createPasskey(options: PasskeyCreationOptions, onSecondTou
     // false when a passkey is made. No answer at all means something else made
     // it (a password manager's extension), and a second prompt would only be
     // that same pop-up again, with the same result
-    if (made.enabled !== true) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock('add'); }
+    if (made.enabled !== true) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock(made.enabled === false ? 'device' : 'add'); }
     // The secret comes on first use. This touch is only for the secret: its
     // signature goes nowhere, so the challenge is made here
     // Say so first: a second sheet with no word of why reads as a stall. It
     // also ends by itself (the first has the server's timeout; this had none)
     onSecondTouch?.();
-    const used = await navigator.credentials.get({
+    const used = await browserCredentials('get', {
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         rpId: options.rp.id,

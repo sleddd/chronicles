@@ -46,6 +46,31 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+describe('the browser’s own passkey call', () => {
+  it('is used in place of the page’s copy, which a password manager may have replaced', async () => {
+    const native = vi.fn().mockResolvedValue(assertionCred({ results: { first: SECRET.buffer } }));
+    const frameWindow = vi.spyOn(HTMLIFrameElement.prototype, 'contentWindow', 'get')
+      .mockReturnValue({ CredentialsContainer: { prototype: { get: native } } } as unknown as Window);
+    api.passkeyLoginOptions.mockResolvedValue({ options: OPTIONS });
+    api.passkeyLogin.mockResolvedValue({ user: {}, passkey: {} });
+    get.mockRejectedValue(new Error('a password manager’s shim'));
+    try {
+      await signInWithPasskey();
+      expect(native).toHaveBeenCalledTimes(1);
+      expect(native.mock.contexts[0]).toBe(navigator.credentials);
+      expect(get).not.toHaveBeenCalled();
+      expect(document.querySelector('iframe')).toBeNull();
+
+      // The browser's own refusal is final: the page's copy is not tried after it
+      native.mockRejectedValue(new DOMException('no', 'NotAllowedError'));
+      await expect(signInWithPasskey()).rejects.toBeInstanceOf(PasskeyCancelled);
+      expect(get).not.toHaveBeenCalled();
+    } finally {
+      frameWindow.mockRestore();
+    }
+  });
+});
+
 describe('signing in with a passkey', () => {
   it('asks for the PRF secret, a verified user, and no particular passkey', async () => {
     api.passkeyLoginOptions.mockResolvedValue({ options: OPTIONS });
