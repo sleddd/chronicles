@@ -373,8 +373,8 @@ describe('passkeys', () => {
       (prisma as any).session = { updateMany: vi.fn() };
       const token = (await confirm(key, 'change-password')).body.confirmToken;
       const res = await request(app).post('/api/auth/change-password').send({
-        confirmToken: token, newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'A'.repeat(64),
-        newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'B'.repeat(16),
+        confirmToken: token, newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'AAAAAAAAAAAAAAAA',
       });
       expect(res.status).toBe(200);
       (ACCOUNT as any).totpSecret = null;

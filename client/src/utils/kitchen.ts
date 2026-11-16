@@ -66,8 +66,9 @@ export function latestOpenList(entries: DecryptedPost[], listTopicId: number | u
   return entries
     .filter(e => topicOf(e) === listTopicId)
     .filter(e => {
-      const items = (customFields(e).items as ShoppingItem[] | undefined) ?? [];
-      return items.length === 0 || items.some(i => !i.checked);
+      const raw = customFields(e).items;
+      const items = Array.isArray(raw) ? raw as ShoppingItem[] : [];
+      return items.length === 0 || items.some(i => !i?.checked);
     })
     .sort((a, b) => time(b) - time(a))[0];
 }

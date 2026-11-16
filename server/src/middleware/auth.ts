@@ -45,9 +45,12 @@ function sessionCookie(req: Request): string | undefined {
   // there: a `__Host-` one left in the browser by a run on localhost without
   // NODE_ENV=development is never replaced by a dev sign-in, and once its
   // session was revoked every request answered "Session revoked" for good
-  return IS_DEVELOPMENT
+  const value = IS_DEVELOPMENT
     ? c.chronicle_session || c['__Host-chronicle_session']
     : c['__Host-chronicle_session'];
+  // cookie-parser turns a value starting "j:" into an object or array: only a
+  // string is ever a session token (an object here failed as a 500)
+  return typeof value === 'string' ? value : undefined;
 }
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -66,7 +69,8 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     token = sessionCookie(req);
   }
 
-  if (!token || token.length < 44) {
+  // A token is exactly 44 hex characters; anything else never reaches the database
+  if (!token || !/^[a-f0-9]{44}$/.test(token)) {
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
@@ -240,7 +244,7 @@ export async function cleanupSessions(): Promise<number> {
 /** Ends the session this browser's cookie holds (only when its verifier matches); returns its account, if any */
 export async function revokeBrowserSession(req: Request, reason = 'replaced'): Promise<number | null> {
   const token = sessionCookie(req);
-  if (!token || token.length < 44) return null;
+  if (!token || !/^[a-f0-9]{44}$/.test(token)) return null;
   const selector = token.slice(0, 12);
   const session = await prisma.session.findUnique({ where: { selector } });
   if (!session || session.revokedAt) return null;

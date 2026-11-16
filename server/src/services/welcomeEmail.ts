@@ -21,7 +21,11 @@ const esc = (s: string) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '
 export function firstName(name: string | null | undefined): string {
   // eslint-disable-next-line no-control-regex
   const clean = (name ?? '').replace(/[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/g, '').trim();
-  return clean.split(/\s+/)[0]?.slice(0, 60) ?? '';
+  const first = clean.split(/\s+/)[0]?.slice(0, 60) ?? '';
+  // Anyone can apply under any name, and the greeting goes to the address they
+  // typed: only something that reads as a name is used — never a web address
+  // or anything a mail app would turn into a link
+  return /^[\p{L}\p{M}'’-]+$/u.test(first) ? first : '';
 }
 
 const F = "font-family:'Open Sans',Helvetica,Arial,sans-serif;";
@@ -81,7 +85,7 @@ export function welcomeEmail({ name, email, link, sig, site }: WelcomeEmailInput
       ${step(3, STEPS[2][0], `Use the built-in <a href="${esc(site)}/report-a-bug" style="color:#2b8784;text-decoration:underline;">bug report form</a> or simply reply directly to this email. Every message gets read.`)}
     </table>
 
-    <p style="margin:32px 0 0;padding-top:20px;border-top:1px solid #e6e8ec;${F}font-size:13px;line-height:1.55;color:#575d68;>${esc(BILLING)}</p>
+    <p style="margin:32px 0 0;padding-top:20px;border-top:1px solid #e6e8ec;${F}font-size:13px;line-height:1.55;color:#575d68;">${esc(BILLING)}</p>
     <p style="margin:24px 0 0;${F}font-size:16px;line-height:1.6;color:#2e333b;">Happy writing,<br><span style="color:#1f2128;font-weight:600;">${esc(sig || 'Chronicles')}</span></p>
   </td></tr>
   <tr><td align="center" style="padding:22px 16px 0;${F}font-size:12px;line-height:1.6;color:#7a808a;">

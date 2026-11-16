@@ -205,7 +205,7 @@ describe('Remember this browser (skip the 2FA code)', () => {
     (prisma.account.findUnique as any).mockResolvedValue(acct);
     const changed = await request(app).post('/api/auth/change-password').set('Cookie', cookie).send({
       currentAuthSecret: GOOD, code: generateSync({ secret, epoch: Math.floor(Date.now() / 1000) + 30 }),
-      newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'A'.repeat(64), newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'B'.repeat(16),
+      newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'AAAAAAAAAAAAAAAA',
     });
     expect(changed.status).toBe(200);
     expect(clearsTrust(changed)).toBe(true);
@@ -232,7 +232,7 @@ describe('Remember this browser (skip the 2FA code)', () => {
     (prisma.account.findUnique as any).mockResolvedValue(acct);
     const key = await request(app).post('/api/auth/recovery-key').set('Cookie', cookie).send({
       currentAuthSecret: GOOD, code: generateSync({ secret, epoch: Math.floor(Date.now() / 1000) + 30 }),
-      recoveryWrappedMK: 'A'.repeat(64), recoveryWrapIv: 'B'.repeat(16), recoveryKeyHash: 'd'.repeat(64), recoveryKeySalt: 'e'.repeat(32),
+      recoveryWrappedMK: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', recoveryWrapIv: 'AAAAAAAAAAAAAAAA', recoveryKeyHash: 'd'.repeat(64), recoveryKeySalt: 'e'.repeat(32),
     });
     expect(key.status).toBe(200);
     expect(clearsTrust(key)).toBe(true);
@@ -343,7 +343,7 @@ describe('the password wrap: what opens the journal, confirmed like the action i
     const acct = wrapped(account(secret));
     (prisma.account.findUnique as any).mockResolvedValue(acct);
     const { body } = await request(app).post('/api/auth/password-wrap').send({ currentAuthSecret: GOOD, action: 'change-password', code: generateSync({ secret }) });
-    const change = { newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'A'.repeat(64), newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'B'.repeat(16) };
+    const change = { newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'AAAAAAAAAAAAAAAA' };
     // Not for another action
     const other = await request(app).delete('/api/auth/account').send({ confirmToken: body.confirmToken });
     expect(other.status).toBe(401);

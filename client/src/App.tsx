@@ -23,6 +23,7 @@ import { HealthPrivacyView } from './views/HealthPrivacyView.js';
 import { TermsView } from './views/TermsView.js';
 import { LicenseView } from './views/LicenseView.js';
 import { NoticeBanner } from './components/organisms/NoticeBanner.js';
+import { ErrorBoundary } from './components/atoms/ErrorBoundary.js';
 import { RecoverView } from './views/RecoverView.js';
 import { JournalView } from './views/JournalView.js';
 import { SettingsView } from './views/SettingsView.js';
@@ -503,7 +504,7 @@ function ChatGate() {
 /** The chat shows only once it's switched on in Settings → In-App AI */
 function ChatWhenOn() {
   const chatOn = useAiChatEnabled();
-  return chatOn ? <AiChat /> : null;
+  return chatOn ? <ErrorBoundary fallback="none"><AiChat /></ErrorBoundary> : null;
 }
 
 /** The saved wallpaper (the sealed `wallpaper` setting) into the store once
@@ -550,7 +551,11 @@ function TimeGate() {
   const { pathname } = useLocation();
   if (!isAuthenticated || !isUnlocked) return null;
   // The reminders bell sits in the top-right corner on wide screens (phones / tablets: their top bar)
-  return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <><RunningTimer /><NotificationBell variant="corner" /></>}</>;
+  return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <>
+    {/* Floating extras: one that fails isn't shown, and the page carries on */}
+    <ErrorBoundary fallback="none"><RunningTimer /></ErrorBoundary>
+    <ErrorBoundary fallback="none"><NotificationBell variant="corner" /></ErrorBoundary>
+  </>}</>;
 }
 
 function WallpaperGate() {
@@ -566,12 +571,25 @@ function NoticeGate() {
   const { pathname } = useLocation();
   const publicPage = isPublicPage(pathname);
   if (!isAuthenticated || publicPage) return null;
-  return <NoticeBanner />;
+  return <ErrorBoundary fallback="none"><NoticeBanner /></ErrorBoundary>;
 }
+
+// Where a page that failed to show can send someone: places that may still open
+const PAGE_LINKS = [
+  { to: '/journal', label: 'Journal' },
+  { to: '/settings', label: 'Settings' },
+];
 
 function R({ children }: { children: React.ReactNode }) {
   useCalendarSync();
-  return <ProtectedRoute>{children}</ProtectedRoute>;
+  const { pathname } = useLocation();
+  // One page failing to show (an entry holding something it didn't expect)
+  // stays that page's problem: the rest of the app, and Settings, still open
+  return (
+    <ProtectedRoute>
+      <ErrorBoundary fallback="page" resetKey={pathname} links={PAGE_LINKS.filter(l => l.to !== pathname)}>{children}</ErrorBoundary>
+    </ProtectedRoute>
+  );
 }
 
 export function App() {

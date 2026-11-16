@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App.js';
 import { PAGE_COLOR, resolveTheme, startingTheme } from './utils/autoTheme.js';
+import { ErrorBoundary } from './components/atoms/ErrorBoundary.js';
 import { setUpdateAvailable } from './services/appUpdate.js';
 
 // Start in the remembered theme (else light) before anything paints — the
@@ -34,7 +35,10 @@ if (window.location.pathname !== '/') document.title = 'Chronicles';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    {/* Last resort: never a blank page (each page has its own boundary inside) */}
+    <ErrorBoundary fallback="page" links={[{ to: '/settings', label: 'Settings' }]}>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );
 

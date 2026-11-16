@@ -81,8 +81,21 @@ export function splitCsvLines(text: string): string[] {
  */
 export function isReservedImportColumn(header: string): boolean {
   const name = header.trim();
-  return name.startsWith('_') || ['onpublicshelf', 'constructor', 'prototype'].includes(name.toLowerCase());
+  return name.startsWith('_') || ['onpublicshelf', 'constructor', 'prototype', '__proto__'].includes(name.toLowerCase())
+    || STRUCTURED_FIELDS.has(name.toLowerCase());
 }
+
+/**
+ * The forms' fields that hold a list or an object (a shopping list's items, a
+ * medication's reminder times, a recipe's steps…). An import writes text and
+ * yes / no only, so a column of one of these names would put text where every
+ * view expects a list — which once took the whole app down on each load. Such
+ * a column is left out; the row's other columns are imported as usual.
+ */
+const STRUCTURED_FIELDS = new Set([
+  'items', 'scheduletimes', 'repeatdays', 'ingredients', 'days', 'steps', 'phases', 'categories',
+  'routineitemsdone', 'checklist', 'wins', 'priorities', 'cover', 'meals', 'nutrientsource', 'slots', 'times',
+]);
 
 const IMPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const IMPORT_TIME = /^\d{2}:\d{2}(:\d{2})?$/;

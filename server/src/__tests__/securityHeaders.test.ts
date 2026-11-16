@@ -155,14 +155,20 @@ describe('securityHeaders middleware', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('sets all expected headers (6 total)', () => {
+  it('keeps other sites from holding this page\'s window', () => {
+    const res = createMockRes() as any;
+    securityHeaders({} as any, res, vi.fn());
+    expect(res.setHeader).toHaveBeenCalledWith('Cross-Origin-Opener-Policy', 'same-origin');
+  });
+
+  it('sets all expected headers (7 total)', () => {
     const req = {} as any;
     const res = createMockRes() as any;
     const next = vi.fn();
 
     securityHeaders(req, res, next);
 
-    expect(res.setHeader).toHaveBeenCalledTimes(6);
+    expect(res.setHeader).toHaveBeenCalledTimes(7);
   });
 });
 
