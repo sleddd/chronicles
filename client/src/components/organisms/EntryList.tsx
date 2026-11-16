@@ -44,8 +44,9 @@ const ListContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Room above the first row (sitewide entry-list spacing) */
-  padding: 6px 0 0;
+  /* No room above the first row: the open row's accent bar starts right at the
+     view row's hairline */
+  padding: 0;
   /* Fills the pane, so its colour runs to the foot on a wallpaper too */
   flex: 1 0 auto;
   background: transparent;

@@ -35,9 +35,9 @@ import { plannerFacts, tasksByDay, parsePlannerOrder, type PlannerOrder } from '
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
+import { NotificationBell, BellBadge } from '../components/organisms/NotificationBell.js';
+import { ErrorBoundary } from '../components/atoms/ErrorBoundary.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
-import { useSaveCommand } from '../hooks/useSaveCommand.js';
-import { useAiReady } from '../hooks/useAiReady.js';
 import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
 import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { QuickLog } from '../components/organisms/HealthQuickLog.js';
@@ -352,7 +352,9 @@ const OutlineBtn = styled.button`
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
   margin-top: 36px;
-  @media (max-width: 640px) { margin-top: 28px; }
+  /* Room under it before Stats / the cards (their own 24–28px add to this) */
+  margin-bottom: 24px;
+  @media (max-width: 640px) { margin-top: 28px; margin-bottom: 16px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
     & > section { border-radius: 14px; outline: 2px solid var(--color-accent); outline-offset: 12px; }
@@ -422,7 +424,7 @@ const MAX_PLACES = 8;
    either alone takes the whole line */
 /* The daily quote's card: the quote in thin italic Work Sans, "~ Author" muted under it */
 const QuoteText = styled.blockquote`
-  margin: 16px 0 0;
+  margin: 0;
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 300;
@@ -462,7 +464,7 @@ const CLOCKS_SHOWN = 3;
 const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  gap: 24px 44px;
   margin-top: 24px;
   align-items: start;
   @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
@@ -471,7 +473,7 @@ const Columns = styled.div`
 const Col = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 36px;
   min-width: 0;
 `;
 
@@ -488,7 +490,7 @@ const cardShell = css`
   ${glassCard}
 `;
 
-const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
+const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: boolean }>`
   position: relative;
   min-width: 0;
   padding: 34px 32px 30px;
@@ -504,6 +506,28 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
     line-height: 30px;
     ${cardLabel}
   }
+  /* $open (every card but the daily quote and the wellness check-in): its panel as usual,
+     with a thin sentence-case Work Sans title over the hairline (not the small capitals) */
+  ${({ $open }) => ($open ? `
+    /* Room above and below the title's hairline */
+    && > section > :first-child { margin-bottom: 24px; padding-bottom: 22px; }
+    && > section > :first-child h2,
+    && > section > :first-child label > span {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 300;
+      letter-spacing: 0;
+      text-transform: none;
+      line-height: 40px;
+      color: var(--text-primary);
+    }
+    /* A little less room above the title than the card's usual padding */
+    padding-top: 26px;
+    @media (max-width: 480px) { padding-top: 18px; }
+    /* Grip and chevron centred on the title's 40px line */
+    & > button { top: 31px; }
+    @media (max-width: 480px) { & > button { top: 23px; } }
+  ` : '')}
   /* $plain (Wellness check-in): no panel, title or fold — its four-square box as it is,
      with only the grip, tucked into the box's top-right corner */
   ${({ $plain }) => ($plain ? `
@@ -532,6 +556,9 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean }>`
     & > button[aria-expanded] { right: -6px; }
     & > button[aria-label^="Move"] { right: 28px; }
     & > section > :not(:first-child) { display: none; }
+    /* Folded: the title fades back, so the open cards lead */
+    && > section > :first-child h2,
+    && > section > :first-child label > span { color: var(--text-muted); opacity: 0.75; }
     && > section > :first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
     /* Controls that only make sense open (the Quick log's Meal | Exercise) go too */
     & [data-fold-hide] { display: none; }
@@ -883,11 +910,12 @@ const PNum = styled.span<{ $done?: boolean }>`
 
 /* A priority's text, edited in place (no box); done = muted + struck. It
    wraps and grows to show all of it (Enter adds no line break) */
-const PText = styled(AutoTextarea)<{ $done?: boolean }>`
+const PText = styled(AutoTextarea)<{ $done?: boolean; $roomy?: boolean }>`
   && {
     flex: 1;
     min-width: 0;
-    padding: 14px 0;
+    /* Priorities and Wins: a roomier row */
+    padding: ${({ $roomy }) => ($roomy ? '20px 0' : '14px 0')};
     line-height: 1.4;
     min-height: 0;
     border: none !important;
@@ -930,12 +958,12 @@ const ListNote = styled.p`
 
 /** One priority's text: edited in place, saved on Enter or leaving the field;
  *  clearing it removes the priority. Escape puts the saved text back. */
-function PriorityText({ item, onCommit, label = 'Priority' }: { item: PriorityItem; onCommit: (text: string) => void; label?: string }) {
+function PriorityText({ item, onCommit, label = 'Priority', roomy }: { item: PriorityItem; onCommit: (text: string) => void; label?: string; roomy?: boolean }) {
   const [text, setText] = useState(item.text);
   useEffect(() => { setText(item.text); }, [item.text]);
   const commit = () => { if (text.trim() !== item.text) onCommit(text.trim()); };
   return (
-    <PText $done={item.done} value={text} aria-label={`${label}: ${item.text}`}
+    <PText $done={item.done} $roomy={roomy} value={text} aria-label={`${label}: ${item.text}`}
       onChange={e => setText(e.target.value)} onBlur={commit}
       onKeyDown={e => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
@@ -982,6 +1010,47 @@ const BareAreaBox = styled(AutoTextarea)`
 function BareArea({ onEnter, ...rest }: Omit<React.ComponentProps<typeof AutoTextarea>, 'onKeyDown' | 'rows'> & { onEnter: (el: HTMLTextAreaElement) => void }) {
   return <BareAreaBox rows={1} {...rest}
     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter(e.currentTarget); } }} />;
+}
+
+/* A card's add box ("Add a priority", "Add a win", "Write a mantra", "Start a timer for…"):
+   a standard outlined text box (the border on the box — inputs are flat app-wide) */
+const AddBox = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  cursor: text;
+  /* Ruled off from the rows above it, like they are from each other */
+  ${Row} + & { border-top: 1px solid var(--border-subtle); }
+  & > svg { flex: none; width: 18px; color: var(--text-muted); }
+  &:focus-within > svg { color: var(--color-accent-link); }
+`;
+
+/** Type and press Enter (or, with `addOnBlur`, leave the box) to add; a failed add puts the text back */
+function CardAdd({ label, failed, run, gap = 12, addOnBlur, roomy }: {
+  label: string; failed: string; run: (text: string) => Promise<unknown>; gap?: number; addOnBlur?: boolean; roomy?: boolean;
+}) {
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const add = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    setError('');
+    run(text).catch(err => {
+      console.error(`${label} failed:`, err);
+      setDraft(text);
+      setError(failed);
+    });
+  };
+  return (<>
+    <AddBox style={{ marginTop: gap, minHeight: roomy ? 64 : undefined }}>
+      <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
+      <BareArea value={draft} placeholder={label} aria-label={label} maxLength={500}
+        onChange={e => setDraft(e.target.value)} onBlur={addOnBlur ? add : undefined} onEnter={add} />
+    </AddBox>
+    {error && <Muted role="alert" style={{ color: 'var(--color-danger)' }}>{error}</Muted>}
+  </>);
 }
 
 /** The newest Priorities-topic entry and its items. Not tied to today — the
@@ -1039,10 +1108,10 @@ function usePriorityList() {
   return { items, write, create, add };
 }
 
-/* Numbered rows — each edited in place, a quiet ×, a check on the right.
-   New ones come in from "Add a priority" in the add row */
+/* Numbered rows — each edited in place, a quiet ×, a check on the right,
+   and "Add a priority" under them */
 function Priorities() {
-  const { items, write, create } = usePriorityList();
+  const { items, write, create, add } = usePriorityList();
   const [starting, setStarting] = useState(false);
 
   // New list: starts an empty one; the old list stays in the journal
@@ -1060,11 +1129,10 @@ function Priorities() {
           <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
         )}
       </SectionHead>
-      {items.length === 0 && <Muted>No priorities yet. Type one into Add a priority.</Muted>}
       {items.map((p, i) => (
         <Row key={p.id}>
           <PNum>{i + 1}</PNum>
-          <PriorityText item={p}
+          <PriorityText item={p} roomy
             onCommit={text => void write(text ? items.map(x => (x.id === p.id ? { ...x, text } : x)) : items.filter(x => x.id !== p.id))} />
           <PRemove type="button" aria-label={`Remove "${p.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== p.id))}>
@@ -1074,6 +1142,7 @@ function Priorities() {
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
         </Row>
       ))}
+      <CardAdd label="Add a priority" failed="That priority didn’t save. Try again." run={add} gap={0} addOnBlur roomy />
       {items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
   );
@@ -1139,10 +1208,10 @@ function useWinsActions() {
 }
 
 /* Laid out like Today's priorities: numbered rows, each win edited in place
-   with a quiet × — no ticks (a win is done). New ones come in from "Add a win" */
+   with a quiet ×, and "Add a win" under them — no ticks (a win is done) */
 function Wins() {
   const navigate = useNavigate();
-  const { items, tid, write, create } = useWinsActions();
+  const { items, tid, write, create, add } = useWinsActions();
   const [starting, setStarting] = useState(false);
 
   // New list: starts an empty one; the old list stays in the journal
@@ -1161,11 +1230,10 @@ function Wins() {
           {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
         </HeadLinks>
       </SectionHead>
-      {items.length === 0 && <Muted>No wins yet. Type one into Add a win.</Muted>}
       {items.map((w, i) => (
         <Row key={w.id}>
           <PNum>{i + 1}</PNum>
-          <PriorityText item={{ ...w, done: false }} label="Win"
+          <PriorityText item={{ ...w, done: false }} label="Win" roomy
             onCommit={text => void write(text ? items.map(x => (x.id === w.id ? { ...x, text } : x)) : items.filter(x => x.id !== w.id))} />
           <PRemove type="button" aria-label={`Remove "${w.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== w.id))}>
@@ -1173,6 +1241,7 @@ function Wins() {
           </PRemove>
         </Row>
       ))}
+      <CardAdd label="Add a win" failed="That win didn’t save. Try again." run={add} gap={0} addOnBlur roomy />
       {items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
   );
@@ -1678,6 +1747,7 @@ function Mantra() {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const [step, setStep] = useState(0);
+  const addMantra = useAddMantra();
 
   const topicId = allTopics.find(t => isMantraTopic(t.name))?.id;
   // Oldest first, so the daily turn is stable as new ones are added
@@ -1688,7 +1758,7 @@ function Mantra() {
     .sort((a, b) => a.id - b.id)), [entries, topicId]);
   const shown = mantras[stepIndex(dailyMantraIndex(mantras.length), step, mantras.length)];
 
-  // One just written (in Write a mantra) shows here: it's last in the list
+  // One just written (in Write a mantra) shows: it's last in the list
   const count = useRef(mantras.length);
   useEffect(() => {
     if (mantras.length > count.current) setStep(mantras.length - 1 - dailyMantraIndex(mantras.length));
@@ -1713,7 +1783,8 @@ function Mantra() {
             </button>
           </MantraNav>
         )}
-      </>) : <Muted>No mantras yet. Write one in Write a mantra.</Muted>}
+      </>) : <Muted>No mantras yet. Write your first one below.</Muted>}
+      <CardAdd label="Write a mantra" failed="That mantra didn’t save. Try again." run={addMantra} gap={20} />
     </section>
   );
 }
@@ -1965,6 +2036,7 @@ function TimeTracked() {
   const apply = useTimeStore(s => s.apply);
   const [period, setPeriod] = useState<TimePeriod>('today');
   const [showAll, setShowAll] = useState(false);
+  const startFor = useStartTimerFor();
   const running = runningSession(sessions);
   const now = useNow(!!running);
 
@@ -1997,7 +2069,7 @@ function TimeTracked() {
       </StatsHead>
       <TimeTotal><b>{formatSpent(total)}</b><span>{periodWord}</span></TimeTotal>
       {rows.length === 0
-        ? <Muted>Nothing timed {periodWord}. Start a timer on a task, goal or exercise, or type an activity into Start a timer for….</Muted>
+        ? <Muted>Nothing timed {periodWord}. Start a timer on a task, goal or exercise, or type an activity below.</Muted>
         : <div style={{ marginTop: 10 }}>
           {shown.map(({ entry, ms: spent, name }) => {
             const on = running?.entryId === entry.id;
@@ -2028,6 +2100,7 @@ function TimeTracked() {
             <MoreLink type="button" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</MoreLink>
           )}
         </div>}
+      <CardAdd label="Start a timer for…" failed="That timer didn’t start. Try again." run={startFor} gap={16} />
     </section>
   );
 }
@@ -2203,140 +2276,13 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
   );
 }
 
-/* ── The add row: one pill each to add a priority, a win, a mantra or start a timer ── */
-
-/* Equal pills across the page; phones: the first on its own, then two a row
-   (a last one left alone takes the whole row) */
-const AddRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px 28px;
-  margin-top: 32px;
-  /* Room under the lines before the cards start */
-  margin-bottom: 16px;
-  /* Phones: one full-width line each, stacked */
-  @media (max-width: 768px) {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    margin-bottom: 12px;
-  }
-`;
-
-/* The add row's boxes (Add a priority, Log a meal…): softly squared boxes in the page
-   colour, a little see-through over the photo, a soft shadow all round, no outline; an
-   accent outline while typing */
-const AddPill = styled.form`
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  height: 44px;
-  padding: 0 10px 0 16px;
-  border: none;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg-app) 82%, transparent);
-  box-shadow: rgba(0, 0, 0, 0.22) 0 4px 14px -4px, rgba(0, 0, 0, 0.1) 0 1px 3px;
-  && input::placeholder { color: var(--text-muted); opacity: 1; }
-  &:focus-within { outline: 1px solid var(--color-accent-line); outline-offset: 0; }
-`;
-
-const EnterBtn = styled.button`
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-left: 8px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  opacity: 0.55;
-  cursor: pointer;
-  transition: opacity 120ms, color 120ms;
-  &:hover:not(:disabled), ${AddPill}:focus-within &:not(:disabled) { opacity: 1; color: var(--color-accent-link); }
-  &:disabled { cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
-`;
-
-const AddRowError = styled(Muted)`
-  color: var(--color-danger);
-`;
-
-interface AddField { key: string; placeholder: string; label: string; failed: string; run: (text: string) => Promise<unknown> }
-
-function AddPillInput({ field, onError }: { field: AddField; onError: (message: string) => void }) {
-  const [draft, setDraft] = useState('');
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    onError('');
-    field.run(text).catch(err => {
-      console.error(`${field.label} failed:`, err);
-      setDraft(text);
-      onError(field.failed);
-    });
-  };
-  return (
-    <AddPill onSubmit={submit}>
-      <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
-        placeholder={field.placeholder} aria-label={field.label}
-        onKeyDown={e => { if (e.key === 'Escape') setDraft(''); }} />
-      {/* The return key, faded: press Enter (or tap it) to save */}
-      <EnterBtn type="submit" aria-label={`Save: ${field.label}`} title="Press Enter to save" disabled={!draft.trim()}>
-        <Icon name="corner-down-left" size={16} strokeWidth={1.8} />
-      </EnterBtn>
-    </AddPill>
-  );
-}
-
-/** Logs a meal or a symptom from a line of text, shaped like its form (the AI chat's /save):
- *  a meal dated now with its type by the time of day (and its nutrients filled by In-App AI
- *  when it's set up), a symptom dated now with its name — in the account's Meals / Symptom
- *  topic, made on first use */
-function useQuickLog() {
-  const saveCommand = useSaveCommand();
-  const aiReady = useAiReady();
-  return async (kind: 'meal' | 'symptom', text: string) => {
-    const [name, icon] = kind === 'meal' ? ['Meals', 'utensils'] : ['Symptom', 'flask'];
-    const id = await getOrCreateTopic(name, icon);
-    await saveCommand({ id, name }, text, { estimateNutrition: kind === 'meal' && aiReady });
-  };
-}
-
-function QuickAdds({ priorities, wins, mantra, timer, meal, symptom }: {
-  priorities: boolean; wins: boolean; mantra: boolean; timer: boolean; meal: boolean; symptom: boolean;
-}) {
-  const prioritiesList = usePriorityList();
-  const winsList = useWinsActions();
-  const addMantra = useAddMantra();
-  const startFor = useStartTimerFor();
-  const quickLog = useQuickLog();
-  const [error, setError] = useState('');
-  const fields: (AddField | false)[] = [
-    priorities && { key: 'priority', placeholder: 'Add a priority', label: 'Add a priority', failed: 'That priority didn’t save. Try again.', run: prioritiesList.add },
-    wins && { key: 'win', placeholder: 'Add a win', label: 'Add a win', failed: 'That win didn’t save. Try again.', run: winsList.add },
-    meal && { key: 'meal', placeholder: 'Log a meal', label: 'Log a meal', failed: 'That meal didn’t save. Try again.', run: (t: string) => quickLog('meal', t) },
-    symptom && { key: 'symptom', placeholder: 'Log a symptom', label: 'Log a symptom', failed: 'That symptom didn’t save. Try again.', run: (t: string) => quickLog('symptom', t) },
-    mantra && { key: 'mantra', placeholder: 'Write a mantra', label: 'Write a mantra', failed: 'That mantra didn’t save. Try again.', run: addMantra },
-    timer && { key: 'timer', placeholder: 'Start a timer for…', label: 'Start a timer for an activity', failed: 'That timer didn’t start. Try again.', run: startFor },
-  ];
-  const shown = fields.filter((f): f is AddField => !!f);
-  if (!shown.length) return null;
-  return (<>
-    <AddRow>{shown.map(f => <AddPillInput key={f.key} field={f} onError={setError} />)}</AddRow>
-    {error && <AddRowError role="alert">{error}</AddRowError>}
-  </>);
-}
-
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
-function SortableCard({ id, collapsed, label, plain, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, plain, open, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
-    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain}
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain} $open={open}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
@@ -2600,7 +2546,7 @@ export function DashboardView() {
       label: 'daily quote', on: shown('quote'),
       node: (
         <section aria-label="Daily quote">
-          <SectionHead><h2>Daily quote</h2></SectionHead>
+          {/* Just the quote — no title row; it keeps clear of the grip and chevron */}
           <QuoteText>{quote.text}</QuoteText>
           {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
         </section>
@@ -2647,7 +2593,7 @@ export function DashboardView() {
     // The wellness check-in keeps its own look (the four-square box): moved by its grip, never folded
     if (k === 'wellness') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain>{w.node}</SortableCard>;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label}>
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote'}>
         {w.node}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
           aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
@@ -2694,6 +2640,15 @@ export function DashboardView() {
                   aria-expanded={customizing} onClick={() => setCustomizing(o => !o)}>
                   <MaterialIcon $size={22} aria-hidden="true">tune</MaterialIcon>
                 </ViewBtn>
+                {/* The reminders bell, in line with Voice and the sliders (other pages: the top-right corner) */}
+                <ErrorBoundary fallback="none">
+                  <NotificationBell variant="corner" trigger={({ count, ...p }) => (
+                    <ViewBtn type="button" $on={p['aria-expanded']} title="Reminders" style={{ position: 'relative' }} {...p}>
+                      <MaterialIcon $size={22} aria-hidden="true">notifications</MaterialIcon>
+                      {count > 0 && <BellBadge aria-hidden="true" style={{ top: -2, right: -4 }}>{count}</BellBadge>}
+                    </ViewBtn>
+                  )} />
+                </ErrorBoundary>
               </HeadActions>
             )}
           </Head>
@@ -2775,9 +2730,6 @@ export function DashboardView() {
 
 
           {shown('stats') && <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} />}
-
-          <QuickAdds priorities={shown('priorities')} wins={shown('wins')} mantra={shown('mantra')} timer={shown('time')}
-            meal={shown('quickLog') && ff.foodEnabled !== false} symptom={shown('symptom')} />
 
           {(left.length > 0 || right.length > 0) && (
             <DndContext sensors={sensors} collisionDetection={closestCorners}

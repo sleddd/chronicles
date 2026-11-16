@@ -3,7 +3,7 @@ import { DraftNote } from '../components/molecules/DraftNote.js';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { validEntryRows } from '../utils/entryRows.js';
 import { duplicateEntryFields } from '../utils/entryDuplicate.js';
-import { nextPrompt } from '../utils/journalPrompts.js';
+import { QUICK_PLACEHOLDER } from '../utils/quickPlaceholder.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 import { glassBar, glassPill } from '../styles/wallpaper.js';
@@ -193,8 +193,6 @@ const imagesSig = (imgs: EntryImage[], featured: string | null) =>
 
 export function JournalView() {
   const { isUnlocked, decryptPosts, encryptPost, encryptNewPost, encryptBytes, decryptBytes } = useEncryption();
-  // A new entry's prompt — the next one each time the journal opens (utils/journalPrompts)
-  const [writingPrompt] = useState(nextPrompt);
   const {
     decryptedEntries, setDecryptedEntries, setRawEntries,
     topics, setTopics, setFeatureFlags, isInitialized, setLoading, isLoading,
@@ -1189,7 +1187,7 @@ export function JournalView() {
             )}
             <EntryForm
               entryId={selectedEntryId}
-              placeholder={selectedEntryId == null ? writingPrompt : undefined}
+              placeholder={selectedEntryId == null ? QUICK_PLACEHOLDER : undefined}
               content={editorContent}
               onContentChange={setEditorContent}
               topicId={editorTopicId}

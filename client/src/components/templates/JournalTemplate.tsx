@@ -30,11 +30,15 @@ const Head = styled.header`
   /* The title sits where the other pages' do (Topics, Health, Planning…: 53px) */
   padding: 53px 36px 30px;
   @media (max-width: 768px) { padding: 34px 24px 32px; align-items: center; row-gap: 10px; }
+  /* With no wallpaper, a hairline closes the title row (the photo marks it otherwise) */
+  html:not([data-wallpaper]) & { border-bottom: 1px solid var(--border-subtle); }
   /* Phones/tablets: the top bar names the page and holds New entry — this row
      is only the back caret, while an entry is open */
   ${NAV_COMPACT} {
     padding: 4px 16px;
     &:not([data-back]) { display: none; }
+    /* Just the back caret here, under the top bar's own hairline */
+    html:not([data-wallpaper]) & { border-bottom: none; }
   }
 `;
 

@@ -198,7 +198,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
 const DARK_CSS_VARS: Record<string, string> = {
   '--bg-app':            '#1f2229',
   '--bg-surface':        '#272a33',
-  '--bg-panel':          '#24262d', /* report panels (Health → Reports) */
+  '--bg-panel':          '#242730', /* cards and panels: a cool grey, in step with the page's blue cast (#24262d read warm on it) */
   '--bg-elevated':       '#2e323c',
   '--bg-sunken':         '#191b21',
   '--bg-hover':          '#2b2f38',
@@ -554,7 +554,8 @@ function TimeGate() {
   return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <>
     {/* Floating extras: one that fails isn't shown, and the page carries on */}
     <ErrorBoundary fallback="none"><RunningTimer /></ErrorBoundary>
-    <ErrorBoundary fallback="none"><NotificationBell variant="corner" /></ErrorBoundary>
+    {/* The dashboard puts its own beside Voice and the sliders */}
+    {pathname !== '/dashboard' && <ErrorBoundary fallback="none"><NotificationBell variant="corner" /></ErrorBoundary>}
   </>}</>;
 }
 

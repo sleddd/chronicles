@@ -38,9 +38,9 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
   align-items: center;
   margin-top: 8px;
   padding: 8px;
-  /* The lightest of outlines: half-way between the faintest hairline and the
-     page itself in light; the ordinary hairline in dark */
-  border: 1px solid color-mix(in srgb, var(--border-faint) 50%, var(--bg-app));
+  /* The card / input outline in light (fainter ones vanished on the plain page);
+     the ordinary hairline in dark */
+  border: 1px solid var(--border-card);
   html[data-theme='dark'] & { border-color: var(--border-subtle); }
   border-radius: 10px;
   ${glassControl}

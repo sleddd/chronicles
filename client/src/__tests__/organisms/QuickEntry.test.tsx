@@ -46,22 +46,15 @@ describe('QuickEntry', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it('waits with the question, opens once a topic is picked and goes back to waiting once saved', async () => {
+  it('is open from the start (Journal) and stays open after saving or clearing', async () => {
     renderWithTheme(<QuickEntry />);
-    expect(screen.getByText('waiting')).toBeTruthy();
-    fireEvent.click(screen.getByText('pick Journal'));
     expect(screen.getByText('open')).toBeTruthy();
     fireEvent.click(screen.getByText('type'));
     fireEvent.click(screen.getByText('save'));
-    await waitFor(() => expect(screen.getByText('waiting')).toBeTruthy());
-  });
-
-  it('Clear / Escape goes back to the question even though the emptied editor reports "<p></p>"', () => {
-    renderWithTheme(<QuickEntry />);
-    fireEvent.click(screen.getByText('pick Journal'));
-    fireEvent.click(screen.getByText('type'));
+    await waitFor(() => expect(create).toHaveBeenCalled());
     expect(screen.getByText('open')).toBeTruthy();
+    fireEvent.click(screen.getByText('type'));
     fireEvent.click(screen.getByText('clear'));
-    expect(screen.getByText('waiting')).toBeTruthy();
+    expect(screen.getByText('open')).toBeTruthy();
   });
 });

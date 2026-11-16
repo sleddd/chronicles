@@ -5,14 +5,12 @@ import { css } from 'styled-components';
    a little see-through with the photo blurred behind them, controls a light
    glass pill, and the page's title text white. Nothing changes without one. */
 
-/** Cards: the panel colour, a little see-through, the photo blurred behind.
- *  --glass-solid / --glass-blur set how much (the Quick entry lowers both so
- *  the photo shows through it) */
+/** Cards: the solid panel colour on the photo too — no see-through, so every shaded
+ *  card on every dashboard is the same cool --bg-panel whatever photo is behind it
+ *  (see-through ones took on the photo's colour and no longer matched the solid ones) */
 export const glassCard = css`
   html[data-wallpaper] & {
-    background: color-mix(in srgb, var(--bg-panel) var(--glass-solid, 76%), transparent);
-    -webkit-backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.15);
-    backdrop-filter: blur(var(--glass-blur, 22px)) saturate(1.15);
+    background: var(--bg-panel);
   }
 `;
 
@@ -101,7 +99,7 @@ export const photoTokens = css`
     --bg-surface: #272a33;
     --bg-elevated: #2e323c;
     --bg-tile: #2c2e37;
-    --bg-panel: #24262d;
+    --bg-panel: #242730;
     --border-pop: #373a44;
     --paper-surface: #272a33;
     --paper-hover: #2b2f38;

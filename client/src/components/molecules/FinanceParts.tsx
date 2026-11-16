@@ -938,9 +938,9 @@ export const CardFootBand = styled.div`
   justify-content: space-between;
   gap: 10px 16px;
   padding: 14px 24px 14px 36px;
-  /* Its tint sets it apart: no rule above it, a little room instead (like the Quick entry's) */
+  /* The card's own colour, ruled off by a hairline (like the Quick entry's) */
   margin-top: 14px;
-  background: var(--bg-app);
+  border-top: 1px solid var(--border-subtle);
   & > :last-child { margin-left: auto; }
   @media (max-width: 640px) { padding: 12px 20px; }
 `;

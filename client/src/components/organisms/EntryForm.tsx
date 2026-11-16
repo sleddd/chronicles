@@ -414,18 +414,9 @@ const cardRows = css`
   }
 `;
 
-/* The Quick entry: the question coming back down into the card after a save, and
-   the form fading in under it once it rises */
-const quickSettle = keyframes`
-  from { opacity: 0; transform: translateY(-14px); }
-  to { opacity: 1; transform: none; }
-`;
+/* The Quick entry: the form fading in under the question once a topic is picked */
 const quickFade = keyframes`
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
-`;
-const quickRise = keyframes`
-  from { opacity: 0; transform: translateY(56px); }
   to { opacity: 1; transform: none; }
 `;
 
@@ -451,29 +442,21 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   ` : '')}
   ${({ $quick }) => ($quick ? css`
     margin-top: 24px;
-    /* Waiting: the question and topic picker centred inside it, the topic menu
-       dropping out of the card (over what's below it) instead of being cut off */
-    &[data-quick-idle] {
-      overflow: visible;
-      z-index: 6;
-      animation: ${quickSettle} 380ms cubic-bezier(0.2, 0.7, 0.2, 1);
-    }
-    /* Open: the form fades in as the question rises above it */
+    /* Not clipped: the topic menu in its first line drops out past the card's foot,
+       over what follows it (the foot band rounds its own corners instead) */
+    overflow: visible;
+    z-index: 6;
+    /* Open: the form fades in under the question */
     &[data-quick-open] { animation: ${quickFade} 320ms ease-out; }
-    @media (prefers-reduced-motion: reduce) { &[data-quick-idle], &[data-quick-open] { animation: none; } }
-    /* Frosted glass: mostly clear over the photo with a light blur, so the photo shows
-       through; the formatting bar stays clear on it */
-    background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
-    -webkit-backdrop-filter: blur(3px);
-    backdrop-filter: blur(3px);
+    @media (prefers-reduced-motion: reduce) { &[data-quick-open] { animation: none; } }
+    /* The dashboard cards' --bg-panel, very slightly see-through (a touch of the photo
+       or page shows); the formatting bar paints the same */
+    background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
     && ${EditorArea} { --editor-surface: transparent; }
-    /* See-through, so its lines and placeholders a step stronger than on a solid card */
-    --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
-    --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
-    /* No outline: a firmer shadow all round than the other dashboard cards
+    /* No outline: the same soft shadow as the other dashboard cards
        */
     border-color: transparent;
-    box-shadow: rgba(0, 0, 0, 0.3) 0 12px 32px -6px, rgba(0, 0, 0, 0.16) 0 2px 8px;
+    box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
     /* "Enter title/text..." a step brighter than the tools beside it */
     && input::placeholder, && textarea::placeholder, && .tiptap p.is-editor-empty:first-child::before { color: var(--text-secondary); opacity: 0.8; }
     @media (max-width: 768px) { margin-top: 18px; }
@@ -482,6 +465,15 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   && ${EditorArea} { margin: 0; padding: 28px ${CARD_X} 22px; border: none; border-radius: 0; }
   && ${EditorArea} .tiptap { padding-bottom: 0; }
   &&[data-tools-beside] ${EditorArea} { padding-right: 150px; }
+  /* The Quick entry: the question is the card's first line, the writing straight under it,
+     its "Enter title/text..." in the question's thin italic Work Sans, a step quieter */
+  && > [data-card-prompt] ~ ${EditorArea} { padding-top: 20px; }
+  &&& > [data-card-prompt] ~ ${EditorArea} .tiptap p.is-editor-empty:first-child::before {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 300;
+    font-style: italic;
+  }
   @container entrycard (max-width: 600px) {
     && ${EditorArea} { padding: 22px 20px 18px; }
     &&[data-tools-beside] ${EditorArea} { padding-right: 124px; }
@@ -504,16 +496,14 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
 /* The Quick entry's finance forms (Bill, Spending): a card like the entry card, their rows edge to edge */
 const QuickExtraBox = styled.div`
   margin-top: 24px;
-  /* The forms inside lay out the entry card's rows themselves (edge to edge) */
-  overflow: clip;
+  /* Not clipped: the topic menu in its first line (the question) drops out past it,
+     over what follows; the form under it clips itself (QuickExtraForm) */
+  position: relative;
+  z-index: 6;
   border-radius: 14px;
-  /* Frosted like the Quick entry card: see-through with a light blur, no outline, its shadow */
-  background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-  box-shadow: rgba(0, 0, 0, 0.3) 0 12px 32px -6px, rgba(0, 0, 0, 0.16) 0 2px 8px;
-  --border-card: color-mix(in srgb, var(--text-muted) 38%, transparent);
-  --border-subtle: color-mix(in srgb, var(--text-muted) 24%, transparent);
+  /* Like the Quick entry card: the panel colour very slightly see-through, no outline, its shadow */
+  background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
+  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
   /* Its joined switches (Bill | Subscription, Active / Paused / Cancelled): clear on the
      glass, no frosted fill of their own */
   && [role='radiogroup'], html[data-wallpaper] && [role='radiogroup'] {
@@ -524,6 +514,13 @@ const QuickExtraBox = styled.div`
   /* …and the chosen one's fill faded */
   && [role='radiogroup'] [aria-checked='true'] { background: color-mix(in srgb, var(--bg-tab-active) 45%, transparent); }
   @media (max-width: 640px) { margin-top: 18px; }
+`;
+
+/* Bill / Spending's form under the question: its rows run edge to edge, its foot band
+   rounded with the card's bottom corners */
+const QuickExtraForm = styled.div`
+  overflow: clip;
+  border-radius: 0 0 14px 14px;
 `;
 
 /* The card's foot: a tinted band — what's left of the footer on the left, Save on the right */
@@ -595,11 +592,14 @@ const JournalPrompt = styled(PromptLine)`
 
 /* The Quick entry's: on the photo — white text, its picker's menu dark */
 const QuickPrompt = styled(PromptLine)`
+  /* Centred, waiting or open, so it never jumps sideways when the form opens */
+  justify-content: center;
+  text-align: center;
+  /* A little lower under the greeting */
+  margin-top: 20px;
+  @media (max-width: 640px) { margin-top: 12px; }
   /* A touch more room between the question and the card under it */
   margin-bottom: 2px;
-  /* Rising out of the card when the form opens */
-  animation: ${quickRise} 380ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  @media (prefers-reduced-motion: reduce) { animation: none; }
   /* Phones: a little smaller */
   @media (max-width: 768px) { font-size: 18px; }
   @media (max-width: 400px) { font-size: 17px; }
@@ -614,8 +614,11 @@ const QuickPrompt = styled(PromptLine)`
 
 /* Under the card: Save entry (and the tools when the writing area is hidden) */
 const QuickFoot = styled(CardFoot)`
-  /* Its tint already sets it apart from the fields: no rule above it, a little room instead */
-  border-top: none;
+  /* The card doesn't clip (its topic menu drops out of it), so the tinted foot rounds its own corners */
+  border-radius: 0 0 14px 14px;
+  /* The card's own colour, ruled off from the fields by a hairline */
+  background: transparent;
+  border-top: 1px solid var(--border-subtle);
   margin-top: 14px;
   /* Save entry: an accent outline with accent text (never filled) once there's
      something to save; a quiet grey outline until then */
@@ -733,13 +736,45 @@ const QuickTools = styled.div<{ $beside?: boolean }>`
   ` : '')}
 `;
 
-/* The Quick entry waiting: the question and topic picker in the middle of the card,
-   at the size it has above it. Only choosing from the picker opens the form */
-const QuickIdle = styled(PromptLine)`
-  justify-content: center;
-  padding: 44px ${CARD_X};
-  text-align: center;
-  @media (max-width: 768px) { font-size: 20px; padding: 32px 20px; }
+/* The Quick entry open: the question and topic picker as the card's first line, where
+   the writing area's placeholder was (that placeholder is left empty) */
+const QuickCardPrompt = styled(PromptLine)`
+  padding: 28px ${CARD_X} 0;
+  font-size: 22px;
+  [data-tools-beside] > & { padding-right: 150px; }
+  @container entrycard (max-width: 600px) {
+    padding: 22px 20px 0;
+    [data-tools-beside] > & { padding-right: 124px; }
+  }
+  @media (max-width: 768px) { font-size: 18px; }
+`;
+
+/* The Quick entry waiting: just the question and topic picker, bare on the page (no
+   card) where the open form's question sits. Only choosing from the picker opens the form */
+const QuickIdle = styled(QuickPrompt)`
+  /* A little lower under the greeting, and room under it before what follows */
+  margin-top: 20px;
+  margin-bottom: 36px;
+  @media (max-width: 640px) { margin-top: 12px; margin-bottom: 24px; }
+  /* A light blur behind the line, fading out softly at its edges (no box edge shows) */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -90px -240px;
+    z-index: -1;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+    /* Full only at the centre, then thinning gradually to nothing, so it blends out
+       with no edge (eased stops, not a straight fade) */
+    -webkit-mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.85) 25%, rgba(0, 0, 0, 0.55) 50%, rgba(0, 0, 0, 0.25) 72%, rgba(0, 0, 0, 0.07) 88%, transparent 100%);
+    mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.85) 25%, rgba(0, 0, 0, 0.55) 50%, rgba(0, 0, 0, 0.25) 72%, rgba(0, 0, 0, 0.07) 88%, transparent 100%);
+    /* Phones: kept inside the screen, so it never makes the page scroll sideways */
+    @media (max-width: 768px) { inset: -44px -12px; }
+  }
+  /* A soft shadow under the words — firmer on the photo */
+  & > h2, & > div > button { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.16); }
+  html[data-wallpaper] & > h2, html[data-wallpaper] & > div > button { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 16px rgba(0, 0, 0, 0.4); }
 `;
 
 /* Only shown when a save fails */
@@ -1464,7 +1499,7 @@ export function EntryForm({
   if (quick) return (
     <QuickCard role="region" aria-label="Quick entry" ref={quickRef}>
       {!quickOpen ? (
-        <EntryCard $quick data-quick-idle="">
+        <>
           {/* The picker sits straight in the line (no wrapper), so it takes the question's
               font — thin italic Work Sans at the same size */}
           <QuickIdle data-keep-placeholder>
@@ -1475,16 +1510,24 @@ export function EntryForm({
               label={() => 'choose a topic'} extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra}
               journalFirst noClearRow />
           </QuickIdle>
-        </EntryCard>
+        </>
       ) : (
         <>
-          {/* Open: the question sits above the card (on the photo) until the entry is saved */}
-          <QuickPrompt data-keep-placeholder>
-            <h2>What would you like to write down?</h2>
-            {quickPicker}
-          </QuickPrompt>
-          {quickExtra && quickExtraBody ? <QuickExtraBox>{quickExtraBody}</QuickExtraBox> : (
+          {/* The question is the card's first line — an entry's or Bill / Spending's */}
+          {quickExtra && quickExtraBody ? (
+            <QuickExtraBox>
+              <QuickCardPrompt data-keep-placeholder>
+                <h2>What would you like to write down?</h2>
+                {quickPicker}
+              </QuickCardPrompt>
+              <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
+            </QuickExtraBox>
+          ) : (
             <EntryCard $quick data-quick-open="" data-tools-beside={!editorHidden ? '' : undefined}>
+              <QuickCardPrompt data-keep-placeholder data-card-prompt="">
+                <h2>What would you like to write down?</h2>
+                {quickPicker}
+              </QuickCardPrompt>
               {body}
               {!editorHidden && quickTools}
               <QuickFoot>

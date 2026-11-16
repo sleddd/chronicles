@@ -15,6 +15,9 @@ const Panel = styled.div`
   gap: 10px;
   padding: 12px 20px 16px;
   border-bottom: 1px solid var(--border-subtle);
+  /* The list pane's own colour (the pane goes clear on a wallpaper), so the fields read
+     as outlines only, with no lighter fill around them */
+  background: var(--list-bg, var(--bg-app));
 `;
 
 const DateRow = styled.div`

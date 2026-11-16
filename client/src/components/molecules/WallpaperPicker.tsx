@@ -11,6 +11,9 @@ const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px;
+  /* Room for the chosen tile's outline (2px out, 2px wide), which a clipping parent
+     cut off at the left and right edges */
+  padding: 4px;
 `;
 
 const Tile = styled.div<{ $on: boolean }>`

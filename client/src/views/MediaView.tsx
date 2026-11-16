@@ -84,6 +84,12 @@ const Inner = styled.div`
 const Head = styled.div`
   padding: 53px 0 20px;
   ${NAV_COMPACT} { padding: 20px 0 16px; }
+  /* With no wallpaper, a hairline closes the title row (the photo marks it otherwise) */
+  html:not([data-wallpaper]) & {
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 28px;
+    margin-bottom: 24px;
+  }
 `;
 
 /* The one page title that stays on phones (the top bar says "Media"; this

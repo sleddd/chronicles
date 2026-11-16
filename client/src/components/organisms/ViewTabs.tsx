@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { glassControl } from '../../styles/wallpaper.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { Icon } from '../atoms/core/Icon.jsx';
@@ -49,7 +48,7 @@ const ViewRow = styled.div`
   gap: 12px;
   /* A standard row: faint hairlines above and below (like the list's rows), edge to edge */
   min-height: 44px;
-  margin: 10px calc(-1 * var(--s-4, 16px)) 0;
+  margin: -6px calc(-1 * var(--s-4, 16px)) 0;
   padding: 0 calc(var(--s-4, 16px) - 2px) 0 20px;
   border-top: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
@@ -174,24 +173,24 @@ const MenuRule = styled.div`
   background: var(--border-pop);
 `;
 
+/* The search is the list head's whole first row: no pill, no fill, edge to edge, its
+   text lined up with the rows'; the icon turns accent while typing / searching */
 const SearchBox = styled.label<{ $active: boolean }>`
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 10px 0 16px;
-  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--border-subtle)')};
-  border-radius: 999px;
+  gap: 12px;
+  /* The entry rows' padding: 17px above and below (the filters button doesn't add to it) */
+  margin: -16px calc(-1 * var(--s-4, 16px)) 0;
+  padding: 17px calc(var(--s-4, 16px) - 2px) 17px 20px;
+  & > button { margin-block: -4px; }
+  border: none;
+  border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
-  ${glassControl}
-  /* A faint outline that fades into the bar (the photo's glass included) */
-  ${({ $active }) => ($active ? '' : 'html[data-wallpaper] & { border-color: color-mix(in srgb, var(--border-subtle) 70%, transparent); }')}
-  /* Light theme: no fill, even over the photo */
-  html[data-theme='light'][data-wallpaper] & { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-  &:focus-within, html[data-wallpaper] &:focus-within { border-color: var(--color-accent); }
+  cursor: text;
+  color: ${({ $active }) => ($active ? 'var(--color-accent-link)' : 'var(--text-muted)')};
+  &:focus-within { color: var(--color-accent-link); }
 `;
 
 const SearchInput = styled.input`
