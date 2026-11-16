@@ -13,13 +13,20 @@ describe('isReservedImportColumn', () => {
 });
 
 describe('safeAccent', () => {
-  it('takes only a hex colour, else Teal', async () => {
+  it('takes only a hex colour, else the default accent', async () => {
     const { safeAccent, DEFAULT_ACCENT_COLOR } = await import('../../styles/accent.js');
     expect(safeAccent('#C0FFEE')).toBe('#C0FFEE');
     expect(safeAccent('#abc')).toBe('#abc');
     for (const bad of ['red; background:url(/api/x)', '#12345', 'transparent', '', null, 7]) {
       expect(safeAccent(bad)).toBe(DEFAULT_ACCENT_COLOR);
     }
+  });
+
+  it('opens a retuned preset saved in its old shade as the new one (Taupe)', async () => {
+    const { safeAccent } = await import('../../styles/accent.js');
+    expect(safeAccent('#8a7564')).toBe('#a39080');
+    expect(safeAccent('#8A7564')).toBe('#a39080');
+    expect(safeAccent('#9c8877')).toBe('#a39080');
   });
 });
 

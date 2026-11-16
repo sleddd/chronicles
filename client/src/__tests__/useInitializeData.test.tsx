@@ -85,7 +85,7 @@ describe('useInitializeData', () => {
     expect(useUIStore.getState().themeMode).toBe('light');
   });
 
-  it("uses Teal when the account has no saved accent — never the previous account's colour", async () => {
+  it("uses the default accent (Taupe) when the account has no saved accent — never the previous account's colour", async () => {
     serverReturns();
     const { result } = renderHook(() => useInitializeData());
     await waitFor(() => expect(result.current.isReady).toBe(true));

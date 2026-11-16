@@ -118,7 +118,7 @@ const ACCENT_PRESETS: { name: string; color: string }[] = [
   { name: 'Plum', color: '#7e4a7f' },
   // Neutrals
   { name: 'Slate', color: '#5a6b7d' },
-  { name: 'Taupe', color: '#8a7564' },
+  { name: 'Taupe', color: '#a39080' },
   { name: 'Cocoa', color: '#6e4f3f' },
   { name: 'Graphite', color: '#4a4a4a' },
   { name: 'Ink', color: '#1f2937' },

@@ -845,7 +845,7 @@ Three sets of variables are written to `:root`:
 
 ### Default Colors
 - Default header: `#2d2c2a` (dark)
-- Default accent: **Teal** `#34a5a2` — always the default (`DEFAULT_ACCENT_COLOR` in `client/src/styles/accent.ts`); accounts with no saved accent get Teal, and every accent fallback uses it
+- Default accent: **Taupe** `#a39080` — always the default (`DEFAULT_ACCENT_COLOR` in `client/src/styles/accent.ts`); accounts with no saved accent get Taupe, and every accent fallback uses it. Teal `#34a5a2` (the default before) stays a preset; the public pages (`styles/lightTokens.ts`, the landing page) keep their Teal. A preset retuned since is mapped from its old hex to the new one on load (`RETUNED_PRESETS` in `accent.ts` — Taupe was `#8a7564`)
 - Paper background: `#f0ebdf` (light) / `#1a1917` (Midnight)
 
 ### Typography
