@@ -27,7 +27,8 @@ export function passkeySignInProblem(err: unknown, signedIn: boolean): string {
     // The server's own words: the passkey was refused, or isn't on the account
     if (e.status === 401 && message) return message;
     if (e.status >= 500) return 'Passkey sign-in is unavailable right now. Try again in a moment, or sign in with your password.';
-    return 'That passkey didn’t work. Try again, or sign in with your password.';
+    // Any other refusal (a 400: the answer never got as far as being checked against a passkey)
+    return `The server turned the passkey’s answer away before checking it (${e.status}). Try again, or sign in with your password.`;
   }
   // The browser refused before showing anything: this address isn't the one the passkeys belong to
   if (e.name === 'SecurityError') return 'Passkeys aren’t set up for this address. Open Chronicles at its usual address, or sign in with your password.';
