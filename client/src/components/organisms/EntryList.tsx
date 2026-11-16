@@ -1,13 +1,17 @@
 import styled from 'styled-components';
-import { memo, useMemo, useCallback, useEffect } from 'react';
+import { memo, useMemo, useCallback, useEffect, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { EntryCard } from './EntryCard.js';
 import { Checkbox } from '../atoms/Checkbox.js';
+import { LoadMore } from '../molecules/LoadMore.js';
 import { useJournalSelect } from '../../stores/journalSelectStore.js';
 import { entries as entriesApi } from '../../services/api.js';
 import { collectImageKeys, bestEffortDeleteImages } from '../../services/imageStorage.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
+
+/** Rows drawn at a time: the list adds this many more as its foot scrolls into view */
+export const LIST_PAGE = 100;
 
 const TOPIC_TO_TYPE: Record<string, string> = {
   task: 'task', goal: 'goal', milestone: 'milestone',
@@ -50,6 +54,12 @@ const ListContainer = styled.div`
   flex: 1 0 auto;
   background: transparent;
   html[data-wallpaper] & { background: var(--list-bg, var(--bg-app)); }
+`;
+
+/* The list's foot: "Show more" and "Showing 100 of 871", on the list's own colour */
+const ListFoot = styled(LoadMore)`
+  margin: 0;
+  padding: 22px 0 28px;
 `;
 
 const EmptyState = styled.div`
@@ -243,6 +253,24 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
     // Sort groups descending (newest first)
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredEntries]);
+  // Only so many rows are drawn at once (a long journal's All view would draw
+  // thousands): more as the list's foot scrolls into view. A different view,
+  // topic, day or search starts from the top again
+  const pageKey = [viewMode, selectedTopicId, viewMode === 'date' ? toLocalDateKey(selectedDate) : '', searchKeyword, searchDateFrom, searchDateTo].join('|');
+  const [page, setPage] = useState({ key: pageKey, rows: LIST_PAGE });
+  const shownRows = page.key === pageKey ? page.rows : LIST_PAGE;
+  const showMore = useCallback(() => setPage({ key: pageKey, rows: shownRows + LIST_PAGE }), [pageKey, shownRows]);
+  const shownGroups = useMemo(() => {
+    if (filteredEntries.length <= shownRows) return groups;
+    const out: typeof groups = [];
+    let left = shownRows;
+    for (const [key, rows] of groups) {
+      if (left <= 0) break;
+      out.push([key, rows.length > left ? rows.slice(0, left) : rows]);
+      left -= rows.length;
+    }
+    return out;
+  }, [groups, filteredEntries.length, shownRows]);
   // An open entry in view is the active row — then the first row needs no hint
   const openRowVisible = selectedEntryId != null && filteredEntries.some(e => e.id === selectedEntryId);
 
@@ -253,10 +281,10 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
   return (
     <ListContainer>
       {/* First row carries the active hint only while no (visible) entry is open */}
-      {groups.map(([dateKey, groupEntries], groupIndex) => {
+      {shownGroups.map(([dateKey, groupEntries], groupIndex) => {
         // All: a "Month YYYY" heading wherever the month changes
         const monthKey = dateKey.slice(0, 7);
-        const newMonth = viewMode === 'all' && (groupIndex === 0 || groups[groupIndex - 1][0].slice(0, 7) !== monthKey);
+        const newMonth = viewMode === 'all' && (groupIndex === 0 || shownGroups[groupIndex - 1][0].slice(0, 7) !== monthKey);
         return (
           <div key={dateKey}>
             {newMonth && (
@@ -330,6 +358,7 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
           </div>
         );
       })}
+      <ListFoot shown={shownRows} total={filteredEntries.length} onMore={showMore} />
     </ListContainer>
   );
 });

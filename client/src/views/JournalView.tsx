@@ -44,6 +44,7 @@ import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { defaultShoppingListTitle } from '../utils/kitchen.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
+import { decryptEntriesInBatches } from '../utils/decryptEntries.js';
 import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameIntoText.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { useTimeStore } from '../stores/timeStore.js';
@@ -617,22 +618,9 @@ export function JournalView() {
 
         // Older entry formats open only until this account is past the move to v3
         setOlderEntriesFromMarker(sealed(ENTRIES_SEAL_MARKER) !== undefined);
-        // Decrypt entries individually, all at once — a failed one keeps a placeholder so it isn't lost
-        const decrypted: import('@shared/crypto/types').DecryptedPost[] = (await Promise.all(encrypted.map(async entry => {
-          try {
-            return await decryptPosts([entry]);
-          } catch (err) {
-            console.warn(`Skipping entry ${entry.id} — decryption failed:`, err);
-            return [{
-              id: entry.id,
-              content: '[Decryption failed]',
-              metadata: {},
-              isEncrypted: entry.isEncrypted,
-              createdAt: entry.createdAt,
-              updatedAt: entry.updatedAt,
-            }];
-          }
-        }))).flat();
+        // A batch at a time, newest first, so the page stays responsive; a failed one keeps a placeholder
+        const decrypted = await decryptEntriesInBatches(encrypted, decryptPosts, () => cancelled);
+        if (!decrypted) return;
         setDecryptedEntries(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
         const resealed = olderEntriesAllowed()
