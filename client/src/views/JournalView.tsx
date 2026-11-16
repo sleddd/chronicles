@@ -453,11 +453,10 @@ export function JournalView() {
     const hasFieldData = Object.keys(customFields).length > 0;
     if (!hasText && !hasDrawing && entryImages.length === 0 && !hasFieldData) return;
 
+    // No topic picked: saved under Journal, but not shown as picked — the picker keeps
+    // asking ("choose a topic") until one is chosen
     let effectiveTopicId = editorTopicId;
-    if (!effectiveTopicId) {
-      effectiveTopicId = await getOrCreateJournalTopic();
-      setEditorTopicId(effectiveTopicId);
-    }
+    if (!effectiveTopicId) effectiveTopicId = await getOrCreateJournalTopic();
     // Shopping lists have no text area — give an untitled one its dated title
     let contentToSave = currentContent;
     const autoTopicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();

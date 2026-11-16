@@ -54,14 +54,18 @@ vi.mock('@/components/organisms/Editor', () => ({
 }));
 
 vi.mock('@/components/organisms/TopicSelector', () => ({
-  TopicSelector: ({ selectedId, onSelect }: { selectedId: number | null; onSelect: (id: number | null) => void }) => (
-    <select
-      data-testid="topic-selector"
-      value={selectedId ?? ''}
-      onChange={e => onSelect(e.target.value ? Number(e.target.value) : null)}
-    >
-      <option value="">No topic</option>
-    </select>
+  TopicSelector: ({ selectedId, onSelect, label }: { selectedId: number | null; onSelect: (id: number | null) => void; label?: (name: string) => string }) => (
+    <>
+      {/* The trigger's words, as the real picker shows them */}
+      {label && <span>{label('Journal')}</span>}
+      <select
+        data-testid="topic-selector"
+        value={selectedId ?? ''}
+        onChange={e => onSelect(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">No topic</option>
+      </select>
+    </>
   ),
 }));
 
@@ -459,6 +463,17 @@ describe('EntryForm', () => {
     });
   });
 
+  it('a journal entry with no topic picked asks for one (even once autosaved); a picked one names it', () => {
+    const { unmount } = renderWithTheme(<EntryForm {...defaultProps} />);
+    expect(screen.getByText('choose a topic')).toBeInTheDocument();
+    unmount();
+    const { unmount: unmount2 } = renderWithTheme(<EntryForm {...defaultProps} entryId={4} isEditing />);
+    expect(screen.getByText('choose a topic')).toBeInTheDocument();
+    unmount2();
+    renderWithTheme(<EntryForm {...defaultProps} entryId={4} topicId={1} isEditing />);
+    expect(screen.getByText('a journal entry')).toBeInTheDocument();
+  });
+
   describe('Quick entry', () => {
     it('Escape inside it, once open, clears it back to the question', () => {
       const onNew = vi.fn();
@@ -481,6 +496,12 @@ describe('EntryForm', () => {
       editor.addEventListener('keydown', e => e.preventDefault());
       fireEvent.keyDown(editor, { key: 'Escape' });
       expect(onNew).not.toHaveBeenCalled();
+    });
+
+    it('waits asking for a topic — "choose a topic", never naming Journal', () => {
+      renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen={false} />);
+      expect(screen.getByText('choose a topic')).toBeInTheDocument();
+      expect(screen.queryByText('a journal entry')).not.toBeInTheDocument();
     });
 
     it('Escape does nothing while it waits with the question', () => {

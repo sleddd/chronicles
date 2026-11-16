@@ -1469,7 +1469,11 @@ export function EntryForm({
               font — thin italic Work Sans at the same size */}
           <QuickIdle data-keep-placeholder>
             <h2>What would you like to write down?</h2>
-            {quickPicker}
+            {/* Waiting: the picker asks for a topic ("choose a topic ⌄"), never names one,
+                so nobody has to reselect Journal; picking one opens the form */}
+            <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
+              label={() => 'choose a topic'} extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra}
+              journalFirst noClearRow />
           </QuickIdle>
         </EntryCard>
       ) : (
@@ -1504,7 +1508,10 @@ export function EntryForm({
             <JournalHead $expanded={!!expanded} $roomy={editorHidden && !recipeViewMode}>
               <JournalPrompt>
                 <h2>What would you like to write down?</h2>
-                <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon label={quickTopicPhrase} />
+                {/* No topic picked asks for one ("choose a topic ⌄") rather than naming
+                    Journal — saved without one (the autosave too) it still goes under Journal */}
+                <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
               </JournalPrompt>
               {(onToggleExpand || onClose) && (
                 <HeadIcons>
