@@ -110,4 +110,34 @@ describe('TopicSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Journal/ }));
     expect(screen.queryByRole('button', { name: /Clear topic/ })).toBeNull();
   });
+
+  it('pins Journal first with journalFirst, the rest A–Z under it', () => {
+    const withJournal = [...topics, { id: 3, name: 'Journal', icon: 'book', color: null }, { id: 4, name: 'Art', icon: null, color: null }];
+    renderWithTheme(<TopicSelector selectedId={1} onSelect={vi.fn()} topics={withJournal} journalFirst />);
+    fireEvent.click(screen.getByText('Work'));
+    const wanted = ['Journal', 'Art', 'Personal', 'Work'];
+    // The list's topic rows (the trigger, which also reads "Work", comes first, and the Clear topic row — skip them)
+    const names = screen.getAllByRole('button').slice(1).filter(b => !b.textContent?.includes('Clear topic'))
+      .map(b => wanted.find(w => b.textContent?.trim().endsWith(w)))
+      .filter(Boolean);
+    expect(names).toEqual(['Journal', 'Art', 'Personal', 'Work']);
+  });
+
+  it('leaves out the Clear topic row with noClearRow, whatever is chosen', () => {
+    renderWithTheme(<TopicSelector selectedId={1} onSelect={vi.fn()} topics={topics} noClearRow />);
+    fireEvent.click(screen.getByText('Work'));
+    expect(screen.queryByText('Clear topic')).not.toBeInTheDocument();
+  });
+
+  it('shows a Clear row that calls onClear, in place of Clear topic', () => {
+    const onClear = vi.fn();
+    const onSelect = vi.fn();
+    renderWithTheme(<TopicSelector selectedId={1} onSelect={onSelect} topics={topics} noClearRow onClear={onClear} />);
+    fireEvent.click(screen.getByText('Work'));
+    expect(screen.queryByText('Clear topic')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Clear'));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
+

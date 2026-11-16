@@ -458,4 +458,36 @@ describe('EntryForm', () => {
       }));
     });
   });
+
+  describe('Quick entry', () => {
+    it('Escape inside it, once open, clears it back to the question', () => {
+      const onNew = vi.fn();
+      renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen onNew={onNew} />);
+      fireEvent.keyDown(screen.getByTestId('editor'), { key: 'Escape' });
+      expect(onNew).toHaveBeenCalledTimes(1);
+    });
+
+    it('Escape with nothing focused (the picker just swapped out) clears it too', () => {
+      const onNew = vi.fn();
+      renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen onNew={onNew} />);
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(onNew).toHaveBeenCalledTimes(1);
+    });
+
+    it('Escape a field already used (its own add box) is left alone', () => {
+      const onNew = vi.fn();
+      renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen onNew={onNew} />);
+      const editor = screen.getByTestId('editor');
+      editor.addEventListener('keydown', e => e.preventDefault());
+      fireEvent.keyDown(editor, { key: 'Escape' });
+      expect(onNew).not.toHaveBeenCalled();
+    });
+
+    it('Escape does nothing while it waits with the question', () => {
+      const onNew = vi.fn();
+      const { container } = renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen={false} onNew={onNew} />);
+      fireEvent.keyDown(container.querySelector('h2')!, { key: 'Escape' });
+      expect(onNew).not.toHaveBeenCalled();
+    });
+  });
 });

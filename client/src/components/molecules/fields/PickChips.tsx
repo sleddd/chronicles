@@ -36,7 +36,7 @@ export function PickChips({ label, value, options, onPick, onAdd, onRemove }: Pi
   };
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { setDraft(''); setAdding(false); }
+    if (e.key === 'Escape') { e.preventDefault(); setDraft(''); setAdding(false); }
   };
 
   if (editing) {

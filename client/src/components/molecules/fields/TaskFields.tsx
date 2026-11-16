@@ -121,7 +121,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
   };
   const onTypeKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); commitType(); }
-    if (e.key === 'Escape') { setTypeDraft(''); setAddingType(false); }
+    if (e.key === 'Escape') { e.preventDefault(); setTypeDraft(''); setAddingType(false); }
   };
   const goalId = useId();
   const milestoneId = useId();

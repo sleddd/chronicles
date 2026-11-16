@@ -351,8 +351,8 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
-  margin-top: 56px;
-  @media (max-width: 640px) { margin-top: 40px; }
+  margin-top: 36px;
+  @media (max-width: 640px) { margin-top: 28px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
     & > section { border-radius: 14px; outline: 2px solid var(--color-accent); outline-offset: 12px; }
@@ -2222,20 +2222,21 @@ const AddRow = styled.div`
   }
 `;
 
-/* The add row's boxes (Add a priority, Log a meal…): a single line to type on —
-   no box, fill or shadow, just a rule under the text (the accent while typing) */
+/* The add row's boxes (Add a priority, Log a meal…): softly squared boxes in the page
+   colour, a little see-through over the photo, a soft shadow all round, no outline; an
+   accent outline while typing */
 const AddPill = styled.form`
   display: flex;
   align-items: center;
   min-width: 0;
   height: 44px;
-  padding: 0 2px;
+  padding: 0 10px 0 16px;
   border: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 55%, transparent);
-  border-radius: 0;
-  background: transparent;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-app) 82%, transparent);
+  box-shadow: rgba(0, 0, 0, 0.22) 0 4px 14px -4px, rgba(0, 0, 0, 0.1) 0 1px 3px;
   && input::placeholder { color: var(--text-muted); opacity: 1; }
-  &:focus-within { border-bottom-color: var(--color-accent); }
+  &:focus-within { outline: 1px solid var(--color-accent-line); outline-offset: 0; }
 `;
 
 const EnterBtn = styled.button`

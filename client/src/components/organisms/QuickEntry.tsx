@@ -38,8 +38,11 @@ export function QuickEntry() {
   // both still see isSaving false and create the entry twice
   const savingRef = useRef(false);
   const [status, setStatus] = useState('');
+  // Waiting (just the question, centred in the card) until a topic is chosen from the
+  // picker; back to waiting once the entry is saved (or cleared)
+  const [opened, setOpened] = useState(false);
 
-  const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); };
+  const reset = () => { setContent(''); setTopicId(null); setCustomFields({}); setFinance(null); setOpened(false); };
 
   // Unsaved writing survives the session ending (15 minutes away, a reload):
   // sealed a moment after each change, offered back after the next sign-in.
@@ -58,6 +61,7 @@ export function QuickEntry() {
     setTopicId(id != null && topics.some(t => t.id === id) ? id : null);
     setContent(typeof content === 'string' ? content : '');
     setCustomFields(fields && typeof fields === 'object' ? fields : {});
+    setOpened(true);
     draft.taken();
   };
 
@@ -115,10 +119,14 @@ export function QuickEntry() {
       content={typedContent}
       onContentChange={setContent}
       topicId={topicId}
-      onTopicChange={id => { setFinance(null); setTopicId(id); }}
+      onTopicChange={id => { setFinance(null); setTopicId(id); setOpened(true); }}
+      // Open only by choice (a topic picked, a draft restored, Bill / Spending) — never
+      // from what the form holds: an emptied editor still reports "<p></p>" and a topic's
+      // form can fill in defaults, which kept it open after Clear / Escape
+      quickOpen={opened || finance !== null}
       quickExtras={financeOn ? QUICK_FINANCE_CHOICES : undefined}
       quickExtra={financeOn ? finance : null}
-      onQuickExtra={k => setFinance(k as QuickFinanceKind)}
+      onQuickExtra={k => { setFinance(k as QuickFinanceKind); setOpened(true); }}
       quickExtraBody={financeOn && finance ? <QuickFinance kind={finance} /> : undefined}
       topics={topics}
       customFields={typedFields}

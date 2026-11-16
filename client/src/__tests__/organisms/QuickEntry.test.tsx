@@ -21,10 +21,16 @@ vi.mock('@/utils/entrySave', () => ({
   prepareEntryForSave: async (content: string, customFields: Record<string, unknown>) => ({ content, customFields }),
 }));
 vi.mock('@/components/organisms/EntryForm', () => ({
-  EntryForm: ({ onContentChange, onSave }: { onContentChange: (c: string) => void; onSave: () => void }) => (
+  EntryForm: ({ onContentChange, onSave, quickOpen, onTopicChange, onNew }: {
+    onContentChange: (c: string) => void; onSave: () => void; quickOpen?: boolean; onTopicChange: (id: number | null) => void; onNew: () => void;
+  }) => (
     <div>
+      <span>{quickOpen ? 'open' : 'waiting'}</span>
+      <button onClick={() => onTopicChange(null)}>pick Journal</button>
       <button onClick={() => onContentChange('<p>Hi</p>')}>type</button>
       <button onClick={onSave}>save</button>
+      {/* Clear / Escape, then the emptied editor reporting its empty paragraph */}
+      <button onClick={() => { onNew(); onContentChange('<p></p>'); }}>clear</button>
     </div>
   ),
 }));
@@ -38,5 +44,24 @@ describe('QuickEntry', () => {
     await waitFor(() => expect(create).toHaveBeenCalled());
     await new Promise(r => setTimeout(r, 30));
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits with the question, opens once a topic is picked and goes back to waiting once saved', async () => {
+    renderWithTheme(<QuickEntry />);
+    expect(screen.getByText('waiting')).toBeTruthy();
+    fireEvent.click(screen.getByText('pick Journal'));
+    expect(screen.getByText('open')).toBeTruthy();
+    fireEvent.click(screen.getByText('type'));
+    fireEvent.click(screen.getByText('save'));
+    await waitFor(() => expect(screen.getByText('waiting')).toBeTruthy());
+  });
+
+  it('Clear / Escape goes back to the question even though the emptied editor reports "<p></p>"', () => {
+    renderWithTheme(<QuickEntry />);
+    fireEvent.click(screen.getByText('pick Journal'));
+    fireEvent.click(screen.getByText('type'));
+    expect(screen.getByText('open')).toBeTruthy();
+    fireEvent.click(screen.getByText('clear'));
+    expect(screen.getByText('waiting')).toBeTruthy();
   });
 });

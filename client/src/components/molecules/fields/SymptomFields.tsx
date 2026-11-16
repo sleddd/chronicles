@@ -159,7 +159,7 @@ export function SymptomFields({ values, onChange, chips = [], onAddChip, onRemov
   };
   const onDraftKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); commitDraft(); }
-    if (e.key === 'Escape') { setDraft(''); setAdding(false); }
+    if (e.key === 'Escape') { e.preventDefault(); setDraft(''); setAdding(false); }
   };
 
   return (

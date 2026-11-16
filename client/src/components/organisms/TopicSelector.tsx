@@ -134,6 +134,9 @@ const Item = styled.button<{ $active?: boolean }>`
   & span { color: var(--text-secondary); }
 
   &:last-child { border-bottom: none; }
+  /* Journal pinned on top (the Quick entry): set apart by a sunken shade, its rule
+     the same faint one as every row */
+  &[data-pinned], &[data-pinned]:hover { background: var(--bg-sunken); }
 
   &:hover {
     background: rgba(0, 0, 0, 0.04);
@@ -146,6 +149,17 @@ const ResetItem = styled(Item)`
   border-bottom: 1px solid var(--border-subtle);
   & > span:first-child { width: 17px; text-align: center; font-size: 16px; line-height: 1; color: var(--text-muted); }
   & > small { font-size: inherit; color: var(--text-muted); opacity: 0.8; }
+`;
+
+/* The Quick entry's Clear: small tracked capitals with a ×, the rows' own faint rule */
+const ClearItem = styled(Item)`
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  & > span:first-child { width: 17px; text-align: center; font-size: 15px; line-height: 1; letter-spacing: 0; color: var(--text-muted); }
 `;
 
 const EmptyMessage = styled.div`
@@ -169,6 +183,14 @@ interface TopicSelectorProps {
   onSelectExtra?: (key: string) => void;
   /** The trigger's words for the chosen topic (the Quick entry: "a journal entry") */
   label?: (name: string) => string;
+  /** Journal pinned first, ruled off from the rest (A–Z under it) — the Quick entry */
+  journalFirst?: boolean;
+  /** No "Clear topic · back to Journal" row: the list stays the same whatever is
+   *  chosen (the Quick entry, whose Clear sits beside its question) */
+  noClearRow?: boolean;
+  /** A small "× CLEAR" row first in the list that calls this (the Quick entry, once
+   *  open: back to the question, as when it first loads) */
+  onClear?: () => void;
 }
 
 type PickerTopic = { id: number | null; name: string; icon: string | null; extra?: string };
@@ -178,7 +200,7 @@ const isJournal = (t: { name: string }) => t.name.toLowerCase() === 'journal';
  *  Journal, so null shows — and is listed — as Journal (even before the
  *  Journal topic exists; picking it then keeps null). Always A–Z. While another
  *  topic is chosen the list opens with "Clear topic · back to Journal". */
-export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false, extras = [], selectedExtra = null, onSelectExtra, label }: TopicSelectorProps) {
+export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false, extras = [], selectedExtra = null, onSelectExtra, label, journalFirst = false, noClearRow = false, onClear }: TopicSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -204,7 +226,8 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
 
   // Always alphabetical (case-insensitive), whatever order the topics are kept in
   const sorted: PickerTopic[] = [...topics, ...(journalTopic ? [] : [journal]), ...extras.map(x => ({ id: null, name: x.name, icon: x.icon, extra: x.key }))]
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    .sort((a, b) => (journalFirst ? Number(isJournal(b)) - Number(isJournal(a)) : 0)
+      || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   const filtered = search
     ? sorted.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
     : sorted;
@@ -237,7 +260,13 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
           </SearchWrapper>
           <ItemList>
             {/* After flipping through topics: one tap back to the default (no topic = Journal) */}
-            {!search && !(selected && !selected.extra && isJournal(selected)) && (
+            {!search && onClear && (
+              <ClearItem type="button" onClick={() => { onClear(); setOpen(false); setSearch(''); }}>
+                <span aria-hidden="true">×</span>
+                Clear
+              </ClearItem>
+            )}
+            {!search && !noClearRow && !onClear && !(selected && !selected.extra && isJournal(selected)) && (
               <ResetItem type="button" onClick={() => { onSelect(journal.id); setOpen(false); setSearch(''); }}>
                 <span aria-hidden="true">×</span>
                 Clear topic<small>· back to Journal</small>
@@ -249,6 +278,7 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
               filtered.map(t => (
                 <Item
                   key={t.extra ? `x:${t.extra}` : t.id ?? 'journal'}
+                  data-pinned={journalFirst && !t.extra && isJournal(t) ? '' : undefined}
                   $active={t.extra ? selectedExtra === t.extra : !selectedExtra && (selectedId === t.id || (selectedId === null && isJournal(t)))}
                   onClick={() => { if (t.extra) onSelectExtra?.(t.extra); else onSelect(t.id); setOpen(false); setSearch(''); }}
                 >

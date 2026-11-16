@@ -1,6 +1,6 @@
 import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/ChangeFields.js';
 import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode } from 'react';
-import styled, { css } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 import { onPhoto, photoTokens, solidUnderPhoto } from '../../styles/wallpaper.js';
 import { cardLabel } from '../../styles/cardLabel.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
@@ -414,6 +414,21 @@ const cardRows = css`
   }
 `;
 
+/* The Quick entry: the question coming back down into the card after a save, and
+   the form fading in under it once it rises */
+const quickSettle = keyframes`
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: none; }
+`;
+const quickFade = keyframes`
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+`;
+const quickRise = keyframes`
+  from { opacity: 0; transform: translateY(56px); }
+  to { opacity: 1; transform: none; }
+`;
+
 const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   position: relative;
   display: flex;
@@ -436,9 +451,19 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   ` : '')}
   ${({ $quick }) => ($quick ? css`
     margin-top: 24px;
+    /* Waiting: the question and topic picker centred inside it, the topic menu
+       dropping out of the card (over what's below it) instead of being cut off */
+    &[data-quick-idle] {
+      overflow: visible;
+      z-index: 6;
+      animation: ${quickSettle} 380ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+    /* Open: the form fades in as the question rises above it */
+    &[data-quick-open] { animation: ${quickFade} 320ms ease-out; }
+    @media (prefers-reduced-motion: reduce) { &[data-quick-idle], &[data-quick-open] { animation: none; } }
     /* Frosted glass: mostly clear over the photo with a light blur, so the photo shows
        through; the formatting bar stays clear on it */
-    background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+    background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
     -webkit-backdrop-filter: blur(3px);
     backdrop-filter: blur(3px);
     && ${EditorArea} { --editor-surface: transparent; }
@@ -572,6 +597,9 @@ const JournalPrompt = styled(PromptLine)`
 const QuickPrompt = styled(PromptLine)`
   /* A touch more room between the question and the card under it */
   margin-bottom: 2px;
+  /* Rising out of the card when the form opens */
+  animation: ${quickRise} 380ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  @media (prefers-reduced-motion: reduce) { animation: none; }
   /* Phones: a little smaller */
   @media (max-width: 768px) { font-size: 18px; }
   @media (max-width: 400px) { font-size: 17px; }
@@ -705,6 +733,15 @@ const QuickTools = styled.div<{ $beside?: boolean }>`
   ` : '')}
 `;
 
+/* The Quick entry waiting: the question and topic picker in the middle of the card,
+   at the size it has above it. Only choosing from the picker opens the form */
+const QuickIdle = styled(PromptLine)`
+  justify-content: center;
+  padding: 44px ${CARD_X};
+  text-align: center;
+  @media (max-width: 768px) { font-size: 20px; padding: 32px 20px; }
+`;
+
 /* Only shown when a save fails */
 const QuickError = styled.p`
   margin: 12px 0 0;
@@ -804,6 +841,9 @@ interface EntryFormProps {
   quickExtra?: string | null;
   onQuickExtra?: (key: string) => void;
   quickExtraBody?: ReactNode;
+  /** Quick entry: false = waiting, just the question centred in the card (the form
+   *  opens once a topic is chosen from the picker); true = the form */
+  quickOpen?: boolean;
 }
 
 export function EntryForm({
@@ -816,8 +856,51 @@ export function EntryForm({
   imageUploading = false, imageError, imagesReady = false,
   variant = 'journal',
   quickExtras, quickExtra = null, onQuickExtra, quickExtraBody,
+  quickOpen = true,
 }: EntryFormProps) {
   const quick = variant === 'quick';
+  // Quick entry: Escape, once open, clears it back to the question (as Clear does).
+  // Heard on the document — after React's own handlers, so an Escape a field already
+  // used (closing its own add box) is left alone — for a key pressed inside the Quick
+  // entry, or with nothing focused at all (picking a topic swaps the picker out, which
+  // leaves the focus on the page); never from another field on the page, a menu or
+  // something portalled out of it (the drawing canvas, the lightbox)
+  useEffect(() => {
+    if (!quick || !quickOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      const root = quickRef.current;
+      const target = e.target as HTMLElement | null;
+      const nothingFocused = target === document.body || target === document.documentElement;
+      // The writing area: the editor itself marks every Escape handled (ProseMirror),
+      // though nothing there uses it, so that mark doesn't count from in there
+      const inEditor = !!target?.closest('.ProseMirror');
+      if (e.key !== 'Escape' || (e.defaultPrevented && !inEditor) || e.isComposing || !root || !target) return;
+      if (!nothingFocused && !root.contains(target)) return;
+      if (target.closest('[role="listbox"], [role="menu"], [role="dialog"]')) return;
+      e.preventDefault();
+      onNew();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [quick, quickOpen, onNew]);
+
+  // Quick entry: once it opens, the cursor goes to the first place to type (the writing
+  // area, else the topic's first field) — once the editor has mounted
+  const wasQuickOpen = useRef(quickOpen);
+  useEffect(() => {
+    const opened = quickOpen && !wasQuickOpen.current;
+    wasQuickOpen.current = quickOpen;
+    if (!quick || !opened) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const card = quickRef.current?.querySelector('[data-quick-open]');
+        const target = card?.querySelector<HTMLElement>(
+          '.tiptap[contenteditable="true"], textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"])');
+        target?.focus();
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [quick, quickOpen]);
   // Quick entry: every text field's placeholder is "Enter title/text...", whichever topic's form shows
   const quickRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1372,24 +1455,43 @@ export function EntryForm({
         </QuickTools>
   );
 
+  const quickPicker = (
+    <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon label={quickTopicPhrase}
+      extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra}
+      journalFirst noClearRow onClear={quickOpen ? onNew : undefined} />
+  );
+
   if (quick) return (
     <QuickCard role="region" aria-label="Quick entry" ref={quickRef}>
-      <QuickPrompt data-keep-placeholder>
-        <h2>What would you like to write down?</h2>
-        <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon label={quickTopicPhrase}
-          extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
-      </QuickPrompt>
-      {quickExtra && quickExtraBody ? <QuickExtraBox>{quickExtraBody}</QuickExtraBox> : (
-        <EntryCard $quick data-tools-beside={!editorHidden ? '' : undefined}>
-          {body}
-          {!editorHidden && quickTools}
-          <QuickFoot>
-            {editorHidden ? quickTools : <span />}
-            {saveButton}
-          </QuickFoot>
+      {!quickOpen ? (
+        <EntryCard $quick data-quick-idle="">
+          {/* The picker sits straight in the line (no wrapper), so it takes the question's
+              font — thin italic Work Sans at the same size */}
+          <QuickIdle data-keep-placeholder>
+            <h2>What would you like to write down?</h2>
+            {quickPicker}
+          </QuickIdle>
         </EntryCard>
+      ) : (
+        <>
+          {/* Open: the question sits above the card (on the photo) until the entry is saved */}
+          <QuickPrompt data-keep-placeholder>
+            <h2>What would you like to write down?</h2>
+            {quickPicker}
+          </QuickPrompt>
+          {quickExtra && quickExtraBody ? <QuickExtraBox>{quickExtraBody}</QuickExtraBox> : (
+            <EntryCard $quick data-quick-open="" data-tools-beside={!editorHidden ? '' : undefined}>
+              {body}
+              {!editorHidden && quickTools}
+              <QuickFoot>
+                {editorHidden ? quickTools : <span />}
+                {saveButton}
+              </QuickFoot>
+            </EntryCard>
+          )}
+        </>
       )}
-      {!(quickExtra && quickExtraBody) && saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
+      {quickOpen && !(quickExtra && quickExtraBody) && saveStatus === 'Save failed' && <QuickError role="alert">Save failed</QuickError>}
     </QuickCard>
   );
 
