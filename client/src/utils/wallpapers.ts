@@ -17,9 +17,7 @@ export interface Wallpaper {
 
 export const WALLPAPERS: Wallpaper[] = [
   { id: 'ales-krivec-wsokJokUfgI', by: 'Ales Krivec', url: 'https://unsplash.com/photos/wsokJokUfgI' },
-  { id: 'alexander-grey-LrfEWoFq6S8', by: 'Alexander Grey', url: 'https://unsplash.com/photos/LrfEWoFq6S8' },
   { id: 'andrew-ridley-Kt5hRENuotI', by: 'Andrew Ridley', url: 'https://unsplash.com/photos/Kt5hRENuotI' },
-  { id: 'art_photo_fil-JLJP8C5JOsk', by: 'Art_photo_fil', url: 'https://unsplash.com/photos/JLJP8C5JOsk' },
   { id: 'ashim-d-silva-WeYamle9fDM', by: 'Ashim D’Silva', url: 'https://unsplash.com/photos/WeYamle9fDM' },
   { id: 'behnam-mohsenzadeh-8KZLgOy-xQY', by: 'Behnam Mohsenzadeh', url: 'https://unsplash.com/photos/8KZLgOy-xQY' },
   { id: 'benjamin-voros-phIFdC6lA4E', by: 'Benjamin Voros', url: 'https://unsplash.com/photos/phIFdC6lA4E' },
@@ -67,9 +65,7 @@ export const WALLPAPERS: Wallpaper[] = [
   { id: 'matt-hardy-6ArTTluciuA', by: 'Matt Hardy', url: 'https://unsplash.com/photos/6ArTTluciuA' },
   { id: 'michal-mrozek-y0iTdaWGBxI', by: 'Michal Mrozek', url: 'https://unsplash.com/photos/y0iTdaWGBxI' },
   { id: 'nikolett-harmat-VSTP_kmMpPQ', by: 'Nikolett Harmat', url: 'https://unsplash.com/photos/VSTP_kmMpPQ' },
-  { id: 'own-img-4094' },
   { id: 'pj-gal-szabo--LgSPyExO9I', by: 'PJ Gal-Szabo', url: 'https://unsplash.com/photos/-LgSPyExO9I' },
-  { id: 'ray-hennessy-E62TNAOLyJA', by: 'Ray Hennessy', url: 'https://unsplash.com/photos/E62TNAOLyJA' },
   { id: 'ritz-WupU1u45AbE', by: 'Ritz', url: 'https://unsplash.com/photos/WupU1u45AbE' },
   { id: 'robert-ostheimer-YzhqA8pj_uI', by: 'Robert Ostheimer', url: 'https://unsplash.com/photos/YzhqA8pj_uI' },
   { id: 'sabari-nathan-p_fv7e4RzoY', by: 'Sabari Nathan', url: 'https://unsplash.com/photos/p_fv7e4RzoY' },
@@ -92,9 +88,10 @@ export const UNSPLASH_LINK = `https://unsplash.com/${UTM}`;
    sealed `wallpaper` setting is the record; this is only a head start) */
 const KEY = 'chronicles.wallpaper-v1';
 
-/** The background everyone starts with: Madison Kuhn's river running
- *  through a valley */
-export const DEFAULT_WALLPAPER = 'madison-kuhn-aV7_rCZpvGY';
+/** The background everyone starts with (Getty Images, LSVUVk4o7DM). Madison
+ *  Kuhn's river valley before it stays in the list, and is still the landing
+ *  page's hero photo (HERO_PHOTO in LandingTemplate) */
+export const DEFAULT_WALLPAPER = 'getty-images-LSVUVk4o7DM';
 
 /** What's saved when someone picks None — kept apart from "never chosen",
  *  which means the default */

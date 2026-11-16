@@ -22,13 +22,13 @@ describe('wallpapers', () => {
   });
 
   it('lists our own photos with no credit or link', () => {
+    // There may be none at the moment (they come and go with the folder)
     const own = WALLPAPERS.filter(w => w.id.startsWith('own-'));
-    expect(own.length).toBeGreaterThan(0);
     for (const w of own) expect(w.by ?? w.url).toBeUndefined();
     for (const w of WALLPAPERS.filter(x => !x.id.startsWith('own-'))) expect(w.by && w.url).toBeTruthy();
   });
 
-  it('starts on the mountains, keeps None as None, and falls back from a removed photo', () => {
+  it('starts on the default photo, keeps None as None, and falls back from a removed photo', () => {
     expect(wallpaperById(DEFAULT_WALLPAPER)).toBeDefined();
     expect(resolveWallpaper(null)).toBe(DEFAULT_WALLPAPER);
     expect(resolveWallpaper(undefined)).toBe(DEFAULT_WALLPAPER);
