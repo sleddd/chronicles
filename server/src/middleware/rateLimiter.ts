@@ -108,7 +108,7 @@ export const icsFeedLimiter = rateLimit({
  * Public shelf page lookups — a shelf is meant to be opened by many people
  * and each page of it is one request, so this is far roomier than the share
  * limiter (a token is 192 random bits; guessing one isn't the concern). The
- * route also answers repeat visits from cache (private, max-age=60 + ETag).
+ * route answers a repeat visit with a 304 when nothing changed (private, no-cache + ETag).
  */
 export const publicShelfLimiter = rateLimit({
   store: sharedRateLimitStore('public-shelf'),

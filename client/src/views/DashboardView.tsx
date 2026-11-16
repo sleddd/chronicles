@@ -99,8 +99,8 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'wellness', label: 'Wellness check-in' },
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
-  { key: 'priorities', label: "Today's priorities" },
-  { key: 'wins', label: "Today's wins" },
+  { key: 'priorities', label: 'Priorities' },
+  { key: 'wins', label: 'Wins' },
   { key: 'tasks', label: 'Tasks & to-do lists' },
   { key: 'mantra', label: 'Mantra' },
   { key: 'comingUp', label: 'Coming up' },
@@ -351,7 +351,7 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
-  margin-top: 76px;
+  margin-top: 66px;
   @media (max-width: 640px) { margin-top: 40px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
@@ -916,6 +916,18 @@ const PRemove = styled.button`
   @media (hover: none) { opacity: 1; }
 `;
 
+/* Under Priorities and Wins: these lists don't clear themselves at midnight
+   (a list can run across several days), so say how a fresh one is started */
+const NEW_LIST_NOTE = 'To start a new day or list, use the New list option at the top.';
+const ListNote = styled.p`
+  margin: 0;
+  padding: 18px 0 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+`;
+
 /** One priority's text: edited in place, saved on Enter or leaving the field;
  *  clearing it removes the priority. Escape puts the saved text back. */
 function PriorityText({ item, onCommit, label = 'Priority' }: { item: PriorityItem; onCommit: (text: string) => void; label?: string }) {
@@ -1041,9 +1053,9 @@ function Priorities() {
   };
 
   return (
-    <section aria-label="Today's priorities">
+    <section aria-label="Priorities">
       <SectionHead>
-        <h2>Today's priorities</h2>
+        <h2>Priorities</h2>
         {items.length > 0 && (
           <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
         )}
@@ -1056,12 +1068,13 @@ function Priorities() {
             onCommit={text => void write(text ? items.map(x => (x.id === p.id ? { ...x, text } : x)) : items.filter(x => x.id !== p.id))} />
           <PRemove type="button" aria-label={`Remove "${p.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== p.id))}>
-            <Icon name="x" size={14} strokeWidth={2} />
+            <Icon name="x" size={18} strokeWidth={2} />
           </PRemove>
           <Checkbox checked={p.done} aria-label={p.done ? `Mark "${p.text}" not done` : `Mark "${p.text}" done`}
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
         </Row>
       ))}
+      {items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
   );
 }
@@ -1140,9 +1153,9 @@ function Wins() {
   };
 
   return (
-    <section aria-label="Today's wins">
+    <section aria-label="Wins">
       <SectionHead>
-        <h2>Today's wins</h2>
+        <h2>Wins</h2>
         <HeadLinks>
           {items.length > 0 && <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>}
           {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
@@ -1156,10 +1169,11 @@ function Wins() {
             onCommit={text => void write(text ? items.map(x => (x.id === w.id ? { ...x, text } : x)) : items.filter(x => x.id !== w.id))} />
           <PRemove type="button" aria-label={`Remove "${w.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== w.id))}>
-            <Icon name="x" size={14} strokeWidth={2} />
+            <Icon name="x" size={18} strokeWidth={2} />
           </PRemove>
         </Row>
       ))}
+      {items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
   );
 }

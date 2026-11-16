@@ -96,4 +96,18 @@ describe('TopicSelector', () => {
     });
     expect(screen.getByText('No topics found')).toBeInTheDocument();
   });
+
+  it('offers a way back to Journal once another topic is chosen', () => {
+    const onSelect = vi.fn();
+    const topics = [{ id: 1, name: 'Journal', icon: 'book', color: null }, { id: 2, name: 'Task', icon: 'circle-check', color: null }];
+    const { unmount } = render(<ThemeProvider theme={lightTheme}><TopicSelector selectedId={2} onSelect={onSelect} topics={topics} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button', { name: /Task/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Clear topic/ }));
+    expect(onSelect).toHaveBeenCalledWith(1);
+    unmount();
+    // already on Journal: nothing to clear
+    render(<ThemeProvider theme={lightTheme}><TopicSelector selectedId={1} onSelect={onSelect} topics={topics} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button', { name: /Journal/ }));
+    expect(screen.queryByRole('button', { name: /Clear topic/ })).toBeNull();
+  });
 });

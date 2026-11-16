@@ -208,17 +208,32 @@ describe('PlannerBoard — stretching a task over more of the day', () => {
   }];
   const props = () => ({ onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onSpan: vi.fn(), overdue: [], open: [] });
 
-  it('shows a stretched task in every part it covers, the later ones as "continued"', () => {
+  it('shows a stretched task as ONE block across its rows, its title once', () => {
     renderWithTheme(<PlannerBoard {...props()} lanes={lanes('night')} />);
-    const cell = (name: string) => screen.getByRole('cell', { name: `Thu 12, ${name}` });
-    expect(cell('Morning').textContent).toContain('Deep work');
-    expect(cell('Morning').textContent).toContain('All day');
-    expect(screen.getAllByRole('button', { name: 'Deep work, continued' })).toHaveLength(2);
-    expect(cell('Noon').textContent).toContain('continued');
-    expect(cell('Night').textContent).toContain('continued');
-    // one grip, at the foot of its last part
+    // never a copy per part: one card, one title, one grip
+    expect(screen.getAllByText('Deep work')).toHaveLength(1);
+    expect(screen.queryByText('continued')).toBeNull();
     expect(screen.getAllByRole('button', { name: /^Stretch Deep work/ })).toHaveLength(1);
-    expect(cell('Night').querySelector('button[title="Drag to cover more of the day"]')).not.toBeNull();
+    const block = document.querySelector<HTMLElement>('[data-span="3"]')!;
+    expect(block.textContent).toContain('All day');
+    // placed on the grid from Morning (row 2) across all three rows of its day's column
+    expect(block.style.gridRow).toBe('2 / span 3');
+    expect(block.style.gridColumn).toBe('2');
+    // the cells behind it hold no copy of it
+    for (const name of ['Morning', 'Noon', 'Night']) expect(screen.getByRole('cell', { name: `Thu 12, ${name}` }).textContent).not.toContain('Deep work');
+  });
+
+  it('keeps room beside the block for a part\'s own cards', () => {
+    const withOther = [{ ...lanes('noon')[0], cards: [...lanes('noon')[0].cards, { id: 4, title: 'Quick call', done: false, day: '2026-11-12', part: 'noon' as const }] }];
+    renderWithTheme(<PlannerBoard {...props()} lanes={withOther} />);
+    const block = document.querySelector<HTMLElement>('[data-span="3"]')!;
+    expect(block.style.gridRow).toBe('2 / span 2');
+    expect(block.style.width).toContain('50%');
+    const noon = screen.getByRole('cell', { name: 'Thu 12, Noon' });
+    expect(noon.textContent).toContain('Quick call');
+    expect(noon.style.paddingLeft).toContain('50%');
+    // a part the block doesn't cover keeps its full width
+    expect(screen.getByRole('cell', { name: 'Thu 12, Night' }).style.paddingLeft).toBe('');
   });
 
   it('the grip\'s arrow keys lengthen and shorten it, never before its own part', () => {
@@ -239,10 +254,10 @@ describe('PlannerBoard — stretching a task over more of the day', () => {
     expect(q.onSpan).toHaveBeenCalledTimes(1); // Night is the end of the day
   });
 
-  it('a continued strip opens the task, and cards off a day have no grip', () => {
+  it('the block opens the task, and cards off a day have no grip', () => {
     const p = props();
     renderWithTheme(<PlannerBoard {...p} lanes={lanes('noon')} open={[{ id: 8, title: 'Someday', done: false, day: '' }]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Deep work, continued' }));
+    fireEvent.click(document.querySelector<HTMLElement>('[data-span="3"]')!);
     expect(p.onOpen).toHaveBeenCalledWith(3);
     expect(screen.queryByRole('button', { name: /^Stretch Someday/ })).toBeNull();
   });
