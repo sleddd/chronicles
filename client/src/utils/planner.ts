@@ -94,7 +94,7 @@ export interface PlannerTask {
   /** On its day through its deadline and time of day, not a "Planned for" day */
   fromDeadline?: boolean;
   done: boolean;
-  /** An idea kept for later (the "Idea / Backlog" status): never listed as Unscheduled */
+  /** An idea kept for later (the "Idea / Backlog" status): listed in Unscheduled's own Ideas / Backlog group */
   backlog?: boolean;
   autoMigrate: boolean;
   /** YYYY-MM-DD or '' */
@@ -179,14 +179,16 @@ export function tasksByDay<T extends PlannerTask>(tasks: T[], days: string[], to
 
 /**
  * What isn't on a day: `overdue` — unfinished tasks whose day has passed and
- * that don't roll forward (oldest first) — and `open`, unfinished tasks with
- * no day (by urgency). Ideas kept for later (Idea / Backlog) are in neither.
+ * that don't roll forward (oldest first) — `open`, unfinished tasks with no
+ * day (by urgency), and `ideas`, the ones kept for later (Idea / Backlog) with
+ * no day, listed in a group of their own.
  */
-export function unscheduled<T extends PlannerTask>(tasks: T[], today: string): { overdue: T[]; open: T[] } {
-  const overdue = tasks.filter(t => !t.done && !t.backlog && t.scheduled && t.scheduled < today && !t.autoMigrate)
+export function unscheduled<T extends PlannerTask>(tasks: T[], today: string): { overdue: T[]; open: T[]; ideas: T[] } {
+  const overdue = tasks.filter(t => !t.done && t.scheduled && t.scheduled < today && !t.autoMigrate)
     .sort((a, b) => a.scheduled.localeCompare(b.scheduled) || byUrgency(a, b));
   const open = tasks.filter(t => !t.done && !t.backlog && !t.scheduled).sort(byUrgency);
-  return { overdue, open };
+  const ideas = tasks.filter(t => !t.done && t.backlog && !t.scheduled).sort(byUrgency);
+  return { overdue, open, ideas };
 }
 
 /** `ids` with `id` put where `overId` is (the end when there's no such card) */

@@ -691,6 +691,8 @@ interface PlannerBoardProps extends CardActions {
   lanes: PlannerLane[];
   /** Unfinished tasks whose day has passed */
   overdue: PlannerCard[];
+  /** Tasks kept for later (Idea / Backlog) with no day: their own group under the rest */
+  ideas?: PlannerCard[];
   /** Unfinished tasks with no day */
   open: PlannerCard[];
   /** Search / filters over the Unscheduled list */
@@ -709,7 +711,9 @@ interface PlannerBoardProps extends CardActions {
   onNext?: () => void;
 }
 
-export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, onSchedule, onSpan, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
+const NO_CARDS: PlannerCard[] = [];
+
+export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, onOpen, onSchedule, onSpan, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
   const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
   const [foldedParts, setFoldedParts] = useState<DayPart[]>(loadFoldedParts);
   const toggleFoldedPart = (part: DayPart) => setFoldedParts(prev => {
@@ -731,7 +735,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
   const lanes = stretching
     ? givenLanes.map(l => ({ ...l, cards: l.cards.map(c => (c.id === stretching.id ? { ...c, partEnd: stretching.end } : c)) }))
     : givenLanes;
-  const backlog = [...overdue, ...open];
+  const backlog = [...overdue, ...open, ...ideas];
   const all = [...backlog, ...lanes.flatMap(l => l.cards)];
   const [dragging, setDragging] = useState<number | null>(null);
   // The card in hand, kept from the start: paging to another week while holding
@@ -928,6 +932,8 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
                 {overdue.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
                 {overdue.length > 0 && open.length > 0 && <Group>No day yet</Group>}
                 {open.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
+                {ideas.length > 0 && <Group>Ideas / Backlog</Group>}
+                {ideas.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
                 {backlog.length === 0 && <Empty>Nothing left to plan</Empty>}
               </SortableContext>
               <AddTask label="Add a task with no day" onAdd={text => onAdd('', text)} />
