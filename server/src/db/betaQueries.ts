@@ -56,7 +56,7 @@ export async function isApproved(email: string, inviteCode: string | undefined):
   const rows = await prisma.$queryRaw<{ invite_hash: string | null }[]>`
     SELECT invite_hash FROM public.beta_signups
     WHERE email = ${email} AND approved_at IS NOT NULL
-      AND approved_at > NOW() - make_interval(days => ${INVITE_VALID_DAYS})
+      AND approved_at > NOW() - make_interval(days => ${INVITE_VALID_DAYS}::int)
   `;
   const stored = rows[0]?.invite_hash;
   if (!stored) return false;

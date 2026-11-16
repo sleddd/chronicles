@@ -43,7 +43,7 @@ export async function trustDevice(accountId: number, label: string): Promise<str
   const token = crypto.randomBytes(32).toString('base64url');
   await prisma.$executeRaw`
     INSERT INTO public.trusted_devices (account_id, token_hash, label, expires_at)
-    VALUES (${accountId}, ${hashTrustToken(token)}, ${label.slice(0, 120)}, NOW() + make_interval(days => ${TRUST_DAYS}))`;
+    VALUES (${accountId}, ${hashTrustToken(token)}, ${label.slice(0, 120)}, NOW() + make_interval(days => ${TRUST_DAYS}::int))`;
   await prisma.$executeRaw`
     DELETE FROM public.trusted_devices WHERE account_id = ${accountId} AND id NOT IN (
       SELECT id FROM public.trusted_devices WHERE account_id = ${accountId} ORDER BY created_at DESC, id DESC LIMIT ${MAX_TRUSTED_DEVICES}
