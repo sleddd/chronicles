@@ -225,7 +225,7 @@ export function PlannerView() {
     </>}>
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
       <PlannerBoard
-        lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)}
+        lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)} ideas={left.ideas.map(card)}
         onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onSpan={span} onAdd={add}
         folded={folded} onFold={setFolded}
         onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}

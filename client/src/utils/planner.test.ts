@@ -66,12 +66,13 @@ describe('planner', () => {
       task(1), task(2, { done: true }), task(3, { scheduled: '2026-11-10' }), task(4, { scheduled: '2026-11-09' }),
       task(5, { scheduled: '2026-11-09', autoMigrate: true }), task(6, { scheduled: '2026-11-09', done: true }),
       task(7, { priority: 'high' }), task(8, { scheduled: TODAY }),
-      // Ideas kept for later are left out, with or without a day
+      // Ideas kept for later get a group of their own; one whose day has passed is overdue like any other
       task(9, { backlog: true }), task(10, { backlog: true, scheduled: '2026-11-09' }),
     ];
     const u = unscheduled(tasks, TODAY);
-    expect(u.overdue.map(t => t.id)).toEqual([4, 3]);
+    expect(u.overdue.map(t => t.id)).toEqual([10, 4, 3]);
     expect(u.open.map(t => t.id)).toEqual([7, 1]);
+    expect(u.ideas.map(t => t.id)).toEqual([9]);
   });
 
   it('places a card where it was dropped', () => {
