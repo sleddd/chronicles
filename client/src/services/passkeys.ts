@@ -97,6 +97,10 @@ export function rememberPasskey(credentialId: string): void {
 export function forgetPasskey(credentialId: string): void {
   saveKnown(knownPasskeys().filter(id => id !== credentialId));
 }
+/** A passkey was removed from the account here: stop asking for the ones remembered (the next sign-in takes any) */
+export function forgetPasskeysHere(): void {
+  saveKnown([]);
+}
 /** The account's passkeys are exactly these: forget any other (removed in Settings) */
 export function keepOnlyPasskeys(credentialIds: string[]): void {
   const on = new Set(credentialIds);

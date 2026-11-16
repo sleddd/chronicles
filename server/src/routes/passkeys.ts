@@ -95,7 +95,10 @@ async function checkAssertion(
     credential: {
       id: passkey.credentialId,
       publicKey: new Uint8Array(passkey.publicKey) as Parameters<typeof verifyAuthenticationResponse>[0]['credential']['publicKey'],
-      counter: passkey.signCount,
+      // A synced passkey lives on several devices, and their counters don't
+      // run in step (most leave it at 0). Holding one to "never lower than last
+      // time" refuses a good passkey for good, so only a device-bound one is held to it
+      counter: passkey.backedUp ? 0 : passkey.signCount,
       transports: passkey.transports as Parameters<typeof verifyAuthenticationResponse>[0]['credential']['transports'],
     },
   }).catch((err: unknown) => {

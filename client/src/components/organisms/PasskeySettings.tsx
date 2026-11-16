@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { deriveAuthSecret } from '@chronicles/shared';
 import type { KeySource } from '../../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError, type PasskeyInfo } from '../../services/api.js';
-import { PasskeyCancelled, confirmWithPasskey, keepOnlyPasskeys, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
+import { PasskeyCancelled, confirmWithPasskey, forgetPasskeysHere, keepOnlyPasskeys, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
 import { useAddPasskey, usePasskeyAddConfirmation } from '../../hooks/useAddPasskey.js';
 import { TextInput } from '../atoms/TextInput.js';
 import { Spinner } from '../atoms/Spinner.js';
@@ -166,6 +166,8 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
       const { passkeys: list } = open.kind === 'remove'
         ? await authApi.passkeyRemove(open.id, confirmation)
         : await authApi.passkeyRemoveAll(confirmation);
+      // Which one went isn't known here (the list carries no credential ids), so none is asked for by name next time
+      forgetPasskeysHere();
       took(list);
       close();
       setNote(open.kind === 'remove' ? 'Passkey removed. It can no longer sign in.' : 'All passkeys removed. None of them can sign in any more.');

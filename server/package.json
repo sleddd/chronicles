@@ -19,6 +19,7 @@
     "clear:topic-links": "tsx src/db/clearTopicLinks.ts",
     "finance:drop-paydays": "tsx src/db/dropPaydays.ts",
     "report:ai-safety": "tsx src/db/aiSafetyReport.ts",
+    "passkeys": "tsx src/db/passkeysAdmin.ts",
     "ai:block": "tsx src/db/aiChatBlock.ts",
     "account:delete": "tsx src/db/deleteAccount.ts",
     "notice": "tsx src/db/appNotice.ts",

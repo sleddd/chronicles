@@ -28,6 +28,7 @@
     "finance:drop-paydays": "npm run -s finance:drop-paydays --workspace=server --",
     "account:delete": "npm run -s account:delete --workspace=server --",
     "notice": "npm run -s notice --workspace=server --",
+    "passkeys": "npm run -s passkeys --workspace=server --",
     "ai:block": "npm run -s ai:block --workspace=server --",
     "report:ai-safety": "npm run -s report:ai-safety --workspace=server --"
   },
