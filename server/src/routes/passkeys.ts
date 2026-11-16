@@ -98,8 +98,18 @@ async function checkAssertion(
       counter: passkey.signCount,
       transports: passkey.transports as Parameters<typeof verifyAuthenticationResponse>[0]['credential']['transports'],
     },
-  }).catch(() => null);
-  if (!verification?.verified || !verification.authenticationInfo.userVerified) return null;
+  }).catch((err: unknown) => {
+    // Why it failed, for the log only (the answer to the browser stays the
+    // same): the verifier's own words name the cause — an origin or RP ID that
+    // isn't this server's, a spent challenge, a signature that doesn't check
+    logSecurityEvent('passkey_verify_failed', { accountId: passkey.accountId, details: { bucket: bucket.split(':')[0], why: (err instanceof Error ? err.message : 'unknown').slice(0, 240) } });
+    return null;
+  });
+  if (!verification) return null;
+  if (!verification.verified || !verification.authenticationInfo.userVerified) {
+    logSecurityEvent('passkey_verify_failed', { accountId: passkey.accountId, details: { bucket: bucket.split(':')[0], why: verification.verified ? 'user not verified' : 'not verified' } });
+    return null;
+  }
   // A challenge made for one account's confirmation only confirms that account
   if (expectAccount !== null && issuedFor !== expectAccount) return null;
   await notePasskeyUsed(passkey.id, verification.authenticationInfo.newCounter, verification.authenticationInfo.credentialBackedUp);

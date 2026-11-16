@@ -36,5 +36,8 @@ export function passkeySignInProblem(err: unknown, signedIn: boolean): string {
   }
   // fetch() failing is a TypeError: the request never arrived
   if (e.name === 'TypeError') return 'Chronicles couldn’t be reached. Check your connection and try again.';
-  return 'That passkey didn’t work. Try again, or sign in with your password.';
+  // Not the server's refusal (that has its own words above): the browser's
+  // passkey prompt itself failed. Say so, with its name, so the two can be told apart
+  const name = typeof e.name === 'string' && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : 'unknown error';
+  return `The passkey prompt failed in this browser (${name}). Try again, or sign in with your password.`;
 }
