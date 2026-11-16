@@ -140,6 +140,14 @@ const Item = styled.button<{ $active?: boolean }>`
   }
 `;
 
+/* The way back to the default: quieter than a topic, ruled off from them */
+const ResetItem = styled(Item)`
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  & > span:first-child { width: 17px; text-align: center; font-size: 16px; line-height: 1; color: var(--text-muted); }
+  & > small { font-size: inherit; color: var(--text-muted); opacity: 0.8; }
+`;
+
 const EmptyMessage = styled.div`
   padding: 16px;
   text-align: center;
@@ -168,7 +176,8 @@ const isJournal = (t: { name: string }) => t.name.toLowerCase() === 'journal';
 
 /** Topic picker. There is no "No topic": an entry without one is saved under
  *  Journal, so null shows — and is listed — as Journal (even before the
- *  Journal topic exists; picking it then keeps null). Always A–Z. */
+ *  Journal topic exists; picking it then keeps null). Always A–Z. While another
+ *  topic is chosen the list opens with "Clear topic · back to Journal". */
 export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon = false, extras = [], selectedExtra = null, onSelectExtra, label }: TopicSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -227,6 +236,13 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
             />
           </SearchWrapper>
           <ItemList>
+            {/* After flipping through topics: one tap back to the default (no topic = Journal) */}
+            {!search && !(selected && !selected.extra && isJournal(selected)) && (
+              <ResetItem type="button" onClick={() => { onSelect(journal.id); setOpen(false); setSearch(''); }}>
+                <span aria-hidden="true">×</span>
+                Clear topic<small>· back to Journal</small>
+              </ResetItem>
+            )}
             {filtered.length === 0 ? (
               <EmptyMessage>No topics found</EmptyMessage>
             ) : (

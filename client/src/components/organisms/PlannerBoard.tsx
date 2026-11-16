@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import {
-  DndContext, DragOverlay, closestCenter, pointerWithin, KeyboardSensor, MouseSensor, TouchSensor, useDroppable,
+  DndContext, DragOverlay, closestCenter, pointerWithin, KeyboardSensor, MouseSensor, TouchSensor, useDraggable, useDroppable,
   useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -18,8 +18,10 @@ import { DEFAULT_PART, PLANNER_ROWS, partsCovered, spanLabel, type DayPart } fro
    a cell, or back to Unscheduled. Every card also has a small calendar button
    that sets its day without dragging (phones, keyboards). A card on a day can
    be stretched over more of it — drag the grip at its foot down through Noon
-   and Night (or use the arrow keys on it): it then shows in every part it
-   covers, the later ones as a short "continued" strip. No hours. Props only. */
+   and Night (or use the arrow keys on it): it becomes ONE block running across
+   the rows it covers, its title once (never a copy per row, which read as
+   several tasks). Every grid child is placed by row and column, so a block
+   can lie across the cells behind it. No hours. Props only. */
 
 export interface PlannerCard {
   id: number;
@@ -202,11 +204,18 @@ const Scroll = styled.div<{ $panning: boolean }>`
 /* The grid: a narrow column naming the parts of the day, then a column per day.
    The names fold away (`$labels` false) to a slim strip holding the button that
    brings them back */
-const Grid = styled.div<{ $cols: number; $labels: boolean }>`
+/* `$wide`: per day, whether a stretched task shares its column with other
+   cards — that day gets a wider column, so the block and the cards beside it
+   both stay readable (the week scrolls sideways if it must) */
+const Grid = styled.div<{ $cols: number; $labels: boolean; $wide: boolean[] }>`
   display: grid;
-  grid-template-columns: ${({ $labels }) => ($labels ? '120px' : '40px')} repeat(${({ $cols }) => $cols}, minmax(${({ $cols }) => ($cols > 1 ? '150px' : '0')}, 1fr));
+  grid-template-columns: ${({ $labels }) => ($labels ? '120px' : '40px')} ${({ $cols, $wide }) => (
+    $cols > 1 ? $wide.map(w => (w ? 'minmax(320px, 1.7fr)' : 'minmax(150px, 1fr)')).join(' ') : 'minmax(0, 1fr)'
+  )};
   @media (max-width: 768px) {
-    grid-template-columns: ${({ $labels }) => ($labels ? '96px' : '36px')} repeat(${({ $cols }) => $cols}, ${({ $cols }) => ($cols > 1 ? 'min(72vw, 260px)' : 'minmax(0, 1fr)')});
+    grid-template-columns: ${({ $labels }) => ($labels ? '96px' : '36px')} ${({ $cols, $wide }) => (
+      $cols > 1 ? $wide.map(w => (w ? 'min(88vw, 340px)' : 'min(72vw, 260px)')).join(' ') : 'minmax(0, 1fr)'
+    )};
   }
 `;
 
@@ -439,27 +448,21 @@ const Grip = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: 4px; }
 `;
 
-/* A stretched task in a later part of its day: a short strip that reads as
-   the same card going on (the same fill, a firmer left edge on both) */
-const Continued = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  background: var(--bg-lane);
-  border: 1px solid var(--border-subtle);
+/* A stretched task: one card lying across the rows it covers, on top of the
+   cells behind it (which keep room beside it for their own cards). Its grip
+   stays at its foot. */
+const SpanCard = styled(TaskCard)`
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  justify-self: start;
+  box-sizing: border-box;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  min-width: 0;
   border-left: 3px solid var(--border-strong);
-  border-radius: var(--r-lg, 6px);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.35;
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-  user-select: none;
-  small { font-size: 12px; color: var(--text-muted); }
-  &:hover { border-color: var(--border-strong); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  /* The grip sits at the very foot however tall the block is */
+  & > button:last-child { margin-top: auto; }
 `;
 
 const Line = styled.div`
@@ -572,7 +575,7 @@ function StretchGrip({ card, day, stretch }: { card: PlannerCard; day: string; s
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const covers = spanLabel(card.part || DEFAULT_PART, card.partEnd);
   return (
-    <Grip type="button" data-active={stretch.activeId === card.id}
+    <Grip type="button" data-active={stretch.activeId === card.id} data-grip={card.id}
       aria-label={`Stretch ${card.title} over more of the day${covers ? ` (now ${covers.toLowerCase()})` : ''}. Arrow down for more, arrow up for less`}
       title="Drag to cover more of the day"
       onPointerDown={e => stretch.onGripDown(card, day, e)}
@@ -627,15 +630,17 @@ function SortableCard({ card, grip, ...actions }: { card: PlannerCard; grip?: { 
   );
 }
 
-/* A stretched task where it goes on: opens the task; its last part carries the grip */
-function ContinuedCard({ card, grip, onOpen }: { card: PlannerCard; grip?: { day: string; stretch: Stretching }; onOpen: (id: number) => void }) {
+/* A stretched task as one block across its rows (placed on the grid by the board) */
+function SpanBlock({ card, style, grip, ...actions }: { card: PlannerCard; style: React.CSSProperties; grip?: { day: string; stretch: Stretching } } & CardActions) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id });
   return (
-    <Continued role="button" tabIndex={0} aria-label={`${card.title}, continued`}
-      onClick={() => onOpen(card.id)}
-      onKeyDown={e => { if (e.key === 'Enter') onOpen(card.id); }}>
-      <span>{card.title}<br /><small>continued</small></span>
+    <SpanCard ref={setNodeRef} style={style} $dragging={isDragging} data-span={card.id}
+      {...attributes} {...listeners}
+      onClick={() => actions.onOpen(card.id)}
+      onKeyDown={e => { if (e.key === 'Enter') actions.onOpen(card.id); }}>
+      <CardBody card={card} {...actions} />
       {grip && <StretchGrip card={card} day={grip.day} stretch={grip.stretch} />}
-    </Continued>
+    </SpanCard>
   );
 }
 
@@ -660,6 +665,23 @@ const collisions: CollisionDetection = args => {
   const cards = hits.filter(h => typeof h.id === 'number');
   return cards.length ? cards : hits;
 };
+
+const isStretched = (c: PlannerCard): boolean => !!c.day && partsCovered(c.part || DEFAULT_PART, c.partEnd).length > 1;
+
+/**
+ * How a day's stretched tasks share its column: each gets a lane of `share`
+ * percent, side by side. When a part they cover also holds cards or events of
+ * its own (`shared`), one more share is kept for those, beside the blocks;
+ * otherwise the blocks take the whole column.
+ */
+function spanPlan(lane: PlannerLane): { spans: PlannerCard[]; share: number; shared: boolean } {
+  const spans = lane.cards.filter(isStretched);
+  if (!spans.length) return { spans, share: 100, shared: false };
+  const covered = new Set(spans.flatMap(x => partsCovered(x.part || DEFAULT_PART, x.partEnd)));
+  const shared = lane.cards.some(x => !isStretched(x) && covered.has(x.part || DEFAULT_PART))
+    || lane.events.some(ev => covered.has(ev.part || DEFAULT_PART));
+  return { spans, share: 100 / (spans.length + (shared ? 1 : 0)), shared };
+}
 
 /* ── Board ── */
 
@@ -815,6 +837,16 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
     onSchedule(id, to.day, onCard ? Number(over.id) : null, to.part);
   };
 
+  // A card changes shape when stretched from the keyboard (a card in a cell ↔ a
+  // block across rows): the grip is put back under the keys
+  const refocusGrip = useRef<number | null>(null);
+  useEffect(() => {
+    const id = refocusGrip.current;
+    if (id === null) return;
+    const el = gridRef.current?.querySelector<HTMLElement>(`[data-grip="${id}"]`);
+    if (el && document.activeElement !== el) el.focus();
+    if (el) refocusGrip.current = null;
+  });
   const partAt = (i: number): DayPart => PLANNER_ROWS[Math.max(0, Math.min(PLANNER_ROWS.length - 1, i))].value;
   const rowOf = (part: DayPart | '' | undefined) => Math.max(0, PLANNER_ROWS.findIndex(r => r.value === (part || DEFAULT_PART)));
   const stretch: Stretching = {
@@ -862,7 +894,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
       const first = rowOf(card.part);
       const now = Math.max(first, rowOf(card.partEnd || card.part));
       const next = Math.max(first, Math.min(PLANNER_ROWS.length - 1, now + (e.key === 'ArrowDown' ? 1 : -1)));
-      if (next !== now) onSpan?.(card.id, partAt(next));
+      if (next !== now) { refocusGrip.current = card.id; onSpan?.(card.id, partAt(next)); }
     },
   };
   const actions = { onOpen: openCard, onSchedule };
@@ -911,9 +943,9 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
             </EdgeHint>
           ))}
           <Scroll ref={pan.ref} $panning={pan.panning} {...pan.bind}>
-            <Grid ref={gridRef} $cols={lanes.length} $labels={!labelsFolded} role="table" aria-label="Planner"
+            <Grid ref={gridRef} $cols={lanes.length} $labels={!labelsFolded} $wide={lanes.map(l => spanPlan(l).shared)} role="table" aria-label="Planner"
               style={pan.pull ? { transform: `translateX(${pan.pull}px)` } : undefined}>
-              <Corner>
+              <Corner style={{ gridRow: 1, gridColumn: 1 }}>
                 <FoldBtn type="button" aria-expanded={!labelsFolded}
                   aria-label={labelsFolded ? 'Show morning, noon and night' : 'Hide morning, noon and night'}
                   title={labelsFolded ? 'Show morning, noon and night' : 'Hide morning, noon and night'}
@@ -921,8 +953,8 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
                   <MaterialIcon $size={20} aria-hidden="true">{labelsFolded ? 'chevron_right' : 'chevron_left'}</MaterialIcon>
                 </FoldBtn>
               </Corner>
-              {lanes.map(lane => (
-                <DayHead key={lane.day} $today={lane.today} role="columnheader">
+              {lanes.map((lane, c) => (
+                <DayHead key={lane.day} $today={lane.today} role="columnheader" style={{ gridRow: 1, gridColumn: c + 2 }}>
                   <DayName type="button" $today={lane.today} disabled={!onPickDay} onClick={() => onPickDay?.(lane.day)}
                     title={onPickDay ? 'Open this day' : undefined}>
                     {lane.label}
@@ -934,31 +966,36 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
               {PLANNER_ROWS.map((row, r) => (
                 <Fragment key={row.value}>
                   {labelsFolded
-                    ? <PartLabel as="div" $first={r === 0} role="rowheader"><SrOnly>{row.label}</SrOnly></PartLabel>
+                    ? <PartLabel as="div" $first={r === 0} role="rowheader" style={{ gridRow: r + 2, gridColumn: 1 }}><SrOnly>{row.label}</SrOnly></PartLabel>
                     : (
-                      <PartLabel type="button" $first={r === 0} role="rowheader" aria-expanded={!foldedParts.includes(row.value)}
+                      <PartLabel type="button" $first={r === 0} role="rowheader" aria-expanded={!foldedParts.includes(row.value)} style={{ gridRow: r + 2, gridColumn: 1 }}
                         title={`${foldedParts.includes(row.value) ? 'Show' : 'Hide'} ${row.label.toLowerCase()}`}
                         onClick={() => toggleFoldedPart(row.value)}>
                         <MaterialIcon $size={18} aria-hidden="true">chevron_right</MaterialIcon>
                         {row.label}<small>{row.hours}</small>
                       </PartLabel>
                     )}
-                  {lanes.map(lane => {
-                    const cards = lane.cards.filter(c => (c.part || DEFAULT_PART) === row.value);
-                    // Tasks stretched into this part from an earlier one
-                    const going = lane.cards.filter(c => (c.part || DEFAULT_PART) !== row.value && partsCovered(c.part || DEFAULT_PART, c.partEnd).includes(row.value));
-                    // The grip sits at the foot of a task's last part
-                    const endsHere = (c: PlannerCard) => (c.partEnd || c.part || DEFAULT_PART) === row.value || partsCovered(c.part || DEFAULT_PART, c.partEnd).at(-1) === row.value;
+                  {lanes.map((lane, c) => {
+                    const plan = spanPlan(lane);
+                    // Its own cards: the ones that sit in this part only (a stretched one is a block, below)
+                    const cards = lane.cards.filter(x => (x.part || DEFAULT_PART) === row.value && !isStretched(x));
+                    // Stretched tasks lying across this part
+                    const going = plan.spans.filter(x => partsCovered(x.part || DEFAULT_PART, x.partEnd).includes(row.value));
                     const grip = onSpan ? { day: lane.day, stretch } : undefined;
                     const events = lane.events.filter(ev => (ev.part || DEFAULT_PART) === row.value);
+                    // Room beside the blocks for this cell's own cards (none needed when it has none)
+                    const place: React.CSSProperties = {
+                      gridRow: r + 2, gridColumn: c + 2,
+                      ...(going.length && plan.shared ? { paddingLeft: `calc(${plan.spans.length * plan.share}% + 8px)` } : {}),
+                    };
                     if (foldedParts.includes(row.value)) {
                       const tasksHere = cards.length + going.length;
                       const summary = [tasksHere && plural(tasksHere, 'task'), events.length && plural(events.length, 'event')].filter(Boolean).join(' · ');
                       return (
                         <DropZone key={lane.day} id={cellId(lane.day, row.value)}>
                           {(over, ref) => (
-                            <Cell ref={ref} $first={r === 0} $over={over} $folded role="cell" aria-label={`${lane.label}, ${row.label}, folded`} data-day={lane.day} data-part={row.value}>
-                              {summary && <FoldedNote>{summary}</FoldedNote>}
+                            <Cell ref={ref} $first={r === 0} $over={over} $folded role="cell" aria-label={`${lane.label}, ${row.label}, folded`} data-day={lane.day} data-part={row.value} style={place}>
+                              {summary && !going.length && <FoldedNote>{summary}</FoldedNote>}
                             </Cell>
                           )}
                         </DropZone>
@@ -967,15 +1004,14 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
                     return (
                       <DropZone key={lane.day} id={cellId(lane.day, row.value)}>
                         {(over, ref) => (
-                          <Cell ref={ref} $first={r === 0} $over={over} role="cell" aria-label={`${lane.label}, ${row.label}`} data-day={lane.day} data-part={row.value}>
-                            {going.map(c => <ContinuedCard key={c.id} card={c} grip={grip && endsHere(c) ? grip : undefined} onOpen={openCard} />)}
+                          <Cell ref={ref} $first={r === 0} $over={over} role="cell" aria-label={`${lane.label}, ${row.label}`} data-day={lane.day} data-part={row.value} style={place}>
                             {events.map(ev => (
                               <EventRow key={ev.key} type="button" onClick={() => onOpenEvent(ev.id)}>
                                 {ev.title}<small>{ev.when}</small>
                               </EventRow>
                             ))}
-                            <SortableContext items={cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                              {cards.map(c => <SortableCard key={c.id} card={c} grip={grip && endsHere(c) ? grip : undefined} {...actions} />)}
+                            <SortableContext items={cards.map(x => x.id)} strategy={verticalListSortingStrategy}>
+                              {cards.map(x => <SortableCard key={x.id} card={x} grip={grip} {...actions} />)}
                             </SortableContext>
                             {cards.length === 0 && going.length === 0 && events.length === 0 && <Blank aria-hidden="true">{row.label}</Blank>}
                           </Cell>
@@ -986,9 +1022,26 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, tools, onOpen, 
                 </Fragment>
               ))}
 
-              <FootGap aria-hidden="true" />
-              {lanes.map(lane => (
-                <FootCell key={lane.day}>
+              {/* Stretched tasks: one block each, across the rows it covers */}
+              {lanes.map((lane, c) => {
+                const plan = spanPlan(lane);
+                return plan.spans.map((x, i) => {
+                  const covered = partsCovered(x.part || DEFAULT_PART, x.partEnd);
+                  const first = PLANNER_ROWS.findIndex(row => row.value === covered[0]);
+                  return (
+                    <SpanBlock key={x.id} card={x} grip={onSpan ? { day: lane.day, stretch } : undefined} {...actions}
+                      style={{
+                        gridColumn: c + 2, gridRow: `${first + 2} / span ${covered.length}`,
+                        width: `calc(${plan.share}% - ${plan.shared || plan.spans.length > 1 ? 12 : 16}px)`,
+                        marginLeft: `calc(${i * plan.share}% + 8px)`,
+                      }} />
+                  );
+                });
+              })}
+
+              <FootGap aria-hidden="true" style={{ gridRow: PLANNER_ROWS.length + 2, gridColumn: 1 }} />
+              {lanes.map((lane, c) => (
+                <FootCell key={lane.day} style={{ gridRow: PLANNER_ROWS.length + 2, gridColumn: c + 2 }}>
                   <AddTask label={`Add a task on ${lane.label}`} onAdd={text => onAdd(lane.day, text)} />
                 </FootCell>
               ))}
