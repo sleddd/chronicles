@@ -19,6 +19,7 @@ import {
   MED_PERIODS, buildMedHistory, medHistoryTotals, medPeriodRange, searchMedHistory,
   type MedHistoryRow, type MedInfo, type MedPeriod,
 } from '../utils/medHistory.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 /* Health → Med history: what was taken over a period, how often, and when —
    searchable, with each medication opening into its doses. Doses ticked off in
@@ -198,8 +199,7 @@ export function MedHistoryView() {
   const meds = useMemo<MedInfo[]>(() => {
     const topicId = allTopics.find(t => t.name.toLowerCase() === 'medication')?.id;
     if (topicId === undefined) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown> | undefined)?._taxonomyId === topicId)
+    return topicEntries(entries, topicId)
       .map(e => {
         const cf = ((e.metadata as Record<string, unknown>)._customFields ?? {}) as Record<string, unknown>;
         const name = typeof cf.medicationName === 'string' && cf.medicationName.trim() ? cf.medicationName : stripHtml(e.content);

@@ -27,6 +27,7 @@ import type { PlannerFilterConfig, SavedPlannerFilter } from '../types/planner.j
 import { EMPTY_PLANNER_FILTER, isFilterEmpty, filtersEqual, encodePlannerFilter, decodePlannerFilter } from '../types/planner.js';
 import { useSearchParams } from 'react-router-dom';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Styled components ── */
 
@@ -372,8 +373,7 @@ export function PlannerFilterView() {
   // Parse all planner items
   const goals = useMemo(() => {
     if (!goalTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === goalTopicId)
+    return topicEntries(entries, goalTopicId)
       .map(e => {
         const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
         return { id: e.id, content: e.content, title: stripHtml(e.content).slice(0, 120) || 'Untitled goal',
@@ -385,8 +385,7 @@ export function PlannerFilterView() {
 
   const milestones: MilestoneEntryData[] = useMemo(() => {
     if (!milestoneTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === milestoneTopicId)
+    return topicEntries(entries, milestoneTopicId)
       .map(e => {
         const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
         return { id: e.id, content: e.content, title: stripHtml(e.content).slice(0, 120) || 'Untitled milestone',
@@ -399,8 +398,7 @@ export function PlannerFilterView() {
 
   const tasks: TaskEntryData[] = useMemo(() => {
     if (!taskTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === taskTopicId)
+    return topicEntries(entries, taskTopicId)
       .map(e => {
         const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
         return { id: e.id, content: e.content, title: stripHtml(e.content).slice(0, 80) || 'Untitled task',

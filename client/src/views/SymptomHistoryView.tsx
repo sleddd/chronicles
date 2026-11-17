@@ -22,6 +22,7 @@ import {
   buildSymptomHistory, searchSymptomHistory, severityWord, symptomEventsFrom, symptomHistoryTotals, type SymptomHistoryRow,
 } from '../utils/symptomHistory.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 /* Health → Symptoms: what you noticed over a period, laid out like Exercise
    history — Log symptom and Download CSV in the header, period chips and a
@@ -61,8 +62,7 @@ export function SymptomHistoryView() {
   const events = useMemo(() => {
     const topicId = allTopics.find(t => t.name.toLowerCase() === 'symptom')?.id;
     if (topicId === undefined) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown> | undefined)?._taxonomyId === topicId)
+    return topicEntries(entries, topicId)
       .flatMap(e => symptomEventsFrom({
         id: e.id,
         day: entryDay(e, 'occurredDate'),

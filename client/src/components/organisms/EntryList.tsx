@@ -5,6 +5,7 @@ import { useEntriesStore } from '../../stores/entriesStore.js';
 import { EntryCard } from './EntryCard.js';
 import { Checkbox } from '../atoms/Checkbox.js';
 import { LoadMore } from '../molecules/LoadMore.js';
+import { entrySearchText } from '../../utils/entrySearchText.js';
 import { useJournalSelect } from '../../stores/journalSelectStore.js';
 import { entries as entriesApi } from '../../services/api.js';
 import { collectImageKeys, bestEffortDeleteImages } from '../../services/imageStorage.js';
@@ -221,11 +222,10 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
       // Keyword and date range belong to the Search tab, where they're visible
       if (viewMode === 'search' && searchKeyword) {
         const keyword = searchKeyword.toLowerCase();
-        const contentMatch = entry.content.toLowerCase().includes(keyword);
-        const metadataMatch = JSON.stringify(entry.metadata).toLowerCase().includes(keyword);
+        // The entry's text and fields, lower-cased once per entry (utils/entrySearchText)
         const topic = taxId ? topics.find(t => t.id === taxId) : undefined;
         const topicMatch = topic?.name?.toLowerCase().includes(keyword) ?? false;
-        if (!contentMatch && !metadataMatch && !topicMatch) return false;
+        if (!entrySearchText(entry).includes(keyword) && !topicMatch) return false;
       }
 
       if (viewMode === 'search' && (searchDateFrom || searchDateTo)) {

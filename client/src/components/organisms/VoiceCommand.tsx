@@ -25,6 +25,7 @@ import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import { doses as dosesApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
+import { topicEntries } from '../../utils/topicIndex.js';
 
 /* Voice commands (dashboard): one tap on Voice opens this and starts listening — "Add task call the
    dentist due Friday, high priority", "Log symptom headache severity 6", "Add
@@ -191,8 +192,7 @@ export function useVoiceSession() {
   // As-needed medications (no scheduled times): "I took my ibuprofen" logs one dose
   const asNeededMeds = useMemo(() => {
     const medTid = refs.find(t => t.name.trim().toLowerCase() === 'medication')?.id;
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown> | undefined)?._taxonomyId === medTid)
+    return topicEntries(entries, medTid)
       .map(e => ({ e, cf: ((e.metadata as Record<string, unknown>)._customFields ?? {}) as Record<string, unknown> }))
       .filter(({ cf }) => cf.frequency === 'as_needed' && cf.isActive !== false)
       .map(({ e, cf }) => ({ id: e.id, title: String(cf.medicationName ?? '').trim() || stripHtml(e.content).trim() }));

@@ -44,6 +44,7 @@ import {
   EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, goalCategoryOf, categoriesInUse, sameCategory, groupByCategory,
   type GoalCategoryConfig,
 } from '../utils/goalCategories.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Layout (mirrors Health) ── */
 
@@ -376,8 +377,7 @@ export function GoalsView() {
   // Parse entries into typed data
   const goals: GoalEntry[] = useMemo(() => {
     if (!goalTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === goalTopicId)
+    return topicEntries(entries, goalTopicId)
       .map(e => {
         const meta = e.metadata as Record<string, unknown>;
         const cf = meta?._customFields as Record<string, unknown> || {};
@@ -396,8 +396,7 @@ export function GoalsView() {
 
   const milestones: MilestoneEntryData[] = useMemo(() => {
     if (!milestoneTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === milestoneTopicId)
+    return topicEntries(entries, milestoneTopicId)
       .map(e => {
         const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
         return { id: e.id, content: e.content, title: stripHtml(e.content).slice(0, 120) || 'Untitled milestone',
@@ -410,8 +409,7 @@ export function GoalsView() {
 
   const tasks: TaskEntryData[] = useMemo(() => {
     if (!taskTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === taskTopicId)
+    return topicEntries(entries, taskTopicId)
       .map(e => {
         const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> || {};
         return { id: e.id, content: e.content, title: stripHtml(e.content).slice(0, 80) || 'Untitled task',

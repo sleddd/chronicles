@@ -79,6 +79,7 @@ import {
 } from '../utils/taskLists.js';
 import { PLAN_TAB_PATHS } from '../utils/planningView.js';
 import { MANTRA_TOPIC, MANTRA_ICON, isMantraTopic, dailyMantraIndex, stepIndex } from '../utils/mantras.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 /* The home dashboard (/dashboard — not the default page; the journal is home):
    the date and home weather over the greeting and a Light | Dark switch; the
@@ -993,8 +994,7 @@ function usePriorities() {
   const entry = useMemo(() => {
     if (tid === undefined) return undefined;
     const time = (e: DecryptedPost) => new Date(e.createdAt).getTime();
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid)
+    return topicEntries(entries, tid)
       .reduce<DecryptedPost | undefined>((best, e) => (!best || time(e) > time(best) ? e : best), undefined);
   }, [entries, tid]);
   const items = ((entry ? cfOf(entry).priorities : undefined) as PriorityItem[] | undefined) ?? [];
@@ -1090,8 +1090,7 @@ function useWinsList() {
   const entry = useMemo(() => {
     if (tid === undefined) return undefined;
     const time = (e: DecryptedPost) => new Date(e.createdAt).getTime();
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid)
+    return topicEntries(entries, tid)
       .reduce<DecryptedPost | undefined>((best, e) => (!best || time(e) > time(best) ? e : best), undefined);
   }, [entries, tid]);
   return { entry, items: entry ? winsOf(cfOf(entry)) : [], tid };
@@ -1303,20 +1302,17 @@ function Tasks({ show: savedShow, onShow: saveShow }: { show: string; onShow: (n
   }, [loadPrivateSettings]);
 
   const tid = topicIdByName(allTopics, 'task');
-  const tasks = useMemo(() => (tid === undefined ? [] : entries
-    .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === tid)
+  const tasks = useMemo(() => (tid === undefined ? [] : [...topicEntries(entries, tid)]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())), [entries, tid]);
   const milestoneGoal = useMemo(() => {
     const mid = topicIdByName(allTopics, 'milestone');
-    return new Map(entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === mid)
+    return new Map(topicEntries(entries, mid)
       .map(e => [e.id, (cfOf(e).parentGoalId as number) || null] as [number, number | null]));
   }, [entries, allTopics]);
   // A saved view's Category filter: a task takes its goal's category
   const goalCategory = useMemo(() => {
     const gid = topicIdByName(allTopics, 'goal');
-    return new Map(entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === gid)
+    return new Map(topicEntries(entries, gid)
       .map(e => [e.id, goalCategoryOf(cfOf(e))] as [number, string]));
   }, [entries, allTopics]);
   const lists = tasks.filter(t => isTodoList(cfOf(t)));
@@ -1681,8 +1677,7 @@ function Mantra() {
 
   const topicId = allTopics.find(t => isMantraTopic(t.name))?.id;
   // Oldest first, so the daily turn is stable as new ones are added
-  const mantras = useMemo(() => (topicId === undefined ? [] : entries
-    .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === topicId)
+  const mantras = useMemo(() => (topicId === undefined ? [] : topicEntries(entries, topicId)
     .map(e => ({ id: e.id, text: stripHtml(e.content).trim() }))
     .filter(m => m.text)
     .sort((a, b) => a.id - b.id)), [entries, topicId]);
@@ -2092,8 +2087,7 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
   const [newName, setNewName] = useState('');
   const listTid = topicIdByName(allTopics, 'shopping list', 'shopping lists');
   // Every list, newest first, for the picker
-  const lists = useMemo(() => (listTid === undefined ? [] : entries
-    .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === listTid)
+  const lists = useMemo(() => (listTid === undefined ? [] : [...topicEntries(entries, listTid)]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())), [entries, listTid]);
   // The chosen list, else (or when it's gone) the newest open one
   const chosen = show !== 'latest' ? lists.find(l => String(l.id) === show) : undefined;

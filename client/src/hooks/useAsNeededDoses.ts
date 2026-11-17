@@ -4,6 +4,7 @@ import { doses as dosesApi, type DoseLogRecord } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { DOSES_CHANGED } from './useTodayDoses.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 export interface AsNeededMed { id: number; name: string; dosage: string }
 
@@ -26,8 +27,7 @@ export function useAsNeededDoses(day?: string) {
   const meds = useMemo<AsNeededMed[]>(() => {
     const medTopicId = allTopics.find(t => t.name.toLowerCase() === 'medication')?.id;
     if (!medTopicId) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === medTopicId)
+    return topicEntries(entries, medTopicId)
       .map(e => ({ e, cf: ((e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>) || {} }))
       .filter(({ cf }) => cf.frequency === 'as_needed' && cf.isActive !== false)
       .map(({ e, cf }) => ({
