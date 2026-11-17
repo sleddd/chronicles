@@ -61,7 +61,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
   }
   /* Dark: deeper, so a bright photo still sits in the dark page */
   html[data-theme='dark'] &::after {
-    background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.28, $shade)}), rgba(0, 0, 0, ${Math.max(0.22, $shade)}) 60%, rgba(0, 0, 0, ${Math.max(0.14, $shade * 0.6)})`});
+    background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.42, $shade + 0.08)}), rgba(0, 0, 0, ${Math.max(0.36, $shade + 0.06)}) 60%, rgba(0, 0, 0, ${Math.max(0.24, $shade * 0.6 + 0.06)})`});
   }
   /* Solid down to a point (the dashboard's Quick entry, written straight on the
      photo), then the same eased fade over the last FADE px; shaded a step
@@ -71,7 +71,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
       rgba(0, 0, 0, 0.62) ${$solid + FADE * 0.34}px, rgba(0, 0, 0, 0.32) ${$solid + FADE * 0.58}px,
       rgba(0, 0, 0, 0.1) ${$solid + FADE * 0.82}px, transparent ${$solid + FADE}px);
     &::after, html[data-theme='dark'] &::after {
-      background: linear-gradient(to bottom, rgba(0, 0, 0, ${Math.max(0.28, $shade)}), rgba(0, 0, 0, ${Math.max(0.22, $shade)}) ${$solid}px, rgba(0, 0, 0, ${Math.max(0.13, $shade * 0.6)}));
+      background: linear-gradient(to bottom, rgba(0, 0, 0, ${Math.max(0.42, $shade + 0.08)}), rgba(0, 0, 0, ${Math.max(0.36, $shade + 0.06)}) ${$solid}px, rgba(0, 0, 0, ${Math.max(0.22, $shade * 0.6 + 0.06)}));
     }
     /* Light: past the solid part a long, gentle fade, washing into the page colour
        as it goes — never a sharp line */

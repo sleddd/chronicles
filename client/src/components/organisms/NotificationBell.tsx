@@ -162,12 +162,12 @@ export const BellBadge = styled.span`
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  /* Just the number, in the accent — no disc behind it */
-  background: none;
-  color: var(--color-accent-link, var(--color-accent));
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--on-accent, #fff);
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 18px;
   text-align: center;
 `;
