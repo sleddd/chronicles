@@ -26,6 +26,7 @@ import { entryTitleText } from '../utils/entryTitle.js';
 import type { UserFieldDef } from '../types/userFields.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
+import { topicEntries as entriesOfTopic } from '../utils/topicIndex.js';
 
 /* ── Layout (mirrors TopicsView) ── */
 
@@ -177,8 +178,7 @@ export function TopicDetailView() {
 
   const topicEntries = useMemo(() => {
     if (!topic) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === topic.id)
+    return [...entriesOfTopic(entries, topic.id)]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [entries, topic]);
 

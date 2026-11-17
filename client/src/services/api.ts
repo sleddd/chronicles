@@ -404,8 +404,23 @@ type EntryChanges =
   | { reset: true; scope: string }
   | { reset: false; scope: string; cursor: string; entries: WireEntry[]; deleted: number[] };
 
-// A full download now and then anyway, so the browser copy can't drift
+// Once a week the browser's copy is checked against the server (how many
+// entries, and the sum of their ids); a copy that disagrees is downloaded again
 const FULL_RELOAD_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Does this copy hold exactly the entries the server has? False when it can't be told (an older server, a failed request) */
+async function copyMatchesServer(rows: Iterable<WireEntry>): Promise<boolean> {
+  try {
+    const server = await request<{ count?: unknown; idSum?: unknown }>('/entries/fingerprint');
+    if (typeof server.count !== 'number' || typeof server.idSum !== 'string') return false;
+    let count = 0;
+    let idSum = 0n;
+    for (const row of rows) { count++; idSum += BigInt(row.id); }
+    return count === server.count && idSum.toString() === server.idSum;
+  } catch {
+    return false;
+  }
+}
 
 // The server's order: newest first, then highest id
 function newestFirst(rows: WireEntry[]): WireEntry[] {
@@ -425,14 +440,19 @@ export const entries = {
     if (!entryCacheAvailable()) return allEntryPages();
     const { cursor, scope } = await request<{ cursor: string; scope: string }>('/entries/cursor');
     const cached = await readCache(scope).catch(() => null);
-    if (cached && Date.now() - cached.fullAt < FULL_RELOAD_MS) {
+    if (cached) {
       const changes = await request<EntryChanges>(`/entries/changes?since=${cached.cursor}`);
       if (!changes.reset && changes.scope === scope) {
         const byId = new Map(cached.rows.map(r => [r.id, r]));
         for (const e of changes.entries) byId.set(e.id, e);
         for (const id of changes.deleted) byId.delete(id);
-        await applyToCache(scope, changes.cursor, changes.entries, changes.deleted).catch(() => {});
-        return newestFirst([...byId.values()]);
+        // A copy a week old is trusted for another week only if it still holds
+        // exactly the server's entries; otherwise everything is downloaded again
+        const due = Date.now() - cached.fullAt >= FULL_RELOAD_MS;
+        if (!due || await copyMatchesServer(byId.values())) {
+          await applyToCache(scope, changes.cursor, changes.entries, changes.deleted, due ? Date.now() : undefined).catch(() => {});
+          return newestFirst([...byId.values()]);
+        }
       }
     }
     // The cursor was taken before this load, so nothing written during it is missed

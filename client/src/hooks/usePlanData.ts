@@ -7,6 +7,7 @@ import { normalizeRoadmapStatus, normalizeMilestoneRoadmapStatus, type RoadmapSt
 import { goalCategoryOf } from '../utils/goalCategories.js';
 import { toDateStr } from '../utils/dateUtils.js';
 
+import { topicEntries } from '../utils/topicIndex.js';
 /* Goals, milestones and tasks read from the entries store, for the Planning
    views beside the boards (Roadmap, Planner, Habits). A milestone or task
    takes its goal's category. */
@@ -39,15 +40,19 @@ function item(e: DecryptedPost, untitled: string): PlanItem {
 }
 
 export function usePlanData() {
-  const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
+  const { goalTopicId, milestoneTopicId, taskTopicId } = useMemo(() => {
+    const topicId = (name: string) => allTopics.find(t => t.name.toLowerCase() === name)?.id;
+    return { goalTopicId: topicId('goal'), milestoneTopicId: topicId('milestone'), taskTopicId: topicId('task') };
+  }, [allTopics]);
+  // Each topic's own list (utils/topicIndex): it keeps its identity while nothing
+  // in that topic changed, so a save elsewhere in the journal redoes nothing here
+  const goalRows = useEntriesStore(s => topicEntries(s.decryptedEntries, goalTopicId));
+  const milestoneRows = useEntriesStore(s => topicEntries(s.decryptedEntries, milestoneTopicId));
+  const taskRows = useEntriesStore(s => topicEntries(s.decryptedEntries, taskTopicId));
 
   return useMemo(() => {
-    const topicId = (name: string) => allTopics.find(t => t.name.toLowerCase() === name)?.id;
-    const goalTopicId = topicId('goal');
-    const milestoneTopicId = topicId('milestone');
-    const taskTopicId = topicId('task');
-    const of = (id: number | undefined) => (id ? entries.filter(e => topicOf(e) === id) : []);
+    const of = (id: number | undefined) => (id === goalTopicId ? goalRows : id === milestoneTopicId ? milestoneRows : taskRows);
 
     const goals: PlanGoal[] = of(goalTopicId).map(e => {
       const base = item(e, 'Untitled goal');
@@ -75,5 +80,5 @@ export function usePlanData() {
     });
 
     return { goals, milestones, tasks, goalTopicId, milestoneTopicId, taskTopicId };
-  }, [entries, allTopics]);
+  }, [goalRows, milestoneRows, taskRows, goalTopicId, milestoneTopicId, taskTopicId]);
 }

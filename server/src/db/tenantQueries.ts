@@ -877,6 +877,19 @@ export async function getSyncCursor(schemaName: string): Promise<string> {
   return cursor;
 }
 
+/**
+ * How many entries the account has and the sum of their ids: what a browser
+ * compares its own copy with before trusting it for another week instead of
+ * downloading the whole journal again. One index pass, no entry bodies read.
+ */
+export async function getPostFingerprint(schemaName: string): Promise<{ count: number; idSum: string }> {
+  const db = await tenantDb(schemaName);
+  const [row] = await db.$queryRawUnsafe<{ count: number; id_sum: string }[]>(
+    `SELECT count(id)::int AS count, coalesce(sum(id), 0)::text AS id_sum FROM "${escapeSchema(schemaName)}".posts`
+  );
+  return { count: row.count, idSum: row.id_sum };
+}
+
 export type PostChanges =
   | { reset: true }
   | { reset: false; cursor: string; entries: TenantPost[]; deleted: number[] };

@@ -14,6 +14,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   ensurePostSync: vi.fn().mockResolvedValue(undefined),
   ensurePostReservations: vi.fn().mockResolvedValue(undefined),
   getSyncCursor: vi.fn(),
+  getPostFingerprint: vi.fn(),
   getPostChanges: vi.fn(),
   updatePost: vi.fn(),
   deletePost: vi.fn(),
@@ -41,7 +42,7 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getPostPage, getPost, createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
+import { getPostPage, getPost, createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 import { deleteSharesForEntry } from '../../db/shareQueries.js';
 
@@ -338,6 +339,16 @@ describe('Entry Routes', () => {
       await request(app).get('/api/entries');
       expect(ensurePostSync).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
       expect(ensurePostReservations).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
+    });
+
+    it('says how many entries the account has and the sum of their ids', async () => {
+      (getPostFingerprint as any).mockResolvedValue({ count: 3, idSum: '42' });
+      const res = await request(app).get('/api/entries/fingerprint');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ count: 3, idSum: '42' });
+      expect(getPostFingerprint).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName);
+      // Never read as an entry id
+      expect(getPost).not.toHaveBeenCalled();
     });
 
     it('gives a cursor and a scope for this account', async () => {

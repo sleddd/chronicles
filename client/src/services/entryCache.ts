@@ -90,8 +90,12 @@ export async function replaceCache(scope: string, cursor: string, rows: WireEntr
   await done(tx);
 }
 
-/** Apply a /changes response; the cursor moves only if every row was written. */
-export async function applyToCache(scope: string, cursor: string, upserts: WireEntry[], deleted: number[]): Promise<void> {
+/**
+ * Apply a /changes response; the cursor moves only if every row was written.
+ * `checkedAt`: the copy was just compared with the server and agrees, so it
+ * counts as fresh from then (the weekly full download starts over).
+ */
+export async function applyToCache(scope: string, cursor: string, upserts: WireEntry[], deleted: number[], checkedAt?: number): Promise<void> {
   const db = await open();
   const tx = db.transaction([ROWS, META], 'readwrite');
   const store = tx.objectStore(ROWS);
@@ -101,7 +105,7 @@ export async function applyToCache(scope: string, cursor: string, upserts: WireE
   const metaReq = metaStore.get(scope);
   metaReq.onsuccess = () => {
     const meta = metaReq.result as { fullAt: number } | undefined;
-    metaStore.put({ scope, cursor, fullAt: meta?.fullAt ?? 0 });
+    metaStore.put({ scope, cursor, fullAt: checkedAt ?? meta?.fullAt ?? 0 });
   };
   await done(tx);
 }

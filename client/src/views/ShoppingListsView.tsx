@@ -19,6 +19,7 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import type { ShoppingItem } from '../types/fields.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Layout (mirrors HealthView) ── */
 
@@ -104,8 +105,7 @@ export function ShoppingListsView() {
 
   const lists = useMemo(() => {
     if (!shoppingListTopic) return [];
-    return entries
-      .filter(e => (e.metadata as Record<string, unknown>)?._taxonomyId === shoppingListTopic.id)
+    return topicEntries(entries, shoppingListTopic.id)
       .map(e => {
         const meta = e.metadata as Record<string, unknown>;
         const cf   = meta?._customFields as Record<string, unknown> | undefined;

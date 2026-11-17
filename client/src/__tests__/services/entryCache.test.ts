@@ -10,13 +10,14 @@ const row = (id: number, day: number, tag = 'v1') => ({
 });
 
 /** A fake server: one journal per scope, with change responses queued by the test. */
-function server(opts: { scope: string; cursor: string; journal: unknown[]; changes?: unknown }) {
+function server(opts: { scope: string; cursor: string; journal: unknown[]; changes?: unknown; fingerprint?: unknown }) {
   const calls: string[] = [];
   const fetchFn = vi.fn(async (url: string) => {
     calls.push(url.replace('/api', ''));
     let body: unknown;
     if (url.startsWith('/api/entries/cursor')) body = { cursor: opts.cursor, scope: opts.scope };
     else if (url.startsWith('/api/entries/changes')) body = opts.changes;
+    else if (url.startsWith('/api/entries/fingerprint')) body = opts.fingerprint ?? {};
     else if (url.startsWith('/api/entries?')) body = { entries: opts.journal, more: false };
     else throw new Error(`unexpected ${url}`);
     return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body };
@@ -78,14 +79,42 @@ describe('entries.getAll with the browser cache', () => {
     expect((await readCache(SCOPE_A))?.rows.map(r => r.id)).toEqual([1]);
   });
 
-  it('downloads everything once the copy is a week old', async () => {
+  const WEEK = 8 * 24 * 60 * 60 * 1000;
+  const nothingNew = { reset: false, scope: SCOPE_A, cursor: '900', entries: [], deleted: [] };
+
+  it('keeps a week-old copy that still matches the server, and trusts it for another week', async () => {
+    server({ scope: SCOPE_A, cursor: '100', journal: [row(2, 5), row(1, 4)] });
+    await entries.getAll();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + WEEK);
+    const calls = server({ scope: SCOPE_A, cursor: '900', journal: [], changes: nothingNew, fingerprint: { count: 2, idSum: '3' } });
+    expect((await entries.getAll()).map(e => e.id)).toEqual([2, 1]);
+    expect(calls).toEqual(['/entries/cursor', '/entries/changes?since=100', '/entries/fingerprint']);
+    // Checked now: the next visit doesn't ask again
+    const next = server({ scope: SCOPE_A, cursor: '900', journal: [], changes: nothingNew });
+    await entries.getAll();
+    expect(next).toEqual(['/entries/cursor', '/entries/changes?since=900']);
+  });
+
+  it('downloads everything when a week-old copy has drifted from the server', async () => {
     server({ scope: SCOPE_A, cursor: '100', journal: [row(1, 4)] });
     await entries.getAll();
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(Date.now() + 8 * 24 * 60 * 60 * 1000);
-    const calls = server({ scope: SCOPE_A, cursor: '900', journal: [row(1, 4), row(2, 5)] });
+    vi.setSystemTime(Date.now() + WEEK);
+    // The server holds an entry the copy never heard of
+    const calls = server({ scope: SCOPE_A, cursor: '900', journal: [row(2, 5), row(1, 4)], changes: nothingNew, fingerprint: { count: 2, idSum: '3' } });
+    expect((await entries.getAll()).map(e => e.id)).toEqual([2, 1]);
+    expect(calls).toEqual(['/entries/cursor', '/entries/changes?since=100', '/entries/fingerprint', '/entries?v=2&limit=5000']);
+  });
+
+  it('downloads everything when the server cannot say (an older server)', async () => {
+    server({ scope: SCOPE_A, cursor: '100', journal: [row(1, 4)] });
     await entries.getAll();
-    expect(calls).toEqual(['/entries/cursor', '/entries?v=2&limit=5000']);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + WEEK);
+    const calls = server({ scope: SCOPE_A, cursor: '900', journal: [row(1, 4)], changes: nothingNew });
+    await entries.getAll();
+    expect(calls).toContain('/entries?v=2&limit=5000');
   });
 
   it('is erased on sign-out', async () => {

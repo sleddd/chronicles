@@ -12,11 +12,8 @@ import { openStartupSettings } from '../services/privateSettings.js';
 import { parseThemePreference } from '../utils/autoTheme.js';
 import { safeAccent } from '../styles/accent.js';
 import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderEntriesFromMarker } from '../services/entryReseal.js';
+import { decryptEntriesInBatches } from '../utils/decryptEntries.js';
 import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameIntoText.js';
-
-/** What the encryption context throws once the key has left the tab (EncryptionContext `getKey`) */
-const KEY_GONE = 'Encryption not unlocked';
-const keyGone = (err: unknown): boolean => err instanceof Error && err.message === KEY_GONE;
 
 /**
  * Shared hook that ensures entries, topics, settings, and encryption are loaded.
@@ -120,25 +117,9 @@ export function useInitializeData() {
 
         // Older entry formats open only until this account is past the move to v3
         setOlderEntriesFromMarker(sealed(ENTRIES_SEAL_MARKER) !== undefined);
-        // Decrypt entries individually, all at once (one at a time held every page up) — a failed one shows as such
-        const decrypted: import('@shared/crypto/types').DecryptedPost[] = (await Promise.all(encrypted.map(async entry => {
-          try {
-            return await decryptPosts([entry]);
-          } catch (err) {
-            // No key is not a bad entry: the whole load stops, so a journal of
-            // placeholders is never shown or marked initialized
-            if (keyGone(err)) throw err;
-            console.warn(`Skipping entry ${entry.id} — decryption failed:`, err);
-            return [{
-              id: entry.id,
-              content: '[Decryption failed]',
-              metadata: {},
-              isEncrypted: entry.isEncrypted,
-              createdAt: entry.createdAt,
-              updatedAt: entry.updatedAt,
-            }];
-          }
-        }))).flat();
+        // A batch at a time, newest first, so the page stays responsive; a failed one shows as such
+        const decrypted = await decryptEntriesInBatches(encrypted, decryptPosts, () => cancelled);
+        if (!decrypted) return;
         if (cancelled) return;
         step(`${decrypted.length} entries decrypted`);
         setDecryptedEntries(decrypted);

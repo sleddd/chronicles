@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import crypto from 'crypto';
-import { createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
+import { createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
@@ -85,6 +85,18 @@ router.get('/cursor', async (req, res) => {
     res.json({ cursor: await getSyncCursor(req.auth!.tenantSchemaName), scope: syncScope(req.auth!.tenantSchemaName) });
   } catch (err) {
     console.error('Entry cursor error:', err);
+    res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// GET /api/entries/fingerprint — How many entries there are and the sum of
+// their ids. A browser whose copy is a week old compares its own with this and,
+// when they agree, keeps the copy instead of downloading the journal again
+router.get('/fingerprint', async (req, res) => {
+  try {
+    res.json(await getPostFingerprint(req.auth!.tenantSchemaName));
+  } catch (err) {
+    console.error('Entry fingerprint error:', err);
     res.status(500).json({ error: 'Failed to load entries' });
   }
 });

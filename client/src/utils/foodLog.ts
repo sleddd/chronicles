@@ -2,6 +2,7 @@ import type { DecryptedPost } from '@shared/crypto/types';
 import { NUTRIENTS, nutrientNumber, type NutrientGoals, type NutrientKey } from '../types/nutrition.js';
 import { stripHtml } from './stripHtml.js';
 import { toDateStr } from './dateUtils.js';
+import { topicEntries } from './topicIndex.js';
 
 export const MEAL_TYPE_OPTIONS = [
   { value: 'breakfast', label: 'Breakfast' },
@@ -71,8 +72,7 @@ export function entryDay(entry: DecryptedPost, dateKey: string): string {
 /** All entries of a topic as food rows, oldest first within a day. */
 export function foodRowsFrom(entries: DecryptedPost[], topicId: number | undefined): FoodRow[] {
   if (topicId === undefined) return [];
-  return entries
-    .filter(e => (e.metadata as Record<string, unknown> | undefined)?._taxonomyId === topicId)
+  return topicEntries(entries, topicId)
     .map(e => {
       const cf = customFields(e);
       const values = {} as Record<NutrientKey, number | null>;
