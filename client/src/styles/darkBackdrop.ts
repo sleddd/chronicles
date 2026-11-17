@@ -28,11 +28,11 @@ export const litSheet = css`
    far corner, with a very faint paper grain. It only ever brightens: nothing is darker
    than the page colour. */
 export const litSheetLight = css`
-  background-color: #f0f2f5;
+  background-color: #f2f4f6;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.05 0 0 0 -0.02'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
     radial-gradient(ellipse 150% 190% at 106% 92%,
-      #fbfcfd 0%, #f8f9fa 22%, #f5f6f8 46%, #f2f4f6 72%, #f0f2f5 94%);
+      #fdfdfe 0%, #fafbfc 22%, #f7f8fa 46%, #f4f5f7 72%, #f2f4f6 94%);
   background-size: 220px 220px, 100% 100%;
   background-repeat: repeat, no-repeat;
   background-attachment: fixed;

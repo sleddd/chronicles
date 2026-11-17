@@ -392,6 +392,11 @@ const NextCard = styled.section`
   flex-direction: column;
   min-width: 0;
   font-family: var(--font-sans);
+  /* Its card title ("Next up · tomorrow") a little smaller than the other widgets' 22px
+     (the extra & out-ranks the card's own title rule) */
+  &&& > :first-child h2 { font-size: 19px; }
+  /* …and less room between it and the divider under it (the other cards have 22px) */
+  &&& > :first-child { padding-bottom: 12px; }
 `;
 
 const NextTitle = styled.h2`
@@ -417,6 +422,7 @@ const NextActions = styled.div`
   gap: 10px;
   margin-top: auto;
   padding-top: 40px; /* room above the buttons */
+  padding-bottom: 12px; /* and a little under them */
 `;
 
 /* The daily quote and the world clocks on one line straight on the page, no
