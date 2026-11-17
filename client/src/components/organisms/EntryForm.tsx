@@ -221,7 +221,7 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: b
   /* Plain text on the card, only as tall as what's written (it grows as you type) */
   .tiptap { min-height: 0; padding: 0; font-size: 16px; line-height: 1.6; color: var(--text-primary); }
   /* The Quick entry with nothing but text (Journal, a topic with no fields): room to write */
-  ${({ $roomy }) => ($roomy ? '.tiptap { min-height: 140px; }' : '')}
+  ${({ $roomy }) => ($roomy ? '.tiptap { min-height: 76px; }' : '')}
 `;
 
 /* The formatted recipe page, inset like the card's rows (36px a side, 20px on a narrow card) */
@@ -451,8 +451,8 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     @media (prefers-reduced-motion: reduce) { &[data-quick-open] { animation: none; } }
     /* Frosted glass: the panel colour at 70% with the photo blurred behind it, so it
        reads as glass on the photo rather than a grey slab over it (the other cards sit
-       off the photo and stay solid); the formatting bar stays clear on it */
-    background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
+       off the photo and stay solid); the formatting bar stays clear on it — 55%, a lighter glass */
+    background: color-mix(in srgb, var(--bg-panel) 55%, transparent);
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
     && ${EditorArea} { --editor-surface: transparent; }
@@ -626,8 +626,8 @@ const QuickPrompt = styled(PromptLine)`
 const QuickFoot = styled(CardFoot)`
   /* The card doesn't clip (its topic menu drops out of it), so the tinted foot rounds its own corners */
   border-radius: 0 0 14px 14px;
-  /* The card's own colour, ruled off from the fields by a hairline */
-  background: transparent;
+  /* Solid (the card above it is glass), ruled off from the fields by a hairline */
+  background: var(--bg-panel);
   border-top: 1px solid var(--border-subtle);
   margin-top: 14px;
   /* Save entry: an accent outline with accent text (never filled) once there's
@@ -749,11 +749,12 @@ const QuickTools = styled.div<{ $beside?: boolean }>`
 /* The Quick entry open: the question and topic picker as the card's first line, where
    the writing area's placeholder was (that placeholder is left empty) */
 const QuickCardPrompt = styled(PromptLine)`
-  padding: 28px ${CARD_X} 0;
+  /* A little room under the question before the writing starts */
+  padding: 28px ${CARD_X} 12px;
   font-size: 22px;
   [data-tools-beside] > & { padding-right: 150px; }
   @container entrycard (max-width: 600px) {
-    padding: 22px 20px 0;
+    padding: 22px 20px 10px;
     [data-tools-beside] > & { padding-right: 124px; }
   }
   @media (max-width: 768px) { font-size: 18px; }
@@ -1499,9 +1500,9 @@ export function EntryForm({
     </>
   );
 
-  // Format, Draw and Dictate: up beside the writing area, else (its text area hidden) under the card
+  // Format, Draw and Dictate: at the left of the foot (Save entry on the right)
   const quickTools = (
-    <QuickTools aria-label="Entry tools" $beside={!editorHidden}>
+    <QuickTools aria-label="Entry tools">
           <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
             onClick={() => setFormatOpen(!toolbarOpen)}>
             <Icon name="type" size={18} strokeWidth={1.7} />
@@ -1525,8 +1526,8 @@ export function EntryForm({
 
   // The Quick entry with nothing picked or written yet: its question waits in the middle
   // of the writing area (Journal's empty field), and goes back up once a topic is picked
-  const promptCentered = quick && quickOpen && !quickExtra && topicId === null && !editorHidden
-    && !stripHtml(content).trim() && images.length === 0;
+  // The question starts at the top of the card (no longer waiting halfway down the empty field)
+  const promptCentered = false;
 
   if (quick) return (
     <QuickCard role="region" aria-label="Quick entry" ref={quickRef}>
@@ -1555,16 +1556,16 @@ export function EntryForm({
               <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
             </QuickExtraBox>
           ) : (
-            <EntryCard $quick data-quick-open="" data-tools-beside={!editorHidden ? '' : undefined}
+            <EntryCard $quick data-quick-open="" 
               data-card-prompt-centered={promptCentered ? '' : undefined}>
               <QuickCardPrompt data-keep-placeholder data-card-prompt="" data-centered={promptCentered ? '' : undefined}>
                 <h2>What would you like to write down?</h2>
                 {quickPicker}
               </QuickCardPrompt>
               {body}
-              {!editorHidden && quickTools}
+              {/* Format, Draw and Dictate on the left, Save entry on the right */}
               <QuickFoot>
-                {editorHidden ? quickTools : <span />}
+                {quickTools}
                 {saveButton}
               </QuickFoot>
             </EntryCard>

@@ -8,6 +8,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import styled, { css } from 'styled-components';
 import { glassCard, glassPill, onPhoto } from '../styles/wallpaper.js';
+import { DayGlance } from '../components/organisms/DayGlance.js';
 import { cardLabel } from '../styles/cardLabel.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -37,11 +38,8 @@ import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
 import { NotificationBell, BellBadge } from '../components/organisms/NotificationBell.js';
 import { ErrorBoundary } from '../components/atoms/ErrorBoundary.js';
-import { useSaveCommand } from '../hooks/useSaveCommand.js';
-import { useAiReady } from '../hooks/useAiReady.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
 import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
-import { ExerciseToday, MedicationsToday } from '../components/organisms/TodayLists.js';
 import { QuickLog } from '../components/organisms/HealthQuickLog.js';
 import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
@@ -94,29 +92,19 @@ import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Config ── */
 
-type SectionKey = 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits';
+type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'quickEntry', label: 'Quick entry' },
-  { key: 'nextUp', label: 'Next event or meeting' },
   { key: 'wellness', label: 'Wellness check-in' },
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
-  { key: 'priorities', label: 'Priorities' },
-  { key: 'wins', label: 'Wins' },
-  { key: 'tasks', label: 'Tasks & to-do lists' },
-  { key: 'mantra', label: 'Mantra' },
-  { key: 'comingUp', label: 'Coming up' },
   { key: 'habits', label: 'Habits' },
-  { key: 'exercise', label: 'Exercise schedule' },
   { key: 'quickLog', label: 'Quick meal log' },
   { key: 'symptom', label: 'Log a symptom' },
   { key: 'menu', label: 'On the menu' },
-  { key: 'meds', label: 'Medications' },
   { key: 'recent', label: 'Recent entries' },
   { key: 'stats', label: 'Stats' },
   { key: 'time', label: 'Time tracked' },
-  { key: 'shopping', label: 'Shopping list' },
 ];
 
 interface DashboardConfig {
@@ -130,29 +118,53 @@ interface DashboardConfig {
   /** Phones: every card starts folded — these are the ones opened there */
   openOnPhone?: SectionKey[];
   /** The two columns' cards, top to bottom, as dragged into place */
-  layout?: { left: SectionKey[]; right: SectionKey[] };
+  layout?: Layout;
   /** What the Tasks card shows: 'open', 'view:<saved view id>' or 'list:<entry id>' */
   tasksShow?: string;
   /** The Shopping list card's list: 'latest' (newest open list) or an entry id */
   shoppingShow?: string;
   /** Coming up leaves bills out (events and meetings only) */
   comingUpHideBills?: boolean;
+  /** Day at a glance was set up: the Priorities and Coming up cards (now inside it) were switched off once */
+  glanceSetup?: boolean;
+  /** …and the Wins card, once Wins moved inside it too */
+  glanceWinsSetup?: boolean;
+  /** …and the Shopping list card, once it moved inside it too */
+  glanceShoppingSetup?: boolean;
 }
 
-/** The cards that can be dragged between the two columns, and where they start */
-const DEFAULT_LAYOUT: { left: SectionKey[]; right: SectionKey[] } = {
-  left: ['quote', 'priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise'],
-  right: ['wellness', 'clocks', 'recent', 'shopping', 'mantra', 'time', 'menu', 'meds', 'symptom'],
+/** The columns cards are dragged between */
+const COLS = ['top', 'left', 'right', 'side'] as const;
+type ColId = typeof COLS[number];
+/** `top`: across both columns under the schedule and priorities; `left` / `right`: the two columns;
+    `side`: Your Agenda's third column, under Coming up and the shopping list */
+type Layout = { top?: SectionKey[]; left: SectionKey[]; right: SectionKey[]; side?: SectionKey[] };
+
+/** The cards that can be dragged (in Your Agenda), and where they start */
+const DEFAULT_LAYOUT: Required<Layout> = {
+  top: ['wellness', 'quote', 'menu'],
+  left: ['priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise', 'symptom'],
+  right: ['clocks', 'recent', 'shopping', 'mantra', 'time', 'meds'],
+  side: [],
 };
 
-/** The saved layout with any card it doesn't know put back in its default column, at its default place there */
-function fullLayout(saved?: { left: SectionKey[]; right: SectionKey[] }): { left: SectionKey[]; right: SectionKey[] } {
-  const all = [...DEFAULT_LAYOUT.left, ...DEFAULT_LAYOUT.right];
-  const left = (saved?.left ?? DEFAULT_LAYOUT.left).filter(k => all.includes(k));
-  const right = (saved?.right ?? DEFAULT_LAYOUT.right).filter(k => all.includes(k) && !left.includes(k));
-  DEFAULT_LAYOUT.left.forEach((k, i) => { if (!left.includes(k) && !right.includes(k)) left.splice(Math.min(i, left.length), 0, k); });
-  DEFAULT_LAYOUT.right.forEach((k, i) => { if (!left.includes(k) && !right.includes(k)) right.splice(Math.min(i, right.length), 0, k); });
-  return { left, right };
+/** The saved layout with any card it doesn't know put back in its default place. One saved before
+    the top row (no `top`) leaves the wellness check-in, the quote and On the menu to their default
+    place at the top */
+function fullLayout(saved?: Layout): Required<Layout> {
+  const base: Layout = !saved ? DEFAULT_LAYOUT : saved.top ? saved
+    : { left: saved.left.filter(k => !DEFAULT_LAYOUT.top.includes(k)), right: saved.right.filter(k => !DEFAULT_LAYOUT.top.includes(k)) };
+  const all = COLS.flatMap(c => DEFAULT_LAYOUT[c]);
+  const seen = new Set<SectionKey>();
+  const out = {} as Required<Layout>;
+  for (const c of COLS) {
+    out[c] = (base[c] ?? []).filter(k => all.includes(k) && !seen.has(k));
+    out[c].forEach(k => seen.add(k));
+  }
+  for (const c of COLS) DEFAULT_LAYOUT[c].forEach((k, i) => {
+    if (!seen.has(k)) { out[c].splice(Math.min(i, out[c].length), 0, k); seen.add(k); }
+  });
+  return out;
 }
 
 const DEFAULT_CONFIG: DashboardConfig = { hidden: [], places: [] };
@@ -175,10 +187,11 @@ const Inner = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 1150px;
+  /* A little wider than the other pages' 1150px column */
+  max-width: 1300px;
   margin: 0 auto;
-  padding: 40px 24px 64px;
-  @media (max-width: 768px) { padding: 28px 16px 48px; }
+  padding: 40px 20px 104px;
+  @media (max-width: 768px) { padding: 28px 16px 72px; }
 `;
 
 /* Voice and the sliders at the top right, the date line and greeting under them */
@@ -192,28 +205,12 @@ const Head = styled.div`
   @media (max-width: 640px) { margin-top: 0; }
 `;
 
-/* "Good evening, Olivia." over "Saturday, November 14 · 56° and cloudy in Portland",
+/* "Good evening, Olivia." (the date and weather are in Your Agenda now),
    a little below the buttons at the top (on phones and tablets they're in the top bar) */
 const DateBlock = styled.div<{ $below: boolean }>`
   min-width: 0;
   /* Wide screens: level with Voice and the sliders (the buttons centre on its first line) */
   margin-top: ${({ $below }) => ($below ? '0' : '12px')};
-`;
-
-const DateLine = styled.div`
-  margin-top: 10px;
-  /* In a touch, so it lines up under the greeting's first letter */
-  padding-left: 4px;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-style: italic;
-  color: var(--text-muted);
-  ${onPhoto}
-  /* A step back from the greeting */
-  opacity: 0.72;
-  /* Phones get the short line ("Sat, Nov 14 · 56° and cloudy") */
-  & > .short { display: none; }
-  @media (max-width: 640px) { margin-top: 8px; padding-left: 2px; & > .long { display: none; } & > .short { display: inline; } }
 `;
 
 const Hello = styled.h1`
@@ -356,10 +353,11 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
-  margin-top: 36px;
+  /* Close under the greeting */
+  margin-top: 18px;
   /* Room under it before Stats / the cards (their own 24–28px add to this) */
   margin-bottom: 24px;
-  @media (max-width: 640px) { margin-top: 28px; margin-bottom: 16px; }
+  @media (max-width: 640px) { margin-top: 16px; margin-bottom: 16px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
     & > section { border-radius: 14px; outline: 2px solid var(--color-accent); outline-offset: 12px; }
@@ -473,13 +471,62 @@ const ClockRow = styled.div<{ $home: boolean }>`
 /** How many cities the clocks card lists before "All N cities" */
 const CLOCKS_SHOWN = 3;
 
-const Columns = styled.div`
+/* World clocks as a full-width strip under the Quick entry. Folded: one line,
+   every part the same size — each city (home in the accent), Local / +3h, the
+   time and the temperature, rules between — with a toggle at the end.
+   Open: a card for each clock */
+const ClockStrip = styled.section`
+  /* Close under the Quick entry, and close above the wellness check-in */
+  margin: 8px 0 14px;
+  /* In a container: the panel colour with a light shadow */
+  padding: 18px 26px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
+  @media (max-width: 560px) { padding: 16px 18px; }
+  font-family: var(--font-sans);
+  font-size: 15px;
+  .bar { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .line { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; }
+  .line > span { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 2px 18px; box-shadow: -1px 0 0 var(--border-card); }
+  .line > span:first-child { padding-left: 0; box-shadow: none; }
+  .city { color: var(--text-secondary); }
+  .home .city { color: var(--color-accent-link); }
+  .muted { color: var(--text-muted); }
+  .time { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0; border: none; background: none; font: inherit; font-size: 14px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+  .toggle:hover { color: var(--color-accent-link); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+  .card { min-width: 0; padding: 18px 20px; border-radius: 10px; background: var(--bg-tile); }
+  .card .city { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .muted { display: block; margin-top: 2px; font-size: 13px; }
+  .card .big { display: block; margin-top: 10px; font-family: var(--font-display); font-size: 28px; font-weight: 300; line-height: 1.1; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .card .weather { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+  .card .weather > span:first-child { color: var(--color-accent); }
+`;
+
+/* The full-width wellness check-in, between the add row and Day at a glance */
+
+/* Three columns over shared rows (each column a subgrid spanning them, --rows),
+   so the cards side by side in a row are the same height */
+const Columns = styled.div<{ $rows: number }>`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px 44px;
-  margin-top: 24px;
+  grid-template-rows: repeat(${({ $rows }) => $rows}, auto);
+  gap: 36px 44px;
+  && > * {
+    grid-row: 1 / span ${({ $rows }) => $rows};
+    display: grid;
+    grid-template-rows: subgrid;
+    align-content: start;
+  }
   align-items: start;
-  @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
+  /* One column: each column's cards stack, no shared rows */
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    && > * { grid-row: auto; display: flex; grid-template-rows: none; }
+  }
 `;
 
 const Col = styled.div`
@@ -502,12 +549,20 @@ const cardShell = css`
   ${glassCard}
 `;
 
-const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: boolean }>`
+/* The widget cards have no background — no fill or shadow — just a light
+   outline all the way round */
+const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: boolean; $wide?: boolean }>`
   position: relative;
   min-width: 0;
   padding: 34px 32px 30px;
-  ${cardShell}
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  /* The panel colour with a light shadow */
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
   @media (max-width: 480px) { padding: 24px 22px 22px; }
+  /* The cards across both columns (quote, On the menu): the panel and light shadow, no outline */
+  ${({ $wide }) => ($wide ? 'border-color: transparent;' : '')}
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
   & > section > :first-child { align-items: center; padding-right: 64px; }
   @media (max-width: 480px) { & > section > :first-child { padding-right: 58px; } }
@@ -523,6 +578,18 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
   ${({ $open }) => ($open ? `
     /* Room above and below the title's hairline */
     && > section > :first-child { margin-bottom: 24px; padding-bottom: 22px; }
+    /* In a narrow column the title stays on one line and its links and controls
+       (View journal, All 7 cities, Meal | Exercise…) drop under it, left-aligned */
+    && > section > :first-child { flex-wrap: wrap; row-gap: 6px; }
+    && > section > :first-child > h2,
+    && > section > :first-child > label {
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     && > section > :first-child h2,
     && > section > :first-child label > span {
       font-family: var(--font-display);
@@ -551,10 +618,14 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     &&& > section > :first-child { padding-right: 0; margin-bottom: 0; }
-    & > button { top: 10px; right: 10px; }
+    /* The box fills the card, so the grip (in the card's corner) sits inside the box */
+    && > section, && > section > * { width: 100%; min-width: 0; box-sizing: border-box; }
+    & > button { top: 12px; right: 12px; z-index: 1; }
     @media (max-width: 480px) { & > button { top: 8px; right: 8px; } }
   ` : '')}
   ${({ $collapsed }) => ($collapsed ? `
+    /* Only its title row tall, not stretched to the row's height */
+    align-self: start;
     padding-top: 16px;
     padding-bottom: 16px;
     /* Folded: no fill or outline — just its title row, edge to edge across the
@@ -584,6 +655,15 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
 `;
 
 /* The grip to drag a card by, just left of its fold chevron */
+/* The wellness check-in's holder: nothing of its own (no padding, fill or outline) — the box is
+   the card — with the grip inside the box's top-right corner */
+const PlainCard = styled.div`
+  position: relative;
+  min-width: 0;
+  & > section { width: 100%; }
+  && > button[aria-label^="Move"] { top: 14px; right: 14px; z-index: 1; }
+`;
+
 const DragHandle = styled.button`
   position: absolute;
   top: 34px;
@@ -700,12 +780,6 @@ const ToggleGrid = styled.div`
   @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
-/* A card's switch with its own option stacked under it, in one cell of the grid */
-const TogglePair = styled.div`
-  display: grid;
-  gap: 10px;
-`;
-
 const PlaceRow = styled.div`
   display: flex;
   align-items: center;
@@ -781,7 +855,8 @@ function clockParts(tz: string, now: Date): [string, string] {
   return [`${get('hour')}:${get('minute')}`, get('dayPeriod')];
 }
 
-function WorldClocks({ places, now, open, onToggle }: { places: Place[]; now: Date; open: boolean; onToggle: () => void }) {
+/** `strip`: every city side by side across the page (under the Quick entry) — no title or "All N cities" */
+function WorldClocks({ places, now, open, onToggle, strip }: { places: Place[]; now: Date; open: boolean; onToggle: () => void; strip?: boolean }) {
   const [weather, setWeather] = useState<Record<string, CurrentWeather>>({});
   useEffect(() => {
     let live = true;
@@ -793,6 +868,50 @@ function WorldClocks({ places, now, open, onToggle }: { places: Place[]; now: Da
 
   const list = places.slice(0, MAX_PLACES);
   const shown = open ? list : list.slice(0, CLOCKS_SHOWN);
+  if (strip) {
+    if (list.length === 0) return null;
+    const rows = list.map((p, i) => {
+      const [t, ampm] = clockParts(p.timezone, now);
+      const diff = hoursFromLocal(p.timezone, now);
+      const w = weather[p.name];
+      return { key: `${p.name}-${i}`, home: i === 0, name: p.name, offset: diff === 0 ? 'Local' : `${diff > 0 ? '+' : ''}${diff}h`,
+        time: `${t} ${ampm}`, w, d: w ? describeWeather(w.code, w.isDay) : null };
+    });
+    return (
+      <ClockStrip aria-label="World clocks">
+        <div className="bar">
+          {open ? <span className="muted">World clocks</span> : (
+            <div className="line">
+              {rows.map(r => (
+                <span key={r.key} className={r.home ? 'home' : undefined}>
+                  <span className="city">{r.name}</span>
+                  <span className="muted">{r.offset}</span>
+                  <span className="time">{r.time}</span>
+                  {r.w && <span className="muted">{r.w.tempF}°</span>}
+                </span>
+              ))}
+            </div>
+          )}
+          <button type="button" className="toggle" aria-expanded={open} onClick={onToggle} style={open ? { marginLeft: 'auto' } : undefined}>
+            {open ? 'Show less' : 'Expand'}
+            <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        </div>
+        {open && (
+          <div className="cards">
+            {rows.map(r => (
+              <div key={r.key} className={r.home ? 'card home' : 'card'}>
+                <span className="city">{r.name}</span>
+                <span className="muted">{r.offset}</span>
+                <span className="big">{r.time}</span>
+                {r.d && <span className="weather"><MaterialIcon $size={16} aria-hidden="true">{r.d.icon}</MaterialIcon><span>{r.w!.tempF}° · {r.d.label}</span></span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </ClockStrip>
+    );
+  }
   return (
     <section aria-label="World clocks">
       <SectionHead>
@@ -968,6 +1087,28 @@ const PRemove = styled.button`
   @media (hover: none) { opacity: 1; }
 `;
 
+/* Inside Day at a glance: smaller rows — the number, 15px text, hairlines between */
+const CompactRow = styled(Row)`
+  min-height: 46px;
+  gap: 14px;
+  font-size: 15px;
+`;
+const CompactNum = styled(PNum)`
+  width: 14px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+`;
+const CompactText = styled(PText)`
+  && { padding: 12px 0; font-size: 15px; }
+`;
+/* The head's aside in Day at a glance: a quiet count */
+const HeadCount = styled.span`
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+`;
+
 /* Under Priorities and Wins: these lists don't clear themselves at midnight
    (a list can run across several days), so say how a fresh one is started */
 const NEW_LIST_NOTE = 'To start a new day or list, use the New list option at the top.';
@@ -982,12 +1123,13 @@ const ListNote = styled.p`
 
 /** One priority's text: edited in place, saved on Enter or leaving the field;
  *  clearing it removes the priority. Escape puts the saved text back. */
-function PriorityText({ item, onCommit, label = 'Priority', roomy }: { item: PriorityItem; onCommit: (text: string) => void; label?: string; roomy?: boolean }) {
+function PriorityText({ item, onCommit, label = 'Priority', roomy, compact }: { item: PriorityItem; onCommit: (text: string) => void; label?: string; roomy?: boolean; compact?: boolean }) {
+  const Field = compact ? CompactText : PText;
   const [text, setText] = useState(item.text);
   useEffect(() => { setText(item.text); }, [item.text]);
   const commit = () => { if (text.trim() !== item.text) onCommit(text.trim()); };
   return (
-    <PText $done={item.done} $roomy={roomy} value={text} aria-label={`${label}: ${item.text}`}
+    <Field $done={item.done} $roomy={roomy} value={text} aria-label={`${label}: ${item.text}`}
       onChange={e => setText(e.target.value)} onBlur={commit}
       onKeyDown={e => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
@@ -1133,7 +1275,8 @@ function usePriorityList() {
 
 /* Numbered rows — each edited in place, a quiet ×, a check on the right,
    and "Add a priority" under them */
-function Priorities() {
+/** `compact`: the Day at a glance look — smaller rows, a count in the head, no add box or note (the add row above has "Add a priority") */
+function Priorities({ compact }: { compact?: boolean }) {
   const { items, write, create, add } = usePriorityList();
   const [starting, setStarting] = useState(false);
 
@@ -1148,14 +1291,21 @@ function Priorities() {
     <section aria-label="Priorities">
       <SectionHead>
         <h2>Priorities</h2>
-        {items.length > 0 && (
-          <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
-        )}
+        <HeadLinks>
+          {items.length > 0 && (
+            <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
+          )}
+          {compact && items.length > 0 && <HeadCount>{items.filter(x => x.done).length} of {items.length}</HeadCount>}
+        </HeadLinks>
       </SectionHead>
-      {items.map((p, i) => (
-        <Row key={p.id}>
-          <PNum>{i + 1}</PNum>
-          <PriorityText item={p} roomy
+      {compact && items.length === 0 && <Muted>No priorities yet.</Muted>}
+      {items.map((p, i) => {
+        const RowEl = compact ? CompactRow : Row;
+        const Num = compact ? CompactNum : PNum;
+        return (
+        <RowEl key={p.id}>
+          <Num>{i + 1}</Num>
+          <PriorityText item={p} roomy={!compact} compact={compact}
             onCommit={text => void write(text ? items.map(x => (x.id === p.id ? { ...x, text } : x)) : items.filter(x => x.id !== p.id))} />
           <PRemove type="button" aria-label={`Remove "${p.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== p.id))}>
@@ -1163,10 +1313,11 @@ function Priorities() {
           </PRemove>
           <Checkbox checked={p.done} aria-label={p.done ? `Mark "${p.text}" not done` : `Mark "${p.text}" done`}
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
-        </Row>
-      ))}
-      <CardAdd label="Add a priority" failed="That priority didn’t save. Try again." run={add} gap={0} addOnBlur roomy />
-      {items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
+        </RowEl>
+        );
+      })}
+      <CardAdd label="Add a priority" failed="That priority didn’t save. Try again." run={add} gap={0} addOnBlur roomy={!compact} />
+      {!compact && items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
   );
 }
@@ -1231,7 +1382,8 @@ function useWinsActions() {
 
 /* Laid out like Today's priorities: numbered rows, each win edited in place
    with a quiet ×, and "Add a win" under them — no ticks (a win is done) */
-function Wins() {
+/** `compact`: the Day at a glance look (see Priorities) */
+function Wins({ compact }: { compact?: boolean }) {
   const navigate = useNavigate();
   const { items, tid, write, create, add } = useWinsActions();
   const [starting, setStarting] = useState(false);
@@ -1252,19 +1404,24 @@ function Wins() {
           {tid !== undefined && <button type="button" onClick={() => navigate(`/topics/${tid}`)}>All wins</button>}
         </HeadLinks>
       </SectionHead>
-      {items.map((w, i) => (
-        <Row key={w.id}>
-          <PNum>{i + 1}</PNum>
-          <PriorityText item={{ ...w, done: false }} label="Win" roomy
+      {compact && items.length === 0 && <Muted>No wins yet.</Muted>}
+      {items.map((w, i) => {
+        const RowEl = compact ? CompactRow : Row;
+        const Num = compact ? CompactNum : PNum;
+        return (
+        <RowEl key={w.id}>
+          <Num>{i + 1}</Num>
+          <PriorityText item={{ ...w, done: false }} label="Win" roomy={!compact} compact={compact}
             onCommit={text => void write(text ? items.map(x => (x.id === w.id ? { ...x, text } : x)) : items.filter(x => x.id !== w.id))} />
           <PRemove type="button" aria-label={`Remove "${w.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== w.id))}>
             <Icon name="x" size={18} strokeWidth={2} />
           </PRemove>
-        </Row>
-      ))}
-      <CardAdd label="Add a win" failed="That win didn’t save. Try again." run={add} gap={0} addOnBlur roomy />
-      {items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
+        </RowEl>
+        );
+      })}
+      <CardAdd label="Add a win" failed="That win didn’t save. Try again." run={add} gap={0} addOnBlur roomy={!compact} />
+      {!compact && items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
   );
 }
@@ -1603,7 +1760,7 @@ function Menu() {
 /* Coming up: events, meetings and bills over the next two weeks (doses live
    in Next up and Medications, not here). The kind is a plain muted label — no
    colour, fill or outline. */
-type UpKind = 'event' | 'meeting' | 'bill';
+type UpKind = 'event' | 'meeting' | 'bill' | 'task';
 const KindPill = styled.span`
   flex: none;
   padding: 3px 0 3px 10px;
@@ -1611,7 +1768,23 @@ const KindPill = styled.span`
   font-weight: 500;
   color: var(--text-muted);
 `;
-const KIND_LABEL: Record<UpKind, string> = { event: 'Event', meeting: 'Meeting', bill: 'Bill' };
+const KIND_LABEL: Record<UpKind, string> = { event: 'Event', meeting: 'Meeting', bill: 'Bill', task: 'Task' };
+/* Day at a glance's Coming up: a dot in the kind's colour before the title (the schedule's colours) */
+const KIND_DOT: Record<UpKind, string> = { event: 'var(--chart-violet)', meeting: 'var(--chart-blue)', bill: 'var(--chart-amber)', task: 'var(--chart-green)' };
+const UpCompact = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  & + & { border-top: 1px solid var(--border-subtle); }
+  font-family: var(--font-sans);
+  & > .when { width: 54px; flex: none; padding-top: 1px; font-size: 13px; color: var(--text-muted); }
+  & > .what { flex: 1; min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: 10px; align-items: baseline;
+    padding: 0; border: none; background: none; text-align: left; font: inherit; font-size: 15px; color: var(--text-secondary); cursor: pointer; }
+  & > .what i { width: 8px; height: 8px; border-radius: 2px; align-self: center; }
+  & > .what small { grid-column: 2; margin-top: 4px; font-size: 13px; color: var(--text-muted); }
+  & > .what:hover { color: var(--text-primary); }
+`;
 
 const UpRow = styled(Row)`
   align-items: flex-start;
@@ -1633,7 +1806,8 @@ function whenLabel(day: string, time: string | undefined, today: string): string
 
 function addDaysLocal(n: number): Date { const d = new Date(); d.setDate(d.getDate() + n); return d; }
 
-function ComingUp({ financeOn, showBills }: { financeOn: boolean; showBills: boolean }) {
+/** `compact`: the Day at a glance look — from tomorrow (today is on the schedule), task deadlines too, a coloured dot per kind */
+function ComingUp({ financeOn, showBills, compact }: { financeOn: boolean; showBills: boolean; compact?: boolean }) {
   const navigate = useNavigate();
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -1643,6 +1817,7 @@ function ComingUp({ financeOn, showBills }: { financeOn: boolean; showBills: boo
   const bills = useFinance('bills', { enabled: withBills });
   const today = toDateStr(new Date());
   const end = addDays(today, 14);
+  const from = compact ? addDays(today, 1) : today;
 
   const items = useMemo(() => {
     const eventIds = new Set(allTopics.filter(t => ['event', 'events'].includes(t.name.toLowerCase())).map(t => t.id));
@@ -1654,7 +1829,7 @@ function ComingUp({ financeOn, showBills }: { financeOn: boolean; showBills: boo
       if (!kind) continue;
       const cf = cfOf(e);
       // Each day it lands on in the next two weeks (just its start day unless it repeats)
-      const days = occurrencesBetween(String(cf.startDate ?? ''), repeatRuleOf(cf), today, end);
+      const days = occurrencesBetween(String(cf.startDate ?? ''), repeatRuleOf(cf), from, end);
       if (!days.length) continue;
       const title = (builtinEntryName(cf) || stripHtml(e.content).trim()).slice(0, 80) || 'Untitled';
       const sub = [cf.location, kind === 'meeting' ? cf.meetingTopic : undefined].filter(v => typeof v === 'string' && v.trim()).join(' · ');
@@ -1663,12 +1838,42 @@ function ComingUp({ financeOn, showBills }: { financeOn: boolean; showBills: boo
       }
     }
     if (withBills) {
-      for (const { bill, date } of billOccurrences(bills.records, today, end)) {
+      for (const { bill, date } of billOccurrences(bills.records, from, end)) {
         out.push({ key: `b${bill.id}${date}`, day: date, title: bill.name, sub: `${formatCents(bill.amountCents)} due`, kind: 'bill', open: () => navigate('/finance') });
       }
     }
+    // Day at a glance also lists unfinished tasks' deadlines
+    if (compact) {
+      const taskIds = new Set(allTopics.filter(t => ['task', 'tasks'].includes(t.name.toLowerCase())).map(t => t.id));
+      for (const e of entries) {
+        if (!taskIds.has((e.metadata as Record<string, unknown>)?._taxonomyId as number)) continue;
+        const cf = cfOf(e);
+        const due = typeof cf.deadline === 'string' ? cf.deadline.slice(0, 10) : '';
+        if (!due || cf.isCompleted || due < from || due > end) continue;
+        out.push({ key: `t${e.id}`, day: due, title: (builtinEntryName(cf) || stripHtml(e.content).trim()).slice(0, 80) || 'Untitled', sub: 'Task deadline', kind: 'task', open: () => openInJournal(e.id) });
+      }
+    }
     return out.sort((a, b) => a.day.localeCompare(b.day) || (a.time ?? '99').localeCompare(b.time ?? '99')).slice(0, 8);
-  }, [entries, allTopics, bills.records, withBills, today, end, openInJournal, navigate]);
+  }, [entries, allTopics, bills.records, withBills, from, end, compact, openInJournal, navigate]);
+
+  if (compact) return (
+    <section aria-label="Coming up">
+      <SectionHead><h2>Coming up</h2><button type="button" onClick={() => navigate('/calendar')}>Calendar</button></SectionHead>
+      {items.length === 0 ? <Muted>Nothing in the next two weeks.</Muted> : items.map(it => {
+        const d = new Date(`${it.day}T12:00:00`);
+        return (
+          <UpCompact key={it.key}>
+            <span className="when">{d.toLocaleDateString('en-US', { weekday: 'short' })} {d.getDate()}</span>
+            <button type="button" className="what" onClick={it.open}>
+              <i style={{ background: KIND_DOT[it.kind] }} aria-hidden="true" />
+              {it.title}
+              <small>{it.time ? time12(it.time) : it.sub ?? (it.kind === 'event' || it.kind === 'meeting' ? 'All day' : '')}</small>
+            </button>
+          </UpCompact>
+        );
+      })}
+    </section>
+  );
 
   return (
     <section aria-label="Coming up">
@@ -1864,13 +2069,21 @@ const StatsBar = styled.section<{ $phoneLast: boolean }>`
   margin-top: 28px;
   padding: 30px 40px;
   ${cardShell}
-  & > label { flex: none; width: 104px; }
+  /* The period picker, then a vertical divider before the figures */
+  & > label {
+    flex: none;
+    box-sizing: content-box;
+    width: 104px;
+    align-self: stretch;
+    padding-right: 32px;
+    border-right: 1px solid var(--border-card);
+  }
   @media (max-width: 768px) {
     ${({ $phoneLast }) => ($phoneLast ? 'order: 3;' : '')}
     flex-direction: column;
     align-items: stretch;
     padding: 24px 22px;
-    & > label { width: auto; align-self: flex-start; }
+    & > label { width: auto; align-self: flex-start; padding-right: 0; border-right: none; }
   }
 `;
 
@@ -1957,6 +2170,9 @@ const TimeTotal = styled.div`
   align-items: baseline;
   gap: 10px;
   margin-top: 18px;
+  /* A divider under the total */
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-subtle);
   b { font-family: var(--font-display); font-size: 34px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
 `;
@@ -2120,7 +2336,10 @@ function TimeTracked() {
             <MoreLink type="button" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</MoreLink>
           )}
         </div>}
-      <CardAdd label="Start a timer for…" failed="That timer didn’t start. Try again." run={startFor} gap={16} />
+      {/* A divider above Start a timer for… */}
+      <div style={{ marginTop: 16, paddingTop: 2, borderTop: '1px solid var(--border-subtle)' }}>
+        <CardAdd label="Start a timer for…" failed="That timer didn’t start. Try again." run={startFor} gap={16} />
+      </div>
     </section>
   );
 }
@@ -2171,7 +2390,8 @@ const AddItem = styled.form`
   &:focus-within { border-color: var(--color-accent); }
 `;
 
-export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; onShow: (next: string) => void }) {
+/** `compact`: the Day at a glance look — the items as a numbered checklist like Priorities */
+export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show: string; onShow: (next: string) => void; compact?: boolean }) {
   const [show, onShow] = useCardChoice(savedShow, saveShow);
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -2262,8 +2482,11 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
             <option value={NEW_LIST}>New list…</option>
           </select>
         </LabelPick>
-        {naming ? <button type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</button>
-          : list && <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>}
+        <HeadLinks>
+          {naming ? <button type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</button>
+            : list && <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>}
+          {compact && !naming && items.length > 0 && <HeadCount>{items.filter(x => x.checked).length} of {items.length}</HeadCount>}
+        </HeadLinks>
       </SectionHead>
       {naming ? (
         <AddItem onSubmit={e => void startList(e)}>
@@ -2273,7 +2496,26 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
             onKeyDown={e => { if (e.key === 'Escape') { setNaming(false); setNewName(''); } }} />
         </AddItem>
       ) : (<>
-      {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : (
+      {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : compact ? (
+        <div>
+          {items.map((it, i) => {
+            const setItems = (next: ShoppingItem[]) => void save(list, { ...cfOf(list), items: next });
+            return (
+              <CompactRow key={it.id}>
+                <CompactNum>{i + 1}</CompactNum>
+                <PriorityText item={{ id: it.id, text: it.name, done: !!it.checked }} label="Item" compact
+                  onCommit={text => setItems(text ? items.map(x => (x.id === it.id ? { ...x, name: text } : x)) : items.filter(x => x.id !== it.id))} />
+                <PRemove type="button" aria-label={`Remove "${it.name}"`} title="Remove"
+                  onClick={() => setItems(items.filter(x => x.id !== it.id))}>
+                  <Icon name="x" size={18} strokeWidth={2} />
+                </PRemove>
+                <Checkbox checked={!!it.checked} aria-label={it.checked ? `Mark "${it.name}" not got` : `Mark "${it.name}" got`}
+                  onChange={() => setItems(items.map(x => (x.id === it.id ? { ...x, checked: !x.checked } : x)))} />
+              </CompactRow>
+            );
+          })}
+        </div>
+      ) : (
         <Pills>
           {[...items.filter(i => !i.checked), ...items.filter(i => i.checked)].map(i => (
             <ItemPill key={i.id} type="button" $got={!!i.checked} aria-pressed={!!i.checked}
@@ -2295,141 +2537,23 @@ export function Shopping({ show: savedShow, onShow: saveShow }: { show: string; 
   );
 }
 
-/* ── The add row: one pill each to add a priority, a win, a mantra or start a timer ── */
-
-/* Equal pills across the page; phones: the first on its own, then two a row
-   (a last one left alone takes the whole row) */
-const AddRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px 28px;
-  /* Straight under the Quick entry (its own 24px of room below adds to this) */
-  margin-top: 8px;
-  /* Room under the lines before the cards start */
-  margin-bottom: 26px;
-  /* Phones: one full-width line each, stacked */
-  @media (max-width: 768px) {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    margin-bottom: 12px;
-  }
-`;
-
-/* The add row's lines (Add a priority, Log a meal…): underlined only, no box */
-const AddPill = styled.form`
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  height: 44px;
-  /* Just an underline: no fill, shadow or corners; the line turns accent while typing */
-  padding: 0 2px 0 0;
-  border: none;
-  border-bottom: 1px solid var(--border-default);
-  border-radius: 0;
-  background: transparent;
-  && input::placeholder { color: var(--text-muted); opacity: 1; }
-  &:focus-within { border-bottom-color: var(--color-accent-line); }
-`;
-
-const EnterBtn = styled.button`
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-left: 8px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  /* Barely there until the line is in use: it blends into the page */
-  opacity: 0.2;
-  cursor: pointer;
-  transition: opacity 120ms, color 120ms;
-  &:hover:not(:disabled), ${AddPill}:focus-within &:not(:disabled) { opacity: 1; color: var(--color-accent-link); }
-  &:disabled { cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
-`;
-
-const AddRowError = styled(Muted)`
-  color: var(--color-danger);
-`;
-
-interface AddField { key: string; placeholder: string; label: string; failed: string; run: (text: string) => Promise<unknown> }
-
-function AddPillInput({ field, onError }: { field: AddField; onError: (message: string) => void }) {
-  const [draft, setDraft] = useState('');
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    onError('');
-    field.run(text).catch(err => {
-      console.error(`${field.label} failed:`, err);
-      setDraft(text);
-      onError(field.failed);
-    });
-  };
-  return (
-    <AddPill onSubmit={submit}>
-      <BareInput value={draft} onChange={e => setDraft(e.target.value)} maxLength={500}
-        placeholder={field.placeholder} aria-label={field.label}
-        onKeyDown={e => { if (e.key === 'Escape') setDraft(''); }} />
-      {/* The return key, faded: press Enter (or tap it) to save */}
-      <EnterBtn type="submit" aria-label={`Save: ${field.label}`} title="Press Enter to save" disabled={!draft.trim()}>
-        <Icon name="corner-down-left" size={16} strokeWidth={1.8} />
-      </EnterBtn>
-    </AddPill>
-  );
-}
-
-/** Logs a meal or a symptom from a line of text, shaped like its form (the AI chat's /save):
- *  a meal dated now with its type by the time of day (and its nutrients filled by In-App AI
- *  when it's set up), a symptom dated now with its name — in the account's Meals / Symptom
- *  topic, made on first use */
-function useQuickLog() {
-  const saveCommand = useSaveCommand();
-  const aiReady = useAiReady();
-  return async (kind: 'meal' | 'symptom', text: string) => {
-    const [name, icon] = kind === 'meal' ? ['Meals', 'utensils'] : ['Symptom', 'flask'];
-    const id = await getOrCreateTopic(name, icon);
-    await saveCommand({ id, name }, text, { estimateNutrition: kind === 'meal' && aiReady });
-  };
-}
-
-function QuickAdds({ priorities, wins, mantra, timer, meal, symptom }: {
-  priorities: boolean; wins: boolean; mantra: boolean; timer: boolean; meal: boolean; symptom: boolean;
-}) {
-  const prioritiesList = usePriorityList();
-  const winsList = useWinsActions();
-  const addMantra = useAddMantra();
-  const startFor = useStartTimerFor();
-  const quickLog = useQuickLog();
-  const [error, setError] = useState('');
-  const fields: (AddField | false)[] = [
-    priorities && { key: 'priority', placeholder: 'Add a priority', label: 'Add a priority', failed: 'That priority didn’t save. Try again.', run: prioritiesList.add },
-    wins && { key: 'win', placeholder: 'Add a win', label: 'Add a win', failed: 'That win didn’t save. Try again.', run: winsList.add },
-    meal && { key: 'meal', placeholder: 'Log a meal', label: 'Log a meal', failed: 'That meal didn’t save. Try again.', run: (t: string) => quickLog('meal', t) },
-    symptom && { key: 'symptom', placeholder: 'Log a symptom', label: 'Log a symptom', failed: 'That symptom didn’t save. Try again.', run: (t: string) => quickLog('symptom', t) },
-    mantra && { key: 'mantra', placeholder: 'Write a mantra', label: 'Write a mantra', failed: 'That mantra didn’t save. Try again.', run: addMantra },
-    timer && { key: 'timer', placeholder: 'Start a timer for…', label: 'Start a timer for an activity', failed: 'That timer didn’t start. Try again.', run: startFor },
-  ];
-  const shown = fields.filter((f): f is AddField => !!f);
-  if (!shown.length) return null;
-  return (<>
-    <AddRow>{shown.map(f => <AddPillInput key={f.key} field={f} onError={setError} />)}</AddRow>
-    {error && <AddRowError role="alert">{error}</AddRowError>}
-  </>);
-}
-
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
-function SortableCard({ id, collapsed, label, plain, open, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, plain, open, wide, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; wide?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  // The wellness check-in: none of a card's padding or look — the box is the card, the grip inside its corner
+  if (plain) return (
+    <PlainCard ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
+      {children}
+      <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
+        <Icon name="grip" size={18} strokeWidth={2.6} />
+      </DragHandle>
+    </PlainCard>
+  );
   return (
-    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain} $open={open}
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain} $open={open} $wide={wide}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
@@ -2440,11 +2564,12 @@ function SortableCard({ id, collapsed, label, plain, open, children }: { id: Sec
 }
 
 /* A column cards can be dropped into — even when it's empty */
-function DropCol({ id, items, children }: { id: 'left' | 'right'; items: SectionKey[]; children: ReactNode }) {
+function DropCol({ id, items, gap, dragging, children }: { id: ColId; items: SectionKey[]; gap?: number; dragging?: boolean; children: ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
   return (
     <SortableContext id={id} items={items} strategy={verticalListSortingStrategy}>
-      <Col ref={setNodeRef} style={{ minHeight: 80 }}>{children}</Col>
+      {/* Empty, it still takes a drop: a strip while a card is being dragged */}
+      <Col ref={setNodeRef} style={{ minHeight: items.length ? undefined : dragging ? 80 : 12, gap }}>{children}</Col>
     </SortableContext>
   );
 }
@@ -2473,11 +2598,20 @@ export function DashboardView() {
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const colOf = (id: UniqueIdentifier, l = layout): 'left' | 'right' | null =>
-    id === 'left' || id === 'right' ? id : l.left.includes(id as SectionKey) ? 'left' : l.right.includes(id as SectionKey) ? 'right' : null;
-  // Into the other column as soon as the card is over it
+  const colOf = (id: UniqueIdentifier, l = layout): ColId | null =>
+    (COLS as readonly UniqueIdentifier[]).includes(id) ? id as ColId : COLS.find(c => l[c].includes(id as SectionKey)) ?? null;
+  // A card just moved to another zone settles before it can move again: moving a tall card (the
+  // wellness check-in, the quote) reshapes the page under the pointer, and without this pause it
+  // flipped back and forth between two zones on every render until React gave up (the page failed)
+  const justMoved = useRef(0);
+  // Into the other zone as soon as the card is over it
   const onDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
+    const now = performance.now();
+    if (now - justMoved.current < 250) return;
+    const from = colOf(active.id), to = colOf(over.id);
+    if (!from || !to || from === to) return;
+    justMoved.current = now;
     setLayout(l => {
       const from = colOf(active.id, l), to = colOf(over.id, l);
       if (!from || !to || from === to) return l;
@@ -2498,7 +2632,7 @@ export function DashboardView() {
       setLayout(next);
     }
     const saved = fullLayout(config.layout);
-    if (next.left.join() !== saved.left.join() || next.right.join() !== saved.right.join()) void saveConfig({ ...config, layout: next });
+    if (COLS.some(c => next[c].join() !== saved[c].join())) void saveConfig({ ...config, layout: next });
   };
   const [customizing, setCustomizing] = useState(false);
   // The buttons move into the top bar on phones and tablets
@@ -2596,6 +2730,16 @@ export function DashboardView() {
     return () => ro.disconnect();
   });
 
+  // Day at a glance holds the priorities and what's coming up, so the separate cards are
+  // switched off once when it arrives (they can be switched back on in Theme and layout)
+  useEffect(() => {
+    if (!configLoaded || (config.glanceSetup && config.glanceWinsSetup && config.glanceShoppingSetup)) return;
+    const moving: SectionKey[] = [...(config.glanceSetup ? [] : ['priorities', 'comingUp'] as SectionKey[]), ...(config.glanceWinsSetup ? [] : ['wins'] as SectionKey[]),
+      ...(config.glanceShoppingSetup ? [] : ['shopping'] as SectionKey[])];
+    const hidden = [...new Set([...(config.hidden ?? []), ...(!(config.hidden ?? []).includes('glance') ? moving : [])])];
+    void saveConfig({ ...config, hidden, glanceSetup: true, glanceWinsSetup: true, glanceShoppingSetup: true }).catch(() => {});
+  }, [configLoaded, config.glanceSetup, config.glanceWinsSetup, config.glanceShoppingSetup]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A passkey is offered only where this browser can open the journal with one.
   // Every hook sits above the early return below: these two once came after
   // it, so the loading render had fewer hooks than the ready one
@@ -2642,15 +2786,6 @@ export function DashboardView() {
     else if (key === 'recovery' && !(onboardingState.ticked ?? []).includes('recovery')) markOnboarding({ ticked: toggleTicked(onboardingState, 'recovery') });
   };
   const hd = homeWeather ? describeWeather(homeWeather.code, homeWeather.isDay) : null;
-  const eyebrow = [
-    now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-    homeWeather && hd && home ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()} in ${home.name}` : null,
-  ].filter(Boolean).join(' · ');
-  // Phones: "Tue, Nov 10 · 55° and cloudy" (today's weather, no city)
-  const shortEyebrow = [
-    now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-    homeWeather && hd ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()}` : null,
-  ].filter(Boolean).join(' · ');
   const financeOn = ff.financeEnabled === true;
   // "Good evening, Alex" — the display name, else the username
   const helloName = displayName.trim() || user?.username?.trim() || '';
@@ -2678,7 +2813,7 @@ export function DashboardView() {
   const right: ReactNode[] = [];
   // Phones start with every card folded (their own list of opened cards); wider screens keep `collapsed`
   const openOnPhone = new Set(config.openOnPhone ?? []);
-  const collapsed = new Set(onPhone ? [...DEFAULT_LAYOUT.left, ...DEFAULT_LAYOUT.right].filter(k => !openOnPhone.has(k)) : config.collapsed ?? []);
+  const collapsed = new Set(onPhone ? COLS.flatMap(c => DEFAULT_LAYOUT[c]).filter(k => !openOnPhone.has(k)) : config.collapsed ?? []);
   const toggleFold = (k: SectionKey) => {
     if (onPhone) {
       void saveConfig({ ...config, openOnPhone: openOnPhone.has(k) ? [...openOnPhone].filter(x => x !== k) : [...openOnPhone, k] });
@@ -2699,21 +2834,21 @@ export function DashboardView() {
         </section>
       ),
     },
-    clocks: {
-      label: 'world clocks', on: shown('clocks'),
-      node: <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />,
-    },
-    wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" quad bare /> },
-    nextUp: { label: 'next up', on: shown('nextUp'), node: <NextUp now={now} /> },
-    priorities: { label: "today's priorities", on: shown('priorities'), node: <Priorities /> },
-    wins: { label: "today's wins", on: shown('wins'), node: <Wins /> },
-    tasks: {
-      label: 'tasks', on: shown('tasks'),
-      node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => saveConfig({ ...config, tasksShow: next }).catch(err => console.warn('Couldn’t save the Tasks card’s choice:', err))} />,
-    },
-    comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} showBills={!config.comingUpHideBills} /> },
+    // World clocks are a full-width strip under the Quick entry, not a card
+    clocks: { label: 'world clocks', on: false, node: null },
+    // The wellness check-in sits full width above Day at a glance, not in the columns
+    wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" strip bare /> },
+    // Next up, Wins and Tasks are no longer cards on the home dashboard (Wins lives in Day at a glance)
+    nextUp: { label: 'next up', on: false, node: null },
+    // Priorities and Wins live in Day at a glance (always on), not as cards
+    priorities: { label: "today's priorities", on: false, node: null },
+    wins: { label: "today's wins", on: false, node: null },
+    tasks: { label: 'tasks', on: false, node: null },
+    // Coming up lives in Day at a glance, not as a card
+    comingUp: { label: 'coming up', on: false, node: null },
     habits: { label: 'habits', on: shown('habits'), node: <HabitsToday /> },
-    exercise: { label: 'exercise schedule', on: shown('exercise') && ff.exerciseEnabled !== false, node: <ExerciseToday /> },
+    // Exercise schedule and Medications are no longer on the home dashboard (Day at a glance has Meds / Move; the Health dashboard keeps both lists)
+    exercise: { label: 'exercise schedule', on: false, node: null },
     quickLog: {
       label: 'quick meal log',
       on: shown('quickLog') && (ff.foodEnabled !== false || ff.exerciseEnabled !== false),
@@ -2721,26 +2856,26 @@ export function DashboardView() {
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
     time: { label: 'time tracked', on: shown('time'), node: <TimeTracked /> },
-    mantra: { label: 'mantra', on: shown('mantra'), node: <Mantra /> },
-    shopping: {
-      label: 'shopping list', on: shown('shopping'),
-      node: <Shopping show={config.shoppingShow ?? 'latest'} onShow={next => saveConfig({ ...config, shoppingShow: next }).catch(err => console.warn('Couldn’t save the Shopping list card’s choice:', err))} />,
-    },
+    // Mantras are no longer on the home dashboard
+    mantra: { label: 'mantra', on: false, node: null },
+    // The shopping list lives in Day at a glance now, not as a card
+    shopping: { label: 'shopping list', on: false, node: null },
     menu: { label: 'on the menu', on: shown('menu') && kitchenOn, node: <Menu /> },
-    meds: { label: 'medications', on: shown('meds') && medsOn, node: <MedicationsToday doses={doses} /> },
+    meds: { label: 'medications', on: false, node: null },
     symptom: { label: 'log a symptom', on: shown('symptom'), node: <LogSymptom /> },
   };
   const visible = (k: SectionKey) => !!widgets[k]?.on;
   // fullLayout again at render: a card the in-memory order doesn't know yet (a new
   // card, or an order kept across a reload of the code) still shows, in its default place
   const placed = fullLayout(layout);
-  const cols = { left: placed.left.filter(visible), right: placed.right.filter(visible) };
-  const card = (k: SectionKey) => {
+  const cols = { top: placed.top.filter(visible), left: placed.left.filter(visible), right: placed.right.filter(visible), side: placed.side.filter(visible) };
+  // `wide`: across both columns (the top row) — no outline
+  const card = (k: SectionKey, wide = false) => {
     const w = widgets[k]!;
-    // The wellness check-in keeps its own look (the four-square box): moved by its grip, never folded
+    // The wellness check-in keeps its own look: moved by its grip, never folded
     if (k === 'wellness') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain>{w.node}</SortableCard>;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote'}>
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote'} wide={wide}>
         {w.node}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
           aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
@@ -2749,8 +2884,19 @@ export function DashboardView() {
       </SortableCard>
     );
   };
-  left.push(...cols.left.map(card));
-  right.push(...cols.right.map(card));
+  left.push(...cols.left.map(k => card(k)));
+  right.push(...cols.right.map(k => card(k)));
+
+  // The widgets inside Your Agenda: a row across both columns, the two columns, and its third column —
+  // cards drag between all four (one DndContext around the whole panel)
+  const widgetColumns = (<>
+    <DropCol id="top" items={cols.top} gap={32} dragging={dragging}>{cols.top.map(k => card(k, true))}</DropCol>
+    <Columns $rows={Math.max(1, cols.left.length, cols.right.length)}>
+      <DropCol id="left" items={cols.left} dragging={dragging}>{left}</DropCol>
+      <DropCol id="right" items={cols.right} dragging={dragging}>{right}</DropCol>
+    </Columns>
+  </>);
+  const sideWidgets = <DropCol id="side" items={cols.side} gap={34} dragging={dragging}>{cols.side.map(k => card(k))}</DropCol>;
 
   const voiceBtnLabel = voice.open ? 'Close voice commands' : 'Voice commands';
 
@@ -2761,7 +2907,6 @@ export function DashboardView() {
           <Head>
             <DateBlock $below={!compactNav}>
               <Hello>{hello}</Hello>
-              <DateLine><span className="long">{eyebrow}</span><span className="short">{shortEyebrow}</span></DateLine>
             </DateBlock>
             {compactNav ? (
               <TopBarAction>
@@ -2800,7 +2945,6 @@ export function DashboardView() {
             )}
           </Head>
           {/* Where the photo's solid part ends when the Quick entry is off */}
-          {!shown('quickEntry') && <div ref={photoEndRef} />}
 
           {voice.open && <VoiceCommand session={voice} />}
           {tourOpen && (
@@ -2827,19 +2971,9 @@ export function DashboardView() {
               </ThemeRow>
               <h3>Show on this page</h3>
               <ToggleGrid>
-                {SECTIONS.map(s => {
-                  const sw = <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>;
-                  // Coming up's own option sits under its switch (Finance on, the card showing)
-                  if (s.key === 'comingUp' && financeOn && shown('comingUp')) {
-                    return (
-                      <TogglePair key={s.key}>
-                        {sw}
-                        <label>Bills in Coming up<Toggle checked={!config.comingUpHideBills} aria-label="Bills in Coming up" onChange={v => void saveConfig({ ...config, comingUpHideBills: !v })} /></label>
-                      </TogglePair>
-                    );
-                  }
-                  return sw;
-                })}
+                {SECTIONS.map(s => <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>)}
+                {/* Day at a glance's Coming up: bills in it or not (Finance on) */}
+                {financeOn && <label>Bills in Coming up<Toggle checked={!config.comingUpHideBills} aria-label="Bills in Coming up" onChange={v => void saveConfig({ ...config, comingUpHideBills: !v })} /></label>}
               </ToggleGrid>
               <h3>Cities (the first is home)</h3>
               {places.length === 0 && <Muted style={{ marginTop: 0 }}>Add your city for the weather, then up to seven more for world clocks.</Muted>}
@@ -2862,7 +2996,8 @@ export function DashboardView() {
             </Customize>
           )}
 
-          {shown('quickEntry') && (
+          {/* The Quick entry is always on: it can't be switched off */}
+          {(
             <QuickWrap $guided={!!entryGuide && !entrySaved}>
               {entryGuide && (
                 <EntryGuide role="status">
@@ -2881,10 +3016,24 @@ export function DashboardView() {
               <div ref={photoEndRef}><QuickEntry /></div>
             </QuickWrap>
           )}
-          {/* The add row (alongside each card's own add box): one line each for a priority,
-              a win, a meal, a symptom, a mantra or a timer */}
-          <QuickAdds priorities={shown('priorities')} wins={shown('wins')} mantra={shown('mantra')} timer={shown('time')}
-            meal={shown('quickLog') && ff.foodEnabled !== false} symptom={shown('symptom')} />
+
+          {/* World clocks, full width under the Quick entry */}
+          {shown('clocks') && <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />}
+
+
+          {/* Day at a glance (always on): the day's schedule, priorities, tasks due and what's coming up, in one panel */}
+          <DndContext sensors={sensors} collisionDetection={closestCorners}
+            onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
+            onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
+            <DayGlance financeOn={financeOn} medsOn={medsOn} exerciseOn={ff.exerciseEnabled !== false}
+              weather={homeWeather && hd ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()}${home ? ` in ${home.name}` : ''}` : undefined}
+              side={sideWidgets}
+              priorities={<Priorities compact />} wins={<Wins compact />}
+              comingUp={<ComingUp compact financeOn={financeOn} showBills={!config.comingUpHideBills} />}
+              widgets={widgetColumns}
+              shopping={<Shopping compact show={config.shoppingShow ?? 'latest'} onShow={next => saveConfig({ ...config, shoppingShow: next }).catch(err => console.warn('Couldn’t save the Shopping list card’s choice:', err))} />} />
+          </DndContext>
+
 
           {showChecklist(onboarding) && (
             <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
@@ -2893,16 +3042,6 @@ export function DashboardView() {
 
           {shown('stats') && <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} />}
 
-          {(left.length > 0 || right.length > 0) && (
-            <DndContext sensors={sensors} collisionDetection={closestCorners}
-              onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
-              onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
-              <Columns>
-                <DropCol id="left" items={cols.left}>{left}</DropCol>
-                <DropCol id="right" items={cols.right}>{right}</DropCol>
-              </Columns>
-            </DndContext>
-          )}
 
         </Inner>
       </Page>

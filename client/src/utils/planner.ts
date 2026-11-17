@@ -101,6 +101,47 @@ export interface PlannerTask {
   deadline: string;
   priority: string;
   created: number;
+  /** How long it takes, in hours (its length on the planner's day) */
+  hours: number;
+  /** A time it was dragged to on its day (minutes from midnight, `scheduledTime`); none = it follows the day's order */
+  at?: number;
+}
+
+/** A task's own time on its day (`scheduledTime`, "HH:MM"), in minutes from midnight */
+export function timeOf(cf: Record<string, unknown> | undefined): number | undefined {
+  const v = cf?.scheduledTime;
+  if (typeof v !== 'string') return undefined;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v);
+  if (!m) return undefined;
+  const mins = Number(m[1]) * 60 + Number(m[2]);
+  return mins >= 0 && mins < 24 * 60 ? mins : undefined;
+}
+
+/** Minutes from midnight as "HH:MM" */
+export function hhmm(mins: number): string {
+  const m = Math.max(0, Math.min(24 * 60 - 1, Math.round(mins)));
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/** A task's length on the planner: half-hour steps from half an hour to twelve hours */
+export const MIN_HOURS = 0.5;
+export const MAX_HOURS = 12;
+export const DEFAULT_HOURS = 1;
+export function hoursOf(cf: Record<string, unknown> | undefined): number {
+  const n = typeof cf?.scheduledHours === 'number' ? cf.scheduledHours : Number(cf?.scheduledHours);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_HOURS;
+  return clampHours(n);
+}
+/** Rounded to the half hour and kept in range */
+export const clampHours = (h: number): number => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round(h * 2) / 2));
+
+/** "30 min", "1 h", "1 h 30" */
+export function hoursLabel(h: number): string {
+  const mins = Math.round(h * 60);
+  if (mins < 60) return `${mins} min`;
+  const hh = Math.floor(mins / 60);
+  const mm = mins % 60;
+  return mm ? `${hh} h ${String(mm).padStart(2, '0')}` : `${hh} h`;
 }
 
 /** A task's planner facts from its custom fields */
@@ -117,6 +158,8 @@ export function plannerFacts(id: number, cf: Record<string, unknown> | undefined
     autoMigrate: !!cf?.isAutoMigrating,
     deadline: dayOf(cf?.deadline),
     priority: typeof cf?.priority === 'string' ? cf.priority : 'none',
+    hours: hoursOf(cf),
+    at: scheduled ? timeOf(cf) : undefined,
   };
 }
 
@@ -157,24 +200,60 @@ const rank = (p: string) => PRIORITY_RANK[p] ?? 4;
 const byUrgency = (a: PlannerTask, b: PlannerTask) =>
   (a.deadline ? 0 : 1) - (b.deadline ? 0 : 1) || a.deadline.localeCompare(b.deadline) || rank(a.priority) - rank(b.priority) || b.created - a.created;
 
+/** Priority first (Urgent, High, Medium, Low, none), then the soonest deadline, then newest */
+const byPriority = (a: PlannerTask, b: PlannerTask) =>
+  rank(a.priority) - rank(b.priority) || (a.deadline ? 0 : 1) - (b.deadline ? 0 : 1) || a.deadline.localeCompare(b.deadline) || b.created - a.created;
+
+/** Where a task lands in a day's list by its priority: before the first task of a lower priority */
+export function priorityIndex(list: Pick<PlannerTask, 'priority'>[], priority: string): number {
+  const r = rank(priority);
+  const at = list.findIndex(t => rank(t.priority) > r);
+  return at === -1 ? list.length : at;
+}
+
 /**
- * The tasks showing on each of `days`: the ones you've arranged in your order,
- * then any not placed yet (by urgency). Finished tasks stay where they are.
+ * The tasks showing on each of `days`: the ones you've arranged stay in your
+ * order, and any not placed yet land among them by priority (before the first
+ * task of a lower priority). Finished tasks stay where they are.
  */
 export function tasksByDay<T extends PlannerTask>(tasks: T[], days: string[], today: string, order: PlannerOrder): Map<string, T[]> {
   const map = new Map<string, T[]>(days.map(d => [d, []]));
   for (const t of tasks) map.get(effectiveDay(t, today))?.push(t);
   for (const [day, list] of map) {
-    const placed = new Map((order[day] ?? []).map((id, i) => [id, i]));
-    list.sort((a, b) => {
-      const pa = placed.get(a.id), pb = placed.get(b.id);
-      if (pa !== undefined && pb !== undefined) return pa - pb;
-      if (pa !== undefined) return -1;
-      if (pb !== undefined) return 1;
-      return byUrgency(a, b);
-    });
+    const placedAt = new Map((order[day] ?? []).map((id, i) => [id, i]));
+    const placed = list.filter(t => placedAt.has(t.id)).sort((a, b) => placedAt.get(a.id)! - placedAt.get(b.id)!);
+    const out = [...placed];
+    for (const t of list.filter(x => !placedAt.has(x.id)).sort(byPriority)) out.splice(priorityIndex(out, t.priority), 0, t);
+    map.set(day, out);
   }
   return map;
+}
+
+/**
+ * Where each task in a day sits, in minutes from midnight: a task with its own
+ * time (`at`, dragged there) sits at it; the rest go one after another in the
+ * day's order, from `dayStart`, each as long as its hours — and never over an
+ * event, a meeting or a timed task (one that would run into one starts after it).
+ */
+export function layoutDay(tasks: { id: number; hours: number; at?: number }[], events: { start: number; end: number }[], dayStart: number): Map<number, number> {
+  const out = new Map<number, number>();
+  const pinned = tasks.filter(t => t.at !== undefined);
+  for (const t of pinned) out.set(t.id, t.at!);
+  const busy = [...events, ...pinned.map(t => ({ start: t.at!, end: t.at! + Math.round(t.hours * 60) }))]
+    .filter(e => e.end > e.start).sort((a, b) => a.start - b.start);
+  let at = dayStart;
+  for (const t of tasks.filter(x => x.at === undefined)) {
+    const len = Math.round(t.hours * 60);
+    for (let moved = true; moved;) {
+      moved = false;
+      for (const e of busy) {
+        if (e.start < at + len && e.end > at) { at = e.end; moved = true; }
+      }
+    }
+    out.set(t.id, at);
+    at += len;
+  }
+  return out;
 }
 
 /**

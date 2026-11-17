@@ -68,6 +68,7 @@ flight
 foggy
 folder
 fork_spoon
+format_color_reset
 format_quote
 forum
 grid_view
@@ -123,6 +124,7 @@ pets
 photo_camera
 photo_library
 piano
+pill
 play_arrow
 play_lesson
 pool

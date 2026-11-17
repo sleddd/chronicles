@@ -258,6 +258,43 @@ const Chip = styled.button<{ $active: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* Cycle as icons (the home dashboard's strip), all one size, no words (the name is
+   the tooltip): a crossed-out drop for None, then one, one, two and three drops.
+   Chosen = the accent, like the mood faces — no fill */
+const FLOW_ICONS: Record<string, { drops: number; size: number; label: string }> = {
+  '': { drops: 0, size: 19, label: 'None' },
+  spotting: { drops: 1, size: 19, label: 'Spotting' },
+  light: { drops: 1, size: 19, label: 'Light' },
+  medium: { drops: 2, size: 19, label: 'Medium' },
+  heavy: { drops: 3, size: 19, label: 'Heavy' },
+};
+
+/* The cycle icons: three to a row, from the left */
+const TwoUp = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: start;
+  gap: 12px 20px;
+`;
+
+const FlowBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-disabled)')};
+  transition: color 120ms;
+  &:hover { color: var(--color-accent); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  .drops { display: inline-flex; align-items: flex-end; height: 22px; gap: 0; }
+  .drops > span { font-weight: 300; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+  small { font-family: var(--font-sans); font-size: 12px; color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')}; }
+`;
+
 const Note = styled.p`
   margin: 14px 0 0;
   font-family: var(--font-sans);
@@ -415,8 +452,9 @@ const StripWrapper = styled(CompactWrapper)`
   && ${Unit} { font-size: 15px; color: var(--text-muted); }
   && ${Slider} { margin-top: 18px; }
   && ${MoodName} { font-size: 15px; font-weight: 600; }
-  && ${Faces} { flex-wrap: nowrap; justify-content: space-between; gap: 6px; }
-  && ${FaceBtn} { width: 38px; height: 38px; & > span { font-size: 46px; } }
+  /* Three faces to a row, a little smaller */
+  && ${Faces} { display: grid; grid-template-columns: repeat(3, max-content); gap: 10px 16px; }
+  && ${FaceBtn} { width: 32px; height: 32px; & > span { font-size: 38px; } }
   && ${CycleNote} { font-size: 13px; }
   && ${Chips} { gap: 10px 8px; }
   && ${Chip} { height: 34px; padding: 0 16px; font-size: 15px; font-weight: 400; }
@@ -425,11 +463,12 @@ const StripWrapper = styled(CompactWrapper)`
 const Strip = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid var(--border-card);
+  /* A card: the panel colour with a light shadow, the rules between cells
+     (the clip hides the outer cells' rules at the edges) */
   border-radius: 16px;
   background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
-  ${glassCard}
   --cell-x: 26px; /* Your day's bar lines up with the cells */
   & > * {
     min-width: 0;
@@ -555,6 +594,28 @@ export function WellnessPanel({
       </Faces>
     </Cell>
   );
+  const cycleIcons$ = showCycle && (
+    <Cell>
+      <Head><Label>Cycle</Label></Head>
+      <TwoUp role="group" aria-label="Cycle">
+        {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => {
+          const ic = FLOW_ICONS[f];
+          return (
+            <FlowBtn key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f}
+              aria-label={`Cycle: ${ic.label}`} title={ic.label} onClick={() => onFlow(f)}>
+              <span className="drops" aria-hidden="true">
+                {ic.drops === 0
+                  ? <MaterialIcon $size={ic.size}>format_color_reset</MaterialIcon>
+                  : Array.from({ length: ic.drops }, (_, i) => <MaterialIcon key={i} $size={ic.size}>water_drop</MaterialIcon>)}
+              </span>
+            </FlowBtn>
+          );
+        })}
+      </TwoUp>
+      {/* The next period's estimate as its own row under the icons */}
+      {cycleNote && <CycleNote style={{ display: 'block', marginTop: 14 }}>{cycleNote}</CycleNote>}
+    </Cell>
+  );
   const cycle$ = showCycle && (
     <Cell>
       <Head><Label>Cycle</Label>{cycleNote && <CycleNote>{cycleNote}</CycleNote>}</Head>
@@ -569,7 +630,7 @@ export function WellnessPanel({
   );
 
   if (strip) {
-    return <StripWrapper><Strip>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
+    return <StripWrapper><Strip>{water$}{sleep$}{mood$}{cycleIcons$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
   }
 
   if (row) {

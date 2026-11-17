@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { PlanningShell, TodayBtn } from '../components/organisms/PlanningShell.js';
 import { PlannerBoard, type PlannerCard, type PlannerEvent, type PlannerLane } from '../components/organisms/PlannerBoard.js';
@@ -24,15 +25,16 @@ import { entryTitleText } from '../utils/entryTitle.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, categoriesInUse, sameCategory, type GoalCategoryConfig } from '../utils/goalCategories.js';
 import {
-  addDays, dayLabel, hasMigrated, movedEnd, laneLabel, longDayLabel, monthDay, movedOrder, parsePlannerOrder, DEFAULT_PART, partOfTime, plannerFacts,
-  tasksByDay, unscheduled, weekLabel, weekOf, type DayPart, type PlannerOrder, type PlannerTask,
+  addDays, dayLabel, hasMigrated, laneLabel, longDayLabel, monthDay, movedOrder, parsePlannerOrder, plannerFacts, priorityIndex,
+  tasksByDay, unscheduled, weekLabel, weekOf, type PlannerOrder, type PlannerTask,
 } from '../utils/planner.js';
 
 /* Planning → Planner: the week (or one day) at a glance. Tasks and todos are
    dragged from Unscheduled onto a day, between days, and up and down within
-   one; the day is saved on the task (`scheduledDate`) and the order within a
-   day in the sealed setting `plannerOrder`. Events and meetings show on their
-   days above the tasks. */
+   one; the day is saved on the task (`scheduledDate`), its length in hours
+   (`scheduledHours`, made longer or shorter by its grip) and the order within a
+   day in the sealed setting `plannerOrder` (a task dropped on a day's free space
+   lands by priority). Events and meetings sit at their times on the day. */
 
 type Mode = 'week' | 'day';
 const MODES: { value: Mode; label: string }[] = [{ value: 'week', label: 'Week' }, { value: 'day', label: 'Day' }];
@@ -65,6 +67,14 @@ const DayTitle = styled.h2`
 
 type Planned = PlanTask & PlannerTask;
 
+/** "14:30" → minutes from midnight; anything else → undefined */
+function minutesOf(hhmm: string): number | undefined {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+  if (!m) return undefined;
+  const mins = Number(m[1]) * 60 + Number(m[2]);
+  return mins >= 0 && mins < 24 * 60 ? mins : undefined;
+}
+
 export function PlannerView() {
   const { goals, milestones, tasks, taskTopicId } = usePlanData();
   const entries = useEntriesStore(s => s.decryptedEntries);
@@ -85,7 +95,10 @@ export function PlannerView() {
     setChosen(m);
     try { localStorage.setItem(MODE_KEY, m); } catch { /* storage unavailable */ }
   };
-  const [anchor, setAnchor] = useState(today);
+  // Opened on a day from elsewhere (the dashboard's Day at a glance): that day, in Day view
+  const handedDay = (useLocation().state as { plannerDay?: string } | null)?.plannerDay;
+  const [anchor, setAnchor] = useState(() => (handedDay && /^\d{4}-\d{2}-\d{2}$/.test(handedDay) ? handedDay : today));
+  useEffect(() => { if (handedDay) setChosen('day'); }, [handedDay]);
   // Unscheduled folds down to a narrow strip, to give the days the whole width (remembered per browser)
   const [folded, setFoldedState] = useState(() => { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch { return false; } });
   const setFolded = (f: boolean) => {
@@ -102,7 +115,7 @@ export function PlannerView() {
   const milestoneTitle = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
 
   const card = (t: Planned): PlannerCard => ({
-    id: t.id, title: t.title, done: t.done, day: t.scheduled, part: t.part ?? '', partEnd: t.partEnd ?? '',
+    id: t.id, title: t.title, done: t.done, day: t.scheduled, hours: t.hours, at: t.at,
     kicker: (t.milestoneId && milestoneTitle.get(t.milestoneId)) || (t.goalId && goalTitle.get(t.goalId)) || undefined,
     due: t.deadline ? `Due ${monthDay(t.deadline)}` : undefined,
     note: hasMigrated(t, today) ? `From ${monthDay(t.scheduled)}` : !t.done && t.scheduled && t.scheduled < today ? dayLabel(t.scheduled) : undefined,
@@ -124,12 +137,16 @@ export function PlannerView() {
       const rule = repeatRuleOf(cf);
       const on = rule ? occurrencesBetween(first, rule, from, to) : first >= from && first <= to ? [first] : [];
       const time = typeof cf.startTime === 'string' && cf.startTime && !cf.allDay ? cf.startTime : '';
+      // Its place on the day's scale (an hour long when it has no end, or an end before its start)
+      const start = minutesOf(time);
+      const endAt = minutesOf(typeof cf.endTime === 'string' ? cf.endTime : '');
+      const end = start === undefined ? undefined : endAt !== undefined && endAt > start ? endAt : start + 60;
       for (const day of on) {
         const list = map.get(day) ?? [];
         list.push({
           key: `${e.id}:${day}`, id: e.id, title: entryTitleText(e.content) || builtinEntryName(cf) || name || 'Event',
           when: `${time ? formatTime12h(time) : 'All day'} · ${name}`,
-          part: partOfTime(time) || DEFAULT_PART, // all-day ones sit at the top of the day
+          start, end, // no start: all day, under the day's name
         });
         map.set(day, list.sort((a, b) => a.when.localeCompare(b.when)));
       }
@@ -175,33 +192,37 @@ export function PlannerView() {
     && words.every(w => t.title.toLowerCase().includes(w));
   const left = unscheduled(planned.filter(passes), today);
   /* ── Changes ── */
-  // `part`: the part of the day it was dropped on; undefined (the calendar button) keeps the one it has
-  const schedule = (id: number, day: string, overId: number | null, part?: DayPart | '') => {
+  // `overId`: the card it was dropped on (it takes that place); null = it lands among the day's tasks by priority
+  const schedule = (id: number, day: string, overId: number | null) => {
     const t = planned.find(x => x.id === id);
     if (!t) return;
-    const nextPart = !day ? '' : part || t.part || DEFAULT_PART;
-    // A stretched task keeps its length where it lands (cut off at Night); '' = just its own part
-    const end = nextPart ? movedEnd(t.part || DEFAULT_PART, t.partEnd, nextPart) : '';
-    const nextEnd = end === nextPart ? '' : end;
-    if (t.scheduled !== day || (t.part ?? '') !== nextPart) {
+    if (t.scheduled !== day) {
       // Dropped somewhere, a task that was on its deadline's day gets a planned day of its own;
       // taken off its day, it loses its time of day too (or its deadline would put it straight back)
-      void saveFields(t.entry, { ...t.fields, scheduledDate: day, scheduledPart: nextPart, scheduledPartEnd: nextEnd }).then(ok => {
+      // …and a time it was dragged to on the dashboard goes: it takes its place in the new day's order
+      const fields = day ? { ...t.fields, scheduledDate: day, scheduledTime: '' } : { ...t.fields, scheduledDate: '', scheduledPart: '', scheduledPartEnd: '', scheduledTime: '' };
+      void saveFields(t.entry, fields).then(ok => {
         if (!ok) showFlash('Couldn’t save that task’s day, so it’s back where it was. Try again.');
+      });
+    } else if (t.fields.scheduledTime) {
+      // Moved within its day here: it follows the day's order again, not the time it was dragged to
+      void saveFields(t.entry, { ...t.fields, scheduledTime: '' }).then(ok => {
+        if (!ok) showFlash('Couldn’t save that task’s place, so it’s back where it was. Try again.');
       });
     }
     if (!orderLoaded) return;
-    // The day's cards as they show now (whether or not that day is on screen)
-    const dayIds = day ? (tasksByDay(planned, [day], today, order).get(day) ?? []).map(x => x.id) : [];
-    void saveOrder(movedOrder(order, id, day, dayIds, overId, today)).catch(err => console.error('Failed to save the day’s order:', err));
+    // The day's cards as they show now (whether or not that day is on screen), without this one
+    const list = day ? (tasksByDay(planned.filter(x => !x.done), [day], today, order).get(day) ?? []).filter(x => x.id !== id) : [];
+    // No card to take the place of: it goes before the first task of a lower priority
+    const target = overId ?? list[priorityIndex(list, t.priority)]?.id ?? null;
+    void saveOrder(movedOrder(order, id, day, list.map(x => x.id), target, today)).catch(err => console.error('Failed to save the day’s order:', err));
   };
 
-  // The grip at a card's foot: the last part of the day it covers
-  const span = (id: number, end: DayPart) => {
+  // The grip at a card's foot: its length in hours
+  const resize = (id: number, hours: number) => {
     const t = planned.find(x => x.id === id);
-    if (!t || !t.scheduled) return;
-    const start = t.part || DEFAULT_PART;
-    void saveFields(t.entry, { ...t.fields, scheduledPart: start, scheduledPartEnd: end === start ? '' : end }).then(ok => {
+    if (!t) return;
+    void saveFields(t.entry, { ...t.fields, scheduledHours: hours }).then(ok => {
       if (!ok) showFlash('Couldn’t save that, so the task is back as it was. Try again.');
     });
   };
@@ -210,7 +231,7 @@ export function PlannerView() {
     void createEntry({ name: 'Task', icon: 'circle-check' }, text, {
       taskDescription: text, isInProgress: false, isCompleted: false, isAutoMigrating: false,
       // Typed into Unscheduled while it shows one goal: the task joins that goal (else it would vanish from the list)
-      parentGoalId: day || goalPicked === TODOS ? null : goalPicked, parentMilestoneId: null, deadline: '', priority: 'none', scheduledDate: day, scheduledPart: day ? DEFAULT_PART : '',
+      parentGoalId: day || goalPicked === TODOS ? null : goalPicked, parentMilestoneId: null, deadline: '', priority: 'none', scheduledDate: day,
     }).then(id => { if (id === null) showFlash('That task didn’t save. Try again.'); });
   };
 
@@ -231,7 +252,7 @@ export function PlannerView() {
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
       <PlannerBoard
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)} ideas={left.ideas.map(card)}
-        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onSpan={span} onAdd={add}
+        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onResize={resize} onAdd={add}
         folded={folded} onFold={setFolded}
         onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}

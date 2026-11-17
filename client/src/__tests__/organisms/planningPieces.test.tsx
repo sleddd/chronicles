@@ -63,14 +63,17 @@ describe('PlanTimeline', () => {
 });
 
 describe('PlannerBoard', () => {
-  const card = (id: number, title: string, over: Partial<PlannerCard> = {}): PlannerCard => ({ id, title, done: false, day: '', ...over });
+  const card = (id: number, title: string, over: Partial<PlannerCard> = {}): PlannerCard => ({ id, title, done: false, day: '', hours: 1, ...over });
   const setup = () => {
     const props = { onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onPickDay: vi.fn() };
     renderWithTheme(<PlannerBoard {...props}
       overdue={[card(1, 'Renew registration', { day: '2026-11-10', note: 'Tue, Nov 10' })]} open={[card(2, 'Call the dentist', { due: 'Due Nov 14' })]}
       lanes={[
-        { day: '2026-11-12', label: 'Thu 12', today: true, events: [{ key: '9:2026-11-12', id: 9, title: 'Standup', when: '9:00 AM · Meeting', part: 'morning' }],
-          cards: [card(3, 'Write the FAQ', { day: '2026-11-12', kicker: 'Private beta', part: 'morning' }), card(4, 'Review PR', { day: '2026-11-12', done: true })] },
+        { day: '2026-11-12', label: 'Thu 12', today: true, events: [
+            { key: '9:2026-11-12', id: 9, title: 'Standup', when: '9:00 AM · Meeting', start: 9 * 60, end: 9 * 60 + 30 },
+            { key: '7:2026-11-12', id: 7, title: 'Holiday party', when: 'All day · Event' },
+          ],
+          cards: [card(3, 'Write the FAQ', { day: '2026-11-12', kicker: 'Private beta', hours: 2 }), card(4, 'Review PR', { day: '2026-11-12', done: true })] },
         { day: '2026-11-13', label: 'Fri 13', today: false, events: [], cards: [] },
       ]} />);
     return props;
@@ -84,29 +87,28 @@ describe('PlannerBoard', () => {
     expect(screen.getByText('Today')).toBeTruthy();
     expect(screen.queryByText(/of \d+ done/)).toBeNull();
     expect(screen.getByText('Standup')).toBeTruthy();
-    // A ruled grid: a row per part of the day, each task and event in its own
-    expect(screen.getAllByRole('rowheader').map(r => r.textContent?.replace('chevron_right', ''))).toEqual(['MorningBefore 12 PM', 'Noon12 – 5 PM', 'NightAfter 5 PM']);
-    // A part of the day folds from its name (each day shows a count instead) and opens again
-    const noon = screen.getAllByRole('rowheader')[1];
-    fireEvent.click(noon);
-    expect(noon.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.getAllByRole('cell', { name: /, Noon, folded$/ })).toHaveLength(2);
-    fireEvent.click(noon);
-    expect(screen.queryAllByRole('cell', { name: /, Noon, folded$/ })).toHaveLength(0);
-    // The names fold away to a slim strip (still read out), and come back
-    fireEvent.click(screen.getByRole('button', { name: 'Hide morning, noon and night' }));
-    expect(screen.getAllByRole('rowheader').map(r => r.textContent)).toEqual(['Morning', 'Noon', 'Night']);
-    expect(screen.queryByText('Before 12 PM')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show morning, noon and night' }));
-    expect(screen.getByText('Before 12 PM')).toBeTruthy();
-    const morning = screen.getByRole('cell', { name: 'Thu 12, Morning' });
-    expect(morning.textContent).toContain('Write the FAQ');
-    expect(morning.textContent).toContain('Standup');
-    // A task with no part chosen sits under Morning (there is no any-time row)
-    expect(morning.textContent).toContain('Review PR');
-    expect(screen.getByRole('cell', { name: 'Thu 12, Noon' }).textContent).toBe('Noon');
-    // An empty space names itself
-    expect(screen.getByRole('cell', { name: 'Fri 13, Night' }).textContent).toBe('Night');
+    // One lane per day, the hours marked down the left
+    const scale = screen.getByRole('rowheader', { name: 'Hours' });
+    expect(scale.textContent).toContain('8 AM');
+    expect(scale.textContent).toContain('10 PM');
+    const thu = screen.getByRole('cell', { name: 'Thu 12' });
+    expect(thu.textContent).toContain('Write the FAQ');
+    expect(thu.textContent).toContain('Standup');
+    expect(thu.textContent).toContain('Review PR');
+    // An all-day event sits under the day's name, not on the scale
+    expect(thu.textContent).not.toContain('Holiday party');
+    expect(screen.getByRole('columnheader', { name: /Thu 12/ }).textContent).toContain('Holiday party');
+    // Tasks sit one after another from 8 AM, never over the 9:00 event: 8–10 would cross it, so the FAQ starts at 9:30
+    const at = (title: string) => parseFloat((screen.getByText(title).closest('article') as HTMLElement).style.top);
+    expect(at('Write the FAQ')).toBe(92);   // 1½ h after 8 AM at 60px an hour, +2
+    expect(at('Review PR')).toBe(212);      // straight after the two-hour FAQ
+    // An empty day says so
+    expect(screen.getByRole('cell', { name: 'Fri 13' }).textContent).toBe('Nothing planned');
+    // The hours fold away to a slim strip, and come back
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the hours' }));
+    expect(scale.textContent).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Show the hours' }));
+    expect(screen.getByRole('rowheader', { name: 'Hours' }).textContent).toContain('8 AM');
   });
 
   it('plans by date, adds and opens without dragging; no card carries a tick', () => {
@@ -131,7 +133,7 @@ describe('PlannerBoard folding', () => {
   it('folds Unscheduled down to a strip and opens it again', () => {
     const onFold = vi.fn();
     const base = { onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onFold,
-      overdue: [], open: [{ id: 2, title: 'Call the dentist', done: false, day: '' }],
+      overdue: [], open: [{ id: 2, title: 'Call the dentist', done: false, day: '', hours: 1 }],
       lanes: [{ day: '2026-11-13', label: 'Fri 13', today: false, events: [], cards: [] }] };
     const { rerender } = renderWithTheme(<PlannerBoard {...base} />);
     fireEvent.click(screen.getByRole('button', { name: 'Hide unscheduled tasks' }));
@@ -201,64 +203,33 @@ describe('habit and category pieces', () => {
   });
 });
 
-describe('PlannerBoard — stretching a task over more of the day', () => {
-  const lanes = (partEnd: PlannerCard['partEnd'] = '') => [{
+describe('PlannerBoard — a task\'s length', () => {
+  const lanes = (hours = 1) => [{
     day: '2026-11-12', label: 'Thu 12', today: true, events: [],
-    cards: [{ id: 3, title: 'Deep work', done: false, day: '2026-11-12', part: 'morning' as const, partEnd }],
+    cards: [{ id: 3, title: 'Deep work', done: false, day: '2026-11-12', hours }],
   }];
-  const props = () => ({ onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onSpan: vi.fn(), overdue: [], open: [] });
+  const props = () => ({ onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onResize: vi.fn(), overdue: [], open: [] });
 
-  it('shows a stretched task as ONE block across its rows, its title once', () => {
-    renderWithTheme(<PlannerBoard {...props()} lanes={lanes('night')} />);
-    // never a copy per part: one card, one title, one grip
-    expect(screen.getAllByText('Deep work')).toHaveLength(1);
-    expect(screen.queryByText('continued')).toBeNull();
-    expect(screen.getAllByRole('button', { name: /^Stretch Deep work/ })).toHaveLength(1);
-    const block = document.querySelector<HTMLElement>('[data-span="3"]')!;
-    expect(block.textContent).toContain('All day');
-    // placed on the grid from Morning (row 2) across all three rows of its day's column
-    expect(block.style.gridRow).toBe('2 / span 3');
-    expect(block.style.gridColumn).toBe('2');
-    // the cells behind it hold no copy of it
-    for (const name of ['Morning', 'Noon', 'Night']) expect(screen.getByRole('cell', { name: `Thu 12, ${name}` }).textContent).not.toContain('Deep work');
-  });
-
-  it('keeps room beside the block for a part\'s own cards', () => {
-    const withOther = [{ ...lanes('noon')[0], cards: [...lanes('noon')[0].cards, { id: 4, title: 'Quick call', done: false, day: '2026-11-12', part: 'noon' as const }] }];
-    renderWithTheme(<PlannerBoard {...props()} lanes={withOther} />);
-    const block = document.querySelector<HTMLElement>('[data-span="3"]')!;
-    expect(block.style.gridRow).toBe('2 / span 2');
-    expect(block.style.width).toContain('50%');
-    const noon = screen.getByRole('cell', { name: 'Thu 12, Noon' });
-    expect(noon.textContent).toContain('Quick call');
-    expect(noon.style.paddingLeft).toContain('50%');
-    // a part the block doesn't cover keeps its full width
-    expect(screen.getByRole('cell', { name: 'Thu 12, Night' }).style.paddingLeft).toBe('');
-  });
-
-  it('the grip\'s arrow keys lengthen and shorten it, never before its own part', () => {
+  it('is as tall as its hours, and its grip\'s arrow keys change it by half an hour', () => {
     const p = props();
-    const { unmount } = renderWithTheme(<PlannerBoard {...p} lanes={lanes()} />);
-    const grip = () => screen.getByRole('button', { name: /^Stretch Deep work/ });
-    fireEvent.keyDown(grip(), { key: 'ArrowDown' });
-    expect(p.onSpan).toHaveBeenLastCalledWith(3, 'noon');
-    fireEvent.keyDown(grip(), { key: 'ArrowUp' });
-    expect(p.onSpan).toHaveBeenCalledTimes(1); // already one part
+    renderWithTheme(<PlannerBoard {...p} lanes={lanes(2)} />);
+    expect((screen.getByText('Deep work').closest('article') as HTMLElement).style.height).toBe('116px');
+    expect(screen.getByText('2 h')).toBeTruthy();
+    const grip = screen.getByRole('button', { name: /^Length of Deep work: 2 h/ });
+    fireEvent.keyDown(grip, { key: 'ArrowDown' });
+    expect(p.onResize).toHaveBeenLastCalledWith(3, 2.5);
+    fireEvent.keyDown(grip, { key: 'ArrowUp' });
+    expect(p.onResize).toHaveBeenLastCalledWith(3, 1.5);
     expect(p.onOpen).not.toHaveBeenCalled();
-    unmount();
-    const q = props();
-    renderWithTheme(<PlannerBoard {...q} lanes={lanes('night')} />);
-    fireEvent.keyDown(grip(), { key: 'ArrowUp' });
-    expect(q.onSpan).toHaveBeenLastCalledWith(3, 'noon');
-    fireEvent.keyDown(grip(), { key: 'ArrowDown' });
-    expect(q.onSpan).toHaveBeenCalledTimes(1); // Night is the end of the day
   });
 
-  it('the block opens the task, and cards off a day have no grip', () => {
+  it('never goes under half an hour, and cards off a day have no grip', () => {
     const p = props();
-    renderWithTheme(<PlannerBoard {...p} lanes={lanes('noon')} open={[{ id: 8, title: 'Someday', done: false, day: '' }]} />);
-    fireEvent.click(document.querySelector<HTMLElement>('[data-span="3"]')!);
+    renderWithTheme(<PlannerBoard {...p} lanes={lanes(0.5)} open={[{ id: 8, title: 'Someday', done: false, day: '', hours: 1 }]} />);
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Length of Deep work/ }), { key: 'ArrowUp' });
+    expect(p.onResize).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^Length of Someday/ })).toBeNull();
+    fireEvent.click(screen.getByText('Deep work'));
     expect(p.onOpen).toHaveBeenCalledWith(3);
-    expect(screen.queryByRole('button', { name: /^Stretch Someday/ })).toBeNull();
   });
 });

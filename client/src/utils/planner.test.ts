@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
-  plannerFacts, partOf, partOfTime, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
+  plannerFacts, hoursOf, hoursLabel, priorityIndex, layoutDay, timeOf, hhmm, partOf, partOfTime, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
   weekLabel, laneLabel, longDayLabel, type PlannerTask,
 } from './planner.js';
 
 const TODAY = '2026-11-12'; // a Thursday
 const task = (id: number, over: Partial<PlannerTask> = {}): PlannerTask => ({
-  id, scheduled: '', done: false, autoMigrate: false, deadline: '', priority: 'none', created: id, ...over,
+  id, scheduled: '', done: false, autoMigrate: false, deadline: '', priority: 'none', created: id, hours: 1, ...over,
 });
 
 describe('planner', () => {
   it('reads a task’s facts from its fields', () => {
     expect(plannerFacts(3, { scheduledDate: '2026-11-13', isCompleted: true, isAutoMigrating: 1, deadline: 'x', priority: 'high' }, 9))
-      .toEqual({ id: 3, created: 9, scheduled: '2026-11-13', part: 'morning', partEnd: 'morning', fromDeadline: false, done: true, backlog: false, autoMigrate: true, deadline: '', priority: 'high' });
+      .toEqual({ id: 3, created: 9, scheduled: '2026-11-13', part: 'morning', partEnd: 'morning', fromDeadline: false, done: true, backlog: false, autoMigrate: true, deadline: '', priority: 'high', hours: 1 });
     expect(plannerFacts(1, undefined, 0).scheduled).toBe('');
     expect(plannerFacts(1, { scheduledDate: '2026-11-13', scheduledPart: 'noon' }, 0).part).toBe('noon');
     // No day, no part of it; with a day and no (or an unknown) part it sits under Morning
@@ -49,14 +49,15 @@ describe('planner', () => {
     expect(parsePlannerOrder({ '2026-11-12': [1, 'x', 2], nope: [3], '2026-11-13': [] })).toEqual({ '2026-11-12': [1, 2] });
   });
 
-  it('lists each day in your order, then the rest by urgency', () => {
+  it('lists each day in your order, the rest landing among them by priority', () => {
     const tasks = [
       task(1, { scheduled: TODAY }), task(2, { scheduled: TODAY, priority: 'urgent' }),
       task(3, { scheduled: TODAY, deadline: '2026-11-13' }), task(4, { scheduled: TODAY }),
       task(5, { scheduled: '2026-11-13' }), task(6, { scheduled: '2026-11-01', autoMigrate: true }), task(7),
     ];
     const map = tasksByDay(tasks, weekOf(TODAY), TODAY, { [TODAY]: [4, 1] });
-    expect(map.get(TODAY)!.map(t => t.id)).toEqual([4, 1, 3, 2, 6]);
+    // 2 is urgent, so it lands above the two you placed; the others (no priority) after them, the one with a deadline first
+    expect(map.get(TODAY)!.map(t => t.id)).toEqual([2, 4, 1, 3, 6]);
     expect(map.get('2026-11-13')!.map(t => t.id)).toEqual([5]);
     expect(map.get('2026-11-08')).toEqual([]);
   });
@@ -88,5 +89,55 @@ describe('planner', () => {
     const order = { '2026-11-11': [1, 2], [TODAY]: [3], '2026-08-01': [8] };
     expect(movedOrder(order, 2, TODAY, [3, 4], 3, TODAY)).toEqual({ '2026-11-11': [1], [TODAY]: [2, 3, 4] });
     expect(movedOrder(order, 3, '', [], null, TODAY)).toEqual({ '2026-11-11': [1, 2] });
+  });
+
+  it('reads a task’s length in hours, in half-hour steps', () => {
+    expect(hoursOf(undefined)).toBe(1);
+    expect(hoursOf({ scheduledHours: 2.4 })).toBe(2.5);
+    expect(hoursOf({ scheduledHours: 0.1 })).toBe(0.5);
+    expect(hoursOf({ scheduledHours: 40 })).toBe(12);
+    expect(hoursOf({ scheduledHours: 'x' })).toBe(1);
+    expect(hoursLabel(0.5)).toBe('30 min');
+    expect(hoursLabel(1)).toBe('1 h');
+    expect(hoursLabel(2.5)).toBe('2 h 30');
+  });
+
+  it('lands a task by priority: before the first of a lower priority', () => {
+    const list = [{ priority: 'urgent' }, { priority: 'high' }, { priority: 'low' }, { priority: 'none' }];
+    expect(priorityIndex(list, 'high')).toBe(2);
+    expect(priorityIndex(list, 'urgent')).toBe(1);
+    expect(priorityIndex(list, 'none')).toBe(4);
+    expect(priorityIndex([], 'low')).toBe(0);
+  });
+
+  it('lays a day out one task after another, around its events', () => {
+    const at = layoutDay(
+      [{ id: 1, hours: 1 }, { id: 2, hours: 2 }, { id: 3, hours: 0.5 }],
+      [{ start: 10 * 60, end: 11 * 60 }],
+      8 * 60,
+    );
+    expect(at.get(1)).toBe(8 * 60);        // 8:00 – 9:00
+    expect(at.get(2)).toBe(11 * 60);       // wouldn't fit before the 10:00 event, so after it
+    expect(at.get(3)).toBe(13 * 60);       // straight after
+  });
+
+  it('keeps a task dragged to a time there, and lays the rest out around it', () => {
+    const at = layoutDay(
+      [{ id: 1, hours: 1 }, { id: 2, hours: 1, at: 9 * 60 }, { id: 3, hours: 1 }],
+      [],
+      8 * 60,
+    );
+    expect(at.get(2)).toBe(9 * 60);        // its own time
+    expect(at.get(1)).toBe(8 * 60);        // 8:00 – 9:00, before it
+    expect(at.get(3)).toBe(10 * 60);       // after it, not over it
+  });
+
+  it('reads a task’s own time and writes minutes back as HH:MM', () => {
+    expect(timeOf({ scheduledTime: '14:30' })).toBe(14 * 60 + 30);
+    expect(timeOf({ scheduledTime: '' })).toBeUndefined();
+    expect(timeOf({ scheduledTime: '25:00' })).toBeUndefined();
+    expect(hhmm(9 * 60 + 5)).toBe('09:05');
+    expect(plannerFacts(1, { scheduledDate: '2026-11-17', scheduledTime: '10:00' }, 0).at).toBe(600);
+    expect(plannerFacts(1, { scheduledTime: '10:00' }, 0).at).toBeUndefined(); // no day, no time
   });
 });
