@@ -48,7 +48,7 @@ import {
   SettingsFoot, RowPill, RowNote, InPlaceInput, FormActions, StatusOk,
 } from '../components/molecules/SettingsGroup.js';
 import { BugReportForm } from '../components/organisms/BugReportForm.js';
-import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly, seedPlanningOnly } from '../utils/seedTestData.js';
+import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly, seedPlanningOnly, seedTodayOnly } from '../utils/seedTestData.js';
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
@@ -61,7 +61,7 @@ import { parseThemePreference, type ThemePreference } from '../utils/autoTheme.j
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { WallpaperPicker } from '../components/molecules/WallpaperPicker.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
-import { NO_WALLPAPER, wallpaperById } from '../utils/wallpapers.js';
+import { NO_WALLPAPER, shownWallpaper, wallpaperById } from '../utils/wallpapers.js';
 
 const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
@@ -207,7 +207,8 @@ export function SettingsView() {
   const themeMode = useUIStore(s => s.themeMode);
   const themePreference = useUIStore(s => s.themePreference);
   // Background: none by default, else a wallpaper (sealed setting `wallpaper`)
-  const wallpaper = useUIStore(s => s.wallpaper);
+  // What shows now (a never-picked choice is the theme's default photo)
+  const wallpaper = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
   const setWallpaper = useUIStore(s => s.setWallpaper);
   const [, saveWallpaper] = useEncryptedSetting<string | null>('wallpaper', null);
   const chooseWallpaper = (id: string | null) => {
@@ -650,6 +651,25 @@ export function SettingsView() {
       setSeedWellnessResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSeedingWellness(false);
+    }
+  };
+
+  const [seedingToday, setSeedingToday] = useState(false);
+  const [seedTodayResult, setSeedTodayResult] = useState('');
+  const handleSeedToday = async () => {
+    setSeedingToday(true); setSeedTodayResult('');
+    try {
+      const freshTopics = await topicsApi.getAll();
+      setSeedTodayResult(await seedTodayOnly({
+        encryptPost: encryptNewPost,
+        topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
+        addDecryptedEntry,
+        onProgress: (msg) => setSeedTodayResult(msg),
+      }));
+    } catch (err) {
+      setSeedTodayResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingToday(false);
     }
   };
 
@@ -1455,6 +1475,16 @@ export function SettingsView() {
           }
         />
         {seedWellnessResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedWellnessResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedWellnessResult}</div>}
+        <SettingsRow
+          title="Seed Today"
+          description="Fill in only what today and this week are missing, for an account that already has data: today's meals, this week's menu, the doses due so far, the exercise schedule ticked over the last week, this week's habit check-ins and today's check-in. Run again, it adds nothing twice"
+          action={
+            <ActionButton onClick={() => void handleSeedToday()} disabled={seedingToday}>
+              {seedingToday ? <Spinner size={14} /> : 'Seed Today'}
+            </ActionButton>
+          }
+        />
+        {seedTodayResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedTodayResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedTodayResult}</div>}
         <SettingsRow
           title="Seed Exercise Schedule"
           description="Add only an exercise schedule — morning yoga, an evening walk, leg strength and an evening stretch, most with several exercises — a week of ticked sessions, and a training plan if there isn’t one. Adds to existing data"

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Chronicles app icon (master, full bleed): the book_5 mark (Material Symbols, Apache 2.0) in the favicon's teal gradient on a charcoal tile. The dusk tile it replaced is kept in src/assets/app-icons/dusk/, the teal tile before that in src/assets/app-icons/teal/. -->
+  <defs>
+    <linearGradient id="book" gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">
+      <stop offset="0" stop-color="#a6dedb"/><stop offset="0.5" stop-color="#5cb6b2"/><stop offset="1" stop-color="#2b8784"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#1d2026"/>
+  <g transform="translate(176 864.8) scale(0.7)"><path d="M270-80q-45 0-77.5-29.64Q160-139.27 160-183v-564q0-36.57 22.12-65.43Q204.24-841.3 240-849l380-79v620l-360 77q-17.14 3.69-28.57 17.54Q220-199.62 220-183q0 19 15 31t35 12h470v-660h60v720H270Zm70-228 220-47v-499l-220 45v501Zm-60 12.81V-796l-20 4q-17 4-28.5 15.83Q220-764.35 220-747v471q9.06-5.2 19.03-9.1Q249-289 260-291l20-4.19ZM220-787v511-511Z" fill="url(#book)"/></g>
+</svg>

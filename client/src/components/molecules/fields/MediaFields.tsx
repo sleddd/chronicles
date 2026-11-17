@@ -4,12 +4,13 @@ import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareInput, BoxText, FieldNote, TextAction,
 } from './formKit.js';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
+import { Icon } from '../../atoms/core/Icon.jsx';
 import { Spinner } from '../../atoms/Spinner.js';
 import { StarRating } from '../StarRating.js';
 import { ProgressSlider } from '../ProgressSlider.js';
 import {
   MEDIA_TYPES, SHELVES, mediaTypeInfo, shelfLabel, clampRating, clampProgress, progressLabel,
-  type MediaFieldValues, type MediaType, type MediaShelf, type MediaCover,
+  mediaLinkUrl, mediaLinkHost, type MediaFieldValues, type MediaType, type MediaShelf, type MediaCover,
 } from '../../../utils/media.js';
 import { searchCovers, fetchCover, type CoverCandidate } from '../../../services/coverLookup.js';
 import { applyLookupDetails, blankDetailKeys, type DetailKey, type MediaDetails } from '../../../services/mediaDetails.js';
@@ -118,6 +119,32 @@ const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', itun
 const KEY_WORDS: Record<DetailKey, string> = { creator: 'who made it', year: 'the year', genre: 'the genre', album: 'the album', season: 'the season' };
 const listWords = (keys: DetailKey[]) => keys.map(k => KEY_WORDS[k]).join(', ').replace(/, ([^,]*)$/, ' and $1');
 
+const LINK_PLACEHOLDER: Record<MediaType, string> = {
+  book: 'Goodreads, StoryGraph…', movie: 'Rotten Tomatoes, IMDb, Letterboxd…', tv: 'Rotten Tomatoes, IMDb…', music: 'Spotify, Apple Music, Bandcamp…',
+};
+
+/* The link's input with an open-in-new-tab button once it's a real address */
+const LinkCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+`;
+
+const OpenLink = styled.a`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--color-accent-link);
+  &:hover { color: var(--color-accent); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
 export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps) {
   // Cover fetches finish after more typing: patch the latest values, never a stale copy
   const latest = useRef(values);
@@ -125,7 +152,7 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
   const set = (patch: Partial<MediaFieldValues>) => onChange({ ...latest.current, ...patch });
   const info = mediaTypeInfo(values.mediaType);
   const type: MediaType = info.value;
-  const ids = { creator: useId(), album: useId(), season: useId(), year: useId(), genre: useId(), notes: useId() };
+  const ids = { creator: useId(), album: useId(), season: useId(), year: useId(), genre: useId(), link: useId(), notes: useId() };
 
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<Found[] | null>(null);
@@ -133,6 +160,11 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
   // Which detail fields a lookup filled (so a different cover's details may replace them; typed ones stay)
   const filledRef = useRef<DetailKey[]>([]);
   const title = values.mediaTitle?.trim() ?? '';
+  const linkUrl = mediaLinkUrl(values.link);
+  // Said once the field is left (not while the address is still being typed)
+  const [linkFocused, setLinkFocused] = useState(false);
+  const linkRefused = !linkUrl && !!values.link?.trim() && !linkFocused;
+  const linkHost = linkUrl ? mediaLinkHost(linkUrl) : '';
   // A new title clears the last search's candidates
   useEffect(() => { setFound(null); setLookupNote(''); }, [title, type]);
 
@@ -263,8 +295,23 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
               <RowLabel as="label" htmlFor={ids.genre}>Genre</RowLabel>
               <BareInput id={ids.genre} value={values.genre ?? ''} placeholder="Genre" onChange={e => set({ genre: e.target.value })} />
             </LabelledRow>
+            <LabelledRow>
+              <RowLabel as="label" htmlFor={ids.link}>Link</RowLabel>
+              <LinkCell>
+                <BareInput id={ids.link} type="url" inputMode="url" autoComplete="off" spellCheck={false} value={values.link ?? ''}
+                  placeholder={LINK_PLACEHOLDER[type]} onChange={e => set({ link: e.target.value })}
+                  onFocus={() => setLinkFocused(true)} onBlur={() => setLinkFocused(false)}
+                  aria-invalid={linkRefused || undefined} aria-describedby={linkRefused ? `${ids.link}-note` : undefined} />
+                {linkUrl && (
+                  <OpenLink href={linkUrl} target="_blank" rel="noopener noreferrer" title={`Open ${linkHost} in a new tab`} aria-label={`Open ${linkHost} in a new tab`}>
+                    <Icon name="external-link" size={16} strokeWidth={2} />
+                  </OpenLink>
+                )}
+              </LinkCell>
+            </LabelledRow>
           </RowBox>
         </Details>
+        {linkRefused && <FieldNote id={`${ids.link}-note`} role="status">That link won’t open: links can only go to the major book, film and music sites, like Goodreads, Barnes &amp; Noble, Amazon, IMDb, Rotten Tomatoes, Letterboxd, Apple, Spotify or YouTube.</FieldNote>}
         {lookupNote && <FieldNote role="status">{lookupNote}</FieldNote>}
         {found && found.length > 1 && (
           <Candidates role="list" aria-label="Covers found">

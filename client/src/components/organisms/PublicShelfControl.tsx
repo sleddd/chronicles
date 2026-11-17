@@ -16,7 +16,7 @@ import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
    shelf exists, bookmarks just toggle; the link sits by the page title and
    the title, Reset link and Turn off live in Settings → Features (under Media). */
 
-export const PUBLIC_SHELF_PRIVACY_LINE = 'Anyone with the link can see the covers, titles, makers, years, ratings and shelves of bookmarked items. Notes and progress stay private. The public shelf is stored readable on the server, like a shared entry.';
+export const PUBLIC_SHELF_PRIVACY_LINE = 'Anyone with the link can see the covers, titles, makers, years, ratings, shelves and links of bookmarked items. Notes and progress stay private. The public shelf is stored readable on the server, like a shared entry.';
 
 const Panel = styled.div`
   position: fixed;

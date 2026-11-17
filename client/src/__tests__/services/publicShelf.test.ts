@@ -58,3 +58,16 @@ describe('pageOf', () => {
     expect(pageOf([], 3)).toEqual({ items: [], page: 1, pages: 1, total: 0 });
   });
 });
+
+describe('public shelf links', () => {
+  it('publishes an item’s web link and drops anything else', () => {
+    const [a, b, c] = buildPublicShelfItems([
+      item({ id: 1, fields: { [ON_PUBLIC_SHELF]: true, link: 'goodreads.com/book/show/1' } }),
+      item({ id: 2, fields: { [ON_PUBLIC_SHELF]: true, link: 'javascript:alert(1)' } }),
+      item({ id: 3, fields: { [ON_PUBLIC_SHELF]: true } }),
+    ]);
+    expect(a.link).toBe('https://goodreads.com/book/show/1');
+    expect(b.link).toBeUndefined();
+    expect(c.link).toBeUndefined();
+  });
+});

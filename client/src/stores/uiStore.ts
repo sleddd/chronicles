@@ -61,7 +61,8 @@ interface UIState {
   setThemeMode: (mode: 'light' | 'dark') => void;
   setThemePreference: (pref: ThemePreference) => void;
   setAccentColor: (color: string) => void;
-  /** Settings → Theme → Background: a wallpaper's id, or null (none, the default) */
+  /** Settings → Theme → Background: a wallpaper's id, null (None) or DEFAULT_CHOICE
+   *  (never picked: the theme's default — shownWallpaper turns it into a photo) */
   wallpaper: string | null;
   setWallpaper: (id: string | null) => void;
 

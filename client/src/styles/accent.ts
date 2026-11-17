@@ -1,5 +1,5 @@
-/** Teal — the accent every account starts with, and the fallback wherever an accent is missing. */
-export const DEFAULT_ACCENT_COLOR = '#34a5a2';
+/** Taupe — the accent every account starts with, and the fallback wherever an accent is missing. */
+export const DEFAULT_ACCENT_COLOR = '#a39080';
 
 /**
  * The accent as a plain hex colour, else the default (Teal). The saved accent is a readable

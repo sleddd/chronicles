@@ -12,7 +12,8 @@ import { PAGE_INK } from '../../templates/LandingTemplate.js';
    pointed at or focused, and doesn't advance at all for reduced motion. Swipe sideways, the ‹ › arrows or the arrow keys move it by hand. */
 
 export const SLIDES = [
-  { key: 'dashboard-dark', name: 'Dashboard', caption: 'Your day at a glance' },
+  { key: 'dashboard-dark-v2', name: 'Dashboard', caption: 'Your day at a glance' },
+  // The earlier dashboard shot, kept to switch back to: { key: 'dashboard-dark', … }
   { key: 'journal-dark', name: 'Journal', caption: 'Every entry, with fields for each topic' },
   { key: 'health-dark', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
   { key: 'reports-dark', name: 'Health reports', caption: 'How water, mood and sleep change over time' },

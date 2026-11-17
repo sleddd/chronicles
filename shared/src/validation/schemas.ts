@@ -1,3 +1,4 @@
+import { allowedMediaLink } from './mediaLinks.js';
 import { z } from 'zod';
 
 // Auth validation
@@ -270,6 +271,10 @@ export const PUBLIC_SHELF_TITLE_DEFAULT = 'My shelf';
 // Linear: one base64 class, then up to two '=' of padding
 const PUBLIC_SHELF_COVER = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 
+export const PUBLIC_SHELF_LINK_MAX = 500;
+/** http(s), a host with a dot, no spaces or control characters */
+const PUBLIC_SHELF_LINK = /^https?:\/\/[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d+)?([/?#][^\s\x00-\x1f\x7f]*)?$/i;
+
 export const publicShelfItemSchema = z.object({
   title: z.string().trim().min(1, 'An item needs a title').max(200),
   creator: z.string().trim().max(200).default(''),
@@ -279,6 +284,9 @@ export const publicShelfItemSchema = z.object({
   /** The Shelf status (Reading / Want to / Finished / Paused / Didn’t finish), not the feature */
   shelf: z.enum(['current', 'want', 'done', 'paused', 'dnf', '']),
   cover: z.string().max(PUBLIC_SHELF_COVER_MAX, 'Cover too large').regex(PUBLIC_SHELF_COVER, 'Cover must be a JPEG').optional(),
+  /** A page about it on one of the major media sites (Goodreads, IMDb, Spotify… — `MEDIA_LINK_SITES`); the card opens it in a new tab */
+  link: z.string().max(PUBLIC_SHELF_LINK_MAX, 'Link too long').regex(PUBLIC_SHELF_LINK, 'Link must be a web address')
+    .refine(v => allowedMediaLink(v) === v, 'Links can only go to the major media sites').optional(),
 });
 
 export const putPublicShelfSchema = z.object({

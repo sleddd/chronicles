@@ -210,8 +210,8 @@ const H1 = styled.h1`
   color: var(--text-primary);
   /* Two lines on wide screens: "A life dashboard for / people too busy to plan." */
   br { @media (max-width: 768px) { display: none; } }
-  /* The second half in a pale teal, the page's one coloured phrase */
-  em { font-style: normal; color: #b6dbd9; }
+  /* The second half in a pale taupe (pale teal #b6dbd9 before), the page's one coloured phrase */
+  em { font-style: normal; color: #ddd2c7; }
   @media (max-width: 768px) { font-size: 44px; }
 `;
 
@@ -423,7 +423,7 @@ const PrivacyGrid = styled.ul`
     border-radius: 14px;
     background: rgba(31, 34, 41, 0.55);
   }
-  li > span { display: block; margin-bottom: 26px; color: #8fd1cd; }
+  li > span { display: block; margin-bottom: 26px; color: #d5c6b8; }
   h3 { margin: 0 0 12px; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-primary); }
   p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--text-secondary); }
   @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -454,9 +454,9 @@ const BetaLayout = styled(Container)`
 const FaqBand = styled(DarkBand)`
   --border-default: rgba(255, 255, 255, 0.22);
   --border-subtle: rgba(255, 255, 255, 0.12);
-  /* A light teal on the dark band */
-  --color-accent-line: #7cc4c2;
-  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.5);
+  /* A light taupe on the dark band */
+  --color-accent-line: #c9b8a8;
+  --shadow-ring: 0 0 0 3px rgba(163, 144, 128, 0.5);
   padding: 120px 0 120px;
   @media (max-width: 768px) { padding: 72px 0 80px; }
 `;

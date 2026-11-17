@@ -85,6 +85,15 @@ const CoverStill = styled.div`
   ${coverLook}
 `;
 
+/* The public page, when the item has a link: the cover opens it in a new tab */
+const CoverLink = styled.a`
+  ${coverLook}
+  cursor: pointer;
+  text-decoration: none;
+  &:hover { border-color: var(--control-border); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
 /* The title on a cover-less tile */
 const TileTitle = styled.span`
   font-family: var(--font-display);
@@ -191,6 +200,8 @@ interface MediaPosterCardProps {
   coverStyle?: CSSProperties;
   /** The public page: nothing to press, the Shelf status as a word, no progress */
   readOnly?: boolean;
+  /** readOnly only: the item's own page (Goodreads, Rotten Tomatoes…), opened in a new tab from the cover */
+  href?: string;
   onOpen?: () => void;
   onRate?: (rating: number) => void;
   onShelve?: (shelf: MediaShelf) => void;
@@ -199,7 +210,7 @@ interface MediaPosterCardProps {
   corner?: ReactNode;
 }
 
-export function MediaPosterCard({ item, coverSrc, coverStyle, readOnly = false, onOpen, onRate, onShelve, onProgress, corner }: MediaPosterCardProps) {
+export function MediaPosterCard({ item, coverSrc, coverStyle, readOnly = false, href, onOpen, onRate, onShelve, onProgress, corner }: MediaPosterCardProps) {
   const sub = mediaSubtitle({ ...item, album: item.album ?? '', season: item.season ?? '' });
   const tip = sub ? `${item.title} · ${sub}` : item.title;
   const inside = coverSrc ? (
@@ -213,7 +224,9 @@ export function MediaPosterCard({ item, coverSrc, coverStyle, readOnly = false, 
   );
   return (
     <Card>
-      {readOnly
+      {readOnly && href
+        ? <CoverLink href={href} target="_blank" rel="noopener noreferrer" aria-label={`${tip} (opens in a new tab)`} title={tip}>{inside}</CoverLink>
+        : readOnly
         ? <CoverStill role="img" aria-label={tip} title={tip}>{inside}</CoverStill>
         : <CoverBtn type="button" onClick={onOpen} aria-label={`Open ${item.title}`} title={tip}>{inside}</CoverBtn>}
       {corner && <Corner>{corner}</Corner>}

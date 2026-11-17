@@ -26,16 +26,17 @@ export const LIGHT_TOKENS = `
   --border-pill: #80868f;
   --control-border: #80868f;
   --color-danger: #d8483f;
-  --color-accent: #34a5a2;
-  --color-accent-line: #23706e;
-  --color-accent-soft: #23706e;
-  --color-accent-hover: #2c8c8a;
-  --color-accent-subtle: rgba(52, 165, 162, 0.10);
+  /* Taupe, the app's default accent (Teal #34a5a2 / #23706e before it) */
+  --color-accent: #a39080;
+  --color-accent-line: #6f6257;
+  --color-accent-soft: #6f6257;
+  --color-accent-hover: #8d7c6e;
+  --color-accent-subtle: rgba(163, 144, 128, 0.10);
   --on-accent: #ffffff;
-  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.35);
-  --logo-top: rgb(23, 74, 73);
-  --logo-mid: rgb(34, 107, 105);
-  --logo-low: rgb(44, 140, 138);
-  --logo-end: #34a5a2;
+  --shadow-ring: 0 0 0 3px rgba(163, 144, 128, 0.35);
+  --logo-top: rgb(72, 63, 56);
+  --logo-mid: rgb(106, 94, 83);
+  --logo-low: rgb(139, 122, 109);
+  --logo-end: #a39080;
   color-scheme: light;
 `;

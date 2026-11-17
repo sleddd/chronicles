@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Chronicles app icon (master, full bleed): the book_5 mark (Material Symbols, Apache 2.0) in the favicon's teal gradient on a charcoal tile. The dusk tile it replaced is kept in src/assets/app-icons/dusk/, the teal tile before that in src/assets/app-icons/teal/. -->
+  <!-- Chronicles app icon (master, full bleed): the book_5 mark (Material Symbols, Apache 2.0) in the favicon's taupe gradient on a charcoal tile. The teal-gradient book before it is kept in src/assets/app-icons/teal-book/; The dusk tile it replaced is kept in src/assets/app-icons/dusk/, the teal tile before that in src/assets/app-icons/teal/. -->
   <defs>
     <linearGradient id="book" gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">
-      <stop offset="0" stop-color="#a6dedb"/><stop offset="0.5" stop-color="#5cb6b2"/><stop offset="1" stop-color="#2b8784"/>
+      <stop offset="0" stop-color="#ddd2c7"/><stop offset="0.5" stop-color="#a39080"/><stop offset="1" stop-color="#6e5d4e"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" fill="#1d2026"/>

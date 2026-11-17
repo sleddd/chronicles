@@ -4,10 +4,11 @@
  */
 import { entries as entriesApi, topics as topicsApi, doses as dosesApi } from '../services/api.js';
 import { useHabitStore } from '../stores/habitStore.js';
-import { withCount } from './habits.js';
+import { DOSES_CHANGED } from '../hooks/useTodayDoses.js';
+import { withCount, loggedOn } from './habits.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { entryTitleText } from './entryTitle.js';
-import { routineLinkKey, SCHEDULE_TOPIC } from './routines.js';
+import { routineLinkKey, SCHEDULE_TOPIC, scheduleTopicIds } from './routines.js';
 import { mountaineeringTemplate } from './training.js';
 import { searchCovers, fetchCover } from '../services/coverLookup.js';
 import { ON_PUBLIC_SHELF } from '../services/publicShelf.js';
@@ -1166,4 +1167,163 @@ async function seedJournal(deps: SeedDeps): Promise<number> {
   await ensureTopic(deps, 'Journal', 'book');
   for (const { topic, html } of SEED_JOURNAL) await createEntry(deps, '', topic, {}, { html });
   return SEED_JOURNAL.length;
+}
+
+
+/* ── Today, for an account that already has data ──
+   Fills in only what today (and this week) is missing, so the dashboards and
+   the Health pages have something to show: today's meals (with nutrients), this
+   week's menu, the doses due so far today, the exercise schedule ticked over the
+   last week, this week's habit check-ins and today's wellness check-in. Run it
+   again and it adds nothing it already added. */
+export async function seedTodayOnly(deps: SeedDeps): Promise<string> {
+  const entries = useEntriesStore.getState().decryptedEntries;
+  const meta = (e: { metadata?: unknown }) => (e.metadata ?? {}) as Record<string, unknown>;
+  const fieldsOf = (e: { metadata?: unknown }) => (meta(e)._customFields ?? {}) as Record<string, unknown>;
+  const inTopics = (ids: (number | null)[]) => entries.filter(e => ids.includes(meta(e)._taxonomyId as number));
+  const inTopic = (name: string) => { const id = findTopic(deps.topics, name); return id ? inTopics([id]) : []; };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const localDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = dayFromToday(0);
+  const now = new Date();
+  const nowHM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const done: string[] = [];
+
+  // Today's meals (food only — dose-synced and supplement rows don't count)
+  if (findTopic(deps.topics, 'Meals')) {
+    const eaten = inTopic('Meals').filter(e => fieldsOf(e).consumedDate === today && !['medication', 'supplement'].includes(String(fieldsOf(e).mealType ?? '')));
+    if (!eaten.length) {
+      const meals: [string, string, string, string][] = [
+        ['Oatmeal with blueberries and chia seeds', 'breakfast', '07:30', 'oats, blueberries, chia seeds, almond milk, maple syrup'],
+        ['Grilled chicken salad with avocado and quinoa', 'lunch', '12:30', 'chicken breast, mixed greens, avocado, quinoa, cherry tomatoes, olive oil dressing'],
+        ['Greek yogurt with honey and walnuts', 'snack', '15:30', 'greek yogurt, honey, walnuts'],
+        ['Salmon with roasted vegetables and brown rice', 'dinner', '18:30', 'salmon fillet, broccoli, sweet potato, brown rice, lemon, garlic'],
+      ];
+      let n = 0;
+      for (const [name, mealType, time, ingredients] of meals) {
+        if (time > nowHM) continue;
+        await createEntry(deps, name, 'Meals', { mealDescription: name, mealType, consumedDate: today, consumedTime: time, ingredients, notes: '' }, { day: today });
+        n++;
+      }
+      if (n) done.push(`${n} meals`);
+    }
+  }
+
+  // This week's menu (Monday to Sunday), linked to recipes the account has
+  if (findTopic(deps.topics, 'Menu Plan')) {
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+    const weekStart = localDay(monday);
+    if (!inTopic('Menu Plan').some(e => fieldsOf(e).weekStart === weekStart)) {
+      const recipes = inTopic('Recipe');
+      const recipe = (title: string) => {
+        const r = recipes.find(e => entryTitleText(e.content).trim().toLowerCase() === title.toLowerCase());
+        return r ? { mealName: title, recipeId: r.id, recipeName: title } : { mealName: title, recipeId: null, recipeName: '' };
+      };
+      const plan: [string, string, string, string][] = [
+        ['Avocado Toast with Poached Eggs', 'Leftover stir-fry', 'Chicken Stir-Fry with Vegetables', 'Almonds and banana'],
+        ['Oatmeal with blueberries', 'Classic Pasta Marinara', 'Beef Tacos with Pico de Gallo', 'Greek yogurt'],
+        ['Avocado Toast with Poached Eggs', 'Taco leftovers', 'Classic Pasta Marinara', 'Apple and peanut butter'],
+        ['Smoothie bowl', 'Chicken Stir-Fry with Vegetables', 'Grilled salmon with veg', 'Hummus and veggies'],
+        ['Avocado Toast with Poached Eggs', 'Caesar salad', 'Beef Tacos with Pico de Gallo', 'Fruit salad'],
+        ['Pancakes with maple syrup', 'Classic Pasta Marinara', 'BBQ ribs and coleslaw', 'Cheese and crackers'],
+        ['Full English breakfast', 'Roast chicken and potatoes', 'Chicken Stir-Fry with Vegetables', 'Dark chocolate'],
+      ];
+      const days: Record<string, Record<string, unknown>> = {};
+      plan.forEach(([breakfast, lunch, dinner, snack], i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        days[localDay(d)] = { breakfast: recipe(breakfast), lunch: recipe(lunch), dinner: recipe(dinner), snack: recipe(snack) };
+      });
+      await createEntry(deps, `Menu: week of ${weekStart}`, 'Menu Plan', { weekStart, days });
+      done.push('this week\'s menu');
+    }
+  }
+
+  // Today's scheduled doses that are due by now, taken a few minutes late
+  const meds = inTopic('Medication').filter(e => fieldsOf(e).isActive !== false && Array.isArray(fieldsOf(e).scheduleTimes));
+  if (meds.length) {
+    const logged = (await dosesApi.getByDate(today)).logs;
+    let n = 0;
+    for (const med of meds) {
+      for (const time of fieldsOf(med).scheduleTimes as string[]) {
+        if (typeof time !== 'string' || time > nowHM) continue;
+        if (logged.some(l => l.medicationPostId === med.id && l.scheduledTime === time && !l.asNeeded)) continue;
+        const [h, m] = time.split(':').map(Number);
+        const late = (med.id + h) % 12;
+        await dosesApi.log({ medicationPostId: med.id, scheduledTime: time, date: today, status: 'taken',
+          takenAt: time12(`${pad(h + Math.floor((m + late) / 60))}:${pad((m + late) % 60)}`) });
+        n++;
+      }
+    }
+    if (n) {
+      window.dispatchEvent(new Event(DOSES_CHANGED)); // every dose list reloads its day
+      done.push(`${n} doses`);
+    }
+  }
+
+  // The exercise schedule ticked over the last week (a couple missed), today's done so far
+  const routines = inTopics(scheduleTopicIds(deps.topics)).filter(e => fieldsOf(e).isActive !== false);
+  if (routines.length && findTopic(deps.topics, 'Exercise')) {
+    const links = new Set(entries.map(e => meta(e)._routineLink).filter(Boolean));
+    let n = 0;
+    for (const r of routines) {
+      const f = fieldsOf(r);
+      const times = (Array.isArray(f.scheduleTimes) ? f.scheduleTimes : []) as string[];
+      const days = (Array.isArray(f.days) ? f.days : []) as number[];
+      const minutes = Number(f.duration) || 20;
+      const items = (Array.isArray(f.items) ? f.items : []) as { id: string }[];
+      for (let offset = -6; offset <= 0; offset++) {
+        const day = dayFromToday(offset);
+        if (days.length && !days.includes(new Date(`${day}T12:00:00`).getDay())) continue;
+        for (const time of times) {
+          if (offset === 0 && time > nowHM) continue;
+          if (offset !== 0 && (offset + minutes) % 5 === 0) continue;
+          const key = routineLinkKey(r.id, day, time);
+          if (links.has(key)) continue;
+          const name = String(f.routineName || entryTitleText(r.content));
+          await createEntry(deps, `${name} · ${minutes} min`, 'Exercise', {
+            exerciseType: f.exerciseType ?? 'other', duration: String(minutes), intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '',
+            performedDate: day, performedTime: time, notes: '', routineId: r.id, routineItemsDone: items.map(i => i.id), trainingCategory: f.trainingCategory ?? '',
+          }, { day, meta: { _routineLink: key } });
+          n++;
+        }
+      }
+    }
+    if (n) done.push(`${n} exercise sessions`);
+  }
+
+  // This week's habit check-ins, up to today
+  const habitStore = useHabitStore.getState();
+  const habits = inTopic('Habit').filter(e => fieldsOf(e).isActive !== false);
+  if (habits.length && habitStore.loaded) {
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() - now.getDay());
+    let n = 0;
+    habitStore.apply(log => {
+      let next = log;
+      for (const h of habits) {
+        const f = fieldsOf(h);
+        const target = Math.max(1, Number(f.targetCount) || 1);
+        const due = (Array.isArray(f.days) ? f.days : []) as number[];
+        for (let d = new Date(sunday); localDay(d) <= today; d.setDate(d.getDate() + 1)) {
+          const day = localDay(d);
+          const wd = d.getDay();
+          if (due.length && !due.includes(wd)) continue;
+          if (loggedOn(next, h.id, day) > 0) continue;
+          // Weekly targets: Mon / Wed / Fri; daily ones every due day
+          const count = f.targetPeriod === 'week' ? ([1, 3, 5].includes(wd) ? 1 : 0) : target;
+          if (count > 0) { next = withCount(next, h.id, day, count); n++; }
+        }
+      }
+      return next;
+    });
+    if (n) done.push(`${n} habit check-ins`);
+  }
+
+  // Today's wellness check-in (days that have one are kept)
+  const checkIns = await seedWellness(deps);
+  if (checkIns) done.push(`${checkIns} wellness check-ins`);
+
+  return done.length ? `Done — added ${done.join(', ')}.` : 'Today already has everything — nothing added.';
 }

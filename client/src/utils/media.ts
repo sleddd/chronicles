@@ -6,6 +6,7 @@
  */
 
 import type { UserFieldDef } from '../types/userFields.js';
+import { allowedMediaLink, mediaLinkSite } from '@shared/validation/mediaLinks';
 
 export type MediaType = 'book' | 'movie' | 'tv' | 'music';
 /** '' = on no shelf */
@@ -38,12 +39,14 @@ export interface MediaFieldValues {
   /** How far through it: 0–100 (% read / watched / listened) */
   progress?: number;
   notes: string;
+  /** A page about it elsewhere — Goodreads, Rotten Tomatoes, IMDb… (private, never on the public shelf) */
+  link?: string;
   cover?: MediaCover | null;
 }
 
 export const MEDIA_DEFAULTS: MediaFieldValues = {
   mediaTitle: '', mediaType: 'book', creator: '', album: '', season: '', year: '', genre: '',
-  rating: 0, shelf: '', progress: 0, notes: '', cover: null,
+  rating: 0, shelf: '', progress: 0, notes: '', link: '', cover: null,
 };
 
 export interface MediaTypeInfo {
@@ -417,4 +420,15 @@ export function legacyMediaFields(
   // …but never a place on the public shelf: only a bookmark tap publishes an item
   for (const [k, v] of Object.entries(cf)) if (k !== '_userFields' && k !== 'onPublicShelf' && !(k in fields)) rest[k] = v;
   return { fields: { ...rest, ...fields } as MediaFieldValues };
+}
+
+/** A typed link as an https address on one of the major media sites
+    (Goodreads, IMDb, Spotify… — `MEDIA_LINK_SITES` in shared), else null */
+export function mediaLinkUrl(raw: string | undefined | null): string | null {
+  return allowedMediaLink(raw);
+}
+
+/** The site's name for the open button: "Goodreads" */
+export function mediaLinkHost(url: string): string {
+  try { return mediaLinkSite(new URL(url).hostname)?.name ?? ''; } catch { return ''; }
 }

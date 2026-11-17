@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
-import { PAGE_INK, PAGE_INK_HOVER } from '../../templates/LandingTemplate.js';
 
 /* The landing page's beta form: name and email in a lifted card. An
    application takes a beta seat while one is open (the server decides, in
@@ -80,21 +79,25 @@ const Submit = styled.div`
   text-align: center;
 `;
 
-/* The submit: a full-width round pill, filled deep teal (like Save entry) */
+/* The submit: a full-width round pill in dark charcoal (the app's dark page colour) —
+   not the page's taupe, so the one thing to press stands out. Deep teal before
+   (TEAL_INK in LandingTemplate) */
+const SUBMIT = '#1f2229';
+const SUBMIT_HOVER = '#33373f';
 const SubmitButton = styled.button`
   width: 100%;
   height: 50px;
   border: none;
   border-radius: 999px;
-  background: ${PAGE_INK};
+  background: ${SUBMIT};
   color: #ffffff;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: background 150ms;
-  &:hover:not(:disabled) { background: ${PAGE_INK_HOVER}; }
-  &:focus-visible { outline: 2px solid ${PAGE_INK}; outline-offset: 3px; }
+  &:hover:not(:disabled) { background: ${SUBMIT_HOVER}; }
+  &:focus-visible { outline: 2px solid ${SUBMIT}; outline-offset: 3px; }
   &:disabled { opacity: 0.6; cursor: default; }
 `;
 

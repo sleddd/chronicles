@@ -34,6 +34,8 @@ const Header = styled.header`
   height: 64px;
   a { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-primary); }
   span { font-family: var(--font-label); font-size: 13px; font-weight: 600; letter-spacing: 0.14em; }
+  /* The way back into the app (signed in), at the row's end */
+  & > [data-aside] { margin-left: auto; }
 `;
 
 const Main = styled.main`
@@ -50,7 +52,10 @@ const Footer = styled.footer`
   a:hover { text-decoration: underline; }
 `;
 
-export function PublicTemplate({ children }: { children: ReactNode }) {
+/** `headerAside`: at the header's end — the public shelf's "Back to Chronicles"
+    for someone signed in (an installed iPhone / iPad app opens its own pages in
+    the same window whatever the link says, so there must be a way back) */
+export function PublicTemplate({ children, headerAside }: { children: ReactNode; headerAside?: ReactNode }) {
   return (
     <Page>
       <Inner>
@@ -59,6 +64,7 @@ export function PublicTemplate({ children }: { children: ReactNode }) {
             <BrandMark size={26} gradientId="public-page-mark" />
             <span>CHRONICLES</span>
           </Link>
+          {headerAside && <div data-aside="">{headerAside}</div>}
         </Header>
       </Inner>
       <Main><Inner>{children}</Inner></Main>

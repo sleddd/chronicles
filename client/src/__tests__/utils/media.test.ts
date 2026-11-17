@@ -195,3 +195,28 @@ describe('moving the old topics', () => {
     expect(legacyMediaFields(e, 'Journal', [], strip)).toBeNull();
   });
 });
+
+import { mediaLinkUrl, mediaLinkHost } from '../../utils/media.js';
+
+describe('mediaLinkUrl', () => {
+  it('opens http(s) links and adds https:// to a bare address', () => {
+    expect(mediaLinkUrl('https://www.goodreads.com/book/show/1')).toBe('https://www.goodreads.com/book/show/1');
+    expect(mediaLinkUrl(' rottentomatoes.com/m/dune ')).toBe('https://rottentomatoes.com/m/dune');
+    expect(mediaLinkHost('https://www.goodreads.com/x')).toBe('Goodreads');
+    expect(mediaLinkUrl('http://music.apple.com/us/album/1')).toBe('https://music.apple.com/us/album/1');
+    expect(mediaLinkUrl('https://open.spotify.com/album/x')).toBe('https://open.spotify.com/album/x');
+  });
+  it('refuses anything else', () => {
+    expect(mediaLinkUrl('javascript:alert(1)')).toBeNull();
+    expect(mediaLinkUrl('data:text/html,hi')).toBeNull();
+    expect(mediaLinkUrl('not a link')).toBeNull();
+    expect(mediaLinkUrl('dune')).toBeNull();
+    expect(mediaLinkUrl('')).toBeNull();
+    // Only the major media sites
+    expect(mediaLinkUrl('https://example.com/dune')).toBeNull();
+    expect(mediaLinkUrl('https://goodreads.com.evil.net/x')).toBeNull();
+    expect(mediaLinkUrl('https://notimdb.com/x')).toBeNull();
+    expect(mediaLinkUrl('https://user@imdb.com/x')).toBeNull();
+    expect(mediaLinkUrl('https://imdb.com:8443/x')).toBeNull();
+  });
+});

@@ -36,3 +36,15 @@ describe('public shelf schema', () => {
     expect(putPublicShelfSchema.safeParse({ title: 'x', items: many }).success).toBe(false);
   });
 });
+
+describe('public shelf item link', () => {
+  const base = { title: 'Dune', type: 'book', rating: 4, shelf: 'done' };
+  it('takes an http(s) link and refuses others', () => {
+    expect(publicShelfItemSchema.safeParse({ ...base, link: 'https://www.rottentomatoes.com/m/dune_2021' }).success).toBe(true);
+    expect(publicShelfItemSchema.safeParse({ ...base, link: 'javascript:alert(1)' }).success).toBe(false);
+    expect(publicShelfItemSchema.safeParse({ ...base, link: 'https://imdb.com/a b' }).success).toBe(false);
+    expect(publicShelfItemSchema.safeParse({ ...base, link: 'https://example.com/dune' }).success).toBe(false);
+    expect(publicShelfItemSchema.safeParse({ ...base, link: 'https://www.goodreads.com.evil.net/x' }).success).toBe(false);
+    expect(publicShelfItemSchema.safeParse({ ...base, link: 'https://www.imdb.com/' + 'a'.repeat(600) }).success).toBe(false);
+  });
+});

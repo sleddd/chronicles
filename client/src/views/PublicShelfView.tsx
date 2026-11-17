@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { publishableCover } from '../services/publicShelf.js';
+import { publishableCover, publishableLink } from '../services/publicShelf.js';
 import styled from 'styled-components';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import { useOptionalAuth } from '../contexts/AuthContext.js';
+import { Icon } from '../components/atoms/core/Icon.jsx';
 import { PublicTemplate } from '../components/templates/PublicTemplate.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { MediaPosterCard, PosterGrid } from '../components/molecules/MediaPosterCard.js';
 import { LoadMore } from '../components/molecules/LoadMore.js';
 import { MediaFilterBar, MediaToolBox, MediaViewSwitch, EMPTY_MEDIA_FILTERS, type MediaFilters, type MediaLayout } from '../components/molecules/MediaFilterBar.js';
 import { EntryListCard } from '../components/molecules/EntryListCard.js';
+import { EntryTitle } from '../components/molecules/EntryTable.js';
 import { formatRating, mediaSubtitle, shelfLabel } from '../utils/media.js';
 import { Chip } from '../components/molecules/fields/formKit.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
@@ -19,6 +22,36 @@ import { publicShelf as publicShelfApi, type PublicShelfPage, type PublicShelfQu
    the next 24 fetched as the foot scrolls into view. The narrowing happens on
    the server (one request per page, each cached for a minute), so a visitor
    never downloads the whole shelf. Always the light theme. No sign-in. */
+
+/* Signed in: back to the Media Journal (an installed app opens this page in its own window) */
+const BackToApp = styled(Link)`
+  && {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--border-pill, var(--control-border));
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  &&:hover { border-color: var(--color-accent-line); color: var(--color-accent-text, var(--color-accent-link)); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* A list row whose item has a link: the whole row opens it in a new tab */
+const RowLink = styled.a`
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  &:hover { color: inherit; }
+  &:hover ${EntryTitle} { color: var(--color-accent-link); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+`;
 
 const Title = styled.h1`
   font-family: var(--font-display);
@@ -159,10 +192,13 @@ export function PublicShelfView() {
       .finally(() => { inFlight.current = false; });
   };
 
+  const signedIn = !!useOptionalAuth()?.isAuthenticated;
   const filtering = !!(filters.type || filters.shelf || filters.minRating || sent.trim());
 
   return (
-    <PublicTemplate>
+    <PublicTemplate headerAside={signedIn ? (
+      <BackToApp to="/media"><Icon name="arrow-left" size={14} strokeWidth={2.5} />Back to Chronicles</BackToApp>
+    ) : undefined}>
       {state.status === 'error' && <Message>This shelf isn’t available.</Message>}
       {state.status !== 'error' && knownTitle && <Title>{knownTitle}</Title>}
       {state.status !== 'error' && hasAny && (
@@ -177,11 +213,17 @@ export function PublicShelfView() {
           <>
             {layout === 'list' ? (
               <ListBox>
-                {state.items.map((item, i) => (
-                  <EntryListCard key={i} readOnly flush roomy content={item.title}
-                    preview={[mediaSubtitle({ type: item.type, creator: item.creator ?? '', year: item.year ?? '', album: '', season: '' }),
-                      item.rating ? `${formatRating(item.rating)} stars` : '', item.shelf ? shelfLabel(item.shelf, item.type) : ''].filter(Boolean).join(' · ')} />
-                ))}
+                {state.items.map((item, i) => {
+                  const row = (
+                    <EntryListCard readOnly flush roomy content={item.title}
+                      preview={[mediaSubtitle({ type: item.type, creator: item.creator ?? '', year: item.year ?? '', album: '', season: '' }),
+                        item.rating ? `${formatRating(item.rating)} stars` : '', item.shelf ? shelfLabel(item.shelf, item.type) : ''].filter(Boolean).join(' · ')} />
+                  );
+                  const link = publishableLink(item.link);
+                  return link
+                    ? <RowLink key={i} href={link} target="_blank" rel="noopener noreferrer" title={`${item.title} (opens in a new tab)`}>{row}</RowLink>
+                    : <div key={i}>{row}</div>;
+                })}
               </ListBox>
             ) : (
             <PosterGrid>
@@ -191,6 +233,7 @@ export function PublicShelfView() {
                   readOnly
                   item={{ title: item.title, type: item.type, creator: item.creator, year: item.year, rating: item.rating, shelf: item.shelf }}
                   coverSrc={publishableCover(item.cover) ?? null}
+                  href={publishableLink(item.link)}
                 />
               ))}
             </PosterGrid>

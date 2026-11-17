@@ -39,8 +39,11 @@ export const SKY_GRADIENT = `
   linear-gradient(135deg, #0d2249 0%, #183e6e 36%, #3b4580 66%, #64598f 100%)
 `;
 
-export const PAGE_INK = TEAL_INK;
-export const PAGE_INK_HOVER = TEAL_INK_HOVER;
+/** The app's default accent, Taupe, deepened for text and fills on white (× 0.68) — the page's ink now */
+export const TAUPE_INK = '#6f6257';
+export const TAUPE_INK_HOVER = '#5c5148';
+export const PAGE_INK = TAUPE_INK;
+export const PAGE_INK_HOVER = TAUPE_INK_HOVER;
 export const BAND_GRADIENT = TEAL_GRADIENT;
 
 /** The hero's photo (served from public/wallpapers, like the app's backgrounds):
@@ -125,8 +128,8 @@ const HeroBand = styled.div`
 
   /* Pills on the photo: the primary turns white with deep teal text, the neutral one a white glass outline */
   --pill-primary-bg: #ffffff;
-  --pill-primary-fg: #174a49;
-  --pill-primary-hover: #e3f3f2;
+  --pill-primary-fg: #4a4038;
+  --pill-primary-hover: #f1ece7;
   --pill-neutral-bg: rgba(255, 255, 255, 0.14);
   --pill-neutral-border: rgba(255, 255, 255, 0.7);
   --pill-neutral-fg: #ffffff;
@@ -219,16 +222,17 @@ const HeaderRow = styled(Container)`
 `;
 
 /* The app icon (the rounded teal tile) beside the name in Work Sans */
-/* The logo: the book mark in the dusk colours (lavender to teal) beside "Chronicles"
+/* The logo: the book mark in a taupe gradient (pale at the top to the accent at the
+   foot; the dusk colours, lavender to teal, before it) beside "Chronicles"
    in thin Work Sans — no tile; the tile is the app icon, for the home screen only */
 function DuskMark({ id }: { id: string }) {
   return (
     <svg viewBox="0 -960 960 960" aria-hidden="true">
       <defs>
         <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">
-          <stop offset="0" stopColor="#ece4fb" />
-          <stop offset="0.5" stopColor="#c9d6f0" />
-          <stop offset="1" stopColor="#7fd3c9" />
+          <stop offset="0" stopColor="#efe8e1" />
+          <stop offset="0.5" stopColor="#d2c4b7" />
+          <stop offset="1" stopColor="#a89482" />
         </linearGradient>
       </defs>
       <path d={BOOK_5} fill={`url(#${id})`} />

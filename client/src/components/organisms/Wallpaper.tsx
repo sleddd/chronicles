@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { useUIStore } from '../../stores/uiStore.js';
-import { wallpaperById, wallpaperSrc } from '../../utils/wallpapers.js';
+import { shownWallpaper, wallpaperById, wallpaperSrc } from '../../utils/wallpapers.js';
 
 /* The chosen wallpaper (Settings → Theme → Background, off by default): the
    photo across the top of the page it's placed in, fading into the page
@@ -36,6 +36,14 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
     rgba(0, 0, 0, 0.48) 58%, rgba(0, 0, 0, 0.28) 70%, rgba(0, 0, 0, 0.12) 82%, rgba(0, 0, 0, 0.03) 92%, transparent 100%);
   -webkit-mask-image: var(--fade);
   mask-image: var(--fade);
+  /* Light: the photo sits exactly as in dark (same box, same crop); only the fade
+     starts lower — solid to 30% of the way down — then eases out gently the
+     rest of the way, never a sharp line */
+  html[data-theme='light'] & {
+    --fade: linear-gradient(to bottom, #000 0%, #000 30%, rgba(0, 0, 0, 0.9) 37.5%, rgba(0, 0, 0, 0.76) 45%,
+      rgba(0, 0, 0, 0.6) 52.5%, rgba(0, 0, 0, 0.45) 60%, rgba(0, 0, 0, 0.32) 67.5%, rgba(0, 0, 0, 0.21) 75%,
+      rgba(0, 0, 0, 0.12) 82.5%, rgba(0, 0, 0, 0.05) 90%, rgba(0, 0, 0, 0.015) 96%, transparent 100%);
+  }
   /* A light shade at the top, so the white title reads on a bright photo */
   /* A bright photo ($shade, measured when it loads) gets as much more as its
      white text needs; a dark one keeps these */
@@ -44,15 +52,16 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
     position: absolute;
     inset: 0;
     /* Light: darker behind the white title and the controls beside it (the top
-       150px), then a wash of the page colour from where the content starts, so the
-       dark text of lists and cards always sits on a light ground over the photo */
-    background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.26, $shade)}) 0, rgba(0, 0, 0, ${Math.max(0.12, $shade * 0.85)}) 150px,
-      color-mix(in srgb, var(--bg-app) 62%, transparent) 210px, color-mix(in srgb, var(--bg-app) 82%, transparent) 300px,
-      color-mix(in srgb, var(--bg-app) 90%, transparent) 100%`});
+       130px), then a wash of the page colour from where the content starts — sooner
+       and fuller, so the photo blends into the light page and the dark text of
+       lists and cards always sits on a light ground over it */
+    background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.26, $shade)}) 0, rgba(0, 0, 0, ${Math.max(0.12, $shade * 0.85)}) 180px,
+      color-mix(in srgb, var(--bg-app) 30%, transparent) 280px, color-mix(in srgb, var(--bg-app) 52%, transparent) 380px,
+      color-mix(in srgb, var(--bg-app) 72%, transparent) 500px, color-mix(in srgb, var(--bg-app) 88%, transparent) 100%`});
   }
   /* Dark: deeper, so a bright photo still sits in the dark page */
   html[data-theme='dark'] &::after {
-    background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.36, $shade)}), rgba(0, 0, 0, ${Math.max(0.3, $shade)}) 60%, rgba(0, 0, 0, ${Math.max(0.2, $shade * 0.6)})`});
+    background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.28, $shade)}), rgba(0, 0, 0, ${Math.max(0.22, $shade)}) 60%, rgba(0, 0, 0, ${Math.max(0.14, $shade * 0.6)})`});
   }
   /* Solid down to a point (the dashboard's Quick entry, written straight on the
      photo), then the same eased fade over the last FADE px; shaded a step
@@ -62,7 +71,21 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
       rgba(0, 0, 0, 0.62) ${$solid + FADE * 0.34}px, rgba(0, 0, 0, 0.32) ${$solid + FADE * 0.58}px,
       rgba(0, 0, 0, 0.1) ${$solid + FADE * 0.82}px, transparent ${$solid + FADE}px);
     &::after, html[data-theme='dark'] &::after {
-      background: linear-gradient(to bottom, rgba(0, 0, 0, ${Math.max(0.36, $shade)}), rgba(0, 0, 0, ${Math.max(0.3, $shade)}) ${$solid}px, rgba(0, 0, 0, ${Math.max(0.18, $shade * 0.6)}));
+      background: linear-gradient(to bottom, rgba(0, 0, 0, ${Math.max(0.28, $shade)}), rgba(0, 0, 0, ${Math.max(0.22, $shade)}) ${$solid}px, rgba(0, 0, 0, ${Math.max(0.13, $shade * 0.6)}));
+    }
+    /* Light: past the solid part a long, gentle fade, washing into the page colour
+       as it goes — never a sharp line */
+    html[data-theme='light'] & {
+      --fade: linear-gradient(to bottom, #000 0, #000 ${$solid + LIGHT_HOLD}px, rgba(0, 0, 0, 0.86) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.12}px,
+        rgba(0, 0, 0, 0.68) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.26}px, rgba(0, 0, 0, 0.5) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.42}px,
+        rgba(0, 0, 0, 0.32) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.58}px, rgba(0, 0, 0, 0.17) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.74}px,
+        rgba(0, 0, 0, 0.06) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.88}px, transparent ${$solid + FADE}px);
+    }
+    html[data-theme='light'] &::after {
+      background: linear-gradient(to bottom, rgba(0, 0, 0, ${Math.max(0.36, $shade)}), rgba(0, 0, 0, ${Math.max(0.3, $shade)}) ${$solid + LIGHT_HOLD}px,
+        color-mix(in srgb, var(--bg-app) 35%, transparent) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.25}px,
+        color-mix(in srgb, var(--bg-app) 65%, transparent) ${$solid + LIGHT_HOLD + (FADE - LIGHT_HOLD) * 0.55}px,
+        color-mix(in srgb, var(--bg-app) 88%, transparent) ${$solid + FADE}px);
     }
   `)}
   @media print { display: none; }
@@ -116,6 +139,9 @@ function measureShade(img: HTMLImageElement): number {
 
 /** How far the photo takes to fade out below its solid part (`solid`) */
 const FADE = 260;
+/** Light theme: the fade below the solid part starts this much further down
+ *  (the photo's box, and so its size and crop, stay the dark theme's) */
+const LIGHT_HOLD = 55;
 
 /** height: how far down the page the photo reaches before it has faded out.
  *  solid: instead, stay solid down to this many px, then fade over FADE px.
@@ -124,7 +150,7 @@ const FADE = 260;
  *  photo follows that panel's scroll (smaller scrolling boxes — tables, the
  *  menu grid — are ignored). The journal passes false: its title row stays put. */
 export function Wallpaper({ height = 'min(520px, 60vh)', follow = true, solid }: { height?: string; follow?: boolean; solid?: number } = {}) {
-  const id = useUIStore(s => s.wallpaper);
+  const id = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
   const paper = wallpaperById(id);
   const src = paper ? wallpaperSrc(paper.id) : '';
   const [loaded, setLoaded] = useState<string | null>(null);

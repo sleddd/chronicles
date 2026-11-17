@@ -1,14 +1,14 @@
 /*
  * The public shelf — pure helpers. What the owner's browser publishes is built
  * here from the media items flagged `onPublicShelf`: only the fields the public
- * page shows (title, maker, year, type, rating, the Shelf status and a found
- * catalogue cover), never notes, progress, genre, album / season, the entry id
+ * page shows (title, maker, year, type, rating, the Shelf status, a found
+ * catalogue cover and the item's link — Goodreads, Rotten Tomatoes…), never notes, progress, genre, album / season, the entry id
  * or the entry's own photo. `pageOf` is the one paging rule shared by the
  * owner's grid and the public page.
  */
 
-import { PUBLIC_SHELF_COVER_MAX, PUBLIC_SHELF_ITEMS_MAX, PUBLIC_SHELF_PAGE_SIZE, type PublicShelfItem } from '@shared/validation/schemas';
-import { clampRating, type MediaItem } from '../utils/media.js';
+import { PUBLIC_SHELF_COVER_MAX, PUBLIC_SHELF_LINK_MAX, PUBLIC_SHELF_ITEMS_MAX, PUBLIC_SHELF_PAGE_SIZE, type PublicShelfItem } from '@shared/validation/schemas';
+import { clampRating, mediaLinkUrl, type MediaItem } from '../utils/media.js';
 
 /** The custom field a media entry carries while it's on the public shelf (never the journal's `_isFavorite`) */
 export const ON_PUBLIC_SHELF = 'onPublicShelf';
@@ -24,12 +24,19 @@ export function publishableCover(cover: string | undefined): string | undefined 
   return cover && cover.length <= PUBLIC_SHELF_COVER_MAX && JPEG_DATA_URL.test(cover) ? cover : undefined;
 }
 
+/** An item's link the public page may open: http(s) only, under the cap */
+export function publishableLink(link: unknown): string | undefined {
+  const url = typeof link === 'string' ? mediaLinkUrl(link) : null;
+  return url && url.length <= PUBLIC_SHELF_LINK_MAX ? url : undefined;
+}
+
 /** The flagged items as what the public page shows, in the shelf's order */
 export function buildPublicShelfItems(items: MediaItem[]): PublicShelfItem[] {
   const out: PublicShelfItem[] = [];
   for (const item of items) {
     if (!isOnPublicShelf(item)) continue;
     const cover = publishableCover(item.cover);
+    const link = publishableLink(item.fields.link);
     out.push({
       title: item.title.trim().slice(0, 200) || 'Untitled',
       creator: item.creator.trim().slice(0, 200),
@@ -38,6 +45,7 @@ export function buildPublicShelfItems(items: MediaItem[]): PublicShelfItem[] {
       rating: clampRating(item.rating),
       shelf: item.shelf,
       ...(cover ? { cover } : {}),
+      ...(link ? { link } : {}),
     });
     if (out.length >= PUBLIC_SHELF_ITEMS_MAX) break;
   }
