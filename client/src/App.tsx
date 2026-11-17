@@ -194,7 +194,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--shadow-lg':         '0 8px 28px rgba(20,20,30,0.14)',
   '--shadow-xl':         '0 16px 48px rgba(20,20,30,0.18)',
   /* Dashboard cards' soft shadow: even on every side, never offset to one corner */
-  '--shadow-card':       '0 0 16px rgba(0, 0, 0, 0.10)',
+  '--shadow-card':       '0 0 16px rgba(0, 0, 0, 0.055)',
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
@@ -287,7 +287,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--shadow-lg':         '0 8px 28px rgba(0,0,0,0.55)',
   '--shadow-xl':         '0 16px 48px rgba(0,0,0,0.6)',
   /* Dashboard cards' soft shadow: even on every side, never offset to one corner */
-  '--shadow-card':       '0 0 34px rgba(0, 0, 0, 0.2)',
+  '--shadow-card':       '0 0 34px rgba(0, 0, 0, 0.15)',
 };
 
 /* Structural tokens that never change with theme or accent.

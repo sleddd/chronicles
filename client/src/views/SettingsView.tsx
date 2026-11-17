@@ -162,9 +162,11 @@ const SETTINGS_CARDS_KEY = 'settings-collapsed-v1';
 const IMPORT_BATCH = 50;
 
 /* All sections start collapsed; each card remembers being opened */
-/* Settings' section cards have no outline — the fill alone sets them off the page */
+/* Settings' section cards have no outline — the fill and a very light, even shadow
+   set them off the page */
 const BorderlessCard = styled.div`
-  & > section { border: none; }
+  & > section { border: none; box-shadow: 0 0 12px rgba(0, 0, 0, 0.04); }
+  html[data-theme='dark'] & > section { box-shadow: 0 0 22px rgba(0, 0, 0, 0.12); }
 `;
 
 function Section(props: { id: string; title: string; subtitle?: string; children: ReactNode }) {

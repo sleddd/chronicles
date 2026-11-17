@@ -2306,7 +2306,7 @@ const AddRow = styled.div`
   /* Straight under the Quick entry (its own 24px of room below adds to this) */
   margin-top: 8px;
   /* Room under the lines before the cards start */
-  margin-bottom: 16px;
+  margin-bottom: 26px;
   /* Phones: one full-width line each, stacked */
   @media (max-width: 768px) {
     grid-template-columns: minmax(0, 1fr);

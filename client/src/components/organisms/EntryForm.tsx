@@ -474,6 +474,7 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   /* The Quick entry: the question is the card's first line, the writing straight under it,
      its "Enter title/text..." in the question's thin italic Work Sans, a step quieter */
   && > [data-card-prompt] ~ ${EditorArea} { padding-top: 20px; }
+  &&&[data-card-prompt-centered]:not(:has(.tiptap:focus)) ${EditorArea} .tiptap p.is-editor-empty:first-child::before { opacity: 0; }
   &&& > [data-card-prompt] ~ ${EditorArea} .tiptap p.is-editor-empty:first-child::before {
     font-family: var(--font-display);
     font-size: 19px;
@@ -756,6 +757,21 @@ const QuickCardPrompt = styled(PromptLine)`
     [data-tools-beside] > & { padding-right: 124px; }
   }
   @media (max-width: 768px) { font-size: 18px; }
+  /* The question's words a little less bright than the text (the picker keeps its colour) */
+  & > h2 { color: color-mix(in srgb, var(--text-primary) 72%, transparent); }
+  /* Gliding back up to the top once a topic is picked */
+  transition: transform 260ms ease;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+  /* Nothing picked or written yet: the question sits halfway down the empty writing
+     area (still aligned left), the field's placeholder hidden. Only moved down — it keeps its place in the
+     card, so nothing is shortened or resized. Clicking into the field (or picking a
+     topic) brings it back up */
+  &[data-centered] {
+    transform: translateY(var(--prompt-drop, 66px));
+    & > h2 { pointer-events: none; }
+  }
+  @container entrycard (max-width: 600px) { &[data-centered] { --prompt-drop: 60px; } }
+  [data-card-prompt-centered]:has(.tiptap:focus) > &[data-centered] { transform: none; }
 `;
 
 /* The Quick entry waiting: just the question and topic picker, bare on the page (no
@@ -1507,6 +1523,11 @@ export function EntryForm({
       journalFirst noClearRow onClear={quickOpen ? onNew : undefined} />
   );
 
+  // The Quick entry with nothing picked or written yet: its question waits in the middle
+  // of the writing area (Journal's empty field), and goes back up once a topic is picked
+  const promptCentered = quick && quickOpen && !quickExtra && topicId === null && !editorHidden
+    && !stripHtml(content).trim() && images.length === 0;
+
   if (quick) return (
     <QuickCard role="region" aria-label="Quick entry" ref={quickRef}>
       {!quickOpen ? (
@@ -1534,8 +1555,9 @@ export function EntryForm({
               <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
             </QuickExtraBox>
           ) : (
-            <EntryCard $quick data-quick-open="" data-tools-beside={!editorHidden ? '' : undefined}>
-              <QuickCardPrompt data-keep-placeholder data-card-prompt="">
+            <EntryCard $quick data-quick-open="" data-tools-beside={!editorHidden ? '' : undefined}
+              data-card-prompt-centered={promptCentered ? '' : undefined}>
+              <QuickCardPrompt data-keep-placeholder data-card-prompt="" data-centered={promptCentered ? '' : undefined}>
                 <h2>What would you like to write down?</h2>
                 {quickPicker}
               </QuickCardPrompt>

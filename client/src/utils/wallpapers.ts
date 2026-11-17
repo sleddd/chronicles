@@ -87,10 +87,11 @@ const KEY = 'chronicles.wallpaper-v1';
  *  qrga71KYbgM for a while; all stay in the list */
 export const DEFAULT_WALLPAPER = 'frank-van-hulst-0h3McHB_eCc';
 
-/** The default background for each theme — shown to anyone who hasn't picked one */
-export const DEFAULT_WALLPAPERS: Record<'light' | 'dark', string> = {
+/** The default background for each theme — shown to anyone who hasn't picked one.
+ *  Dark has none by default (null): just the lit page */
+export const DEFAULT_WALLPAPERS: Record<'light' | 'dark', string | null> = {
   light: 'frank-van-hulst-0h3McHB_eCc',
-  dark: DEFAULT_WALLPAPER,
+  dark: null,
 };
 
 /** The choice "never picked one": the theme's default, which changes with the theme */
