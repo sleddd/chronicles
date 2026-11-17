@@ -51,7 +51,12 @@ export const BAND_GRADIENT = TEAL_GRADIENT;
     The one before it was Benjamin Voros's Milky Way (`HERO_PHOTO_STARS`), kept
     with its screenshots (src/assets/landing-stars) so the page can go back. */
 export const HERO_PHOTO_STARS = '/wallpapers/benjamin-voros-phIFdC6lA4E.jpg';
-export const HERO_PHOTO = '/wallpapers/madison-kuhn-aV7_rCZpvGY.jpg';
+/** The hero's photo (and the privacy band's): Justin Fisher's qrga71KYbgM. The app's
+ *  default background, Frank van Hulst's beach (`HERO_PHOTO_BEACH`), and Madison Kuhn's
+ *  river valley (`HERO_PHOTO_RIVER`) were tried before it */
+export const HERO_PHOTO = '/wallpapers/justin-fisher-qrga71KYbgM.jpg';
+export const HERO_PHOTO_BEACH = '/wallpapers/frank-van-hulst-0h3McHB_eCc.jpg';
+export const HERO_PHOTO_RIVER = '/wallpapers/madison-kuhn-aV7_rCZpvGY.jpg';
 
 /** The hero's background: 'mountains' is Madison Kuhn's river valley (the app's
     default wallpaper) under a dark shade, fading into the page at its foot;
@@ -64,8 +69,12 @@ const HERO_BACKGROUND: 'mountains' | 'stars' | 'gradient' = 'mountains';
 const heroMountains = css`
   background:
     linear-gradient(180deg, transparent 78%, var(--bg-app) 98%),
-    linear-gradient(rgba(10, 12, 17, 0.65), rgba(10, 12, 17, 0.65)),
-    #141a2e url(${HERO_PHOTO}) center 28% / cover no-repeat;
+    /* The shade over the photo, light enough to let it show (0.65 before) */
+    linear-gradient(rgba(10, 12, 17, 0.48), rgba(10, 12, 17, 0.48)),
+    #141a2e url(${HERO_PHOTO}) center 100% / auto 120% no-repeat;
+  /* Drawn a fifth taller than the band and anchored at its foot, so the photo sits
+     higher and more of its lower part shows; very wide screens fill by width instead */
+  @media (min-aspect-ratio: 16/9) { background-size: auto, auto, cover; background-position: 0 0, 0 0, center 70%; }
 `;
 
 /* The privacy band's background, layer for layer, stopping partway down the

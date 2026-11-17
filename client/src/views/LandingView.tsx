@@ -185,20 +185,10 @@ const Band = styled.section<{ $tone: 'page' | 'white' }>`
 const Hero = styled.div`
   max-width: 1180px;
   margin: 0 auto;
-  padding: 88px 24px 72px;
+  padding: 60px 24px 72px;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 18px rgba(0, 0, 0, 0.55);
-  @media (max-width: 768px) { padding: 48px 32px 48px; }
-`;
-
-const HeroEyebrow = styled.p`
-  margin: 0 0 22px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--text-primary);
-  @media (max-width: 480px) { letter-spacing: 0.18em; font-size: 12px; }
+  @media (max-width: 768px) { padding: 34px 32px 48px; }
 `;
 
 const H1 = styled.h1`
@@ -559,7 +549,6 @@ export function LandingView() {
       hero={(
         <section aria-labelledby="hero-title">
           <Hero>
-            <HeroEyebrow>Life dashboard · Journal · Day planner</HeroEyebrow>
             <H1 id="hero-title">A life dashboard for<br /> people <em>too busy to plan.</em></H1>
             <HeroText>
               Chronicles is a private zero knowledge life dashboard and day planner that automatically organizes your
