@@ -50,6 +50,8 @@ export const glassPill = css`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
+  /* Light: no glow on the words — a tight, very light drop shadow */
+  html[data-wallpaper][data-theme='light'] & { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
 `;
 
 /** Text on the photo: white, with a soft shadow so it reads on any picture */

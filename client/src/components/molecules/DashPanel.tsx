@@ -65,6 +65,9 @@ export const FoldableBox = styled(DashPanel)<{ $folded: boolean }>`
       padding: 16px 0;
       background: none !important;
       box-shadow: none !important;
+      /* A hairline under the folded title row, edge to edge */
+      border-bottom: 1px solid var(--border-subtle);
+      border-radius: 0;
       -webkit-backdrop-filter: none !important;
       backdrop-filter: none !important;
     }

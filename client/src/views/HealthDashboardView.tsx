@@ -110,14 +110,14 @@ const TodayTitle = styled.h2`
   color: var(--text-secondary);
   @media (max-width: 480px) { font-size: 22px; }
   /* Light, on the photo: a soft page-colour glow behind the letters so they hold */
-  html[data-wallpaper][data-theme='light'] & { color: var(--text-primary); font-weight: 400; text-shadow: 0 0 3px var(--bg-app), 0 0 12px var(--bg-app), 0 0 22px var(--bg-app); }
+  html[data-wallpaper][data-theme='light'] & { color: var(--text-primary); font-weight: 400; text-shadow: none; }
 `;
 
 const TodayDate = styled.span`
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-muted);
-  html[data-wallpaper][data-theme='light'] & { color: var(--text-primary); text-shadow: 0 0 3px var(--bg-app), 0 0 12px var(--bg-app), 0 0 22px var(--bg-app); }
+  html[data-wallpaper][data-theme='light'] & { color: var(--text-primary); text-shadow: none; }
 `;
 
 /** Today's nutrient totals against the daily goals. */

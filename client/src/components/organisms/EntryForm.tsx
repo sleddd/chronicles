@@ -616,6 +616,7 @@ const QuickPrompt = styled(PromptLine)`
   /* Over the photo the picker's words are bright white like the question (an accent
      can sink into a dark photo) */
   html[data-wallpaper] & > div > button { color: #fff; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
+  html[data-wallpaper][data-theme='light'] & > div > button { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
   /* Its menu over the photo: the lines between topics barely there */
   html[data-wallpaper] & > div > div { --border-faint: rgba(255, 255, 255, 0.12); }
 `;
@@ -783,6 +784,8 @@ const QuickIdle = styled(QuickPrompt)`
   /* A soft shadow under the words — firmer on the photo */
   & > h2, & > div > button { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.16); }
   html[data-wallpaper] & > h2, html[data-wallpaper] & > div > button { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 16px rgba(0, 0, 0, 0.4); }
+  /* Light: no glow around the words — just a tight, very light drop shadow */
+  html[data-theme='light'] & > h2, html[data-theme='light'] & > div > button { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28) !important; }
 `;
 
 /* Only shown when a save fails */

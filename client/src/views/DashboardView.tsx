@@ -562,6 +562,9 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     padding-left: 0;
     padding-right: 0;
     border-color: transparent !important;
+    /* …with a hairline under the title row, edge to edge */
+    border-bottom-color: var(--border-subtle) !important;
+    border-radius: 0;
     box-shadow: none !important;
     background: none !important;
     -webkit-backdrop-filter: none !important;

@@ -34,6 +34,7 @@ export const GlobalStyle = createGlobalStyle`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
+  html[data-wallpaper][data-theme='light'] .page-action button { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
   html[data-wallpaper] .page-action button:hover { background: rgba(18, 20, 26, 0.66) !important; }
 
   html[data-wallpaper] .view-title {
