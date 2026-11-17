@@ -23,6 +23,19 @@ export const glassControl = css`
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
   }
+  /* Dark: the page colour is black, which made these stand out as black slabs on the
+     photo. A softer, see-through frost instead, so they melt into the picture */
+  html[data-wallpaper][data-theme='dark'] & {
+    background: rgba(58, 62, 72, 0.42);
+    /* Placeholders and icons inside a frosted control: brighter, so they stand out on the glass */
+    --text-hint: rgba(255, 255, 255, 0.72);
+    --text-placeholder: rgba(255, 255, 255, 0.72);
+    --text-muted: rgba(255, 255, 255, 0.74);
+    & input::placeholder, & textarea::placeholder { color: rgba(255, 255, 255, 0.72); }
+    border-color: rgba(255, 255, 255, 0.12);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    backdrop-filter: blur(18px) saturate(1.15);
+  }
 `;
 
 /** Buttons on the photo (Voice, the sliders, New entry, a page's main action):
@@ -45,6 +58,8 @@ export const onPhoto = css`
     color: #fff;
     text-shadow: 0 1px 14px rgba(0, 0, 0, 0.3);
   }
+  /* Light: a very light drop shadow (offset, barely blurred) — a shadow, not a glow */
+  html[data-wallpaper][data-theme='light'] & { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
 `;
 
 /** Bars at the top of a panel (the journal's date bar, Bulk edit): the page's own
@@ -96,13 +111,13 @@ export const photoTokens = css`
     --color-accent-soft: var(--color-accent);
     --color-accent-text: var(--color-accent);
     /* Floating menus inside it: the dark theme's surfaces */
-    --bg-surface: #272a33;
-    --bg-elevated: #2e323c;
-    --bg-tile: #2c2e37;
-    --bg-panel: #242730;
-    --border-pop: #373a44;
-    --paper-surface: #272a33;
-    --paper-hover: #2b2f38;
+    --bg-surface: #1a1c24;
+    --bg-elevated: #1e2029;
+    --bg-tile: #1b1d25;
+    --bg-panel: #181a22;
+    --border-pop: #2a2d37;
+    --paper-surface: #1a1c24;
+    --paper-hover: #1d1f28;
     --ink: #fff;
     --ink-2: #f1f3f6;
     --ink-3: #e3e6eb;

@@ -8,6 +8,7 @@ import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { SidebarToggle } from '../atoms/SidebarToggle.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { onBackdrop } from '../../styles/darkBackdrop.js';
 
 const Layout = styled.div`
   display: flex;
@@ -19,6 +20,7 @@ const Layout = styled.div`
   ${NAV_COMPACT} {
     padding-top: 56px;
   }
+  ${onBackdrop}
 `;
 
 /* Main column: fills the width on phones/tablets; the menu drops down over it. */
@@ -40,6 +42,7 @@ const Body = styled.div`
   flex: 1;
   overflow-y: auto;
   background: var(--paper);
+  ${onBackdrop}
   /* The wallpaper (when one's chosen) sits under the content, over this background */
   position: relative;
   isolation: isolate;

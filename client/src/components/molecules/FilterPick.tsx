@@ -44,6 +44,18 @@ export const PickPill = styled.label<{ $set: boolean; $grow?: boolean }>`
   }
   option { color: var(--text-primary); background: var(--bg-surface); }
   ${glassControl}
+  /* Dark: frosted glass, the Planner cards' tone — on the lit page and on the photo
+     alike (after the glass mixin, whose dark page-colour fill it replaces) */
+  html[data-theme='dark'] &, html[data-wallpaper][data-theme='dark'] & {
+    background: rgba(44, 46, 54, 0.8);
+    /* Placeholders and icons inside a frosted control: brighter, so they stand out on the glass */
+    --text-hint: rgba(255, 255, 255, 0.72);
+    --text-placeholder: rgba(255, 255, 255, 0.72);
+    --text-muted: rgba(255, 255, 255, 0.74);
+    & input::placeholder, & textarea::placeholder { color: rgba(255, 255, 255, 0.72); }
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+  }
 `;
 
 export function FilterPick({ name, value, set, grow, children }: { name: string; value: string; set: boolean; grow?: boolean; children: ReactNode }) {

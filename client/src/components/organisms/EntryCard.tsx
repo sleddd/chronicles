@@ -69,12 +69,20 @@ const TopicButton = styled.button<{ $active?: boolean }>`
   white-space: nowrap;
   font-family: var(--font-label);
   font-size: 10px;
-  font-weight: 500;
+  /* Bold on the open entry */
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
   letter-spacing: 0.12rem;
   text-transform: uppercase;
-  color: var(--text-meta);
+  /* Accent on the open / hovered row (--row-topic, set by styles/entryRow) */
+  color: var(--row-topic, var(--text-meta));
   &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* The same label when it isn't a button: accent and bold on the open entry */
+const RowTopic = styled(TopicCell)`
+  color: var(--row-topic, var(--text-meta));
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
 `;
 
 const EndCol = styled.div`
@@ -116,7 +124,7 @@ export function EntryCard({
             {topicName}
           </TopicButton>
         ) : topicName ? (
-          <TopicCell $active={active} title={topicName}>{topicName}</TopicCell>
+          <RowTopic $active={active} title={topicName}>{topicName}</RowTopic>
         ) : null}
       </span>}
       <EntryCell>

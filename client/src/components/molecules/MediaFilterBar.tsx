@@ -47,6 +47,18 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
   /* The glass mixin brings its own firmer outline on the photo; this box keeps a soft one */
   html[data-wallpaper] & { border-color: rgba(255, 255, 255, 0.5); }
   html[data-wallpaper][data-theme='dark'] & { border-color: rgba(255, 255, 255, 0.14); }
+  /* Dark: frosted glass across the whole bar — a light veil with a blur, on the lit page
+     and on the photo alike (after the glass mixin, whose dark page-colour fill it replaces) */
+  html[data-theme='dark'] &, html[data-wallpaper][data-theme='dark'] & {
+    background: rgba(44, 46, 54, 0.8); /* the Planner cards' frosted tone (#2c2e35 as seen), held steady over a bright photo */
+    /* Placeholders and icons inside a frosted control: brighter, so they stand out on the glass */
+    --text-hint: rgba(255, 255, 255, 0.72);
+    --text-placeholder: rgba(255, 255, 255, 0.72);
+    --text-muted: rgba(255, 255, 255, 0.74);
+    & input::placeholder, & textarea::placeholder { color: rgba(255, 255, 255, 0.72); }
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+  }
 `;
 
 /* The search: bare inside the box — the icon and the input, no fill of its own */
@@ -169,6 +181,16 @@ const TypeRow = styled(Chips)<{ $phone: boolean }>`
   html[data-wallpaper] & ${Chip}[aria-pressed='false'] { border-color: rgba(255, 255, 255, 0.55); }
   html[data-wallpaper][data-theme='dark'] & ${Chip}[aria-pressed='false'] { border-color: rgba(255, 255, 255, 0.24); }
   ${Chip}[aria-pressed='false']:hover { border-color: var(--text-muted); }
+  /* Light, on the photo: lightly frosted (see-through, never a full fill) with full-strength
+     text and a firm outline, so the chips don't disappear against the picture */
+  html[data-wallpaper][data-theme='light'] & ${Chip} {
+    background: rgba(255, 255, 255, 0.22);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    color: var(--text-primary);
+  }
+  html[data-wallpaper][data-theme='light'] & ${Chip}[aria-pressed='false'] { border-color: var(--border-pill, var(--control-border)); }
+  html[data-wallpaper][data-theme='light'] & ${Chip}[aria-pressed='true'] { color: var(--color-accent-soft); }
 `;
 
 export type MediaLayout = 'grid' | 'list';

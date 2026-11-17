@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { onBackdrop } from "../../styles/darkBackdrop.js";
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import type { ReactNode } from 'react';
@@ -16,6 +17,10 @@ const Page = styled.div`
   position: relative;
   isolation: isolate;
   background: var(--bg-app);
+  ${onBackdrop}
+  /* Dark: the editor's surface is a little lighter than the page (the open row in
+     the list matches it, styles/entryRow) */
+  html[data-theme='dark'] & { --bg-editor: #191b22; }
 `;
 
 /* Title inset a little further than the list rows' 20px gutter */
@@ -106,7 +111,12 @@ const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean 
   /* The list is a drawer beside the editor: a shade darker than the page (no
      divider). Its head, rows and month headings read --list-bg too */
   --list-bg: color-mix(in srgb, var(--bg-app) 80%, #000);
-  html[data-theme='light'] & { --list-bg: color-mix(in srgb, var(--bg-app) 95%, #000); }
+  /* Light: a cool grey in the nav rail's own hue, a step lighter than it (a plain
+     darkening of the page read warm beside the rail) */
+  html[data-theme='light'] & { --list-bg: #e5e8ed; }
+  /* Dark: never a black slab — a touch lighter than the nav rail and page, a step
+     under the editor, so list, rail and editor blend */
+  html[data-theme='dark'] & { --list-bg: #15171d; }
   background: var(--list-bg);
   html[data-wallpaper] & { background: transparent; }
 
@@ -123,6 +133,9 @@ const StyledEditorPanel = styled.div<{ $visibleMobile?: boolean; $isDark?: boole
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Everything in the editor pane (body, bars, foot) reads the page colour, so the
+     lighter editor surface is set here once */
+  html[data-theme='dark'] & { --bg-app: var(--bg-editor); }
   background: var(--bg-app);
   html[data-wallpaper] & { background: transparent; }
 
@@ -176,7 +189,7 @@ export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', tit
   return (
     <Page>
       {/* Just the title row and the panels' top bars — the rows and the editor stay solid */}
-      <Wallpaper height="min(200px, 25vh)" follow={false} />
+      <Wallpaper height="min(200px, 25vh)" follow={false} wash={false} />
       <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (

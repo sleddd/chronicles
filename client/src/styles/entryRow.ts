@@ -3,11 +3,11 @@ import { css } from 'styled-components';
 /*
  * ONE row style for every list in the app (journal, topic/health/goals/
  * shopping/planner lists, Topics):
- *   - journal (entryRow): rows have no fill of their own; hovering shows only the
- *     3px accent bar (the background doesn't change); the open entry lifts to
- *     the page colour — the editor's colour, with no
- *     divider between list and editor, so the open row runs into the edit area,
- *     and a 3px accent bar on its left edge
+ *   - journal (entryRow): rows have no fill of their own and no accent bar; hovering
+ *     turns the row's topic label accent (the background doesn't change); the open
+ *     entry lifts to the page colour — the editor's colour, with no divider between
+ *     list and editor, so the open row runs into the edit area — with its topic
+ *     label in the accent
  *   - every other list (entryRowPlain): rows on the page colour; hover and
  *     the active row show a rounded accent (--color-accent-line) outline (no fill, no bar)
  *   - journal only: the first row starts active, as a hint, until the
@@ -19,9 +19,11 @@ import { css } from 'styled-components';
 
 const HOVER_FLAG = 'entryRowHover';
 
+/* No accent bar on the row (the nav rail keeps the accent bar): the active row's
+   topic label turns accent instead, through --row-topic, which the label reads */
 export const rowActive = css`
-  background: var(--bg-app);
-  box-shadow: inset 4px 0 0 var(--color-accent);
+  background: var(--bg-editor, var(--bg-app));
+  --row-topic: var(--color-accent-text);
 `;
 
 /* Non-journal lists: no fill change — hover / the active row draw a rounded
@@ -44,9 +46,9 @@ const plainOutline = css`
   }
 `;
 
-/* Journal hover: just the accent bar — the background stays put */
+/* Journal hover: just the topic label in the accent — the background stays put */
 const rowHoverBar = css`
-  box-shadow: inset 4px 0 0 var(--color-accent);
+  --row-topic: var(--color-accent-text);
 `;
 
 const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: boolean, hover = active, extra = css``) => css<{ $active?: boolean; $hint?: boolean }>`
@@ -60,7 +62,7 @@ const rowStyle = (base: string, active: ReturnType<typeof css>, firstRowHint: bo
   `}
 `;
 
-/** Journal list: rows unfilled; the open row sits on the page (editor) colour with a 3px accent bar; hover shows only the bar */
+/** Journal list: rows unfilled; the open row sits on the page (editor) colour with its topic label in the accent; hover turns the topic accent too */
 export const entryRow = rowStyle('transparent', rowActive, true, rowHoverBar);
 /** Every other list (topic, health, goals, shopping, planner, Topics): page-colour rows, a rounded outline on hover / active, no fill or bar.
  *  On a wallpaper the rows go clear (--row-plain-bg, GlobalStyle), so the photo isn't striped by them */

@@ -487,7 +487,7 @@ const Col = styled.div`
 const cardShell = css`
   /* No outline: a soft shadow sets each card off the page */
   border: 1px solid transparent;
-  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+  box-shadow: var(--shadow-card); /* even, all the way round the card */
   border-radius: 16px;
   background: var(--bg-panel);
   ${glassCard}

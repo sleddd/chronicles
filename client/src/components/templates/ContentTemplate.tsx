@@ -7,6 +7,7 @@ import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { Wallpaper } from '../organisms/Wallpaper.js';
+import { onBackdrop } from '../../styles/darkBackdrop.js';
 
 const Layout = styled.div<{ $focusMode?: boolean }>`
   display: flex;
@@ -18,6 +19,7 @@ const Layout = styled.div<{ $focusMode?: boolean }>`
   ${NAV_COMPACT} {
     padding-top: ${({ $focusMode }) => $focusMode ? '0' : '56px'};
   }
+  ${onBackdrop}
 `;
 
 /* Main column sits to the right of the sidebar (desktop): its own header bar
@@ -49,6 +51,7 @@ const Main = styled.main`
   /* The page colour token (was the old theme's near-white overlay, which hid
      the light page grey) */
   background: var(--bg-app, ${({ theme }) => theme.colors.background});
+  ${onBackdrop}
   /* Phones: a little more room at the sides on top of each page's own 16px
      gutter, so content never runs close to the screen edge */
   @media (max-width: 768px) { padding-inline: 8px; }

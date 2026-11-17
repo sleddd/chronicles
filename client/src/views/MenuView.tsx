@@ -331,6 +331,13 @@ const MealTile = styled.div`
   padding: 16px;
   border-radius: 8px;
   background: var(--bg-tile);
+  /* Dark: frosted glass, the Planner cards' look — a light veil with a blur and a faint edge */
+  html[data-theme='dark'] & {
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+  }
 `;
 
 const TileTop = styled.div`

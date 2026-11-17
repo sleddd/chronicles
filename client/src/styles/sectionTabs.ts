@@ -42,5 +42,8 @@ export const SectionTab = styled.button<{ $active?: boolean }>`
     color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.8)')};
     text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
   }
+  /* Light: white like dark's, with a tight drop shadow (a shadow, not a glow) so they
+     hold on the photo */
+  html[data-wallpaper][data-theme='light'] & { text-shadow: 0 1px 1px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35); }
   html[data-wallpaper] &:hover:not([aria-selected="true"]) { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.6); }
 `;

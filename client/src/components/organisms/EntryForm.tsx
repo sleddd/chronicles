@@ -456,10 +456,13 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
     && ${EditorArea} { --editor-surface: transparent; }
+    /* Typing in the Quick entry never highlights the writing area: no focus outline
+       in the accent (the global [tabindex]:focus-visible rule) on the editor */
+    && .tiptap:focus, && .tiptap:focus-visible, && [contenteditable]:focus, && [contenteditable]:focus-visible { outline: none; box-shadow: none; }
     /* No outline: the same soft shadow as the other dashboard cards
        */
     border-color: transparent;
-    box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+    box-shadow: var(--shadow-card); /* even, all the way round the card */
     /* "Enter title/text..." a step brighter than the tools beside it */
     && input::placeholder, && textarea::placeholder, && .tiptap p.is-editor-empty:first-child::before { color: var(--text-secondary); opacity: 0.8; }
     @media (max-width: 768px) { margin-top: 18px; }
@@ -508,7 +511,7 @@ const QuickExtraBox = styled.div`
   background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
   backdrop-filter: blur(16px) saturate(1.1);
-  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+  box-shadow: var(--shadow-card); /* even, all the way round the card */
   /* Its joined switches (Bill | Subscription, Active / Paused / Cancelled): clear on the
      glass, no frosted fill of their own */
   && [role='radiogroup'], html[data-wallpaper] && [role='radiogroup'] {

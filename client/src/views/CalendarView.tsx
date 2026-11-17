@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { calendarDayFor, isTaskTopic } from '../utils/calendarItems.js';
 import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
 import styled from 'styled-components';
+import { onBackdrop } from '../styles/darkBackdrop.js';
 import { CalendarGrid } from '../components/organisms/CalendarGrid.js';
 import { CalendarDayView } from '../components/organisms/CalendarDayView.js';
 import { CalendarWeekView } from '../components/organisms/CalendarWeekView.js';
@@ -36,6 +37,7 @@ const Layout = styled.div`
   min-height: 0;
   overflow: hidden;
   background: var(--bg-app);
+  ${onBackdrop}
 `;
 
 const GridPane = styled.div`

@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { onBackdrop } from '../../styles/darkBackdrop.js';
 import { CalendarHeader } from './CalendarHeader.js';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import type { DecryptedPost } from '@shared/crypto/types';
@@ -39,6 +40,8 @@ const Wrapper = styled.div`
   min-height: 0;
   overflow: hidden;
   background: var(--bg-app);
+  /* Dark: see-through, so the lit sheet behind the page shows */
+  ${onBackdrop}
   /* The day's list scrolls in under it here, so the grid keeps its own height */
   @media (max-width: 900px) { flex: none; min-height: 560px; }
   @media (max-width: 768px) { min-height: 0; }

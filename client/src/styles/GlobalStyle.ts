@@ -1,4 +1,5 @@
 import { createGlobalStyle } from 'styled-components';
+import { litSheet, litSheetLight } from './darkBackdrop.js';
 import { NAV_COMPACT } from './breakpoints.js';
 
 /* Work Sans + Open Sans, bundled with the app (not Google Fonts) so Safari/iOS load them */
@@ -20,6 +21,8 @@ export const GlobalStyle = createGlobalStyle`
      big title reads white on the photo */
   /* …and list rows (entryRowPlain) go clear so they don't stripe the photo */
   html[data-wallpaper] { --row-plain-bg: transparent; }
+  /* Both themes: list rows (Topics, topic pages and the other plain lists) have no fill of their own, so the lit page shows through */
+  html[data-theme='dark'], html[data-theme='light'] { --row-plain-bg: transparent; }
 
   /* A page's main action beside its title (TopBarAction, desktop): a smoked glass
      pill on the photo, whatever button it is */
@@ -37,6 +40,8 @@ export const GlobalStyle = createGlobalStyle`
     color: #fff !important;
     text-shadow: 0 1px 14px rgba(0, 0, 0, 0.3);
   }
+  /* Light: a very light drop shadow — a shadow, not a glow */
+  html[data-wallpaper][data-theme='light'] .view-title { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
 
   *, *::before, *::after {
     box-sizing: border-box;
@@ -63,6 +68,19 @@ export const GlobalStyle = createGlobalStyle`
     overscroll-behavior: none;
     position: fixed;
     width: 100%;
+  }
+
+  /* Dark theme: the page itself — a matte black sheet under one soft light. The light
+     comes from off the bottom-right corner and falls away smoothly to near-black at the
+     top left (sampled from the reference: #35373f → #15171c), with a fine paper grain
+     over it. Fixed to the window, so it stays put while pages scroll. The app's layouts
+     are see-through over it (styles/darkBackdrop.ts, where the sheet itself is defined) */
+  html[data-theme='dark'] body {
+    ${litSheet}
+  }
+  /* Light theme: the same lit sheet on white */
+  html[data-theme='light'] body {
+    ${litSheetLight}
   }
 
   #root {

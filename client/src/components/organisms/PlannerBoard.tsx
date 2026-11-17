@@ -244,14 +244,14 @@ function loadLabelsFolded(): boolean {
   try { return localStorage.getItem(LABELS_FOLDED_KEY) === '1'; } catch { return false; }
 }
 
-/* A day's name over the firmer rule; today's in the soft accent over an accent rule */
+/* A day's name over the firmer rule; today's in the soft accent, with no accent underline */
 const DayHead = styled.div<{ $today: boolean }>`
   display: flex;
   align-items: baseline;
   gap: 8px;
   min-height: 44px;
   padding: 4px 10px 9px;
-  border-bottom: ${({ $today }) => ($today ? '2px solid var(--color-accent)' : '1px solid var(--border-default)')};
+  border-bottom: 1px solid var(--border-default);
   border-left: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
   font-size: 13px;
@@ -420,6 +420,21 @@ const TaskCard = styled.article<{ $dragging?: boolean; $stretched?: boolean }>`
   transition: border-color 120ms;
   &:hover { border-color: var(--border-strong); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  /* Dark: frosted glass, a shade lighter than the page — a light veil with a blur */
+  html[data-theme='dark'] & {
+    background: rgba(255, 255, 255, 0.07);
+    border-top-color: rgba(255, 255, 255, 0.09);
+    border-right-color: rgba(255, 255, 255, 0.09);
+    border-bottom-color: rgba(255, 255, 255, 0.09);
+    ${({ $stretched }) => ($stretched ? '' : 'border-left-color: rgba(255, 255, 255, 0.09);')}
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+  }
+  html[data-theme='dark'] &:hover {
+    border-top-color: rgba(255, 255, 255, 0.2);
+    border-right-color: rgba(255, 255, 255, 0.2);
+    border-bottom-color: rgba(255, 255, 255, 0.2);
+  }
 `;
 
 /* The grip at the foot of a card on a day: drag it down (or up) to stretch the
@@ -553,6 +568,7 @@ const Floating = styled(TaskCard)`
   cursor: grabbing;
   box-shadow: var(--shadow-lg);
   border-color: var(--color-accent-line);
+  html[data-theme='dark'] &, html[data-theme='dark'] &:hover { border-color: var(--color-accent-line); }
 `;
 
 /* ── Pieces ── */

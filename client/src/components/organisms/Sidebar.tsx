@@ -21,6 +21,8 @@ const SidebarRoot = styled.aside<{ $open: boolean }>`
   /* A toned rail with a hairline down its right edge, the full height */
   background: var(--bg-rail);
   border-right: 1px solid var(--border-subtle);
+  /* Dark: one quiet blue-black strip — no edge line */
+  html[data-theme='dark'] & { border-right-color: transparent; }
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -42,6 +44,8 @@ const activeTab = `
     width: 5px;
     background: var(--color-accent-nav);
   }
+  /* Dark: a thin bar on the rail's outer (left) edge, the full height of the item, beside the accent icon */
+  html[data-theme='dark'] &::before { width: 2px; }
 `;
 
 /* Brand logo block — the Chronicles mark (accent gradient) in a darker cell pinned
@@ -62,6 +66,8 @@ const LogoBtn = styled.button<{ $active?: boolean }>`
   transition: color 120ms ease;
 
   &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')}; }
+  /* Dark: the same barely-there hairline under the logo as between the items */
+  html[data-theme='dark'] & { border-bottom: 1px solid rgba(255, 255, 255, 0.022); }
   ${({ $active }) => ($active ? activeTab : '')}
 `;
 
@@ -102,8 +108,8 @@ const NavScroll = styled.nav`
   }
 `;
 
-/* Rail row — no dividers; the active row is lifted onto --bg-rail-active
-   with the accent tab. Under the last item: expand / collapse, then ⋯, whose
+/* Rail row — the active row is its accent icon and the accent tab, with no background
+   change (a light hairline between rows in both themes). Under the last item: expand / collapse, then ⋯, whose
    menu holds Sign out; Settings is its own row above Collapse. */
 const NavIconBtn = styled.button<{ $active?: boolean }>`
   position: relative;
@@ -126,6 +132,12 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
     background: var(--bg-rail-active);
     color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-primary)'};
   }
+  /* Dark: hovering brightens the icon only (no block behind it) */
+  html[data-theme='dark'] &:hover { background: transparent; }
+  /* Light: a light hairline between items */
+  html[data-theme='light'] & { border-bottom: 1px solid rgba(0, 0, 0, 0.07); }
+  /* Dark: a light hairline between items too */
+  html[data-theme='dark'] & { border-bottom: 1px solid rgba(255, 255, 255, 0.022); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
   ${({ $active }) => ($active ? activeTab : '')}

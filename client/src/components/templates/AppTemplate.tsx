@@ -6,6 +6,7 @@ import { Sidebar } from '../organisms/Sidebar.js';
 import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
 import { useUIStore } from '../../stores/uiStore.js';
+import { onBackdrop } from '../../styles/darkBackdrop.js';
 
 const SkipLink = styled.a`
   position: absolute;
@@ -56,6 +57,7 @@ const Layout = styled.div<{ $hideAccentStripe?: boolean; $focusMode?: boolean }>
   ${NAV_COMPACT} {
     padding-top: ${({ $focusMode }) => $focusMode ? '0' : '56px'};
   }
+  ${onBackdrop}
 `;
 
 /* Main column: header bar + content, to the right of the sidebar (desktop).
@@ -80,6 +82,7 @@ const MainContent = styled.main<{ $transparent?: boolean }>`
   min-height: 0;
   overflow-y: ${({ $transparent }) => $transparent ? 'hidden' : 'auto'};
   background: ${({ $transparent }) => $transparent ? 'transparent' : 'var(--paper)'};
+  ${onBackdrop}
   padding-bottom: 0;
 `;
 

@@ -5,6 +5,7 @@ import { Header } from '../organisms/Header.js';
 import { Sidebar } from '../organisms/Sidebar.js';
 import { Background } from '../organisms/Background.js';
 import { MobileChrome } from '../organisms/MobileChrome.js';
+import { onBackdrop } from '../../styles/darkBackdrop.js';
 
 const Layout = styled.div`
   display: flex;
@@ -15,6 +16,7 @@ const Layout = styled.div`
   ${NAV_COMPACT} {
     padding-top: 56px;
   }
+  ${onBackdrop}
 `;
 
 const MainColumn = styled.div`

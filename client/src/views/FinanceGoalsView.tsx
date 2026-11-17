@@ -5,11 +5,17 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
 import { FormField } from '../components/molecules/FormField.js';
 import {
-  Note, Actions, ErrorNote, RowMenu, RowBtn, PanelCard, CardTitle, type RowMenuItem,
+  Note, Actions, ErrorNote, RowMenu, RowBtn, PanelCard as BasePanelCard, CardTitle, type RowMenuItem,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { centsToInput, formatCents, formatDay, goalProgress, parseMoney, daysBetween, todayStr } from '../utils/finance.js';
 import type { FinanceGoal, FinanceRecord } from '../types/finance.js';
+
+/* A finance goal's card: the shared panel with a mild, even shadow */
+const PanelCard = styled(BasePanelCard)`
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.08);
+  html[data-theme='dark'] & { box-shadow: 0 0 20px rgba(0, 0, 0, 0.26); }
+`;
 
 const Center = styled.div`
   display: flex;
@@ -17,12 +23,12 @@ const Center = styled.div`
   padding: 48px 0;
 `;
 
-/* "2 active goals · $121.00 paid toward $8,940.00" with "+ New goal" across */
+/* The New finance goal pill, on the right (no summary line) */
 const Top = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   margin: 32px 0 24px;
   font-family: var(--font-sans);
@@ -203,14 +209,9 @@ function Goals() {
   const order = { active: 0, paused: 1, achieved: 2 } as const;
   const sorted = [...goals.records].sort((a, b) => order[a.status] - order[b.status] || (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999'));
 
-  const active = goals.records.filter(g => g.status === 'active');
-  const paid = active.reduce((t, g) => t + goalProgress(g, savings.records).currentCents, 0);
-  const toward = active.reduce((t, g) => t + g.targetCents, 0);
-
   return (
     <section>
       <Top>
-        <span>{active.length} active goal{active.length === 1 ? '' : 's'}{active.length ? ` · ${formatCents(paid)} paid toward ${formatCents(toward)}` : ''}</span>
         <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>{editing === 'new' ? 'Close' : 'New finance goal'}</PillButton>
       </Top>
       {editing === 'new' && <PanelCard style={{ marginBottom: 16 }}><GoalEditor pots={savings.records} onSave={g => goals.save(g)} onCancel={() => setEditing(null)} /></PanelCard>}

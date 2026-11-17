@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
+import { glassControl } from '../styles/wallpaper.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { FinanceShell } from '../components/organisms/FinanceShell.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
@@ -55,6 +56,8 @@ const Search = styled.label`
   }
   input::placeholder { color: var(--text-hint); }
   input::-webkit-search-cancel-button { display: none; }
+  /* Frosted over the photo, like the app's other search boxes */
+  ${glassControl}
 `;
 
 

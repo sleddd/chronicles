@@ -80,6 +80,14 @@ export const Column = styled.section<{ $over?: boolean }>`
   border-radius: var(--r-lg, 6px);
   min-height: 160px;
   transition: background 120ms ease;
+  /* Dark: frosted glass over the lit page (never a black slab) — a faint light veil
+     with a blur, a touch brighter while a card is dragged over it */
+  html[data-theme='dark'] & {
+    background: ${({ $over }) => ($over ? 'rgba(255, 255, 255, 0.075)' : 'rgba(255, 255, 255, 0.04)')};
+    border-color: rgba(255, 255, 255, 0.07);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    backdrop-filter: blur(14px) saturate(1.1);
+  }
 `;
 
 export const ColumnHead = styled.header`

@@ -161,8 +161,13 @@ const SETTINGS_CARDS_KEY = 'settings-collapsed-v1';
 const IMPORT_BATCH = 50;
 
 /* All sections start collapsed; each card remembers being opened */
+/* Settings' section cards have no outline — the fill alone sets them off the page */
+const BorderlessCard = styled.div`
+  & > section { border: none; }
+`;
+
 function Section(props: { id: string; title: string; subtitle?: string; children: ReactNode }) {
-  return <CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} />;
+  return <BorderlessCard><CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} /></BorderlessCard>;
 }
 
 

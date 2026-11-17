@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { onBackdrop } from '../../styles/darkBackdrop.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { useNavigate } from 'react-router-dom';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
@@ -36,6 +37,8 @@ const Panel = styled.div`
   min-height: 0;
   overflow: hidden;
   background: var(--bg-app);
+  /* Dark: see-through, so the lit sheet behind the page shows */
+  ${onBackdrop}
 `;
 
 const DayHeader = styled.div`

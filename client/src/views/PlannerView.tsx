@@ -43,10 +43,15 @@ const GOAL_KEY = 'planning-planner-goal-v1';
 /* The Type pill's "Todos" choice: tasks with no goal or milestone */
 const TODOS = -1;
 
+/* The Unscheduled list's search and filters: room between the rows, then a divider
+   that rules them off from the tasks below */
 const Tools = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  padding: 6px 0 22px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-default);
 `;
 
 /* The day view's own heading (the week view's lanes name themselves) */

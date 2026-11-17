@@ -25,7 +25,9 @@ export const DashPanel = styled.section`
   /* The home dashboard cards' padding: a little less above the title */
   padding: 20px 32px 28px;
   background: var(--bg-panel);
-  border-radius: 14px;
+  /* The home dashboard widgets' corners and soft, even shadow */
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
   @media (max-width: 480px) { padding: 14px 20px 22px; }
   ${glassCard}
   /* Titles as on the home dashboard's cards: 22px thin sentence-case Work Sans on a

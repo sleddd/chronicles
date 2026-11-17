@@ -34,7 +34,7 @@ const Tools = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 28px; /* room under the controls, before the dates start */
 `;
 
 const Hint = styled.p`

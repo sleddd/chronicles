@@ -208,7 +208,8 @@ const FilterRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 10px;
-  margin-top: 16px;
+  /* Room above (under the tabs) and below (before the board or list) */
+  margin: 28px 0 12px;
 `;
 
 /* Clear completed: the app's neutral outlined pill, with a count; asks once */

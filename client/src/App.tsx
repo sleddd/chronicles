@@ -145,9 +145,9 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--border-strong':     '#a9afb8',
   '--border-field':      '#cdd1d8',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
-  '--bg-rail':           '#dcdfe4',
-  '--bg-rail-logo':      '#d3d7dd',
-  '--bg-rail-active':    '#f4f5f7',
+  '--bg-rail':           '#dfe2e7',
+  '--bg-rail-logo':      '#d5d9df',
+  '--bg-rail-active':    'transparent', /* the active item never changes background: accent icon + accent tab only */
   /* Chart series — muted, same chroma as the accent presets */
   '--chart-blue':        '#4f8fd1',
   '--chart-violet':      '#8a6fd1',
@@ -193,17 +193,19 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--shadow-3':          '0 6px 24px rgba(20,20,30,0.12)',
   '--shadow-lg':         '0 8px 28px rgba(20,20,30,0.14)',
   '--shadow-xl':         '0 16px 48px rgba(20,20,30,0.18)',
+  /* Dashboard cards' soft shadow: even on every side, never offset to one corner */
+  '--shadow-card':       '0 0 16px rgba(0, 0, 0, 0.10)',
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
-  '--bg-app':            '#1f2229',
-  '--bg-surface':        '#272a33',
-  '--bg-panel':          '#242730', /* cards and panels: a cool grey, in step with the page's blue cast (#24262d read warm on it) */
-  '--bg-elevated':       '#2e323c',
-  '--bg-sunken':         '#191b21',
-  '--bg-hover':          '#2b2f38',
-  '--bg-active':         '#333844',
-  '--bg-tab-active':     '#333844',
+  '--bg-app':            '#12141a',
+  '--bg-surface':        '#1a1c24',
+  '--bg-panel':          '#181a22', /* cards and panels (widgets): the colour the user chose. Do not retint */
+  '--bg-elevated':       '#1e2029',
+  '--bg-sunken':         '#0a0b0f',
+  '--bg-hover':          '#1d1f28',
+  '--bg-active':         'rgba(255, 255, 255, 0.13)', /* chosen toggles: a light veil, brighter than what it sits on — never a darker fill */
+  '--bg-tab-active':     'rgba(255, 255, 255, 0.13)',
   '--bg-inverse':        '#f1f2f5',
   '--text-primary':      '#f7f8fa',
   '--text-secondary':    '#e6e9ee',
@@ -214,33 +216,34 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-muted':        '#7c7f88',  /* card subtitles, chevrons, + icons */
   '--text-placeholder':  '#6c6f78',
   '--control-border':    '#5b5f69',  /* unticked round checks */
-  '--border-card':       '#31343d',  /* card outlines + their inner rules/boxes */
-  '--bg-row-hover':      '#2f313a',  /* a row lifting inside a card on hover */
+  '--border-card':       '#23262f',  /* card outlines + their inner rules/boxes */
+  '--bg-row-hover':      '#1d1f28',  /* a row lifting inside a card on hover */
   '--text-soft':         '#a5a8b0',  /* toolbar text buttons, chevrons */
   '--text-faint':        '#464a54',  /* quiet + marks in empty slots */
-  '--bg-tile':           '#2c2e37',  /* a filled tile on the canvas (menu meals) */
-  '--bg-lane':           '#272a33',  /* planning board swim lanes */
-  '--bg-lane-over':      '#2b2f38',  /* a lane while a card is dragged over it */
-  '--bg-lane-card':      '#20232a',  /* cards sitting in a lane */
-  '--bg-today-col':      '#262831',  /* today's column band */
-  '--border-pop':        '#373a44',  /* floating menus' outline */
+  '--bg-tile':           '#1b1d25',  /* a filled tile on the canvas (menu meals) */
+  '--bg-lane':           '#0e1015',  /* planning board swim lanes */
+  '--bg-lane-over':      '#13151b',  /* a lane while a card is dragged over it */
+  '--bg-lane-card':      '#15171d',  /* cards sitting in a lane */
+  '--bg-today-col':      '#14161c',  /* today's column band */
+  '--border-pop':        '#2a2d37',  /* floating menus' outline */
   '--border-dashed':     '#3b3f49',  /* dashed outline of an empty slot on hover */
   '--text-hint':         '#60636c',  /* placeholders in big borderless fields */
   '--text-inverse':      '#14161b',
-  '--border-subtle':     '#2c2f3a',
-  '--border-faint':      '#2c2f3a', /* same as --border-subtle in dark */
-  '--border-default':    '#343844',
+  '--border-subtle':     '#1f222b',
+  '--border-faint':      '#1f222b', /* same as --border-subtle in dark */
+  '--border-default':    '#292c36',
   /* Light-only tokens: empty = unset, so components use their own dark values */
   '--border-pill':       '',
   '--progress-track':    '',
   '--bg-control':        '',
   '--bg-tracker':        '',
   '--border-strong':     '#3e4350',
-  '--border-field':      '#30333f',  /* faint outline on styled-form boxes + nutrition panel */
-  /* Nav rail — its own toned panel: darker logo cell, active item lifted */
-  '--bg-rail':           '#272a33',
-  '--bg-rail-logo':      '#1a1c22',
-  '--bg-rail-active':    '#353a46',
+  '--border-field':      '#252832',  /* faint outline on styled-form boxes + nutrition panel */
+  /* Nav rail — one strip a shade darker than the page with the logo in it (no darker cell); the active
+     item is just its accent icon and a thin accent bar, never a lifted block */
+  '--bg-rail':           '#12141a',
+  '--bg-rail-logo':      '#12141a',
+  '--bg-rail-active':    'transparent',
   /* Chart series — brightened a notch for the slate canvas */
   '--chart-blue':        '#6aa6e6',
   '--chart-violet':      '#a68cf0',
@@ -258,17 +261,17 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--neutral-700': '#cdd2da',
 
   /* ── Legacy aliases → DS values ── */
-  '--paper':             '#1f2229',
-  '--paper-deep':        '#1a1c22',
-  '--paper-surface':     '#272a33',
-  '--paper-well':        '#333844',
-  '--paper-hover':       '#2b2f38',
+  '--paper':             '#12141a',
+  '--paper-deep':        '#0a0b0f',
+  '--paper-surface':     '#1a1c24',
+  '--paper-well':        '#20232c',
+  '--paper-hover':       '#1d1f28',
   '--ink':               '#f7f8fa',
   '--ink-2':             '#e6e9ee',
   '--ink-3':             '#cdd2da',
   '--ink-4':             '#a3a9b5',
-  '--rule':              '#2c2f3a',
-  '--rule-2':            '#2c2f3a',
+  '--rule':              '#1f222b',
+  '--rule-2':            '#1f222b',
   '--btn-primary':       '#f7f8fa',
   '--btn-primary-ink':   '#20232a',
   '--btn-primary-hover': '#d4d7df',
@@ -283,6 +286,8 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--shadow-3':          '0 8px 24px rgba(0,0,0,0.5)',
   '--shadow-lg':         '0 8px 28px rgba(0,0,0,0.55)',
   '--shadow-xl':         '0 16px 48px rgba(0,0,0,0.6)',
+  /* Dashboard cards' soft shadow: even on every side, never offset to one corner */
+  '--shadow-card':       '0 0 34px rgba(0, 0, 0, 0.2)',
 };
 
 /* Structural tokens that never change with theme or accent.

@@ -78,6 +78,16 @@ const Controls = styled.div`
   justify-content: space-between;
   gap: 12px 16px;
   margin-top: 24px;
+  /* Light, on the photo: the period chips are lightly frosted (see-through, the photo blurred behind them) with full-strength
+     text and outline, so they don't get lost against the picture */
+  html[data-wallpaper][data-theme='light'] & [role='group'] > button {
+    background: rgba(255, 255, 255, 0.22); /* frost only: see-through, never a full fill */
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    color: var(--text-primary);
+  }
+  html[data-wallpaper][data-theme='light'] & [role='group'] > button[aria-pressed='false'] { border-color: var(--border-pill, var(--control-border)); }
+  html[data-wallpaper][data-theme='light'] & [role='group'] > button[aria-pressed='true'] { color: var(--color-accent-soft); }
 `;
 
 const SearchBox = styled.div`

@@ -39,5 +39,5 @@ export function rememberTheme(pref: ThemePreference): void {
 export const startingTheme = (): ThemePreference => rememberedTheme() ?? 'light';
 
 /** Page colour per theme (--bg-app), for the first paint and the browser bar */
-export const PAGE_COLOR = { light: '#f4f5f7', dark: '#1f2229' } as const;
+export const PAGE_COLOR = { light: '#f4f5f7', dark: '#12141a' } as const;
 

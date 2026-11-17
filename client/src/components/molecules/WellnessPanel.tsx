@@ -386,7 +386,7 @@ const Quad = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   /* No outline: a soft shadow, like the dashboard's cards (the rules between cells stay) */
   border: 1px solid transparent;
-  box-shadow: rgba(0, 0, 0, 0.1) 10px 10px 10px -8px;
+  box-shadow: var(--shadow-card); /* even, all the way round the card */
   border-radius: 16px;
   overflow: hidden;
   /* The same see-through panel as the dashboard's other cards under a wallpaper */
