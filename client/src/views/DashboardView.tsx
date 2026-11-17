@@ -135,6 +135,8 @@ interface DashboardConfig {
   tasksShow?: string;
   /** The Shopping list card's list: 'latest' (newest open list) or an entry id */
   shoppingShow?: string;
+  /** Coming up leaves bills out (events and meetings only) */
+  comingUpHideBills?: boolean;
 }
 
 /** The cards that can be dragged between the two columns, and where they start */
@@ -393,7 +395,7 @@ const NextCard = styled.section`
 `;
 
 const NextTitle = styled.h2`
-  margin: 4px 0 0;
+  margin: 6px 0 0; /* room above the appointment's name */
   font-family: var(--font-display);
   font-size: 30px;
   font-weight: 300;
@@ -402,8 +404,9 @@ const NextTitle = styled.h2`
 `;
 
 const NextList = styled.p`
-  margin: 16px 0 0;
-  font-size: 16px;
+  margin: 9px 0 0; /* close under the title */
+  font-size: 15px;
+  font-style: italic;
   line-height: 1.5;
   color: var(--text-soft);
 `;
@@ -413,7 +416,7 @@ const NextActions = styled.div`
   flex-wrap: wrap;
   gap: 10px;
   margin-top: auto;
-  padding-top: 24px;
+  padding-top: 40px; /* room above the buttons */
 `;
 
 /* The daily quote and the world clocks on one line straight on the page, no
@@ -523,7 +526,7 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
       text-transform: none;
       line-height: 40px;
       /* A step back from full strength, so the cards' content leads */
-      color: color-mix(in srgb, var(--text-primary) 82%, transparent);
+      color: color-mix(in srgb, var(--text-primary) 68%, transparent);
     }
     /* A little less room above the title than the card's usual padding */
     padding-top: 20px;
@@ -681,9 +684,17 @@ const ToggleGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 32px;
+  /* A stacked pair (Coming up over its Bills option) is taller: its row-mate stays at the top */
+  align-items: start;
   margin-bottom: 24px;
   label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--text-secondary); }
   @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); }
+`;
+
+/* A card's switch with its own option stacked under it, in one cell of the grid */
+const TogglePair = styled.div`
+  display: grid;
+  gap: 10px;
 `;
 
 const PlaceRow = styled.div`
@@ -1613,12 +1624,14 @@ function whenLabel(day: string, time: string | undefined, today: string): string
 
 function addDaysLocal(n: number): Date { const d = new Date(); d.setDate(d.getDate() + n); return d; }
 
-function ComingUp({ financeOn }: { financeOn: boolean }) {
+function ComingUp({ financeOn, showBills }: { financeOn: boolean; showBills: boolean }) {
   const navigate = useNavigate();
   const openInJournal = useOpenInJournal();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const bills = useFinance('bills', { enabled: financeOn });
+  // Bills: only with Finance on and not hidden in Theme and layout (then they aren't loaded either)
+  const withBills = financeOn && showBills;
+  const bills = useFinance('bills', { enabled: withBills });
   const today = toDateStr(new Date());
   const end = addDays(today, 14);
 
@@ -1640,13 +1653,13 @@ function ComingUp({ financeOn }: { financeOn: boolean }) {
         out.push({ key: `e${e.id}-${day}`, day, time: cf.allDay ? undefined : (cf.startTime as string | undefined) || undefined, title, sub: sub || undefined, kind, open: () => openInJournal(e.id) });
       }
     }
-    if (financeOn) {
+    if (withBills) {
       for (const { bill, date } of billOccurrences(bills.records, today, end)) {
         out.push({ key: `b${bill.id}${date}`, day: date, title: bill.name, sub: `${formatCents(bill.amountCents)} due`, kind: 'bill', open: () => navigate('/finance') });
       }
     }
     return out.sort((a, b) => a.day.localeCompare(b.day) || (a.time ?? '99').localeCompare(b.time ?? '99')).slice(0, 8);
-  }, [entries, allTopics, bills.records, financeOn, today, end, openInJournal, navigate]);
+  }, [entries, allTopics, bills.records, withBills, today, end, openInJournal, navigate]);
 
   return (
     <section aria-label="Coming up">
@@ -2689,7 +2702,7 @@ export function DashboardView() {
       label: 'tasks', on: shown('tasks'),
       node: <Tasks show={config.tasksShow ?? 'open'} onShow={next => saveConfig({ ...config, tasksShow: next }).catch(err => console.warn('Couldn’t save the Tasks card’s choice:', err))} />,
     },
-    comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} /> },
+    comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} showBills={!config.comingUpHideBills} /> },
     habits: { label: 'habits', on: shown('habits'), node: <HabitsToday /> },
     exercise: { label: 'exercise schedule', on: shown('exercise') && ff.exerciseEnabled !== false, node: <ExerciseToday /> },
     quickLog: {
@@ -2805,9 +2818,19 @@ export function DashboardView() {
               </ThemeRow>
               <h3>Show on this page</h3>
               <ToggleGrid>
-                {SECTIONS.map(s => (
-                  <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>
-                ))}
+                {SECTIONS.map(s => {
+                  const sw = <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>;
+                  // Coming up's own option sits under its switch (Finance on, the card showing)
+                  if (s.key === 'comingUp' && financeOn && shown('comingUp')) {
+                    return (
+                      <TogglePair key={s.key}>
+                        {sw}
+                        <label>Bills in Coming up<Toggle checked={!config.comingUpHideBills} aria-label="Bills in Coming up" onChange={v => void saveConfig({ ...config, comingUpHideBills: !v })} /></label>
+                      </TogglePair>
+                    );
+                  }
+                  return sw;
+                })}
               </ToggleGrid>
               <h3>Cities (the first is home)</h3>
               {places.length === 0 && <Muted style={{ marginTop: 0 }}>Add your city for the weather, then up to seven more for world clocks.</Muted>}

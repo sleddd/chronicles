@@ -8,6 +8,7 @@ import type { DecryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../../types/topics.js';
 import type { CalendarViewMode } from '../../views/CalendarView.js';
 import type { CalendarBillItem } from '../../types/finance.js';
+import type { Holiday } from '../../utils/holidays.js';
 import { formatCents } from '../../utils/finance.js';
 
 function toDateStr(d: Date): string {
@@ -126,12 +127,12 @@ const Item = styled.button`
   &:hover { color: var(--text-primary); }
 `;
 
-const Dot = styled.i<{ $bill?: boolean; $task?: boolean }>`
+const Dot = styled.i<{ $bill?: boolean; $task?: boolean; $holiday?: boolean }>`
   flex: none;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: ${({ $bill, $task }) => ($bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
+  background: ${({ $bill, $task, $holiday }) => ($holiday ? 'var(--chart-green)' : $bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
 `;
 
 const Dash = styled.span`
@@ -155,6 +156,8 @@ interface CalendarWeekViewProps {
   /** Bills due by day (Finance on) */
   billsByDate?: Map<string, CalendarBillItem[]>;
   onBillClick?: (bill: CalendarBillItem) => void;
+  /** US holidays by day (when switched on) */
+  holidaysByDate?: Map<string, Holiday[]>;
   onDayClick: (dateStr: string) => void;
   onDayDoubleClick: (dateStr: string) => void;
   onPrev: () => void;
@@ -165,7 +168,7 @@ interface CalendarWeekViewProps {
 
 export function CalendarWeekView({
   weekStart, entriesByDate, accentColor, eventTopicIds, taskTopicIds,
-  viewMode, getTopicForEntry, billsByDate, onBillClick,
+  viewMode, getTopicForEntry, billsByDate, onBillClick, holidaysByDate,
   onPrev, onNext, onToday, onViewMode,
 }: CalendarWeekViewProps) {
   const navigate = useNavigate();
@@ -200,6 +203,7 @@ export function CalendarWeekView({
           const dateStr = toDateStr(date);
           const dayEntries = entriesByDate.get(dateStr) || [];
           const dayBills = billsByDate?.get(dateStr) || [];
+          const dayHolidays = holidaysByDate?.get(dateStr) || [];
           const isToday = isSameDay(date, today);
           return (
             <DayRow key={dateStr}>
@@ -208,6 +212,11 @@ export function CalendarWeekView({
                 <DayWeekday>{date.toLocaleDateString('en-US', { weekday: 'short' })}</DayWeekday>
               </DayLabel>
               <Items>
+                {dayHolidays.map(h => (
+                  <Item key={h.name} as="div" style={{ cursor: 'default' }}>
+                    <Dot $holiday aria-hidden="true" /><span>{h.name}</span><small>{h.federal ? 'Federal holiday' : 'Holiday'}</small>
+                  </Item>
+                ))}
                 {dayEntries.map(entry => {
                   const topic = getTopicForEntry(entry);
                   const meta = entry.metadata as Record<string, unknown>;
@@ -228,7 +237,7 @@ export function CalendarWeekView({
                     <Dot $bill aria-hidden="true" /><span>{b.name}</span><small>{formatCents(b.amountCents)} due</small>
                   </Item>
                 ))}
-                {dayBills.length === 0 && dayEntries.length === 0 && <Dash aria-label="Nothing this day">—</Dash>}
+                {dayBills.length === 0 && dayEntries.length === 0 && dayHolidays.length === 0 && <Dash aria-label="Nothing this day">—</Dash>}
               </Items>
             </DayRow>
           );

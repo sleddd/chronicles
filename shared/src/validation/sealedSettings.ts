@@ -9,6 +9,7 @@
 export const KNOWN_FEATURE_FLAGS = [
   'foodEnabled', 'medicationEnabled', 'goalsEnabled', 'milestonesEnabled',
   'exerciseEnabled', 'allergiesEnabled', 'entertainmentEnabled', 'inspirationEnabled',
+  'holidaysEnabled', // US holidays on the calendar
 ] as const;
 
 /** Opt-in features — off until the user turns them on in Settings. */

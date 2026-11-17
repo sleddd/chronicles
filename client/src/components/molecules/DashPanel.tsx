@@ -12,7 +12,7 @@ const dashTitle = css`
   text-transform: none;
   line-height: 40px;
   /* A step back from full strength, so the cards' content leads */
-  color: color-mix(in srgb, var(--text-primary) 82%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 68%, transparent);
 `;
 
 /* Health dashboard panel — the home dashboard's widget card: a --bg-panel card

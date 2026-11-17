@@ -5,6 +5,7 @@ import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { CalendarViewMode } from '../../views/CalendarView.js';
 import type { CalendarBillItem } from '../../types/finance.js';
+import type { Holiday } from '../../utils/holidays.js';
 import { formatCents } from '../../utils/finance.js';
 
 /* ── Helpers ── */
@@ -116,12 +117,26 @@ const DayNumber = styled.div<{ $isToday?: boolean; $isSelected?: boolean; $accen
 `;
 
 /* A dot — amber for bills, accent for events and meetings */
-const Dot = styled.i<{ $bill?: boolean; $task?: boolean }>`
+const Dot = styled.i<{ $bill?: boolean; $task?: boolean; $holiday?: boolean }>`
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: ${({ $bill, $task }) => ($bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
+  background: ${({ $bill, $task, $holiday }) => ($holiday ? 'var(--chart-green)' : $bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
+`;
+
+/* A holiday's name in its day's cell: small and muted, up to two lines (it names the
+   day, so it is written out — the day's items stay dots) */
+const HolidayName = styled.div`
+  margin: -6px 0 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
 /* ── Mobile list view ── */
@@ -232,6 +247,8 @@ interface CalendarGridProps {
   /** Bill due dates from Finance (only when it's switched on). */
   billsByDate?: Map<string, CalendarBillItem[]>;
   onBillClick?: (bill: CalendarBillItem) => void;
+  /** US holidays by day (when switched on) */
+  holidaysByDate?: Map<string, Holiday[]>;
 }
 
 const NO_TASK_TOPICS = new Set<number>();
@@ -240,7 +257,7 @@ const billLabel = (b: CalendarBillItem) => `${b.name} · ${formatCents(b.amountC
 export function CalendarGrid({
   currentMonth, selectedDate, entriesByDate, accentColor, eventTopicIds, taskTopicIds = NO_TASK_TOPICS,
   viewMode, onPrev, onNext, onToday, onViewMode, onDayClick, onDayDoubleClick, getTopicName,
-  billsByDate, onBillClick,
+  billsByDate, onBillClick, holidaysByDate,
 }: CalendarGridProps) {
   const today = new Date();
   const days = getCalendarDays(currentMonth.getFullYear(), currentMonth.getMonth());
@@ -279,6 +296,7 @@ export function CalendarGrid({
               const dateStr = toDateStr(date);
               const dayEntries = entriesByDate.get(dateStr) || [];
               const dayBills = billsByDate?.get(dateStr) || [];
+              const dayHolidays = holidaysByDate?.get(dateStr) || [];
               // One accent dot when the day has events / meetings, one amber dot when bills are due
               const total = dayEntries.length + dayBills.length;
               const isToday = isSameDay(date, today);
@@ -298,6 +316,7 @@ export function CalendarGrid({
                       <DayNumber $isToday={isToday} $isSelected={isSelected} $accentColor={accentColor}>
                         {date.getDate()}
                       </DayNumber>
+                      {dayHolidays.length > 0 && <HolidayName>{dayHolidays.map(h => h.name).join(', ')}</HolidayName>}
                       {total > 0 && (
                         <DotRow role="img" aria-label={`${total} ${total === 1 ? 'item' : 'items'}`}>
                           {dayEntries.some(e => !isTask(e)) && <Dot title={titlesOf(dayEntries.filter(e => !isTask(e)))} />}
@@ -322,20 +341,22 @@ export function CalendarGrid({
             if (isOutside) return <span key={i} />;
             const dateStr = toDateStr(date);
             const nBills = billsByDate?.get(dateStr)?.length ?? 0;
+            const holidayNames = (holidaysByDate?.get(dateStr) ?? []).map(h => h.name);
             const list = entriesByDate.get(dateStr) ?? [];
             const nEntries = list.length;
-            // One accent dot for events / meetings, one blue dot for planned tasks, one amber dot for bills
-            const dots: ('entry' | 'task' | 'bill')[] = [
+            // One green dot for a holiday, one accent dot for events / meetings, one blue dot for planned tasks, one amber dot for bills
+            const dots: ('holiday' | 'entry' | 'task' | 'bill')[] = [
+              ...(holidayNames.length ? ['holiday' as const] : []),
               ...(list.some(e => !isTask(e)) ? ['entry' as const] : []), ...(list.some(isTask) ? ['task' as const] : []), ...(nBills ? ['bill' as const] : []),
             ];
             const isToday = isSameDay(date, today);
             const isSelected = selectedDate === dateStr;
             return (
               <MobileDay key={i} type="button" $selected={isSelected && !isToday} onClick={() => onDayClick(dateStr)}
-                aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${nBills + nEntries ? `, ${nBills + nEntries} item${nBills + nEntries === 1 ? '' : 's'}` : ''}`}
+                aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${holidayNames.length ? `, ${holidayNames.join(', ')}` : ''}${nBills + nEntries ? `, ${nBills + nEntries} item${nBills + nEntries === 1 ? '' : 's'}` : ''}`}
                 aria-pressed={isSelected}>
                 <MobileNum $today={isToday} $selected={isSelected}>{date.getDate()}</MobileNum>
-                <MobileDots aria-hidden="true">{dots.map(kind => <Dot key={kind} $bill={kind === 'bill'} $task={kind === 'task'} />)}</MobileDots>
+                <MobileDots aria-hidden="true">{dots.map(kind => <Dot key={kind} $bill={kind === 'bill'} $task={kind === 'task'} $holiday={kind === 'holiday'} />)}</MobileDots>
               </MobileDay>
             );
           })}

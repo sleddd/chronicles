@@ -9,9 +9,11 @@ import type { DecryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../../types/topics.js';
 import type { CalendarViewMode } from '../../views/CalendarView.js';
 import type { CalendarBillItem } from '../../types/finance.js';
+import type { Holiday } from '../../utils/holidays.js';
 import { formatCents } from '../../utils/finance.js';
 
 const NO_BILLS: CalendarBillItem[] = [];
+const NO_HOLIDAYS: Holiday[] = [];
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -161,6 +163,8 @@ interface CalendarDayViewProps {
   /** Bills due this day (Finance on) */
   bills?: CalendarBillItem[];
   onBillClick?: (bill: CalendarBillItem) => void;
+  /** US holidays on this day (when switched on) */
+  holidays?: Holiday[];
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -169,7 +173,7 @@ interface CalendarDayViewProps {
 
 export function CalendarDayView({
   dateStr, entries, accentColor, eventTopicIds, taskTopicIds, viewMode,
-  getTopicForEntry, onPrev, onNext, onToday, onViewMode, bills = NO_BILLS, onBillClick,
+  getTopicForEntry, onPrev, onNext, onToday, onViewMode, bills = NO_BILLS, onBillClick, holidays = NO_HOLIDAYS,
 }: CalendarDayViewProps) {
   const navigate = useNavigate();
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
@@ -204,8 +208,17 @@ export function CalendarDayView({
       </DayHead>
 
       <List>
-        {/* Events and meetings first, then bills due */}
-        {entries.length === 0 && bills.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>}
+        {/* The day's holiday first, then events and meetings, then bills due */}
+        {entries.length === 0 && bills.length === 0 && holidays.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>}
+        {holidays.map(h => (
+          <EntryRow key={h.name} as="div" style={{ cursor: 'default' }}>
+            <TimeLabel>All day</TimeLabel>
+            <div>
+              <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot style={{ background: 'var(--chart-green)' }} />{h.federal ? 'Federal holiday' : 'Holiday'}</TopicLabel>
+              <EntryTitle>{h.name}</EntryTitle>
+            </div>
+          </EntryRow>
+        ))}
         {entries.map(entry => {
             const topic = getTopicForEntry(entry);
             const timeLabel = getTimeLabel(entry, eventTopicIds);

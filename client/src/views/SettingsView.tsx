@@ -133,6 +133,7 @@ const FEATURES = [
   { key: 'allergiesEnabled', title: 'Allergy and Sensitivities', description: 'Track allergies and reactions' },
   { key: 'entertainmentEnabled', title: 'Media', description: 'Books, movies, TV shows and music on shelves, with ratings' },
   { key: 'inspirationEnabled', title: 'Inspiration', description: 'Save research, ideas, and quotes' },
+  { key: 'holidaysEnabled', title: 'Holidays', description: 'US holidays on the calendar' },
   { key: 'financeEnabled', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)' },
 ];
 

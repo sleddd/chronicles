@@ -15,6 +15,7 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useNavigate } from 'react-router-dom';
 import { addDays, billOccurrences } from '../utils/finance.js';
+import { holidaysBetween, type Holiday } from '../utils/holidays.js';
 import type { CalendarBillItem } from '../types/finance.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 
@@ -146,6 +147,14 @@ export function CalendarView() {
   }, [financeOn, bills, monthStart, currentDate]);
   const openBills = useCallback(() => navigate('/finance'), [navigate]);
 
+  // US holidays (Settings → Features → Holidays, on by default) — worked out here, nothing fetched
+  const holidaysOn = useEntriesStore(s => s.featureFlags.holidaysEnabled !== false);
+  const holidaysByDate = useMemo(() => {
+    if (!holidaysOn) return new Map<string, Holiday[]>();
+    const end = toDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+    return holidaysBetween(addDays(monthStart, -7), addDays(end, 7));
+  }, [holidaysOn, monthStart, currentDate]);
+
   const getTopicForEntry = useCallback((entry: typeof entries[number]) => {
     const taxId = (entry.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
     return taxId ? allTopics.find(t => t.id === taxId) : undefined;
@@ -241,6 +250,7 @@ export function CalendarView() {
               getTopicForEntry={getTopicForEntry}
               bills={billsByDate.get(toDateStr(currentDate))}
               onBillClick={openBills}
+              holidays={holidaysByDate.get(toDateStr(currentDate))}
             />
           </GridPane>
         </Layout>
@@ -265,6 +275,7 @@ export function CalendarView() {
               getTopicForEntry={getTopicForEntry}
               billsByDate={billsByDate}
               onBillClick={openBills}
+              holidaysByDate={holidaysByDate}
               onDayClick={handleDayClick}
               onDayDoubleClick={handleDayDoubleClick}
             />
@@ -291,6 +302,7 @@ export function CalendarView() {
             getTopicName={entry => getTopicForEntry(entry)?.name}
             billsByDate={billsByDate}
             onBillClick={openBills}
+            holidaysByDate={holidaysByDate}
           />
           <MobileDetail>
             <CalendarDayDetail
@@ -302,6 +314,7 @@ export function CalendarView() {
               taskTopicIds={taskTopicIds}
               onClose={() => {}}
               bills={billsByDate.get(selectedDate)}
+              holidays={holidaysByDate.get(selectedDate)}
             />
           </MobileDetail>
         </GridPane>
@@ -315,6 +328,7 @@ export function CalendarView() {
             taskTopicIds={taskTopicIds}
             onClose={() => {}}
             bills={billsByDate.get(selectedDate)}
+            holidays={holidaysByDate.get(selectedDate)}
           />
         </DetailPane>
       </Layout>

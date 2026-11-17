@@ -6,6 +6,7 @@ import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { formatCents } from '../../utils/finance.js';
 import type { CalendarBillItem } from '../../types/finance.js';
+import type { Holiday } from '../../utils/holidays.js';
 
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../../types/topics.js';
@@ -102,12 +103,12 @@ const EventRow = styled.div<{ $accent: string }>`
   @media (max-width: 900px) { margin: 0; }
 `;
 
-const Dot = styled.i<{ $bill?: boolean; $task?: boolean }>`
+const Dot = styled.i<{ $bill?: boolean; $task?: boolean; $holiday?: boolean }>`
   width: 7px;
   height: 7px;
   border-radius: 50%;
   align-self: center;
-  background: ${({ $bill, $task }) => ($bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
+  background: ${({ $bill, $task, $holiday }) => ($holiday ? 'var(--chart-green)' : $bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
 `;
 
 const EventContent = styled.div`
@@ -156,10 +157,12 @@ interface CalendarDayDetailProps {
   onClose: () => void;
   /** Bills due this day (Finance, when switched on). */
   bills?: CalendarBillItem[];
+  /** US holidays on this day (when switched on) */
+  holidays?: Holiday[];
 }
 
 export function CalendarDayDetail({
-  dateStr, entries, allTopics, accentColor, eventTopicIds, taskTopicIds, bills = [],
+  dateStr, entries, allTopics, accentColor, eventTopicIds, taskTopicIds, bills = [], holidays = [],
 }: CalendarDayDetailProps) {
   const navigate = useNavigate();
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
@@ -221,9 +224,18 @@ export function CalendarDayDetail({
       </DayHeader>
 
       <List>
-        {/* Events and meetings first, then bills due */}
+        {/* The day's holiday first (it names the day), then events and meetings, then bills due */}
+        {holidays.map(h => (
+          <EventRow key={h.name} $accent={accentColor} as="div" style={{ cursor: 'default' }}>
+            <Dot $holiday aria-hidden="true" />
+            <EventContent>
+              <EventTitle>{h.name}</EventTitle>
+              <EventMeta>{h.federal ? 'Federal holiday' : 'Holiday'}</EventMeta>
+            </EventContent>
+          </EventRow>
+        ))}
         {rows.length === 0 ? (
-          bills.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>
+          bills.length === 0 && holidays.length === 0 && <EmptyMsg>Nothing on this day.</EmptyMsg>
         ) : (
           rows.map(entry => {
             const meta = entry.metadata as Record<string, unknown>;
