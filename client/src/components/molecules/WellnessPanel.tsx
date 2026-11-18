@@ -461,6 +461,12 @@ const StripWrapper = styled(CompactWrapper)`
   /* Three faces to a row, a little smaller */
   && ${Faces} { display: grid; grid-template-columns: repeat(3, max-content); gap: 10px 16px; }
   && ${FaceBtn} { width: 32px; height: 32px; & > span { font-size: 38px; } }
+  /* Stacked (Mood on a row of its own): all five faces in one row, from the left */
+  @container (max-width: 860px) {
+    && ${Faces} { grid-template-columns: repeat(5, max-content); justify-content: start; }
+  }
+  /* A little more room under the word Cycle, above its drops */
+  && ${Head}.cycle-head { margin-bottom: 26px; }
   && ${CycleNote} { font-size: 13px; }
   && ${Chips} { gap: 10px 8px; }
   && ${Chip} { height: 34px; padding: 0 16px; font-size: 15px; font-weight: 400; }
@@ -602,7 +608,7 @@ export function WellnessPanel({
   );
   const cycleIcons$ = showCycle && (
     <Cell>
-      <Head><Label>Cycle</Label></Head>
+      <Head className="cycle-head"><Label>Cycle</Label></Head>
       <TwoUp role="group" aria-label="Cycle">
         {/* None, one drop, two drops, three drops (a day logged as Spotting shows as one drop) */}
         {(['', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(f => {

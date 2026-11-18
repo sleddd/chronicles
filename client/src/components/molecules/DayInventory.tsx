@@ -35,7 +35,8 @@ const Bar = styled.button`
   gap: 16px;
   width: 100%;
   min-height: 52px;
-  padding: 0 var(--cell-x, 22px);
+  /* Room over and under the words */
+  padding: 16px var(--cell-x, 22px);
   border: none;
   border-radius: 10px;
   background: none;
