@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SectionTabBar, SectionTab } from '../../styles/sectionTabs.js';
+import { KITCHEN_VIEWS } from '../../utils/sectionViews.js';
 
 const Bar = SectionTabBar;
 const TabBtn = SectionTab;
@@ -7,12 +8,7 @@ const TabBtn = SectionTab;
 /** Section title shared by every From the Kitchen page. */
 export const KITCHEN_TITLE = 'From the Kitchen';
 
-const TABS: { label: string; path: string }[] = [
-  { label: 'Dashboard', path: '/kitchen' },
-  { label: 'Menu', path: '/menu' },
-  { label: 'Recipes', path: '/menu/recipes' },
-  { label: 'Shopping lists', path: '/shopping' },
-];
+const TABS = KITCHEN_VIEWS;
 
 /** Tabs for the From the Kitchen section. */
 export function MealsTabBar() {

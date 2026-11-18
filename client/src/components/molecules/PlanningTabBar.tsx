@@ -1,17 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SectionTabBar, SectionTab } from '../../styles/sectionTabs.js';
+import { PLANNING_VIEWS, isViewActive } from '../../utils/sectionViews.js';
 
 const Bar = SectionTabBar;
 const TabBtn = SectionTab;
 
-const TABS = [
-  { label: 'Vision', path: '/goals/overview' },
-  { label: 'Goals', path: '/goals' },
-  { label: 'Milestones', path: '/goals/milestones' },
-  { label: 'Roadmap', path: '/goals/roadmap' },
-  { label: 'Tasks', path: '/goals/tasks' },
-  { label: 'Planner', path: '/goals/planner' },
-];
+const TABS = PLANNING_VIEWS;
 
 export function PlanningTabBar() {
   const location = useLocation();
@@ -21,9 +15,7 @@ export function PlanningTabBar() {
     <Bar>
       {TABS.map((t) => {
         // Todos is a view of the Tasks tab (its Show pill), reached at /goals/todos
-        const isActive = t.path === '/goals'
-          ? location.pathname === '/goals'
-          : location.pathname.startsWith(t.path) || (t.path === '/goals/tasks' && location.pathname.startsWith('/goals/todos'));
+        const isActive = isViewActive(t.path, location.pathname);
         return (
           <TabBtn
             key={t.path}

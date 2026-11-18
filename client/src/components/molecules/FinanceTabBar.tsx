@@ -1,18 +1,13 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SectionTabBar, SectionTab } from '../../styles/sectionTabs.js';
+import { FINANCE_VIEWS } from '../../utils/sectionViews.js';
 
 const Bar = SectionTabBar;
 const TabBtn = SectionTab;
 
 export const FINANCE_TITLE = 'Finance';
 
-export const FINANCE_TABS: { label: string; path: string }[] = [
-  { label: 'Budget & bills', path: '/finance' },
-  { label: 'Goals', path: '/finance/goals' },
-  { label: 'Savings', path: '/finance/savings' },
-  { label: 'Debts', path: '/finance/debts' },
-  { label: 'Reports', path: '/finance/reports' },
-];
+export const FINANCE_TABS = FINANCE_VIEWS;
 
 /** Tabs for the Finance section. */
 export function FinanceTabBar() {

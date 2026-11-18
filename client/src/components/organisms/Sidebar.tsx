@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
-import { useNavItems } from '../../hooks/useNavItems.js';
+import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
+import { useNavSections } from '../../hooks/useNavSections.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
 import { BrandMark } from '../atoms/BrandMark.js';
+import { Icon } from '../atoms/core/Icon.jsx';
 
 /* Collapsed: icons only (92px). Expanded: each item's name beside its icon.
    The icons keep a 92px column either way, so they never move. */
@@ -176,6 +178,75 @@ const Wordmark = styled.span`
   white-space: nowrap;
 `;
 
+/* A section's row with views: the row, and its chevron at the right edge (a sibling, never
+   inside the row's button) */
+const RowWrap = styled.div`
+  position: relative;
+  flex: 0 0 auto;
+  /* Room for the chevron at the end of the name */
+  & > button:first-child > span:last-child { padding-right: 44px; }
+`;
+
+const SectionChevron = styled.button<{ $open: boolean }>`
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  cursor: pointer;
+  & > svg { transition: transform 160ms ease; transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg); }
+  @media (prefers-reduced-motion: reduce) { & > svg { transition: none; } }
+  &:hover { color: var(--text-primary); background: var(--bg-rail-active); }
+  html[data-theme='dark'] &:hover { background: transparent; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+/* A section's views, under its row: names lined up with the section names, the one showing
+   in the accent (no fill, as the rail's own rows) */
+const ViewList = styled.ul`
+  list-style: none;
+  margin: -6px 0 8px;
+  padding: 0;
+`;
+
+const ViewBtn = styled.button<{ $active: boolean }>`
+  display: block;
+  width: 100%;
+  height: 34px;
+  padding: 0 16px 0 ${RAIL}px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: ${({ $active }) => ($active ? 500 : 400)};
+  color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'color-mix(in srgb, var(--text-secondary) 72%, transparent)')};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')}; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+/* Settings, Collapse and ⋯: right under the last item, and kept in view (stuck to the
+   rail's foot) when open sections make the list taller than the window */
+const Foot = styled.div`
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-rail);
+  display: flex;
+  flex-direction: column;
+`;
+
 /* Settings, then expand / collapse, then ⋯ (Sign out), under the last item */
 const ToggleBtn = styled(NavIconBtn)`
   height: 44px;
@@ -220,7 +291,8 @@ const FlyoutItem = styled.button<{ $active?: boolean }>`
 `;
 
 const STORAGE_KEY = 'nav-expanded-v1';
-const readOpen = () => { try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; } };
+// Expanded (names and the sections' views) unless collapsed by hand in this browser
+const readOpen = () => { try { return localStorage.getItem(STORAGE_KEY) !== '0'; } catch { return true; } };
 const saveOpen = (v: boolean) => { try { localStorage.setItem(STORAGE_KEY, v ? '1' : '0'); } catch { /* remembered for this visit only */ } };
 
 const SrOnly = styled.span`
@@ -293,6 +365,43 @@ export const Sidebar = memo(function Sidebar() {
   const toggle = () => setOpen(v => { saveOpen(!v); return !v; });
   /* Collapsed, the name is a tooltip and screen-reader text; expanded, it's shown */
   const name = (label: string) => (open ? <Label>{label}</Label> : <SrOnly>{label}</SrOnly>);
+  const sections = useNavSections();
+  const row = (item: NavItem) => {
+    const btn = (
+      <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}
+        aria-current={item.active && !item.views?.some(v => v.active) ? 'page' : undefined}>
+        <IconCell><MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon></IconCell>
+        {name(item.label)}
+      </NavIconBtn>
+    );
+    // Collapsed (icons only), or a page with no views: just the row
+    if (!open || !item.views?.length) return btn;
+    const shown = sections.isOpen(item.key, item.active);
+    const listId = `nav-views-${item.key}`;
+    return (
+      <div key={item.key}>
+        <RowWrap>
+          {btn}
+          <SectionChevron type="button" $open={shown} aria-expanded={shown} aria-controls={listId}
+            aria-label={`${shown ? 'Hide' : 'Show'} ${item.label} views`} title={shown ? 'Hide views' : 'Show views'}
+            onClick={() => sections.toggle(item.key, item.active)}>
+            <Icon name="chevron-down" size={18} strokeWidth={1.8} aria-hidden="true" />
+          </SectionChevron>
+        </RowWrap>
+        {shown && (
+          <ViewList id={listId} aria-label={`${item.label} views`}>
+            {item.views.map(v => (
+              <li key={v.path}>
+                <ViewBtn type="button" $active={v.active} aria-current={v.active ? 'page' : undefined} onClick={() => navigate(v.path)}>
+                  {v.label}
+                </ViewBtn>
+              </li>
+            ))}
+          </ViewList>
+        )}
+      </div>
+    );
+  };
 
   return (
     <SidebarRoot $open={open}>
@@ -303,12 +412,8 @@ export const Sidebar = memo(function Sidebar() {
       </LogoBtn>
 
       <NavScroll>
-        {mainItems.map(item => (
-          <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}>
-            <IconCell><MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon></IconCell>
-            {name(item.label)}
-          </NavIconBtn>
-        ))}
+        {mainItems.map(row)}
+        <Foot>
         {/* Settings: its own row, last before Collapse */}
         {settingsItem && (
           <NavIconBtn $active={settingsItem.active} onClick={() => navigate(settingsItem.path)} title={open ? undefined : settingsItem.label}>
@@ -325,6 +430,7 @@ export const Sidebar = memo(function Sidebar() {
           <IconCell><Dots aria-hidden="true">⋯</Dots></IconCell>
           {open ? <Label>More</Label> : <SrOnly>More</SrOnly>}
         </ToggleBtn>
+        </Foot>
       </NavScroll>
       {menuAt && createPortal(
         <Flyout ref={menuRef} role="menu" aria-label="More" style={{ left: menuAt.left, top: menuAt.top }}>

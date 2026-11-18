@@ -41,6 +41,8 @@ describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // These look at the collapsed rail (icons, names as tooltips); it starts expanded now
+    localStorage.setItem('nav-expanded-v1', '0');
     featureFlags = { medicationEnabled: true, foodEnabled: true, exerciseEnabled: true, allergiesEnabled: true };
   });
 
@@ -156,5 +158,46 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));
     expect(screen.getByTitle('Journal')).toBeInTheDocument();
+  });
+
+  it('starts expanded when nothing is remembered', () => {
+    localStorage.clear();
+    renderAt();
+    expect(screen.getByRole('button', { name: 'Collapse' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  describe('expanded: each section’s views', () => {
+    beforeEach(() => { localStorage.clear(); });
+
+    it('the current section shows its views, the one showing marked; others open from their chevron', () => {
+      renderAt('/health/symptoms');
+      const health = screen.getByRole('list', { name: 'Health views' });
+      expect(within(health).getAllByRole('button').map(b => b.textContent)).toEqual(
+        ['Dashboard', 'Meals', 'Exercise', 'Habits', 'Symptoms', 'Med list', 'Med history', 'Allergies', 'Reports']);
+      expect(within(health).getByRole('button', { name: 'Symptoms' })).toHaveAttribute('aria-current', 'page');
+      // Planning is closed until its chevron is pressed
+      expect(screen.queryByRole('list', { name: 'Planning views' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Show Planning views' }));
+      const planning = screen.getByRole('list', { name: 'Planning views' });
+      fireEvent.click(within(planning).getByRole('button', { name: 'Roadmap' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/goals/roadmap');
+    });
+
+    it('leaves out views whose feature is off, and remembers a section closed by hand', () => {
+      featureFlags = { medicationEnabled: false, foodEnabled: true, exerciseEnabled: true, allergiesEnabled: true };
+      const { unmount } = renderAt('/health');
+      expect(within(screen.getByRole('list', { name: 'Health views' })).queryByRole('button', { name: 'Med list' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Hide Health views' }));
+      expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
+      unmount();
+      renderAt('/health');
+      expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
+    });
+
+    it('collapsed, no views show (icons only)', () => {
+      localStorage.setItem('nav-expanded-v1', '0');
+      renderAt('/health');
+      expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
+    });
   });
 });

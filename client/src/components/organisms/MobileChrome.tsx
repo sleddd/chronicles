@@ -8,6 +8,8 @@ import { TOP_BAR_SLOT_ID } from './TopBarAction.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
+import { useNavSections } from '../../hooks/useNavSections.js';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { useEffect } from 'react';
 
 /* Top bar shown only on phones/tablets: the logo and the current page's name
@@ -118,6 +120,59 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
+/* A section with views: its row, and a chevron at the right that shows them (a sibling) */
+const SectionWrap = styled.div`
+  position: relative;
+  & > button:first-child { padding-right: 60px; }
+`;
+
+const SectionChevron = styled.button<{ $open: boolean }>`
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  & > svg { transition: transform 160ms ease; transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg); }
+  @media (prefers-reduced-motion: reduce) { & > svg { transition: none; } }
+  @media (hover: hover) { &:hover { background: var(--bg-row-hover); color: var(--text-primary); } }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+/* The section's views, lined up with the section names; the one showing on the grey fill */
+const ViewList = styled.ul`
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+`;
+
+const ViewRow = styled.button<{ $active: boolean }>`
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px 0 54px;
+  border: none;
+  border-radius: 10px;
+  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: ${({ $active }) => ($active ? 400 : 300)};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')};
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  @media (hover: hover) { &:hover { background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'var(--bg-row-hover)')}; } }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
 const MenuRule = styled.hr`
   margin: 8px 14px;
   border: none;
@@ -169,13 +224,42 @@ export function MobileChrome() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, setOpen]);
 
-  const row = (item: NavItem, quiet = false) => (
-    <NavRow key={item.key} type="button" $active={item.active} $quiet={quiet} aria-current={item.active ? 'page' : undefined}
-      onClick={() => { setOpen(false); navigate(item.path); }}>
-      <MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon>
-      <span>{item.label}</span>
-    </NavRow>
-  );
+  const sections = useNavSections();
+  const go = (path: string) => { setOpen(false); navigate(path); };
+  const row = (item: NavItem, quiet = false) => {
+    // A section's own row reads as current only when none of its views is the one showing
+    const viewShowing = !!item.views?.some(v => v.active);
+    const btn = (
+      <NavRow key={item.key} type="button" $active={item.active && !viewShowing} $quiet={quiet} aria-current={item.active && !viewShowing ? 'page' : undefined}
+        onClick={() => go(item.path)}>
+        <MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon>
+        <span>{item.label}</span>
+      </NavRow>
+    );
+    if (!item.views?.length) return btn;
+    const shown = sections.isOpen(item.key, item.active);
+    const listId = `mobile-views-${item.key}`;
+    return (
+      <div key={item.key}>
+        <SectionWrap>
+          {btn}
+          <SectionChevron type="button" $open={shown} aria-expanded={shown} aria-controls={listId}
+            aria-label={`${shown ? 'Hide' : 'Show'} ${item.label} views`} onClick={() => sections.toggle(item.key, item.active)}>
+            <Icon name="chevron-down" size={20} strokeWidth={1.8} aria-hidden="true" />
+          </SectionChevron>
+        </SectionWrap>
+        {shown && (
+          <ViewList id={listId} aria-label={`${item.label} views`}>
+            {item.views.map(v => (
+              <li key={v.path}>
+                <ViewRow type="button" $active={v.active} aria-current={v.active ? 'page' : undefined} onClick={() => go(v.path)}>{v.label}</ViewRow>
+              </li>
+            ))}
+          </ViewList>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
