@@ -32,6 +32,7 @@ import { TimeTracker } from '../molecules/fields/TimeTracker.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
 import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
 import { MEDIA_DEFAULTS, mediaTags, mediaTopicIds } from '../../utils/media.js';
+import { retagMedia } from '../../utils/retagMedia.js';
 import { useSaveFields } from '../../hooks/useSaveFields.js';
 import { showFlash } from '../../services/flashNotice.js';
 import { aiMediaDetails } from '../../services/mediaDetails.js';
@@ -822,23 +823,24 @@ const QuickError = styled.p`
    media entries */
 function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof MediaFields> & { entryId?: number | null }) {
   const saveEntryFields = useSaveFields();
-  const retag = async (from: string, to: string | null) => {
-    const key = from.trim().toLowerCase();
-    const { decryptedEntries, allTopics } = useEntriesStore.getState();
-    // Media entries only — never another topic's fields that happen to be called "tags"
-    const media = new Set(mediaTopicIds(allTopics));
-    for (const e of decryptedEntries) {
-      if (e.id === entryId) continue;
-      if (!media.has((e.metadata as Record<string, unknown> | undefined)?._taxonomyId as number)) continue;
-      const cf = (e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown> | undefined;
-      const tags = cf ? mediaTags(cf.tags) : [];
-      if (!tags.some(t => t.toLowerCase() === key)) continue;
-      const next = to === null ? tags.filter(t => t.toLowerCase() !== key) : mediaTags(tags.map(t => (t.toLowerCase() === key ? to : t)));
-      const ok = await saveEntryFields(e, { ...cf, tags: next });
-      if (!ok) { showFlash('Couldn’t change that tag on every item. Try again.'); return; }
-    }
+  // One rename at a time: a second waits for the first, so they never interleave
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const retag = (from: string, to: string | null): Promise<boolean> => {
+    const run = queue.current.then(async () => {
+      const result = await retagMedia(from, to, {
+        entries: () => useEntriesStore.getState().decryptedEntries,
+        mediaTopicIds: mediaTopicIds(useEntriesStore.getState().allTopics),
+        skipId: entryId,
+        save: saveEntryFields,
+      });
+      if (result === 'rolled-back') showFlash('Couldn’t change that tag on every item, so nothing was changed. Try again.');
+      if (result === 'partial') showFlash('Couldn’t change that tag on every item, and some kept the change. Try again.');
+      return result === 'done';
+    });
+    queue.current = run.catch(() => {});
+    return run;
   };
-  return <MediaFields {...props} onRenameTag={(from, to) => void retag(from, to)} onRemoveTag={tag => void retag(tag, null)} />;
+  return <MediaFields {...props} onRenameTag={(from, to) => retag(from, to)} onRemoveTag={tag => retag(tag, null)} />;
 }
 
 /** The Quick entry's question, now the writing area's placeholder (the topic picker sits alone on the card's first line) */
