@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
@@ -37,14 +37,25 @@ function renderAt(path = '/journal') {
 
 // The bar and menu are display:none outside the phone breakpoint (jsdom), so queries include hidden elements
 describe('MobileChrome drop-down menu', () => {
-  beforeEach(() => { vi.clearAllMocks(); open = true; });
+  beforeEach(() => {
+    localStorage.clear(); vi.clearAllMocks(); open = true; });
 
   it('shows every destination as an icon over its name, marking the current one', () => {
     renderAt('/journal');
     for (const name of ['Home', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
-      expect(screen.getByRole('button', { name: new RegExp(name), hidden: true })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`${name}$`), hidden: true })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: /Journal/, hidden: true })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('a section shows its views under it (the current one open), and a view closes the menu on the way there', () => {
+    renderAt('/goals/planner');
+    const planning = screen.getByRole('list', { name: 'Planning views', hidden: true });
+    expect(within(planning).getByRole('button', { name: 'Planner', hidden: true })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: 'Show Kitchen views', hidden: true }));
+    fireEvent.click(within(screen.getByRole('list', { name: 'Kitchen views', hidden: true })).getByRole('button', { name: 'Recipes', hidden: true }));
+    expect(mockNavigate).toHaveBeenCalledWith('/menu/recipes');
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
   });
 
   it('navigates and closes when a destination is tapped', () => {
