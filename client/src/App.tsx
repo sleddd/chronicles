@@ -218,7 +218,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-muted':        '#7c7f88',  /* card subtitles, chevrons, + icons */
   '--text-placeholder':  '#6c6f78',
   '--control-border':    '#5b5f69',  /* unticked round checks */
-  '--border-card':       '#23262f',  /* card outlines + their inner rules/boxes */
+  '--border-card':       '#2f323d',  /* card outlines + their inner rules/boxes */
   '--bg-row-hover':      '#1d1f28',  /* a row lifting inside a card on hover */
   '--text-soft':         '#a5a8b0',  /* toolbar text buttons, chevrons */
   '--text-faint':        '#464a54',  /* quiet + marks in empty slots */
@@ -240,7 +240,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--bg-control':        '',
   '--bg-tracker':        '',
   '--border-strong':     '#3e4350',
-  '--border-field':      '#252832',  /* faint outline on styled-form boxes + nutrition panel */
+  '--border-field':      '#31343f',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — one strip a shade darker than the page with the logo in it (no darker cell); the active
      item is just its accent icon and a thin accent bar, never a lifted block */
   '--bg-rail':           '#12141a',
@@ -556,13 +556,15 @@ function TimeGate() {
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
   const { pathname } = useLocation();
+  // The journal editor full width (Expand, or opened to edit from another view): no corner bell over it
+  const editorFull = useUIStore(s => s.editorFocusMode);
   if (!isAuthenticated || !isUnlocked) return null;
   // The reminders bell sits in the top-right corner on wide screens (phones / tablets: their top bar)
   return <><TimeSync /><HabitSync />{!isPublicPage(pathname) && <>
     {/* Floating extras: one that fails isn't shown, and the page carries on */}
     <ErrorBoundary fallback="none"><RunningTimer /></ErrorBoundary>
     {/* The dashboard puts its own beside Voice and the sliders */}
-    {pathname !== '/dashboard' && <ErrorBoundary fallback="none"><NotificationBell variant="corner" /></ErrorBoundary>}
+    {pathname !== '/dashboard' && !editorFull && <ErrorBoundary fallback="none"><NotificationBell variant="corner" /></ErrorBoundary>}
   </>}</>;
 }
 

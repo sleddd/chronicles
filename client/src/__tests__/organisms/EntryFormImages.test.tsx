@@ -84,37 +84,13 @@ describe('EntryForm image gating', () => {
     expect(btn).toHaveAttribute('title', 'Maximum of 7 images per entry');
   });
 
-  it('offers Share in the More menu on entries without images', () => {
-    renderWithTheme(<EntryForm {...defaultProps} images={[]} onShare={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText('More actions'));
-    expect(screen.getByRole('menuitem', { name: /share/i })).toBeInTheDocument();
-  });
 
-  it('puts Dictate and Draw in the tool row, and Share and Close in More', () => {
-    renderWithTheme(<EntryForm {...defaultProps} images={[]} />);
-    expect(screen.getByLabelText('Dictate')).toBeInTheDocument();
-    expect(screen.getByLabelText('Draw')).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('More actions'));
-    const items = screen.getAllByRole('menuitem').map(i => i.textContent);
-    expect(items.some(t => /share/i.test(t ?? ''))).toBe(true);
-    expect(items.some(t => /close/i.test(t ?? ''))).toBe(true);
-  });
 
   it('keeps Format visible in the toolbar (not in More)', () => {
     renderWithTheme(<EntryForm {...defaultProps} images={[]} />);
     expect(screen.getByLabelText('Formatting')).toBeInTheDocument();
   });
 
-  it('disables Share in the More menu on entries with images, and says why', () => {
-    const onShare = vi.fn();
-    renderWithTheme(
-      <EntryForm {...defaultProps} entryId={1} images={[makeImage(1)]} imagesReady={true} onShare={onShare} />
-    );
-    fireEvent.click(screen.getByLabelText('More actions'));
-    const share = screen.getByRole('menuitem', { name: /share/i });
-    expect(share).toBeDisabled();
-    expect(screen.getByText('Not for entries with images')).toBeInTheDocument();
-  });
 
 
   it('shows each photo under the text, each with its own remove (no featured image)', () => {

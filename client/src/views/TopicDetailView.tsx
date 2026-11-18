@@ -74,9 +74,8 @@ const BackBtn = styled.button`
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-primary); /* the standard text colour, never the accent */
   cursor: pointer;
-  &:hover { color: var(--text-primary); } /* brightens, never the accent */
   & > span {
     font-size: 56px;
     font-weight: 100;
@@ -106,15 +105,16 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Topic icon beside the title, in the accent at the title's thin weight */
+/* Topic icon beside the title, in the title's colour at its thin weight */
 const TitleIcon = styled.span`
   display: inline-flex;
   margin: 0 14px 0 6px;
-  color: var(--color-accent);
+  color: var(--text-primary);
   & > span { font-weight: 200; font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
 `;
 
-const HeadActions = styled.div`
+/* page-action: smoked glass pills on the background photo, like every page's main action */
+const HeadActions = styled.div.attrs({ className: 'page-action' })`
   display: flex;
   align-items: center;
   gap: 10px;

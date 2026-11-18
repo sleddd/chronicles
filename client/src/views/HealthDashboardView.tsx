@@ -1,4 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import {
+  DndContext, KeyboardSensor, MouseSensor, TouchSensor, pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors,
+  type CollisionDetection, type DragEndEvent,
+} from '@dnd-kit/core';
+import { Icon } from '../components/atoms/core/Icon.jsx';
+import { moveBeside, moveToRow, normalizeLayout, rowColumns, type HealthWidget } from '../utils/healthLayout.js';
 import styled from 'styled-components';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -64,33 +70,93 @@ const Stack = styled.div`
   @media (max-width: 768px) { gap: 16px; margin-top: 24px; }
 `;
 
-/* Desktop: Quick log | Medications side by side; one column on tablets and phones */
-const Pair = styled.div`
+/* A row of the dashboard: one widget full width, or two side by side by weight
+   (rowColumns: a wide widget beside a one-column one takes two thirds); one column on phones */
+const Row = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
-  ${NAV_COMPACT} { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  & > * { min-width: 0; }
+  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr) !important; gap: 16px; }
 `;
 
-/* The quick log on the left, Wellness check-in on the right — side by side
-   on tablets too, stacked only on phones. Each is its own height (no stretching to match). */
-const TopPair = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  align-items: start;
-  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+/* Between rows: a place to drop a widget on a row of its own (shown while dragging) */
+const Gap = styled.div<{ $dragging: boolean; $over: boolean }>`
+  height: ${({ $dragging }) => ($dragging ? '34px' : '0')};
+  margin: ${({ $dragging }) => ($dragging ? '-5px 0' : '-12px 0')};
+  border-radius: 12px;
+  border: 1.5px dashed ${({ $dragging, $over }) => ($over ? 'var(--color-accent-line)' : $dragging ? 'var(--border-dashed)' : 'transparent')};
+  background: ${({ $over }) => ($over ? 'color-mix(in srgb, var(--color-accent) 8%, transparent)' : 'transparent')};
+  transition: height 120ms ease, border-color 120ms ease;
 `;
 
-/* A column of the pair: Quick log over Log a symptom, Medications over As needed */
-const Column = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+/* A widget's place: its drag grip just left of its fold chevron (the wellness check-in, which
+   has neither panel nor chevron, in its top-right corner); outlined while one is dropped on it */
+const Slot = styled.div<{ $bare: boolean; $over: boolean }>`
+  position: relative;
   min-width: 0;
-  ${NAV_COMPACT} { gap: 16px; }
+  border-radius: 16px;
+  outline: 2px solid ${({ $over }) => ($over ? 'var(--color-accent-line)' : 'transparent')};
+  outline-offset: 4px;
+  /* The title row keeps clear of the grip and the chevron */
+  & > * > :first-child:has(> h2) { padding-right: 82px !important; }
 `;
+
+const Grip = styled.button<{ $bare: boolean }>`
+  position: absolute;
+  z-index: 2;
+  top: ${({ $bare }) => ($bare ? '10px' : '25px')};
+  right: ${({ $bare }) => ($bare ? '10px' : '54px')};
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  &:hover { color: var(--text-primary); }
+  &:active { cursor: grabbing; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @media (max-width: 480px) { top: ${({ $bare }) => ($bare ? '8px' : '19px')}; right: ${({ $bare }) => ($bare ? '8px' : '46px')}; }
+`;
+
+/* What's under the pointer; with the keyboard (no pointer), what the moved widget overlaps */
+const collisions: CollisionDetection = args => {
+  const hits = pointerWithin(args);
+  return hits.length ? hits : rectIntersection(args);
+};
+
+const NAMES: Record<HealthWidget, string> = {
+  wellness: 'Wellness check-in', quickLog: 'Quick log', symptom: 'Log a symptom', meds: 'Medications',
+  habits: 'Habits', change: 'Log a change', exercise: 'Exercise schedule',
+};
+
+function WidgetSlot({ id, children }: { id: HealthWidget; children: ReactNode }) {
+  const drag = useDraggable({ id });
+  // Not a place to drop itself (it moves with the pointer)
+  const drop = useDroppable({ id: `w:${id}`, disabled: drag.isDragging });
+  const bare = false; // every widget is a panel now, with its grip beside the fold chevron
+  const t = drag.transform;
+  return (
+    <Slot ref={el => { drag.setNodeRef(el); drop.setNodeRef(el); }} $bare={bare} $over={drop.isOver && !drag.isDragging}
+      style={{ transform: t ? `translate(${t.x}px, ${t.y}px)` : undefined, zIndex: drag.isDragging ? 5 : undefined, opacity: drag.isDragging ? 0.7 : 1 }}>
+      {children}
+      <Grip type="button" $bare={bare} aria-label={`Move ${NAMES[id]}`} title="Drag to move" {...drag.attributes} {...drag.listeners}>
+        <Icon name="grip" size={18} strokeWidth={2.6} />
+      </Grip>
+    </Slot>
+  );
+}
+
+function RowGap({ index, dragging }: { index: number; dragging: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `gap:${index}` });
+  return <Gap ref={setNodeRef} $dragging={dragging} $over={isOver} aria-hidden="true" />;
+}
+
 
 /* "Today" + the date, then the nutrient strip */
 const TodayHead = styled.div`
@@ -172,6 +238,14 @@ export function HealthDashboardView() {
   const hasRoutines = useHasRoutines();
   const medsOn = ff.medicationEnabled !== false;
   const doses = useTodayDoses(isReady && medsOn);
+  // The widgets' arrangement, saved encrypted like the home dashboard's
+  const [savedLayout, saveLayout, layoutLoaded] = useEncryptedSetting<{ rows?: string[][] }>('healthLayout', {});
+  const [dragging, setDragging] = useState(false);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
 
 
   if (isLoading || !isReady) return (
@@ -185,6 +259,40 @@ export function HealthDashboardView() {
   const food = ff.foodEnabled !== false;
   const exercise = ff.exerciseEnabled !== false;
   const routines = exercise && hasRoutines;
+
+  /* The widgets, and which of them show */
+  const widgets: Record<HealthWidget, ReactNode> = {
+    wellness: <WellnessCheckIn title="Wellness check-in" quad foldable />,
+    quickLog: <QuickLog meal={food} exercise={exercise} />,
+    symptom: <QuickSymptom />,
+    // Only once a medication has scheduled times
+    meds: <MedicationsToday doses={doses} hideWhenEmpty panel />,
+    habits: <HabitsToday panel />,
+    change: <QuickChange />,
+    exercise: <ExerciseToday panel />,
+  };
+  const shown = (Object.keys(widgets) as HealthWidget[]).filter(k =>
+    k === 'meds' ? medsOn && hasMeds : k === 'exercise' ? routines : true);
+  const rows = normalizeLayout(savedLayout.rows, shown);
+  const save = (next: HealthWidget[][]) => {
+    if (!layoutLoaded) return;
+    // A widget that isn't showing goes back in at its default place when it shows again
+    void saveLayout({ rows: next }).catch(err => console.error('Failed to save the Health layout:', err));
+  };
+  const onDragEnd = ({ active, over, delta, activatorEvent }: DragEndEvent) => {
+    setDragging(false);
+    if (!over) return;
+    const key = active.id as HealthWidget;
+    const target = String(over.id);
+    if (target.startsWith('gap:')) { save(moveToRow(rows, key, Number(target.slice(4)))); return; }
+    if (!target.startsWith('w:')) return;
+    const onto = target.slice(2) as HealthWidget;
+    if (onto === key) return;
+    // Which half of the widget it was let go over: before it or after it in the row
+    const start = activatorEvent && 'clientX' in activatorEvent ? (activatorEvent as PointerEvent).clientX : over.rect.left + over.rect.width / 2;
+    const x = start + delta.x;
+    save(moveBeside(rows, key, onto, x < over.rect.left + over.rect.width / 2 ? 'before' : 'after'));
+  };
 
   return (
     <ContentTemplate>
@@ -201,56 +309,20 @@ export function HealthDashboardView() {
           </TodayHead>
           {food && <FoodGlance />}
 
-          <Stack>
-            {food && hasMeds && medsOn ? (
-              /* Two columns that each flow straight down, so what's under the quick log sits
-                 right under it whatever the check-in's height (stacked on phones) */
-              <TopPair>
-                <Column>
-                  <QuickLog meal={food} exercise={exercise} />
-                  <QuickChange />
-                  <QuickSymptom />
-                  {routines && <ExerciseToday panel />}
-                </Column>
-                <Column>
-                  <WellnessCheckIn title="Wellness check-in" quad bare />
-                  <HabitsToday panel />
-                  <MedicationsToday doses={doses} panel />
-                </Column>
-              </TopPair>
-            ) : food ? (
-              <TopPair>
-                {/* The quick log leads, beside the check-in (the macro chart is on the Meals page only) */}
-                <Column><QuickLog meal={food} exercise={exercise} /></Column>
-                <Column><WellnessCheckIn title="Wellness check-in" quad bare /></Column>
-              </TopPair>
-            ) : <WellnessCheckIn title="Wellness check-in" quad bare />}
-            {food && hasMeds && medsOn ? null : hasMeds && medsOn && exercise ? (
-              <Pair>
-                <Column>
-                  {!food && <QuickLog meal={food} exercise={exercise} />}
-                  <QuickChange />
-                  <QuickSymptom />
-                  {/* The exercise schedule sits under Log a symptom; Medications has the right column */}
-                  {routines && <ExerciseToday panel />}
-                </Column>
-                <Column>
-                  {/* Habits sit right under the Wellness check-in, above Medications */}
-                  <HabitsToday panel />
-                  <MedicationsToday doses={doses} panel />
-                </Column>
-              </Pair>
-            ) : (
-              <>
-                <HabitsToday panel />
-                {!food && <QuickLog meal={food} exercise={exercise} />}
-                <QuickChange />
-                <QuickSymptom />
-                {routines && <ExerciseToday panel />}
-                {medsOn && <MedicationsToday doses={doses} hideWhenEmpty panel />}
-              </>
-            )}
-          </Stack>
+          <DndContext sensors={sensors} collisionDetection={collisions}
+            onDragStart={() => setDragging(true)} onDragCancel={() => setDragging(false)} onDragEnd={onDragEnd}>
+            <Stack>
+              <RowGap index={0} dragging={dragging} />
+              {rows.map((row, r) => (
+                <div key={row.join('|')} style={{ display: 'contents' }}>
+                  <Row style={{ gridTemplateColumns: rowColumns(row) }}>
+                    {row.map(k => <WidgetSlot key={k} id={k}>{widgets[k]}</WidgetSlot>)}
+                  </Row>
+                  <RowGap index={r + 1} dragging={dragging} />
+                </div>
+              ))}
+            </Stack>
+          </DndContext>
         </Inner>
       </Page>
     </ContentTemplate>

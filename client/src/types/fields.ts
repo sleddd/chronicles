@@ -93,6 +93,10 @@ export interface TaskFieldValues {
   scheduledDate?: string;
   /** A time on the planned day ("HH:MM") — where it sits in the planner and on Your Agenda; blank = it follows the day's order */
   scheduledTime?: string;
+  /** The deadline's time ("HH:MM"), the Ends time in the task card's When box; blank = any time that day */
+  deadlineTime?: string;
+  /** When is all day: no Starts / Ends times */
+  allDay?: boolean;
   /** The part of that day: 'morning' | 'noon' | 'night'; unset = any time */
   scheduledPart?: string;
   /** The last part of the day it covers, when stretched over more than one ('night' from 'morning' = all day) */
@@ -146,6 +150,8 @@ export interface MilestoneFieldValues {
   isCompleted: boolean;
   parentGoalId: number | null;
   notes?: string;
+  /** Tasks attached before the milestone was first saved; joined to it (their parentMilestoneId) once it has an id */
+  _attachTasks?: number[];
 }
 
 export interface FoodFieldValues {

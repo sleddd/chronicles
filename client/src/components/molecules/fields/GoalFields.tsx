@@ -1,9 +1,11 @@
-import { useId } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import styled from 'styled-components';
 import type { GoalFieldValues } from '../../../types/fields.js';
 import {
-  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareDate, BoxText,
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BoxText,
 } from './formKit.js';
-import { PickChips } from './PickChips.js';
+import { Icon } from '../../atoms/core/Icon.jsx';
+import { PillPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
 export type { GoalFieldValues } from '../../../types/fields.js';
 
 /* Goal fields — the same form in the journal editor and Quick Entry: the
@@ -19,13 +21,44 @@ const TYPES: { value: GoalFieldValues['goalType']; label: string }[] = [
 ];
 
 /* Same statuses as the goals board's columns (Achieved = completed) */
-const STATUSES: { value: GoalFieldValues['goalStatus']; label: string }[] = [
-  { value: 'new', label: 'New' },
-  { value: 'planned', label: 'Planned' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'paused', label: 'Paused' },
-  { value: 'completed', label: 'Achieved' },
+const STATUSES: { value: GoalFieldValues['goalStatus']; label: string; dot: string }[] = [
+  { value: 'new', label: 'New', dot: 'var(--text-muted)' },
+  { value: 'planned', label: 'Planned', dot: 'var(--text-secondary)' },
+  { value: 'in_progress', label: 'In progress', dot: 'var(--chart-amber)' },
+  { value: 'paused', label: 'Paused', dot: 'var(--text-muted)' },
+  { value: 'completed', label: 'Achieved', dot: 'var(--color-accent)' },
 ];
+
+/** The goal's Status, for the text box's foot strip (like the task card's) */
+export function GoalStatusPick({ values, onChange }: { values: GoalFieldValues; onChange: (v: GoalFieldValues) => void }) {
+  const status = STATUSES.some(s => s.value === values.goalStatus) ? values.goalStatus : 'new';
+  return <StatusDropdown value={status} options={STATUSES} onChange={goalStatus => onChange({ ...values, goalStatus })} />;
+}
+
+const NEW_CATEGORY = '__new_category__';
+
+/* "+ New category…": a name box with a × to cancel */
+const NameBox = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  input {
+    width: 200px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--color-accent-line) !important;
+    border-radius: 8px;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+  button {
+    display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+    border: none; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer;
+  }
+  button:hover { color: var(--text-primary); background: var(--bg-hover); }
+`;
 
 interface GoalFieldsProps {
   values: GoalFieldValues;
@@ -36,15 +69,60 @@ interface GoalFieldsProps {
   onAddCategory?: (label: string) => void;
   /** Remove one from the list; omitted = no Edit */
   onRemoveCategory?: (label: string) => void;
+  /** The goal's Time panel, opened from a stopwatch in the When row's top-right corner */
+  timer?: ReactNode;
+  timerRunning?: boolean;
 }
 
-export function GoalFields({ values, onChange, categories = [], onAddCategory, onRemoveCategory }: GoalFieldsProps) {
+/** A category as a pill dropdown: None, the list, then "+ New category…" (a name box with a × in its
+    place) — the goal's and the habit's. `name` puts a muted "Category:" before the choice */
+export function CategoryPill({ value, categories, onPick, onAdd, name }: {
+  value: string; categories: string[]; onPick: (v: string) => void; onAdd?: (label: string) => void; name?: string;
+}) {
+  const list = value && !categories.some(c => c.toLowerCase() === value.toLowerCase()) ? [...categories, value] : categories;
+  const shown = list.find(c => c.toLowerCase() === value.toLowerCase());
+  const [naming, setNaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  const commit = () => {
+    const label = draft.trim().replace(/\s+/g, ' ');
+    if (label) { onAdd?.(label); onPick(label); }
+    setDraft(''); setNaming(false);
+  };
+  if (naming) return (
+    <NameBox>
+      <input autoFocus value={draft} maxLength={40} placeholder="New category" aria-label="New category"
+        onChange={e => setDraft(e.target.value)} onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') { e.preventDefault(); setDraft(''); setNaming(false); }
+        }} />
+      <button type="button" aria-label="Cancel new category" title="Cancel"
+        onMouseDown={e => e.preventDefault()} onClick={() => { setDraft(''); setNaming(false); }}>
+        <Icon name="x" size={14} strokeWidth={2} />
+      </button>
+    </NameBox>
+  );
+  return (
+    <div>
+      <PillPick>
+        {name && <span className="name">{name}</span>}
+        <span className="value">{shown ?? 'None'}</span>
+        <Icon name="chevron-down" size={14} strokeWidth={2} />
+        <select aria-label="Category" value={shown ?? ''}
+          onChange={e => { if (e.target.value === NEW_CATEGORY) setNaming(true); else onPick(e.target.value); }}>
+          <option value="">None</option>
+          {list.map(c => <option key={c} value={c}>{c}</option>)}
+          {onAdd && <option value={NEW_CATEGORY}>+ New category…</option>}
+        </select>
+      </PillPick>
+    </div>
+  );
+}
+
+export function GoalFields({ values, onChange, categories = [], onAddCategory, timer, timerRunning }: GoalFieldsProps) {
   const set = (patch: Partial<GoalFieldValues>) => onChange({ ...values, ...patch });
-  // Older goals may hold a legacy status ("active", "archived") — those show as New
-  const status = STATUSES.some(s => s.value === values.goalStatus) ? values.goalStatus : 'new';
-  const startId = useId();
-  const dateId = useId();
   const notesId = useId();
+
 
   return (
     <FormWrap>
@@ -60,8 +138,7 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, o
       <RowBox style={{ marginTop: 30 }}>
         <LabelledRow>
           <RowLabel>Category</RowLabel>
-          <PickChips label="Category" value={values.goalCategory ?? ''} options={categories}
-            onPick={goalCategory => set({ goalCategory })} onAdd={onAddCategory} onRemove={onRemoveCategory} />
+          <CategoryPill value={values.goalCategory ?? ''} categories={categories} onPick={goalCategory => set({ goalCategory })} onAdd={onAddCategory} />
         </LabelledRow>
         <LabelledRow>
           <RowLabel>Type</RowLabel>
@@ -74,25 +151,22 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, o
             ))}
           </Chips>
         </LabelledRow>
-        <LabelledRow>
-          <RowLabel>Status</RowLabel>
-          <Chips role="radiogroup" aria-label="Status">
-            {STATUSES.map(s => (
-              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
-                $active={status === s.value} onClick={() => set({ goalStatus: s.value })}>
-                {s.label}
-              </Chip>
-            ))}
-          </Chips>
-        </LabelledRow>
-        <LabelledRow>
-          <RowLabel as="label" htmlFor={startId}>Start date</RowLabel>
-          <BareDate id={startId} type="date" value={values.startOn ?? ''} max={values.targetDate || undefined}
-            onChange={e => set({ startOn: e.target.value })} />
-        </LabelledRow>
-        <LabelledRow>
-          <RowLabel as="label" htmlFor={dateId}>Target date</RowLabel>
-          <BareDate id={dateId} type="date" value={values.targetDate} onChange={e => set({ targetDate: e.target.value })} />
+        {/* When: Starts (the start date) and Ends (the target date), the two ends of its roadmap bar */}
+        <LabelledRow style={timer ? { position: 'relative' } : undefined}>
+          <RowLabel>When</RowLabel>
+          {/* The timer in the row's top-right corner: view the time, start one, add time */}
+          {timer && <span style={{ position: 'absolute', top: 10, right: 20 }}><TimerPopButton timer={timer} running={timerRunning} /></span>}
+          <WhenBox2 style={{ maxWidth: 420 }}>
+            <WhenLine $allDay>
+              <WhenLabel>Starts</WhenLabel>
+              <DateTimeInput type="date" aria-label="Start date" value={values.startOn ?? ''} max={values.targetDate || undefined}
+                onChange={e => set({ startOn: e.target.value })} />
+            </WhenLine>
+            <WhenLine $allDay>
+              <WhenLabel>Ends</WhenLabel>
+              <DateTimeInput type="date" aria-label="Target date" value={values.targetDate} onChange={e => set({ targetDate: e.target.value })} />
+            </WhenLine>
+          </WhenBox2>
         </LabelledRow>
       </RowBox>
 

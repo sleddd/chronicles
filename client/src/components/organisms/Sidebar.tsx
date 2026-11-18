@@ -66,11 +66,12 @@ const LogoBtn = styled.button<{ $active?: boolean }>`
   padding: 0;
   border: none;
   cursor: pointer;
-  background: var(--bg-rail-logo);
-  color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-secondary)')};
+  background: transparent; /* no cell of its own: the rail's colour, a hairline under it */
+  border-bottom: 1px solid var(--border-subtle);
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')};
   transition: color 120ms ease;
 
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')}; }
+  &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-primary)')}; }
   ${({ $active }) => ($active ? activeTab : '')}
 `;
 
@@ -114,7 +115,7 @@ const NavScroll = styled.nav`
 /* Rail row — the active row is its accent icon and the accent tab, with no background
    change (a light hairline between rows in both themes). Under the last item: expand / collapse, then ⋯, whose
    menu holds Sign out; Settings is its own row above Collapse. */
-const NavIconBtn = styled.button<{ $active?: boolean }>`
+const NavIconBtn = styled.button<{ $active?: boolean; $tab?: boolean; $fullTab?: boolean }>`
   position: relative;
   flex: 0 0 auto;
   display: flex;
@@ -127,20 +128,23 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   cursor: pointer;
   background: ${({ $active }) => $active ? 'var(--bg-rail-active)' : 'transparent'};
   /* Idle rows recede (about 55%) so only the active one reads bright */
-  color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'color-mix(in srgb, var(--text-secondary) 55%, transparent)'};
+  color: ${({ $active }) => $active ? 'var(--text-primary)' : 'color-mix(in srgb, var(--text-secondary) 55%, transparent)'};
   transition: background 120ms ease, color 120ms ease;
 
 
   &:hover {
     background: var(--bg-rail-active);
-    color: ${({ $active }) => $active ? 'var(--color-accent-nav)' : 'var(--text-primary)'};
+    color: ${({ $active }) => $active ? 'var(--text-primary)' : 'var(--text-primary)'};
   }
   /* Dark: hovering brightens the icon only (no block behind it) */
   html[data-theme='dark'] &:hover { background: transparent; }
   /* No lines between items, in either theme */
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
-  ${({ $active }) => ($active ? activeTab : '')}
+  /* The accent tab: on a section with views, while it's open (clicked or its arrow); else the page you're on */
+  ${({ $active, $tab }) => (($tab ?? $active) ? activeTab : '')}
+  /* Expanded rail: the tab runs the row's full height */
+  ${({ $fullTab }) => ($fullTab ? '&::before { top: 0; height: 100%; transform: none; border-radius: 0; }' : '')}
 `;
 
 /* The icon's fixed column, so it sits in the same place collapsed or expanded */
@@ -183,29 +187,35 @@ const Wordmark = styled.span`
 const RowWrap = styled.div`
   position: relative;
   flex: 0 0 auto;
+  /* Open: the section's row a shade darker than the rail — in light its views a step darker again,
+     in dark the other way round (the row darker, the views lifted lighter) */
+  transition: background 240ms ease;
+  /* Open: the section's row in the logo cell's colour (the CHRONICLES cell at the top) */
+  [data-open] > & { background: var(--bg-rail-logo); }
   /* Room for the chevron at the end of the name */
   & > button:first-child > span:last-child { padding-right: 44px; }
 `;
 
-const SectionChevron = styled.button<{ $open: boolean }>`
+const SectionChevron = styled.button<{ $open: boolean; $active?: boolean }>`
   position: absolute;
   top: 50%;
   right: 8px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  margin-top: -16px;
+  /* Just the chevron, no fill behind it */
+  width: 26px;
+  height: 26px;
+  margin-top: -13px;
   padding: 0;
   border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  border-radius: 50%;
+  background: none;
+  /* The same colour as its row's name: bright on the current section, receding with the others */
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'color-mix(in srgb, var(--text-secondary) 55%, transparent)')};
   cursor: pointer;
   & > svg { transition: transform 160ms ease; transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg); }
   @media (prefers-reduced-motion: reduce) { & > svg { transition: none; } }
-  &:hover { color: var(--text-primary); background: var(--bg-rail-active); }
-  html[data-theme='dark'] &:hover { background: transparent; }
+  &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
@@ -216,30 +226,48 @@ const ViewList = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
-  background: color-mix(in srgb, var(--bg-rail) 94%, #000);
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
-  & > li + li { border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent); }
+  /* A step darker than the open section's row; between rows a dark line over a faint light one */
+  background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
+  html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 96%, #fff); }
+  /* Lines only between rows: none above the first or below the last, so it sits right against
+     the section's row and the next item */
+  & > li + li { border-top: 1px solid rgba(0, 0, 0, 0.3); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035); }
+  html[data-theme='light'] & > li + li { border-top-color: rgba(20, 24, 32, 0.09); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); }
 `;
 
 const ViewBtn = styled.button<{ $active: boolean }>`
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
-  height: 38px;
-  padding: 0 16px 0 ${RAIL}px;
+  height: 44px;
+  padding: 0 11px 0 ${RAIL}px;
   border: none;
   background: transparent;
   text-align: left;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: ${({ $active }) => ($active ? 500 : 400)};
-  color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'color-mix(in srgb, var(--text-secondary) 72%, transparent)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'color-mix(in srgb, var(--text-secondary) 72%, transparent)')};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')}; }
+  &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  & > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+`;
+
+/* The views slide open and shut (rows 0fr → 1fr); hidden from the keyboard and screen
+   readers while shut, instant for reduced motion */
+const ViewSlide = styled.div<{ $open: boolean }>`
+  display: grid;
+  grid-template-rows: ${({ $open }) => ($open ? '1fr' : '0fr')};
+  visibility: ${({ $open }) => ($open ? 'visible' : 'hidden')};
+  transition: grid-template-rows 240ms ease, visibility 0s linear ${({ $open }) => ($open ? '0s' : '240ms')};
+  & > * { min-height: 0; overflow: hidden; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
 /* A section and its views: never squeezed by the scrolling column — it takes its full height */
@@ -292,7 +320,7 @@ const FlyoutItem = styled.button<{ $active?: boolean }>`
   font-family: var(--font-sans);
   font-size: 15px;
   text-align: left;
-  color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')};
+  color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-primary)')};
   cursor: pointer;
   &:hover { background: var(--bg-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
@@ -374,39 +402,55 @@ export const Sidebar = memo(function Sidebar() {
   /* Collapsed, the name is a tooltip and screen-reader text; expanded, it's shown */
   const name = (label: string) => (open ? <Label>{label}</Label> : <SrOnly>{label}</SrOnly>);
   const sections = useNavSections();
+  // One accent at a time: on the section opened last (its row or its arrow) while it stays open,
+  // else on the page you're on — opening another section moves it, never leaves it behind
+  const [lastOpened, setLastOpened] = useState<string | null>(null);
+  const accentKey = (() => {
+    const last = lastOpened ? items.find(i => i.key === lastOpened) : undefined;
+    if (last && sections.isOpen(last.key, last.active)) return last.key;
+    return items.find(i => i.active)?.key ?? null;
+  })();
+  const toggleSection = (item: NavItem, shown: boolean) => {
+    sections.toggle(item.key, item.active);
+    setLastOpened(shown ? (lastOpened === item.key ? null : lastOpened) : item.key);
+  };
   const row = (item: NavItem) => {
+    const hasViews = open && !!item.views?.length;
+    const shown = hasViews && sections.isOpen(item.key, item.active);
     const btn = (
-      <NavIconBtn key={item.key} $active={item.active} onClick={() => navigate(item.path)} title={open ? undefined : item.label}
+      <NavIconBtn key={item.key} $active={item.active} $tab={open ? item.key === accentKey : undefined} $fullTab={open}
+        // A section's row also opens its views (never closes them — that's the arrow)
+        onClick={() => { if (hasViews && !shown) sections.toggle(item.key, item.active); setLastOpened(hasViews ? item.key : null); navigate(item.path); }}
+        title={open ? undefined : item.label}
         aria-current={item.active && !item.views?.some(v => v.active) ? 'page' : undefined}>
         <IconCell><MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon></IconCell>
         {name(item.label)}
       </NavIconBtn>
     );
     // Collapsed (icons only), or a page with no views: just the row
-    if (!open || !item.views?.length) return btn;
-    const shown = sections.isOpen(item.key, item.active);
+    if (!hasViews) return btn;
     const listId = `nav-views-${item.key}`;
     return (
-      <Section key={item.key}>
+      <Section key={item.key} data-open={shown ? '' : undefined}>
         <RowWrap>
           {btn}
-          <SectionChevron type="button" $open={shown} aria-expanded={shown} aria-controls={listId}
+          <SectionChevron type="button" $open={shown} $active={item.active} aria-expanded={shown} aria-controls={listId}
             aria-label={`${shown ? 'Hide' : 'Show'} ${item.label} views`} title={shown ? 'Hide views' : 'Show views'}
-            onClick={() => sections.toggle(item.key, item.active)}>
-            <Icon name="chevron-down" size={18} strokeWidth={1.8} aria-hidden="true" />
+            onClick={() => toggleSection(item, shown)}>
+            <Icon name="chevron-down" size={15} strokeWidth={2} aria-hidden="true" />
           </SectionChevron>
         </RowWrap>
-        {shown && (
+        <ViewSlide $open={shown}>
           <ViewList id={listId} aria-label={`${item.label} views`}>
-            {item.views.map(v => (
+            {(item.views ?? []).map(v => (
               <li key={v.path}>
-                <ViewBtn type="button" $active={v.active} aria-current={v.active ? 'page' : undefined} onClick={() => navigate(v.path)}>
-                  {v.label}
+                <ViewBtn type="button" $active={v.active} aria-current={v.active ? 'page' : undefined} onClick={() => { setLastOpened(null); navigate(v.path); }}>
+                  <span>{v.label}</span>
                 </ViewBtn>
               </li>
             ))}
           </ViewList>
-        )}
+        </ViewSlide>
       </Section>
     );
   };

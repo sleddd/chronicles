@@ -2,14 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithTheme } from '../testUtils';
 
-import { GoalFields } from '@/components/molecules/fields/GoalFields';
+import { GoalFields, GoalStatusPick } from '@/components/molecules/fields/GoalFields';
 import { FoodFields } from '@/components/molecules/fields/FoodFields';
 import { SymptomFields } from '@/components/molecules/fields/SymptomFields';
 import { ExerciseFields } from '@/components/molecules/fields/ExerciseFields';
 import { EventFields } from '@/components/molecules/fields/EventFields';
 import { MeetingFields } from '@/components/molecules/fields/MeetingFields';
 import { MedicationFields } from '@/components/molecules/fields/MedicationFields';
-import { MilestoneFields } from '@/components/molecules/fields/MilestoneFields';
+import { MilestoneFields, MilestoneStatusPick } from '@/components/molecules/fields/MilestoneFields';
 import { TaskFields } from '@/components/molecules/fields/TaskFields';
 
 import type { GoalFieldValues } from '@/types/fields';
@@ -31,12 +31,13 @@ describe('GoalFields', () => {
     targetDate: '2024-12-31',
   };
 
-  it('renders the title and a box of Type, Status and Target date rows', () => {
+  it('renders the title and a box of Type and When rows (Status is in the text box\'s foot, GoalStatusPick)', () => {
     renderWithTheme(<GoalFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByPlaceholderText('What do you want to achieve?')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Short-term' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: 'In progress' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Target date')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Status')).toBeNull();
   });
 
   it('edits the goal notes', () => {
@@ -55,10 +56,10 @@ describe('GoalFields', () => {
 
   it('calls onChange when goalStatus changes (Achieved = completed, Paused)', () => {
     const onChange = vi.fn();
-    renderWithTheme(<GoalFields values={defaultValues} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Achieved' }));
+    renderWithTheme(<GoalStatusPick values={defaultValues} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'completed' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalStatus: 'completed' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'paused' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalStatus: 'paused' }));
   });
 });
@@ -75,11 +76,10 @@ describe('FoodFields', () => {
     notes: '',
   };
 
-  it('renders the title, meal chips, When, calories, ingredients, and notes', () => {
+  it('renders the title, the meal dropdown, When, calories, ingredients, and notes', () => {
     renderWithTheme(<FoodFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByPlaceholderText('What did you eat?')).toBeInTheDocument();
-    expect(screen.getByText('Meal')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Breakfast' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Meal')).toHaveValue('breakfast');
     expect(screen.getByText('When')).toBeInTheDocument();
     expect(screen.getByText('Calories')).toBeInTheDocument();
     expect(screen.getByText('Ingredients')).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('FoodFields', () => {
   it('calls onChange when mealType changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<FoodFields values={defaultValues} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Lunch' }));
+    fireEvent.change(screen.getByLabelText('Meal'), { target: { value: 'lunch' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ mealType: 'lunch' }));
   });
 
@@ -139,27 +139,27 @@ describe('SymptomFields', () => {
     notes: '',
   };
 
-  it('taps common symptom chips in and out of the name', () => {
+  it('picks common symptoms from the dropdown, in and out of the name', () => {
     const onChange = vi.fn();
     const { rerender } = renderWithTheme(<SymptomFields values={{ ...defaultValues, symptomName: 'Flare day' }} onChange={onChange} chips={['Flare day', 'Runny nose']} />);
-    expect(screen.getByRole('button', { name: 'Flare day' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'Runny nose' }));
+    expect(screen.getByRole('option', { name: '✓ Flare day' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Common symptoms'), { target: { value: 'Runny nose' } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ symptomName: 'Flare day, Runny nose' }));
     rerender(<SymptomFields values={{ ...defaultValues, symptomName: 'Flare day, Runny nose' }} onChange={onChange} chips={['Flare day', 'Runny nose']} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Flare day' }));
+    fireEvent.change(screen.getByLabelText('Common symptoms'), { target: { value: 'Flare day' } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ symptomName: 'Runny nose' }));
   });
 
-  it('adds a chip of your own (and picks it), and removes chips in Edit', () => {
+  it('adds a symptom of your own (and picks it), and removes ones in Edit list', () => {
     const onChange = vi.fn(); const onAdd = vi.fn(); const onRemove = vi.fn();
     renderWithTheme(<SymptomFields values={defaultValues} onChange={onChange} chips={['Cough']} onAddChip={onAdd} onRemoveChip={onRemove} />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    fireEvent.change(screen.getByLabelText('Common symptoms'), { target: { value: '__add_symptom__' } });
     const box = screen.getByLabelText('New symptom');
     fireEvent.change(box, { target: { value: 'Hives' } });
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(onAdd).toHaveBeenCalledWith('Hives');
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ symptomName: 'Hives' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Common symptoms'), { target: { value: '__edit_symptoms__' } });
     fireEvent.click(screen.getByRole('button', { name: 'Remove Cough' }));
     expect(onRemove).toHaveBeenCalledWith('Cough');
   });
@@ -405,7 +405,7 @@ describe('MedicationFields', () => {
   it('calls onChange when frequency changes', () => {
     const onChange = vi.fn();
     renderWithTheme(<MedicationFields values={defaultValues} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Weekly' }));
+    fireEvent.change(screen.getByLabelText('How often'), { target: { value: 'weekly' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ frequency: 'weekly' }));
   });
 
@@ -447,14 +447,38 @@ describe('MilestoneFields', () => {
     { id: 2, title: 'Run Marathon' },
   ];
 
-  it('renders linked goal, status, and target date', () => {
+  it('renders the goal and When (Status is in the text box\'s foot, MilestoneStatusPick)', () => {
     renderWithTheme(
       <MilestoneFields values={defaultValues} onChange={() => {}} goalOptions={goalOptions} />,
     );
     expect(screen.getByPlaceholderText('What does this milestone accomplish?')).toBeInTheDocument();
     expect(screen.getByLabelText('Goal')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Not started' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Target date')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Status')).toBeNull();
+    expect(screen.getByText('No tasks attached yet.')).toBeInTheDocument();
+  });
+
+  it('lists its tasks to tick or detach, and attaches another', () => {
+    const toggle = vi.fn(), unlink = vi.fn(), link = vi.fn();
+    renderWithTheme(<MilestoneFields values={defaultValues} onChange={() => {}} goalOptions={goalOptions}
+      linkedTasks={[{ id: 7, title: 'Buy shoes', isCompleted: false }]} attachableTasks={[{ id: 8, title: 'Plan route' }]}
+      onToggleTaskComplete={toggle} onUnlinkTask={unlink} onLinkTask={link} />);
+    fireEvent.click(screen.getByLabelText('Mark "Buy shoes" done'));
+    expect(toggle).toHaveBeenCalledWith(7, true);
+    fireEvent.click(screen.getByRole('button', { name: 'Detach "Buy shoes"' }));
+    expect(unlink).toHaveBeenCalledWith(7);
+    fireEvent.change(screen.getByLabelText('Attach a task'), { target: { value: '8' } });
+    expect(link).toHaveBeenCalledWith(8);
+  });
+
+  it('makes a new task from its name, right there', () => {
+    const create = vi.fn();
+    renderWithTheme(<MilestoneFields values={defaultValues} onChange={() => {}} goalOptions={goalOptions} onCreateTask={create} />);
+    fireEvent.click(screen.getByRole('button', { name: /New task/ }));
+    fireEvent.change(screen.getByLabelText('New task'), { target: { value: 'Book the venue' } });
+    fireEvent.keyDown(screen.getByLabelText('New task'), { key: 'Enter' });
+    expect(create).toHaveBeenCalledWith('Book the venue');
   });
 
   it('edits the milestone notes', () => {
@@ -466,8 +490,8 @@ describe('MilestoneFields', () => {
 
   it('Done marks the milestone completed', () => {
     const onChange = vi.fn();
-    renderWithTheme(<MilestoneFields values={defaultValues} onChange={onChange} goalOptions={goalOptions} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Done' }));
+    renderWithTheme(<MilestoneStatusPick values={defaultValues} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'completed' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ milestoneStatus: 'completed', isCompleted: true }));
   });
 

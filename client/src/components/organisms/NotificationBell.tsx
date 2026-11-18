@@ -174,6 +174,18 @@ const BarBell = styled.button`
 
 /* Wide screens: the bell in the app's top-right corner, over every signed-in
    page — a round button, white glass on the background photo */
+/** While something's due: a small accent dot at the bell's top right (no count) */
+export const BellDot = styled.span<{ $at?: number }>`
+  position: absolute;
+  top: ${({ $at = 2 }) => $at}px;
+  right: ${({ $at = 2 }) => $at}px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  pointer-events: none;
+`;
+
 const CornerBell = styled(BarBell)`
   position: fixed;
   top: 17px;
@@ -368,12 +380,14 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigge
     <>
       {trigger ? trigger(props) : variant === 'corner' ? (
         <CornerBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
-          {/* No count: the bell turns the accent while something's due */}
-          <MaterialIcon $size={18} aria-hidden="true" style={due.length > 0 ? { color: 'var(--color-accent)' } : undefined}>notifications</MaterialIcon>
+          {/* No count: an accent dot while something's due */}
+          <MaterialIcon $size={18} aria-hidden="true">notifications</MaterialIcon>
+          {due.length > 0 && <BellDot aria-hidden="true" $at={0} />}
         </CornerBell>
       ) : (
         <BarBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
-          <MaterialIcon $size={24} aria-hidden="true" style={due.length > 0 ? { color: 'var(--color-accent)' } : undefined}>notifications</MaterialIcon>
+          <MaterialIcon $size={24} aria-hidden="true">notifications</MaterialIcon>
+          {due.length > 0 && <BellDot aria-hidden="true" $at={6} />}
         </BarBell>
       )}
       {open && createPortal(

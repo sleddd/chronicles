@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import {
-  FormWrap, Section, SectionHead, SectionLabel, TitleInput, BoxInput, BoxText, FieldNote,
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, BoxInput, BoxText, FieldNote, DateTimeBox, DateTimeField,
 } from './formKit.js';
 
 /* Changes topic (journal editor): something you changed that the app can't
@@ -14,6 +14,8 @@ export interface ChangeFieldValues {
   changeWhat: string;
   /** YYYY-MM-DD; blank = the day it was written */
   changeDate: string;
+  /** The time of day it changed ("HH:MM"), optional */
+  changeTime?: string;
   notes: string;
 }
 
@@ -37,8 +39,14 @@ export function ChangeFields({ values, onChange }: ChangeFieldsProps) {
       />
 
       <Section style={{ marginTop: 30 }} aria-label="When">
-        <SectionHead><SectionLabel as="label" htmlFor={dateId}>When did it change?</SectionLabel></SectionHead>
-        <BoxInput id={dateId} type="date" value={values.changeDate} onChange={e => set({ changeDate: e.target.value })} />
+        <SectionHead><SectionLabel as="label" htmlFor={dateId}>When</SectionLabel></SectionHead>
+        {/* The same date | time box as Allergy, Symptoms and Meals */}
+        <DateTimeBox style={{ maxWidth: 400 }}>
+          <DateTimeField id={dateId} type="date" value={values.changeDate} onChange={e => set({ changeDate: e.target.value })}
+            aria-label="When did it change?" />
+          <DateTimeField type="time" value={values.changeTime ?? ''} onChange={e => set({ changeTime: e.target.value })}
+            aria-label="What time did it change?" />
+        </DateTimeBox>
         <FieldNote>Leave it blank for the day you write it. Medication changes are recorded on the medication itself.</FieldNote>
       </Section>
 

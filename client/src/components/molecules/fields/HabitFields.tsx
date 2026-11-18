@@ -7,8 +7,9 @@ import type { GoalOption } from '../../../types/ui.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, RowBox, LabelledRow, RowLabel, BareSelect, BoxText, JoinedGroup, JoinedBtn,
 } from './formKit.js';
-import { PickChips } from './PickChips.js';
-import { Days, DayChip, StatusCard } from './RoutineFields.js';
+import { Days, DayChip } from './RoutineFields.js';
+import { CategoryPill } from './GoalFields.js';
+import { PillPick } from './TaskCardFields.js';
 import { describeDays } from '../../../utils/routines.js';
 import { describeTarget, habitFrom, weekTarget } from '../../../utils/habits.js';
 export type { HabitFieldValues } from '../../../types/fields.js';
@@ -22,6 +23,34 @@ export type { HabitFieldValues } from '../../../types/fields.js';
 
 const DAY_CHIPS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/* Target: its count and period with Active at the top right, the days under them */
+const TargetBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .active {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-soft);
+    white-space: nowrap;
+  }
+`;
+
+/* Category and Part of side by side */
+const PillRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+`;
 
 const TargetRow = styled.div`
   display: flex;
@@ -98,61 +127,70 @@ export function HabitFields({ values, onChange, goalOptions = [], categories = [
       </Section>
 
       <RowBox style={{ marginTop: 30 }}>
-        <LabelledRow>
+        {/* Target: how many times a day or week, Active at the top right, and the days it's due under them (none = any day) */}
+        <LabelledRow style={{ paddingTop: 26, paddingBottom: 26 }}>
           <RowLabel>Target</RowLabel>
-          <TargetRow>
-            <Stepper role="group" aria-label="How many times">
-              <button type="button" aria-label="Fewer" disabled={habit.target <= 1} onClick={() => set({ targetCount: habit.target - 1 })}>
-                <Icon name="minus" size={14} strokeWidth={2} />
-              </button>
-              <b aria-live="polite">{habit.target}</b>
-              <button type="button" aria-label="More" disabled={habit.target >= 35} onClick={() => set({ targetCount: habit.target + 1 })}>
-                <Icon name="plus" size={14} strokeWidth={2} />
-              </button>
-            </Stepper>
-            {habit.target === 1 ? 'time a' : 'times a'}
-            <JoinedGroup role="radiogroup" aria-label="Each">
-              {(['day', 'week'] as const).map(p => (
-                <JoinedBtn key={p} type="button" role="radio" aria-checked={habit.period === p} $active={habit.period === p} $fill
-                  onClick={() => set({ targetPeriod: p })}>
-                  {p === 'day' ? 'Day' : 'Week'}
-                </JoinedBtn>
+          <TargetBlock>
+            <div className="top">
+              <TargetRow>
+                <Stepper role="group" aria-label="How many times">
+                  <button type="button" aria-label="Fewer" disabled={habit.target <= 1} onClick={() => set({ targetCount: habit.target - 1 })}>
+                    <Icon name="minus" size={14} strokeWidth={2} />
+                  </button>
+                  <b aria-live="polite">{habit.target}</b>
+                  <button type="button" aria-label="More" disabled={habit.target >= 35} onClick={() => set({ targetCount: habit.target + 1 })}>
+                    <Icon name="plus" size={14} strokeWidth={2} />
+                  </button>
+                </Stepper>
+                {habit.target === 1 ? 'time a' : 'times a'}
+                <JoinedGroup role="radiogroup" aria-label="Each">
+                  {(['day', 'week'] as const).map(p => (
+                    <JoinedBtn key={p} type="button" role="radio" aria-checked={habit.period === p} $active={habit.period === p} $fill
+                      onClick={() => set({ targetPeriod: p })}>
+                      {p === 'day' ? 'Day' : 'Week'}
+                    </JoinedBtn>
+                  ))}
+                </JoinedGroup>
+              </TargetRow>
+              <span className="active" title={values.isActive === false
+                ? 'Paused. It keeps its history and stays off your lists.'
+                : `${describeTarget(habit, describeDays)}, so ${perWeek} ${perWeek === 1 ? 'time' : 'times'} makes a full week. Tick it off on Health → Habits or the dashboard.`}>
+                Active
+                <Toggle checked={values.isActive !== false} aria-label="Active" onChange={v => set({ isActive: v })} />
+              </span>
+            </div>
+            <Days aria-label="Days">
+              {DAY_CHIPS.map((label, d) => (
+                <DayChip key={label} type="button" $active={days.includes(d)} aria-pressed={days.includes(d)}
+                  aria-label={DAY_NAMES[d]} onClick={() => toggleDay(d)}>
+                  {label}
+                </DayChip>
               ))}
-            </JoinedGroup>
-          </TargetRow>
+            </Days>
+          </TargetBlock>
         </LabelledRow>
-        <LabelledRow>
+        {/* Category and the goal it's part of, as two pill dropdowns on one row */}
+        <LabelledRow style={{ paddingTop: 26, paddingBottom: 26 }}>
           <RowLabel>Category</RowLabel>
-          <PickChips label="Category" value={values.habitCategory ?? ''} options={categories}
-            onPick={habitCategory => set({ habitCategory })} onAdd={onAddCategory} onRemove={onRemoveCategory} />
-        </LabelledRow>
-        <LabelledRow>
-          <RowLabel as="label" htmlFor={goalId}>Part of</RowLabel>
-          <BareSelect>
-            <select id={goalId} value={values.parentGoalId?.toString() || ''}
-              onChange={e => set({ parentGoalId: e.target.value ? parseInt(e.target.value, 10) : null })}>
-              <option value="">No goal</option>
-              {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-            </select>
-            <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
-          </BareSelect>
+          <PillRow>
+            <CategoryPill name="Category:" value={values.habitCategory ?? ''} categories={categories}
+              onPick={habitCategory => set({ habitCategory })} onAdd={onAddCategory} />
+            <div>
+              <PillPick>
+                <span className="name">Part of:</span>
+                <span className="value">{goalOptions.find(g => g.id === values.parentGoalId)?.title ?? 'No goal'}</span>
+                <Icon name="chevron-down" size={14} strokeWidth={2} />
+                <select id={goalId} aria-label="Part of" value={values.parentGoalId?.toString() || ''}
+                  onChange={e => set({ parentGoalId: e.target.value ? parseInt(e.target.value, 10) : null })}>
+                  <option value="">No goal</option>
+                  {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+                </select>
+              </PillPick>
+            </div>
+          </PillRow>
         </LabelledRow>
       </RowBox>
 
-      <Section aria-label="Days" style={{ marginTop: 30 }}>
-        <SectionHead>
-          <SectionLabel>Days</SectionLabel>
-          <Count>{days.length === 0 || days.length === 7 ? 'Any day' : describeDays(days)}</Count>
-        </SectionHead>
-        <Days>
-          {DAY_CHIPS.map((label, d) => (
-            <DayChip key={label} type="button" $active={days.includes(d)} aria-pressed={days.includes(d)}
-              aria-label={DAY_NAMES[d]} onClick={() => toggleDay(d)}>
-              {label}
-            </DayChip>
-          ))}
-        </Days>
-      </Section>
 
       <Section style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>
@@ -160,17 +198,6 @@ export function HabitFields({ values, onChange, goalOptions = [], categories = [
           onChange={e => set({ notes: e.target.value })} />
       </Section>
 
-      <StatusCard>
-        <div>
-          <div className="title">On my habits</div>
-          <div className="note">
-            {values.isActive === false
-              ? 'Paused. It keeps its history and stays off your lists.'
-              : `${describeTarget(habit, describeDays)}, so ${perWeek} ${perWeek === 1 ? 'time' : 'times'} makes a full week. Tick it off on Health → Habits or the dashboard.`}
-          </div>
-        </div>
-        <Toggle checked={values.isActive !== false} aria-label="On my habits" onChange={v => set({ isActive: v })} />
-      </StatusCard>
     </FormWrap>
   );
 }

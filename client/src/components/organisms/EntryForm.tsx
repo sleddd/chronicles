@@ -6,7 +6,6 @@ import { cardLabel } from '../../styles/cardLabel.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { SectionLabel, RowBox, LabelledRow, RowLabel } from '../molecules/fields/formKit.js';
 import { TitleField } from '../molecules/fields/TitleInput.js';
-import { QUICK_PLACEHOLDER } from '../../utils/quickPlaceholder.js';
 import { NAME_FIELD_BY_TYPE, NAME_MAX, NAME_PLACEHOLDER_BY_TYPE, contentWithName, nameFromContent } from '../../utils/nameFields.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
@@ -19,8 +18,8 @@ import { TopicSelector } from './TopicSelector.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { FieldRowLayoutContext } from '../molecules/FormField.js';
 import { TaskFields, type TaskFieldValues } from '../molecules/fields/TaskFields.js';
-import { GoalFields, type GoalFieldValues } from '../molecules/fields/GoalFields.js';
-import { MilestoneFields, type MilestoneFieldValues } from '../molecules/fields/MilestoneFields.js';
+import { GoalFields, GoalStatusPick, type GoalFieldValues } from '../molecules/fields/GoalFields.js';
+import { MilestoneFields, MilestoneStatusPick, type MilestoneFieldValues } from '../molecules/fields/MilestoneFields.js';
 import { HabitFields, type HabitFieldValues } from '../molecules/fields/HabitFields.js';
 import { HABIT_DEFAULTS } from '../../utils/habits.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -29,12 +28,15 @@ import { MedicationFields, type MedicationFieldValues } from '../molecules/field
 import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/MenuPlanFields.js';
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
 import { TimeTracker } from '../molecules/fields/TimeTracker.js';
+import { TaskCardRows, TaskRow, TaskRowName, TaskStatusPick, TaskFormatToggle } from '../molecules/fields/TaskCardFields.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
 import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
 import { MEDIA_DEFAULTS, mediaTags, mediaTopicIds } from '../../utils/media.js';
 import { retagMedia } from '../../utils/retagMedia.js';
 import { useSaveFields } from '../../hooks/useSaveFields.js';
 import { showFlash } from '../../services/flashNotice.js';
+import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
+import { useCreateEntry } from '../../hooks/useCreateEntry.js';
 import { aiMediaDetails } from '../../services/mediaDetails.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useTimeTracking } from '../../hooks/useTimeTracking.js';
@@ -326,6 +328,105 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
   }
 `;
 
+/* ── The task card (journal and Quick entry) ── */
+
+/* Its head: the topic picker and Single task | To-do list, full screen / close at the right; no line under it */
+const TaskHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 18px 26px;
+  position: relative;
+  z-index: 5; /* the topic menu drops over the rows */
+  /* The journal: full screen / close right at the pane's edge (10px in) */
+  &[data-journal] { padding-right: 10px; }
+  /* Close: a round button with the reminders bell's fill, no outline — the dark smoked glass in
+     dark, the panel colour with a light shadow in light */
+  && button[aria-label='Close'] {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(18, 20, 26, 0.5);
+    color: #fff;
+  }
+  && button[aria-label='Close']:hover { background: rgba(18, 20, 26, 0.66); }
+  html[data-theme='light'] && button[aria-label='Close'] {
+    background: var(--bg-panel);
+    box-shadow: 0 1px 3px rgba(20, 24, 32, 0.08);
+    color: var(--text-secondary);
+  }
+  html[data-theme='light'] && button[aria-label='Close']:hover { color: var(--text-primary); }
+  ${NAV_COMPACT} { &[data-journal] { padding-right: 26px; } }
+  & > :last-child:not(:first-child):not([role='radiogroup']) { margin-left: auto; }
+  @container entrycard (max-width: 560px) { padding: 14px 18px; }
+`;
+
+/* The rows under the head */
+const TaskBody = styled.div`
+  padding: 10px 26px 12px;
+  @container entrycard (max-width: 560px) { padding: 8px 18px 10px; }
+`;
+
+/* The title in a box: the writing area, then its Status and the tools under a hairline */
+const TitleBox = styled.div`
+  min-width: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  /* An outline only — no fill */
+  background: transparent;
+  overflow: clip;
+  &&&& ${EditorArea} { --editor-surface: transparent; margin: 0; padding: 22px 16px 26px 22px; border: none; border-radius: 0; }
+  /* Typing never lights it up: no accent outline on the box or the writing area */
+  && .tiptap:focus, && .tiptap:focus-visible, && [contenteditable]:focus, && [contenteditable]:focus-visible { outline: none; box-shadow: none; }
+`;
+
+const TitleFoot = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 10px 10px 10px 16px;
+  border-top: 1px solid var(--border-card);
+  /* A shade darker than the title above it */
+  background: rgba(0, 0, 0, 0.16);
+  html[data-theme='light'] & { background: rgba(20, 24, 32, 0.04); }
+`;
+
+const TitleTools = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  & > button, & > div > button { width: 36px; height: 36px; color: var(--text-secondary); }
+  & > button[aria-pressed="true"] { color: var(--color-accent); }
+`;
+
+/* The foot's left side: the tools (a topic with no text box) and Delete */
+const FootLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+`;
+
+/* Delete at the foot's left: the trash and the word, in the danger colour */
+const TaskDelete = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--color-danger);
+  cursor: pointer;
+  &:hover { opacity: 0.8; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
 /* ── Quick entry (dashboard) ── */
 
 /* No card: written straight on the page (on the photo, when there's a
@@ -345,6 +446,32 @@ const QuickCard = styled.div`
    field on the right, hairlines edge to edge — and a tinted foot with Save */
 const CARD_X = '36px';
 const LABEL_COL = '200px';
+
+/* Every other topic's text: a row like the fields' (their 200px label column), the writing area
+   in the task card's box with the tools under it */
+const TextRow = styled.div`
+  display: grid;
+  grid-template-columns: ${LABEL_COL} minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
+  padding: 20px ${CARD_X} 22px;
+  & > :first-child { ${cardLabel} padding-top: 22px; }
+  @container entrycard (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 10px;
+    padding: 16px 20px 18px;
+    & > :first-child { padding-top: 0; }
+  }
+`;
+
+/* A topic that is only text (no fields of its own): the writing area alone — no label or box —
+   its tools in the foot's left beside Delete */
+const PlainText = styled.div`
+  padding: 18px ${CARD_X} 6px;
+  @container entrycard (max-width: 600px) { padding: 14px 20px 4px; }
+  &&&& ${EditorArea} { --editor-surface: transparent; margin: 0; padding: 0; border: none; border-radius: 0; }
+  && .tiptap:focus, && .tiptap:focus-visible, && [contenteditable]:focus, && [contenteditable]:focus-visible { outline: none; box-shadow: none; }
+`;
 
 const cardRows = css`
   /* Every field group is a row: its head (the label) in the left column, the field on the right */
@@ -454,8 +581,8 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     @media (prefers-reduced-motion: reduce) { &[data-quick-open] { animation: none; } }
     /* Frosted glass: the panel colour at 70% with the photo blurred behind it, so it
        reads as glass on the photo rather than a grey slab over it (the other cards sit
-       off the photo and stay solid); the formatting bar stays clear on it — 55%, a lighter glass */
-    background: color-mix(in srgb, var(--bg-panel) 55%, transparent);
+       off the photo and stay solid); the formatting bar stays clear on it — 92%, nearly solid */
+    background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
     && ${EditorArea} { --editor-surface: transparent; }
@@ -469,6 +596,8 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     /* "Enter title/text..." a step brighter than the tools beside it */
     && input::placeholder, && textarea::placeholder, && .tiptap p.is-editor-empty:first-child::before { color: var(--text-secondary); opacity: 0.8; }
     @media (max-width: 768px) { margin-top: 18px; }
+    /* The title / text box has no outline here (the card is its frame); its tools strip stays */
+    && ${TitleBox} { border-color: transparent; border-radius: 0; }
   ` : '')}
   /* The writing area is the card's title row; the tools sit at its top right */
   && ${EditorArea} { margin: 0; padding: 28px ${CARD_X} 22px; border: none; border-radius: 0; }
@@ -488,7 +617,7 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     && ${EditorArea} { padding: 22px 20px 18px; }
     &&[data-tools-beside] ${EditorArea} { padding-right: 124px; }
   }
-  /* Placeholders faded (the Quick entry's read "Enter title/text...", QUICK_PLACEHOLDER below);
+  /* Placeholders faded (each field keeps its own hint);
      the topic menu's search (in QuickPrompt) keeps its own */
   & input::placeholder, & textarea::placeholder { color: var(--text-muted); font-style: normal; opacity: 0.55; }
   && .tiptap p.is-editor-empty:first-child::before { font-style: normal; color: var(--text-muted); opacity: 0.55; }
@@ -511,8 +640,8 @@ const QuickExtraBox = styled.div`
   position: relative;
   z-index: 6;
   border-radius: 14px;
-  /* Frosted like the Quick entry card: the panel colour at 70%, the photo blurred behind */
-  background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
+  /* Frosted like the Quick entry card: the panel colour at 92%, the photo blurred behind */
+  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
   backdrop-filter: blur(16px) saturate(1.1);
   box-shadow: var(--shadow-card); /* even, all the way round the card */
@@ -821,6 +950,65 @@ const QuickError = styled.p`
 /* The media form, able to rename or remove a tag on every other media entry that has it
    (the open entry changes in its form). Its own component so the save hook only runs for
    media entries */
+/* A milestone's form with its tasks saved for real (tick, attach, detach, create go to the server
+   through useSaveFields / useCreateEntry) — its own component so the hooks only run for milestones.
+   Before the milestone has an id, attached tasks are held in its fields (_attachTasks) and listed
+   with the others; they're joined to it as soon as it's saved (here in the journal, in QuickEntry's
+   save for the Quick entry) */
+function MilestoneFieldsWithTasks({ entryId, linkedTasks = [], attachableTasks = [], ...props }: React.ComponentProps<typeof MilestoneFields> & { entryId?: number | null }) {
+  const saveEntryFields = useSaveFields();
+  const openInJournal = useOpenInJournal();
+  const createEntry = useCreateEntry();
+  const entries = useEntriesStore(st => st.decryptedEntries);
+  const { values, onChange } = props;
+  const pending = Array.isArray(values._attachTasks) ? values._attachTasks : [];
+  const fieldsOf = (id: number) => {
+    const e = entries.find(x => x.id === id);
+    return e ? { e, cf: ((e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {} } : null;
+  };
+  const change = (taskId: number, patch: Record<string, unknown>) => {
+    const f = fieldsOf(taskId);
+    if (!f) return;
+    void saveEntryFields(f.e, { ...f.cf, ...patch }).then(ok => { if (!ok) showFlash('Couldn’t save that task. Try again.'); });
+  };
+  const linkPatch = (id: number) => ({ parentMilestoneId: id, ...(values.parentGoalId ? { parentGoalId: values.parentGoalId } : {}) });
+
+  // Saved now: join the tasks held for it, then let the field go
+  useEffect(() => {
+    if (!entryId || pending.length === 0) return;
+    for (const id of pending) change(id, linkPatch(entryId));
+    const { _attachTasks: _, ...rest } = values;
+    onChange(rest as typeof values);
+  }, [entryId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Shown: the tasks on it, then the ones held for it
+  const held = pending.filter(id => !linkedTasks.some(t => t.id === id)).flatMap(id => {
+    const f = fieldsOf(id);
+    return f ? [{ id, title: stripHtml(f.e.content).slice(0, 60) || `Task #${id}`, isCompleted: !!f.cf.isCompleted }] : [];
+  });
+  const shown = [...linkedTasks, ...held];
+  const attachable = attachableTasks.filter(t => !pending.includes(t.id));
+
+  return (
+    <MilestoneFields {...props} linkedTasks={shown} attachableTasks={attachable}
+      onToggleTaskComplete={(id, done) => change(id, { isCompleted: done, ...(done ? { isInProgress: false, isBacklog: false } : {}) })}
+      onUnlinkTask={id => (pending.includes(id)
+        ? onChange({ ...values, _attachTasks: pending.filter(x => x !== id) })
+        : change(id, { parentMilestoneId: null }))}
+      onLinkTask={id => (entryId ? change(id, linkPatch(entryId)) : onChange({ ...values, _attachTasks: [...pending, id] }))}
+      onOpenTask={id => openInJournal(id)}
+      onCreateTask={title => {
+        void createEntry({ name: 'Task', icon: 'circle-check' }, title, {
+          taskDescription: title, isInProgress: false, isCompleted: false, isAutoMigrating: false,
+          parentGoalId: values.parentGoalId ?? null, parentMilestoneId: entryId ?? null, deadline: '', priority: 'none',
+        }).then(id => {
+          if (id === null) { showFlash('That task didn’t save. Try again.'); return; }
+          if (!entryId) onChange({ ...values, _attachTasks: [...pending, id] });
+        });
+      }} />
+  );
+}
+
 function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof MediaFields> & { entryId?: number | null }) {
   const saveEntryFields = useSaveFields();
   // One rename at a time: a second waits for the first, so they never interleave
@@ -849,7 +1037,7 @@ const QUICK_QUESTION = 'What would you like to write down?';
 /** The prompt's words for a topic: "a journal entry", "an exercise entry" */
 export function quickTopicPhrase(name: string): string {
   const n = name.trim().toLowerCase() || 'journal';
-  return `${/^[aeiou]/.test(n) ? 'an' : 'a'} ${n} entry`;
+  return `${/^[aeiou]/.test(n) ? 'an' : 'a'} ${n}`;
 }
 
 /* ── Helpers ── */
@@ -998,7 +1186,7 @@ export function EntryForm({
     });
     return () => cancelAnimationFrame(frame);
   }, [quick, quickOpen]);
-  // Quick entry: every text field's placeholder is "Enter title/text...", whichever topic's form shows
+  // Quick entry: number fields read "0"; every other field keeps its own hint (Venue name, Attendees…)
   const quickRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = quickRef.current;
@@ -1010,9 +1198,7 @@ export function EntryForm({
         // Number fields (exercise stats, nutrients, amounts…) read just "0"
         if (el instanceof HTMLInputElement && (el.type === 'number' || el.inputMode === 'decimal' || el.inputMode === 'numeric')) {
           if (el.placeholder !== '0') el.placeholder = '0';
-          return;
         }
-        if (el.placeholder !== QUICK_PLACEHOLDER) el.placeholder = QUICK_PLACEHOLDER;
       });
     };
     apply();
@@ -1168,27 +1354,16 @@ export function EntryForm({
       return { id: e.id, title: stripHtml(e.content).slice(0, 60) || `Task #${e.id}`, isCompleted: !!cf?.isCompleted };
     }) : [], [entries, topics, entryId]);
 
-  // Toggle a linked task's completion status
-  const handleToggleTaskComplete = (taskId: number, completed: boolean) => {
-    const entry = entries.find(e => e.id === taskId);
-    if (!entry) return;
-    const meta = entry.metadata as Record<string, unknown>;
-    const existingFields = (meta?._customFields as Record<string, unknown>) || {};
-    const updatedFields = { ...existingFields, isCompleted: completed };
-    const updatedMeta = { ...meta, _customFields: updatedFields };
-    updateDecryptedEntry(taskId, { metadata: updatedMeta });
-  };
-
-  // Unlink a task from this milestone
-  const handleUnlinkTask = (taskId: number) => {
-    const entry = entries.find(e => e.id === taskId);
-    if (!entry) return;
-    const meta = entry.metadata as Record<string, unknown>;
-    const existingFields = (meta?._customFields as Record<string, unknown>) || {};
-    const updatedFields = { ...existingFields, parentMilestoneId: null };
-    const updatedMeta = { ...meta, _customFields: updatedFields };
-    updateDecryptedEntry(taskId, { metadata: updatedMeta });
-  };
+  // Tasks that could be attached: not on this milestone, not done (newest first)
+  const attachableTasks = useMemo(() => entries
+    .filter(e => {
+      const meta = e.metadata as Record<string, unknown>;
+      const cf = meta?._customFields as Record<string, unknown> | undefined;
+      const tid = meta?._taxonomyId as number | undefined;
+      const t = tid ? topics.find(tp => tp.id === tid) : undefined;
+      return t && getCustomType(t.name) === 'task' && (entryId == null || cf?.parentMilestoneId !== entryId) && !cf?.isCompleted;
+    })
+    .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Task #${e.id}` })), [entries, topics, entryId]);
 
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
   // Any filled-in field makes an entry saveable — topics without a text area
@@ -1402,8 +1577,54 @@ export function EntryForm({
   );
 
 
-  // The writing area and the topic's fields — the same in both layouts
-  const body = (
+  // Exercise and an exercise routine: the Time panel opens from a stopwatch beside Duration (no Time section of their own)
+  const exerciseTimer = !['exercise', 'routine', 'goal', 'milestone'].includes(customType ?? '') ? undefined : quick
+    ? (onSaveAndStartTimer ? (
+      <TimeTracker
+        sessions={[]} totalMs={0} running={false} otherRunning={timer.otherRunning} now={timer.now}
+        disabled={isSaving || !timer.loaded}
+        onStart={() => void onSaveAndStartTimer(canSave ? undefined : timerFill(customType, nameKey, new Date()))} onStop={timer.stop} onAdd={() => {}} onRemove={() => {}}
+        noAdd
+        note={timer.otherRunning ? 'Starting the timer saves this entry and stops the one running now.' : 'Starting the timer saves this entry.'}
+      />
+    ) : undefined)
+    : (
+      <TimeTracker
+        sessions={timer.sessions} totalMs={timer.totalMs} running={timer.running} otherRunning={timer.otherRunning} now={timer.now}
+        disabled={(entryId === null && !onSaveAndStartTimer) || isSaving || !timer.loaded}
+        onStart={entryId === null && onSaveAndStartTimer
+          ? () => void onSaveAndStartTimer(canSave ? undefined : timerFill(customType, nameKey, new Date()))
+          : timer.start}
+        onStop={timer.stop} onAdd={timer.addManual} onRemove={timer.remove}
+        note={entryId === null && onSaveAndStartTimer ? 'Starting the timer saves this entry.' : undefined}
+        onUseAsDuration={customType === 'exercise' ? m => onCustomFieldsChange({ ...customFields, duration: String(m) }) : undefined}
+      />
+    );
+
+  // The writing area itself (in the body below, or in a task card's title box)
+  const editorEl = (
+    <Editor
+      content={content}
+      onChange={onContentChange}
+      // The Quick entry asks its question in the writing area itself
+      placeholder={quick && customType !== 'task' ? QUICK_QUESTION : !nameTarget ? placeholder
+        : (nameKey && customType ? NAME_PLACEHOLDER_BY_TYPE[customType] : customTitle?.label) || placeholder}
+      onEnterSave={canSave && !isSaving ? onSave : undefined}
+      toolbarOpen={toolbarOpen}
+      onToolbarToggle={setFormatOpen}
+      hideToolbarToggle
+      dictationControlRef={dictRef}
+      drawingControlRef={drawingControlRef}
+      onDictationChange={quick ? setListening : undefined}
+    />
+  );
+
+  // The writing area and the topic's fields — the same in both layouts. Every topic but a task
+  // (its own card) and a recipe's formatted page is framed: the writing area in a box with the tools
+  const framed = !recipeViewMode;
+  // A topic with no fields of its own (Journal, a plain topic): just the writing area, tools in the foot
+  const textOnly = !customType && userFieldDefs.length === 0 && !editorHidden;
+  const renderBody = () => (
     <>
       {/* Featured image hero — at the top, above the topic / actions row
           (recipes place it inside their own layout) */}
@@ -1424,22 +1645,36 @@ export function EntryForm({
 
 
       {/* Rich text editor — hidden entirely for structured topics */}
-      <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $roomy={quick && !customType && userFieldDefs.length === 0}>
-        <Editor
-          content={content}
-          onChange={onContentChange}
-          // The Quick entry asks its question in the writing area itself
-          placeholder={quick ? QUICK_QUESTION : !nameTarget ? placeholder
-            : (nameKey && customType ? NAME_PLACEHOLDER_BY_TYPE[customType] : customTitle?.label) || placeholder}
-          onEnterSave={canSave && !isSaving ? onSave : undefined}
-          toolbarOpen={toolbarOpen}
-          onToolbarToggle={setFormatOpen}
-          hideToolbarToggle
-          dictationControlRef={dictRef}
-          drawingControlRef={drawingControlRef}
-          onDictationChange={quick ? setListening : undefined}
-        />
-      </EditorArea>
+      {framed ? (editorHidden ? (
+        // No text box on this topic: the editor stays mounted, hidden, as before
+        <EditorArea $hidden $quick={quick}>{editorEl}</EditorArea>
+      ) : textOnly ? (
+        // Only text: no label or box, the tools go to the foot
+        <PlainText><EditorArea $quick={quick} $roomy={quick}>{editorEl}</EditorArea></PlainText>
+      ) : (
+        <TextRow>
+          <div>{nameTarget ? 'Title' : 'Text'}</div>
+          <TitleBox>
+            <EditorArea $quick={quick}>{editorEl}</EditorArea>
+            {/* A goal's Status sits here, like a task's; other topics just have the tools */}
+            <TitleFoot style={customType === 'goal' || customType === 'milestone' ? undefined : { justifyContent: 'flex-end' }}>
+              {customType === 'milestone' && (
+                <MilestoneStatusPick values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues}
+                  onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
+              )}
+              {customType === 'goal' && (
+                <GoalStatusPick values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues}
+                  onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
+              )}
+              {taskTools}
+            </TitleFoot>
+          </TitleBox>
+        </TextRow>
+      )) : (
+        <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $roomy={quick && !customType && userFieldDefs.length === 0}>
+          {editorEl}
+        </EditorArea>
+      )}
 
       {/* Photos under the text: one larger, more in a row (no featured banner).
           A media item's go at the foot of the card instead, after its cover and details */}
@@ -1466,20 +1701,24 @@ export function EntryForm({
                 onRemoveType={taskTypesLoaded ? l => { void saveTaskTypes(removeTaskType(taskTypes, l)); } : undefined} />}
               {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
                 categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
-                onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}
+                onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined}
+                timer={exerciseTimer} timerRunning={timer.running} />}
               {customType === 'habit' && <HabitFields values={{ ...HABIT_DEFAULTS, parentGoalId: null, ...customFields } as HabitFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions}
                 categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
                 onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}
-              {customType === 'milestone' && <MilestoneFields values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} onToggleTaskComplete={handleToggleTaskComplete} onUnlinkTask={handleUnlinkTask} />}
+              {customType === 'milestone' && <MilestoneFieldsWithTasks values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} attachableTasks={attachableTasks} entryId={entryId}
+                timer={exerciseTimer} timerRunning={timer.running} />}
               {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
-              {customType === 'routine' && <RoutineFields values={{ ...ROUTINE_DEFAULTS, duration: '', items: [], days: [], isActive: true, notes: '', ...customFields } as RoutineFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} categoryOptions={trainingCategoryOptions} />}
+              {customType === 'routine' && <RoutineFields values={{ ...ROUTINE_DEFAULTS, duration: '', items: [], days: [], isActive: true, notes: '', ...customFields } as RoutineFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} categoryOptions={trainingCategoryOptions}
+                timer={exerciseTimer} timerRunning={timer.running} />}
               {customType === 'training_plan' && <TrainingPlanFields values={{ startDate: '', eventDate: '', categories: [], phases: [], isActive: true, notes: '', ...customFields } as TrainingPlanFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'change' && <ChangeFields values={{ changeWhat: '', changeDate: '', notes: '', ...customFields } as ChangeFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'symptom' && <SymptomFields values={{ symptomName: '', severity: 5, occurredDate: '', occurredTime: '', duration: '', notes: '', ...customFields } as SymptomFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
                 chips={symptomChipList(symptomChips)} onAddChip={chipsLoaded ? l => { void saveSymptomChips(addSymptomChip(symptomChips, l)); } : undefined}
                 onRemoveChip={chipsLoaded ? l => { void saveSymptomChips(removeSymptomChip(symptomChips, l)); } : undefined} />}
-              {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} categoryOptions={trainingCategoryOptions} />}
+              {customType === 'exercise' && <ExerciseFields values={{ exerciseType: 'running', duration: '', intensity: 'medium', distance: '', distanceUnit: 'miles', calories: '', performedDate: '', performedTime: '', notes: '', ...customFields } as ExerciseFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} categoryOptions={trainingCategoryOptions}
+                timer={exerciseTimer} timerRunning={timer.running} />}
               {customType === 'event' && <EventFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', location: '', address: '', phone: '', notes: '', ...customFields } as EventFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
               {customType === 'meeting' && <MeetingFields values={{ startDate: '', startTime: '', endDate: '', endTime: '', meetingTopic: '', attendees: '', location: '', address: '', phone: '', notes: '', ...customFields } as MeetingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} showCalendarSync={calendarSyncEnabled} />}
               {customType === 'allergy' && <AllergyFields values={{ allergen: '', severity: 5, reaction: '', occurredDate: '', occurredTime: '', notes: '', ...customFields } as AllergyFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
@@ -1491,7 +1730,7 @@ export function EntryForm({
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
               {customType === 'media' && <MediaFieldsWithTags values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady ? aiMediaDetails : undefined} allTags={mediaTagOptions} entryId={entryId} />}
               {customType === 'time_tracking' && <TimeTrackingFields values={{ activityName: '', notes: '', ...customFields } as TimeTrackingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
-              {customType && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
+              {customType && !['exercise', 'routine', 'goal', 'milestone'].includes(customType) && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
                 <div style={{ marginTop: 32 }}>
                   <TimeTracker
                     sessions={[]} totalMs={0} running={false} otherRunning={timer.otherRunning} now={timer.now}
@@ -1502,7 +1741,7 @@ export function EntryForm({
                   />
                 </div>
               )}
-              {customType && TIME_TRACKED_TYPES.has(customType) && !quick && (
+              {customType && !['exercise', 'routine', 'goal', 'milestone'].includes(customType) && TIME_TRACKED_TYPES.has(customType) && !quick && (
                 <div>
                   <TimeTracker
                     sessions={timer.sessions} totalMs={timer.totalMs} running={timer.running} otherRunning={timer.otherRunning} now={timer.now}
@@ -1544,6 +1783,147 @@ export function EntryForm({
       )}
 
     </>
+  );
+
+  /* ── A task: its own card (the task card mock) ── */
+  const isTaskCard = customType === 'task' && !recipeViewMode;
+  const taskValues = { isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues;
+  const setTask = (v: TaskFieldValues) => onCustomFieldsChange(v as unknown as Record<string, unknown>);
+  // The timer behind the stopwatch: view the time, start a timer, add time
+  const taskTimer = quick
+    ? (onSaveAndStartTimer ? (
+      <TimeTracker
+        sessions={[]} totalMs={0} running={false} otherRunning={timer.otherRunning} now={timer.now}
+        disabled={isSaving || !timer.loaded}
+        onStart={() => void onSaveAndStartTimer(canSave ? undefined : timerFill('task', nameKey, new Date()))} onStop={timer.stop} onAdd={() => {}} onRemove={() => {}}
+        noAdd
+        note={timer.otherRunning ? 'Starting the timer saves this entry and stops the one running now.' : 'Starting the timer saves this entry.'}
+      />
+    ) : undefined)
+    : (
+      <TimeTracker
+        sessions={timer.sessions} totalMs={timer.totalMs} running={timer.running} otherRunning={timer.otherRunning} now={timer.now}
+        disabled={(entryId === null && !onSaveAndStartTimer) || isSaving || !timer.loaded}
+        onStart={entryId === null && onSaveAndStartTimer
+          ? () => void onSaveAndStartTimer(canSave ? undefined : timerFill('task', nameKey, new Date()))
+          : timer.start}
+        onStop={timer.stop} onAdd={timer.addManual} onRemove={timer.remove}
+        note={entryId === null && onSaveAndStartTimer ? 'Starting the timer saves this entry.' : undefined}
+      />
+    );
+  const taskTools = (
+    <TitleTools aria-label="Entry tools">
+      <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
+        onClick={() => setFormatOpen(!toolbarOpen)}>
+        <Icon name="type" size={18} strokeWidth={1.7} />
+      </IconBtn>
+      <IconBtn type="button" aria-label="Draw" title="Draw"
+        onClick={() => { setNotesExpanded(true); drawingControlRef.current?.open(); }}>
+        <Icon name="pencil" size={17} strokeWidth={1.7} />
+      </IconBtn>
+      <IconBtn type="button" $active={listening} aria-label={listening ? 'Stop dictation' : 'Dictate'} title="Dictate" aria-pressed={listening}
+        onClick={() => { setNotesExpanded(true); dictRef.current?.toggle(); }}>
+        <Icon name="mic" size={17} strokeWidth={1.7} />
+      </IconBtn>
+      {!quick && imagesReady && (
+        <>
+          <input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES.join(',')} multiple style={{ display: 'none' }}
+            onChange={e => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length > 0) onImagesSelected?.(files);
+              e.target.value = '';
+            }} />
+          <IconBtn type="button" aria-label="Add images" title={imagesFull ? 'Maximum of 7 images per entry' : 'Add images'}
+            disabled={imagesFull || imageUploading}
+            onClick={() => !imagesFull && !imageUploading && fileInputRef.current?.click()}
+            style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
+            {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={18} strokeWidth={1.7} />}
+          </IconBtn>
+        </>
+      )}
+      {!quick && (
+        <IconBtn type="button" $active={isFavorite} $activeColor={accentColor}
+          aria-label={isFavorite ? 'Remove bookmark' : 'Bookmark entry'} title="Bookmark"
+          onClick={() => entryId && onBookmark?.()}
+          style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}>
+          <Icon name="bookmark" size={18} strokeWidth={1.7} />
+        </IconBtn>
+      )}
+    </TitleTools>
+  );
+  // A topic with no text box (Exercise, Wellness…): no Format, Draw or Dictate (nothing to format) —
+  // just Add images and Bookmark, in the journal's foot
+  const noTextTools = quick ? null : (
+    <TitleTools aria-label="Entry tools">
+      {imagesReady && (
+        <>
+          <input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_TYPES.join(',')} multiple style={{ display: 'none' }}
+            onChange={e => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length > 0) onImagesSelected?.(files);
+              e.target.value = '';
+            }} />
+          <IconBtn type="button" aria-label="Add images" title={imagesFull ? 'Maximum of 7 images per entry' : 'Add images'}
+            disabled={imagesFull || imageUploading}
+            onClick={() => !imagesFull && !imageUploading && fileInputRef.current?.click()}
+            style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
+            {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={18} strokeWidth={1.7} />}
+          </IconBtn>
+        </>
+      )}
+      <IconBtn type="button" $active={isFavorite} $activeColor={accentColor}
+        aria-label={isFavorite ? 'Remove bookmark' : 'Bookmark entry'} title="Bookmark"
+        onClick={() => entryId && onBookmark?.()}
+        style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}>
+        <Icon name="bookmark" size={18} strokeWidth={1.7} />
+      </IconBtn>
+    </TitleTools>
+  );
+
+  // Full screen and close, at the right of the head (the journal)
+  const headIcons = (onToggleExpand || onClose) ? (
+    <HeadIcons>
+      {onToggleExpand && (
+        <IconBtn type="button" $active={expanded} aria-label={expanded ? 'Exit full screen' : 'Expand editor'}
+          title={expanded ? 'Exit full screen' : 'Expand'} aria-pressed={!!expanded} onClick={onToggleExpand}>
+          <Icon name={expanded ? 'minimize' : 'maximize'} size={18} strokeWidth={1.8} />
+        </IconBtn>
+      )}
+      {onClose && (
+        <IconBtn type="button" aria-label="Close" title="Close" onClick={onClose}>
+          <Icon name="x" size={18} strokeWidth={1.8} />
+        </IconBtn>
+      )}
+    </HeadIcons>
+  ) : null;
+  const deleteBtn = entryId && onDelete ? (
+    <TaskDelete type="button" onClick={onDelete}>
+      <Icon name="trash" size={17} strokeWidth={1.8} /> Delete
+    </TaskDelete>
+  ) : null;
+
+  const taskBody = (
+    <TaskBody>
+      {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
+      <TaskRow style={{ alignItems: 'start', paddingTop: 2, paddingBottom: 22 }}>
+        <TaskRowName style={{ paddingTop: 18 }}>Title</TaskRowName>
+        <TitleBox>
+          <EditorArea $quick={quick}>{editorEl}</EditorArea>
+          <TitleFoot>
+            <TaskStatusPick values={taskValues} onChange={setTask} />
+            {taskTools}
+          </TitleFoot>
+        </TitleBox>
+      </TaskRow>
+      {images.length + (imageUploading ? 1 : 0) > 0 && (
+        <PhotosRow>
+          <EntryPhotos images={images} uploading={imageUploading} onRemove={key => onImageRemoved?.(key)} onOpen={setLightboxIndex} />
+        </PhotosRow>
+      )}
+      <TaskCardRows values={taskValues} onChange={setTask} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
+        types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
+        timer={taskTimer} timerRunning={timer.running} />
+    </TaskBody>
   );
 
   // Format, Draw and Dictate: at the left of the foot (Save entry on the right)
@@ -1600,13 +1980,36 @@ export function EntryForm({
               </QuickCardPrompt>
               <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
             </QuickExtraBox>
+) : isTaskCard ? (
+            <EntryCard $quick data-quick-open="" data-task-card="">
+              <TaskHead>
+                <QuickCardPrompt data-keep-placeholder style={{ padding: 0 }}>{quickPicker}</QuickCardPrompt>
+                <TaskFormatToggle values={taskValues} onChange={setTask} />
+              </TaskHead>
+              {taskBody}
+              <QuickFoot>
+                <span />
+                {saveButton}
+              </QuickFoot>
+            </EntryCard>
+          ) : framed ? (
+            <EntryCard $quick data-quick-open="" data-framed="">
+              <TaskHead style={{ paddingLeft: CARD_X }}>
+                <QuickCardPrompt data-keep-placeholder style={{ padding: 0 }}>{quickPicker}</QuickCardPrompt>
+              </TaskHead>
+              {renderBody()}
+              <QuickFoot>
+                {textOnly ? taskTools : <span />}
+                {saveButton}
+              </QuickFoot>
+            </EntryCard>
           ) : (
             <EntryCard $quick data-quick-open="" 
               data-card-prompt-centered={promptCentered ? '' : undefined}>
               <QuickCardPrompt data-keep-placeholder data-card-prompt="" data-centered={promptCentered ? '' : undefined}>
                 {quickPicker}
               </QuickCardPrompt>
-              {body}
+              {renderBody()}
               {/* Format, Draw and Dictate on the left, Save entry on the right */}
               <QuickFoot>
                 {quickTools}
@@ -1625,6 +2028,67 @@ export function EntryForm({
       {/* No top bar: the question, the writing area, the fields and the tool row all in one scroll */}
       <ScrollArea>
         <EdBody>
+          {isTaskCard ? (
+          <EntryCard $flat data-task-card="">
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined}>
+              <JournalPrompt>
+                <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
+              </JournalPrompt>
+              <TaskFormatToggle values={taskValues} onChange={setTask} />
+              {(onToggleExpand || onClose) && (
+                <HeadIcons>
+                  {onToggleExpand && (
+                    <IconBtn type="button" $active={expanded} aria-label={expanded ? 'Exit full screen' : 'Expand editor'}
+                      title={expanded ? 'Exit full screen' : 'Expand'} aria-pressed={!!expanded} onClick={onToggleExpand}>
+                      <Icon name={expanded ? 'minimize' : 'maximize'} size={18} strokeWidth={1.8} />
+                    </IconBtn>
+                  )}
+                  {onClose && (
+                    <IconBtn type="button" aria-label="Close" title="Close" onClick={onClose}>
+                      <Icon name="x" size={18} strokeWidth={1.8} />
+                    </IconBtn>
+                  )}
+                </HeadIcons>
+              )}
+            </TaskHead>
+            {taskBody}
+            <QuickFoot style={{ marginTop: 'auto' }}>
+              {entryId && onDelete ? (
+                <TaskDelete type="button" onClick={onDelete}>
+                  <Icon name="trash" size={17} strokeWidth={1.8} /> Delete
+                </TaskDelete>
+              ) : <span />}
+              <JournalSaveSide>
+                {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
+                {saveButton}
+              </JournalSaveSide>
+            </QuickFoot>
+          </EntryCard>
+          ) : framed ? (
+          <EntryCard $flat data-framed="">
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ paddingLeft: CARD_X }}>
+              <JournalPrompt>
+                <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
+              </JournalPrompt>
+              {headIcons}
+            </TaskHead>
+            {renderBody()}
+            <QuickFoot style={{ marginTop: 'auto' }}>
+              <FootLeft>
+                {/* A topic with no text box keeps its tools here */}
+                {editorHidden && noTextTools}
+                {textOnly && taskTools}
+                {deleteBtn}
+              </FootLeft>
+              <JournalSaveSide>
+                {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
+                {saveButton}
+              </JournalSaveSide>
+            </QuickFoot>
+          </EntryCard>
+          ) : (
           <EntryCard $flat>
             <JournalHead $expanded={!!expanded} $roomy={editorHidden && !recipeViewMode}>
               <JournalPrompt>
@@ -1649,7 +2113,7 @@ export function EntryForm({
                 </HeadIcons>
               )}
             </JournalHead>
-            {body}
+            {renderBody()}
             {/* The tool row: Format, Draw, Dictate, images, Bookmark and ⋯ on the left; Save entry on the right */}
             <JournalFoot>
               <JournalTools aria-label="Entry tools">
@@ -1744,6 +2208,7 @@ export function EntryForm({
               </JournalSaveSide>
             </JournalFoot>
           </EntryCard>
+          )}
         </EdBody>
       </ScrollArea>
 

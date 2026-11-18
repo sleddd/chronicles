@@ -2,6 +2,8 @@ import { medChangesOf, describeMedChange } from '../../../utils/healthChanges.js
 import { useId, useState } from 'react';
 import styled from 'styled-components';
 import { Toggle } from '../../atoms/Toggle.js';
+import { Icon } from '../../atoms/core/Icon.jsx';
+import { PillPick } from './TaskCardFields.js';
 import { ReminderTimes } from './ReminderTimes.js';
 import { DOSE_NUTRIENTS, parseMedNutrients } from '../../../utils/medNutrients.js';
 import type { MedicationFieldValues } from '../../../types/fields.js';
@@ -170,16 +172,18 @@ export function MedicationFields({ values, onChange, entryName = '' }: Medicatio
           onChange={e => set({ dosage: e.target.value })} />
       </Section>
 
-      <Section aria-label="How often">
+      <Section>
         <SectionHead><SectionLabel>How often</SectionLabel></SectionHead>
-        <Chips role="radiogroup" aria-label="How often">
-          {frequencies.map(f => (
-            <Chip key={f.value} type="button" role="radio" aria-checked={values.frequency === f.value}
-              $active={values.frequency === f.value} onClick={() => set({ frequency: f.value })}>
-              {f.label}
-            </Chip>
-          ))}
-        </Chips>
+        {/* A pill dropdown (the task card's look) */}
+        <div>
+          <PillPick>
+            <span className="value">{frequencies.find(f => f.value === values.frequency)?.label ?? 'Pick one'}</span>
+            <Icon name="chevron-down" size={14} strokeWidth={2} />
+            <select aria-label="How often" value={values.frequency} onChange={e => set({ frequency: e.target.value as MedicationFieldValues['frequency'] })}>
+              {frequencies.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </PillPick>
+        </div>
         {values.frequency === 'as_needed' && (
           <FieldNote>Log each dose with Take one under As needed on the dashboards. Every dose counts in Med history and Reports.</FieldNote>
         )}

@@ -94,6 +94,49 @@ describe('EntryForm', () => {
     saveStatus: '',
   };
 
+  it('a task opens in the task card: format switch, Status in the title box, then Type, Priority, Planned, Deadline and Notes', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Task', icon: null, color: null } as never]}
+      customFields={{ priority: 'none' }} onCustomFieldsChange={onChange} entryId={3} isEditing onDelete={vi.fn()} />);
+    expect(screen.getByRole('radio', { name: 'Single task' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Status')).toBeInTheDocument();
+    // ("Planned" is also a Status choice, so look for the row names as words on the card)
+    for (const row of ['Title', 'Type', 'Priority', 'When', 'Notes']) expect(screen.getAllByText(row).some(el => el.tagName === 'DIV')).toBe(true);
+    expect(screen.getByLabelText('Goal and milestone')).toBeInTheDocument();
+    // When: Starts (planned day + time) and Ends (the deadline) in one box, with All day
+    expect(screen.getByLabelText('Planned for')).toBeInTheDocument();
+    expect(screen.getByLabelText('Planned time')).toBeInTheDocument();
+    expect(screen.getByLabelText('Deadline')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Deadline'), { target: { value: '2026-11-30' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ deadline: '2026-11-30' }));
+    expect(screen.getByRole('button', { name: /^Time:/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    // The old chip rows are gone (no Time of day)
+    expect(screen.queryByText('Time of day')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'high' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ priority: 'high' }));
+  });
+
+  it('a text-only topic has no label; its tools sit in the foot beside Delete, with Save', () => {
+    renderWithTheme(<EntryForm {...defaultProps} content="<p>Hello</p>" entryId={5} isEditing onDelete={vi.fn()} />);
+    // Journal (no fields): no "Text" label; no Status (that's the task card's)
+    expect(screen.queryAllByText('Text').some(el => el.tagName === 'DIV')).toBe(false);
+    expect(screen.queryByLabelText('Status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Formatting' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    expect(screen.getByText('Save entry')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull();
+  });
+
+  it('the Quick entry keeps each field\'s own hint (no "Enter title/text..." over them)', () => {
+    renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen topicId={6}
+      topics={[{ id: 6, name: 'Event', icon: null, color: null } as never]} />);
+    for (const label of ['Venue name', 'Full address', 'Contact number']) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('placeholder', label);
+    }
+    expect(screen.queryAllByPlaceholderText('Enter title/text...').filter(el => el.tagName === 'INPUT')).toHaveLength(0);
+  });
+
   it('renders editor', () => {
     renderWithTheme(<EntryForm {...defaultProps} />);
     expect(screen.getByTestId('editor')).toBeInTheDocument();
@@ -128,13 +171,6 @@ describe('EntryForm', () => {
     expect(screen.getByText('Save entry')).not.toBeDisabled();
   });
 
-  it('has Close in the ⋯ menu, wired to onNew', () => {
-    const onNew = vi.fn();
-    renderWithTheme(<EntryForm {...defaultProps} isEditing={true} entryId={1} onNew={onNew} />);
-    fireEvent.click(screen.getByLabelText('More actions'));
-    fireEvent.click(screen.getByRole('menuitem', { name: /Close/ }));
-    expect(onNew).toHaveBeenCalled();
-  });
 
   it('shows a save failure', () => {
     renderWithTheme(<EntryForm {...defaultProps} saveStatus="Save failed" />);
@@ -146,15 +182,6 @@ describe('EntryForm', () => {
     expect(screen.getByText('Saved')).toBeInTheDocument();
   });
 
-  it('offers Duplicate in ⋯ More once the entry is saved', () => {
-    const onDuplicate = vi.fn();
-    const { rerender } = renderWithTheme(<EntryForm {...defaultProps} onDuplicate={onDuplicate} />);
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    expect(screen.getByRole('menuitem', { name: /Duplicate/ })).toBeDisabled();
-    rerender(<ThemeProvider theme={lightTheme}><EntryForm {...defaultProps} entryId={5} content="<p>Hi</p>" onDuplicate={onDuplicate} /></ThemeProvider>);
-    fireEvent.click(screen.getByRole('menuitem', { name: /Duplicate/ }));
-    expect(onDuplicate).toHaveBeenCalled();
-  });
 
   it('calls onSave when save button is clicked', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
@@ -471,7 +498,7 @@ describe('EntryForm', () => {
     expect(screen.getByText('choose a topic')).toBeInTheDocument();
     unmount2();
     renderWithTheme(<EntryForm {...defaultProps} entryId={4} topicId={1} isEditing />);
-    expect(screen.getByText('a journal entry')).toBeInTheDocument();
+    expect(screen.getByText('a journal')).toBeInTheDocument();
   });
 
   describe('Quick entry', () => {
@@ -501,7 +528,7 @@ describe('EntryForm', () => {
     it('waits asking for a topic — "choose a topic", never naming Journal', () => {
       renderWithTheme(<EntryForm {...defaultProps} variant="quick" quickOpen={false} />);
       expect(screen.getByText('choose a topic')).toBeInTheDocument();
-      expect(screen.queryByText('a journal entry')).not.toBeInTheDocument();
+      expect(screen.queryByText('a journal')).not.toBeInTheDocument();
     });
 
     it('Escape does nothing while it waits with the question', () => {

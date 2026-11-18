@@ -83,9 +83,13 @@ interface ChecklistSectionProps {
   ticks?: boolean;
   /** The plural, for the count without ticks (default noun + "s") */
   plural?: string;
+  /** The tick circles' size (default 20); the task card's to-do list matches its 16px text */
+  tickSize?: number;
+  /** No "2 of 2 left" count (the task card's to-do list) */
+  noCount?: boolean;
 }
 
-export function ChecklistSection({ label, noun, items, onChange, style, ticks = true, plural = `${noun}s` }: ChecklistSectionProps) {
+export function ChecklistSection({ label, noun, items, onChange, style, ticks = true, plural = `${noun}s`, tickSize, noCount }: ChecklistSectionProps) {
   const [draft, setDraft] = useState('');
   const Noun = noun.charAt(0).toUpperCase() + noun.slice(1);
 
@@ -103,15 +107,15 @@ export function ChecklistSection({ label, noun, items, onChange, style, ticks = 
 
   return (
     <Section aria-label={label} style={style}>
-      <SectionHead>
+      {(label || !noCount) && <SectionHead>
         <SectionLabel>{label}</SectionLabel>
-        {items.length > 0 && <Count>{ticks ? `${left} of ${items.length} left` : `${items.length} ${items.length === 1 ? noun : plural}`}</Count>}
-      </SectionHead>
+        {items.length > 0 && !noCount && <Count>{ticks ? `${left} of ${items.length} left` : `${items.length} ${items.length === 1 ? noun : plural}`}</Count>}
+      </SectionHead>}
       {items.map((p, i) => (
         <Item key={p.id} $done={ticks && p.done}>
           {ticks && <Tick type="button" $done={p.done} aria-pressed={p.done} aria-label={p.done ? `Mark ${noun} ${i + 1} not done` : `Mark ${noun} ${i + 1} done`}
             onClick={() => update(p.id, { done: !p.done })}>
-            <TickMark checked={p.done} />
+            <TickMark checked={p.done} size={tickSize} />
           </Tick>}
           <ItemInput value={p.text} placeholder={`${Noun} ${i + 1}`} aria-label={`${Noun} ${i + 1}`}
             onChange={e => update(p.id, { text: e.target.value })} />

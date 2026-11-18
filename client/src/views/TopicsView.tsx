@@ -91,12 +91,12 @@ const Row = styled.button<{ $hint?: boolean }>`
   ${entryRowPlain}
 `;
 
-/* Topic icon in the accent, thin */
+/* Topic icon in the standard text colour, thin */
 const RowIcon = styled.span`
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  color: var(--color-accent);
+  color: var(--text-primary);
   & > span { font-weight: 200; font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24; }
 `;
 

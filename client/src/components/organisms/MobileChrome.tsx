@@ -72,8 +72,8 @@ const PageName = styled.span`
 `;
 
 /* The menu: a sheet dropping from under the bar, full width, rounded at the
-   bottom — one row per destination (accent icon + name); the current page
-   on the grey --bg-active, its name bold in the standard colour; a hairline, then Settings and Sign out, quieter. Escape, a
+   bottom — one row per destination (icon + name, no accent); the current page
+   with no fill, its name a step heavier in the standard colour; a hairline, then Settings and Sign out, quieter. Escape, a
    destination or a tap outside closes it. */
 const Panel = styled.nav`
   display: none;
@@ -88,9 +88,12 @@ const Panel = styled.nav`
     max-height: calc(100dvh - 76px - env(safe-area-inset-top, 0px));
     overflow-y: auto;
     padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
-    background: var(--bg-app);
+    /* The desktop nav rail's colour for the theme */
+    background: var(--bg-rail);
     border-radius: 0 0 20px 20px;
     box-shadow: var(--shadow-xl);
+    /* Dark: every grey in the menu a cool one (the blue cast of the page) — the chosen row on a cool
+       grey, not the neutral white veil */
     animation: navDrop 180ms ease-out;
     @keyframes navDrop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { animation: none; }
@@ -106,7 +109,7 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   padding: 0 14px;
   border: none;
   border-radius: 10px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  background: transparent; /* the current page gets no fill — just its name a step heavier */
   font-family: var(--font-sans);
   font-size: 16px;
   /* Light names (Open Sans's lightest bundled weight is 300), the current page a step heavier */
@@ -115,14 +118,28 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  & > span:first-child { color: var(--color-accent); }
-  @media (hover: hover) { &:hover { background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'var(--bg-row-hover)')}; } }
+  & > span:first-child { color: var(--text-primary); }
+  @media (hover: hover) { &:hover { background: var(--bg-row-hover); } }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+/* A section and its views: it reaches past the sheet's 10px gutter so its row and views
+   run edge to edge */
+const SectionBox = styled.div`
+  margin: 0 -10px; /* always, so nothing shifts as it opens and shuts */
 `;
 
 /* A section with views: its row, and a chevron at the right that shows them (a sibling) */
 const SectionWrap = styled.div`
   position: relative;
+  /* Open: the section's row a shade darker than the menu — in light its views a step darker again,
+     in dark the other way round (the row darker, the views lifted lighter) */
+  transition: background 240ms ease;
+  padding: 0 10px;
+  [data-open] > & { background: var(--bg-rail-logo); }
+  /* Open, the row and its views run edge to edge across the sheet: square, no rounding */
+  [data-open] > & > button:first-child { border-radius: 0; }
+  & > button:last-child { right: 16px; }
   & > button:first-child { padding-right: 60px; }
 `;
 
@@ -132,42 +149,50 @@ const SectionChevron = styled.button<{ $open: boolean }>`
   right: 6px;
   display: grid;
   place-items: center;
+  /* Just the chevron (no fill behind it), in a 40px target */
   width: 40px;
   height: 40px;
   padding: 0;
   border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-muted);
+  border-radius: 50%;
+  background: none;
+  /* The same colour as the row's name */
+  color: var(--text-primary);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   & > svg { transition: transform 160ms ease; transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg); }
   @media (prefers-reduced-motion: reduce) { & > svg { transition: none; } }
-  @media (hover: hover) { &:hover { background: var(--bg-row-hover); color: var(--text-primary); } }
+  @media (hover: hover) { &:hover { color: var(--text-primary); } }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
 /* The section's views, lined up with the section names; the one showing on the grey fill */
 const ViewList = styled.ul`
   list-style: none;
-  margin: 2px 0 6px;
+  margin: 0;
   padding: 0;
-  /* A band a shade darker than the menu, barely-there hairlines above, below and between */
-  background: color-mix(in srgb, var(--bg-app) 93%, #000);
-  border-radius: 10px;
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
-  & > li + li { border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent); }
+  /* A step darker than the open section's row; between rows a dark line over a faint light one */
+  background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
+  html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 95%, #c8d4ff); } /* lifted with a cool tint, never plain white */
+  overflow: hidden;
+  /* Lines only between rows: none above the first or below the last, so it sits right against
+     the section's row and the next item */
+  & > li + li { border-top: 1px solid rgba(4, 6, 14, 0.45); box-shadow: inset 0 1px 0 rgba(190, 205, 255, 0.04); }
+  html[data-theme='light'] & > li + li { border-top-color: rgba(20, 24, 32, 0.09); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); }
 `;
 
 const ViewRow = styled.button<{ $active: boolean }>`
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
-  min-height: 44px;
-  padding: 0 14px 0 54px;
+  min-height: 48px;
+  /* The sheet's 10px gutter added back, since the views run edge to edge */
+  padding: 0 25px 0 64px;
   border: none;
-  border-radius: 10px;
-  background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
+  border-radius: 0;
+  background: transparent; /* the current page gets no fill — just its name a step heavier */
   font-family: var(--font-sans);
   font-size: 15px;
   font-weight: ${({ $active }) => ($active ? 400 : 300)};
@@ -175,8 +200,19 @@ const ViewRow = styled.button<{ $active: boolean }>`
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  @media (hover: hover) { &:hover { background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'var(--bg-row-hover)')}; } }
+  @media (hover: hover) { &:hover { background: var(--bg-row-hover); } }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+`;
+
+/* The views slide open and shut (rows 0fr → 1fr); hidden from the keyboard and screen
+   readers while shut, instant for reduced motion */
+const ViewSlide = styled.div<{ $open: boolean }>`
+  display: grid;
+  grid-template-rows: ${({ $open }) => ($open ? '1fr' : '0fr')};
+  visibility: ${({ $open }) => ($open ? 'visible' : 'hidden')};
+  transition: grid-template-rows 240ms ease, visibility 0s linear ${({ $open }) => ($open ? '0s' : '240ms')};
+  & > * { min-height: 0; overflow: hidden; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
 const MenuRule = styled.hr`
@@ -233,20 +269,22 @@ export function MobileChrome() {
   const sections = useNavSections();
   const go = (path: string) => { setOpen(false); navigate(path); };
   const row = (item: NavItem, quiet = false) => {
-    // A section's own row reads as current only when none of its views is the one showing
+    // A section's own row reads as current only when none of its views is the one showing; a section with
+    // views never takes the grey fill (like the rail) — open, it's on the rail's parent colour (--bg-rail-logo)
     const viewShowing = !!item.views?.some(v => v.active);
+    const hasViews = !!item.views?.length;
+    const shown = hasViews && sections.isOpen(item.key, item.active);
     const btn = (
-      <NavRow key={item.key} type="button" $active={item.active && !viewShowing} $quiet={quiet} aria-current={item.active && !viewShowing ? 'page' : undefined}
-        onClick={() => go(item.path)}>
+      <NavRow key={item.key} type="button" $active={item.active && !viewShowing && !hasViews} $quiet={quiet} aria-current={item.active && !viewShowing ? 'page' : undefined}
+        onClick={() => { if (hasViews && !shown) sections.toggle(item.key, item.active); go(item.path); }}>
         <MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon>
         <span>{item.label}</span>
       </NavRow>
     );
     if (!item.views?.length) return btn;
-    const shown = sections.isOpen(item.key, item.active);
     const listId = `mobile-views-${item.key}`;
     return (
-      <div key={item.key}>
+      <SectionBox key={item.key} data-open={shown ? '' : undefined}>
         <SectionWrap>
           {btn}
           <SectionChevron type="button" $open={shown} aria-expanded={shown} aria-controls={listId}
@@ -254,16 +292,18 @@ export function MobileChrome() {
             <Icon name="chevron-down" size={20} strokeWidth={1.8} aria-hidden="true" />
           </SectionChevron>
         </SectionWrap>
-        {shown && (
+        <ViewSlide $open={shown}>
           <ViewList id={listId} aria-label={`${item.label} views`}>
             {item.views.map(v => (
               <li key={v.path}>
-                <ViewRow type="button" $active={v.active} aria-current={v.active ? 'page' : undefined} onClick={() => go(v.path)}>{v.label}</ViewRow>
+                <ViewRow type="button" $active={v.active} aria-current={v.active ? 'page' : undefined} onClick={() => go(v.path)}>
+                  <span>{v.label}</span>
+                </ViewRow>
               </li>
             ))}
           </ViewList>
-        )}
-      </div>
+        </ViewSlide>
+      </SectionBox>
     );
   };
 

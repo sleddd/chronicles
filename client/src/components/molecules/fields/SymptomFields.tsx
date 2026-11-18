@@ -1,9 +1,11 @@
 import { useId, useState, type KeyboardEvent } from 'react';
+import { Icon } from '../../atoms/core/Icon.jsx';
+import { PillPick } from './TaskCardFields.js';
 import styled from 'styled-components';
 import type { SymptomFieldValues } from '../../../types/fields.js';
 import {
-  FormWrap, Section, SectionHead, SectionLabel, DateTimeBox, DateTimeField, Unit, BoxText, TitleInput, Chips, Chip, TextAction,
-  RemoveChip, AddChip, AddChipBox,
+  FormWrap, Section, SectionHead, SectionLabel, DateTimeBox, DateTimeField, Unit, BoxText, TitleInput, Chips, TextAction,
+  RemoveChip, AddChipBox,
 } from './formKit.js';
 import { hasSymptom, toggleSymptom } from '../../../utils/symptomChips.js';
 import { severityWord } from '../../../utils/symptomHistory.js';
@@ -84,6 +86,19 @@ const Ticks = styled.div`
   span { width: 8px; text-align: center; }
 `;
 
+const ADD = '__add_symptom__';
+const EDIT = '__edit_symptoms__';
+
+/* Common symptoms, then the date | time | lasted box, on one line */
+const SymptomLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+  & > label:first-child { max-width: 100%; }
+`;
+
 /* date | time | lasted */
 const WhenBox = styled(DateTimeBox)`
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.9fr);
@@ -127,9 +142,6 @@ export function SeveritySection({ value, onChange }: { value: number; onChange: 
   );
 }
 
-const ChipHead = styled(SectionHead)`
-  margin-top: 26px;
-`;
 
 interface SymptomFieldsProps {
   values: SymptomFieldValues;
@@ -171,45 +183,57 @@ export function SymptomFields({ values, onChange, chips = [], onAddChip, onRemov
         aria-label="Symptom"
       />
 
-      <Section aria-label="Common symptoms">
-        <ChipHead>
-          <SectionLabel>Common symptoms</SectionLabel>
-          {onRemoveChip && chips.length > 0 && (
-            <TextAction type="button" onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</TextAction>
-          )}
-        </ChipHead>
-        <Chips>
-          {chips.map(c => (editing ? (
-            <RemoveChip key={c} type="button" $active={false} aria-label={`Remove ${c}`} onClick={() => onRemoveChip?.(c)}>{c}</RemoveChip>
-          ) : (
-            <Chip key={c} type="button" $active={hasSymptom(values.symptomName, c)} aria-pressed={hasSymptom(values.symptomName, c)}
-              onClick={() => set({ symptomName: toggleSymptom(values.symptomName, c) })}>{c}</Chip>
-          )))}
-          {onAddChip && !editing && (adding ? (
+      {/* Common symptoms (a pill dropdown: picking one adds it to the name, picking it again takes it
+          out; + Add a symptom…, Edit list…) and when, on one row */}
+      <Section aria-label="When">
+        <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
+        <SymptomLine>
+          {adding ? (
             <AddChipBox autoFocus value={draft} maxLength={40} placeholder="New symptom" aria-label="New symptom"
               onChange={e => setDraft(e.target.value)} onKeyDown={onDraftKey} onBlur={commitDraft} />
           ) : (
-            <AddChip type="button" $active={false} onClick={() => setAdding(true)}>+ Add</AddChip>
-          ))}
-        </Chips>
+            <PillPick style={{ height: 52, borderRadius: 10, padding: '0 16px' }}>
+              <span className="value">{chips.filter(c => hasSymptom(values.symptomName, c)).join(', ') || 'Common symptoms'}</span>
+              <Icon name="chevron-down" size={14} strokeWidth={2} />
+              <select aria-label="Common symptoms" value=""
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v === ADD) setAdding(true);
+                  else if (v === EDIT) setEditing(true);
+                  else if (v) set({ symptomName: toggleSymptom(values.symptomName, v) });
+                }}>
+                <option value="">Common symptoms</option>
+                {chips.map(c => <option key={c} value={c}>{hasSymptom(values.symptomName, c) ? `✓ ${c}` : c}</option>)}
+                {onAddChip && <option value={ADD}>+ Add a symptom…</option>}
+                {onRemoveChip && chips.length > 0 && <option value={EDIT}>Edit list…</option>}
+              </select>
+            </PillPick>
+          )}
+          <WhenBox style={{ flex: '1 1 300px', maxWidth: 480 }}>
+            <DateTimeField type="date" value={values.occurredDate} aria-label="Date"
+              onChange={e => set({ occurredDate: e.target.value })} />
+            <DateTimeField type="time" value={values.occurredTime} aria-label="Time"
+              onChange={e => set({ occurredTime: e.target.value })} />
+            <Lasted>
+              <LastedInput inputMode="numeric" value={values.duration} placeholder="Lasted" aria-label="Lasted (minutes)"
+                onChange={e => set({ duration: e.target.value.replace(/[^\d.]/g, '') })} />
+              <Unit>min</Unit>
+            </Lasted>
+          </WhenBox>
+        </SymptomLine>
+        {/* Edit list: the list's symptoms with a × each (a built-in one is hidden, your own deleted) */}
+        {editing && (
+          <Chips aria-label="Edit common symptoms">
+            {chips.map(c => (
+              <RemoveChip key={c} type="button" $active={false} aria-label={`Remove ${c}`} onClick={() => onRemoveChip?.(c)}>{c}</RemoveChip>
+            ))}
+            <TextAction type="button" onClick={() => setEditing(false)}>Done</TextAction>
+          </Chips>
+        )}
       </Section>
 
       <SeveritySection value={values.severity} onChange={n => set({ severity: n })} />
 
-      <Section aria-label="When">
-        <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
-        <WhenBox>
-          <DateTimeField type="date" value={values.occurredDate} aria-label="Date"
-            onChange={e => set({ occurredDate: e.target.value })} />
-          <DateTimeField type="time" value={values.occurredTime} aria-label="Time"
-            onChange={e => set({ occurredTime: e.target.value })} />
-          <Lasted>
-            <LastedInput inputMode="numeric" value={values.duration} placeholder="Lasted" aria-label="Lasted (minutes)"
-              onChange={e => set({ duration: e.target.value.replace(/[^\d.]/g, '') })} />
-            <Unit>min</Unit>
-          </Lasted>
-        </WhenBox>
-      </Section>
 
       <Section>
         <SectionHead><SectionLabel as="label" htmlFor={notesId}>Notes</SectionLabel></SectionHead>

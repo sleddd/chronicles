@@ -29,7 +29,7 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
-export function WellnessCheckIn({ title, quad, bare, strip }: { title?: string; quad?: boolean; bare?: boolean; strip?: boolean } = {}) {
+export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?: string; quad?: boolean; bare?: boolean; strip?: boolean; foldable?: boolean } = {}) {
   const { encryptPost, encryptNewPost } = useEncryption();
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -207,11 +207,18 @@ export function WellnessCheckIn({ title, quad, bare, strip }: { title?: string; 
       cycleNote={nextPeriod}
       compact={!quad && !strip}
       strip={strip}
-      quad={!strip && quad && (bare || !title)}
-      row={!strip && !!title && !bare}
+      quad={!strip && quad && (bare || foldable || !title)}
+      row={!strip && !!title && !bare && !foldable}
       smallFaces={bare}
       footer={<DayInventory values={day} onChange={setDay} inside />}
     />
+  );
+  // Foldable (the Health dashboard): the four squares in a panel with its title, folded by its chevron
+  if (foldable) return (
+    <DashPanel aria-label={title ?? 'Wellness check-in'}>
+      <DashPanelHead title={title ?? 'Wellness check-in'} aside={entry ? 'Logged today' : 'Not logged yet'} />
+      {panel}
+    </DashPanel>
   );
   // Bare (home dashboard): no panel or heading; a grid so the card stretches
   // to the height of the card beside it

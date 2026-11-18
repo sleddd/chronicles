@@ -7,6 +7,7 @@ import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { Spinner } from '../../atoms/Spinner.js';
 import { StarRating } from '../StarRating.js';
+import { PillPick } from './TaskCardFields.js';
 import { ProgressSlider } from '../ProgressSlider.js';
 import {
   MEDIA_TYPES, SHELVES, mediaTypeInfo, shelfLabel, clampRating, clampProgress, progressLabel,
@@ -411,17 +412,17 @@ export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTa
 
       <Section style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel>Shelf</SectionLabel></SectionHead>
-        <Chips role="radiogroup" aria-label="Shelf">
-          {SHELVES.map(s => {
-            const active = values.shelf === s.value;
-            return (
-              <Chip key={s.value} type="button" role="radio" aria-checked={active} $active={active}
-                onClick={() => set({ shelf: (active ? '' : s.value) as MediaShelf })}>
-                {shelfLabel(s.value, type)}
-              </Chip>
-            );
-          })}
-        </Chips>
+        {/* A pill dropdown (the task card's look): None, then the shelves worded by the type */}
+        <div>
+          <PillPick>
+            <span className="value">{values.shelf ? shelfLabel(values.shelf as MediaShelf, type) : 'None'}</span>
+            <Icon name="chevron-down" size={14} strokeWidth={2} />
+            <select aria-label="Shelf" value={values.shelf ?? ''} onChange={e => set({ shelf: e.target.value as MediaShelf })}>
+              <option value="">None</option>
+              {SHELVES.map(sh => <option key={sh.value} value={sh.value}>{shelfLabel(sh.value, type)}</option>)}
+            </select>
+          </PillPick>
+        </div>
       </Section>
 
       <Section style={{ marginTop: 30 }}>

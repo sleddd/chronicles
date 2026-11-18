@@ -12,6 +12,7 @@ import { startTimer } from '../../utils/timeTracking.js';
 import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from './QuickFinance.js';
 import { useSealedDraft } from '../../hooks/useSealedDraft.js';
 import { DraftNote } from '../molecules/DraftNote.js';
+import { useSaveFields } from '../../hooks/useSaveFields.js';
 
 /** What the Quick entry holds before it is saved (sealed as it's typed, services/drafts.ts) */
 interface QuickDraft { topicId: number | null; content: string; fields: Record<string, unknown> }
@@ -24,6 +25,7 @@ interface QuickDraft { topicId: number | null; content: string; fields: Record<s
  * in Budget & bills' own forms (`QuickFinance`).
  */
 export function QuickEntry() {
+  const saveFields = useSaveFields();
   const topics = useEntriesStore(s => s.topics);
   const addDecryptedEntry = useEntriesStore(s => s.addDecryptedEntry);
   const topicCustomFields = useUIStore(s => s.topicCustomFields);
@@ -75,6 +77,9 @@ export function QuickEntry() {
       const effectiveTopicId = topicId ?? await getOrCreateJournalTopic();
       const topicName = useEntriesStore.getState().allTopics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
       const prepared = await prepareEntryForSave(content, customFields, topicName, userFieldDefs);
+      // Tasks attached to a milestone before it had an id: joined to it after it's made (not saved in it)
+      const { _attachTasks: held, ...savedFields } = prepared.customFields as Record<string, unknown>;
+      prepared.customFields = savedFields;
       const metadata: Record<string, unknown> = { _taxonomyId: effectiveTopicId };
       if (Object.keys(prepared.customFields).length > 0) metadata._customFields = prepared.customFields;
       const enc = await encryptNewPost(prepared.content, metadata);
@@ -85,6 +90,16 @@ export function QuickEntry() {
       });
       addDecryptedEntry({ id: res.id as number, content: prepared.content, metadata, isEncrypted: true,
         createdAt: new Date(res.createdAt as string), updatedAt: new Date((res.updatedAt || res.createdAt) as string) });
+      // A milestone saved with tasks attached before it had an id: join them to it now
+      if (Array.isArray(held) && held.length) {
+        const goal = (prepared.customFields as Record<string, unknown>).parentGoalId;
+        for (const taskId of held) {
+          const t = useEntriesStore.getState().decryptedEntries.find(e => e.id === taskId);
+          if (!t) continue;
+          const cf = ((t.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {};
+          void saveFields(t, { ...cf, parentMilestoneId: res.id as number, ...(goal ? { parentGoalId: goal } : {}) });
+        }
+      }
       reset();
       // Saved: its sealed draft goes now (not a moment later, when this page may be gone)
       draftRef.current.clear();
@@ -121,7 +136,7 @@ export function QuickEntry() {
       quickExtras={financeOn ? QUICK_FINANCE_CHOICES : undefined}
       quickExtra={financeOn ? finance : null}
       onQuickExtra={k => setFinance(k as QuickFinanceKind)}
-      quickExtraBody={financeOn && finance ? <QuickFinance kind={finance} /> : undefined}
+      quickExtraBody={financeOn && finance ? <QuickFinance kind={finance} onCancel={() => { setFinance(null); setTopicId(null); }} /> : undefined}
       topics={topics}
       customFields={typedFields}
       onCustomFieldsChange={setCustomFields}

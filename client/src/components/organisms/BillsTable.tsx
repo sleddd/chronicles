@@ -265,6 +265,30 @@ const FieldHint = styled.span`
   color: var(--text-muted);
 `;
 
+/* The card's Cost: the amount box, then Bill | Subscription */
+const CostLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+  & > :first-child { flex: 1 1 160px; min-width: 0; }
+`;
+
+/* The card's How often: the select, then Autopay and its switch on the same line */
+const OftenLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  min-width: 0;
+  select { flex: 1 1 140px; min-width: 0; }
+  /* Its chevron well inside the box's right edge */
+  &&& select { padding-right: 46px; background-position: right 20px center; }
+  input[type='date'] { flex: 1 1 150px; min-width: 0; }
+  .auto { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-sans); font-size: 15px; color: var(--text-soft); }
+`;
+
 /* Autopay and Status between hairlines */
 const Settings = styled.div`
   margin: 14px 0 10px;
@@ -432,48 +456,46 @@ export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory, 
     <form onSubmit={e => void submit(e)}>
       <CardRows>
         <CardRow>
-          <CardRowLabel as="span" id={`bill-kind-${uid}`}>Type</CardRowLabel>
-          <JoinedGroup role="radiogroup" aria-labelledby={`bill-kind-${uid}`} style={{ justifySelf: 'start' }}>
-            {KINDS.map(k => (
-              <JoinedBtn key={k.value} type="button" role="radio" aria-checked={d.kind === k.value} $active={d.kind === k.value} $fill
-                onClick={() => set({ kind: k.value })}>{k.label}</JoinedBtn>
-            ))}
-          </JoinedGroup>
-        </CardRow>
-        <CardRow>
           <CardRowLabel htmlFor={`bill-name-${uid}`}>Name</CardRowLabel>
           <input id={`bill-name-${uid}`} value={d.name} onChange={e => set({ name: e.target.value })} placeholder="Rent, Netflix, phone…" />
         </CardRow>
+        {/* The amount, and whether it's a bill or a subscription, on one line */}
         <CardRow>
-          <CardRowLabel htmlFor={`bill-amount-${uid}`}>Amount</CardRowLabel>
-          <Money>
-            <span aria-hidden="true">$</span>
-            <input id={`bill-amount-${uid}`} inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" />
-          </Money>
+          <CardRowLabel htmlFor={`bill-amount-${uid}`}>Cost</CardRowLabel>
+          <CostLine>
+            <Money>
+              <span aria-hidden="true">$</span>
+              <input id={`bill-amount-${uid}`} aria-label="Amount" inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" />
+            </Money>
+            <JoinedGroup role="radiogroup" aria-label="Type">
+              {KINDS.map(k => (
+                <JoinedBtn key={k.value} type="button" role="radio" aria-checked={d.kind === k.value} $active={d.kind === k.value} $fill
+                  onClick={() => set({ kind: k.value })}>{k.label}</JoinedBtn>
+              ))}
+            </JoinedGroup>
+          </CostLine>
         </CardRow>
+        {/* How often, the due date and Autopay on one line (the repeat note under them) */}
         <CardRow>
           <CardRowLabel htmlFor={`bill-freq-${uid}`}>How often</CardRowLabel>
-          <select id={`bill-freq-${uid}`} value={d.frequency} onChange={e => set({ frequency: e.target.value as Bill['frequency'] })}>
-            {BILL_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
-        </CardRow>
-        <CardRow>
-          <CardRowLabel htmlFor={`bill-due-${uid}`}>{d.frequency === 'once' || bill ? 'Due date' : 'Next due'}</CardRowLabel>
           <CardRowField>
-            <input id={`bill-due-${uid}`} type="date" value={d.dueDate} onChange={e => set({ dueDate: e.target.value })} />
+            <OftenLine>
+              <select id={`bill-freq-${uid}`} value={d.frequency} onChange={e => set({ frequency: e.target.value as Bill['frequency'] })}>
+                {BILL_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+              </select>
+              <input id={`bill-due-${uid}`} type="date" value={d.dueDate} onChange={e => set({ dueDate: e.target.value })}
+                aria-label={d.frequency === 'once' || bill ? 'Due date' : 'Next due'} />
+              <span className="auto" title="Your bank pays it on the due date. Mark it paid when it goes through.">
+                <span id={`bill-auto-${uid}`}>Autopay</span>
+                <Toggle checked={d.autopay} aria-labelledby={`bill-auto-${uid}`} onChange={v => set({ autopay: v })} />
+              </span>
+            </OftenLine>
             {d.dueDate && <FieldHint>{billRepeatNote(d.frequency, d.dueDate)}</FieldHint>}
           </CardRowField>
         </CardRow>
         <CardRow>
           <CardRowLabel htmlFor={`bill-cat-${uid}`}>Category</CardRowLabel>
           {categoryControl}
-        </CardRow>
-        <CardRow>
-          <CardRowLabel as="span" id={`bill-auto-${uid}`}>Autopay</CardRowLabel>
-          <SettingRow style={{ padding: 0 }}>
-            <SettingNote style={{ marginTop: 0 }}>Your bank pays it on the due date. Mark it paid when it goes through.</SettingNote>
-            <Toggle checked={d.autopay} aria-labelledby={`bill-auto-${uid}`} onChange={v => set({ autopay: v })} />
-          </SettingRow>
         </CardRow>
         <CardRow>
           <CardRowLabel as="span" id={`bill-status-${uid}`}>Status</CardRowLabel>

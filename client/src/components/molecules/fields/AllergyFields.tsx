@@ -39,7 +39,8 @@ export function AllergyFields({ values, onChange }: AllergyFieldsProps) {
 
       <Section aria-label="When">
         <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
-        <DateTimeBox>
+        {/* Just as wide as a date and a time need */}
+        <DateTimeBox style={{ maxWidth: 400 }}>
           <DateTimeField type="date" value={values.occurredDate ?? ''} aria-label="Date"
             onChange={e => set({ occurredDate: e.target.value })} />
           <DateTimeField type="time" value={values.occurredTime ?? ''} aria-label="Time"

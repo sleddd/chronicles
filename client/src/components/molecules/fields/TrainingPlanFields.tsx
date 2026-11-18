@@ -8,15 +8,16 @@ import { mountaineeringTemplate } from '../../../utils/training.js';
 import { tableColumnRules } from '../../../styles/columnRules.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel,
-  BareDate, BoxInput, BoxText, FieldNote,
+  BoxInput, BoxText, FieldNote,
 } from './formKit.js';
+import { WhenBox2, WhenLine, WhenLabel, DateTimeInput } from './TaskCardFields.js';
 
 /* Training plan fields (journal editor): the plan's name as a big borderless
-   title; Start / Event dates in a row box; Categories — each name edited in
+   title; When (Starts | Event dates in one box); Categories — each name edited in
    place with × and the activities that count toward it automatically as small
    chips; Phases as a spreadsheet — phase, weeks, then the hours for the whole
-   phase in each category and its total — with "+ Add phase"; Notes; and an
-   Active card. An empty plan offers the mountaineering template. Props only. */
+   phase in each category and its total — with "+ Add phase"; Notes. The Active card sits under
+   the template row (first under the name once there's no template). An empty plan offers the mountaineering template. Props only. */
 
 const SHORT_ACTIVITY: Record<string, string> = { strength: 'Strength' };
 
@@ -125,6 +126,12 @@ const Sheet = styled.table`
   td.num input { text-align: right; }
 `;
 
+/* The When box's lines, with room for the longer names */
+const PlanWhenLine = styled(WhenLine)`
+  && { grid-template-columns: 150px minmax(0, 1fr); }
+  @media (max-width: 560px) { && { grid-template-columns: 124px minmax(0, 1fr); } }
+`;
+
 const StatusCard = styled.div.attrs({ className: 'card-row' })`
   display: flex;
   align-items: center;
@@ -148,8 +155,6 @@ export function TrainingPlanFields({ values, onChange }: TrainingPlanFieldsProps
   const categories = values.categories ?? [];
   const phases = values.phases ?? [];
   const [draft, setDraft] = useState('');
-  const startId = useId();
-  const eventId = useId();
   const notesId = useId();
 
   const setCategory = (id: string, patch: Partial<TrainingCategory>) =>
@@ -185,6 +190,7 @@ export function TrainingPlanFields({ values, onChange }: TrainingPlanFieldsProps
           placeholder="e.g. Mt Hood" aria-label="Plan name" />
       </div>
 
+
       {categories.length === 0 && phases.length === 0 && (
         <TemplateCard>
           <span>Start from the mountaineering template, with five categories and four phases.</span>
@@ -192,14 +198,31 @@ export function TrainingPlanFields({ values, onChange }: TrainingPlanFieldsProps
         </TemplateCard>
       )}
 
+      {/* Active plan, under the template row */}
+      <StatusCard>
+        <div>
+          <div className="title">Active plan</div>
+          <div className="note">{values.isActive ? 'Shown first in Training' : 'Kept for reference'}</div>
+        </div>
+        <Toggle checked={values.isActive} aria-label="Active plan" onChange={v => set({ isActive: v })} />
+      </StatusCard>
+
+      {/* When: the plan's start and its event date, in one box */}
       <RowBox style={{ marginTop: 30 }}>
         <LabelledRow>
-          <RowLabel as="label" htmlFor={startId}>Starts</RowLabel>
-          <BareDate id={startId} type="date" value={values.startDate ?? ''} onChange={e => set({ startDate: e.target.value })} />
-        </LabelledRow>
-        <LabelledRow>
-          <RowLabel as="label" htmlFor={eventId}>Event date</RowLabel>
-          <BareDate id={eventId} type="date" value={values.eventDate ?? ''} onChange={e => set({ eventDate: e.target.value })} />
+          <RowLabel>When</RowLabel>
+          <WhenBox2 style={{ maxWidth: 480 }}>
+            <PlanWhenLine $allDay>
+              <WhenLabel>Phase start date</WhenLabel>
+              <DateTimeInput type="date" aria-label="Phase start date" value={values.startDate ?? ''} max={values.eventDate || undefined}
+                onChange={e => set({ startDate: e.target.value })} />
+            </PlanWhenLine>
+            <PlanWhenLine $allDay>
+              <WhenLabel>Goal date</WhenLabel>
+              <DateTimeInput type="date" aria-label="Goal date" value={values.eventDate ?? ''}
+                onChange={e => set({ eventDate: e.target.value })} />
+            </PlanWhenLine>
+          </WhenBox2>
         </LabelledRow>
       </RowBox>
 
@@ -295,13 +318,6 @@ export function TrainingPlanFields({ values, onChange }: TrainingPlanFieldsProps
           onChange={e => set({ notes: e.target.value })} />
       </Section>
 
-      <StatusCard>
-        <div>
-          <div className="title">Active plan</div>
-          <div className="note">{values.isActive ? 'Shown first in Training' : 'Kept for reference'}</div>
-        </div>
-        <Toggle checked={values.isActive} aria-label="Active plan" onChange={v => set({ isActive: v })} />
-      </StatusCard>
     </FormWrap>
   );
 }

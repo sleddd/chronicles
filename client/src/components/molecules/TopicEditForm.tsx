@@ -14,6 +14,17 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   padding: 8px 0;
+  /* On the background photo: the form on a frosted panel of its own, so its outlines,
+     labels and pills read whatever the picture is behind them */
+  html[data-wallpaper] & {
+    padding: 28px 32px 32px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--bg-panel) 90%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    box-shadow: var(--shadow-card);
+  }
+  @media (max-width: 560px) { html[data-wallpaper] & { padding: 22px 18px 24px; } }
 `;
 
 const Top = styled.div`
@@ -33,7 +44,7 @@ const IconTile = styled.button<{ $open: boolean }>`
   border: 1px solid ${({ $open }) => ($open ? 'var(--color-accent)' : 'var(--border-card)')};
   border-radius: 10px;
   background: transparent;
-  color: var(--color-accent);
+  color: var(--text-primary);
   cursor: pointer;
   &:hover { border-color: var(--control-border); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }

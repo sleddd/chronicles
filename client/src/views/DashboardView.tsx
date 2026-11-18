@@ -37,7 +37,7 @@ import { plannerFacts, tasksByDay, parsePlannerOrder, type PlannerOrder } from '
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
-import { NotificationBell } from '../components/organisms/NotificationBell.js';
+import { NotificationBell, BellDot } from '../components/organisms/NotificationBell.js';
 import { ErrorBoundary } from '../components/atoms/ErrorBoundary.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
 import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
@@ -369,8 +369,8 @@ const QuickWrap = styled.div<{ $guided?: boolean }>`
   /* A little room under the greeting */
   margin-top: 28px;
   /* Room under it before Stats / the cards (their own 24–28px add to this) */
-  margin-bottom: 24px;
-  @media (max-width: 640px) { margin-top: 22px; margin-bottom: 16px; }
+  margin-bottom: 8px;
+  @media (max-width: 640px) { margin-top: 22px; margin-bottom: 4px; }
   /* Phones / tablets: a little closer under the greeting */
   ${NAV_COMPACT} { margin-top: 16px; }
   /* Getting started → Write your first entry: ringed in the accent */
@@ -1134,12 +1134,6 @@ const CompactNum = styled(PNum)`
 const CompactText = styled(PText)`
   && { padding: 12px 0; font-size: 15px; }
 `;
-/* The head's aside in Day at a glance: a quiet count */
-const HeadCount = styled.span`
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-muted);
-`;
 
 /* Under Priorities and Wins: these lists don't clear themselves at midnight
    (a list can run across several days), so say how a fresh one is started */
@@ -1348,7 +1342,6 @@ function Priorities({ compact }: { compact?: boolean }) {
           {items.length > 0 && (
             <button type="button" disabled={starting} onClick={() => void startNew()}>New list</button>
           )}
-          {compact && items.length > 0 && <HeadCount>{items.filter(x => x.done).length} of {items.length}</HeadCount>}
         </HeadLinks>
       </SectionHead>
       {compact && items.length === 0 && <Muted>No priorities yet.</Muted>}
@@ -1366,14 +1359,15 @@ function Priorities({ compact }: { compact?: boolean }) {
         const Num = compact ? CompactNum : PNum;
         return (
         <SortablePriority key={p.id} id={p.id} Row={RowEl} Num={Num} n={i + 1} label={p.text}>
+          {/* The tick before the text and the × at the far end, so finishing one never lands on removing it */}
+          <Checkbox checked={p.done} aria-label={p.done ? `Mark "${p.text}" not done` : `Mark "${p.text}" done`}
+            onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
           <PriorityText item={p} roomy={!compact} compact={compact}
             onCommit={text => void write(text ? items.map(x => (x.id === p.id ? { ...x, text } : x)) : items.filter(x => x.id !== p.id))} />
           <PRemove type="button" aria-label={`Remove "${p.text}"`} title="Remove"
             onClick={() => void write(items.filter(x => x.id !== p.id))}>
             <Icon name="x" size={18} strokeWidth={2} />
           </PRemove>
-          <Checkbox checked={p.done} aria-label={p.done ? `Mark "${p.text}" not done` : `Mark "${p.text}" done`}
-            onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
         </SortablePriority>
         );
       })}
@@ -2591,7 +2585,6 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
         <HeadLinks>
           {naming ? <button type="button" onClick={() => { setNaming(false); setNewName(''); }}>Cancel</button>
             : list && <button type="button" onClick={() => openInJournal(list.id)}>Open list</button>}
-          {compact && !naming && items.length > 0 && <HeadCount>{items.filter(x => x.checked).length} of {items.length}</HeadCount>}
         </HeadLinks>
       </SectionHead>
       {naming ? (
@@ -2609,14 +2602,14 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
             return (
               <CompactRow key={it.id}>
                 <CompactNum>{i + 1}</CompactNum>
+                <Checkbox checked={!!it.checked} aria-label={it.checked ? `Mark "${it.name}" not got` : `Mark "${it.name}" got`}
+                  onChange={() => setItems(items.map(x => (x.id === it.id ? { ...x, checked: !x.checked } : x)))} />
                 <PriorityText item={{ id: it.id, text: it.name, done: !!it.checked }} label="Item" compact
                   onCommit={text => setItems(text ? items.map(x => (x.id === it.id ? { ...x, name: text } : x)) : items.filter(x => x.id !== it.id))} />
                 <PRemove type="button" aria-label={`Remove "${it.name}"`} title="Remove"
                   onClick={() => setItems(items.filter(x => x.id !== it.id))}>
                   <Icon name="x" size={18} strokeWidth={2} />
                 </PRemove>
-                <Checkbox checked={!!it.checked} aria-label={it.checked ? `Mark "${it.name}" not got` : `Mark "${it.name}" got`}
-                  onChange={() => setItems(items.map(x => (x.id === it.id ? { ...x, checked: !x.checked } : x)))} />
               </CompactRow>
             );
           })}
@@ -2646,13 +2639,16 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
+/** Cards drawn with no outline wherever they sit */
+const NO_OUTLINE: ReadonlySet<SectionKey> = new Set<SectionKey>(['habits', 'time']);
+
 function SortableCard({ id, collapsed, label, plain, open, wide, spaced, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; wide?: boolean; spaced?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   // The wellness check-in: none of a card's padding or look — the box is the card, the grip inside its corner
   if (plain) return (
     <PlainCard ref={setNodeRef}
       // The wellness check-in gets extra room above and below
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined, ...(spaced ? { margin: '16px 0' } : {}) }}>
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined, ...(spaced ? { margin: '28px 0 0' } : {}) }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
         <Icon name="grip" size={18} strokeWidth={2.6} />
@@ -2991,12 +2987,14 @@ export function DashboardView() {
   const placed = fullLayout(layout);
   const cols = { head: placed.head.filter(visible), top: placed.top.filter(visible), left: placed.left.filter(visible), right: placed.right.filter(visible), side: placed.side.filter(visible) };
   // `wide`: across both columns (the top row) — no outline
+  // Habits and Time tracked: no outline wherever they sit (the panel and light shadow only)
   const card = (k: SectionKey, wide = false) => {
     const w = widgets[k]!;
     // The wellness check-in keeps its own look: moved by its grip, never folded
     if (k === 'wellness' || k === 'clocks') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain spaced={k === 'wellness'}>{w.node}</SortableCard>;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote' || collapsed.has(k)} wide={wide}>
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote' || collapsed.has(k)}
+        wide={wide || NO_OUTLINE.has(k)}>
         {w.node}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
           aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
@@ -3060,7 +3058,8 @@ export function DashboardView() {
                 <ErrorBoundary fallback="none">
                   <NotificationBell variant="corner" trigger={({ count, ...p }) => (
                     <ViewBtn type="button" $on={p['aria-expanded']} title="Reminders" style={{ position: 'relative' }} {...p}>
-                      <MaterialIcon $size={22} aria-hidden="true" style={count > 0 ? { color: 'var(--color-accent)' } : undefined}>notifications</MaterialIcon>
+                      <MaterialIcon $size={22} aria-hidden="true">notifications</MaterialIcon>
+                      {count > 0 && <BellDot aria-hidden="true" $at={1} />}
                     </ViewBtn>
                   )} />
                 </ErrorBoundary>

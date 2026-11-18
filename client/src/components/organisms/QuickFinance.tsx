@@ -48,7 +48,8 @@ const Saved = styled.p`
   button:hover { text-decoration: underline; }
 `;
 
-export function QuickFinance({ kind }: { kind: QuickFinanceKind }) {
+/** `onCancel`: leave the form (Cancel) — the Quick entry goes back to Journal */
+export function QuickFinance({ kind, onCancel }: { kind: QuickFinanceKind; onCancel?: () => void }) {
   const navigate = useNavigate();
   const budget = useFinance('budget');
   const bills = useFinance('bills', { enabled: kind === 'bill' });
@@ -70,7 +71,7 @@ export function QuickFinance({ kind }: { kind: QuickFinanceKind }) {
           categories={categories}
           onAddCategory={async name => (await budget.save({ name, monthlyPlannedCents: 0, order: categories.reduce((m, c) => Math.max(m, c.order), -1) + 1 }))?.id ?? null}
           onSave={async b => { if (await bills.save(b)) setSaved(`Saved ${b.name} to Bills.`); }}
-          onCancel={() => setRound(r => r + 1)}
+          onCancel={() => (onCancel ? onCancel() : setRound(r => r + 1))}
         />
       ) : (
         <ExpenseForm

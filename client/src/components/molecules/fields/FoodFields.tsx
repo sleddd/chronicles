@@ -1,4 +1,6 @@
 import { useId } from 'react';
+import { Icon } from '../../atoms/core/Icon.jsx';
+import { PillPick } from './TaskCardFields.js';
 import { NutritionPanel, PillBtn } from '../NutritionPanel.js';
 import { nutrientSourceOf, withManualNutrient, type NutrientKey } from '../../../types/nutrition.js';
 import type { FoodFieldValues } from '../../../types/fields.js';
@@ -57,24 +59,24 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
         />
       </Section>
 
-      <Section aria-label="Meal">
-        <SectionHead><SectionLabel>Meal</SectionLabel></SectionHead>
-        <Chips>
-          {MEALS.map(m => (
-            <Chip key={m.value} type="button" $active={values.mealType === m.value} aria-pressed={values.mealType === m.value}
-              onClick={() => set({ mealType: m.value })}>
-              {m.label}
-            </Chip>
-          ))}
-        </Chips>
-      </Section>
-
+      {/* The meal (a pill dropdown, the task card's look) and when it was eaten, on one row */}
       <Section aria-label="When">
         <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
-        <DateTimeBox>
-          <DateTimeField type="date" aria-label="Date eaten" value={values.consumedDate} onChange={e => set({ consumedDate: e.target.value })} />
-          <DateTimeField type="time" aria-label="Time eaten" value={values.consumedTime} onChange={e => set({ consumedTime: e.target.value })} />
-        </DateTimeBox>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 14px', minWidth: 0 }}>
+          {/* Squared off like the date | time box beside it, the same height (its 50px row + border) */}
+          <PillPick style={{ height: 52, borderRadius: 10, padding: '0 16px' }}>
+            <span className="value">{MEALS.find(m => m.value === values.mealType)?.label ?? 'Pick a meal'}</span>
+            <Icon name="chevron-down" size={14} strokeWidth={2} />
+            <select aria-label="Meal" value={values.mealType ?? ''} onChange={e => set({ mealType: e.target.value as FoodFieldValues['mealType'] })}>
+              {!MEALS.some(m => m.value === values.mealType) && <option value="">Pick a meal</option>}
+              {MEALS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </PillPick>
+          <DateTimeBox style={{ flex: '1 1 260px', maxWidth: 400 }}>
+            <DateTimeField type="date" aria-label="Date eaten" value={values.consumedDate} onChange={e => set({ consumedDate: e.target.value })} />
+            <DateTimeField type="time" aria-label="Time eaten" value={values.consumedTime} onChange={e => set({ consumedTime: e.target.value })} />
+          </DateTimeBox>
+        </div>
       </Section>
 
       <Section aria-label="Nutrition" data-card-wide>

@@ -1,5 +1,7 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import { TimerPopButton, PillPick } from './TaskCardFields.js';
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../../styles/breakpoints.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { Toggle } from '../../atoms/Toggle.js';
 import { ReminderTimes } from './ReminderTimes.js';
@@ -53,7 +55,8 @@ const DurationBox = styled.label`
   border-radius: var(--r-lg, 6px);
   cursor: text;
   &:focus-within { border-color: var(--color-accent); }
-  span { flex: none; font-family: var(--font-sans); font-size: 15px; color: var(--text-muted); }
+  /* "min" (only that: the stopwatch's icon is a span too, and must keep the icon font) */
+  & > .unit { flex: none; font-family: var(--font-sans); font-size: 15px; color: var(--text-muted); }
 `;
 
 const DurationInput = styled.input`
@@ -73,6 +76,27 @@ const DurationInput = styled.input`
     color: var(--text-primary);
   }
   &::placeholder { color: var(--text-hint); }
+`;
+
+/* Days & times: the time pills, the day chips, and On my schedule at the right */
+export const DaysLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  min-width: 0;
+  .sched {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-soft);
+    white-space: nowrap;
+  }
+  /* Phones and tablets: on its own line, at the left like the times and days above it */
+  ${NAV_COMPACT} { .sched { margin-left: 0; margin-top: 10px; flex-basis: 100%; } }
 `;
 
 export const Days = styled.div`
@@ -204,9 +228,12 @@ interface RoutineFieldsProps {
   onChange: (values: RoutineFieldValues) => void;
   /** Categories from your training plans, offered under Counts toward training */
   categoryOptions?: string[];
+  /** The routine's Time panel, opened from a stopwatch at the right of Duration */
+  timer?: ReactNode;
+  timerRunning?: boolean;
 }
 
-export function RoutineFields({ values, onChange, categoryOptions = [] }: RoutineFieldsProps) {
+export function RoutineFields({ values, onChange, categoryOptions = [], timer, timerRunning }: RoutineFieldsProps) {
   const set = (patch: Partial<RoutineFieldValues>) => onChange({ ...values, ...patch });
   const [draft, setDraft] = useState('');
   const [itemsOpen, setItemsOpen] = useState(false);
@@ -243,7 +270,8 @@ export function RoutineFields({ values, onChange, categoryOptions = [] }: Routin
 
       <Section aria-label="Activity" style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel>Activity</SectionLabel></SectionHead>
-        <Chips>
+        {/* The chips wrap within about two thirds of the row (phones keep at least 300px) */}
+        <Chips style={{ maxWidth: 'max(66%, 300px)' }}>
           {EXERCISE_TYPES.map(t => (
             <Chip key={t.value} type="button" $active={values.exerciseType === t.value} aria-pressed={values.exerciseType === t.value}
               onClick={() => set({ exerciseType: t.value })}>
@@ -256,47 +284,54 @@ export function RoutineFields({ values, onChange, categoryOptions = [] }: Routin
       <Pair>
         <Section>
           <SectionHead><SectionLabel as="label" htmlFor={durationId}>Duration</SectionLabel></SectionHead>
-          <DurationBox>
+          {/* Just as wide as a few minutes and the stopwatch need */}
+          <DurationBox style={{ maxWidth: 220 }}>
             <DurationInput id={durationId} inputMode="numeric" value={values.duration ?? ''} placeholder={summed ? String(summed) : '0'}
               onChange={e => set({ duration: e.target.value.replace(/[^\d.]/g, '') })} />
-            <span>min</span>
+            <span className="unit">min</span>
+            {/* The timer at the box's right: view the time, start one, add time */}
+            {timer && <span style={{ alignSelf: 'center', marginRight: -8 }}><TimerPopButton timer={timer} running={timerRunning} /></span>}
           </DurationBox>
         </Section>
-        <Section aria-label="Times">
-          <SectionHead><SectionLabel>Times</SectionLabel></SectionHead>
+        {/* Times and the days, on one row */}
+        <Section aria-label="Days and times">
+          <SectionHead><SectionLabel>Days &amp; times</SectionLabel></SectionHead>
+          <DaysLine>
           <ReminderTimes compact times={values.scheduleTimes ?? []} label="Time" addAt="07:00"
             onChange={scheduleTimes => set({ scheduleTimes })} />
+          <Days aria-label="Days">
+            {DAY_CHIPS.map((label, d) => (
+              <DayChip key={label} type="button" $active={days.includes(d)} aria-pressed={days.includes(d)}
+                aria-label={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]}
+                onClick={() => toggleDay(d)}>
+                {label}
+              </DayChip>
+            ))}
+          </Days>
+          {/* On my schedule, at the row's right */}
+          <span className="sched" title={scheduleNote(values, minutes)}>
+            On my schedule
+            <Toggle checked={values.isActive} aria-label="On my schedule" onChange={v => set({ isActive: v })} />
+          </span>
+          </DaysLine>
         </Section>
       </Pair>
 
-      <Section aria-label="Days" style={{ marginTop: 30 }}>
-        <SectionHead>
-          <SectionLabel>Days</SectionLabel>
-          <Count>{describeDays(days)}</Count>
-        </SectionHead>
-        <Days>
-          {DAY_CHIPS.map((label, d) => (
-            <DayChip key={label} type="button" $active={days.includes(d)} aria-pressed={days.includes(d)}
-              aria-label={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]}
-              onClick={() => toggleDay(d)}>
-              {label}
-            </DayChip>
-          ))}
-        </Days>
-      </Section>
-
       {categories.length > 0 && (
-        <Section aria-label="Counts toward training">
-          <SectionHead><SectionLabel>Counts toward training</SectionLabel></SectionHead>
-          <Chips>
-            {categories.map(c => {
-              const on = c.toLowerCase() === category.toLowerCase();
-              return (
-                <Chip key={c} type="button" $active={on} aria-pressed={on} onClick={() => set({ trainingCategory: c })}>{c}</Chip>
-              );
-            })}
-            <Chip type="button" $active={!category} aria-pressed={!category} onClick={() => set({ trainingCategory: '' })}>None</Chip>
-          </Chips>
+        <Section aria-label="Training">
+          <SectionHead><SectionLabel>Training</SectionLabel></SectionHead>
+          {/* A pill dropdown: None, then the plans' categories */}
+          <div>
+            <PillPick>
+              <span className="value">{categories.find(c => c.toLowerCase() === category.toLowerCase()) ?? 'None'}</span>
+              <Icon name="chevron-down" size={14} strokeWidth={2} />
+              <select aria-label="Counts toward training" value={categories.find(c => c.toLowerCase() === category.toLowerCase()) ?? ''}
+                onChange={e => set({ trainingCategory: e.target.value })}>
+                <option value="">None</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </PillPick>
+          </div>
         </Section>
       )}
 
@@ -347,13 +382,6 @@ export function RoutineFields({ values, onChange, categoryOptions = [] }: Routin
         )}
       </Section>
 
-      <StatusCard>
-        <div>
-          <div className="title">On my schedule</div>
-          <div className="note">{scheduleNote(values, minutes)}</div>
-        </div>
-        <Toggle checked={values.isActive} aria-label="On my schedule" onChange={v => set({ isActive: v })} />
-      </StatusCard>
     </FormWrap>
   );
 }

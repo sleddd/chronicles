@@ -182,7 +182,7 @@ describe('habit and category pieces', () => {
   it('sets a goal’s category and start date', () => {
     const onChange = vi.fn();
     renderWithTheme(<GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '2026-12-01' }} onChange={onChange} categories={['Health']} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Health' }));
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Health' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalCategory: 'Health' }));
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-11-01' } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ startOn: '2026-11-01' }));
@@ -192,7 +192,8 @@ describe('habit and category pieces', () => {
     const onChange = vi.fn();
     renderWithTheme(<HabitFields values={{ habitName: 'Balance board', targetCount: 3, targetPeriod: 'week', days: [], parentGoalId: null, isActive: true }}
       onChange={onChange} goalOptions={[{ id: 5, title: 'Half marathon' }]} categories={['Health']} />);
-    expect(screen.getByText(/3 times a week, so 3 times makes a full week/)).toBeTruthy();
+    // The note is On my habits' tooltip now
+    expect(screen.getByTitle(/3 times a week, so 3 times makes a full week/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ targetCount: 4 }));
     fireEvent.click(screen.getByRole('radio', { name: 'Day' }));

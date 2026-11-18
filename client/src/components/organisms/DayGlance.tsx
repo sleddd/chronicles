@@ -22,6 +22,7 @@ import { showFlash } from '../../services/flashNotice.js';
 import { toDateStr, formatTime12h } from '../../utils/dateUtils.js';
 import { isEventTopic, calendarDayFor } from '../../utils/calendarItems.js';
 import { repeatRuleOf, occurrencesBetween } from '../../utils/recurrence.js';
+import { holidaysBetween } from '../../utils/holidays.js';
 import { entryTitleText } from '../../utils/entryTitle.js';
 import { builtinEntryName } from '../../utils/stripHtml.js';
 import { billOccurrences, formatCents } from '../../utils/finance.js';
@@ -88,10 +89,17 @@ const BarePill = styled(PillButton)`
   &&& { border-color: transparent; }
 `;
 
+/* A trial: Your Agenda in a container of its own (a --bg-panel card with the light card shadow) */
 const Panel = styled.section`
   margin-top: 20px;
-  padding: 20px 0 8px;
-  /* No line across the top */
+  padding: 40px 32px 48px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
+  /* Light: the container is the tiles' own near-white, so its cards (events, tasks, all-day) take a
+     grey a step darker to show */
+  html[data-theme='light'] & { --bg-tile: #eceef2; }
+  @media (max-width: 760px) { padding: 30px 18px 34px; }
 `;
 
 /* The title, then the Meds / Move row under it (lined up with the title, a divider above and below) */
@@ -219,8 +227,9 @@ const WeekMonth = styled.div`
 /* The week: a day's short name over its date, small marks for what it holds; the chosen day lifted */
 const Week = styled.div`
   display: grid;
-  /* The month, then the seven days */
-  grid-template-columns: auto repeat(7, minmax(0, 1fr));
+  /* The month, ‹, the days (a strip that scrolls through the calendar, a week in view), › */
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 6px;
   /* A line between the title and the row, and one under it (room under the title first) */
   margin-top: 28px;
@@ -229,9 +238,48 @@ const Week = styled.div`
   container-type: inline-size;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--border-subtle);
+  /* A band a shade darker than the container, edge to edge across it */
+  margin-left: -32px;
+  margin-right: -32px;
+  padding-left: 32px;
+  padding-right: 32px;
+  background: rgba(0, 0, 0, 0.1);
+  html[data-theme='light'] & { background: rgba(20, 24, 32, 0.025); }
+  @media (max-width: 760px) { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
   @media (max-width: 640px) { gap: 2px; }
   /* Phones / tablets: close under the Meds / Move row (a line under the title above it) */
   ${NAV_COMPACT} { margin-top: 16px; }
+`;
+
+/* The days: about four months back and eight ahead, seven in view, scrolled sideways (or a week at a
+   time with ‹ ›); each snaps to the left edge */
+const DayStrip = styled.div`
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+  container-type: inline-size;
+  & > * { flex: 0 0 calc((100cqw - 36px) / 7); scroll-snap-align: start; }
+  @media (max-width: 640px) { gap: 2px; & > * { flex-basis: calc((100cqw - 12px) / 7); } }
+`;
+
+/* ‹ › either side of the days: a week back or ahead */
+const StripBtn = styled.button`
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
 const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
@@ -275,34 +323,44 @@ const Body = styled.div`
   grid-template-columns: minmax(0, 2.35fr) minmax(0, 0.85fr);
   gap: 36px 64px;
   /* Room under the date row before the schedule and lists */
-  margin-top: 40px;
+  margin-top: 56px;
   align-items: start;
+  /* A hairline between the columns while they're side by side */
+  @media (min-width: 1201px) {
+    column-gap: 32px;
+    & > :nth-child(2) { align-self: stretch; padding-left: 32px; border-left: 1px solid var(--border-subtle); }
+  }
   @media (max-width: 1200px) { grid-template-columns: minmax(0, 1fr); }
   /* Room under each heading's line (Schedule, Priorities, Tasks due, Coming up…) before its content */
   & > div > section > :first-child,
   & > div > div > section > :first-child { margin-bottom: 14px; }
 `;
 
-/* Schedule | priorities, then the widgets across both */
+/* Schedule | priorities (the widgets sit under the container) */
 const Main = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   gap: 36px 64px;
   align-items: start;
   min-width: 0;
+  /* A hairline between the schedule and the priorities while they're side by side */
+  @media (min-width: 761px) {
+    align-self: stretch;
+    column-gap: 32px;
+    & > :nth-child(2) { align-self: stretch; padding-left: 32px; border-left: 1px solid var(--border-subtle); }
+  }
   @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 /* The dashboard's widgets, under the schedule and priorities: a divider, then two across */
+/* The dashboard's widgets, under Your Agenda's container (out of it, on the page) */
 const Widgets = styled.div`
-  grid-column: 1 / -1;
   min-width: 0;
+  margin-top: 36px;
   /* Room between the cards (wellness, quote, On the menu, then the two columns) */
   display: flex;
   flex-direction: column;
   gap: 32px;
-  padding-top: 32px;
-  border-top: 1px solid var(--border-card);
 `;
 
 const Col = styled.div`
@@ -364,6 +422,8 @@ const AllDayTile = styled.button`
   cursor: pointer;
   & + & { margin-top: 6px; }
   &:hover { color: var(--text-primary); }
+  /* A holiday: not an entry, so nothing to open */
+  &[data-holiday] { cursor: default; &:hover { color: var(--text-secondary); } }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -425,7 +485,8 @@ const BlockBtn = styled.button<{ $kind: Kind }>`
   cursor: pointer;
   /* A little room between the title and its time */
   .body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  small { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+  /* The time and place (an address can run to two or three lines) */
+  small { margin-top: 4px; font-size: 13px; font-weight: 400; font-style: italic; line-height: 1.55; color: var(--text-muted); }
   &:hover { border-color: var(--border-default); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   /* A task card: room on the left for its tick; struck through once done */
@@ -626,13 +687,17 @@ const NowLine = styled.div`
 `;
 
 /* Opens / folds the schedule's evening (after 7 PM) */
+/* Full width, with a hairline across the schedule above it */
 const EveningBtn = styled.button`
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: 4px;
   margin-top: 14px;
-  padding: 0;
+  padding: 14px 0 0;
   border: none;
+  border-top: 1px solid var(--border-subtle);
+  text-align: left;
   background: none;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -641,8 +706,11 @@ const EveningBtn = styled.button`
   &:hover { color: var(--color-accent-link); }
 `;
 
+/* A hairline above it */
 const LaterNote = styled.p`
-  margin: 14px 0 0;
+  margin: 28px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-muted);
@@ -919,6 +987,65 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const monday = addDays(day, -((dow(day) + 6) % 7));
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 
+  /* The date strip: about four months back and eight ahead of today (wider if the chosen day is
+     further out), scrolled sideways; it opens on the chosen day's week */
+  // Anchored to today, so picking a day never shifts the days under the scroll; it reaches
+  // further only for a day beyond that range
+  const earliest = addDays(today, -120);
+  const from = day < earliest ? day : earliest;
+  const stripStart = addDays(from, -((dow(from) + 6) % 7));
+  const latest = addDays(today, 240);
+  const stripEnd = day > latest ? day : latest;
+  const stripDays = useMemo(() => {
+    const end = stripEnd;
+    const out: string[] = [];
+    for (let d = stripStart; d <= end; d = addDays(d, 1)) out.push(d);
+    return out;
+  }, [stripStart, stripEnd]);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [firstInView, setFirstInView] = useState(0);
+  // A day's step along the strip, measured exactly (cells are fractional widths)
+  const cellWidth = () => {
+    const kids = stripRef.current?.children;
+    if (!kids || kids.length < 2) return 0;
+    return (kids[1] as HTMLElement).getBoundingClientRect().left - (kids[0] as HTMLElement).getBoundingClientRect().left;
+  };
+  const onStripScroll = () => {
+    const w = cellWidth();
+    if (w) setFirstInView(Math.round((stripRef.current?.scrollLeft ?? 0) / w));
+  };
+  const stripBy = (n: number) => {
+    const w = cellWidth();
+    stripRef.current?.scrollBy({ left: n * w, behavior: 'smooth' });
+  };
+  // Opening (and when the chosen day is set from elsewhere): its week at the left. Picking a day
+  // in view doesn't move the strip
+  const shownWeek = useRef('');
+  // If the strip ever reaches further back (a day before its start), keep the same days in view
+  const startRef = useRef(stripStart);
+  useLayoutEffect(() => {
+    const el = stripRef.current;
+    const w = cellWidth();
+    if (!el || !w) return;
+    const i = stripDays.indexOf(day);
+    const visible = i >= firstInView && i < firstInView + 7;
+    if (shownWeek.current && visible) return;
+    const at = stripDays.indexOf(monday);
+    if (at >= 0) { el.scrollLeft = at * w; setFirstInView(at); }
+    shownWeek.current = monday;
+    startRef.current = stripStart; // placed against the strip as it is now
+  }, [day]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const el = stripRef.current;
+    const w = cellWidth();
+    if (el && w && startRef.current !== stripStart) {
+      const added = Math.round((new Date(`${startRef.current}T12:00:00`).getTime() - new Date(`${stripStart}T12:00:00`).getTime()) / 86_400_000);
+      el.scrollLeft += added * w;
+    }
+    startRef.current = stripStart;
+  }, [stripStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inView = stripDays.slice(firstInView, firstInView + 7);
+
   /* Doses: the day's logs follow the chosen day back to today (never ahead) */
   const doses = useTodayDoses(medsOn);
   useEffect(() => {
@@ -968,6 +1095,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const dayEvents = eventsByDay.get(day) ?? [];
   const timedEvents = dayEvents.filter(ev => ev.start !== undefined);
   const allDay = dayEvents.filter(ev => ev.start === undefined);
+  // The day's holidays (when Holidays is on in Settings → Features), first among the all-day items
+  const holidaysOn = useEntriesStore(s => s.featureFlags.holidaysEnabled !== false);
+  const dayHolidays = useMemo(() => (holidaysOn ? holidaysBetween(day, day).get(day) ?? [] : []), [day, holidaysOn]);
   const dayTasks = byDay.get(day) ?? [];
   const dayStart = morningOpen ? DAY_START : MORNING;
   const taskStart = Math.min(TASK_START, ...timedEvents.map(ev => Math.floor(ev.start! / 60) * 60));
@@ -1188,14 +1318,17 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const doseRow = (d: ScheduledDose) => (
     <PopRow key={`${d.medicationPostId}-${d.time}`}>
       <span>{d.medicationName}{d.dosage && <small>{d.dosage} · {clock(minutesOf(d.time) ?? 0)}</small>}</span>
-      {dosesForDay && (
-        <Checkbox checked={doses.isTaken(d)} aria-label={doses.isTaken(d) ? `Mark ${d.medicationName} not taken` : `Mark ${d.medicationName} taken`}
-          onChange={() => void doses.setTaken(d, !doses.isTaken(d))} />
-      )}
+      {/* Every dose has its tick. A day ahead can't be taken yet, so its tick is shown but off;
+          while the day's logs are still loading it waits too */}
+      <Checkbox checked={dosesForDay && doses.isTaken(d)} disabled={!dosesForDay}
+        title={day > today ? 'Doses can be marked taken on the day' : undefined}
+        aria-label={dosesForDay && doses.isTaken(d) ? `Mark ${d.medicationName} not taken` : `Mark ${d.medicationName} taken`}
+        onChange={() => { if (dosesForDay) void doses.setTaken(d, !doses.isTaken(d)); }} />
     </PopRow>
   );
 
   return (
+    <>
     <Panel aria-label="Day at a glance">
       <Head>
         {/* "Your Agenda"; Meds, Move and the Planner button at the right (the week row shows the day) */}
@@ -1222,13 +1355,17 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
         </TitleRow>
       </Head>
 
-      <Week role="group" aria-label="Week">
-        {/* The week's month in full, at the left of the days ("November", or "November – December") */}
+      <Week role="group" aria-label="Days">
+        {/* The month of the days in view, at the left ("November", or "November – December") */}
         <WeekMonth>
-          <span className="long">{[...new Set(week.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'long' })))].join(' – ')}</span>
-          <span className="short">{[...new Set(week.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short' })))].join('–')}</span>
+          <span className="long">{[...new Set(inView.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'long' })))].join(' – ')}</span>
+          <span className="short">{[...new Set(inView.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short' })))].join('–')}</span>
         </WeekMonth>
-        {week.map(d => {
+        <StripBtn type="button" aria-label="Earlier days" title="Earlier" onClick={() => stripBy(-7)}>
+          <Icon name="chevron-left" size={16} strokeWidth={2} />
+        </StripBtn>
+        <DayStrip ref={stripRef} onScroll={onStripScroll}>
+        {stripDays.map(d => {
           const marks = marksOf(d);
           const on = d === day;
           return (
@@ -1239,6 +1376,10 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             </WeekDay>
           );
         })}
+        </DayStrip>
+        <StripBtn type="button" aria-label="Later days" title="Later" onClick={() => stripBy(7)}>
+          <Icon name="chevron-right" size={16} strokeWidth={2} />
+        </StripBtn>
       </Week>
 
       <Body>
@@ -1277,14 +1418,18 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             </AddForm>
           )}
           <Timeline>
-            {allDay.length > 0 && (
+            {allDay.length + dayHolidays.length > 0 && (
               <AllDayRow>
+                {dayHolidays.map(h => (
+                  <AllDayTile as="div" key={`h${h.name}`} data-holiday="">{h.name} · {h.federal ? 'Federal holiday' : 'Holiday'}</AllDayTile>
+                ))}
                 {allDay.map(ev => (
                   <AllDayTile key={`a${ev.id}`} type="button" onClick={() => openInJournal(ev.id)}>All day · {ev.title}</AllDayTile>
                 ))}
               </AllDayRow>
             )}
-            <EveningBtn type="button" aria-expanded={morningOpen} onClick={toggleMorning} style={{ margin: '0 0 22px' }}>
+            <EveningBtn type="button" aria-expanded={morningOpen} onClick={toggleMorning}
+              style={{ margin: '0 0 22px', padding: '0 0 14px', borderTop: 'none', borderBottom: '1px solid var(--border-subtle)' }}>
               {morningOpen ? 'Hide before 7 AM' : `Show before 7 AM${morningCount + earlyDoses.length ? ` · ${morningCount + earlyDoses.length} ${morningCount + earlyDoses.length === 1 ? 'item' : 'items'}` : ''}`}
               <Icon name={morningOpen ? 'chevron-down' : 'chevron-up'} size={16} strokeWidth={1.8} aria-hidden="true" />
             </EveningBtn>
@@ -1388,7 +1533,6 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
           </section>
           {wins}
         </Col>
-        {widgets && <Widgets>{widgets}</Widgets>}
        </Main>
 
         <Col>
@@ -1440,5 +1584,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
         </MarkerList>
       )}
     </Panel>
+    {widgets && <Widgets>{widgets}</Widgets>}
+    </>
   );
 }
