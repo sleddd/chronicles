@@ -504,11 +504,11 @@ describe('TaskFields', () => {
     priority: 'none',
   };
 
-  it('renders the title, Priority and Status chips, Deadline and Auto-migrate', () => {
+  it('renders the title, Priority chips, a Status dropdown, Deadline and Auto-migrate', () => {
     renderWithTheme(<TaskFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByPlaceholderText('What needs doing?')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'None' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: 'Planned' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('todo');
     expect(screen.getByLabelText('Deadline')).toBeInTheDocument();
     expect(screen.getByLabelText('Auto-migrate')).toBeInTheDocument();
   });
@@ -520,11 +520,22 @@ describe('TaskFields', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Ask about shots' }));
   });
 
-  it('Status chips set the progress flags', () => {
+  it('the Status dropdown sets the progress flags', () => {
     const onChange = vi.fn();
     renderWithTheme(<TaskFields values={defaultValues} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'In progress' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: 'in_progress' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ isInProgress: true, isCompleted: false }));
+  });
+
+  it('a planned time is always offered; picking one with no day plans it for the deadline, else today', () => {
+    const onChange = vi.fn();
+    const { unmount } = renderWithTheme(<TaskFields values={{ ...defaultValues, deadline: '2026-12-01' }} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Planned time'), { target: { value: '14:30' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ scheduledTime: '14:30', scheduledDate: '2026-12-01' }));
+    unmount();
+    renderWithTheme(<TaskFields values={defaultValues} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('Planned time'), { target: { value: '09:00' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ scheduledTime: '09:00', scheduledDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }));
   });
 
   it('renders milestone select when options are provided', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
@@ -6,6 +6,7 @@ import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
+import { TickMark } from '../atoms/TickMark.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { cardLabel } from '../../styles/cardLabel.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -25,6 +26,7 @@ import { entryTitleText } from '../../utils/entryTitle.js';
 import { builtinEntryName } from '../../utils/stripHtml.js';
 import { billOccurrences, formatCents } from '../../utils/finance.js';
 import type { ScheduledDose } from '../../types/health.js';
+import { taskFieldsForStatus } from '../../types/goals.js';
 import { addDays, layoutDay, parsePlannerOrder, plannerFacts, tasksByDay, hoursLabel, clampHours, hhmm, type PlannerOrder } from '../../utils/planner.js';
 
 /* Day at a glance (the home dashboard, under the add row): one panel for a day —
@@ -75,7 +77,7 @@ type Kind = 'meeting' | 'event' | 'task';
 const KIND_COLOR: Record<Kind, string> = { meeting: 'var(--chart-blue)', event: 'var(--chart-violet)', task: 'var(--chart-green)' };
 const KIND_NAME: Record<Kind, string> = { meeting: 'Meeting', event: 'Event', task: 'Task block' };
 
-interface Block { key: string; id: number; kind: Kind; title: string; start: number; end: number; note?: string }
+interface Block { key: string; id: number; kind: Kind; title: string; start: number; end: number; note?: string; done?: boolean }
 
 /* ── Styles: the dashboard's own card, labels and pills ── */
 
@@ -426,6 +428,142 @@ const BlockBtn = styled.button<{ $kind: Kind }>`
   small { font-size: 13px; font-weight: 400; color: var(--text-muted); }
   &:hover { border-color: var(--border-default); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  /* A task card: room on the left for its tick; struck through once done */
+  &[data-task='true'] { padding-left: 44px; }
+  &[data-done='true'] .title { text-decoration: line-through; color: var(--text-tertiary); }
+`;
+
+/* A task card's tick, to the left of its title: an 18px circle in a 32px target, so it's
+   small but easy to tap. A sibling of the card (never inside its button), placed over it */
+const CardTick = styled.button`
+  position: absolute;
+  left: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  &:hover { background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
+/* Schedule's +: a round accent outline, no fill, across from the heading */
+const AddBtn = styled.button`
+  align-self: center;
+  /* Taller than the label: pulled in, so this head's rule stays level with the columns' beside it */
+  margin: -8px 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--color-accent-line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-accent-soft, var(--color-accent));
+  cursor: pointer;
+  &:hover { background: var(--color-accent-subtle); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
+/* The + opens this under the heading: one outlined box (what | time), then Add / Cancel */
+const AddForm = styled.form`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 14px;
+  .box {
+    flex: 1 1 260px;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 44px;
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    &:focus-within { border-color: var(--color-accent-line); }
+  }
+  input {
+    min-width: 0;
+    height: 100%;
+    padding: 0 14px;
+    border: none !important;
+    background: transparent !important;
+    outline: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+  input[type='text'] { flex: 1; }
+  input[type='time'] { flex: none; width: 128px; border-left: 1px solid var(--border-card) !important; color-scheme: inherit; }
+  input::placeholder { color: var(--text-placeholder, var(--text-muted)); }
+  .acts { display: flex; gap: 8px; }
+`;
+
+/* A task that can be dragged onto the schedule: its grip */
+const DragGrip = styled.button`
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -5px -6px -5px 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  &:hover { background: var(--bg-hover); color: var(--text-secondary); }
+  &:active { cursor: grabbing; }
+`;
+
+/* Where a carried task would land: a dashed accent line across the schedule, with its time */
+const DropLine = styled.div`
+  position: absolute;
+  left: 60px;
+  right: 0;
+  z-index: 4;
+  border-top: 2px dashed var(--color-accent);
+  pointer-events: none;
+  span {
+    position: absolute;
+    left: 8px;
+    top: -24px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--color-accent);
+    color: var(--on-accent, #fff);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+  }
+`;
+
+/* The task in hand while it's carried: a small floating tile under the pointer */
+const Ghost = styled.div`
+  position: fixed;
+  z-index: 80;
+  max-width: 260px;
+  padding: 9px 14px;
+  border: 1px solid var(--border-pop, var(--border-default));
+  border-radius: 8px;
+  background: var(--bg-tile);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 `;
 
 /* The foot of a schedule card: drag it down to stretch the card, up to shorten it */
@@ -539,26 +677,6 @@ const ItemText = styled.button<{ $done?: boolean }>`
   &:hover { color: var(--text-primary); }
 `;
 
-const AddLine = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 0 4px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  input {
-    flex: 1;
-    min-width: 0;
-    padding: 0;
-    border: none !important;
-    background: transparent !important;
-    outline: none;
-    font-family: var(--font-sans);
-    font-size: 15px;
-    color: var(--text-primary);
-  }
-  input::placeholder { color: var(--text-placeholder, var(--text-muted)); }
-`;
 
 const Muted = styled.p`
   margin: 14px 0 0;
@@ -575,8 +693,14 @@ const NoDay = styled.div`
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-secondary);
-  button { display: block; margin-top: 6px; padding: 0; border: none; background: none; font: inherit; font-size: 15px; color: var(--color-accent-link); cursor: pointer; }
-  button:hover { text-decoration: underline; }
+  > button { display: block; margin-top: 6px; padding: 0; border: none; background: none; font: inherit; font-size: 15px; color: var(--color-accent-link); cursor: pointer; }
+  > button:hover { text-decoration: underline; }
+  ul { list-style: none; margin: 14px 0 4px; padding: 0; }
+  li { display: flex; align-items: center; gap: 10px; padding: 9px 0; font-size: 15px; }
+  li + li { border-top: 1px solid var(--border-subtle); }
+  li .name { flex: 1; min-width: 0; padding: 0; border: none; background: none; font: inherit; color: var(--text-secondary); text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li .name:hover { color: var(--text-primary); }
+  p { margin: 4px 0 0; font-size: 13px; color: var(--text-muted); }
 `;
 
 /* The list a marker opens: a small floating panel, like the app's other menus */
@@ -807,7 +931,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
 
   /* The Planner's tasks on each day (unfinished, in the day's order) */
   const planned = useMemo(() => tasks.map(t => ({ ...t, ...plannerFacts(t.id, t.fields, t.created) })), [tasks]);
-  const byDay = useMemo(() => tasksByDay(planned.filter(t => !t.done), week, today, order), [planned, week[0], today, order]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Done ones stay on the agenda, struck through, so a tick can be undone there
+  const byDay = useMemo(() => tasksByDay(planned, week, today, order), [planned, week[0], today, order]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* The chosen day's timeline: events and meetings at their times, tasks in the free time around them */
   const dayEvents = eventsByDay.get(day) ?? [];
@@ -825,7 +950,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     ...dayTasks.map(t => {
       const start = taskAt.get(t.id) ?? taskStart;
       const end = start + Math.round(t.hours * 60);
-      return { key: `t${t.id}`, id: t.id, kind: 'task' as const, title: t.title, start, end, note: `${clock(start)} – ${clock(end)} · ${hoursLabel(t.hours)}` };
+      return { key: `t${t.id}`, id: t.id, kind: 'task' as const, title: t.title, start, end, note: `${clock(start)} – ${clock(end)} · ${hoursLabel(t.hours)}`, done: t.done };
     }),
   ];
   const dayEnd = eveningOpen ? DAY_END : EVENING;
@@ -868,6 +993,17 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const m = Math.max(dayStart, Math.min(dayEnd, mins));
     const h = Math.min(Math.floor(m / 60), Math.ceil(dayEnd / 60));
     return (hourTops[h] ?? 0) - (hourTops[Math.floor(dayStart / 60)] ?? 0) + ((m - h * 60) / 60) * hourPx(h);
+  };
+  // The other way: the time at a height on the schedule (for a task dropped there)
+  const minutesAt = (y: number) => {
+    const first = Math.floor(dayStart / 60);
+    const base = hourTops[first] ?? 0;
+    for (let h = first; h <= Math.ceil(dayEnd / 60); h++) {
+      const top = (hourTops[h] ?? 0) - base;
+      const px = hourPx(h);
+      if (y < top + px) return Math.max(dayStart, Math.min(dayEnd, h * 60 + (Math.max(0, y - top) / px) * 60));
+    }
+    return dayEnd;
   };
   // Each card's place: its own time, or its share of a shared stretch (by the room each needs)
   const slot = new Map<string, { top: number; height: number }>();
@@ -912,7 +1048,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const due = tasks.filter(t => t.fields.deadline === day);
   const goalName = new Map(goals.map(g => [g.id, g.title]));
   const milestoneName = new Map(milestones.map(m => [m.id, m.title]));
-  const noDay = planned.filter(t => !t.done && !t.backlog && !t.scheduled).length;
+  // Unfinished tasks with no day — ideas from the backlog too (a new task starts there), so any
+  // task can be dragged onto the schedule from here
+  const noDay = planned.filter(t => !t.done && !t.scheduled).length;
 
   /* The header's pills: meds taken that day, and the exercise schedule's minutes */
   const medTotal = medsOn ? doses.groups.reduce((n, g) => n + g.doses.length, 0) : 0;
@@ -931,17 +1069,81 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const [open, setOpen] = useState<{ kind: 'dose' | 'bill' | 'meds'; key?: string; rect: DOMRect } | null>(null);
   const openFrom = (kind: 'dose' | 'bill' | 'meds', e: React.MouseEvent<HTMLElement>, key?: string) => setOpen({ kind, key, rect: e.currentTarget.getBoundingClientRect() });
 
-  const [newTask, setNewTask] = useState('');
-  const addDue = async () => {
-    const text = newTask.trim();
+  /* Schedule's +: a task planned for the chosen day, at a time (blank = it follows the day's order) */
+  const [adding, setAdding] = useState(false);
+  const [addTitle, setAddTitle] = useState('');
+  const [addTime, setAddTime] = useState('');
+  const openAdd = () => {
+    if (adding) { setAdding(false); return; }
+    // Today: the next quarter hour; another day: 9 AM
+    const next = Math.min(23 * 60 + 45, Math.ceil((nowMins + 1) / 15) * 15);
+    setAddTime(isToday ? hhmm(next) : '09:00');
+    setAddTitle('');
+    setAdding(true);
+  };
+  const addPlanned = async () => {
+    const text = addTitle.trim();
     if (!text) return;
-    setNewTask('');
+    const time = addTime;
+    setAddTitle('');
+    setAdding(false);
+    // Make sure it shows: a time before 7 AM or after 7 PM opens that part of the day
+    const at = minutesOf(time);
+    if (at !== undefined && at < MORNING && !morningOpen) toggleMorning();
+    if (at !== undefined && at >= EVENING && !eveningOpen) toggleEvening();
     const id = await createEntry({ name: 'Task', icon: 'circle-check' }, text, {
-      taskDescription: text, isInProgress: false, isCompleted: false, isAutoMigrating: false,
-      parentGoalId: null, parentMilestoneId: null, deadline: day, priority: 'none', scheduledDate: '',
+      taskDescription: text, ...taskFieldsForStatus('todo'), isAutoMigrating: false,
+      parentGoalId: null, parentMilestoneId: null, deadline: '', priority: 'none',
+      scheduledDate: day, scheduledTime: time, scheduledHours: 1,
     });
     if (id === null) showFlash('That task didn’t save. Try again.');
   };
+
+  /* Carrying a task (from Tasks due, or the ones with no day) onto the schedule: pointer events,
+     so it works with touch too. Dropped on the schedule it's planned for this day at that time */
+  const hoursRef = useRef<HTMLDivElement>(null);
+  const [carry, setCarry] = useState<{ id: number; title: string; x: number; y: number; at: number | null } | null>(null);
+  const timeAtPoint = (x: number, y: number): number | null => {
+    const r = hoursRef.current?.getBoundingClientRect();
+    if (!r || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    return Math.min(23 * 60 + 45, Math.round(minutesAt(y - r.top - 7) / 15) * 15);
+  };
+  const onCarryDown = (t: { id: number; title: string }, e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    setCarry({ id: t.id, title: t.title, x: e.clientX, y: e.clientY, at: timeAtPoint(e.clientX, e.clientY) });
+  };
+  const onCarryMove = (e: React.PointerEvent) => {
+    if (!carry) return;
+    setCarry({ ...carry, x: e.clientX, y: e.clientY, at: timeAtPoint(e.clientX, e.clientY) });
+  };
+  const onCarryUp = (e: React.PointerEvent) => {
+    const c = carry;
+    setCarry(null);
+    if (!c) return;
+    const at = e.type === 'pointercancel' ? null : timeAtPoint(e.clientX, e.clientY);
+    if (at === null) return;
+    const t = tasks.find(x => x.id === c.id);
+    if (!t) return;
+    const fields: Record<string, unknown> = { ...t.fields, scheduledDate: day, scheduledTime: hhmm(at) };
+    // An idea from the backlog becomes a planned task once it's on the schedule
+    if (t.fields.isBacklog) Object.assign(fields, taskFieldsForStatus('todo'));
+    void saveFields(t.entry, fields).then(ok => { if (!ok) showFlash('Couldn’t put that task on the schedule. Try again.'); });
+  };
+  const carryProps = (t: { id: number; title: string }) => ({
+    type: 'button' as const,
+    'aria-label': `Drag “${t.title}” onto the schedule`,
+    title: 'Drag onto the schedule',
+    onPointerDown: (e: React.PointerEvent) => onCarryDown(t, e),
+    onPointerMove: onCarryMove,
+    onPointerUp: onCarryUp,
+    onPointerCancel: onCarryUp,
+  });
+  // The tasks with no day yet, listed so they can be dragged on (a few; the Planner has the rest)
+  // Ideas last, newest first within each
+  const noDayTasks = planned.filter(t => !t.done && !t.scheduled).sort((x, y) => Number(x.backlog) - Number(y.backlog) || y.created - x.created);
+  const NO_DAY_SHOWN = 5;
   const tick = (t: typeof tasks[number]) =>
     void saveFields(t.entry, { ...t.fields, isCompleted: !t.fields.isCompleted, isInProgress: false, isInReview: false }).then(ok => {
       if (!ok) showFlash('Couldn’t save that task. Try again.');
@@ -1025,7 +1227,25 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                 </Marker>
               )}
             </span>
+            <AddBtn type="button" aria-label={`Add a task to ${isToday ? 'today' : `${WEEK_NAMES[dow(day)]} ${mm}/${dd}`}`} aria-expanded={adding}
+              title="Add a task" onClick={openAdd}>
+              <Icon name={adding ? 'x' : 'plus'} size={16} strokeWidth={2} />
+            </AddBtn>
           </SubHead>
+          {adding && (
+            <AddForm onSubmit={e => { e.preventDefault(); void addPlanned(); }}
+              onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setAdding(false); } }}>
+              <div className="box">
+                <input type="text" autoFocus value={addTitle} maxLength={200} onChange={e => setAddTitle(e.target.value)}
+                  placeholder="What needs doing?" aria-label="Task" />
+                <input type="time" value={addTime} step={900} onChange={e => setAddTime(e.target.value)} aria-label="Time" />
+              </div>
+              <div className="acts">
+                <PillButton type="submit" disabled={!addTitle.trim()}>Add</PillButton>
+                <PillButton type="button" $variant="neutral" onClick={() => setAdding(false)}>Cancel</PillButton>
+              </div>
+            </AddForm>
+          )}
           <Timeline>
             {allDay.length > 0 && (
               <AllDayRow>
@@ -1038,7 +1258,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
               {morningOpen ? 'Hide before 7 AM' : `Show before 7 AM${morningCount + earlyDoses.length ? ` · ${morningCount + earlyDoses.length} ${morningCount + earlyDoses.length === 1 ? 'item' : 'items'}` : ''}`}
               <Icon name={morningOpen ? 'chevron-down' : 'chevron-up'} size={16} strokeWidth={1.8} aria-hidden="true" />
             </EveningBtn>
-            <Hours style={{ height: height + 14, paddingTop: 7 }}>
+            <Hours ref={hoursRef} style={{ height: height + 14, paddingTop: 7 }}>
               {hours.map(h => {
                 const top = yAt(h * 60) + 7;
                 return (
@@ -1063,6 +1283,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                 );
               })}
               {isToday && nowMins >= dayStart && nowMins <= dayEnd && <NowLine style={{ top: yAt(nowMins) + 6 }} aria-hidden="true" />}
+              {carry?.at != null && (
+                <DropLine style={{ top: yAt(carry.at) + 7 }} aria-hidden="true"><span>{clock(carry.at)}</span></DropLine>
+              )}
               <Blocks style={{ top: 7 }}>
                 {shownBlocks.map(b => {
                   // While dragged: where it would go (on its own time); else its slot
@@ -1070,11 +1293,22 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                   const s0 = moving ? drag!.start : b.start;
                   const e0 = moving ? drag!.end : b.end;
                   const place = moving ? { top: yAt(s0), height: yAt(e0) - yAt(s0) } : slot.get(b.key) ?? { top: yAt(s0), height: yAt(e0) - yAt(s0) };
+                  const cardTop = place.top + CARD_GAP / 2;
+                  const task = b.kind === 'task' ? dayTasks.find(x => x.id === b.id) : undefined;
                   return (
-                    <BlockBtn key={b.key} type="button" $kind={b.kind} data-dragging={drag?.key === b.key}
+                    <Fragment key={b.key}>
+                    {task && (
+                      // Its tick, to the left of the title: level with the title's first line
+                      <CardTick type="button" style={{ top: cardTop + 5 }} role="checkbox" aria-checked={!!b.done}
+                        aria-label={b.done ? `Mark “${b.title}” not done` : `Mark “${b.title}” done`}
+                        onClick={() => tick(task)}>
+                        <TickMark checked={!!b.done} size={18} />
+                      </CardTick>
+                    )}
+                    <BlockBtn type="button" $kind={b.kind} data-dragging={drag?.key === b.key} data-task={!!task} data-done={!!b.done}
                       style={{
                         // A little room above and below each card inside its time
-                        top: place.top + CARD_GAP / 2, height: Math.max(30, place.height - CARD_GAP),
+                        top: cardTop, height: Math.max(30, place.height - CARD_GAP),
                         left: 0, width: '100%',
                       }}
                       onPointerDown={e => onCardDown(b, 'move', e)} onPointerMove={onCardMove} onPointerUp={onCardUp} onPointerCancel={onCardUp}
@@ -1083,10 +1317,11 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                       title={`${b.title} · ${KIND_NAME[b.kind]} — drag to move, drag its foot to stretch`}>
                       {/* The card's words, measured so the schedule makes room for all of them */}
                       <span className="body" ref={el => { if (el) cardBodies.current.set(b.key, el); else cardBodies.current.delete(b.key); }}>
-                        {b.title}{moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>}
+                        <span className="title">{b.title}</span>{moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>}
                       </span>
                       <StretchGrip aria-hidden="true" onPointerDown={e => onCardDown(b, 'end', e)} />
                     </BlockBtn>
+                    </Fragment>
                   );
                 })}
               </Blocks>
@@ -1116,16 +1351,10 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                     {t.title}
                     <small>{isToday ? 'Due today' : `Due ${WEEK_NAMES[dow(day)]} ${dd}`}{where ? ` · ${where}` : ''}</small>
                   </ItemText>
+                  {!done && <DragGrip {...carryProps(t)}><Icon name="grip" size={16} strokeWidth={2.6} /></DragGrip>}
                 </ItemRow>
               );
             })}
-            <AddLine>
-              <Icon name="plus" size={18} strokeWidth={1.8} />
-              <input value={newTask} onChange={e => setNewTask(e.target.value)} maxLength={200}
-                placeholder={isToday ? 'Add a task for today' : `Add a task due ${WEEK_NAMES[dow(day)]} ${mm}/${dd}`}
-                aria-label={isToday ? 'Add a task due today' : `Add a task due ${WEEK_NAMES[dow(day)]}`}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addDue(); } if (e.key === 'Escape') setNewTask(''); }} />
-            </AddLine>
           </section>
           {wins}
         </Col>
@@ -1138,13 +1367,28 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
           {noDay > 0 && (
             <NoDay>
               {noDay} {noDay === 1 ? 'task' : 'tasks'} with no day yet
-              <button type="button" onClick={() => navigate('/goals/planner')}>Place them on the week</button>
+              <p>Drag one onto the schedule to plan it.</p>
+              <ul>
+                {noDayTasks.slice(0, NO_DAY_SHOWN).map(t => (
+                  <li key={t.id}>
+                    <DragGrip {...carryProps(t)}><Icon name="grip" size={16} strokeWidth={2.6} /></DragGrip>
+                    <button type="button" className="name" onClick={() => openInJournal(t.id)}>{t.title}</button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" onClick={() => navigate('/goals/planner')}>
+                {noDay > NO_DAY_SHOWN ? `${noDay - NO_DAY_SHOWN} more · Place them on the week` : 'Place them on the week'}
+              </button>
             </NoDay>
           )}
           {side}
         </Col>
       </Body>
 
+      {carry && createPortal(
+        <Ghost style={{ left: carry.x + 14, top: carry.y + 10 }} aria-hidden="true">{carry.title}</Ghost>,
+        document.body,
+      )}
       {open?.kind === 'bill' && (
         <MarkerList anchor={open.rect} title={`Bills due ${dayWord}`} onClose={() => setOpen(null)}>
           {dayBills.map(b => (

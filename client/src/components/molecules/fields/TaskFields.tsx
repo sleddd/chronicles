@@ -13,6 +13,9 @@ import { checklistOf } from '../../../utils/taskLists.js';
 import { DAY_PARTS, chosenPart, partEndOf, partOf, partsCovered } from '../../../utils/planner.js';
 import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
+import { toDateStr } from '../../../utils/dateUtils.js';
+
+const todayStr = () => toDateStr(new Date());
 export type { TaskFieldValues } from '../../../types/fields.js';
 
 /* Task fields — the same form in the journal editor and Quick Entry: the task
@@ -137,6 +140,7 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
   const scheduledId = useId();
   const deadlineId = useId();
   const notesId = useId();
+  const statusId = useId();
 
   // A goal narrows the milestones to its own (MilestoneOption may carry parentGoalId)
   const goalOf = (m: MilestoneOption) => (m as MilestoneOption & { parentGoalId?: number | null }).parentGoalId ?? null;
@@ -211,16 +215,17 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
         </LabelledRow>
 
         <LabelledRow>
-          <RowLabel>Status</RowLabel>
-          <Chips role="radiogroup" aria-label="Status">
-            {STATUSES.map(s => (
-              <Chip key={s.value} type="button" role="radio" aria-checked={status === s.value}
-                $active={status === s.value}
-                onClick={() => set(taskFieldsForStatus(s.value))}>
-                {s.label}
-              </Chip>
-            ))}
-          </Chips>
+          <RowLabel as="label" htmlFor={statusId}>Status</RowLabel>
+          {/* A dropdown (an outlined pill picker, like Part of) */}
+          <PartOf>
+            <BareSelect>
+              <select id={statusId} aria-label="Status" value={status}
+                onChange={e => set(taskFieldsForStatus(e.target.value as TaskStatus))}>
+                {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+              <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+            </BareSelect>
+          </PartOf>
         </LabelledRow>
 
         <LabelledRow>
@@ -280,11 +285,14 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
             <PlannedWhen>
               <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
                 onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value ? {} : { scheduledTime: '' }), ...(e.target.value || values.deadline ? {} : { scheduledPart: '', scheduledPartEnd: '' }) })} />
-              {/* A time on that day: where it sits in the planner (blank = it follows the day's order) */}
-              {values.scheduledDate ? (
-                <BareDate type="time" aria-label="Planned time" value={values.scheduledTime ?? ''} step={900}
-                  onChange={e => set({ scheduledTime: e.target.value })} />
-              ) : null}
+              {/* A time on that day: where it sits in the planner and on Your Agenda (blank = it
+                  follows the day's order). Always there: a time chosen with no day yet plans it for
+                  its deadline's day, else today */}
+              <BareDate type="time" aria-label="Planned time" value={values.scheduledTime ?? ''} step={900}
+                onChange={e => set({
+                  scheduledTime: e.target.value,
+                  ...(e.target.value && !values.scheduledDate ? { scheduledDate: values.deadline || todayStr() } : {}),
+                })} />
             </PlannedWhen>
           </DateHalf>
         </DateRow>
