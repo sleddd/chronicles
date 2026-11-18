@@ -276,12 +276,12 @@ const Nav = styled.nav`
     font-weight: 500;
     &:hover { color: var(--text-primary); }
   }
+  /* Tablets and phones: the menu button holds the section links and Sign in / Open Chronicles */
   @media (max-width: 1000px) {
     gap: 16px;
-    [data-section-link] { display: none; }
+    [data-section-link], [data-sign-in] { display: none; }
   }
-  /* Phones: Sign in moves into the menu, so the pill and the menu button fit */
-  @media (max-width: 480px) { gap: 10px; a:not([data-button]) { font-size: 14px; } [data-sign-in] { display: none; } }
+  @media (max-width: 480px) { gap: 10px; a:not([data-button]) { font-size: 14px; } }
 `;
 
 /* Phones and tablets (≤1000px): a round menu button — three lines, a × while
@@ -293,15 +293,15 @@ const MenuBtn = styled.button`
   width: 42px;
   height: 42px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  /* A plain hamburger: just the three lines, no circle or fill */
+  border: none;
+  border-radius: 6px;
+  background: none;
   color: #fff;
   cursor: pointer;
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  &:hover { background: rgba(255, 255, 255, 0.24); }
-  &:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  &:hover { opacity: 0.8; }
+  &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   span {
     position: absolute;
     left: 12px;

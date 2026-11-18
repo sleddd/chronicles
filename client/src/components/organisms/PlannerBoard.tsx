@@ -69,7 +69,8 @@ const Wrap = styled.div<{ $day: boolean; $folded: boolean }>`
   display: grid;
   /* The days first, Unscheduled on the right (and under them on narrow screens) */
   grid-template-columns: minmax(0, 1fr) ${({ $day, $folded }) => ($folded ? '48px' : $day ? '320px' : '264px')};
-  align-items: start;
+  /* Unscheduled runs the days' height (it scrolls inside), so it never reaches past them */
+  align-items: stretch;
   & > :first-child { order: 2; }
   @media (max-width: 900px) {
     grid-template-columns: minmax(0, 1fr);
@@ -83,13 +84,31 @@ const Backlog = styled.section<{ $over: boolean }>`
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  min-height: 200px;
+  /* As tall as the days and no taller: its own height doesn't count toward the row
+     (height 0), it fills the row the days set (min-height 100%) and its list scrolls */
+  height: 0;
+  min-height: max(100%, 360px);
   margin-left: 16px;
   padding: 14px 14px 16px 16px;
   border-radius: 14px;
   background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'color-mix(in srgb, var(--bg-sunken) 45%, transparent)')};
   transition: background 120ms ease;
-  @media (max-width: 900px) { margin-left: 0; padding: 16px; }
+  @media (max-width: 900px) { margin-left: 0; padding: 16px; height: auto; min-height: 200px; }
+`;
+
+/* Unscheduled's cards: the part that scrolls, so a long list stays beside the days */
+const BacklogList = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Room for the cards' outlines and focus rings at the edges */
+  margin: 0 -6px;
+  padding: 2px 6px 4px;
+  @media (max-width: 900px) { overflow: visible; }
 `;
 
 /* The column's name and its fold button */
@@ -98,6 +117,9 @@ const BacklogHead = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  /* A hairline under the name */
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 const FoldBtn = styled.button`
@@ -226,11 +248,23 @@ const Corner = styled.div`
   border-bottom: 1px solid var(--border-default);
 `;
 
-/* Whether the hours show, remembered per browser */
-const LABELS_FOLDED_KEY = 'planner-labels-folded-v1';
-function loadLabelsFolded(): boolean {
-  try { return localStorage.getItem(LABELS_FOLDED_KEY) === '1'; } catch { return false; }
+/* Whether Unscheduled's search and filters show (hidden to start), remembered per browser */
+const FILTERS_OPEN_KEY = 'planner-filters-open-v1';
+function loadFiltersOpen(): boolean {
+  try { return localStorage.getItem(FILTERS_OPEN_KEY) === '1'; } catch { return false; }
 }
+
+/* The head's buttons: Filters, then the fold */
+const HeadButtons = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2px;
+`;
+
+/* Filters: shows or hides the search and pickers; accent while open, and while folded with one set */
+const FiltersBtn = styled(FoldBtn)<{ $on: boolean }>`
+  color: ${({ $on }) => ($on ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+`;
 
 /* A day's name over the firmer rule (its all-day events under it); today's in the soft accent */
 const DayHead = styled.div`
@@ -708,6 +742,8 @@ interface PlannerBoardProps extends CardActions {
   open: PlannerCard[];
   /** Search / filters over the Unscheduled list */
   tools?: ReactNode;
+  /** How many of the search / filters are set (the Filters button says so while they're hidden) */
+  toolsSet?: number;
   onOpenEvent: (id: number) => void;
   /** The tick on each card: mark the task done, or not done again */
   onToggleDone?: (id: number) => void;
@@ -726,11 +762,11 @@ interface PlannerBoardProps extends CardActions {
 
 const NO_CARDS: PlannerCard[] = [];
 
-export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, onOpen, onSchedule, onToggleDone, onResize, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
-  const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
-  const toggleLabels = () => setLabelsFolded(prev => {
-    try { localStorage.setItem(LABELS_FOLDED_KEY, prev ? '0' : '1'); } catch { /* storage refused */ }
-    return !prev;
+export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, toolsSet = 0, onOpen, onSchedule, onToggleDone, onResize, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
+  const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen);
+  const toggleFilters = () => setFiltersOpen(v => {
+    try { localStorage.setItem(FILTERS_OPEN_KEY, v ? '0' : '1'); } catch { /* per browser only */ }
+    return !v;
   });
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -1030,13 +1066,23 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
             <Backlog ref={ref} $over={over} aria-label="Unscheduled">
               <BacklogHead>
                 <BacklogTitle>Unscheduled</BacklogTitle>
-                {onFold && (
-                  <FoldBtn type="button" aria-expanded aria-label="Hide unscheduled tasks" title="Hide unscheduled tasks" onClick={() => onFold(true)}>
-                    <MaterialIcon $size={20} aria-hidden="true">chevron_right</MaterialIcon>
-                  </FoldBtn>
-                )}
+                <HeadButtons>
+                  {tools && (
+                    <FiltersBtn type="button" $on={filtersOpen || toolsSet > 0} aria-expanded={filtersOpen}
+                      aria-label={filtersOpen ? 'Hide search and filters' : `Show search and filters${toolsSet ? ` (${toolsSet} set)` : ''}`}
+                      title={filtersOpen ? 'Hide search and filters' : 'Show search and filters'} onClick={toggleFilters}>
+                      <MaterialIcon $size={20} aria-hidden="true">tune</MaterialIcon>
+                    </FiltersBtn>
+                  )}
+                  {onFold && (
+                    <FoldBtn type="button" aria-expanded aria-label="Hide unscheduled tasks" title="Hide unscheduled tasks" onClick={() => onFold(true)}>
+                      <MaterialIcon $size={20} aria-hidden="true">chevron_right</MaterialIcon>
+                    </FoldBtn>
+                  )}
+                </HeadButtons>
               </BacklogHead>
-              {tools}
+              {filtersOpen && tools}
+              <BacklogList>
               <SortableContext items={backlog.map(c => c.id)} strategy={verticalListSortingStrategy}>
                 {overdue.length > 0 && <Group>Overdue</Group>}
                 {overdue.map(c => <SortableCard key={c.id} card={c} {...actions} />)}
@@ -1047,6 +1093,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
                 {backlog.length === 0 && <Empty>Nothing left to plan</Empty>}
               </SortableContext>
               <AddTask label="Add a task with no day" onAdd={text => onAdd('', text)} />
+              </BacklogList>
             </Backlog>
           ))}
         </DropZone>
@@ -1059,16 +1106,10 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
             </EdgeHint>
           ))}
           <Scroll ref={pan.ref} $panning={pan.panning} {...pan.bind}>
-            <Grid ref={gridRef} $cols={lanes.length} $labels={!labelsFolded} role="table" aria-label="Planner"
+            <Grid ref={gridRef} $cols={lanes.length} $labels role="table" aria-label="Planner"
               style={pan.pull ? { transform: `translateX(${pan.pull}px)` } : undefined}>
-              <Corner style={{ gridRow: 1, gridColumn: 1 }}>
-                <FoldBtn type="button" aria-expanded={!labelsFolded}
-                  aria-label={labelsFolded ? 'Show the hours' : 'Hide the hours'}
-                  title={labelsFolded ? 'Show the hours' : 'Hide the hours'}
-                  onClick={toggleLabels}>
-                  <MaterialIcon $size={20} aria-hidden="true">{labelsFolded ? 'chevron_right' : 'chevron_left'}</MaterialIcon>
-                </FoldBtn>
-              </Corner>
+              {/* The hours always show (no fold) */}
+              <Corner style={{ gridRow: 1, gridColumn: 1 }} />
               {lanes.map((lane, c) => (
                 <DayHead key={lane.day} role="columnheader" style={{ gridRow: 1, gridColumn: c + 2 }}>
                   <DayNameRow>
@@ -1086,7 +1127,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
 
               {/* The hours down the left */}
               <Scale role="rowheader" aria-label="Hours" style={{ gridRow: 2, gridColumn: 1, height }}>
-                {!labelsFolded && hours.map(h => (
+                {hours.map(h => (
                   <HourMark key={h} style={{ top: Math.max(8, yAt(h * 60)) }}>{hourName(h)}</HourMark>
                 ))}
               </Scale>

@@ -202,17 +202,20 @@ const H1 = styled.h1`
   br { @media (max-width: 768px) { display: none; } }
   /* The second half in a pale taupe (pale teal #b6dbd9 before), the page's one coloured phrase */
   em { font-style: normal; color: #ddd2c7; }
-  @media (max-width: 768px) { font-size: 44px; }
+  /* Tablets and phones: a little bigger than before (the intro under it a little smaller) */
+  @media (max-width: 1024px) { font-size: 72px; margin-bottom: 24px; }
+  @media (max-width: 768px) { font-size: 58px; }
+  @media (max-width: 400px) { font-size: 50px; }
 `;
 
 const HeroText = styled.p`
-  max-width: 1120px; /* wide enough for the first line to run to "notes, habits," */
+  /* The width sets where the lines wrap (no line breaks in the text) */
+  max-width: 760px;
   margin: 0 auto;
   font-size: 18px;
   line-height: 1.65;
   color: var(--text-soft);
-  /* The line break after "habits," is for wide screens only */
-  br { @media (max-width: 768px) { display: none; } }
+  @media (max-width: 1024px) { font-size: 18px; }
   @media (max-width: 768px) { font-size: 17px; }
 `;
 
@@ -223,6 +226,7 @@ const HeroActions = styled.div`
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 40px;
+  @media (max-width: 1024px) { margin-top: 56px; }
   a { text-shadow: none; }
 `;
 
@@ -318,16 +322,21 @@ const Marker = styled.span`
 /* ——— Feature rows ——— */
 
 const FeatureRows = styled.div`
+  /* A little wider than the page's 1184px column, so the text and screenshots have more room */
+  width: min(1360px, calc(100vw - 48px));
+  margin-left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 136px;
-  @media (max-width: 900px) { gap: 80px; }
+  @media (max-width: 900px) { gap: 80px; width: auto; margin-left: 0; transform: none; }
 `;
 
 const FeatureRow = styled.article`
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 80px;
+  gap: 120px;
+  @media (max-width: 1200px) { gap: 88px; }
   align-items: center;
   &:nth-child(even) { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
   &:nth-child(even) > :first-child { order: 2; }
@@ -552,7 +561,7 @@ export function LandingView() {
             <H1 id="hero-title">A life dashboard for<br /> people <em>too busy to plan.</em></H1>
             <HeroText>
               Chronicles is a private zero knowledge life dashboard and day planner that automatically organizes your
-              notes, habits,<br /> and tasks into one secure workspace where your data stays entirely on your device with zero
+              notes, habits, and tasks into one secure workspace where your data stays entirely on your device with zero
               corporate tracking.
             </HeroText>
             <HeroActions>

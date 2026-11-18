@@ -107,11 +107,9 @@ describe('PlannerBoard', () => {
     expect(card('Review PR').top).toBeGreaterThanOrEqual(card('Write the FAQ').bottom); // straight after the two-hour FAQ
     // An empty day says so
     expect(screen.getByRole('cell', { name: 'Fri 13' }).textContent).toBe('Nothing planned');
-    // The hours fold away to a slim strip, and come back
-    fireEvent.click(screen.getByRole('button', { name: 'Hide the hours' }));
-    expect(scale.textContent).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Show the hours' }));
-    expect(screen.getByRole('rowheader', { name: 'Hours' }).textContent).toContain('8 AM');
+    // The hours always show — there's no button to fold them away
+    expect(screen.queryByRole('button', { name: 'Hide the hours' })).toBeNull();
+    expect(scale.textContent).toContain('8 AM');
   });
 
   it('plans by date, adds and opens without dragging; no card carries a tick', () => {

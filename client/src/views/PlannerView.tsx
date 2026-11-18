@@ -274,6 +274,7 @@ export function PlannerView() {
         folded={folded} onFold={setFolded}
         onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}
+        toolsSet={(query.trim() ? 1 : 0) + (goalPicked ? 1 : 0) + (category ? 1 : 0)}
         tools={(
           <Tools>
             <RoundSearch value={query} onChange={setQuery} placeholder="Search tasks" ariaLabel="Search unscheduled tasks" />
