@@ -209,18 +209,23 @@ const SectionChevron = styled.button<{ $open: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
-/* A section's views, under its row: names lined up with the section names, the one showing
-   in the accent (no fill, as the rail's own rows) */
+/* A section's views, under its row: on a band a shade darker than the rail, with barely-there
+   hairlines above, below and between them; the names lined up with the section names, the
+   one showing in the accent. The list takes its full height — what's under it moves down */
 const ViewList = styled.ul`
   list-style: none;
-  margin: -6px 0 8px;
+  margin: 0;
   padding: 0;
+  background: color-mix(in srgb, var(--bg-rail) 94%, #000);
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  & > li + li { border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent); }
 `;
 
 const ViewBtn = styled.button<{ $active: boolean }>`
   display: block;
   width: 100%;
-  height: 34px;
+  height: 38px;
   padding: 0 16px 0 ${RAIL}px;
   border: none;
   background: transparent;
@@ -237,12 +242,15 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 `;
 
-/* Settings, Collapse and ⋯: right under the last item, and kept in view (stuck to the
-   rail's foot) when open sections make the list taller than the window */
+/* A section and its views: never squeezed by the scrolling column — it takes its full height */
+const Section = styled.div`
+  flex: none;
+`;
+
+/* Settings, Collapse and ⋯: right under the last item, in the flow — an open section's views
+   push them down (the rail scrolls when it runs long), never slide under them */
 const Foot = styled.div`
-  position: sticky;
-  bottom: 0;
-  background: var(--bg-rail);
+  flex: none;
   display: flex;
   flex-direction: column;
 `;
@@ -379,7 +387,7 @@ export const Sidebar = memo(function Sidebar() {
     const shown = sections.isOpen(item.key, item.active);
     const listId = `nav-views-${item.key}`;
     return (
-      <div key={item.key}>
+      <Section key={item.key}>
         <RowWrap>
           {btn}
           <SectionChevron type="button" $open={shown} aria-expanded={shown} aria-controls={listId}
@@ -399,7 +407,7 @@ export const Sidebar = memo(function Sidebar() {
             ))}
           </ViewList>
         )}
-      </div>
+      </Section>
     );
   };
 

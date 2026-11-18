@@ -453,22 +453,22 @@ const CardTick = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
-/* Schedule's +: a round accent outline, no fill, across from the heading */
+/* Schedule's +: just the plus in the accent (no circle), across from the heading */
 const AddBtn = styled.button`
   align-self: center;
   /* Taller than the label: pulled in, so this head's rule stays level with the columns' beside it */
-  margin: -8px 0;
+  margin: -8px -6px -8px 0;
   display: grid;
   place-items: center;
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid var(--color-accent-line);
-  border-radius: 50%;
+  border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--color-accent-soft, var(--color-accent));
   cursor: pointer;
-  &:hover { background: var(--color-accent-subtle); }
+  &:hover { color: var(--color-accent); background: var(--bg-hover); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -479,6 +479,8 @@ const AddForm = styled.form`
   align-items: center;
   gap: 10px 12px;
   margin-top: 14px;
+  /* Room under Add / Cancel before the schedule starts */
+  margin-bottom: 26px;
   .box {
     flex: 1 1 260px;
     display: flex;
@@ -1229,7 +1231,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             </span>
             <AddBtn type="button" aria-label={`Add a task to ${isToday ? 'today' : `${WEEK_NAMES[dow(day)]} ${mm}/${dd}`}`} aria-expanded={adding}
               title="Add a task" onClick={openAdd}>
-              <Icon name={adding ? 'x' : 'plus'} size={16} strokeWidth={2} />
+              <Icon name={adding ? 'x' : 'plus'} size={20} strokeWidth={2} />
             </AddBtn>
           </SubHead>
           {adding && (
