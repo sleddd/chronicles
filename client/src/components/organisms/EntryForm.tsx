@@ -31,7 +31,7 @@ import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/Symp
 import { TimeTracker } from '../molecules/fields/TimeTracker.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
 import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
-import { MEDIA_DEFAULTS, mediaTags } from '../../utils/media.js';
+import { MEDIA_DEFAULTS, mediaTags, mediaTopicIds } from '../../utils/media.js';
 import { useSaveFields } from '../../hooks/useSaveFields.js';
 import { showFlash } from '../../services/flashNotice.js';
 import { aiMediaDetails } from '../../services/mediaDetails.js';
@@ -824,8 +824,12 @@ function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof 
   const saveEntryFields = useSaveFields();
   const retag = async (from: string, to: string | null) => {
     const key = from.trim().toLowerCase();
-    for (const e of useEntriesStore.getState().decryptedEntries) {
+    const { decryptedEntries, allTopics } = useEntriesStore.getState();
+    // Media entries only — never another topic's fields that happen to be called "tags"
+    const media = new Set(mediaTopicIds(allTopics));
+    for (const e of decryptedEntries) {
       if (e.id === entryId) continue;
+      if (!media.has((e.metadata as Record<string, unknown> | undefined)?._taxonomyId as number)) continue;
       const cf = (e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown> | undefined;
       const tags = cf ? mediaTags(cf.tags) : [];
       if (!tags.some(t => t.toLowerCase() === key)) continue;
