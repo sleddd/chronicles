@@ -12,8 +12,9 @@ vi.mock('@/hooks/useSaveFields', () => ({ useSaveFields: () => saveFields }));
 vi.mock('@/hooks/useOpenInJournal', () => ({ useOpenInJournal: () => vi.fn() }));
 vi.mock('@/hooks/useFinance', () => ({ useFinance: () => ({ records: [] }) }));
 vi.mock('@/hooks/useEncryptedSetting', () => ({ useEncryptedSetting: (_k: string, d: unknown) => [d, vi.fn(), true] }));
+let doseGroups: { time: string; doses: Record<string, unknown>[] }[] = [];
 vi.mock('@/hooks/useTodayDoses', () => ({
-  useTodayDoses: () => ({ day: new Date().toISOString().slice(0, 10), groups: [], taken: 0, isTaken: () => false, shiftDay: vi.fn(), setTaken: vi.fn() }),
+  useTodayDoses: () => ({ day: new Date().toISOString().slice(0, 10), groups: doseGroups, taken: 0, isTaken: () => false, shiftDay: vi.fn(), setTaken: vi.fn() }),
 }));
 vi.mock('@/hooks/useRoutineChecklist', () => ({ useRoutineChecklist: () => ({ slots: [], isDone: () => false }) }));
 
@@ -35,15 +36,16 @@ const task = (id: number, title: string, fields: Record<string, unknown>) => ({
   metadata: { _taxonomyId: 5, _customFields: { taskDescription: title, isCompleted: false, ...fields } },
 });
 
-const renderGlance = () => render(
+const renderGlance = (medsOn = false) => render(
   <ThemeProvider theme={lightTheme}><MemoryRouter>
-    <DayGlance priorities={null} comingUp={null} financeOn={false} medsOn={false} exerciseOn={false} />
+    <DayGlance priorities={null} comingUp={null} financeOn={false} medsOn={medsOn} exerciseOn={false} />
   </MemoryRouter></ThemeProvider>,
 );
 
 describe('Your Agenda', () => {
   beforeEach(() => {
     createEntry.mockClear();
+    doseGroups = [];
     saveFields.mockClear();
     useEntriesStore.setState({ allTopics: [{ id: 5, name: 'Task' }] as never, decryptedEntries: [] as never });
   });
@@ -86,5 +88,20 @@ describe('Your Agenda', () => {
     fireEvent.pointerUp(grip, { clientX: 100, clientY: 300 });
     expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }),
       expect.objectContaining({ scheduledDate: today, scheduledTime: expect.stringMatching(/^\d{2}:\d{2}$/) }));
+  });
+
+  it('a long medications list stays within the screen and scrolls, so the last dose can be ticked', () => {
+    doseGroups = Array.from({ length: 30 }, (_, i) => ({
+      time: `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`,
+      doses: [{ medicationPostId: i + 1, medicationName: `Med ${i + 1}`, dosage: '1 tab', time: `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}` }],
+    }));
+    renderGlance(true);
+    fireEvent.click(screen.getByRole('button', { name: /^Medications: 0 of 30 taken/ }));
+    const dialog = screen.getByRole('dialog', { name: /Medications today/ });
+    // Capped to the room on screen, the rows in a scrolling body
+    expect(parseFloat(dialog.style.maxHeight)).toBeLessThanOrEqual(window.innerHeight);
+    const body = dialog.querySelector('h4 ~ div:last-child') as HTMLElement;
+    expect(getComputedStyle(body).overflowY).toBe('auto');
+    expect(body).toContainElement(screen.getByRole('checkbox', { name: 'Mark Med 30 taken' }));
   });
 });

@@ -716,7 +716,21 @@ const Pop = styled.div`
   background: var(--bg-tile);
   box-shadow: var(--shadow-lg);
   font-family: var(--font-sans);
-  h4 { margin: 0 0 8px; padding-right: 28px; ${cardLabel} }
+  /* Never taller than the room on screen: the heading stays, the rows scroll (PopBody) */
+  display: flex;
+  flex-direction: column;
+  h4 { flex: none; margin: 0 0 8px; padding-right: 28px; ${cardLabel} }
+`;
+
+/* The rows of a pop-up: they scroll inside it when there are more than fit, so the last
+   ones can always be reached and ticked (scrolling here never scrolls the page under it) */
+const PopBody = styled.div`
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -16px;
+  padding: 0 16px;
 `;
 
 /* The pop-up's close button: a small × in its top-right corner */
@@ -772,16 +786,30 @@ function MarkerList({ anchor, title, onClose, children }: { anchor: DOMRect; tit
     document.addEventListener('keydown', esc);
     return () => { clearTimeout(t); document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
   }, [onClose]);
-  const left = Math.min(anchor.left, window.innerWidth - 336);
-  const below = anchor.bottom + 8;
-  const top = below + 260 > window.innerHeight ? Math.max(16, anchor.top - 268) : below;
+  // Placed again when the window changes size (a phone turning, a keyboard opening)
+  const [, setSize] = useState(0);
+  useEffect(() => {
+    const again = () => setSize(n => n + 1);
+    window.addEventListener('resize', again);
+    return () => window.removeEventListener('resize', again);
+  }, []);
+  const GAP = 8, EDGE = 16;
+  const left = Math.max(EDGE, Math.min(anchor.left, window.innerWidth - 336));
+  // Under the button when there's room, else on whichever side has more; never taller than that room
+  const roomBelow = window.innerHeight - anchor.bottom - GAP - EDGE;
+  const roomAbove = anchor.top - GAP - EDGE;
+  const below = roomBelow >= 260 || roomBelow >= roomAbove;
+  const maxHeight = Math.max(140, below ? roomBelow : roomAbove);
+  const place: React.CSSProperties = below
+    ? { left, top: anchor.bottom + GAP, maxHeight }
+    : { left, bottom: window.innerHeight - anchor.top + GAP, maxHeight };
   return createPortal(
-    <Pop ref={ref} role="dialog" aria-label={title} style={{ left: Math.max(16, left), top }}>
+    <Pop ref={ref} role="dialog" aria-label={title} style={place}>
       <h4>{title}</h4>
       <PopClose type="button" aria-label="Close" title="Close" onClick={onClose}>
         <Icon name="x" size={15} strokeWidth={2} />
       </PopClose>
-      {children}
+      <PopBody>{children}</PopBody>
     </Pop>,
     document.body,
   );
