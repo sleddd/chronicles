@@ -39,5 +39,9 @@ export function rememberTheme(pref: ThemePreference): void {
 export const startingTheme = (): ThemePreference => rememberedTheme() ?? 'light';
 
 /** Page colour per theme (--bg-app), for the first paint and the browser bar */
-export const PAGE_COLOR = { light: '#f4f5f7', dark: '#12141a' } as const;
+export const PAGE_COLOR = { light: '#f4f5f7', dark: '#15171d' } as const;
+
+/** Sign in, sign up and recovery are always in the dark theme, whatever the person chose */
+const AUTH_PATHS = ['/login', '/sign-up', '/register', '/recover'];
+export const isAuthPath = (pathname: string): boolean => AUTH_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`));
 

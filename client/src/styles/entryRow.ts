@@ -19,11 +19,11 @@ import { css } from 'styled-components';
 
 const HOVER_FLAG = 'entryRowHover';
 
-/* No accent bar on the row (the nav rail keeps the accent bar): the active row's
-   topic label turns accent instead, through --row-topic, which the label reads */
+/* The open entry: the editor's colour with an accent bar down its left edge; its topic
+   label keeps its usual colour (no accent) */
 export const rowActive = css`
   background: var(--bg-editor, var(--bg-app));
-  --row-topic: var(--color-accent-text);
+  box-shadow: inset 3px 0 0 var(--color-accent);
 `;
 
 /* Non-journal lists: no fill change — hover / the active row draw a rounded

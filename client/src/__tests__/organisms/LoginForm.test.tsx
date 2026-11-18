@@ -11,8 +11,8 @@ function renderWithTheme(ui: React.ReactElement) {
 describe('LoginForm', () => {
   it('renders email and password fields', () => {
     renderWithTheme(<LoginForm onSubmit={vi.fn()} />);
-    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter password')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
   });
 
   it('renders sign in button', () => {
@@ -24,10 +24,10 @@ describe('LoginForm', () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderWithTheme(<LoginForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'mypassword123' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -41,10 +41,10 @@ describe('LoginForm', () => {
     const onSubmit = vi.fn().mockRejectedValue(new Error('Invalid credentials'));
     renderWithTheme(<LoginForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'wrongpassword' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));

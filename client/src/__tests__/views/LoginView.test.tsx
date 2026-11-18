@@ -50,12 +50,12 @@ vi.mock('@/components/organisms/LoginForm', () => ({
 describe('LoginView', () => {
   it('renders without crashing', () => {
     renderWithTheme(<LoginView />);
-    expect(screen.getByText('Chronicles')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back')).toBeInTheDocument();
   });
 
-  it('displays the title "Chronicles"', () => {
+  it('displays the title "Welcome back"', () => {
     renderWithTheme(<LoginView />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Chronicles');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Welcome back');
   });
 
   it('renders the login form', () => {

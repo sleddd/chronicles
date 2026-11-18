@@ -116,13 +116,13 @@ const DayNumber = styled.div<{ $isToday?: boolean; $isSelected?: boolean; $accen
   margin: -4px 0 12px -2px; /* room under the day number / today's disc */
 `;
 
-/* A dot — amber for bills, accent for events and meetings */
+/* A dot: one per day with anything on it, one colour (no colour coding by kind) */
 const Dot = styled.i<{ $bill?: boolean; $task?: boolean; $holiday?: boolean }>`
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: ${({ $bill, $task, $holiday }) => ($holiday ? 'var(--chart-green)' : $bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
+  background: var(--text-muted);
 `;
 
 /* A holiday's name in its day's cell: small and muted, up to two lines (it names the
@@ -319,9 +319,8 @@ export function CalendarGrid({
                       {dayHolidays.length > 0 && <HolidayName>{dayHolidays.map(h => h.name).join(', ')}</HolidayName>}
                       {total > 0 && (
                         <DotRow role="img" aria-label={`${total} ${total === 1 ? 'item' : 'items'}`}>
-                          {dayEntries.some(e => !isTask(e)) && <Dot title={titlesOf(dayEntries.filter(e => !isTask(e)))} />}
-                          {dayEntries.some(isTask) && <Dot $task title={titlesOf(dayEntries.filter(isTask))} />}
-                          {dayBills.length > 0 && <Dot $bill title={dayBills.map(billLabel).join('\n')} />}
+                          {/* One dot for the day, whatever it holds (the titles on hover) */}
+                          <Dot title={[titlesOf(dayEntries), ...dayBills.map(billLabel)].filter(Boolean).join('\n')} />
                         </DotRow>
                       )}
                     </>
@@ -356,7 +355,7 @@ export function CalendarGrid({
                 aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${holidayNames.length ? `, ${holidayNames.join(', ')}` : ''}${nBills + nEntries ? `, ${nBills + nEntries} item${nBills + nEntries === 1 ? '' : 's'}` : ''}`}
                 aria-pressed={isSelected}>
                 <MobileNum $today={isToday} $selected={isSelected}>{date.getDate()}</MobileNum>
-                <MobileDots aria-hidden="true">{dots.map(kind => <Dot key={kind} $bill={kind === 'bill'} $task={kind === 'task'} $holiday={kind === 'holiday'} />)}</MobileDots>
+                <MobileDots aria-hidden="true">{dots.length > 0 && <Dot />}</MobileDots>
               </MobileDay>
             );
           })}

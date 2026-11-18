@@ -82,13 +82,14 @@ describe('CalendarGrid', () => {
     expect(screen.getByRole('img', { name: '1 item' })).toBeInTheDocument();
   });
 
-  it('shows one accent dot for entries and one amber dot for bills, whatever the count', () => {
+  it('shows one dot for a day with anything on it, whatever the count or kind', () => {
     const bill = (n: number) => ({ key: `b${n}`, billId: `b${n}`, name: `Bill ${n}`, amountCents: 1000, date: '2024-06-15' });
     const entries = Array.from({ length: 5 }, (_, i) => entry(i, `Entry ${i}`));
     const { container } = renderWithTheme(<CalendarGrid {...defaultProps} entriesByDate={new Map([['2024-06-15', entries]]) as never} billsByDate={new Map([['2024-06-15', [bill(1), bill(2)]]])} />);
     const row = screen.getByRole('img', { name: '7 items' });
-    expect(row.querySelectorAll('i')).toHaveLength(2);
-    expect(row.querySelector('i[title*="Bill 2"]')?.getAttribute('title')).toBe('Bill 1 · $10.00 due\nBill 2 · $10.00 due');
+    expect(row.querySelectorAll('i')).toHaveLength(1);
+    // Its title names everything on the day: the entries, then the bills
+    expect(row.querySelector('i')?.getAttribute('title')).toMatch(/Bill 1 · \$10\.00 due\nBill 2 · \$10\.00 due$/);
     expect(screen.queryByText('Bill 2')).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\+\d/);
   });

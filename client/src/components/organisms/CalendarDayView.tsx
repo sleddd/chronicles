@@ -123,7 +123,8 @@ const BillDot = styled.i`
   margin-right: 8px;
   border-radius: 50%;
   vertical-align: middle;
-  background: var(--chart-amber);
+  /* One colour for every kind (no colour coding) */
+  background: var(--text-muted);
 `;
 
 /* ── helpers ── */
@@ -214,7 +215,7 @@ export function CalendarDayView({
           <EntryRow key={h.name} as="div" style={{ cursor: 'default' }}>
             <TimeLabel>All day</TimeLabel>
             <div>
-              <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot style={{ background: 'var(--chart-green)' }} />{h.federal ? 'Federal holiday' : 'Holiday'}</TopicLabel>
+              <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />{h.federal ? 'Federal holiday' : 'Holiday'}</TopicLabel>
               <EntryTitle>{h.name}</EntryTitle>
             </div>
           </EntryRow>
@@ -232,7 +233,7 @@ export function CalendarDayView({
               <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
                 <TimeLabel>{isTask ? (done ? 'Done' : 'To do') : timeLabel}</TimeLabel>
                 <div style={{ minWidth: 0 }}>
-                  {isTask ? <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot style={{ background: 'var(--chart-blue)' }} />Task</TopicLabel>
+                  {isTask ? <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />Task</TopicLabel>
                     : topic && <TopicLabel>{topic.name}</TopicLabel>}
                   <EntryTitle style={done ? { textDecoration: 'line-through' } : undefined}>{title}</EntryTitle>
                 </div>

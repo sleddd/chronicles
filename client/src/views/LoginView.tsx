@@ -5,6 +5,7 @@ import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
+import { useDarkAuthTheme } from '../hooks/useDarkAuthTheme.js';
 import { LoginForm } from '../components/organisms/LoginForm.js';
 import { Button } from '../components/atoms/Button.js';
 import { Spinner } from '../components/atoms/Spinner.js';
@@ -84,6 +85,7 @@ const ErrorBanner = styled.div`
 `;
 
 export function LoginView() {
+  useDarkAuthTheme();
   const navigate = useNavigate();
   const { login, submitTotpCode, loginWithPasskey, cancel2FA, pending2FA, endSession } = useAuth();
   const { unlock, unlockWithPasskey, clearKey } = useEncryption();
@@ -294,7 +296,7 @@ export function LoginView() {
 
   return (
     <AuthTemplate
-      title="Chronicles"
+      title="Welcome back"
       brand
       footer={<>New here? <Link to="/sign-up">Create an account</Link></>}
     >

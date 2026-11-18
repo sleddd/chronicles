@@ -626,8 +626,8 @@ const QuickPrompt = styled(PromptLine)`
 const QuickFoot = styled(CardFoot)`
   /* The card doesn't clip (its topic menu drops out of it), so the tinted foot rounds its own corners */
   border-radius: 0 0 14px 14px;
-  /* Solid (the card above it is glass), ruled off from the fields by a hairline */
-  background: var(--bg-panel);
+  /* The card's own colour (the same glass as the rest of it), ruled off from the fields by a hairline */
+  background: transparent;
   border-top: 1px solid var(--border-subtle);
   margin-top: 14px;
   /* Save entry: an accent outline with accent text (never filled) once there's
@@ -751,15 +751,18 @@ const QuickTools = styled.div<{ $beside?: boolean }>`
 const QuickCardPrompt = styled(PromptLine)`
   /* A little room under the question before the writing starts */
   padding: 28px ${CARD_X} 12px;
-  font-size: 22px;
+  /* The journal picker's size: 18px, 17px on phones */
+  font-size: 18px;
   [data-tools-beside] > & { padding-right: 150px; }
   @container entrycard (max-width: 600px) {
     padding: 22px 20px 10px;
     [data-tools-beside] > & { padding-right: 124px; }
   }
-  @media (max-width: 768px) { font-size: 18px; }
+  @media (max-width: 768px) { font-size: 17px; }
   /* The question's words a little less bright than the text (the picker keeps its colour) */
   & > h2 { color: color-mix(in srgb, var(--text-primary) 72%, transparent); }
+  /* The picker here: no underline */
+  && > div > button, && > div > button:hover { border-bottom: none; padding-bottom: 0; }
   /* Gliding back up to the top once a topic is picked */
   transition: transform 260ms ease;
   @media (prefers-reduced-motion: reduce) { transition: none; }
@@ -811,6 +814,9 @@ const QuickError = styled.p`
   font-size: 13px;
   color: var(--color-danger);
 `;
+
+/** The Quick entry's question, now the writing area's placeholder (the topic picker sits alone on the card's first line) */
+const QUICK_QUESTION = 'What would you like to write down?';
 
 /** The prompt's words for a topic: "a journal entry", "an exercise entry" */
 export function quickTopicPhrase(name: string): string {
@@ -1383,7 +1389,8 @@ export function EntryForm({
         <Editor
           content={content}
           onChange={onContentChange}
-          placeholder={quick || !nameTarget ? placeholder
+          // The Quick entry asks its question in the writing area itself
+          placeholder={quick ? QUICK_QUESTION : !nameTarget ? placeholder
             : (nameKey && customType ? NAME_PLACEHOLDER_BY_TYPE[customType] : customTitle?.label) || placeholder}
           onEnterSave={canSave && !isSaving ? onSave : undefined}
           toolbarOpen={toolbarOpen}
@@ -1550,7 +1557,6 @@ export function EntryForm({
           {quickExtra && quickExtraBody ? (
             <QuickExtraBox>
               <QuickCardPrompt data-keep-placeholder>
-                <h2>What would you like to write down?</h2>
                 {quickPicker}
               </QuickCardPrompt>
               <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
@@ -1559,7 +1565,6 @@ export function EntryForm({
             <EntryCard $quick data-quick-open="" 
               data-card-prompt-centered={promptCentered ? '' : undefined}>
               <QuickCardPrompt data-keep-placeholder data-card-prompt="" data-centered={promptCentered ? '' : undefined}>
-                <h2>What would you like to write down?</h2>
                 {quickPicker}
               </QuickCardPrompt>
               {body}
@@ -1584,8 +1589,7 @@ export function EntryForm({
           <EntryCard $flat>
             <JournalHead $expanded={!!expanded} $roomy={editorHidden && !recipeViewMode}>
               <JournalPrompt>
-                <h2>What would you like to write down?</h2>
-                {/* No topic picked asks for one ("choose a topic ⌄") rather than naming
+                {/* Just the picker (no question). No topic picked asks for one ("choose a topic ⌄") rather than naming
                     Journal — saved without one (the autosave too) it still goes under Journal */}
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />

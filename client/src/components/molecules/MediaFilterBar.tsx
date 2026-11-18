@@ -47,9 +47,30 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
   /* The glass mixin brings its own firmer outline on the photo; this box keeps a soft one */
   html[data-wallpaper] & { border-color: rgba(255, 255, 255, 0.5); }
   html[data-wallpaper][data-theme='dark'] & { border-color: rgba(255, 255, 255, 0.14); }
-  /* Dark: frosted glass across the whole bar — a light veil with a blur, on the lit page
-     and on the photo alike (after the glass mixin, whose dark page-colour fill it replaces) */
-  html[data-theme='dark'] &, html[data-wallpaper][data-theme='dark'] & {
+  /* Light, on the photo: smoked glass like the page's buttons and the section tabs — a dark
+     see-through fill with a blur, white text */
+  html[data-wallpaper][data-theme='light'] & {
+    background: rgba(18, 20, 26, 0.5);
+    border-color: transparent;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    --text-primary: #fff;
+    --text-secondary: rgba(255, 255, 255, 0.9);
+    --text-muted: rgba(255, 255, 255, 0.78);
+    --text-hint: rgba(255, 255, 255, 0.72);
+    --text-placeholder: rgba(255, 255, 255, 0.72);
+    --border-subtle: rgba(255, 255, 255, 0.18);
+    --border-card: rgba(255, 255, 255, 0.18);
+    --bg-tab-active: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    & input, & select { color: #fff; }
+    & input::placeholder { color: rgba(255, 255, 255, 0.72); }
+  }
+  /* No photo: just the outline, no fill (either theme).
+     Dark, on the photo: frosted glass across the whole bar — a light veil with a blur
+     (after the glass mixin, whose dark page-colour fill it replaces) */
+  html:not([data-wallpaper]) & { background: transparent; }
+  html[data-wallpaper][data-theme='dark'] & {
     background: rgba(44, 46, 54, 0.8); /* the Planner cards' frosted tone (#2c2e35 as seen), held steady over a bright photo */
     /* Placeholders and icons inside a frosted control: brighter, so they stand out on the glass */
     --text-hint: rgba(255, 255, 255, 0.72);

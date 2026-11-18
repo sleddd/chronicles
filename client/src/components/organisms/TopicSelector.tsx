@@ -137,6 +137,8 @@ const Item = styled.button<{ $active?: boolean }>`
   /* Journal pinned on top (the Quick entry): set apart by a sunken shade, its rule
      the same faint one as every row */
   &[data-pinned], &[data-pinned]:hover { background: var(--bg-sunken); }
+  /* Dark: a soft lift, not the near-black sunken colour */
+  html[data-theme='dark'] &[data-pinned], html[data-theme='dark'] &[data-pinned]:hover { background: rgba(255, 255, 255, 0.05); }
 
   &:hover {
     background: rgba(0, 0, 0, 0.04);

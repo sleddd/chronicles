@@ -132,7 +132,8 @@ const Dot = styled.i<{ $bill?: boolean; $task?: boolean; $holiday?: boolean }>`
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: ${({ $bill, $task, $holiday }) => ($holiday ? 'var(--chart-green)' : $bill ? 'var(--chart-amber)' : $task ? 'var(--chart-blue)' : 'var(--color-accent)')};
+  /* One colour for every kind (no colour coding) */
+  background: var(--text-muted);
 `;
 
 const Dash = styled.span`

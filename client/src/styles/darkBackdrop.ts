@@ -8,19 +8,13 @@ export const onBackdrop = css`
   html[data-theme='dark'] &, html[data-theme='light'] & { background: transparent; }
 `;
 
-/* The dark theme's page: a matte black sheet under one soft light from off the
-   bottom-right corner, falling away to near-black at the top left (sampled from the
-   reference: a cool #1f232f at the lit corner, falling off quickly, spreading wide across the page → black #0c0e13 at the far corner, which the grain brings level with the nav rail’s #12141a), with a fine paper grain. Painted by body and by the
-   fixed canvas layer behind every app layout (organisms/Background). */
+/* The dark theme's page: one solid colour, a touch lighter than the nav rail (#12141a) —
+   no lighting or grain (the lit sheet before it, a soft light from the bottom-right corner
+   over a paper grain, is in git history). Painted by body and by the fixed canvas layer
+   behind every app layout (organisms/Background). */
 export const litSheet = css`
-  background-color: #0c0e13;
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.1 0 0 0 -0.04'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
-    radial-gradient(ellipse 150% 190% at 106% 92%,
-      #1f232f 0%, #191c26 20%, #15181f 44%, #0f1116 70%, #0c0e13 94%);
-  background-size: 220px 220px, 100% 100%;
-  background-repeat: repeat, no-repeat;
-  background-attachment: fixed;
+  background-color: #15171d;
+  background-image: none;
 `;
 
 /* The light theme's page: the same idea on white — one soft light from off the

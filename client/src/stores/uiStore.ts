@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { rememberWallpaper, startingWallpaper } from '../utils/wallpapers.js';
 import { DEFAULT_ACCENT_COLOR, safeAccent } from '../styles/accent.js';
-import { resolveTheme, rememberTheme, startingTheme, type ThemePreference } from '../utils/autoTheme.js';
+import { resolveTheme, rememberTheme, startingTheme, type ThemePreference, isAuthPath } from '../utils/autoTheme.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
 
 interface UIState {
@@ -59,6 +59,9 @@ interface UIState {
   themePreference: ThemePreference;
   accentColor: string;
   setThemeMode: (mode: 'light' | 'dark') => void;
+  /** A theme a page pins while it shows (sign in, sign up and recovery: always dark); null = the person's own */
+  forcedTheme: 'light' | 'dark' | null;
+  setForcedTheme: (mode: 'light' | 'dark' | null) => void;
   setThemePreference: (pref: ThemePreference) => void;
   setAccentColor: (color: string) => void;
   /** Settings → Theme → Background: a wallpaper's id, null (None) or DEFAULT_CHOICE
@@ -157,6 +160,9 @@ export const useUIStore = create<UIState>((set) => ({
   themePreference: startingTheme(),
   accentColor: DEFAULT_ACCENT_COLOR,
   setThemeMode: (mode) => set({ themeMode: mode }),
+  // A sign-in page opened directly starts dark (no flash of the other theme)
+  forcedTheme: typeof window !== 'undefined' && isAuthPath(window.location.pathname) ? 'dark' : null,
+  setForcedTheme: (mode) => set({ forcedTheme: mode }),
   setThemePreference: (pref) => { rememberTheme(pref); set({ themePreference: pref, themeMode: resolveTheme(pref) }); },
   setAccentColor: (color) => set({ accentColor: safeAccent(color) }),
   wallpaper: startingWallpaper(),

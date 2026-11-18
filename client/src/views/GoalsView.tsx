@@ -1039,9 +1039,12 @@ export function GoalsView() {
                 </ViewBtn>
               </ViewSwitch>
               {activeAddTopic && (
-                <PillButton type="button" onClick={() => newEntry(activeAddTopic.id)}>
-                  {addLabel}
-                </PillButton>
+                // Smoked glass on the photo, like every page's main action (.page-action)
+                <span className="page-action" style={{ display: 'contents' }}>
+                  <PillButton type="button" onClick={() => newEntry(activeAddTopic.id)}>
+                    {addLabel}
+                  </PillButton>
+                </span>
               )}
             </HeadActions>
           </Head>

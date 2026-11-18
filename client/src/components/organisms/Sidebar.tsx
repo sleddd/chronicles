@@ -32,19 +32,22 @@ const SidebarRoot = styled.aside<{ $open: boolean }>`
   ${NAV_COMPACT} { display: none; }
 `;
 
-/* Active rail item: lifted onto a lighter block with a 4px accent tab on the
-   rail's outer edge. Shared by the logo (Dashboard) and the icon rows. */
+/* Active rail item: an accent tab on the rail's right edge (beside the page), about
+   as tall as the icon. Shared by the logo (Dashboard) and the icon rows. */
 const activeTab = `
   &::before {
     content: '';
     position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    right: 0;
+    /* About the icon's height, centred on it */
+    top: 50%;
+    height: 30px;
+    transform: translateY(-50%);
+    border-radius: 2px;
     width: 5px;
     background: var(--color-accent-nav);
   }
-  /* Dark: a thin bar on the rail's outer (left) edge, the full height of the item, beside the accent icon */
+  /* Dark: a thin bar on the rail's right edge, about the icon's height */
   html[data-theme='dark'] &::before { width: 2px; }
 `;
 
@@ -66,8 +69,6 @@ const LogoBtn = styled.button<{ $active?: boolean }>`
   transition: color 120ms ease;
 
   &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-nav)' : 'var(--text-primary)')}; }
-  /* Dark: the same barely-there hairline under the logo as between the items */
-  html[data-theme='dark'] & { border-bottom: 1px solid rgba(255, 255, 255, 0.022); }
   ${({ $active }) => ($active ? activeTab : '')}
 `;
 
@@ -134,10 +135,7 @@ const NavIconBtn = styled.button<{ $active?: boolean }>`
   }
   /* Dark: hovering brightens the icon only (no block behind it) */
   html[data-theme='dark'] &:hover { background: transparent; }
-  /* Light: a light hairline between items */
-  html[data-theme='light'] & { border-bottom: 1px solid rgba(0, 0, 0, 0.07); }
-  /* Dark: a light hairline between items too */
-  html[data-theme='dark'] & { border-bottom: 1px solid rgba(255, 255, 255, 0.022); }
+  /* No lines between items, in either theme */
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
   ${({ $active }) => ($active ? activeTab : '')}

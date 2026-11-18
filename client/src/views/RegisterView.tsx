@@ -4,6 +4,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
+import { useDarkAuthTheme } from '../hooks/useDarkAuthTheme.js';
 import { RegisterForm } from '../components/organisms/RegisterForm.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import { PasskeyOffer } from '../components/organisms/PasskeyOffer.js';
@@ -16,6 +17,7 @@ import { deriveAuthSecret, newRecoveryProof, LEGAL_VERSIONS } from '@chronicles/
 const INVITE_KEY = 'chronicles.invite-v1';
 
 export function RegisterView() {
+  useDarkAuthTheme();
   const navigate = useNavigate();
   const { register } = useAuth();
   const { setupEncryption, clearKey } = useEncryption();
@@ -154,15 +156,14 @@ export function RegisterView() {
   }
 
   return (
-    <AuthTemplate
-      title="Create Account"
-      footer={<>Already have an account? <Link to="/login">Sign in</Link></>}
-    >
+    <AuthTemplate title="Create your account" wide>
       <RegisterForm
         onSubmit={handleRegister}
         initialEmail={invitedEmail}
         canSubmit={consentComplete(consent)}
-        extra={<ConsentCard value={consent} onChange={setConsent} />}
+        consentMissing={[!consent.age, !consent.terms, !consent.health, consent.breachNotice === 'mail' && consent.postalAddress.trim().length < 8].filter(Boolean).length}
+        footStart={<>Already have an account? <Link to="/login">Sign in</Link></>}
+        extra={<ConsentCard value={consent} onChange={setConsent} bare />}
       />
     </AuthTemplate>
   );

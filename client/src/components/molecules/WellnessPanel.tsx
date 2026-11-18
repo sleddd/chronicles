@@ -269,28 +269,34 @@ const FLOW_ICONS: Record<string, { drops: number; size: number; label: string }>
   heavy: { drops: 3, size: 19, label: 'Heavy' },
 };
 
-/* The cycle icons: three to a row, from the left */
+/* The cycle icons: in one row from the left, evenly spaced */
 const TwoUp = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
-  justify-content: start;
-  gap: 12px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px 12px;
 `;
 
 const FlowBtn = styled.button<{ $active: boolean }>`
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 4px 0;
-  border: none;
+  /* A chip: a light outline round each set of drops, the chosen one's in the accent */
+  min-width: 44px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid ${({ $active }) => ($active ? 'var(--color-accent-line, var(--color-accent))' : 'var(--border-card)')};
+  border-radius: 999px;
   background: transparent;
   cursor: pointer;
   color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-disabled)')};
   transition: color 120ms;
   &:hover { color: var(--color-accent); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
-  .drops { display: inline-flex; align-items: flex-end; height: 22px; gap: 0; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .drops { display: inline-flex; align-items: center; height: 22px; gap: 0; }
   .drops > span { font-weight: 300; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
   small { font-family: var(--font-sans); font-size: 12px; color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')}; }
 `;
@@ -598,10 +604,12 @@ export function WellnessPanel({
     <Cell>
       <Head><Label>Cycle</Label></Head>
       <TwoUp role="group" aria-label="Cycle">
-        {(['', ...FLOW_OPTIONS] as FlowIntensity[]).map(f => {
+        {/* None, one drop, two drops, three drops (a day logged as Spotting shows as one drop) */}
+        {(['', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(f => {
           const ic = FLOW_ICONS[f];
+          const on = flow === f || (f === 'light' && flow === 'spotting');
           return (
-            <FlowBtn key={f || 'none'} type="button" $active={flow === f} aria-pressed={flow === f}
+            <FlowBtn key={f || 'none'} type="button" $active={on} aria-pressed={on}
               aria-label={`Cycle: ${ic.label}`} title={ic.label} onClick={() => onFlow(f)}>
               <span className="drops" aria-hidden="true">
                 {ic.drops === 0
@@ -613,7 +621,7 @@ export function WellnessPanel({
         })}
       </TwoUp>
       {/* The next period's estimate as its own row under the icons */}
-      {cycleNote && <CycleNote style={{ display: 'block', marginTop: 14 }}>{cycleNote}</CycleNote>}
+      {cycleNote && <CycleNote style={{ display: 'block', marginTop: 22, textAlign: 'left' }}>{cycleNote}</CycleNote>}
     </Cell>
   );
   const cycle$ = showCycle && (

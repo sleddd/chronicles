@@ -16,6 +16,25 @@ const Box = styled.label`
   color: var(--text-muted);
   &:focus-within { border-color: var(--control-border); }
   ${glassControl}
+  /* Light, on the photo: smoked glass like the page's buttons and the section tabs — a dark
+     see-through fill with a blur, white text */
+  html[data-wallpaper][data-theme='light'] & {
+    background: rgba(18, 20, 26, 0.5);
+    border-color: transparent;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    --text-primary: #fff;
+    --text-secondary: rgba(255, 255, 255, 0.9);
+    --text-muted: rgba(255, 255, 255, 0.78);
+    --text-hint: rgba(255, 255, 255, 0.72);
+    --text-placeholder: rgba(255, 255, 255, 0.72);
+    --border-subtle: rgba(255, 255, 255, 0.18);
+    --border-card: rgba(255, 255, 255, 0.18);
+    --bg-tab-active: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    & input, & select { color: #fff; }
+    & input::placeholder { color: rgba(255, 255, 255, 0.72); }
+  }
   input {
     flex: 1;
     min-width: 0;

@@ -12,8 +12,18 @@ export const SectionTabBar = styled.nav`
 
   @media (max-width: 768px) { column-gap: 28px; }
   @media (max-width: 480px) { column-gap: 20px; }
-  /* On a wallpaper: a light rule that shows on the photo */
-  html[data-wallpaper] & { border-bottom-color: rgba(255, 255, 255, 0.3); }
+  /* On a wallpaper: a frosted strip — smoked glass like the page actions, so the white tabs
+     read on any photo (light theme too) — over a light rule */
+  html[data-wallpaper] & {
+    padding: 0 20px;
+    /* A box with lightly rounded corners all round, like the media shelf's bar (no rule under it) */
+    border-radius: 10px;
+    border-bottom-color: transparent;
+    overflow: hidden;
+    background: rgba(18, 20, 26, 0.34);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
 `;
 
 export const SectionTab = styled.button<{ $active?: boolean }>`

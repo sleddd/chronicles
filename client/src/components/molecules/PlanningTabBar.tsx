@@ -5,6 +5,7 @@ const Bar = SectionTabBar;
 const TabBtn = SectionTab;
 
 const TABS = [
+  { label: 'Vision', path: '/goals/overview' },
   { label: 'Goals', path: '/goals' },
   { label: 'Milestones', path: '/goals/milestones' },
   { label: 'Tasks', path: '/goals/tasks' },

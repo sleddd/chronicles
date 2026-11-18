@@ -76,18 +76,19 @@ const Wrap = styled.div<{ $day: boolean; $folded: boolean }>`
   }
 `;
 
-/* What's left to plan: a plain column, ruled off from the days */
+/* What's left to plan: a column on a slightly sunken ground, set apart from the days */
 const Backlog = styled.section<{ $over: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
   min-height: 200px;
-  padding: 0 0 12px 16px;
-  border-left: 1px solid var(--border-subtle);
-  background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'transparent')};
+  margin-left: 16px;
+  padding: 14px 14px 16px 16px;
+  border-radius: 14px;
+  background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'color-mix(in srgb, var(--bg-sunken) 45%, transparent)')};
   transition: background 120ms ease;
-  @media (max-width: 900px) { padding-left: 0; border-left: none; border-top: 1px solid var(--border-default); padding-top: 20px; }
+  @media (max-width: 900px) { margin-left: 0; padding: 16px; }
 `;
 
 /* The column's name and its fold button */

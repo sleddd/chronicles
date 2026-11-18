@@ -1,7 +1,7 @@
 import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  DndContext, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors,
+  DndContext, KeyboardSensor, PointerSensor, closestCenter, closestCorners, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -134,14 +134,16 @@ interface DashboardConfig {
 }
 
 /** The columns cards are dragged between */
-const COLS = ['top', 'left', 'right', 'side'] as const;
+const COLS = ['head', 'top', 'left', 'right', 'side'] as const;
 type ColId = typeof COLS[number];
-/** `top`: across both columns under the schedule and priorities; `left` / `right`: the two columns;
+/** `head`: full width above the world clocks (empty until a card is dragged there);
+    `top`: across both columns under the schedule and priorities; `left` / `right`: the two columns;
     `side`: Your Agenda's third column, under Coming up and the shopping list */
-type Layout = { top?: SectionKey[]; left: SectionKey[]; right: SectionKey[]; side?: SectionKey[] };
+type Layout = { head?: SectionKey[]; top?: SectionKey[]; left: SectionKey[]; right: SectionKey[]; side?: SectionKey[] };
 
 /** The cards that can be dragged (in Your Agenda), and where they start */
 const DEFAULT_LAYOUT: Required<Layout> = {
+  head: [],
   top: ['wellness', 'quote', 'menu'],
   left: ['priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise', 'symptom'],
   right: ['clocks', 'recent', 'shopping', 'mantra', 'time', 'meds'],
@@ -190,8 +192,8 @@ const Inner = styled.div`
   /* A little wider than the other pages' 1150px column */
   max-width: 1300px;
   margin: 0 auto;
-  padding: 40px 20px 104px;
-  @media (max-width: 768px) { padding: 28px 16px 72px; }
+  padding: 40px 32px 104px;
+  @media (max-width: 768px) { padding: 28px 20px 72px; }
 `;
 
 /* Voice and the sliders at the top right, the date line and greeting under them */
@@ -218,7 +220,7 @@ const Hello = styled.h1`
   font-family: var(--font-display);
   font-size: 58px;
   font-weight: 200; /* the view titles' weight */
-  line-height: 1.1;
+  line-height: 1.25;
   color: var(--text-primary);
   text-wrap: balance;
   @media (max-width: 640px) { font-size: 41px; }
@@ -353,11 +355,11 @@ const OutlineBtn = styled.button`
 /* Next up | Wellness check-in */
 /* Quick entry: the journal's editor in a card, straight under the greeting */
 const QuickWrap = styled.div<{ $guided?: boolean }>`
-  /* Close under the greeting */
-  margin-top: 18px;
+  /* A little room under the greeting */
+  margin-top: 28px;
   /* Room under it before Stats / the cards (their own 24–28px add to this) */
   margin-bottom: 24px;
-  @media (max-width: 640px) { margin-top: 16px; margin-bottom: 16px; }
+  @media (max-width: 640px) { margin-top: 22px; margin-bottom: 16px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
     & > section { border-radius: 14px; outline: 2px solid var(--color-accent); outline-offset: 12px; }
@@ -436,12 +438,13 @@ const MAX_PLACES = 8;
 const QuoteText = styled.blockquote`
   margin: 0;
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 300;
   font-style: italic;
-  line-height: 1.4;
-  color: var(--text-primary);
-  @media (max-width: 480px) { font-size: 20px; }
+  line-height: 1.5;
+  /* A step back from full brightness */
+  color: color-mix(in srgb, var(--text-primary) 72%, transparent);
+  @media (max-width: 480px) { font-size: 18px; }
 `;
 
 const QuoteBy = styled.p`
@@ -476,8 +479,8 @@ const CLOCKS_SHOWN = 3;
    time and the temperature, rules between — with a toggle at the end.
    Open: a card for each clock */
 const ClockStrip = styled.section`
-  /* Close under the Quick entry, and close above the wellness check-in */
-  margin: 8px 0 14px;
+  /* A little room under the Quick entry, close above what follows */
+  margin: 14px 0 14px;
   /* In a container: the panel colour with a light shadow */
   padding: 18px 26px;
   border-radius: 16px;
@@ -491,7 +494,8 @@ const ClockStrip = styled.section`
   .line > span { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 2px 18px; box-shadow: -1px 0 0 var(--border-card); }
   .line > span:first-child { padding-left: 0; box-shadow: none; }
   .city { color: var(--text-secondary); }
-  .home .city { color: var(--color-accent-link); }
+  /* The home city in grey */
+  .home .city { color: var(--text-muted); }
   .muted { color: var(--text-muted); }
   .time { color: var(--text-primary); font-variant-numeric: tabular-nums; }
   .toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0; border: none; background: none; font: inherit; font-size: 14px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
@@ -509,6 +513,16 @@ const ClockStrip = styled.section`
 
 /* Three columns over shared rows (each column a subgrid spanning them, --rows),
    so the cards side by side in a row are the same height */
+/* Stats at the foot of Your Agenda's widgets: the widgets' gap above it, not its own margin */
+const StatsSpan = styled.div`
+  & > section { margin-top: 0; }
+`;
+
+/* The zone above the clocks: no room of its own until a card is in it */
+const HeadZone = styled.div<{ $filled: boolean }>`
+  margin-top: ${({ $filled }) => ($filled ? '18px' : '0')};
+`;
+
 const Columns = styled.div<{ $rows: number }>`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -874,7 +888,8 @@ function WorldClocks({ places, now, open, onToggle, strip }: { places: Place[]; 
       const [t, ampm] = clockParts(p.timezone, now);
       const diff = hoursFromLocal(p.timezone, now);
       const w = weather[p.name];
-      return { key: `${p.name}-${i}`, home: i === 0, name: p.name, offset: diff === 0 ? 'Local' : `${diff > 0 ? '+' : ''}${diff}h`,
+      // No "Local" for the home city's zone — just the others' offsets
+      return { key: `${p.name}-${i}`, home: i === 0, name: p.name, offset: diff === 0 ? '' : `${diff > 0 ? '+' : ''}${diff}h`,
         time: `${t} ${ampm}`, w, d: w ? describeWeather(w.code, w.isDay) : null };
     });
     return (
@@ -885,7 +900,7 @@ function WorldClocks({ places, now, open, onToggle, strip }: { places: Place[]; 
               {rows.map(r => (
                 <span key={r.key} className={r.home ? 'home' : undefined}>
                   <span className="city">{r.name}</span>
-                  <span className="muted">{r.offset}</span>
+                  {r.offset && <span className="muted">{r.offset}</span>}
                   <span className="time">{r.time}</span>
                   {r.w && <span className="muted">{r.w.tempF}°</span>}
                 </span>
@@ -902,7 +917,7 @@ function WorldClocks({ places, now, open, onToggle, strip }: { places: Place[]; 
             {rows.map(r => (
               <div key={r.key} className={r.home ? 'card home' : 'card'}>
                 <span className="city">{r.name}</span>
-                <span className="muted">{r.offset}</span>
+                {r.offset && <span className="muted">{r.offset}</span>}
                 <span className="big">{r.time}</span>
                 {r.d && <span className="weather"><MaterialIcon $size={16} aria-hidden="true">{r.d.icon}</MaterialIcon><span>{r.w!.tempF}° · {r.d.label}</span></span>}
               </div>
@@ -1273,11 +1288,32 @@ function usePriorityList() {
   return { items, write, create, add };
 }
 
+/* A priority row that can be dragged by its number to another place in the list */
+function SortablePriority({ id, Row: RowEl, Num, n, label, children }: {
+  id: string; Row: typeof Row; Num: typeof PNum; n: number; label: string; children: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <RowEl ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, position: 'relative', zIndex: isDragging ? 2 : undefined, opacity: isDragging ? 0.7 : 1 }}>
+      <Num as="button" type="button" ref={setActivatorNodeRef} {...attributes} {...listeners}
+        aria-label={`Move priority ${n}: ${label}`} title="Drag to reorder"
+        style={{ padding: 0, border: 'none', background: 'none', cursor: 'grab', touchAction: 'none', textAlign: 'left' }}>
+        {n}
+      </Num>
+      {children}
+    </RowEl>
+  );
+}
+
 /* Numbered rows — each edited in place, a quiet ×, a check on the right,
    and "Add a priority" under them */
 /** `compact`: the Day at a glance look — smaller rows, a count in the head, no add box or note (the add row above has "Add a priority") */
 function Priorities({ compact }: { compact?: boolean }) {
   const { items, write, create, add } = usePriorityList();
+  const prioritySensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const [starting, setStarting] = useState(false);
 
   // New list: starts an empty one; the old list stays in the journal
@@ -1299,12 +1335,20 @@ function Priorities({ compact }: { compact?: boolean }) {
         </HeadLinks>
       </SectionHead>
       {compact && items.length === 0 && <Muted>No priorities yet.</Muted>}
+      {/* Drag a priority by its number to put it elsewhere in the list (arrow keys too, once it's picked up) */}
+      <DndContext sensors={prioritySensors} collisionDetection={closestCenter}
+        onDragEnd={({ active, over }) => {
+          if (!over || active.id === over.id) return;
+          const from = items.findIndex(x => x.id === active.id);
+          const to = items.findIndex(x => x.id === over.id);
+          if (from >= 0 && to >= 0) void write(arrayMove(items, from, to));
+        }}>
+      <SortableContext items={items.map(x => x.id)} strategy={verticalListSortingStrategy}>
       {items.map((p, i) => {
         const RowEl = compact ? CompactRow : Row;
         const Num = compact ? CompactNum : PNum;
         return (
-        <RowEl key={p.id}>
-          <Num>{i + 1}</Num>
+        <SortablePriority key={p.id} id={p.id} Row={RowEl} Num={Num} n={i + 1} label={p.text}>
           <PriorityText item={p} roomy={!compact} compact={compact}
             onCommit={text => void write(text ? items.map(x => (x.id === p.id ? { ...x, text } : x)) : items.filter(x => x.id !== p.id))} />
           <PRemove type="button" aria-label={`Remove "${p.text}"`} title="Remove"
@@ -1313,9 +1357,11 @@ function Priorities({ compact }: { compact?: boolean }) {
           </PRemove>
           <Checkbox checked={p.done} aria-label={p.done ? `Mark "${p.text}" not done` : `Mark "${p.text}" done`}
             onChange={() => void write(items.map(x => (x.id === p.id ? { ...x, done: !x.done } : x)))} />
-        </RowEl>
+        </SortablePriority>
         );
       })}
+      </SortableContext>
+      </DndContext>
       <CardAdd label="Add a priority" failed="That priority didn’t save. Try again." run={add} gap={0} addOnBlur roomy={!compact} />
       {!compact && items.length > 0 && <ListNote>{NEW_LIST_NOTE}</ListNote>}
     </section>
@@ -1779,10 +1825,10 @@ const UpCompact = styled.div`
   & + & { border-top: 1px solid var(--border-subtle); }
   font-family: var(--font-sans);
   & > .when { width: 54px; flex: none; padding-top: 1px; font-size: 13px; color: var(--text-muted); }
-  & > .what { flex: 1; min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: 10px; align-items: baseline;
+  /* The title over its time — no coloured mark */
+  & > .what { flex: 1; min-width: 0; display: block;
     padding: 0; border: none; background: none; text-align: left; font: inherit; font-size: 15px; color: var(--text-secondary); cursor: pointer; }
-  & > .what i { width: 8px; height: 8px; border-radius: 2px; align-self: center; }
-  & > .what small { grid-column: 2; margin-top: 4px; font-size: 13px; color: var(--text-muted); }
+  & > .what small { display: block; margin-top: 4px; font-size: 13px; color: var(--text-muted); }
   & > .what:hover { color: var(--text-primary); }
 `;
 
@@ -1865,7 +1911,6 @@ function ComingUp({ financeOn, showBills, compact }: { financeOn: boolean; showB
           <UpCompact key={it.key}>
             <span className="when">{d.toLocaleDateString('en-US', { weekday: 'short' })} {d.getDate()}</span>
             <button type="button" className="what" onClick={it.open}>
-              <i style={{ background: KIND_DOT[it.kind] }} aria-hidden="true" />
               {it.title}
               <small>{it.time ? time12(it.time) : it.sub ?? (it.kind === 'event' || it.kind === 'meeting' ? 'All day' : '')}</small>
             </button>
@@ -2104,6 +2149,12 @@ const StatFig = styled.div`
   b { font-family: var(--font-display); font-size: 38px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   span { font-family: var(--font-sans); font-size: 15px; color: var(--text-muted); }
   @media (max-width: 480px) { b { font-size: 32px; } span { font-size: 14px; } }
+  /* Light: grey, so the figures sit quietly (not near-black), the labels a step lighter */
+  html[data-theme='light'] & b { color: #858b94; }
+  html[data-theme='light'] & span { color: #959ba3; }
+  /* Dark: grey too, so the figures sit quietly */
+  html[data-theme='dark'] & b { color: #8a8e98; }
+  html[data-theme='dark'] & span { color: #6c707a; }
 `;
 
 const STAT_PERIODS: { value: StatsPeriod; label: string }[] = [
@@ -2169,15 +2220,18 @@ const TimeTotal = styled.div`
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 6px;
   /* A divider under the total */
-  padding-bottom: 18px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-subtle);
-  b { font-family: var(--font-display); font-size: 34px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  b { font-family: var(--font-display); font-size: 23px; font-weight: 300; line-height: 1.05; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   span { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
 `;
 
 const TimeRow = styled(Row)`
+  /* Tighter rows */
+  padding-top: 6px;
+  padding-bottom: 6px;
   & > .title { flex: 1; min-width: 0; padding: 0; border: none; background: none; text-align: left; font: inherit; color: inherit;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   & > .title:hover { text-decoration: underline; }
@@ -2306,7 +2360,7 @@ function TimeTracked() {
       <TimeTotal><b>{formatSpent(total)}</b><span>{periodWord}</span></TimeTotal>
       {rows.length === 0
         ? <Muted>Nothing timed {periodWord}. Start a timer on a task, goal or exercise, or type an activity below.</Muted>
-        : <div style={{ marginTop: 10 }}>
+        : <div style={{ marginTop: 2 }}>
           {shown.map(({ entry, ms: spent, name }) => {
             const on = running?.entryId === entry.id;
             return (
@@ -2337,8 +2391,8 @@ function TimeTracked() {
           )}
         </div>}
       {/* A divider above Start a timer for… */}
-      <div style={{ marginTop: 16, paddingTop: 2, borderTop: '1px solid var(--border-subtle)' }}>
-        <CardAdd label="Start a timer for…" failed="That timer didn’t start. Try again." run={startFor} gap={16} />
+      <div style={{ marginTop: 8, paddingTop: 0, borderTop: '1px solid var(--border-subtle)' }}>
+        <CardAdd label="Start a timer for…" failed="That timer didn’t start. Try again." run={startFor} gap={6} />
       </div>
     </section>
   );
@@ -2569,7 +2623,7 @@ function DropCol({ id, items, gap, dragging, children }: { id: ColId; items: Sec
   return (
     <SortableContext id={id} items={items} strategy={verticalListSortingStrategy}>
       {/* Empty, it still takes a drop: a strip while a card is being dragged */}
-      <Col ref={setNodeRef} style={{ minHeight: items.length ? undefined : dragging ? 80 : 12, gap }}>{children}</Col>
+      <Col ref={setNodeRef} style={{ minHeight: items.length ? undefined : dragging ? 80 : 0, gap }}>{children}</Col>
     </SortableContext>
   );
 }
@@ -2868,7 +2922,7 @@ export function DashboardView() {
   // fullLayout again at render: a card the in-memory order doesn't know yet (a new
   // card, or an order kept across a reload of the code) still shows, in its default place
   const placed = fullLayout(layout);
-  const cols = { top: placed.top.filter(visible), left: placed.left.filter(visible), right: placed.right.filter(visible), side: placed.side.filter(visible) };
+  const cols = { head: placed.head.filter(visible), top: placed.top.filter(visible), left: placed.left.filter(visible), right: placed.right.filter(visible), side: placed.side.filter(visible) };
   // `wide`: across both columns (the top row) — no outline
   const card = (k: SectionKey, wide = false) => {
     const w = widgets[k]!;
@@ -2895,6 +2949,8 @@ export function DashboardView() {
       <DropCol id="left" items={cols.left} dragging={dragging}>{left}</DropCol>
       <DropCol id="right" items={cols.right} dragging={dragging}>{right}</DropCol>
     </Columns>
+    {/* Stats: across both columns, at the foot of the widgets */}
+    {shown('stats') && <StatsSpan><Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} /></StatsSpan>}
   </>);
   const sideWidgets = <DropCol id="side" items={cols.side} gap={34} dragging={dragging}>{cols.side.map(k => card(k))}</DropCol>;
 
@@ -3017,14 +3073,20 @@ export function DashboardView() {
             </QuickWrap>
           )}
 
+          {/* One drag-and-drop for every card from here down: a zone above the clocks, then Your Agenda's */}
+          <DndContext sensors={sensors} collisionDetection={closestCorners}
+            onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
+            onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
+          {/* Above the clocks: any card dragged here (the wellness check-in, say), full width */}
+          <HeadZone $filled={cols.head.length > 0}>
+            <DropCol id="head" items={cols.head} gap={24} dragging={dragging}>{cols.head.map(k => card(k, true))}</DropCol>
+          </HeadZone>
+
           {/* World clocks, full width under the Quick entry */}
           {shown('clocks') && <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />}
 
 
           {/* Day at a glance (always on): the day's schedule, priorities, tasks due and what's coming up, in one panel */}
-          <DndContext sensors={sensors} collisionDetection={closestCorners}
-            onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
-            onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
             <DayGlance financeOn={financeOn} medsOn={medsOn} exerciseOn={ff.exerciseEnabled !== false}
               weather={homeWeather && hd ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()}${home ? ` in ${home.name}` : ''}` : undefined}
               side={sideWidgets}
@@ -3040,7 +3102,6 @@ export function DashboardView() {
           )}
 
 
-          {shown('stats') && <Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} />}
 
 
         </Inner>

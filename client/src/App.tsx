@@ -38,6 +38,7 @@ import { FinanceSavingsView } from './views/FinanceSavingsView.js';
 import { FinanceReportsView } from './views/FinanceReportsView.js';
 import { PlannerFilterView } from './views/PlannerFilterView.js';
 import { PlanRoadmapView } from './views/PlanRoadmapView.js';
+import { PlanningOverviewView } from './views/PlanningOverviewView.js';
 import { PlannerView } from './views/PlannerView.js';
 import { HabitsView } from './views/HabitsView.js';
 import { useHabitStore } from './stores/habitStore.js';
@@ -198,7 +199,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
-  '--bg-app':            '#12141a',
+  '--bg-app':            '#15171d',
   '--bg-surface':        '#1a1c24',
   '--bg-panel':          '#181a22', /* cards and panels (widgets): the colour the user chose. Do not retint */
   '--bg-elevated':       '#1e2029',
@@ -601,7 +602,9 @@ function R({ children }: { children: React.ReactNode }) {
 export function App() {
   const accentColor = useUIStore(s => s.accentColor);
   const themeMode = useUIStore(s => s.themeMode);
-  const isDark = themeMode === 'dark';
+  // A page can pin a theme while it shows (the sign-in pages: always dark)
+  const forcedTheme = useUIStore(s => s.forcedTheme);
+  const isDark = (forcedTheme ?? themeMode) === 'dark';
   const activeTheme = isDark ? darkTheme : lightTheme;
 
   // Auto theme: follow the clock (light 7 AM – 7 PM) — checked every minute and
@@ -714,6 +717,7 @@ export function App() {
               <Route path="/topics" element={<R><TopicsView /></R>} />
               <Route path="/topics/:topicId" element={<R><TopicDetailView /></R>} />
               <Route path="/calendar" element={<R><CalendarView /></R>} />
+              <Route path="/goals/overview" element={<R><PlanningOverviewView /></R>} />
               <Route path="/goals" element={<R><GoalsView /></R>} />
               <Route path="/goals/milestones" element={<R><GoalsView /></R>} />
               <Route path="/goals/tasks" element={<R><GoalsView /></R>} />

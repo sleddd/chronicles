@@ -1,72 +1,109 @@
 import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
-import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
-import { authFields } from '../atoms/AuthForm.js';
+import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { authFields, HiddenLabel } from '../atoms/AuthForm.js';
+import { PasswordInput } from '../atoms/PasswordInput.js';
+
+/* Sign in: Email and Password as filled boxes named by their placeholders (the labels
+   kept for screen readers), Show inside the password box, "Forgot password?" under it on
+   the right, a full-width accent Sign in pill, "or", then an outlined passkey pill */
 
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   ${authFields}
 `;
 
+/* One field: the same as Create account's */
 const Field = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  input { width: 100%; box-sizing: border-box; border: none; outline: none; }
 `;
 
-const FieldLabel = styled.label``;
-
-const InputWrap = styled.div`
-  position: relative;
-  display: flex;
-  align-items: center;
-  /* The input itself carries the outline (authFields); Show sits inside it */
-  input { padding-right: 64px !important; }
-`;
-
-const StyledInput = styled.input`
-  flex: 1;
-  height: 48px;
-  font-size: 16px;
-  color: var(--text-primary);
-  background: transparent;
+const Forgot = styled.button`
+  align-self: flex-end;
+  margin-top: -4px;
+  padding: 0;
   border: none;
-  outline: none;
-  &::placeholder { color: var(--text-disabled); }
-`;
-
-const ShowBtn = styled.button`
-  position: absolute;
-  right: 6px;
-  padding: 0 10px;
-  font-size: 12px;
-  color: var(--text-tertiary);
   background: none;
-  border: none;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--color-accent-link, var(--color-accent));
   cursor: pointer;
-  &:hover { color: var(--text-primary); }
+  &:hover { text-decoration: underline; }
+`;
+
+/* The main action: a full-width accent pill with white text */
+const Primary = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 54px;
+  margin-top: 10px;
+  /* An accent outline pill (accent text, no fill); hover fills it */
+  border: 1px solid var(--color-accent-line, var(--color-accent));
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-accent-line, var(--color-accent));
+  transition: border-color 150ms, color 150ms;
+  cursor: pointer;
+  /* Hover: the background a step darker (the white text stays white) */
+  /* Hover: no fill, the outline and text a brighter accent */
+  &:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-accent) 65%, #fff); color: color-mix(in srgb, var(--color-accent) 65%, #fff); }
+  &:disabled { opacity: 0.55; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+`;
+
+/* The other way in: an outlined pill */
+const Secondary = styled(Primary)`
+  margin-top: 0;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  font-weight: 500;
+  color: var(--text-primary);
+  & > span:first-child { color: var(--color-accent); }
+  &:hover:not(:disabled) { filter: none; background: transparent; border-color: var(--border-strong); color: var(--text-primary); }
+`;
+
+const Quiet = styled.button`
+  align-self: center;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); text-decoration: underline; }
 `;
 
 const ErrorBanner = styled.div`
   padding: 10px 14px;
   background: var(--color-danger-subtle, rgba(239,68,68,0.1));
   border: 1px solid var(--color-danger);
-  border-radius: var(--r-md);
+  border-radius: 12px;
   color: var(--color-danger);
-  font-size: 13px;
+  font-size: 14px;
 `;
 
 const Or = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  margin: 4px 0;
   font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--text-tertiary);
-  &::before, &::after { content: ''; flex: 1; height: 1px; background: var(--border-default); }
+  font-size: 15px;
+  color: var(--text-muted);
+  &::before, &::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
 `;
 
 interface LoginFormProps {
@@ -81,7 +118,6 @@ interface LoginFormProps {
 export function LoginForm({ onSubmit, onForgotPassword, onPasskey, passkeyChoice }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
@@ -121,61 +157,39 @@ export function LoginForm({ onSubmit, onForgotPassword, onPasskey, passkeyChoice
     <Form onSubmit={handleSubmit}>
       {error && <ErrorBanner role="alert">{error}</ErrorBanner>}
 
+      {/* The same boxes as Create account's: a plain input for the email, PasswordInput (with its Show) for the password */}
       <Field>
-        <FieldLabel htmlFor="email">Email</FieldLabel>
-        <InputWrap>
-          <StyledInput
-            id="email"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            autoComplete="email"
-          />
-        </InputWrap>
+        <HiddenLabel htmlFor="email">Email</HiddenLabel>
+        <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="Email" required autoComplete="email" />
       </Field>
 
       <Field>
-        <FieldLabel htmlFor="password">Password</FieldLabel>
-        <InputWrap>
-          <StyledInput
-            id="password"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Enter password"
-            required
-            autoComplete="current-password"
-          />
-          <ShowBtn type="button" onClick={() => setShowPassword(v => !v)}>
-            {showPassword ? 'Hide' : 'Show'}
-          </ShowBtn>
-        </InputWrap>
+        <HiddenLabel htmlFor="password">Password</HiddenLabel>
+        <PasswordInput id="password" value={password} onChange={e => setPassword(e.target.value)}
+          placeholder="Password" required autoComplete="current-password" />
       </Field>
 
-      <Button type="submit" fullWidth disabled={loading || passkeyBusy} variant="secondary">
+      {onForgotPassword && (
+        <Forgot type="button" onClick={onForgotPassword}>Forgot password?</Forgot>
+      )}
+
+      <Primary type="submit" disabled={loading || passkeyBusy}>
         {loading ? <Spinner size={18} /> : 'Sign in'}
-      </Button>
+      </Primary>
 
       {onPasskey && (
         <>
           <Or>or</Or>
-          <Button type="button" fullWidth variant="secondary" disabled={passkeyBusy || loading} onClick={() => void handlePasskey()}>
-            {passkeyBusy ? <Spinner size={18} /> : 'Sign in with a passkey'}
-          </Button>
+          <Secondary type="button" disabled={passkeyBusy || loading} onClick={() => void handlePasskey()}>
+            {passkeyBusy ? <Spinner size={18} /> : <><MaterialIcon $size={20} aria-hidden="true">key</MaterialIcon>Sign in with a passkey</>}
+          </Secondary>
           {passkeyChoice && passkeyTried && (
-            <Button type="button" variant="ghost" disabled={passkeyBusy || loading} onClick={() => void handlePasskey(true)}>
+            <Quiet type="button" disabled={passkeyBusy || loading} onClick={() => void handlePasskey(true)}>
               Use a different passkey
-            </Button>
+            </Quiet>
           )}
         </>
-      )}
-
-      {onForgotPassword && (
-        <Button type="button" variant="ghost" onClick={onForgotPassword}>
-          Forgot password?
-        </Button>
       )}
     </Form>
   );

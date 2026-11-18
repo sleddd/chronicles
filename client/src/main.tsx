@@ -4,14 +4,15 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App.js';
-import { PAGE_COLOR, resolveTheme, startingTheme } from './utils/autoTheme.js';
+import { PAGE_COLOR, resolveTheme, startingTheme, isAuthPath } from './utils/autoTheme.js';
 import { ErrorBoundary } from './components/atoms/ErrorBoundary.js';
 import { setUpdateAvailable } from './services/appUpdate.js';
 
 // Start in the remembered theme (else light) before anything paints — the
 // app's own tokens follow in App's layout effect
 {
-  const mode = resolveTheme(startingTheme());
+  // The sign-in pages are always dark
+  const mode = isAuthPath(window.location.pathname) ? 'dark' : resolveTheme(startingTheme());
   document.documentElement.setAttribute('data-theme', mode);
   document.documentElement.style.backgroundColor = PAGE_COLOR[mode];
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', PAGE_COLOR[mode]);

@@ -87,8 +87,8 @@ const BarePill = styled(PillButton)`
 
 const Panel = styled.section`
   margin-top: 8px;
-  padding: 28px 0 8px;
-  border-top: 1px solid var(--border-card);
+  padding: 20px 0 8px;
+  /* No line across the top */
 `;
 
 /* The title, then the Meds / Move row under it (lined up with the title, a divider above and below) */
@@ -98,10 +98,10 @@ const Head = styled.div`
 
 const TitleRow = styled.div`
   display: flex;
-  flex-wrap: wrap; /* narrow: the pills and button drop under the title */
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  flex-wrap: wrap; /* narrow: Meds, Move and the button drop under the title */
+  align-items: baseline;
+  /* Room between the title and the Meds row when it wraps under it */
+  gap: 14px 18px;
   h2 {
     margin: 0;
     font-family: var(--font-display);
@@ -116,7 +116,7 @@ const TitleRow = styled.div`
 
 /* The picked day, between the title and the Meds / Move row */
 const DateLine = styled.p`
-  margin: 10px 0 0;
+  margin: 0;
   font-family: var(--font-sans);
   font-size: 14px;
   font-style: italic;
@@ -129,11 +129,51 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px 18px;
+  gap: 8px 26px;
+  margin-left: auto;
+  align-self: center;
+  /* Phones: under the title, from the left */
+  @media (max-width: 640px) { margin-left: 0; width: 100%; justify-content: flex-start; margin-top: 12px; }
+  /* …with the expand button still at the right */
+  & > button[aria-label='Open this day in the Planner'] { margin-left: auto; }
 
   /* The pills' figures: the count quiet, what's due in amber */
   em { font-style: normal; color: var(--text-muted); margin-left: 6px; }
   strong { margin-left: 8px; font-weight: 600; color: var(--chart-amber); }
+`;
+
+/* Meds / Move: a small icon and plain words (sentence case); the meds icon amber while a dose is due */
+const HeadStat = styled.button<{ $due?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  & > span:first-child { color: ${({ $due }) => ($due ? 'var(--chart-amber)' : 'var(--color-accent)')}; }
+  /* "· 5 PM due": quiet grey */
+  strong { font-weight: 400; color: var(--text-muted); }
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
+/* Opens the day in the Planner: just the icon */
+const ExpandBtn = styled.button`
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
 `;
 
 const RoundBtn = styled.button`
@@ -151,17 +191,34 @@ const RoundBtn = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* The week's month in full, the first cell of the week row (left of the days) */
+const WeekMonth = styled.div`
+  align-self: center;
+  padding-right: 12px;
+  ${cardLabel}
+  /* The same size as the days' weekday and number */
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
+  /* Phones: abbreviated ("Nov") */
+  .short { display: none; }
+  @media (max-width: 640px) { .long { display: none; } .short { display: inline; } }
+`;
+
 /* The week: a day's short name over its date, small marks for what it holds; the chosen day lifted */
 const Week = styled.div`
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* The month, then the seven days */
+  grid-template-columns: auto repeat(7, minmax(0, 1fr));
   gap: 6px;
-  /* A divider under the date, room either side */
-  margin-top: 32px;
-  padding-top: 20px;
-  container-type: inline-size;
+  /* A line between the title and the row, and one under it (room under the title first) */
+  margin-top: 28px;
+  padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
-  padding-bottom: 18px;
+  container-type: inline-size;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border-subtle);
   @media (max-width: 640px) { gap: 2px; }
 `;
@@ -170,22 +227,23 @@ const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 16px 14px 18px;
-  /* The chosen day: a light outline, no fill */
-  border: 1px solid ${({ $on }) => ($on ? 'var(--border-default)' : 'transparent')};
-  border-radius: 12px;
-  background: transparent;
+  padding: 12px 14px 12px;
+  border: none;
+  border-radius: 10px;
+  /* The chosen day: a soft lifted fill */
+  background: ${({ $on }) => ($on ? 'var(--bg-hover, rgba(255, 255, 255, 0.05))' : 'transparent')};
   text-align: left;
   cursor: pointer;
-  > small { ${cardLabel} color: ${({ $today }) => ($today ? 'var(--color-accent-soft)' : 'var(--text-muted)')}; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  /* Narrow (the week row under 820px): today is just its accent weekday, no "· Today" to run into the next day */
-  @container (max-width: 820px) { > small .today-word { display: none; } }
-  > span { font-family: var(--font-display); font-size: 28px; font-weight: 300; line-height: 1; color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
-  &:hover > span { color: var(--text-primary); }
+  /* The month, small, above the weekday and date */
+  /* The weekday (TODAY on today, in the accent) and the date on one line */
+  .day { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .day > small { ${cardLabel} font-size: 14px; font-weight: 300; line-height: 1; color: ${({ $today }) => ($today ? 'var(--color-accent-soft)' : 'var(--text-muted)')}; white-space: nowrap; }
+  .day > span { font-family: var(--font-sans); font-size: 14px; font-weight: 400; line-height: 1; color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
+  &:hover .day > span { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 640px) { padding: 13px 11px 15px; > span { font-size: 22px; } > small { letter-spacing: 0.06em; } }
+  @media (max-width: 640px) { padding: 10px 8px; .day { flex-direction: column; gap: 6px; } .day > small { letter-spacing: 0.06em; } }
 `;
 
 const Marks = styled.div`
@@ -202,9 +260,13 @@ const Body = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 2.35fr) minmax(0, 0.85fr);
   gap: 36px 64px;
-  margin-top: 26px;
+  /* Room under the date row before the schedule and lists */
+  margin-top: 40px;
   align-items: start;
   @media (max-width: 1200px) { grid-template-columns: minmax(0, 1fr); }
+  /* Room under each heading's line (Schedule, Priorities, Tasks due, Coming up…) before its content */
+  & > div > section > :first-child,
+  & > div > div > section > :first-child { margin-bottom: 14px; }
 `;
 
 /* Schedule | priorities, then the widgets across both */
@@ -819,34 +881,36 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   return (
     <Panel aria-label="Day at a glance">
       <Head>
+        {/* "Your Agenda"; Meds, Move and the Planner button at the right (the week row shows the day) */}
         <TitleRow>
-          {/* "Your Agenda", whichever day is picked (the date under it says which) */}
           <h2>Your Agenda</h2>
-          {/* Meds, Move and the Planner (expand) button together, on the title's row at the right */}
           <HeadActions>
             {medTotal > 0 && (
-              <BarePill type="button" $variant="neutral" onClick={e => openFrom('meds', e)} aria-label={`Medications: ${medTaken} of ${medTotal} taken`}>
-                <MaterialIcon $size={18} aria-hidden="true">health_and_safety</MaterialIcon>
-                Meds<em>{medTaken} of {medTotal}</em>{nextDue !== undefined && <strong>{shortClock(nextDue)} due</strong>}
-              </BarePill>
+              <HeadStat type="button" $due={nextDue !== undefined} onClick={e => openFrom('meds', e)} aria-label={`Medications: ${medTaken} of ${medTotal} taken`}>
+                <MaterialIcon $size={23} aria-hidden="true">health_and_safety</MaterialIcon>
+                Meds {medTaken} of {medTotal}{nextDue !== undefined && <strong> · {shortClock(nextDue)} due</strong>}
+              </HeadStat>
             )}
             {moveTotal > 0 && (
-              <BarePill type="button" $variant="neutral" onClick={() => navigate('/health/exercise/schedule')}>
-                <MaterialIcon $size={18} aria-hidden="true">directions_run</MaterialIcon>
-                Move<em>{moveDone} of {moveTotal} min</em>
-              </BarePill>
+              <HeadStat type="button" onClick={() => navigate('/health/exercise/schedule')} aria-label={`Move: ${moveDone} of ${moveTotal} minutes`}>
+                <MaterialIcon $size={17} aria-hidden="true">directions_run</MaterialIcon>
+                Move {moveDone} min
+              </HeadStat>
             )}
-            {/* Opens the day in the Planner: on the title's row, at the right */}
-            <RoundBtn type="button" aria-label="Open this day in the Planner" title="Open in the Planner"
+            <ExpandBtn type="button" aria-label="Open this day in the Planner" title="Open in the Planner"
               onClick={() => navigate('/goals/planner', { state: { plannerDay: day } })}>
-              <Icon name="maximize" size={17} strokeWidth={1.8} />
-            </RoundBtn>
+              <Icon name="maximize" size={16} strokeWidth={1.8} />
+            </ExpandBtn>
           </HeadActions>
         </TitleRow>
-        <DateLine>{isToday ? ['Today', dateLine, weather].filter(Boolean).join(' · ') : dateLine}</DateLine>
       </Head>
 
       <Week role="group" aria-label="Week">
+        {/* The week's month in full, at the left of the days ("November", or "November – December") */}
+        <WeekMonth>
+          <span className="long">{[...new Set(week.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'long' })))].join(' – ')}</span>
+          <span className="short">{[...new Set(week.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short' })))].join('–')}</span>
+        </WeekMonth>
         {week.map(d => {
           const marks = marksOf(d);
           const on = d === day;
@@ -854,9 +918,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             <WeekDay key={d} type="button" $on={on} $today={d === today} aria-pressed={on}
               aria-label={`${LONG_NAMES[dow(d)]} ${Number(d.slice(8))}${d === today ? ', today' : ''}${marks.length ? `, ${marks.length} planned` : ''}`}
               onClick={() => setPicked(d === today ? null : d)}>
-              <small>{WEEK_NAMES[dow(d)]}{d === today && <span className="today-word"> · Today</span>}</small>
-              <span>{Number(d.slice(8))}</span>
-              <Marks aria-hidden="true">{marks.map((k, i) => <i key={i} style={{ background: KIND_COLOR[k] }} />)}</Marks>
+              <div className="day"><small>{d === today ? 'Today' : WEEK_NAMES[dow(d)]}</small><span>{Number(d.slice(8))}</span></div>
             </WeekDay>
           );
         })}
@@ -878,9 +940,6 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                 </Marker>
               )}
             </span>
-            <Legend aria-hidden="true">
-              {(['meeting', 'event', 'task'] as Kind[]).map(k => <span key={k}><i style={{ background: KIND_COLOR[k] }} />{KIND_NAME[k]}</span>)}
-            </Legend>
           </SubHead>
           <Timeline>
             {allDay.length > 0 && (
@@ -890,7 +949,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                 ))}
               </AllDayRow>
             )}
-            <EveningBtn type="button" aria-expanded={morningOpen} onClick={toggleMorning} style={{ margin: '0 0 12px' }}>
+            <EveningBtn type="button" aria-expanded={morningOpen} onClick={toggleMorning} style={{ margin: '0 0 22px' }}>
               {morningOpen ? 'Hide before 4 AM' : `Show before 4 AM${morningCount + earlyDoses.length ? ` · ${morningCount + earlyDoses.length} ${morningCount + earlyDoses.length === 1 ? 'item' : 'items'}` : ''}`}
               <Icon name={morningOpen ? 'chevron-down' : 'chevron-up'} size={16} strokeWidth={1.8} aria-hidden="true" />
             </EveningBtn>
@@ -914,7 +973,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                     style={{ top: px(g.mins! - dayStart) + 7, left: 'auto', right: 4 + (shift % 2) * 28 }}
                     aria-label={`Medications at ${clock(g.mins!)}${dosesForDay ? (pending ? ', due' : ', taken') : ''}`}
                     onClick={e => openFrom('dose', e, g.time)}>
-                    <MaterialIcon $size={16} aria-hidden="true">health_and_safety</MaterialIcon>
+                    <MaterialIcon $size={22} aria-hidden="true">health_and_safety</MaterialIcon>
                   </Marker>
                 );
               })}

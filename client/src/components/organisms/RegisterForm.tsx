@@ -1,57 +1,166 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
-import { TextInput } from '../atoms/TextInput.js';
 import { PasswordInput } from '../atoms/PasswordInput.js';
 import { PasswordStrengthMeter } from '../molecules/PasswordStrengthMeter.js';
 import { newPasswordProblem } from '@chronicles/shared';
-import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
-import { FormField } from '../molecules/FormField.js';
-import { authFields } from '../atoms/AuthForm.js';
+import { authFields, HiddenLabel } from '../atoms/AuthForm.js';
+import { cardLabel } from '../../styles/cardLabel.js';
 
-/* Fields closer together than the app's forms */
+/* Create account, in two columns: "1 · Your sign-in" (Email, Username, Password with
+   its rules and strength, Confirm password — filled boxes named by their placeholders)
+   beside "2 · Before you start" (the consent card, passed in as `extra`), then a foot
+   under a hairline: the sign-in link on the left, what's still needed and the
+   Create account pill on the right. One column on narrow screens. */
+
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 6px;
   ${authFields}
-  /* Each field row: less padding, label closer to its box */
-  & > div:has(> label[for]) { padding: 4px 0; gap: 8px; }
+`;
+
+const Cols = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 32px 56px;
+  align-items: start;
+  @media (max-width: 860px) { grid-template-columns: minmax(0, 1fr); }
+`;
+
+const Col = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+`;
+
+/* "1 · YOUR SIGN-IN": the dashboards' card label */
+const Step = styled.h2`
+  margin: 0 0 4px;
+  ${cardLabel}
+`;
+
+const Field = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  input { width: 100%; box-sizing: border-box; border: none; outline: none; }
+`;
+
+const FieldError = styled.p`
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-danger);
+`;
+
+/* The password's rules as a quiet line of dots, each lit in the accent once it's met */
+const Rules = styled.ul`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin: 0;
+  padding: 0 4px;
+  list-style: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  li { display: inline-flex; align-items: center; gap: 8px; }
+  li::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+  li[data-met] { color: var(--color-accent-soft, var(--color-accent)); }
 `;
 
 const ErrorBanner = styled.div`
-  padding: ${({ theme }) => theme.spacing.sm}px ${({ theme }) => theme.spacing.md}px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid ${({ theme }) => theme.colors.danger};
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  color: ${({ theme }) => theme.colors.danger};
-  font-size: ${({ theme }) => theme.fontSize.sm}px;
+  border: 1px solid var(--color-danger);
+  border-radius: 12px;
+  color: var(--color-danger);
+  font-size: 14px;
 `;
 
 const SuggestionsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin-top: 4px;
 `;
 
 const SuggestionLabel = styled.span`
   font-size: 14px;
-  color: ${({ theme }) => theme.colors.textMuted};
+  color: var(--text-muted);
   margin-right: 2px;
 `;
 
 const SuggestionChip = styled.button`
-  padding: 3px 10px;
-  font-size: 15px;
-  font-family: ${({ theme }) => theme.fontFamily.ui};
-  color: ${({ theme }) => theme.colors.text};
+  padding: 3px 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm}px;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  &:hover { background: rgba(0,0,0,0.04); border-color: ${({ theme }) => theme.colors.textMuted}; }
+  &:hover { border-color: var(--border-strong); color: var(--text-primary); }
+`;
+
+/* The foot: the sign-in link, then (right) what's still needed and Create account */
+const Foot = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-top: 32px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-secondary);
+  a { font-weight: 600; color: var(--color-accent-link, var(--color-accent)); text-decoration: none; &:hover { text-decoration: underline; } }
+`;
+
+const FootLink = styled.div`
+  margin-top: 20px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text-secondary);
+  a { font-weight: 600; color: var(--color-accent-link, var(--color-accent)); text-decoration: none; &:hover { text-decoration: underline; } }
+`;
+
+const Needed = styled.span`
+  flex: 1 1 240px;
+  min-width: 0;
+  text-align: left;
+  font-size: 15px;
+  color: var(--text-muted);
+`;
+
+/* Create account: the accent pill with white text; quiet until ready */
+const Submit = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  height: 54px;
+  padding: 0 36px;
+  /* An accent outline pill (accent text, no fill); hover fills it */
+  border: 1px solid var(--color-accent-line, var(--color-accent));
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-accent-line, var(--color-accent));
+  transition: border-color 150ms, color 150ms;
+  cursor: pointer;
+  /* Hover: the background a step darker (the white text stays white) */
+  /* Hover: no fill, the outline and text a brighter accent */
+  &:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-accent) 65%, #fff); color: color-mix(in srgb, var(--color-accent) 65%, #fff); }
+  /* Not ready yet: a quiet grey outline */
+  &:disabled { border-color: var(--border-default); background: transparent; color: var(--text-muted); cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 `;
 
 function generateUsernameSuggestions(base: string): string[] {
@@ -64,17 +173,24 @@ function generateUsernameSuggestions(base: string): string[] {
   ];
 }
 
+/** "a, b and c" */
+const listWords = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
 interface RegisterFormProps {
   onSubmit: (data: { email: string; username: string; password: string }) => Promise<void>;
   /** Prefilled email (from a beta sign-up link) */
   initialEmail?: string;
-  /** Shown above Create account (the consent card) */
+  /** The right-hand column (the consent card) */
   extra?: ReactNode;
   /** Create account stays disabled until this is true (every consent box ticked) */
   canSubmit?: boolean;
+  /** How many consent items are still to agree to (for the "Still needed" line) */
+  consentMissing?: number;
+  /** At the foot's left ("Already have an account? Sign in") */
+  footStart?: ReactNode;
 }
 
-export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail = '' }: RegisterFormProps) {
+export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail = '', consentMissing = 0, footStart }: RegisterFormProps) {
   const [email, setEmail] = useState(initialEmail);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -131,75 +247,90 @@ export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail =
     }
   };
 
+  // The password's rules, lit as they're met
+  const rules = [
+    { label: '12 or more characters', met: password.length >= 12 },
+    { label: 'Upper and lower case', met: /[a-z]/.test(password) && /[A-Z]/.test(password) },
+    { label: 'A number', met: /\d/.test(password) },
+    { label: 'A symbol', met: /[^A-Za-z0-9]/.test(password) },
+  ];
+
+  // What's still needed before Create account
+  const needed: string[] = [];
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) needed.push('your email');
+  if (username.trim().length < 3) needed.push('a username');
+  if (newPasswordProblem(password, { email, username }) || password !== confirmPassword) needed.push('your password');
+  if (consentMissing > 0) needed.push(`${consentMissing} ${consentMissing === 1 ? 'item' : 'items'} to agree to`);
+
   return (
     <Form onSubmit={handleSubmit}>
       {error && <ErrorBanner role="alert">{error}</ErrorBanner>}
 
-      <FormField label="Email" htmlFor="reg-email" error={fieldErrors.email}>
-        <TextInput
-          id="reg-email"
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          required
-          autoComplete="email"
-        />
-      </FormField>
+      <Cols>
+        <Col aria-labelledby="reg-step-1">
+          <Step id="reg-step-1">1 · Your sign-in</Step>
 
-      <FormField label="Username" htmlFor="reg-username" error={fieldErrors.username}>
-        <TextInput
-          id="reg-username"
-          value={username}
-          onChange={e => { setUsername(e.target.value); setUsernameSuggestions([]); }}
-          placeholder="Choose a username"
-          required
-          autoComplete="username"
-        />
-        {usernameSuggestions.length > 0 && (
-          <SuggestionsRow>
-            <SuggestionLabel>Try:</SuggestionLabel>
-            {usernameSuggestions.map(s => (
-              <SuggestionChip
-                key={s}
-                type="button"
-                onClick={() => { setUsername(s); setUsernameSuggestions([]); setFieldErrors(prev => ({ ...prev, username: '' })); }}
-              >
-                {s}
-              </SuggestionChip>
-            ))}
-          </SuggestionsRow>
+          <Field>
+            <HiddenLabel htmlFor="reg-email">Email</HiddenLabel>
+            <input id="reg-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="Email" required autoComplete="email" aria-invalid={!!fieldErrors.email || undefined} />
+            {fieldErrors.email && <FieldError role="alert">{fieldErrors.email}</FieldError>}
+          </Field>
+
+          <Field>
+            <HiddenLabel htmlFor="reg-username">Username</HiddenLabel>
+            <input id="reg-username" value={username} onChange={e => { setUsername(e.target.value); setUsernameSuggestions([]); }}
+              placeholder="Username" required autoComplete="username" aria-invalid={!!fieldErrors.username || undefined} />
+            {fieldErrors.username && <FieldError role="alert">{fieldErrors.username}</FieldError>}
+            {usernameSuggestions.length > 0 && (
+              <SuggestionsRow>
+                <SuggestionLabel>Try:</SuggestionLabel>
+                {usernameSuggestions.map(s => (
+                  <SuggestionChip key={s} type="button"
+                    onClick={() => { setUsername(s); setUsernameSuggestions([]); setFieldErrors(prev => ({ ...prev, username: '' })); }}>
+                    {s}
+                  </SuggestionChip>
+                ))}
+              </SuggestionsRow>
+            )}
+          </Field>
+
+          <Field>
+            <HiddenLabel htmlFor="reg-password">Password</HiddenLabel>
+            <PasswordInput id="reg-password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Password" required autoComplete="new-password" />
+            <Rules aria-label="Password rules">
+              {rules.map(r => <li key={r.label} data-met={r.met ? '' : undefined}>{r.label}</li>)}
+            </Rules>
+            <PasswordStrengthMeter password={password} email={email} username={username} />
+            {fieldErrors.password && <FieldError role="alert">{fieldErrors.password}</FieldError>}
+          </Field>
+
+          <Field>
+            <HiddenLabel htmlFor="reg-confirm">Confirm password</HiddenLabel>
+            <PasswordInput id="reg-confirm" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="Confirm password" required autoComplete="new-password" />
+            {fieldErrors.confirmPassword && <FieldError role="alert">{fieldErrors.confirmPassword}</FieldError>}
+          </Field>
+        </Col>
+
+        {extra && (
+          <Col aria-labelledby="reg-step-2">
+            <Step id="reg-step-2">2 · Before you start</Step>
+            {extra}
+          </Col>
         )}
-      </FormField>
+      </Cols>
 
-      <FormField label="Password" htmlFor="reg-password" error={fieldErrors.password}>
-        <PasswordInput
-          id="reg-password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="12+ characters: upper and lower case, a number, a symbol"
-          required
-          autoComplete="new-password"
-        />
-        <PasswordStrengthMeter password={password} email={email} username={username} />
-      </FormField>
-
-      <FormField label="Confirm Password" htmlFor="reg-confirm" error={fieldErrors.confirmPassword}>
-        <PasswordInput
-          id="reg-confirm"
-          value={confirmPassword}
-          onChange={e => setConfirmPassword(e.target.value)}
-          placeholder="Re-enter password"
-          required
-          autoComplete="new-password"
-        />
-      </FormField>
-
-      {extra}
-
-      <Button type="submit" fullWidth disabled={loading || !canSubmit} variant="secondary">
-        {loading ? <Spinner size={18} /> : 'Create account'}
-      </Button>
+      <Foot>
+        {/* What's still needed on the left, Create account on the right */}
+        <Needed>{needed.length > 0 && <>Still needed: {listWords(needed)}</>}</Needed>
+        <Submit type="submit" disabled={loading || !canSubmit}>
+          {loading ? <Spinner size={18} /> : 'Create account'}
+        </Submit>
+      </Foot>
+      {/* The sign-in link on its own row under them */}
+      {footStart && <FootLink>{footStart}</FootLink>}
     </Form>
   );
 }

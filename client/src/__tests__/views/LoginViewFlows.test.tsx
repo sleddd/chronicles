@@ -33,8 +33,8 @@ import { PasskeyCancelled } from '@/services/passkeys';
 const WRAP = { encryptionEnabled: true, kekSalt: 's', encryptedMasterKey: 'k', kekWrapIv: 'i', kekIterations: 600000, recoveryWrappedMK: null, recoveryWrapIv: null };
 
 const typeAndSubmit = () => {
-  fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'o@example.com' } });
-  fireEvent.change(screen.getByPlaceholderText('Enter password'), { target: { value: 'Correct-horse-9' } });
+  fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'o@example.com' } });
+  fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'Correct-horse-9' } });
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 };
 

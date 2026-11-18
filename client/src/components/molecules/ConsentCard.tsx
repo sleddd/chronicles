@@ -49,6 +49,36 @@ const Card = styled.fieldset`
   a { color: var(--color-accent-link, var(--color-accent)); }
 `;
 
+/* Sign-up's look (bare): no box or title of its own (the form names the column),
+   each item in its own outlined box, the notice choice on one line */
+const Bare = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  a { color: var(--color-accent-link, var(--color-accent)); }
+  .ch-check { align-items: flex-start; }
+  .ch-check__label { line-height: 1.55; color: var(--text-primary); }
+`;
+
+const Item = styled.div`
+  padding: 16px 20px;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+`;
+
+const NoticeLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 28px;
+  margin-top: 6px;
+  color: var(--text-primary);
+`;
+
 const Intro = styled.p`
   margin: 0;
   color: var(--text-muted);
@@ -93,14 +123,56 @@ interface ConsentCardProps {
   show?: { age: boolean; terms: boolean; health: boolean; notice: boolean };
   /** "Before you start" on sign-up; "We've updated our terms" on re-consent */
   title?: string;
+  /** Sign-up's look: no box or title (the form's column names it), each item boxed */
+  bare?: boolean;
 }
 
-export function ConsentCard({ value, onChange, show = { age: true, terms: true, health: true, notice: true }, title = 'Before you start' }: ConsentCardProps) {
+export function ConsentCard({ value, onChange, show = { age: true, terms: true, health: true, notice: true }, title = 'Before you start', bare }: ConsentCardProps) {
   const set = (patch: Partial<ConsentValue>) => onChange({ ...value, ...patch });
+  if (bare) return (
+    <Bare role="group" aria-label={title}>
+      <Intro>Please read and agree to each item.</Intro>
+      {show.age && (
+        <Item><Checkbox checked={value.age} onChange={e => set({ age: e.target.checked })} label="I’m 18 or older." /></Item>
+      )}
+      {show.terms && (
+        <Item><Checkbox checked={value.terms} onChange={e => set({ terms: e.target.checked })} label={<>
+          I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>, including the Risk
+          Notice and the image rules. I understand that no app is perfectly secure, and I accept the risks it describes.
+        </>} /></Item>
+      )}
+      {show.health && (
+        <Item><Checkbox checked={value.health} onChange={e => set({ health: e.target.checked })} label={<>
+          I consent to Chronicles collecting the health information I choose to enter, such as medications, allergies,
+          symptoms, sleep, mood, cycle and meals, to run the features I use. It is never sold, it is shared only as
+          the <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a> describes, and it is never shared with a third party.
+          I can withdraw by deleting my account or writing to {LEGAL_DETAILS.contactEmail}.
+        </>} /></Item>
+      )}
+      {show.notice && (
+        <>
+          <NoticeLine role="radiogroup" aria-label="If there’s ever a security incident, notify me by">
+            <span>Notify me of a security incident by</span>
+            <Radios>
+              <label><input type="radio" name="breach-notice" checked={value.breachNotice === 'email'} onChange={() => set({ breachNotice: 'email' })} /> Email</label>
+              <label><input type="radio" name="breach-notice" checked={value.breachNotice === 'mail'} onChange={() => set({ breachNotice: 'mail' })} /> Mailed letter</label>
+            </Radios>
+          </NoticeLine>
+          {value.breachNotice === 'mail' && (
+            <>
+              <Address aria-label="Postal address for mailed notices" placeholder="Postal address" value={value.postalAddress}
+                onChange={e => set({ postalAddress: e.target.value })} maxLength={500} />
+              <SmallNote>Your address is stored readable on our server, only to mail you a notice.</SmallNote>
+            </>
+          )}
+        </>
+      )}
+    </Bare>
+  );
   return (
     <Card>
       <legend>{title}</legend>
-      <Intro>Chronicles keeps your journal and health information encrypted on your own device. Please read and agree to each item below.</Intro>
+      <Intro>Please read and agree to each item below.</Intro>
 
       {show.age && (
         <Checkbox checked={value.age} onChange={e => set({ age: e.target.checked })} label="I’m 18 or older." />
@@ -116,8 +188,8 @@ export function ConsentCard({ value, onChange, show = { age: true, terms: true, 
       {show.health && (
         <Checkbox checked={value.health} onChange={e => set({ health: e.target.checked })} label={<>
           I consent to Chronicles collecting the health information I choose to enter, such as medications, allergies,
-          symptoms, sleep, mood, cycle and meals, to run the features I use. It is never sold, and it’s shared only as
-          the <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a> describes.
+          symptoms, sleep, mood, cycle and meals, to run the features I use. It is never sold, it is shared only as
+          the <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy Policy</a> describes, and it is never shared with a third party.
           I can withdraw by deleting my account or writing to {LEGAL_DETAILS.contactEmail}.
         </>} />
       )}

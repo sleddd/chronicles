@@ -46,7 +46,7 @@ const Row = styled.div<{ $active?: boolean; $hint?: boolean; $noTopic?: boolean 
   align-items: baseline;
   box-sizing: border-box;
   cursor: pointer;
-  padding: 17px 20px;
+  padding: 22px 20px;
   /* A faint hairline — fainter than --border-subtle on the darker list pane */
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
   ${entryRow}
@@ -55,7 +55,8 @@ const Row = styled.div<{ $active?: boolean; $hint?: boolean; $noTopic?: boolean 
 /* List titles stay quiet (soft grey, a little smaller); the open entry is bright */
 const RowTitle = styled(EntryTitle)<{ $open?: boolean }>`
   font-size: 14px;
-  color: ${({ $completed, $open }) => ($completed ? 'var(--text-tertiary)' : $open ? 'var(--text-primary)' : 'color-mix(in srgb, var(--text-primary) 62%, transparent)')};
+  /* The open entry's title the same soft grey as the others (its row has the accent bar) */
+  color: ${({ $completed }) => ($completed ? 'var(--text-tertiary)' : 'color-mix(in srgb, var(--text-primary) 62%, transparent)')};
 `;
 
 /* Tapping the topic filters the list to that topic */
@@ -69,8 +70,8 @@ const TopicButton = styled.button<{ $active?: boolean }>`
   white-space: nowrap;
   font-family: var(--font-label);
   font-size: 10px;
-  /* Bold on the open entry */
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  /* The open entry's label the same as the others (its row has the accent bar) */
+  font-weight: 500;
   letter-spacing: 0.12rem;
   text-transform: uppercase;
   /* Accent on the open / hovered row (--row-topic, set by styles/entryRow) */
@@ -82,7 +83,7 @@ const TopicButton = styled.button<{ $active?: boolean }>`
 /* The same label when it isn't a button: accent and bold on the open entry */
 const RowTopic = styled(TopicCell)`
   color: var(--row-topic, var(--text-meta));
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  font-weight: 500;
 `;
 
 const EndCol = styled.div`

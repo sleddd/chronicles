@@ -5,8 +5,12 @@
 
 export const DEFAULT_GOAL_CATEGORIES = ['Health', 'Career', 'Finances', 'Relationships', 'Growth', 'Home'] as const;
 
-/** What's saved: categories the person added, and built-in ones they hid */
-export interface GoalCategoryConfig { added: string[]; hidden: string[] }
+/** A category shown as an area on the Planning dashboard: its vision and header photo (a wallpaper id) */
+export interface AreaInfo { vision?: string; photo?: string; shown?: boolean }
+
+/** What's saved: categories the person added, built-in ones they hid, and each area's vision / photo
+    (keyed by the category's lower-cased name) */
+export interface GoalCategoryConfig { added: string[]; hidden: string[]; areas?: Record<string, AreaInfo>; areaOrder?: string[]; vision?: string }
 
 export const EMPTY_GOAL_CATEGORIES: GoalCategoryConfig = { added: [], hidden: [] };
 
@@ -18,7 +22,43 @@ export const sameCategory = (a: string, b: string) => key(a) === key(b);
 /** The saved setting, well-formed (it is user data from the server) */
 export function parseGoalCategories(raw: unknown): GoalCategoryConfig {
   const o = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  return { added: strings(o.added), hidden: strings(o.hidden) };
+  const areas: Record<string, AreaInfo> = {};
+  if (o.areas && typeof o.areas === 'object') {
+    for (const [k, v] of Object.entries(o.areas as Record<string, unknown>)) {
+      if (!v || typeof v !== 'object') continue;
+      const a = v as Record<string, unknown>;
+      areas[key(k)] = {
+        ...(typeof a.vision === 'string' ? { vision: a.vision.slice(0, 600) } : {}),
+        ...(typeof a.photo === 'string' ? { photo: a.photo.slice(0, 80) } : {}),
+        ...(a.shown === true ? { shown: true } : {}),
+      };
+    }
+  }
+  const areaOrder = strings(o.areaOrder).map(key);
+  return { added: strings(o.added), hidden: strings(o.hidden), ...(Object.keys(areas).length ? { areas } : {}), ...(areaOrder.length ? { areaOrder } : {}), ...(typeof o.vision === 'string' && o.vision.trim() ? { vision: o.vision.slice(0, 1200) } : {}) };
+}
+
+/** The areas in the order they were dragged into on the Planning dashboard (ones never placed keep the list's order, after) */
+export function orderAreas(names: string[], order: string[] | undefined): string[] {
+  if (!order?.length) return names;
+  const rank = (n: string) => { const i = order.indexOf(key(n)); return i === -1 ? order.length + names.indexOf(n) : i; };
+  return [...names].sort((a, b) => rank(a) - rank(b));
+}
+
+/** The config with the areas' order set */
+export function withAreaOrder(config: GoalCategoryConfig, names: string[]): GoalCategoryConfig {
+  return { ...config, areaOrder: names.map(key) };
+}
+
+/** An area's vision and photo */
+export function areaInfo(config: GoalCategoryConfig | null | undefined, name: string): AreaInfo {
+  return config?.areas?.[key(name)] ?? {};
+}
+
+/** The config with an area's vision / photo changed */
+export function withAreaInfo(config: GoalCategoryConfig, name: string, patch: AreaInfo): GoalCategoryConfig {
+  const k = key(name);
+  return { ...config, areas: { ...(config.areas ?? {}), [k]: { ...(config.areas?.[k] ?? {}), ...patch } } };
 }
 
 /** The categories to offer: built-in ones not hidden, then the person's own */
@@ -43,7 +83,7 @@ export function addGoalCategory(config: GoalCategoryConfig, label: string): Goal
   const hidden = config.hidden.filter(h => key(h) !== key(name));
   const isDefault = DEFAULT_GOAL_CATEGORIES.some(d => key(d) === key(name));
   const added = isDefault || config.added.some(a => key(a) === key(name)) ? config.added : [...config.added, name];
-  return { added, hidden };
+  return { ...config, added, hidden };
 }
 
 /** Remove a category: the person's own is deleted, a built-in one is hidden. Goals keep the name they carry. */

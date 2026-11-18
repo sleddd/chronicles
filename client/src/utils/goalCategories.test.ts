@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   EMPTY_GOAL_CATEGORIES, DEFAULT_GOAL_CATEGORIES, goalCategoryList, addGoalCategory, removeGoalCategory,
-  parseGoalCategories, goalCategoryOf, categoriesInUse, categoryRank, groupByCategory,
+  parseGoalCategories, goalCategoryOf, categoriesInUse, categoryRank, groupByCategory, areaInfo, withAreaInfo,
 } from './goalCategories.js';
 
 describe('goalCategories', () => {
@@ -35,6 +35,17 @@ describe('goalCategories', () => {
   it('reads only a well-formed setting', () => {
     expect(parseGoalCategories(null)).toEqual(EMPTY_GOAL_CATEGORIES);
     expect(parseGoalCategories({ added: ['A', 3], hidden: 'x' })).toEqual({ added: ['A'], hidden: [] });
+  });
+
+  it('keeps each area’s vision and photo, through adding and removing categories', () => {
+    const c = parseGoalCategories({ added: [], hidden: [], areas: { career: { vision: 'Ship it', photo: 'abc', shown: true, junk: 1 }, bad: 3 } });
+    expect(areaInfo(c, 'Career')).toEqual({ vision: 'Ship it', photo: 'abc', shown: true });
+    expect(areaInfo(c, 'Health')).toEqual({});
+    const more = addGoalCategory(c, 'Creative life');
+    expect(areaInfo(more, 'career').vision).toBe('Ship it');
+    const named = withAreaInfo(more, 'Creative life', { vision: 'Write' });
+    expect(areaInfo(named, 'creative life')).toEqual({ vision: 'Write' });
+    expect(areaInfo(removeGoalCategory(named, 'Home'), 'Career').photo).toBe('abc');
   });
 
   it('reads a goal’s category', () => {

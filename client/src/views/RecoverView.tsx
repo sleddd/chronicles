@@ -6,6 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError } from '../services/api.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
+import { useDarkAuthTheme } from '../hooks/useDarkAuthTheme.js';
 import { TextInput } from '../components/atoms/TextInput.js';
 import { PasswordInput } from '../components/atoms/PasswordInput.js';
 import { Button } from '../components/atoms/Button.js';
@@ -19,6 +20,7 @@ import { deriveAuthSecret, deriveRecoveryProof, newRecoveryProof, newPasswordPro
 import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthMeter.js';
 
 export function RecoverView() {
+  useDarkAuthTheme();
   const navigate = useNavigate();
   const { recoverAndRewrap, clearKey } = useEncryption();
   const { adoptSession } = useAuth();

@@ -41,8 +41,9 @@ vi.mock('@/components/templates/AuthTemplate', () => ({
 }));
 
 vi.mock('@/components/organisms/RegisterForm', () => ({
-  RegisterForm: ({ onSubmit }: any) => (
+  RegisterForm: ({ onSubmit, footStart }: any) => (
     <form data-testid="register-form">
+      {footStart}
       <button type="button" onClick={() => onSubmit({ email: 'a@b.com', username: 'user', password: 'Password123!' })}>
         Register
       </button>
@@ -62,7 +63,7 @@ vi.mock('@/components/molecules/RecoveryKeyDisplay', () => ({
 describe('RegisterView', () => {
   it('renders without crashing', () => {
     renderWithTheme(<RegisterView />);
-    expect(screen.getByText('Create Account')).toBeInTheDocument();
+    expect(screen.getByText('Create your account')).toBeInTheDocument();
   });
 
   it('displays the registration form initially', () => {
@@ -76,8 +77,8 @@ describe('RegisterView', () => {
     expect(link).toHaveAttribute('href', '/login');
   });
 
-  it('shows the title "Create Account"', () => {
+  it('shows the title "Create your account"', () => {
     renderWithTheme(<RegisterView />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create Account');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create your account');
   });
 });

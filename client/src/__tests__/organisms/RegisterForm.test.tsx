@@ -11,10 +11,10 @@ function renderWithTheme(ui: React.ReactElement) {
 describe('RegisterForm', () => {
   it('renders all form fields', () => {
     renderWithTheme(<RegisterForm onSubmit={vi.fn()} />);
-    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Choose a username')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Re-enter password')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Username')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Confirm password')).toBeInTheDocument();
   });
 
   it('renders create account button', () => {
@@ -26,16 +26,16 @@ describe('RegisterForm', () => {
     const onSubmit = vi.fn();
     renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
+    fireEvent.change(screen.getByPlaceholderText('Username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'short' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), {
       target: { value: 'short' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -49,16 +49,16 @@ describe('RegisterForm', () => {
     const onSubmit = vi.fn();
     renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
+    fireEvent.change(screen.getByPlaceholderText('Username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'ValidPass123!' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), {
       target: { value: 'DifferentPass123!' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -73,16 +73,16 @@ describe('RegisterForm', () => {
     const onSubmit = vi.fn();
     renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
+    fireEvent.change(screen.getByPlaceholderText('Username'), {
       target: { value: 'ab' },
     });
-    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'ValidPass123!' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -97,16 +97,16 @@ describe('RegisterForm', () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
+    fireEvent.change(screen.getByPlaceholderText('Username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'ValidPass123!' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -124,16 +124,16 @@ describe('RegisterForm', () => {
     const onSubmit = vi.fn().mockRejectedValue(new Error('Email taken'));
     renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+    fireEvent.change(screen.getByPlaceholderText('Email'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Choose a username'), {
+    fireEvent.change(screen.getByPlaceholderText('Username'), {
       target: { value: 'testuser' },
     });
-    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), {
+    fireEvent.change(screen.getByPlaceholderText('Password'), {
       target: { value: 'ValidPass123!' },
     });
-    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), {
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), {
       target: { value: 'ValidPass123!' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -146,12 +146,12 @@ describe('RegisterForm', () => {
   it('refuses a password that meets the rules but is easy to guess, with a strength meter', async () => {
     const onSubmit = vi.fn();
     renderWithTheme(<RegisterForm onSubmit={onSubmit} />);
-    fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'test@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Choose a username'), { target: { value: 'testuser' } });
-    fireEvent.change(screen.getByPlaceholderText('12+ characters: upper and lower case, a number, a symbol'), { target: { value: 'Password123!' } });
-    fireEvent.change(screen.getByPlaceholderText('Re-enter password'), { target: { value: 'Password123!' } });
+    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByPlaceholderText('Username'), { target: { value: 'testuser' } });
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'Password123!' } });
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), { target: { value: 'Password123!' } });
     expect(screen.getByRole('status', { name: /Password strength: (Too weak|Weak|Fair)/ })).toBeInTheDocument();
-    fireEvent.submit(screen.getByPlaceholderText('you@example.com').closest('form')!);
+    fireEvent.submit(screen.getByPlaceholderText('Email').closest('form')!);
     expect(await screen.findByText(/too easy to guess/)).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
