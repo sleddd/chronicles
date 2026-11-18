@@ -154,9 +154,8 @@ export function PlannerView() {
     return map;
   }, [entries, allTopics, days]);
 
-  // Finished tasks clear off the planner (they keep their place in the day's order,
-  // and still show struck through in the dashboard's Today's plan)
-  const byDay = useMemo(() => tasksByDay(planned.filter(t => !t.done), days, today, order), [planned, days, today, order]);
+  // Finished tasks stay on their day, ticked and struck through (as on Your Agenda), so a tap undoes it
+  const byDay = useMemo(() => tasksByDay(planned, days, today, order), [planned, days, today, order]);
   const lanes: PlannerLane[] = days.map(day => ({
     day, label: laneLabel(day), today: day === today,
     events: eventsByDay.get(day) ?? [], cards: (byDay.get(day) ?? []).map(card),
@@ -229,6 +228,15 @@ export function PlannerView() {
   };
 
   // The grip at a card's foot: its length in hours
+  // The tick on a card: done, or not done again
+  const toggleDone = (id: number) => {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    const done = !t.fields.isCompleted;
+    void saveFields(t.entry, { ...t.fields, isCompleted: done, isInProgress: false, isInReview: false, ...(done ? { isBacklog: false } : {}) }).then(ok => {
+      if (!ok) showFlash('Couldn’t save that task. Try again.');
+    });
+  };
   const resize = (id: number, hours: number) => {
     const t = planned.find(x => x.id === id);
     if (!t) return;
@@ -262,7 +270,7 @@ export function PlannerView() {
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
       <PlannerBoard
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)} ideas={left.ideas.map(card)}
-        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onResize={resize} onAdd={add}
+        onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onToggleDone={toggleDone} onResize={resize} onAdd={add}
         folded={folded} onFold={setFolded}
         onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}

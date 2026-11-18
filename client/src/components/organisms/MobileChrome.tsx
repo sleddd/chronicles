@@ -150,8 +150,14 @@ const SectionChevron = styled.button<{ $open: boolean }>`
 /* The section's views, lined up with the section names; the one showing on the grey fill */
 const ViewList = styled.ul`
   list-style: none;
-  margin: 0 0 6px;
+  margin: 2px 0 6px;
   padding: 0;
+  /* A band a shade darker than the menu, barely-there hairlines above, below and between */
+  background: color-mix(in srgb, var(--bg-app) 93%, #000);
+  border-radius: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  & > li + li { border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent); }
 `;
 
 const ViewRow = styled.button<{ $active: boolean }>`

@@ -6,6 +6,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TickMark } from '../atoms/TickMark.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { usePagePan } from '../../hooks/usePagePan.js';
 import { Kicker, CardTitle, Chip } from './KanbanBoard.js';
@@ -468,6 +469,33 @@ const Text = styled.div`
   gap: 5px;
 `;
 
+/* The tick and the title side by side (never wrapped apart) */
+const TickRow = styled.div`
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+`;
+
+/* A card's tick, left of its title: an 18px circle in a 30px target (small, easy to tap) */
+const CardTick = styled.button`
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -6px -2px -6px -6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  &:hover { background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+`;
+
 const Title = styled(CardTitle)`
   font-size: 15px;
   /* Words wrap whole; a word breaks only when it can't fit a line on its own */
@@ -581,19 +609,30 @@ interface CardActions {
       `at`: the time it was dropped at on the day (minutes from midnight) — it stays there.
       `keep`: the other cards on the days it left and joined, at the times they show now, so none slides up */
   onSchedule: (id: number, day: string, overId: number | null, at?: number, keep?: { id: number; at: number }[]) => void;
+  /** Mark it done, or not done again (the tick left of its title) */
+  onToggleDone?: (id: number) => void;
 }
 
-/* No tick on a planner card: a task is marked done where it lives (its board or the journal); a done one shows struck through.
+/* A tick left of the title marks it done (a done one stays, ticked and struck through, so a tap undoes it).
    `compact`: a short card (under an hour and a half) shows just its title and length */
-function CardBody({ card, onSchedule, compact }: { card: PlannerCard; compact?: boolean } & Partial<CardActions>) {
+function CardBody({ card, onSchedule, onToggleDone, compact }: { card: PlannerCard; compact?: boolean } & Partial<CardActions>) {
   // Controls inside a draggable card must not start a drag or open it
   const quiet = { onPointerDown: (e: React.SyntheticEvent) => e.stopPropagation(), onKeyDown: (e: React.SyntheticEvent) => e.stopPropagation(), onClick: (e: React.SyntheticEvent) => e.stopPropagation() };
   return (<>
     <Line>
-      <Text>
-        {card.kicker && !compact && <Kicker>{card.kicker}</Kicker>}
-        <Title $done={card.done}>{card.title}</Title>
-      </Text>
+      <TickRow>
+        {onToggleDone && (
+          <CardTick type="button" role="checkbox" aria-checked={card.done} {...quiet}
+            aria-label={card.done ? `Mark “${card.title}” not done` : `Mark “${card.title}” done`}
+            onClick={e => { e.stopPropagation(); onToggleDone(card.id); }}>
+            <TickMark checked={card.done} size={18} />
+          </CardTick>
+        )}
+        <Text>
+          {card.kicker && !compact && <Kicker>{card.kicker}</Kicker>}
+          <Title $done={card.done}>{card.title}</Title>
+        </Text>
+      </TickRow>
       {compact && card.day && <Note>{hoursLabel(card.hours)}</Note>}
     </Line>
     {!compact && (
@@ -670,6 +709,8 @@ interface PlannerBoardProps extends CardActions {
   /** Search / filters over the Unscheduled list */
   tools?: ReactNode;
   onOpenEvent: (id: number) => void;
+  /** The tick on each card: mark the task done, or not done again */
+  onToggleDone?: (id: number) => void;
   /** A new task typed under a day ('' = Unscheduled) */
   onAdd: (day: string, text: string) => void;
   /** A day's name was pressed (the week view opens that day); omitted = plain text */
@@ -685,7 +726,7 @@ interface PlannerBoardProps extends CardActions {
 
 const NO_CARDS: PlannerCard[] = [];
 
-export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, onOpen, onSchedule, onResize, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
+export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, onOpen, onSchedule, onToggleDone, onResize, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
   const [labelsFolded, setLabelsFolded] = useState(loadLabelsFolded);
   const toggleLabels = () => setLabelsFolded(prev => {
     try { localStorage.setItem(LABELS_FOLDED_KEY, prev ? '0' : '1'); } catch { /* storage refused */ }
@@ -970,7 +1011,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
       if (next !== card.hours) { refocusGrip.current = card.id; onResize?.(card.id, next); }
     },
   };
-  const actions = { onOpen: openCard, onSchedule };
+  const actions = { onOpen: openCard, onSchedule, onToggleDone };
   const single = lanes.length === 1;
 
   return (

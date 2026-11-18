@@ -206,6 +206,22 @@ describe('habit and category pieces', () => {
   });
 });
 
+describe('PlannerBoard — the tick on a card', () => {
+  const props = () => ({ onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onToggleDone: vi.fn(), overdue: [], open: [] });
+  const lane = (done: boolean) => [{ day: '2026-11-12', label: 'Thu 12', today: true, events: [],
+    cards: [{ id: 3, title: 'Deep work', done, day: '2026-11-12', hours: 2 }] }];
+
+  it('marks the task done without opening it, and a done one stays ticked to undo', () => {
+    const p = props();
+    const { rerender } = renderWithTheme(<PlannerBoard {...p} lanes={lane(false)} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mark “Deep work” done' }));
+    expect(p.onToggleDone).toHaveBeenCalledWith(3);
+    expect(p.onOpen).not.toHaveBeenCalled();
+    rerender(<PlannerBoard {...p} lanes={lane(true)} />);
+    expect(screen.getByRole('checkbox', { name: 'Mark “Deep work” not done' })).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
 describe('PlannerBoard — a task\'s length', () => {
   const lanes = (hours = 1) => [{
     day: '2026-11-12', label: 'Thu 12', today: true, events: [],
