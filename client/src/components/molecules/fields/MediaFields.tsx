@@ -115,9 +115,10 @@ interface MediaFieldsProps {
   onAiDetails?: (values: MediaFieldValues, keys: DetailKey[]) => Promise<MediaDetails>;
   /** Every tag already used on the shelf, offered as chips */
   allTags?: string[];
-  /** Rename / remove a tag on every other media item (this one is changed in the form) */
-  onRenameTag?: (from: string, to: string) => void;
-  onRemoveTag?: (tag: string) => void;
+  /** Rename / remove a tag on every other media item; true once they all have it (this one
+      is then changed in the form, so it never moves ahead of the rest) */
+  onRenameTag?: (from: string, to: string) => Promise<boolean>;
+  onRemoveTag?: (tag: string) => Promise<boolean>;
 }
 
 /* Tags: the shelf's tags as chips — tap to put one on this item or take it off, any number;
@@ -427,15 +428,17 @@ export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTa
         <SectionHead><SectionLabel>Tags</SectionLabel></SectionHead>
         <TagChips value={values.tags ?? []} options={allTags ?? []} onChange={tags => set({ tags })}
           onRename={onRenameTag ? (from, to) => {
-            // This item too, in the form (the others are saved by the page)
-            const cur = latest.current.tags ?? [];
-            if (cur.some(t => t.toLowerCase() === from.toLowerCase())) set({ tags: [...new Set(cur.map(t => (t.toLowerCase() === from.toLowerCase() ? to : t)))] });
-            onRenameTag(from, to);
+            // The others first (all or nothing), then this item in the form
+            void onRenameTag(from, to).then(ok => {
+              const cur = latest.current.tags ?? [];
+              if (ok && cur.some(t => t.toLowerCase() === from.toLowerCase())) set({ tags: [...new Set(cur.map(t => (t.toLowerCase() === from.toLowerCase() ? to : t)))] });
+            });
           } : undefined}
           onRemove={onRemoveTag ? tag => {
-            const cur = latest.current.tags ?? [];
-            if (cur.some(t => t.toLowerCase() === tag.toLowerCase())) set({ tags: cur.filter(t => t.toLowerCase() !== tag.toLowerCase()) });
-            onRemoveTag(tag);
+            void onRemoveTag(tag).then(ok => {
+              const cur = latest.current.tags ?? [];
+              if (ok && cur.some(t => t.toLowerCase() === tag.toLowerCase())) set({ tags: cur.filter(t => t.toLowerCase() !== tag.toLowerCase()) });
+            });
           } : undefined} />
       </Section>
 
