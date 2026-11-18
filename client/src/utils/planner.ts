@@ -127,11 +127,45 @@ export function hhmm(mins: number): string {
 export const MIN_HOURS = 0.5;
 export const MAX_HOURS = 12;
 export const DEFAULT_HOURS = 1;
+/** A same-day end time (the task's Ends time on its planned day, after its start), in minutes */
+export function sameDayEnd(cf: Record<string, unknown> | undefined): number | undefined {
+  const start = timeOf(cf);
+  const v = cf?.deadlineTime;
+  if (start === undefined || typeof v !== 'string') return undefined;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v);
+  if (!m) return undefined;
+  const end = Number(m[1]) * 60 + Number(m[2]);
+  const deadline = typeof cf?.deadline === 'string' ? cf.deadline : '';
+  const day = typeof cf?.scheduledDate === 'string' ? cf.scheduledDate : '';
+  if (deadline && day && deadline !== day) return undefined;
+  return end > start ? end : undefined;
+}
+
+/** A task's length in hours: from its start to a same-day end time when it has one (to the
+ *  minute — 4:10 to 4:15 is 5 minutes), else its own length (half-hour steps), else an hour */
 export function hoursOf(cf: Record<string, unknown> | undefined): number {
+  const end = sameDayEnd(cf);
+  if (end !== undefined) return Math.min(MAX_HOURS, (end - timeOf(cf)!) / 60);
   const n = typeof cf?.scheduledHours === 'number' ? cf.scheduledHours : Number(cf?.scheduledHours);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_HOURS;
   return clampHours(n);
 }
+/** The fields after moving a task's start to `start` (minutes), its same-day end time moved with it */
+export function startPatch(cf: Record<string, unknown>, start: number): Record<string, unknown> {
+  const end = sameDayEnd(cf);
+  const old = timeOf(cf);
+  const out: Record<string, unknown> = { ...cf, scheduledTime: hhmm(start) };
+  if (end !== undefined && old !== undefined) out.deadlineTime = hhmm(Math.min(24 * 60 - 1, start + (end - old)));
+  return out;
+}
+/** The fields after giving a task `hours`: its same-day end time follows, when it has one */
+export function lengthPatch(cf: Record<string, unknown>, hours: number): Record<string, unknown> {
+  const start = timeOf(cf);
+  const out: Record<string, unknown> = { ...cf, scheduledHours: clampHours(hours) };
+  if (sameDayEnd(cf) !== undefined && start !== undefined) out.deadlineTime = hhmm(Math.min(24 * 60 - 1, start + Math.round(hours * 60)));
+  return out;
+}
+
 /** Rounded to the half hour and kept in range */
 export const clampHours = (h: number): number => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round(h * 2) / 2));
 

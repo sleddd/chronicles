@@ -686,10 +686,10 @@ function CardBody({ card, onSchedule, onToggleDone, compact }: { card: PlannerCa
 }
 
 /* A card: in Unscheduled (in the flow), or on a day at its place (`at`: top and height in px) with the resize grip at its foot */
-function SortableCard({ card, at, resize, measure, ...actions }: { card: PlannerCard; at?: { top: number; height: number }; resize?: Resizing; measure?: (el: HTMLElement | null) => void } & CardActions) {
+function SortableCard({ card, at, resize, measure, ...actions }: { card: PlannerCard; at?: { top: number; height: number; z?: number }; resize?: Resizing; measure?: (el: HTMLElement | null) => void } & CardActions) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   // On a day: placed at its time, as tall as its length, a little tighter inside
-  const placed: React.CSSProperties = at ? { position: 'absolute', left: 6, right: 6, top: at.top, height: at.height, zIndex: 2, overflow: 'hidden', padding: '6px 10px 2px', gap: 4 } : {};
+  const placed: React.CSSProperties = at ? { position: 'absolute', left: 6, right: 6, top: at.top, height: at.height, zIndex: at.z ?? 2, overflow: 'hidden', padding: '6px 10px 2px', gap: 4 } : {};
   return (
     <TaskCard ref={el => { setNodeRef(el); measure?.(el); }} style={{ ...placed, transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging}
       {...attributes} {...listeners}
@@ -820,32 +820,38 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
   );
   const dayEnd = Math.min(24 * 60, Math.ceil(lastEnd / 60) * 60);
 
-  /* Nothing overlaps and no card is cut off: each card and event is measured after it draws,
-     ones sharing a time on a day are stacked one under another, and every hour grows (on all
-     the days alike, so the rows stay level) until each day's stretch touching it fits */
+  /* Each card and event sits in the hour row it starts in (on its day): with room, at its minute
+     within the hour; when several crowd an hour they stack one under another and that row grows to
+     hold them (every day's row alike, so they stay level). A long card runs on down to its end time,
+     and anything starting later in its span is drawn over it — the clash is left for the planner.
+     (Before, a chain of overlapping cards made every hour it touched as tall as the whole chain.) */
   const GAP = 12; // the room between cards (each is inset 5–6px top and bottom in its slot)
   const needOf = (k: string) => Math.max(26, needs[k] ?? 0) + GAP;
-  const laneGroups = lanes.map(l => {
+  const firstHour = Math.floor(dayStart / 60);
+  const laneRows = lanes.map(l => {
     const at = layouts.get(l.day) ?? new Map<number, number>();
     const items = [
       ...l.events.filter(ev => ev.start !== undefined).map(ev => ({ key: `e:${l.day}:${ev.key}`, start: ev.start!, end: ev.end ?? ev.start! + 60 })),
       ...l.cards.map(c => { const st = at.get(c.id) ?? dayStart; return { key: `t:${c.id}`, start: st, end: st + Math.round(c.hours * 60) }; }),
-    ].sort((a, b) => a.start - b.start);
-    const groups: { start: number; end: number; keys: string[] }[] = [];
+    ].sort((a, b) => a.start - b.start || a.key.localeCompare(b.key));
+    const rows = new Map<number, { key: string; off: number; height: number; end: number }[]>();
     for (const it of items) {
-      const g = groups[groups.length - 1];
-      if (g && it.start < g.end) { g.keys.push(it.key); g.end = Math.max(g.end, it.end); }
-      else groups.push({ start: it.start, end: it.end, keys: [it.key] });
+      const h = Math.max(firstHour, Math.floor(it.start / 60));
+      const list = rows.get(h) ?? [];
+      const bottom = list.reduce((m, r) => Math.max(m, r.off + r.height), 0);
+      // Its room in this row: its words, or its part of this hour
+      const part = ((Math.min(it.end, (h + 1) * 60) - Math.max(it.start, h * 60)) / 60) * HOUR_PX;
+      const height = Math.ceil(Math.max(needOf(it.key), part));
+      const off = Math.max(bottom, ((Math.max(it.start, h * 60) - h * 60) / 60) * HOUR_PX);
+      list.push({ key: it.key, off, height, end: it.end });
+      rows.set(h, list);
     }
-    return { items, groups };
+    return { items, rows };
   });
+  // A row is an hour tall, or as tall as the cards starting in it on its busiest day
   const hourPx = (h: number) => {
     let v = HOUR_PX;
-    for (const { groups } of laneGroups) for (const g of groups) {
-      if (!(g.start < (h + 1) * 60 && g.end > h * 60)) continue;
-      const room = g.keys.reduce((t, k) => t + needOf(k), 0);
-      v = Math.max(v, HOUR_PX * g.keys.length, (room / Math.max(1, g.end - g.start)) * 60);
-    }
+    for (const { rows } of laneRows) for (const r of rows.get(h) ?? []) v = Math.max(v, r.off + r.height);
     return Math.ceil(v);
   };
   const hourTops: number[] = [];
@@ -864,17 +870,15 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
     }
     return dayEnd;
   };
-  const slot = new Map<string, { top: number; height: number }>();
-  for (const { items, groups } of laneGroups) for (const g of groups) {
-    if (g.keys.length === 1) {
-      const it = items.find(x => x.key === g.keys[0])!;
-      slot.set(it.key, { top: yAt(it.start), height: yAt(it.end) - yAt(it.start) });
-      continue;
+  // Each item's place: in the row it starts in, running down to its end time (later ones on top)
+  const slot = new Map<string, { top: number; height: number; z: number }>();
+  for (const { rows } of laneRows) for (const [h, list] of rows) {
+    const rowTop = (hourTops[h] ?? 0) - (hourTops[firstHour] ?? 0);
+    for (const r of list) {
+      const top = rowTop + r.off;
+      // Drawn in time order: what starts later sits over a long card it overlaps
+      slot.set(r.key, { top, height: Math.max(r.height, yAt(r.end) - top), z: 2 + Math.round(top) });
     }
-    const top = yAt(g.start), bottom = yAt(g.end);
-    const total = g.keys.reduce((t, k) => t + needOf(k), 0);
-    let y = top;
-    for (const k of g.keys) { const hgt = ((bottom - top) * needOf(k)) / total; slot.set(k, { top: y, height: hgt }); y += hgt; }
   }
   const height = yAt(dayEnd) + 1;
   const hours: number[] = [];
@@ -1145,7 +1149,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
                           const end = ev.end ?? ev.start! + 60;
                           return (
                             <EventBlock key={ev.key} type="button" onClick={() => onOpenEvent(ev.id)} ref={measureRef(`e:${lane.day}:${ev.key}`)}
-                              style={(() => { const sl = slot.get(`e:${lane.day}:${ev.key}`) ?? { top: yAt(ev.start!), height: yAt(end) - yAt(ev.start!) }; return { top: sl.top + 5, height: Math.max(22, sl.height - 10) }; })()}>
+                              style={(() => { const sl = slot.get(`e:${lane.day}:${ev.key}`) ?? { top: yAt(ev.start!), height: yAt(end) - yAt(ev.start!) }; return { top: sl.top + 5, height: Math.max(22, sl.height - 10), zIndex: 'z' in sl ? sl.z : 2 }; })()}>
                               {ev.title}<small>{ev.when}</small>
                             </EventBlock>
                           );
@@ -1154,7 +1158,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
                           {lane.cards.map(x => (
                             <SortableCard key={x.id} card={x} resize={onResize ? resize : undefined} {...actions}
                               measure={measureRef(`t:${x.id}`)}
-                              at={(() => { const sl = slot.get(`t:${x.id}`) ?? { top: yAt(at.get(x.id) ?? dayStart), height: yAt((at.get(x.id) ?? dayStart) + x.hours * 60) - yAt(at.get(x.id) ?? dayStart) }; return { top: sl.top + 6, height: Math.max(26, sl.height - 12) }; })()} />
+                              at={(() => { const sl = slot.get(`t:${x.id}`) ?? { top: yAt(at.get(x.id) ?? dayStart), height: yAt((at.get(x.id) ?? dayStart) + x.hours * 60) - yAt(at.get(x.id) ?? dayStart) }; return { top: sl.top + 6, height: Math.max(26, sl.height - 12), z: 'z' in sl ? sl.z : 2 }; })()} />
                           ))}
                         </SortableContext>
                         {lane.cards.length === 0 && lane.events.length === 0 && <Blank aria-hidden="true">Nothing planned</Blank>}

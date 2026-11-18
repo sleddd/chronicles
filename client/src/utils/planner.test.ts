@@ -141,3 +141,19 @@ describe('planner', () => {
     expect(plannerFacts(1, { scheduledTime: '10:00' }, 0).at).toBeUndefined(); // no day, no time
   });
 });
+describe('a same-day end time sets the length', () => {
+  it('4:10 to 4:15 is five minutes, to the minute', async () => {
+    const { hoursOf } = await import('./planner.js');
+    expect(hoursOf({ scheduledDate: '2026-11-18', scheduledTime: '16:10', deadlineTime: '16:15' }) * 60).toBeCloseTo(5);
+    // An end on another day doesn't count — the task's own length (or an hour) stands
+    expect(hoursOf({ scheduledDate: '2026-11-18', scheduledTime: '16:10', deadline: '2026-11-20', deadlineTime: '16:15' })).toBe(1);
+  });
+  it('moving or stretching keeps the end time in step', async () => {
+    const { startPatch, lengthPatch } = await import('./planner.js');
+    const cf = { scheduledDate: '2026-11-18', scheduledTime: '16:10', deadlineTime: '16:15' };
+    expect(startPatch(cf, 9 * 60)).toMatchObject({ scheduledTime: '09:00', deadlineTime: '09:05' });
+    expect(lengthPatch(cf, 1.5)).toMatchObject({ scheduledHours: 1.5, deadlineTime: '17:40' });
+    // No end time: only the length changes
+    expect(lengthPatch({ scheduledTime: '16:10' }, 2)).not.toHaveProperty('deadlineTime');
+  });
+});
