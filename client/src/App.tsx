@@ -35,6 +35,7 @@ import { GoalsView } from './views/GoalsView.js';
 import { FinanceBudgetView } from './views/FinanceBudgetView.js';
 import { FinanceGoalsView } from './views/FinanceGoalsView.js';
 import { FinanceSavingsView } from './views/FinanceSavingsView.js';
+import { FinanceDebtsView } from './views/FinanceDebtsView.js';
 import { FinanceReportsView } from './views/FinanceReportsView.js';
 import { PlannerFilterView } from './views/PlannerFilterView.js';
 import { PlanRoadmapView } from './views/PlanRoadmapView.js';
@@ -739,6 +740,7 @@ export function App() {
               <Route path="/finance/reports" element={<R><FinanceReportsView /></R>} />
               <Route path="/finance/goals" element={<R><FinanceGoalsView /></R>} />
               <Route path="/finance/savings" element={<R><FinanceSavingsView /></R>} />
+              <Route path="/finance/debts" element={<R><FinanceDebtsView /></R>} />
               <Route path="/health" element={<R><HealthDashboardView /></R>} />
               <Route path="/health/meds" element={<R><HealthView topicNames={['Medication']} metaFields={[{ key: 'dosage', label: 'Dosage' }, { key: 'frequency', label: 'Frequency' }, { key: 'isActive', label: 'Active' }]} showDateFilter={false} printable printTitle="Medications" /></R>} />
               <Route path="/health/med-history" element={<R><MedHistoryView /></R>} />

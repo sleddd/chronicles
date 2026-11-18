@@ -402,6 +402,28 @@ export function potBalance(pot: SavingsPot): number {
   return pot.entries.reduce((sum, e) => sum + e.amountCents, 0);
 }
 
+// ── Debts (kept in the savings table, kind: 'debt') ─────────────────────────
+
+/** A debt, not a savings fund */
+export const isDebt = (pot: Pick<SavingsPot, 'kind'>): boolean => pot.kind === 'debt';
+
+/** Paid toward a debt so far: payments less any charges added */
+export function debtPaid(debt: SavingsPot): number {
+  return debt.entries.reduce((sum, e) => sum + e.amountCents, 0);
+}
+
+/** What's still owed: the starting balance less what's been paid (never below zero) */
+export function debtOwed(debt: SavingsPot): number {
+  return Math.max(0, (debt.startCents ?? 0) - debtPaid(debt));
+}
+
+/** How much of the debt is paid off, 0–1 */
+export function debtFraction(debt: SavingsPot): number {
+  const start = debt.startCents ?? 0;
+  if (start <= 0) return 0;
+  return Math.max(0, Math.min(1, debtPaid(debt) / start));
+}
+
 export interface GoalProgress { currentCents: number; targetCents: number; /** 0–1 */ fraction: number; reached: boolean }
 
 export function goalProgress(goal: FinanceGoal, pots: (SavingsPot & FinanceMeta)[]): GoalProgress {

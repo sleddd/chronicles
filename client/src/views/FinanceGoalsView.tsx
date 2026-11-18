@@ -8,7 +8,7 @@ import {
   Note, Actions, ErrorNote, RowMenu, RowBtn, PanelCard as BasePanelCard, CardTitle, type RowMenuItem,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
-import { centsToInput, formatCents, formatDay, goalProgress, parseMoney, daysBetween, todayStr } from '../utils/finance.js';
+import { centsToInput, formatCents, formatDay, goalProgress, parseMoney, daysBetween, todayStr, isDebt } from '../utils/finance.js';
 import type { FinanceGoal, FinanceRecord } from '../types/finance.js';
 
 /* A finance goal's card: the shared panel with a mild, even shadow */
@@ -214,14 +214,14 @@ function Goals() {
       <Top>
         <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>{editing === 'new' ? 'Close' : 'New finance goal'}</PillButton>
       </Top>
-      {editing === 'new' && <PanelCard style={{ marginBottom: 16 }}><GoalEditor pots={savings.records} onSave={g => goals.save(g)} onCancel={() => setEditing(null)} /></PanelCard>}
+      {editing === 'new' && <PanelCard style={{ marginBottom: 16 }}><GoalEditor pots={savings.records.filter(p => !isDebt(p))} onSave={g => goals.save(g)} onCancel={() => setEditing(null)} /></PanelCard>}
       {sorted.length === 0 && editing !== 'new' ? (
         <Note>Set a target — an emergency fund, paying off a card, a trip — and watch your progress. Link a savings fund to track it automatically.</Note>
       ) : (
         <List>
           {sorted.map(g => {
             if (editing === g.id) {
-              return <PanelCard key={g.id}><GoalEditor goal={g} pots={savings.records} onSave={x => goals.save(x)} onCancel={() => setEditing(null)} /></PanelCard>;
+              return <PanelCard key={g.id}><GoalEditor goal={g} pots={savings.records.filter(p => !isDebt(p))} onSave={x => goals.save(x)} onCancel={() => setEditing(null)} /></PanelCard>;
             }
             const p = goalProgress(g, savings.records);
             const pot = g.savingsPotId ? savings.records.find(s => s.id === g.savingsPotId) : undefined;

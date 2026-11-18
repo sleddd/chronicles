@@ -24,6 +24,16 @@ export const SectionTabBar = styled.nav`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
+  /* Light: no dark fill — just the blur of the photo behind the tabs */
+  html[data-wallpaper][data-theme='light'] & { background: transparent; }
+  /* Dark: no blur, and the fill fades out toward its edges, leaving only a faint trace
+     of the strip behind the tabs (the tabs themselves stay solid) */
+  html[data-wallpaper][data-theme='dark'] & {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    /* Centred behind the tabs (on the left), gone well before the row's empty right end */
+    background: radial-gradient(ellipse 42% 170% at 20% 50%, rgba(18, 20, 26, 0.34) 30%, rgba(18, 20, 26, 0.12) 65%, rgba(18, 20, 26, 0) 100%);
+  }
 `;
 
 export const SectionTab = styled.button<{ $active?: boolean }>`

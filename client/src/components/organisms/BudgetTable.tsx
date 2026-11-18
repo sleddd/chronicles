@@ -46,7 +46,8 @@ const Top = styled.section`
 
 /* Bills + spending by category for the month: a second panel under the plan totals */
 const BreakdownBox = styled.section`
-  margin-top: 12px;
+  /* Room between the budget stats above and this panel */
+  margin-top: 32px;
   padding: 18px 22px 22px;
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);

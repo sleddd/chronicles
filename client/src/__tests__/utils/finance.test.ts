@@ -386,3 +386,33 @@ describe('bill editor notes', () => {
     expect(billSummaryLine({ amountCents: 0, frequency: 'once', dueDate: '2026-10-01' }, '2026-11-05')).toBe('$0.00 once');
   });
 });
+
+import { isDebt, debtPaid, debtOwed, debtFraction } from '../../utils/finance.js';
+
+describe('debts', () => {
+  const debt = {
+    kind: 'debt' as const, name: 'Card', startCents: 100000,
+    entries: [
+      { id: '1', date: '2026-10-01', amountCents: 25000 },              // a payment
+      { id: '2', date: '2026-10-15', amountCents: -5000, note: 'Interest' }, // a charge added
+      { id: '3', date: '2026-11-01', amountCents: 30000 },
+    ],
+  };
+
+  it('tells a debt from a savings fund', () => {
+    expect(isDebt(debt)).toBe(true);
+    expect(isDebt({ name: 'Trip', entries: [] } as never)).toBe(false);
+  });
+
+  it('counts payments less charges, and what is left to pay', () => {
+    expect(debtPaid(debt)).toBe(50000);
+    expect(debtOwed(debt)).toBe(50000);
+    expect(debtFraction(debt)).toBe(0.5);
+  });
+
+  it('never owes less than nothing once paid off', () => {
+    const paidOff = { ...debt, entries: [...debt.entries, { id: '4', date: '2026-11-20', amountCents: 80000 }] };
+    expect(debtOwed(paidOff)).toBe(0);
+    expect(debtFraction(paidOff)).toBe(1);
+  });
+});

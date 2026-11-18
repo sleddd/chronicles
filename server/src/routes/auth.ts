@@ -19,6 +19,7 @@ import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services
 import { apiLimiter, authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
 import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail, type ConfirmAction } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
+import { previewField } from '../services/previews.js';
 
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
 // default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
@@ -825,7 +826,7 @@ router.post('/register', registerLimiter, authLimiter, async (req, res) => {
     rememberKnownDevice(res, { id: account.id, email, passwordHash, totpEnabled: false, totpSecret: null });
     setSessionCookie(res, token);
     res.status(201).json({
-      user: { email: account.email, username: account.username },
+      user: { ...previewField(account.id), email: account.email, username: account.username },
     });
   } catch (err) {
     if (sendIfHasherBusy(err, res)) return;
@@ -854,7 +855,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       return;
     }
 
-    res.json({ user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled } });
+    res.json({ user: { ...previewField(req.auth!.accountId), email: account.email, username: account.username, totpEnabled: account.totpEnabled } });
   } catch (err) {
     console.error('Me error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -943,7 +944,7 @@ router.post('/login', authLimiter, async (req, res) => {
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
     res.json({
-      user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
+      user: { ...previewField(account.id), email: account.email, username: account.username, totpEnabled: account.totpEnabled },
       encryption: buildEncryptionResponse(account),
     });
   } catch (err) {
@@ -1274,7 +1275,7 @@ router.post('/recover', strictLimiter, async (req, res) => {
 
     setSessionCookie(res, token);
     res.json({
-      user: { email: account.email, username: account.username },
+      user: { ...previewField(account.id), email: account.email, username: account.username },
       encryption: {
         encryptionEnabled: account.encryptionEnabled,
         kekSalt: newKekSalt,
@@ -1396,7 +1397,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
     res.json({
-      user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
+      user: { ...previewField(account.id), email: account.email, username: account.username, totpEnabled: account.totpEnabled },
       encryption: buildEncryptionResponse(account),
     });
   } catch (err) {

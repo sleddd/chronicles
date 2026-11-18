@@ -10,6 +10,7 @@ export const FINANCE_TABS: { label: string; path: string }[] = [
   { label: 'Budget & bills', path: '/finance' },
   { label: 'Goals', path: '/finance/goals' },
   { label: 'Savings', path: '/finance/savings' },
+  { label: 'Debts', path: '/finance/debts' },
   { label: 'Reports', path: '/finance/reports' },
 ];
 

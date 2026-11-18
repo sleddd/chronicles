@@ -8,7 +8,7 @@ import {
   PanelCard, CardTitle, FieldRow, OutlineBtn, SHEET_RULE,
 } from '../components/molecules/FinanceParts.js';
 import { useFinance } from '../hooks/useFinance.js';
-import { centsToInput, formatCents, formatDay, newId, parseMoney, potBalance, todayStr } from '../utils/finance.js';
+import { centsToInput, formatCents, formatDay, isDebt, newId, parseMoney, potBalance, todayStr } from '../utils/finance.js';
 import type { FinanceRecord, SavingsPot } from '../types/finance.js';
 
 const Center = styled.div`
@@ -62,7 +62,7 @@ const Balance = styled.div`
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin: 18px 0 16px;
+  margin: 24px 0 20px;
   font-family: var(--font-display);
   font-size: 34px;
   font-weight: 300;
@@ -76,11 +76,11 @@ const Buttons = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 16px;
 `;
 
 const Entries = styled.div`
-  margin-top: 18px;
+  margin-top: 26px;
   border-top: 1px solid ${SHEET_RULE};
 `;
 
@@ -89,7 +89,7 @@ const Entry = styled.div`
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
+  padding: 13px 0;
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-secondary);
@@ -158,7 +158,7 @@ function PotCard({ pot, onSave, onDelete }: {
         <span>{formatCents(balance)}</span>
         {pot.targetCents ? <small>of {formatCents(pot.targetCents)}</small> : null}
       </Balance>
-      {pot.targetCents ? <div style={{ marginBottom: 16 }}><ProgressRule fraction={balance / pot.targetCents} tone={balance >= pot.targetCents ? 'success' : 'default'} /></div> : null}
+      {pot.targetCents ? <div style={{ marginBottom: 24 }}><ProgressRule fraction={balance / pot.targetCents} tone={balance >= pot.targetCents ? 'success' : 'default'} /></div> : null}
 
       <form onSubmit={e => { e.preventDefault(); add(1); }}>
         <FieldRow $cols="150px 110px minmax(0, 1fr)">
@@ -204,7 +204,9 @@ function Savings() {
 
   if (savings.status === 'idle' || savings.status === 'loading') return <Center><Spinner size={32} /></Center>;
 
-  const total = savings.records.reduce((s, p) => s + potBalance(p), 0);
+  // Debts share this table (kind: 'debt'): the Savings tab shows funds only
+  const funds = savings.records.filter(p => !isDebt(p));
+  const total = funds.reduce((s, p) => s + potBalance(p), 0);
   const targetCents = target.trim() ? parseMoney(target) : null;
 
   return (
@@ -217,7 +219,7 @@ function Savings() {
         <PillButton type="button" onClick={() => setAdding(a => !a)}>{adding ? 'Close' : 'New fund'}</PillButton>
       </Top>
 
-      {(adding || savings.records.length === 0) && (
+      {(adding || funds.length === 0) && (
         <form onSubmit={e => {
           e.preventDefault();
           if (!name.trim() || (target.trim() && targetCents === null)) return;
@@ -232,11 +234,11 @@ function Savings() {
         </form>
       )}
 
-      {savings.records.length === 0 ? (
+      {funds.length === 0 ? (
         <Note>Make a fund for each thing you're saving for, then log what you add or take out. Goals can track a fund's balance.</Note>
       ) : (
         <Pots>
-          {savings.records.map(p => (
+          {funds.map(p => (
             <PotCard key={p.id} pot={p} onSave={x => savings.save(x)} onDelete={() => void savings.remove(p.id)} />
           ))}
         </Pots>

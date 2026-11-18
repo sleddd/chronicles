@@ -579,7 +579,26 @@ const Pop = styled.div`
   background: var(--bg-tile);
   box-shadow: var(--shadow-lg);
   font-family: var(--font-sans);
-  h4 { margin: 0 0 8px; ${cardLabel} }
+  h4 { margin: 0 0 8px; padding-right: 28px; ${cardLabel} }
+`;
+
+/* The pop-up's close button: a small × in its top-right corner */
+const PopClose = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); background: var(--bg-hover); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 `;
 
 const PopRow = styled.div`
@@ -622,6 +641,9 @@ function MarkerList({ anchor, title, onClose, children }: { anchor: DOMRect; tit
   return createPortal(
     <Pop ref={ref} role="dialog" aria-label={title} style={{ left: Math.max(16, left), top }}>
       <h4>{title}</h4>
+      <PopClose type="button" aria-label="Close" title="Close" onClick={onClose}>
+        <Icon name="x" size={15} strokeWidth={2} />
+      </PopClose>
       {children}
     </Pop>,
     document.body,

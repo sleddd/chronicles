@@ -28,6 +28,8 @@ interface User {
   email: string;
   username: string;
   totpEnabled: boolean;
+  /** Features this account sees while they're tried out (the server's PREVIEW_ACCOUNT_IDS) */
+  previews?: string[];
 }
 
 interface EncryptionData {

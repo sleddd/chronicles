@@ -10,5 +10,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // No feature previews in tests (services/previews defaults to accounts 1 and 2), so the
+    // user objects the routes return stay as the tests expect
+    env: { PREVIEW_ACCOUNT_IDS: '' },
   },
 });

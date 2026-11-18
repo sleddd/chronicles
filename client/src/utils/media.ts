@@ -42,6 +42,8 @@ export interface MediaFieldValues {
   /** A page about it elsewhere — Goodreads, Rotten Tomatoes, IMDb… (private, never on the public shelf) */
   link?: string;
   cover?: MediaCover | null;
+  /** The person's own tags — romantasy, book club, comfort watch… (private, never on the public shelf) */
+  tags?: string[];
 }
 
 export const MEDIA_DEFAULTS: MediaFieldValues = {
@@ -90,7 +92,7 @@ export function shelfLabel(shelf: MediaShelf, type: MediaType = 'book'): string 
 /** The shelf's name across every type, for the filter: Active / Saved / Finished / Paused / Didn’t finish */
 export function shelfFilterLabel(shelf: Exclude<MediaShelf, ''>): string {
   if (shelf === 'current') return 'Active';
-  if (shelf === 'want') return 'Saved';
+  if (shelf === 'want') return 'Want to';
   if (shelf === 'paused') return 'Paused';
   if (shelf === 'dnf') return 'Didn’t finish';
   return 'Finished';
@@ -169,6 +171,8 @@ export interface MediaItem {
   shelf: MediaShelf;
   /** 0–100 */
   progress: number;
+  /** The person's own tags (see mediaTags) */
+  tags: string[];
   /** The entry's own photo (encrypted thumbnail), which wins over a found cover */
   image?: MediaImageRef;
   /** A found cover, as a data URL */
@@ -223,6 +227,7 @@ export function mediaItems(entries: EntryLike[], topicIds: number[], stripHtml: 
       rating: clampRating(cf.rating),
       shelf,
       progress: clampProgress(cf.progress),
+      tags: mediaTags(cf.tags),
       image: entryImageRef(meta),
       cover: typeof cover === 'string' && cover.startsWith('data:image/') ? cover : undefined,
       createdAt: e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt),
@@ -242,7 +247,7 @@ export function mediaSubtitle(item: Pick<MediaItem, 'type' | 'creator' | 'album'
   return parts.join(' · ');
 }
 
-export type MediaSort = 'newest' | 'rating' | 'title' | 'type';
+export type MediaSort = 'newest' | 'rating' | 'title' | 'type' | 'tag';
 
 export interface MediaFilter {
   type: MediaType | '';
@@ -250,16 +255,41 @@ export interface MediaFilter {
   /** 0 = any, else at least this many stars */
   minRating: number;
   query: string;
+  /** '' = any; else items carrying this tag */
+  tag?: string;
 }
 
-export const EMPTY_MEDIA_FILTER: MediaFilter = { type: '', shelf: '', minRating: 0, query: '' };
+export const EMPTY_MEDIA_FILTER: MediaFilter = { type: '', shelf: '', minRating: 0, query: '', tag: '' };
 
 export const MEDIA_SORTS: { value: MediaSort; label: string }[] = [
   { value: 'newest', label: 'Newest' },
   { value: 'rating', label: 'Rating' },
   { value: 'title', label: 'Title A–Z' },
   { value: 'type', label: 'Type' },
+  { value: 'tag', label: 'Tag' },
 ];
+
+const sameTag = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** A media item's tags from its fields: trimmed, at most 40 characters, no repeats (case ignored), up to 20 */
+export function mediaTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const t of raw) {
+    if (typeof t !== 'string') continue;
+    const tag = t.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (tag && !out.some(o => sameTag(o, tag))) out.push(tag);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+/** Every tag in use across the shelf, A–Z */
+export function allMediaTags(items: Pick<MediaItem, 'tags'>[]): string[] {
+  const out: string[] = [];
+  for (const it of items) for (const t of it.tags) if (!out.some(o => sameTag(o, t))) out.push(t);
+  return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
 
 /** Every word of the query must be in the title, creator, album, genre or year */
 export function filterMedia(items: MediaItem[], filter: MediaFilter): MediaItem[] {
@@ -268,8 +298,9 @@ export function filterMedia(items: MediaItem[], filter: MediaFilter): MediaItem[
     if (filter.type && it.type !== filter.type) return false;
     if (filter.shelf && it.shelf !== filter.shelf) return false;
     if (filter.minRating > 0 && it.rating < filter.minRating) return false;
+    if (filter.tag && !it.tags.some(t => sameTag(t, filter.tag!))) return false;
     if (words.length) {
-      const hay = [it.title, it.creator, it.album, it.season, it.genre, it.year].join(' ').toLowerCase();
+      const hay = [it.title, it.creator, it.album, it.season, it.genre, it.year, ...it.tags].join(' ').toLowerCase();
       if (!words.every(w => hay.includes(w))) return false;
     }
     return true;
@@ -288,6 +319,15 @@ export function sortMedia(items: MediaItem[], sort: MediaSort): MediaItem[] {
       return list.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) || byNewest(a, b));
     case 'type':
       return list.sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    case 'tag': {
+      // Grouped by tag (each item under its first tag A–Z), untagged ones last, then by title
+      const first = (it: MediaItem) => [...it.tags].sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' }))[0];
+      return list.sort((a, b) => {
+        const ta = first(a), tb = first(b);
+        if (!ta !== !tb) return ta ? -1 : 1;
+        return (ta && tb ? ta.localeCompare(tb, undefined, { sensitivity: 'base' }) : 0) || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      });
+    }
     default:
       return list.sort(byNewest);
   }
@@ -295,7 +335,7 @@ export function sortMedia(items: MediaItem[], sort: MediaSort): MediaItem[] {
 
 /** How many filters are set (the Filters count on phones) */
 export function mediaFilterCount(f: MediaFilter): number {
-  return (f.type ? 1 : 0) + (f.shelf ? 1 : 0) + (f.minRating > 0 ? 1 : 0);
+  return (f.type ? 1 : 0) + (f.shelf ? 1 : 0) + (f.minRating > 0 ? 1 : 0) + (f.tag ? 1 : 0);
 }
 
 /* ── Moving the old topics into Media ── */

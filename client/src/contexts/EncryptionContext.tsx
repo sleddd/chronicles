@@ -9,6 +9,7 @@ import { clearImageCache, rederiveImageStorageConfig } from '../services/imageSt
 import { clearAiConfig, rederiveAiConfig } from '../services/aiAssistant.js';
 import { clearRecordCipher, installRecordCipher } from '../services/recordCipher.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
+import { stopAllFocusSounds } from '../services/focusSounds.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { olderEntriesAllowed, reserveEntryId, clearReservedEntryIds } from '../services/entryReseal.js';
 import { clearSealMarkers, clearIssuedTopicIds } from '../services/api.js';
@@ -177,6 +178,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearRecordCipher();
     // And the decrypted Finance records
     clearFinanceCache();
+    // Focus sounds stop with the session
+    stopAllFocusSounds();
     // And the app-wide copies of the sealed settings (habit log, time log,
     // dashboard layout, chips…) held by useEncryptedSetting
     clearEncryptedSettings();

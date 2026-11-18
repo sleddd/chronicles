@@ -19,7 +19,8 @@ const Box = styled.label`
   /* Light, on the photo: smoked glass like the page's buttons and the section tabs — a dark
      see-through fill with a blur, white text */
   html[data-wallpaper][data-theme='light'] & {
-    background: rgba(18, 20, 26, 0.5);
+    /* No dark fill — just the blur of the photo (as the section tabs) */
+    background: transparent;
     border-color: transparent;
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);

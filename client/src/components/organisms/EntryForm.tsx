@@ -31,7 +31,9 @@ import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/Symp
 import { TimeTracker } from '../molecules/fields/TimeTracker.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
 import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
-import { MEDIA_DEFAULTS } from '../../utils/media.js';
+import { MEDIA_DEFAULTS, mediaTags } from '../../utils/media.js';
+import { useSaveFields } from '../../hooks/useSaveFields.js';
+import { showFlash } from '../../services/flashNotice.js';
 import { aiMediaDetails } from '../../services/mediaDetails.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useTimeTracking } from '../../hooks/useTimeTracking.js';
@@ -815,6 +817,26 @@ const QuickError = styled.p`
   color: var(--color-danger);
 `;
 
+/* The media form, able to rename or remove a tag on every other media entry that has it
+   (the open entry changes in its form). Its own component so the save hook only runs for
+   media entries */
+function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof MediaFields> & { entryId?: number | null }) {
+  const saveEntryFields = useSaveFields();
+  const retag = async (from: string, to: string | null) => {
+    const key = from.trim().toLowerCase();
+    for (const e of useEntriesStore.getState().decryptedEntries) {
+      if (e.id === entryId) continue;
+      const cf = (e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown> | undefined;
+      const tags = cf ? mediaTags(cf.tags) : [];
+      if (!tags.some(t => t.toLowerCase() === key)) continue;
+      const next = to === null ? tags.filter(t => t.toLowerCase() !== key) : mediaTags(tags.map(t => (t.toLowerCase() === key ? to : t)));
+      const ok = await saveEntryFields(e, { ...cf, tags: next });
+      if (!ok) { showFlash('Couldn’t change that tag on every item. Try again.'); return; }
+    }
+  };
+  return <MediaFields {...props} onRenameTag={(from, to) => void retag(from, to)} onRemoveTag={tag => void retag(tag, null)} />;
+}
+
 /** The Quick entry's question, now the writing area's placeholder (the topic picker sits alone on the card's first line) */
 const QUICK_QUESTION = 'What would you like to write down?';
 
@@ -1050,6 +1072,17 @@ export function EntryForm({
 
   const selectedTopic = topics.find(t => t.id === topicId);
   const customType = getCustomType(selectedTopic?.name);
+  // Every tag on the media shelf, for a media entry's Tags chips
+  const mediaTagOptions = useMemo(() => {
+    if (customType !== 'media') return [];
+    const out: string[] = [];
+    for (const e of entries) {
+      const tags = ((e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown> | undefined)?.tags;
+      if (!Array.isArray(tags) || (e.metadata as Record<string, unknown>)?._customFields === undefined) continue;
+      for (const t of mediaTags(tags)) if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t);
+    }
+    return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [entries, customType]);
   const aiReady = useAiReady();
   const calorieEstimate = useCalorieEstimate(
     customType === 'food' || customType === 'exercise' ? customType : null,
@@ -1450,7 +1483,7 @@ export function EntryForm({
               {customType === 'wins' && <WinsFields values={{ wins: [], ...(customFields as Partial<WinsFieldValues>) } as WinsFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
-              {customType === 'media' && <MediaFields values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady ? aiMediaDetails : undefined} />}
+              {customType === 'media' && <MediaFieldsWithTags values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady ? aiMediaDetails : undefined} allTags={mediaTagOptions} entryId={entryId} />}
               {customType === 'time_tracking' && <TimeTrackingFields values={{ activityName: '', notes: '', ...customFields } as TimeTrackingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
                 <div style={{ marginTop: 32 }}>

@@ -39,6 +39,23 @@ type View = 'board' | 'list';
 
 /* ── Styles ── */
 
+/* Board | List: in light theme on the photo, smoked glass like the page's buttons — a dark
+   see-through fill with a blur, white words, the chosen one a faint white lift */
+const BlurSwitch = styled.div`
+  display: contents;
+  html[data-wallpaper][data-theme='light'] & > * {
+    background: rgba(18, 20, 26, 0.5) !important;
+    border-color: transparent !important;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    --text-primary: #fff;
+    --text-secondary: rgba(255, 255, 255, 0.9);
+    --text-muted: rgba(255, 255, 255, 0.78);
+    --text-soft: rgba(255, 255, 255, 0.85);
+    --bg-tab-active: rgba(255, 255, 255, 0.18);
+  }
+`;
+
 /* Board: a masonry of cards — three columns on desktop (two under 1200px, one under 760px),
    the cards dealt across them in order, each straight under the one above it; List: one column */
 const Masonry = styled.div<{ $cols: number }>`
@@ -356,7 +373,7 @@ export function PlanningOverviewView() {
   };
 
   const actions = (<>
-    <FilterTabs options={[{ value: 'board', label: 'Board' }, { value: 'list', label: 'List' }]} active={view} onChange={setView} label="View" />
+    <BlurSwitch><FilterTabs options={[{ value: 'board', label: 'Board' }, { value: 'list', label: 'List' }]} active={view} onChange={setView} label="View" /></BlurSwitch>
     {/* The page's actions: smoked glass on the photo, like every page's main action (.page-action) */}
     <span className="page-action" style={{ display: 'contents' }}>
       <PillButton type="button" $variant="neutral" onClick={() => setNaming(v => !v)} aria-expanded={naming}>New area</PillButton>

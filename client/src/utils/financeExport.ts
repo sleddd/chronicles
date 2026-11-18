@@ -4,7 +4,7 @@
  * the server beyond reading the user's own (encrypted) records.
  */
 import { csvCell } from './csv.js';
-import { centsToInput, goalProgress, monthlyEquivalent, nextUnpaidDue, potBalance, todayStr } from './finance.js';
+import { centsToInput, goalProgress, monthlyEquivalent, nextUnpaidDue, potBalance, todayStr, isDebt, debtPaid, debtOwed } from './finance.js';
 import { zipTextFiles } from './zip.js';
 import type { FinanceKind, FinanceRecord } from '../types/finance.js';
 
@@ -85,6 +85,10 @@ export function financeMovementsCsv(data: FinanceExport): string {
   }
   for (const f of data.savings) {
     for (const e of f.entries) {
+      if (isDebt(f)) {
+        rows.push({ date: e.date, type: e.amountCents >= 0 ? 'Debt payment' : 'Debt charge', description: f.name, category: '', amount: money(-e.amountCents), details: e.note ?? '' });
+        continue;
+      }
       rows.push({
         date: e.date, type: e.amountCents >= 0 ? 'Savings deposit' : 'Savings withdrawal',
         description: f.name, category: '', amount: money(e.amountCents), details: e.note ?? '',
@@ -148,15 +152,28 @@ export function financeExportFiles(data: FinanceExport, today = todayStr()): { n
 
   const funds = table(
     ['Fund', 'Target', 'Balance', 'Entries', 'Archived'],
-    data.savings.map(f => [f.name, f.targetCents !== undefined ? money(f.targetCents) : '', money(potBalance(f)), f.entries.length, yesNo(f.archived)]),
+    data.savings.filter(f => !isDebt(f)).map(f => [f.name, f.targetCents !== undefined ? money(f.targetCents) : '', money(potBalance(f)), f.entries.length, yesNo(f.archived)]),
     [1, 2, 3],
   );
 
   const fundEntries = table(
     ['Date', 'Fund', 'Amount', 'Note'],
-    data.savings.flatMap(f => f.entries.map(e => [e.date, f.name, money(e.amountCents), e.note ?? '']))
+    data.savings.filter(f => !isDebt(f)).flatMap(f => f.entries.map(e => [e.date, f.name, money(e.amountCents), e.note ?? '']))
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
     [2],
+  );
+
+  const debts = table(
+    ['Debt', 'Starting balance', 'Paid', 'Owed', 'Interest %', 'Entries'],
+    data.savings.filter(isDebt).map(f => [f.name, money(f.startCents ?? 0), money(debtPaid(f)), money(debtOwed(f)), f.aprPct ?? '', f.entries.length]),
+    [1, 2, 3],
+  );
+
+  const debtEntries = table(
+    ['Date', 'Debt', 'Type', 'Amount', 'Note'],
+    data.savings.filter(isDebt).flatMap(f => f.entries.map(e => [e.date, f.name, e.amountCents >= 0 ? 'Payment' : 'Charge', money(Math.abs(e.amountCents)), e.note ?? '']))
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    [3],
   );
 
   const goals = table(
@@ -177,6 +194,8 @@ export function financeExportFiles(data: FinanceExport, today = todayStr()): { n
     { name: 'spending.csv', text: spending },
     { name: 'savings-funds.csv', text: funds },
     { name: 'savings-entries.csv', text: fundEntries },
+    { name: 'debts.csv', text: debts },
+    { name: 'debt-payments.csv', text: debtEntries },
     { name: 'goals.csv', text: goals },
     { name: 'finance.json', text: financeExportJson(data) },
   ];

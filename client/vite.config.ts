@@ -72,6 +72,11 @@ export default defineConfig({
           urlPattern: ({ url }) => url.pathname.startsWith('/wallpapers/'),
           handler: 'CacheFirst',
           options: { cacheName: 'wallpapers', expiration: { maxEntries: 8 } },
+        }, {
+          // Focus sounds (60 MB in all) aren't precached either: the ones played are kept
+          urlPattern: ({ url }) => url.pathname.endsWith('.m4a'),
+          handler: 'CacheFirst',
+          options: { cacheName: 'focus-sounds', expiration: { maxEntries: 12 }, rangeRequests: true },
         }],
       },
     }),

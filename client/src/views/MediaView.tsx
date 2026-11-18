@@ -30,7 +30,7 @@ import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
 import {
-  EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, filterMedia, sortMedia, mediaItems, mediaTopicIds, mediaSubtitle, shelfLabel, formatRating,
+  EMPTY_MEDIA_FILTER, MEDIA_SORTS, MEDIA_TYPES, SHELVES, allMediaTags, filterMedia, sortMedia, mediaItems, mediaTopicIds, mediaSubtitle, shelfLabel, formatRating,
   type MediaFilter, type MediaItem, type MediaShelf, type MediaSort, type MediaType,
 } from '../utils/media.js';
 
@@ -59,6 +59,7 @@ function loadSaved(): Saved {
       shelf: SHELVES.some(s => s.value === v.shelf) ? v.shelf as MediaShelf : '',
       minRating: typeof v.minRating === 'number' ? v.minRating : 0,
       sort: MEDIA_SORTS.some(s => s.value === v.sort) ? v.sort as MediaSort : 'newest',
+      tag: typeof v.tag === 'string' ? v.tag.slice(0, 40) : '',
       layout: v.layout === 'list' ? 'list' : 'grid',
     };
   } catch { return EMPTY_SAVED; }
@@ -310,14 +311,18 @@ export function MediaView() {
   };
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ } }, [saved]);
   // A new search, filter or sort starts from the top again
-  useEffect(() => { setShownCount(PUBLIC_SHELF_PAGE_SIZE); }, [query, saved.type, saved.shelf, saved.minRating, saved.sort]);
+  useEffect(() => { setShownCount(PUBLIC_SHELF_PAGE_SIZE); }, [query, saved.type, saved.shelf, saved.minRating, saved.sort, saved.tag]);
 
   const topicIds = useMemo(() => mediaTopicIds(allTopics), [allTopics]);
   const topicId = topicIds[0];
   const items = useMemo(() => mediaItems(entries, topicIds, stripHtml), [entries, topicIds]);
   const { layout, ...filters } = saved;
-  const filter: MediaFilter = { ...EMPTY_MEDIA_FILTER, type: saved.type, shelf: saved.shelf, minRating: saved.minRating, query };
-  const shown = useMemo(() => sortMedia(filterMedia(items, filter), saved.sort), [items, filter.type, filter.shelf, filter.minRating, query, saved.sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The tags in use on the shelf; a remembered tag that's no longer on anything is dropped
+  const tags = useMemo(() => allMediaTags(items), [items]);
+  const tag = saved.tag && tags.some(t => t.toLowerCase() === saved.tag!.toLowerCase()) ? saved.tag : '';
+  const filter: MediaFilter = { ...EMPTY_MEDIA_FILTER, type: saved.type, shelf: saved.shelf, minRating: saved.minRating, query, tag };
+  const sort: MediaSort = saved.sort === 'tag' && tags.length === 0 ? 'newest' : saved.sort;
+  const shown = useMemo(() => sortMedia(filterMedia(items, filter), sort), [items, filter.type, filter.shelf, filter.minRating, filter.tag, query, sort]); // eslint-disable-line react-hooks/exhaustive-deps
   const visible = useMemo(() => shown.slice(0, shownCount), [shown, shownCount]);
   const pendingItem = useMemo(() => items.find(i => i.id === pendingItemId) ?? null, [items, pendingItemId]);
 
@@ -394,7 +399,7 @@ export function MediaView() {
           </Head>
 
           {items.length > 0 && (
-            <MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone}
+            <MediaFilterBar query={query} onQuery={setQuery} filters={{ ...filters, tag, sort }} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone} tags={tags}
               aside={<MediaViewSwitch value={layout} onChange={l => setSaved(v => ({ ...v, layout: l }))} />} />
           )}
           <PublicShelfControl open={panelOpen} onOpenChange={setPanel} anchor={anchor} pendingItem={pendingItem} onTurnedOn={turnedOn} />

@@ -19,6 +19,7 @@ import { Checkbox } from '../components/atoms/core/Checkbox.jsx';
 import { Toggle } from '../components/atoms/Toggle.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { WellnessCheckIn } from '../components/organisms/WellnessCheckIn.js';
+import { FocusSounds } from '../components/organisms/FocusSounds.js';
 import { QuickEntry } from '../components/organisms/QuickEntry.js';
 import { VoiceCommand, useVoiceSession } from '../components/organisms/VoiceCommand.js';
 import { OnboardingTour } from '../components/organisms/OnboardingTour.js';
@@ -92,7 +93,7 @@ import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Config ── */
 
-type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits';
+type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits' | 'focus';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'wellness', label: 'Wellness check-in' },
@@ -105,10 +106,16 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'recent', label: 'Recent entries' },
   { key: 'stats', label: 'Stats' },
   { key: 'time', label: 'Time tracked' },
+  { key: 'focus', label: 'Focus sounds' },
 ];
+
+/** Cards that start switched off (shown only once switched on in Theme and layout) */
+const OFF_BY_DEFAULT: SectionKey[] = ['focus'];
 
 interface DashboardConfig {
   hidden: SectionKey[];
+  /** Cards from OFF_BY_DEFAULT the person switched on */
+  turnedOn?: SectionKey[];
   /** The first is home: its weather is in the greeting and it's marked Local */
   places: Place[];
   /** The full world-clock grid is open under the one-line strip */
@@ -143,10 +150,10 @@ type Layout = { head?: SectionKey[]; top?: SectionKey[]; left: SectionKey[]; rig
 
 /** The cards that can be dragged (in Your Agenda), and where they start */
 const DEFAULT_LAYOUT: Required<Layout> = {
-  head: [],
-  top: ['wellness', 'quote', 'menu'],
+  head: ['clocks'],
+  top: ['wellness', 'quote', 'menu', 'focus'],
   left: ['priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise', 'symptom'],
-  right: ['clocks', 'recent', 'shopping', 'mantra', 'time', 'meds'],
+  right: ['recent', 'shopping', 'mantra', 'time', 'meds'],
   side: [],
 };
 
@@ -160,7 +167,8 @@ function fullLayout(saved?: Layout): Required<Layout> {
   const seen = new Set<SectionKey>();
   const out = {} as Required<Layout>;
   for (const c of COLS) {
-    out[c] = (base[c] ?? []).filter(k => all.includes(k) && !seen.has(k));
+    // The clocks strip never sits in one of the two narrow columns (older layouts had it there): back to its place
+    out[c] = (base[c] ?? []).filter(k => all.includes(k) && !seen.has(k) && !(k === 'clocks' && (c === 'left' || c === 'right')));
     out[c].forEach(k => seen.add(k));
   }
   for (const c of COLS) DEFAULT_LAYOUT[c].forEach((k, i) => {
@@ -479,8 +487,8 @@ const CLOCKS_SHOWN = 3;
    time and the temperature, rules between — with a toggle at the end.
    Open: a card for each clock */
 const ClockStrip = styled.section`
-  /* A little room under the Quick entry, close above what follows */
-  margin: 14px 0 14px;
+  /* (Its room above and below comes from the head row it sits in) */
+  margin: 0;
   /* In a container: the panel colour with a light shadow */
   padding: 18px 26px;
   border-radius: 16px;
@@ -489,7 +497,8 @@ const ClockStrip = styled.section`
   @media (max-width: 560px) { padding: 16px 18px; }
   font-family: var(--font-sans);
   font-size: 15px;
-  .bar { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  /* (room at the right for the card's drag grip) */
+  .bar { display: flex; align-items: center; gap: 16px; min-width: 0; padding-right: 34px; }
   .line { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; }
   .line > span { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 2px 18px; box-shadow: -1px 0 0 var(--border-card); }
   .line > span:first-child { padding-left: 0; box-shadow: none; }
@@ -520,7 +529,7 @@ const StatsSpan = styled.div`
 
 /* The zone above the clocks: no room of its own until a card is in it */
 const HeadZone = styled.div<{ $filled: boolean }>`
-  margin-top: ${({ $filled }) => ($filled ? '18px' : '0')};
+  margin: ${({ $filled }) => ($filled ? '14px 0' : '0')};
 `;
 
 const Columns = styled.div<{ $rows: number }>`
@@ -638,8 +647,11 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     @media (max-width: 480px) { & > button { top: 8px; right: 8px; } }
   ` : '')}
   ${({ $collapsed }) => ($collapsed ? `
-    /* Only its title row tall, not stretched to the row's height */
+    /* Only its title row tall, not stretched to the row's height — but still the full
+       width (in a flex column, align-self: start would shrink it to its title) */
     align-self: start;
+    width: 100%;
+    box-sizing: border-box;
     padding-top: 16px;
     padding-bottom: 16px;
     /* Folded: no fill or outline — just its title row, edge to edge across the
@@ -2355,7 +2367,8 @@ function TimeTracked() {
     <section aria-label="Time tracked">
       <StatsHead>
         <h2>Time tracked</h2>
-        <FilterTabs options={TIME_PERIODS} active={period} onChange={setPeriod} />
+        {/* Hidden while the card is folded */}
+        <div data-fold-hide=""><FilterTabs options={TIME_PERIODS} active={period} onChange={setPeriod} /></div>
       </StatsHead>
       <TimeTotal><b>{formatSpent(total)}</b><span>{periodWord}</span></TimeTotal>
       {rows.length === 0
@@ -2594,12 +2607,13 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
 /* ── View ── */
 
 /* A card that can be dragged by its grip (only the grip starts a drag, so the card's own controls work as usual) */
-function SortableCard({ id, collapsed, label, plain, open, wide, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; wide?: boolean; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, plain, open, wide, spaced, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; wide?: boolean; spaced?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   // The wellness check-in: none of a card's padding or look — the box is the card, the grip inside its corner
   if (plain) return (
     <PlainCard ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
+      // The wellness check-in gets extra room above and below
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined, ...(spaced ? { margin: '16px 0' } : {}) }}>
       {children}
       <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
         <Icon name="grip" size={18} strokeWidth={2.6} />
@@ -2701,6 +2715,8 @@ export function DashboardView() {
   const voice = useVoiceSession();
   const displayName = useUIStore(s => s.displayName) ?? '';
   const { user } = useAuth();
+  // Focus sounds is a preview: shown only to the accounts the server lists
+  const canFocus = !!user?.previews?.includes('focus');
   const themePreference = useUIStore(s => s.themePreference);
   const setThemePreference = useUIStore(s => s.setThemePreference);
   const changeTheme = (pref: ThemePreference) => {
@@ -2804,7 +2820,8 @@ export function DashboardView() {
     <ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>
   );
 
-  const shown = (k: SectionKey) => !(config.hidden ?? []).includes(k);
+  // Cards off until switched on (Focus sounds); the rest are on until hidden
+  const shown = (k: SectionKey) => (OFF_BY_DEFAULT.includes(k) ? (config.turnedOn ?? []).includes(k) : !(config.hidden ?? []).includes(k));
   const onboardingState = onboarding ?? {};
   const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported, passkeySupported });
   const entrySaved = !!entryGuide && quoteEntries.length > entryGuide.baseline;
@@ -2847,8 +2864,14 @@ export function DashboardView() {
   const quote = dailyQuote(now, myQuotes);
   const kitchenOn = true;
 
-  const toggleSection = (k: SectionKey, on: boolean) =>
+  const toggleSection = (k: SectionKey, on: boolean) => {
+    if (OFF_BY_DEFAULT.includes(k)) {
+      const turnedOn = (config.turnedOn ?? []).filter(x => x !== k);
+      void saveConfig({ ...config, turnedOn: on ? [...turnedOn, k] : turnedOn });
+      return;
+    }
     void saveConfig({ ...config, hidden: on ? (config.hidden ?? []).filter(x => x !== k) : [...(config.hidden ?? []), k] });
+  };
   const addPlace = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = placeQuery.trim();
@@ -2889,7 +2912,8 @@ export function DashboardView() {
       ),
     },
     // World clocks are a full-width strip under the Quick entry, not a card
-    clocks: { label: 'world clocks', on: false, node: null },
+    // The world clocks strip: a card of its own above Your Agenda (the head row), draggable like the others
+    clocks: { label: 'world clocks', on: shown('clocks'), node: <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} /> },
     // The wellness check-in sits full width above Day at a glance, not in the columns
     wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" strip bare /> },
     // Next up, Wins and Tasks are no longer cards on the home dashboard (Wins lives in Day at a glance)
@@ -2910,6 +2934,8 @@ export function DashboardView() {
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
     time: { label: 'time tracked', on: shown('time'), node: <TimeTracked /> },
+    // Focus sounds: a preview, only for the accounts the server names
+    focus: { label: 'focus sounds', on: shown('focus') && canFocus, node: <FocusSounds /> },
     // Mantras are no longer on the home dashboard
     mantra: { label: 'mantra', on: false, node: null },
     // The shopping list lives in Day at a glance now, not as a card
@@ -2927,7 +2953,7 @@ export function DashboardView() {
   const card = (k: SectionKey, wide = false) => {
     const w = widgets[k]!;
     // The wellness check-in keeps its own look: moved by its grip, never folded
-    if (k === 'wellness') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain>{w.node}</SortableCard>;
+    if (k === 'wellness' || k === 'clocks') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain spaced={k === 'wellness'}>{w.node}</SortableCard>;
     return (
       <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote'} wide={wide}>
         {w.node}
@@ -3027,7 +3053,7 @@ export function DashboardView() {
               </ThemeRow>
               <h3>Show on this page</h3>
               <ToggleGrid>
-                {SECTIONS.map(s => <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>)}
+                {SECTIONS.filter(s => s.key !== 'focus' || canFocus).map(s => <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>)}
                 {/* Day at a glance's Coming up: bills in it or not (Finance on) */}
                 {financeOn && <label>Bills in Coming up<Toggle checked={!config.comingUpHideBills} aria-label="Bills in Coming up" onChange={v => void saveConfig({ ...config, comingUpHideBills: !v })} /></label>}
               </ToggleGrid>
@@ -3077,13 +3103,11 @@ export function DashboardView() {
           <DndContext sensors={sensors} collisionDetection={closestCorners}
             onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
             onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
-          {/* Above the clocks: any card dragged here (the wellness check-in, say), full width */}
+          {/* Under the Quick entry, full width: the world clocks to start with, and any card dragged here
+              (the wellness check-in, say) — in whatever order they're dragged into */}
           <HeadZone $filled={cols.head.length > 0}>
-            <DropCol id="head" items={cols.head} gap={24} dragging={dragging}>{cols.head.map(k => card(k, true))}</DropCol>
+            <DropCol id="head" items={cols.head} gap={14} dragging={dragging}>{cols.head.map(k => card(k, true))}</DropCol>
           </HeadZone>
-
-          {/* World clocks, full width under the Quick entry */}
-          {shown('clocks') && <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />}
 
 
           {/* Day at a glance (always on): the day's schedule, priorities, tasks due and what's coming up, in one panel */}

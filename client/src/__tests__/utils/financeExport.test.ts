@@ -70,7 +70,7 @@ describe('financeExportFiles', () => {
     const files = financeExportFiles(data, TODAY);
     expect(files.map(f => f.name)).toEqual([
       'transactions.csv', 'budget-categories.csv', 'bills.csv', 'bill-payments.csv', 'spending.csv',
-      'savings-funds.csv', 'savings-entries.csv', 'goals.csv', 'finance.json',
+      'savings-funds.csv', 'savings-entries.csv', 'debts.csv', 'debt-payments.csv', 'goals.csv', 'finance.json',
     ]);
     const rows = (name: string) => splitCsvLines(files.find(f => f.name === name)!.text).filter(Boolean).map(parseCsvRow);
     expect(rows('budget-categories.csv')).toHaveLength(plan.budget.length + 1);

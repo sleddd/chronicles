@@ -6,7 +6,7 @@ import { PUBLIC_SHELF_COVER_MAX } from '@shared/validation/schemas';
 const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAg=';
 const item = (over: Partial<MediaItem> & { id: number }): MediaItem => ({
   title: 'Dune', type: 'book', creator: 'Frank Herbert', album: '', season: '', year: '1965', genre: 'Science fiction',
-  rating: 4.5, shelf: 'done', progress: 40, createdAt: new Date(), fields: { [ON_PUBLIC_SHELF]: true, notes: 'private' },
+  rating: 4.5, shelf: 'done', progress: 40, tags: ['book club'], createdAt: new Date(), fields: { [ON_PUBLIC_SHELF]: true, notes: 'private' },
   ...over,
 });
 

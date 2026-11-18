@@ -8,8 +8,8 @@ const TABS = [
   { label: 'Vision', path: '/goals/overview' },
   { label: 'Goals', path: '/goals' },
   { label: 'Milestones', path: '/goals/milestones' },
-  { label: 'Tasks', path: '/goals/tasks' },
   { label: 'Roadmap', path: '/goals/roadmap' },
+  { label: 'Tasks', path: '/goals/tasks' },
   { label: 'Planner', path: '/goals/planner' },
 ];
 

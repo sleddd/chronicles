@@ -62,7 +62,7 @@ describe('shelves and types', () => {
     expect(shelfLabel('dnf', 'movie')).toBe('Didn’t finish');
     expect(shelfFilterLabel('dnf')).toBe('Didn’t finish');
     expect(shelfFilterLabel('current')).toBe('Active');
-    expect(shelfFilterLabel('want')).toBe('Saved');
+    expect(shelfFilterLabel('want')).toBe('Want to');
   });
 
   it('knows the Media topic and the old ones', () => {
@@ -218,5 +218,23 @@ describe('mediaLinkUrl', () => {
     expect(mediaLinkUrl('https://notimdb.com/x')).toBeNull();
     expect(mediaLinkUrl('https://user@imdb.com/x')).toBeNull();
     expect(mediaLinkUrl('https://imdb.com:8443/x')).toBeNull();
+  });
+});
+
+import { mediaTags as _mediaTags, allMediaTags as _allMediaTags, filterMedia as _filterMedia, sortMedia as _sortMedia, EMPTY_MEDIA_FILTER as _EMPTY } from '../../utils/media.js';
+
+describe('media tags', () => {
+  const it2 = (id: number, title: string, tags: string[]) => ({ id, title, type: 'book', creator: '', album: '', season: '', year: '', genre: '', rating: 0, shelf: '', progress: 0, tags, createdAt: new Date(2026, 0, id), fields: {} }) as never;
+
+  it('reads tags tidily: trimmed, no repeats whatever the case', () => {
+    expect(_mediaTags([' Romantasy ', 'romantasy', 'Book  club', 3, ''])).toEqual(['Romantasy', 'Book club']);
+    expect(_mediaTags('nope')).toEqual([]);
+  });
+
+  it('lists the shelf’s tags A–Z, filters by one and groups by tag', () => {
+    const items = [it2(1, 'Zed', ['drama']), it2(2, 'Alpha', ['Book club', 'romantasy']), it2(3, 'Beta', []), it2(4, 'Cee', ['Drama'])];
+    expect(_allMediaTags(items)).toEqual(['Book club', 'drama', 'romantasy']);
+    expect(_filterMedia(items, { ..._EMPTY, tag: 'DRAMA' }).map((x: { title: string }) => x.title)).toEqual(['Zed', 'Cee']);
+    expect(_sortMedia(items, 'tag').map((x: { title: string }) => x.title)).toEqual(['Alpha', 'Cee', 'Zed', 'Beta']);
   });
 });

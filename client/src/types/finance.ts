@@ -109,6 +109,13 @@ export interface SavingsPot {
   targetCents?: number;
   entries: SavingsEntry[];
   archived?: boolean;
+  /** A debt (the Debts tab), kept in the same encrypted table: 'debt'; a savings fund has none.
+      A debt's entries are payments (positive) and charges or interest added (negative). */
+  kind?: 'debt';
+  /** A debt's balance when it was started */
+  startCents?: number;
+  /** A debt's interest rate, % a year (for reference only) */
+  aprPct?: number;
 }
 
 export interface FinanceGoal {

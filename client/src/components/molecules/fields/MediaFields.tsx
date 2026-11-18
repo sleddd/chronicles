@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
-  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareInput, BoxText, FieldNote, TextAction,
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BareInput, BoxText, FieldNote, TextAction, AddChip, AddChipBox,
 } from './formKit.js';
 import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
@@ -113,6 +113,85 @@ interface MediaFieldsProps {
   onChange: (values: MediaFieldValues) => void;
   /** With In-App AI ready: fills the details the catalogue didn't (the entry form passes `aiMediaDetails`) */
   onAiDetails?: (values: MediaFieldValues, keys: DetailKey[]) => Promise<MediaDetails>;
+  /** Every tag already used on the shelf, offered as chips */
+  allTags?: string[];
+  /** Rename / remove a tag on every other media item (this one is changed in the form) */
+  onRenameTag?: (from: string, to: string) => void;
+  onRemoveTag?: (tag: string) => void;
+}
+
+/* Tags: the shelf's tags as chips — tap to put one on this item or take it off, any number;
+   "+ Add" makes a new one (romantasy, book club…) and puts it on. "Edit" lists the tags to
+   rename (tap one, type, Enter) or remove (× — asks once: "Remove “x” from every item?"),
+   on every item that has it. Private: never on the public shelf */
+function TagChips({ value, options, onChange, onRename, onRemove }: {
+  value: string[]; options: string[]; onChange: (tags: string[]) => void;
+  onRename?: (from: string, to: string) => void; onRemove?: (tag: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const chips = [...options, ...value.filter(v => !options.some(o => same(o, v)))];
+  const has = (t: string) => value.some(v => same(v, t));
+  const commit = () => {
+    const tag = draft.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (tag && !has(tag)) onChange([...value, tag]);
+    setDraft('');
+    setAdding(false);
+  };
+  const commitRename = () => {
+    const to = renameDraft.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (renaming && to && to !== renaming) onRename?.(renaming, to);
+    setRenaming(null);
+  };
+
+  if (editing) return (
+    <Chips role="group" aria-label="Edit tags">
+      {chips.map(t => renaming === t ? (
+        <AddChipBox key={t} autoFocus value={renameDraft} maxLength={40} aria-label={`Rename ${t}`}
+          onChange={e => setRenameDraft(e.target.value)} onBlur={commitRename}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitRename(); } if (e.key === 'Escape') { e.preventDefault(); setRenaming(null); } }} />
+      ) : confirming === t ? (
+        <Chip key={t} type="button" $active={false} style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+          autoFocus onBlur={() => setConfirming(null)} onClick={() => { onRemove?.(t); setConfirming(null); }}>
+          Remove “{t}” from every item?
+        </Chip>
+      ) : (
+        <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+          <Chip type="button" $active={false} title="Rename" onClick={() => { setRenaming(t); setRenameDraft(t); }}>{t}</Chip>
+          <TextAction type="button" aria-label={`Remove ${t}`} title="Remove" onClick={() => setConfirming(t)}
+            style={{ padding: '0 6px', fontSize: 16 }}>×</TextAction>
+        </span>
+      ))}
+      <TextAction type="button" onClick={() => { setEditing(false); setRenaming(null); setConfirming(null); }}>Done</TextAction>
+    </Chips>
+  );
+
+  return (
+    <Chips role="group" aria-label="Tags">
+      {chips.map(t => {
+        const on = has(t);
+        return (
+          <Chip key={t} type="button" aria-pressed={on} $active={on}
+            onClick={() => onChange(on ? value.filter(v => !same(v, t)) : [...value, t])}>{t}</Chip>
+        );
+      })}
+      {adding ? (
+        <AddChipBox autoFocus value={draft} maxLength={40} placeholder="New tag" aria-label="New tag"
+          onChange={e => setDraft(e.target.value)} onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { e.preventDefault(); setDraft(''); setAdding(false); } }} />
+      ) : (
+        <AddChip type="button" $active={false} onClick={() => setAdding(true)}>+ Add</AddChip>
+      )}
+      {(onRename || onRemove) && chips.length > 0 && !adding && (
+        <TextAction type="button" onClick={() => setEditing(true)}>Edit</TextAction>
+      )}
+    </Chips>
+  );
 }
 
 const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', itunes: 'Apple’s catalogue', tvmaze: 'TVmaze', wikipedia: 'Wikipedia' };
@@ -145,7 +224,7 @@ const OpenLink = styled.a`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps) {
+export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTag, onRemoveTag }: MediaFieldsProps) {
   // Cover fetches finish after more typing: patch the latest values, never a stale copy
   const latest = useRef(values);
   latest.current = values;
@@ -342,6 +421,22 @@ export function MediaFields({ values, onChange, onAiDetails }: MediaFieldsProps)
             );
           })}
         </Chips>
+      </Section>
+
+      <Section style={{ marginTop: 30 }}>
+        <SectionHead><SectionLabel>Tags</SectionLabel></SectionHead>
+        <TagChips value={values.tags ?? []} options={allTags ?? []} onChange={tags => set({ tags })}
+          onRename={onRenameTag ? (from, to) => {
+            // This item too, in the form (the others are saved by the page)
+            const cur = latest.current.tags ?? [];
+            if (cur.some(t => t.toLowerCase() === from.toLowerCase())) set({ tags: [...new Set(cur.map(t => (t.toLowerCase() === from.toLowerCase() ? to : t)))] });
+            onRenameTag(from, to);
+          } : undefined}
+          onRemove={onRemoveTag ? tag => {
+            const cur = latest.current.tags ?? [];
+            if (cur.some(t => t.toLowerCase() === tag.toLowerCase())) set({ tags: cur.filter(t => t.toLowerCase() !== tag.toLowerCase()) });
+            onRemoveTag(tag);
+          } : undefined} />
       </Section>
 
       <Section style={{ marginTop: 30 }}>

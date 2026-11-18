@@ -22,14 +22,16 @@ export interface MediaFilters {
   shelf: MediaShelf;
   minRating: number;
   sort: MediaSort;
+  /** '' = any tag (the owner's page only) */
+  tag?: string;
 }
 
-export const EMPTY_MEDIA_FILTERS: MediaFilters = { type: '', shelf: '', minRating: 0, sort: 'newest' };
+export const EMPTY_MEDIA_FILTERS: MediaFilters = { type: '', shelf: '', minRating: 0, sort: 'newest', tag: '' };
 
 const TYPE_CHIPS: { value: MediaType; label: string }[] = [
   { value: 'book', label: 'Books' }, { value: 'movie', label: 'Movies' }, { value: 'tv', label: 'TV shows' }, { value: 'music', label: 'Music' },
 ];
-const SORT_WORDS: Record<MediaSort, string> = { newest: 'Newest first', rating: 'Highest rated', title: 'Title A–Z', type: 'By type' };
+const SORT_WORDS: Record<MediaSort, string> = { newest: 'Newest first', rating: 'Highest rated', title: 'Title A–Z', type: 'By type', tag: 'By tag' };
 const RATINGS = [5, 4.5, 4, 3.5, 3, 2];
 
 export const MediaToolBox = styled.div<{ $phone: boolean }>`
@@ -50,8 +52,23 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
   /* Light, on the photo: smoked glass like the page's buttons and the section tabs — a dark
      see-through fill with a blur, white text */
   html[data-wallpaper][data-theme='light'] & {
-    background: rgba(18, 20, 26, 0.5);
+    /* No fill — just the blur of the photo (as the section tabs) — and the theme's own
+       text colours, no shadow: a filter that's set reads in the standard text colour too, not the accent */
+    --color-accent-soft: var(--text-primary);
+    background: transparent;
     border-color: transparent;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  /* No photo: just the outline, no fill (either theme) */
+  html:not([data-wallpaper]) & { background: transparent; }
+  /* Dark, on the photo: clear glass — just the blur and a whisper of dark fill, white text,
+     its faint light outline */
+  html[data-wallpaper][data-theme='dark'] & {
+    /* Mostly see-through: little more than the blur */
+    background: rgba(18, 20, 26, 0.14);
+    border-color: rgba(255, 255, 255, 0.14);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     --text-primary: #fff;
@@ -66,20 +83,6 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
     & input, & select { color: #fff; }
     & input::placeholder { color: rgba(255, 255, 255, 0.72); }
   }
-  /* No photo: just the outline, no fill (either theme).
-     Dark, on the photo: frosted glass across the whole bar — a light veil with a blur
-     (after the glass mixin, whose dark page-colour fill it replaces) */
-  html:not([data-wallpaper]) & { background: transparent; }
-  html[data-wallpaper][data-theme='dark'] & {
-    background: rgba(44, 46, 54, 0.8); /* the Planner cards' frosted tone (#2c2e35 as seen), held steady over a bright photo */
-    /* Placeholders and icons inside a frosted control: brighter, so they stand out on the glass */
-    --text-hint: rgba(255, 255, 255, 0.72);
-    --text-placeholder: rgba(255, 255, 255, 0.72);
-    --text-muted: rgba(255, 255, 255, 0.74);
-    & input::placeholder, & textarea::placeholder { color: rgba(255, 255, 255, 0.72); }
-    -webkit-backdrop-filter: blur(16px) saturate(1.1);
-    backdrop-filter: blur(16px) saturate(1.1);
-  }
 `;
 
 /* The search: bare inside the box — the icon and the input, no fill of its own */
@@ -93,7 +96,8 @@ const Search = styled.label<{ $phone: boolean }>`
   padding: 0 14px;
   border-radius: 8px;
   color: var(--text-muted);
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  /* No accent ring while typing in the search (the caret shows where you are) */
+  input:focus, input:focus-visible { outline: none; box-shadow: none; }
   input {
     flex: 1;
     min-width: 0;
@@ -238,9 +242,11 @@ interface MediaFilterBarProps {
   phone: boolean;
   searchPlaceholder?: string;
   aside?: ReactNode;
+  /** The owner's tags: shows an "All tags" picker and the By tag sort (left out on the public page, which has no tags) */
+  tags?: string[];
 }
 
-export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, searchPlaceholder = 'Search titles, creators, genres', aside }: MediaFilterBarProps) {
+export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, searchPlaceholder = 'Search titles, creators, genres', aside, tags }: MediaFilterBarProps) {
   const set = (patch: Partial<MediaFilters>) => onFilters({ ...filters, ...patch });
   const chevron = <Icon name="chevron-down" size={14} strokeWidth={2} />;
   return (
@@ -268,10 +274,19 @@ export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, sear
               {RATINGS.map(r => <option key={r} value={r}>{formatRating(r)}+ stars</option>)}
             </select>
           </Pick>
+          {tags && tags.length > 0 && (
+            <Pick $set={!!filters.tag} $phone={phone}>
+              <span>{filters.tag || 'All tags'}</span>{chevron}
+              <select aria-label="Tag" value={filters.tag ?? ''} onChange={e => set({ tag: e.target.value })}>
+                <option value="">All tags</option>
+                {tags.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Pick>
+          )}
           <Pick $set={filters.sort !== 'newest'} $phone={phone}>
             <span>{SORT_WORDS[filters.sort]}</span>{chevron}
             <select aria-label="Sort" value={filters.sort} onChange={e => set({ sort: e.target.value as MediaSort })}>
-              {MEDIA_SORTS.map(s => <option key={s.value} value={s.value}>{SORT_WORDS[s.value]}</option>)}
+              {MEDIA_SORTS.filter(s => s.value !== 'tag' || (tags && tags.length > 0)).map(s => <option key={s.value} value={s.value}>{SORT_WORDS[s.value]}</option>)}
             </select>
           </Pick>
           {aside && !phone && <Aside $phone={false}>{aside}</Aside>}

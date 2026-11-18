@@ -21,6 +21,7 @@ import { passkeyUserHandle, webauthnConfig } from '../services/webauthn.js';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { confirmGate, confirmIdentity, countConfirmFailure, rememberKnownDevice, sendIfHasherBusy, setSessionCookie } from './auth.js';
 import { beginSignIn, cancelSignIns, signInStillWanted } from './authState.js';
+import { previewField } from '../services/previews.js';
 
 /*
  * Passkeys: sign in and open the journal with one touch.
@@ -189,7 +190,7 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
     res.json({
-      user: { email: account.email, username: account.username, totpEnabled: account.totpEnabled },
+      user: { ...previewField(account.id), email: account.email, username: account.username, totpEnabled: account.totpEnabled },
       passkey: wrapOf(passkey),
     });
   } catch (err) {
