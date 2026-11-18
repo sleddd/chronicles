@@ -7,7 +7,6 @@ import { ACTIVITY_EVENT, ACTIVITY_STORE_KEY, IDLE_SIGN_OUT_MS, isIdle, lastActiv
 import { useEndSession } from './useSignOut.js';
 
 export { ACTIVITY_STORE_KEY, IDLE_SIGN_OUT_MS, isIdle };
-export const IDLE_NOTE = 'You were signed out after 15 minutes away.';
 
 // Someone at the page, but nothing sent to the server for this long: say so,
 // so the server's own idle limit (2 hours) doesn't end a session that's in use
@@ -53,7 +52,7 @@ export function useIdleSignOut(): void {
       if (ending) return;
       ending = true;
       // Anything still being typed is sealed first (it is also sealed as it's typed)
-      void flushDrafts().catch(() => {}).then(() => endRef.current(IDLE_NOTE));
+      void flushDrafts().catch(() => {}).then(() => endRef.current());  // signed out quietly: no note on the sign-in page
     };
     const check = (): boolean => {
       if (ending) return true;

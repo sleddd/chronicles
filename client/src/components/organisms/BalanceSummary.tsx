@@ -89,11 +89,11 @@ export function BalanceSummary({ snapshot, bills, expenses, onSet }: {
       </SheetHead>
       {!snapshot || !now ? (
         <>
-          <Note>
+          <Note style={{ lineHeight: 1.75, maxWidth: 760 }}>
             What you have to spend right now, across all your accounts. Enter it once and it keeps itself current.
             Bills you mark paid and spending you log come off it, and you can update it whenever you check your accounts.
           </Note>
-          {editing ? form : <PillButton type="button" style={{ marginTop: 12 }} onClick={startEdit}>Set balance</PillButton>}
+          {editing ? form : <PillButton type="button" style={{ marginTop: 28 }} onClick={startEdit}>Set balance</PillButton>}
         </>
       ) : (
         <>

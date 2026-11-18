@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import { onBackdrop } from '../../styles/darkBackdrop.js';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { CalendarHeader } from './CalendarHeader.js';
 import { stripHtml, builtinEntryName } from '../../utils/stripHtml.js';
 import type { DecryptedPost } from '@shared/crypto/types';
@@ -94,6 +95,7 @@ const DayCell = styled.div<{ $isOutside?: boolean; $isSelected?: boolean; $accen
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative; /* tablets: the dot sits in its bottom-right corner */
   transition: background 0.1s;
   &:hover { background: ${({ $isOutside }) => ($isOutside ? 'transparent' : 'var(--bg-panel)')}; }
 `;
@@ -123,6 +125,7 @@ const Dot = styled.i<{ $bill?: boolean; $task?: boolean; $holiday?: boolean }>`
   height: 6px;
   border-radius: 50%;
   background: var(--text-muted);
+  opacity: 0.5; /* faded: a quiet mark that the day has something on it */
 `;
 
 /* A holiday's name in its day's cell: small and muted, up to two lines (it names the
@@ -182,6 +185,7 @@ const MobileDay = styled.button<{ $selected: boolean }>`
   gap: 4px;
   height: 52px;
   padding: 6px 0 0;
+  position: relative; /* the dot sits in its bottom-right corner */
   border: none;
   border-radius: 10px;
   background: ${({ $selected }) => ($selected ? 'var(--bg-panel)' : 'transparent')};
@@ -204,7 +208,11 @@ const MobileNum = styled.span<{ $today: boolean; $selected: boolean }>`
   margin-bottom: 3px; /* a little room above the dots */
 `;
 
+/* The day's one dot, in the bottom-right corner of its square */
 const MobileDots = styled.span`
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
   display: flex;
   gap: 3px;
   height: 6px;
@@ -219,6 +227,8 @@ const DotRow = styled.div`
   gap: 6px;
   & > i { width: 7px; height: 7px; }
   & > small { font-family: var(--font-sans); font-size: 12px; color: var(--text-muted); line-height: 1; }
+  /* Tablets: the day's dot in the bottom-right corner of its square, like on phones */
+  ${NAV_COMPACT} { position: absolute; right: 10px; bottom: 10px; }
 `;
 
 /** Dots shown in a desktop month cell before "+N" */

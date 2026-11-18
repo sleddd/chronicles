@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { NAV_COMPACT } from './breakpoints.js';
 
 /* One look for every section's tabs (Health, Kitchen, Planning, Finance):
    sentence-case labels on a hairline rule, muted until chosen; the active tab is
@@ -33,6 +34,16 @@ export const SectionTabBar = styled.nav`
     backdrop-filter: none;
     /* Centred behind the tabs (on the left), gone well before the row's empty right end */
     background: radial-gradient(ellipse 42% 170% at 20% 50%, rgba(18, 20, 26, 0.34) 30%, rgba(18, 20, 26, 0.12) 65%, rgba(18, 20, 26, 0) 100%);
+  }
+  /* Phones / tablets: room under the page's controls (the title row above holds them there),
+     and in dark the strip frosted again — the smoked fill with its blur, all the way across */
+  ${NAV_COMPACT} {
+    margin-top: 14px;
+    html[data-wallpaper][data-theme='dark'] & {
+      background: rgba(18, 20, 26, 0.34);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+    }
   }
 `;
 

@@ -19,6 +19,8 @@ export const SLIDES = [
   { key: 'reports-dark', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
   { key: 'tasks-dark', name: 'Tasks', caption: 'Drag tasks from to do to done' },
   { key: 'roadmap-dark', name: 'Roadmap', caption: 'Goals and their milestones across the year' },
+  { key: 'planner-dark', name: 'Planner', caption: 'Your week, hour by hour, around your meetings' },
+  { key: 'vision-dark', name: 'Vision', caption: 'Your vision and goals for each area of life' },
   { key: 'calendar-dark', name: 'Calendar', caption: 'Events, deadlines and bills due' },
   { key: 'kitchen-dark', name: 'Kitchen', caption: 'The week’s menu, linked to your recipes' },
   { key: 'shopping-dark', name: 'Shopping list', caption: 'Today’s meals and a list to take to the store' },

@@ -8,6 +8,12 @@ import { Wallpaper } from '../organisms/Wallpaper.js';
 import { onPhoto } from '../../styles/wallpaper.js';
 
 /* Page title on top, the two panels below it — edge to edge */
+/* The background photo: only on wide screens — the journal on phones and tablets is just the page colour */
+const PhotoSlot = styled.div`
+  display: contents;
+  ${NAV_COMPACT} { display: none; }
+`;
+
 const Page = styled.div`
   display: flex;
   flex-direction: column;
@@ -18,6 +24,8 @@ const Page = styled.div`
   isolation: isolate;
   background: var(--bg-app);
   ${onBackdrop}
+  /* Phones / tablets: a little room under the top bar, inside the page so the photo still runs up to the bar */
+  ${NAV_COMPACT} { padding-top: 26px; }
   /* Dark: the editor's surface is a little lighter than the page (the open row in
      the list matches it, styles/entryRow) */
   html[data-theme='dark'] & { --bg-editor: #191b22; }
@@ -189,7 +197,7 @@ export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', tit
   return (
     <Page>
       {/* Just the title row and the panels' top bars — the rows and the editor stay solid */}
-      <Wallpaper height="min(200px, 25vh)" follow={false} wash={false} />
+      <PhotoSlot><Wallpaper height="min(200px, 25vh)" follow={false} wash={false} /></PhotoSlot>
       <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (

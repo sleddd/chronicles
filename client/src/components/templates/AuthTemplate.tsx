@@ -14,7 +14,7 @@ const Wrapper = styled.div`
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 40px 16px;
+  padding: calc(40px + env(safe-area-inset-top, 0px)) 16px 40px;
   position: relative;
   background: var(--bg-app);
 `;

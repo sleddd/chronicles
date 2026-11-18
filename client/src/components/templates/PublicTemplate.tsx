@@ -17,6 +17,8 @@ const Page = styled.div`
   font-family: var(--font-sans);
   display: flex;
   flex-direction: column;
+  /* An installed iPad / iPhone app: start under the clock and battery */
+  padding-top: env(safe-area-inset-top, 0px);
 `;
 
 const Inner = styled.div`

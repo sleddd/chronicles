@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
@@ -35,18 +36,18 @@ import { addDays, layoutDay, parsePlannerOrder, plannerFacts, tasksByDay, hoursL
 
 const NO_ORDER: PlannerOrder = {};
 /** One hour on the schedule, in px */
-const HOUR_PX = 72;
-/** The schedule shows 12 AM to 6 PM, and the evening (to 12 AM) once opened */
+const HOUR_PX = 84;
+/** The schedule shows 7 AM to 7 PM; the early hours and the evening (to 12 AM) fold away */
 const DAY_START = 0;
 const DAY_END = 24 * 60;
-const EVENING = 18 * 60;
+const EVENING = 19 * 60;
 /** Whether the schedule's evening is open, per browser */
 const EVENING_KEY = 'glance-evening-open-v1';
 function readEveningOpen(): boolean {
   try { return localStorage.getItem(EVENING_KEY) === '1'; } catch { return false; }
 }
-/** …and the small hours (before 4 AM), folded until opened, per browser */
-const MORNING = 4 * 60;
+/** …and the early hours (before 7 AM), folded until opened, per browser */
+const MORNING = 7 * 60;
 const MORNING_KEY = 'glance-early-open-v1';
 function readMorningOpen(): boolean {
   try { return localStorage.getItem(MORNING_KEY) === '1'; } catch { return false; }
@@ -86,7 +87,7 @@ const BarePill = styled(PillButton)`
 `;
 
 const Panel = styled.section`
-  margin-top: 8px;
+  margin-top: 20px;
   padding: 20px 0 8px;
   /* No line across the top */
 `;
@@ -110,6 +111,11 @@ const TitleRow = styled.div`
     line-height: 1.1;
     color: var(--text-primary);
   }
+  /* Phones / tablets: the title on its own line with a hairline under it, Meds / Move below */
+  ${NAV_COMPACT} {
+    row-gap: 4px;
+    h2 { flex-basis: 100%; padding-bottom: 24px; border-bottom: 1px solid var(--border-subtle); }
+  }
   /* Only its own spans: a broad span rule here turned the pills' icons into their names */
   > span { font-family: var(--font-sans); font-size: 16px; color: var(--text-muted); }
 `;
@@ -132,8 +138,9 @@ const HeadActions = styled.div`
   gap: 8px 26px;
   margin-left: auto;
   align-self: center;
-  /* Phones: under the title, from the left */
+  /* Phones and tablets: under the title, from the left, lined up with its text */
   @media (max-width: 640px) { margin-left: 0; width: 100%; justify-content: flex-start; margin-top: 12px; }
+  ${NAV_COMPACT} { margin-left: 0; width: 100%; justify-content: flex-start; margin-top: 12px; }
   /* …with the expand button still at the right */
   & > button[aria-label='Open this day in the Planner'] { margin-left: auto; }
 
@@ -215,12 +222,14 @@ const Week = styled.div`
   gap: 6px;
   /* A line between the title and the row, and one under it (room under the title first) */
   margin-top: 28px;
-  padding-top: 12px;
+  padding-top: 18px;
   border-top: 1px solid var(--border-subtle);
   container-type: inline-size;
-  padding-bottom: 12px;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--border-subtle);
   @media (max-width: 640px) { gap: 2px; }
+  /* Phones / tablets: close under the Meds / Move row (a line under the title above it) */
+  ${NAV_COMPACT} { margin-top: 16px; }
 `;
 
 const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
@@ -229,7 +238,7 @@ const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  padding: 12px 14px 12px;
+  padding: 16px 14px;
   border: none;
   border-radius: 10px;
   /* The chosen day: a soft lifted fill */
@@ -241,9 +250,12 @@ const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
   .day { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
   .day > small { ${cardLabel} font-size: 14px; font-weight: 300; line-height: 1; color: ${({ $today }) => ($today ? 'var(--color-accent-soft)' : 'var(--text-muted)')}; white-space: nowrap; }
   .day > span { font-family: var(--font-sans); font-size: 14px; font-weight: 400; line-height: 1; color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
+  /* Today reads "Today"; on phones / tablets just its weekday (still in the accent) */
+  .today-day { display: none; }
+  ${NAV_COMPACT} { .today-word { display: none; } .today-day { display: inline; } }
   &:hover .day > span { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 640px) { padding: 10px 8px; .day { flex-direction: column; gap: 6px; } .day > small { letter-spacing: 0.06em; } }
+  @media (max-width: 640px) { padding: 14px 8px; .day { flex-direction: column; gap: 6px; } .day > small { letter-spacing: 0.06em; } }
 `;
 
 const Marks = styled.div`
@@ -396,27 +408,23 @@ const BlockBtn = styled.button<{ $kind: Kind }>`
   justify-content: flex-start;
   gap: 4px;
   padding: 12px 16px;
-  /* Frosted, like the Planner's cards: no colour fill */
-  border: 1px solid var(--border-subtle);
+  /* A solid tile, like the Menu's planned meals (--bg-tile), no colour fill or blur */
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--bg-lane);
-  html[data-theme='dark'] & {
-    background: rgba(255, 255, 255, 0.11);
-    border-color: rgba(255, 255, 255, 0.11);
-    -webkit-backdrop-filter: blur(16px) saturate(1.1);
-    backdrop-filter: blur(16px) saturate(1.1);
-  }
+  background: var(--bg-tile);
   text-align: left;
   font-family: var(--font-sans);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.3;
-  color: var(--text-primary);
+  /* A step back from bright white */
+  color: color-mix(in srgb, var(--text-primary) 72%, transparent);
   overflow: hidden;
   cursor: pointer;
+  /* A little room between the title and its time */
+  .body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   small { font-size: 13px; font-weight: 400; color: var(--text-muted); }
-  &:hover { border-color: var(--border-strong); }
-  html[data-theme='dark'] &:hover { border-color: rgba(255, 255, 255, 0.2); }
+  &:hover { border-color: var(--border-default); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
@@ -477,7 +485,7 @@ const NowLine = styled.div`
   &::before { content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--mood-1); }
 `;
 
-/* Opens / folds the schedule's evening (after 6 PM) */
+/* Opens / folds the schedule's evening (after 7 PM) */
 const EveningBtn = styled.button`
   display: inline-flex;
   align-items: center;
@@ -504,9 +512,11 @@ const ItemRow = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 12px 0;
+  padding: 17px 0;
   & + & { border-top: 1px solid var(--border-subtle); }
   font-family: var(--font-sans);
+  /* The tick is as tall as the title's first line, so the two line up at the top */
+  & > label { flex: none; height: 18px; }
 `;
 
 const ItemText = styled.button<{ $done?: boolean }>`
@@ -514,17 +524,18 @@ const ItemText = styled.button<{ $done?: boolean }>`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 7px; /* room between the title and its Due line */
   padding: 0;
   border: none;
   background: none;
   text-align: left;
   font-family: var(--font-sans);
   font-size: 15px;
+  line-height: 18px; /* the tick's height: the title's first line sits level with it */
   color: ${({ $done }) => ($done ? 'var(--text-tertiary)' : 'var(--text-secondary)')};
   text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
   cursor: pointer;
-  small { font-size: 13px; color: var(--text-muted); text-decoration: none; }
+  small { font-size: 13px; line-height: 1.35; color: var(--text-muted); text-decoration: none; }
   &:hover { color: var(--text-primary); }
 `;
 
@@ -692,6 +703,10 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   });
   /* Schedule cards: drag one to another time, or its foot to stretch / shorten it */
   const [drag, setDrag] = useState<{ key: string; start: number; end: number } | null>(null);
+  // Each card's natural height (its text and padding), measured after it draws, so the hours
+  // can grow until every card shows in full with nothing overlapping
+  const [needs, setNeeds] = useState<Record<string, number>>({});
+  const cardBodies = useRef(new Map<string, HTMLElement>());
   const dragRef = useRef<{ b: Block; mode: 'move' | 'end'; y0: number; moved: boolean; start: number; end: number } | null>(null);
   const onCardDown = (b: Block, mode: 'move' | 'end', e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -814,27 +829,75 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     }),
   ];
   const dayEnd = eveningOpen ? DAY_END : EVENING;
-  // Folded: what starts after 6 PM is hidden (counted on the toggle)
+  // Folded: what starts after 7 PM is hidden (counted on the toggle)
   const eveningCount = blocks.filter(b => b.start >= EVENING).length;
   const morningCount = blocks.filter(b => b.start < MORNING).length;
   const shownBlocks = blocks.filter(b => b.start < dayEnd && b.end > dayStart);
   const hours: number[] = [];
   for (let h = dayStart / 60; h <= dayEnd / 60; h++) hours.push(h);
   // Events that overlap share the width, side by side
-  const cols = new Map<string, { col: number; of: number }>();
-  {
-    const sorted = [...blocks].filter(b => b.kind !== 'task').sort((a, b) => a.start - b.start);
-    const ends: number[] = [];
-    for (const b of sorted) {
-      let c = ends.findIndex(e => e <= b.start);
-      if (c === -1) { c = ends.length; ends.push(b.end); } else ends[c] = b.end;
-      cols.set(b.key, { col: c, of: 0 });
+  /* Cards that share a time (meetings, events, tasks) are stacked, one under the other, and
+     the hours they cover grow to fit them all: each hour is as many rows tall as the most
+     cards sharing any part of it. yAt maps a time to its place on that stretched scale. */
+  const groups: { start: number; end: number; keys: string[] }[] = [];
+  for (const b of [...shownBlocks].sort((a, c) => a.start - c.start || a.title.localeCompare(c.title))) {
+    const g = groups[groups.length - 1];
+    if (g && b.start < g.end) { g.keys.push(b.key); g.end = Math.max(g.end, b.end); }
+    else groups.push({ start: b.start, end: b.end, keys: [b.key] });
+  }
+  // The room a card needs: its measured height plus the gap around it (one hour's room until measured)
+  const CARD_GAP = 24; // 12px above and below each card in its time
+  const needOf = (k: string) => Math.max(30, needs[k] ?? 0) + CARD_GAP;
+  // An hour is tall enough for every stretch touching it: as many rows as the most cards sharing a
+  // time, and as many pixels a minute as the most crowded stretch needs to show its cards in full
+  const hourPx = (h: number) => {
+    let px = HOUR_PX;
+    for (const g of groups) {
+      if (!(g.start < (h + 1) * 60 && g.end > h * 60)) continue;
+      const room = g.keys.reduce((t, k) => t + needOf(k), 0);
+      px = Math.max(px, HOUR_PX * g.keys.length, (room / Math.max(1, g.end - g.start)) * 60);
     }
-    for (const b of sorted) {
-      const over = sorted.filter(o => o.start < b.end && o.end > b.start);
-      cols.set(b.key, { col: cols.get(b.key)!.col, of: Math.max(...over.map(o => cols.get(o.key)!.col)) + 1 });
+    return Math.ceil(px);
+  };
+  const hourTops: number[] = [];
+  {
+    let y = 0;
+    for (let h = Math.floor(dayStart / 60); h <= Math.ceil(dayEnd / 60); h++) { hourTops[h] = y; y += hourPx(h); }
+  }
+  const yAt = (mins: number) => {
+    const m = Math.max(dayStart, Math.min(dayEnd, mins));
+    const h = Math.min(Math.floor(m / 60), Math.ceil(dayEnd / 60));
+    return (hourTops[h] ?? 0) - (hourTops[Math.floor(dayStart / 60)] ?? 0) + ((m - h * 60) / 60) * hourPx(h);
+  };
+  // Each card's place: its own time, or its share of a shared stretch (by the room each needs)
+  const slot = new Map<string, { top: number; height: number }>();
+  for (const g of groups) {
+    const top = yAt(g.start), bottom = yAt(g.end);
+    if (g.keys.length === 1) {
+      const b = shownBlocks.find(x => x.key === g.keys[0])!;
+      slot.set(g.keys[0], { top: yAt(b.start), height: yAt(b.end) - yAt(b.start) });
+      continue;
+    }
+    const total = g.keys.reduce((t, k) => t + needOf(k), 0);
+    let y = top;
+    for (const k of g.keys) {
+      const h = ((bottom - top) * needOf(k)) / total;
+      slot.set(k, { top: y, height: h });
+      y += h;
     }
   }
+
+  useLayoutEffect(() => {
+    const next: Record<string, number> = {};
+    let changed = false;
+    for (const [k, el] of cardBodies.current) {
+      if (!el.isConnected) continue;
+      const h = Math.ceil(el.offsetHeight + 26); // the card's 12px padding top and bottom, and its border
+      next[k] = h;
+      if (Math.abs((needs[k] ?? 0) - h) > 1) changed = true;
+    }
+    if (changed) setNeeds(next);
+  });
 
   /* Doses as icons at their times (one per time), the later ones as a note under the scale */
   const doseGroups = medsOn ? doses.groups.map(g => ({ ...g, mins: minutesOf(g.time) })).filter(g => g.mins !== undefined) : [];
@@ -888,7 +951,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const [, mm, dd] = day.split('-').map(Number);
   // The picked day in full, under the title (the title no longer names it)
   const dateLine = new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const height = px(dayEnd - dayStart);
+  const height = yAt(dayEnd);
 
   const doseRow = (d: ScheduledDose) => (
     <PopRow key={`${d.medicationPostId}-${d.time}`}>
@@ -940,7 +1003,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             <WeekDay key={d} type="button" $on={on} $today={d === today} aria-pressed={on}
               aria-label={`${LONG_NAMES[dow(d)]} ${Number(d.slice(8))}${d === today ? ', today' : ''}${marks.length ? `, ${marks.length} planned` : ''}`}
               onClick={() => setPicked(d === today ? null : d)}>
-              <div className="day"><small>{d === today ? 'Today' : WEEK_NAMES[dow(d)]}</small><span>{Number(d.slice(8))}</span></div>
+              <div className="day"><small>{d === today ? <><span className="today-word">Today</span><span className="today-day">{WEEK_NAMES[dow(d)]}</span></> : WEEK_NAMES[dow(d)]}</small><span>{Number(d.slice(8))}</span></div>
             </WeekDay>
           );
         })}
@@ -972,12 +1035,12 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
               </AllDayRow>
             )}
             <EveningBtn type="button" aria-expanded={morningOpen} onClick={toggleMorning} style={{ margin: '0 0 22px' }}>
-              {morningOpen ? 'Hide before 4 AM' : `Show before 4 AM${morningCount + earlyDoses.length ? ` · ${morningCount + earlyDoses.length} ${morningCount + earlyDoses.length === 1 ? 'item' : 'items'}` : ''}`}
+              {morningOpen ? 'Hide before 7 AM' : `Show before 7 AM${morningCount + earlyDoses.length ? ` · ${morningCount + earlyDoses.length} ${morningCount + earlyDoses.length === 1 ? 'item' : 'items'}` : ''}`}
               <Icon name={morningOpen ? 'chevron-down' : 'chevron-up'} size={16} strokeWidth={1.8} aria-hidden="true" />
             </EveningBtn>
             <Hours style={{ height: height + 14, paddingTop: 7 }}>
               {hours.map(h => {
-                const top = px(h * 60 - dayStart) + 7;
+                const top = yAt(h * 60) + 7;
                 return (
                   <div key={h}>
                     <HourName style={{ top }}>{hourName(h)}</HourName>
@@ -989,39 +1052,39 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                 const pending = pendingOf(g).length > 0;
                 // One close above it (under 28px apart) pushes this one to the right
                 let shift = 0;
-                for (let k = i - 1; k >= 0 && px(g.mins! - shownDoses[k].mins!) < 28; k--) shift++;
+                for (let k = i - 1; k >= 0 && yAt(g.mins!) - yAt(shownDoses[k].mins!) < 28; k--) shift++;
                 return (
                   <Marker key={g.time} type="button" $due={dosesForDay && pending} $ahead={!dosesForDay}
-                    style={{ top: px(g.mins! - dayStart) + 7, left: 'auto', right: 4 + (shift % 2) * 28 }}
+                    style={{ top: yAt(g.mins!) + 7, left: 'auto', right: 4 + (shift % 2) * 28 }}
                     aria-label={`Medications at ${clock(g.mins!)}${dosesForDay ? (pending ? ', due' : ', taken') : ''}`}
                     onClick={e => openFrom('dose', e, g.time)}>
                     <MaterialIcon $size={22} aria-hidden="true">health_and_safety</MaterialIcon>
                   </Marker>
                 );
               })}
-              {isToday && nowMins >= dayStart && nowMins <= dayEnd && <NowLine style={{ top: px(nowMins - dayStart) + 6 }} aria-hidden="true" />}
+              {isToday && nowMins >= dayStart && nowMins <= dayEnd && <NowLine style={{ top: yAt(nowMins) + 6 }} aria-hidden="true" />}
               <Blocks style={{ top: 7 }}>
                 {shownBlocks.map(b => {
-                  const c = cols.get(b.key);
-                  // While dragged: where it would go
+                  // While dragged: where it would go (on its own time); else its slot
                   const moving = drag?.key === b.key;
                   const s0 = moving ? drag!.start : b.start;
                   const e0 = moving ? drag!.end : b.end;
-                  const of = c?.of || 1;
+                  const place = moving ? { top: yAt(s0), height: yAt(e0) - yAt(s0) } : slot.get(b.key) ?? { top: yAt(s0), height: yAt(e0) - yAt(s0) };
                   return (
                     <BlockBtn key={b.key} type="button" $kind={b.kind} data-dragging={drag?.key === b.key}
                       style={{
                         // A little room above and below each card inside its time
-                        top: px(Math.max(s0, dayStart) - dayStart) + 4, height: Math.max(30, px(Math.min(e0, dayEnd) - Math.max(s0, dayStart)) - 9),
-                        // A short one (half an hour) keeps its title centred instead of the full padding
-                        ...(px(Math.min(e0, dayEnd) - Math.max(s0, dayStart)) - 9 < 44 ? { paddingTop: 0, paddingBottom: 0, justifyContent: 'center' } : {}),
-                        left: `calc(${((c?.col ?? 0) / of) * 100}%)`, width: `calc(${100 / of}% - ${of > 1 ? 4 : 0}px)`,
+                        top: place.top + CARD_GAP / 2, height: Math.max(30, place.height - CARD_GAP),
+                        left: 0, width: '100%',
                       }}
                       onPointerDown={e => onCardDown(b, 'move', e)} onPointerMove={onCardMove} onPointerUp={onCardUp} onPointerCancel={onCardUp}
                       // The keyboard's Enter / Space (no pointer) opens it
                       onClick={e => { if (e.detail === 0) openInJournal(b.id); }}
                       title={`${b.title} · ${KIND_NAME[b.kind]} — drag to move, drag its foot to stretch`}>
-                      {b.title}{px(e0 - s0) >= 60 && (moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>)}
+                      {/* The card's words, measured so the schedule makes room for all of them */}
+                      <span className="body" ref={el => { if (el) cardBodies.current.set(b.key, el); else cardBodies.current.delete(b.key); }}>
+                        {b.title}{moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>}
+                      </span>
                       <StretchGrip aria-hidden="true" onPointerDown={e => onCardDown(b, 'end', e)} />
                     </BlockBtn>
                   );
@@ -1032,7 +1095,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
               <LaterNote>Later · {laterDoses.map(g => `dose at ${clock(g.mins!)}`).join(', ')}</LaterNote>
             )}
             <EveningBtn type="button" aria-expanded={eveningOpen} onClick={toggleEvening}>
-              {eveningOpen ? 'Hide after 6 PM' : `Show after 6 PM${eveningCount ? ` · ${eveningCount} ${eveningCount === 1 ? 'item' : 'items'}` : ''}`}
+              {eveningOpen ? 'Hide after 7 PM' : `Show after 7 PM${eveningCount ? ` · ${eveningCount} ${eveningCount === 1 ? 'item' : 'items'}` : ''}`}
               <Icon name={eveningOpen ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={1.8} aria-hidden="true" />
             </EveningBtn>
           </Timeline>

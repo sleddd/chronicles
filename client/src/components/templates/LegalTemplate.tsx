@@ -15,7 +15,7 @@ const Page = styled.div`
 const Column = styled.main`
   max-width: 760px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: calc(40px + env(safe-area-inset-top, 0px)) 24px 80px;
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.65;

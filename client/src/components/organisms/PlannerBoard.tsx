@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import {
   DndContext, DragOverlay, closestCenter, pointerWithin, KeyboardSensor, MouseSensor, TouchSensor, useDroppable,
@@ -308,9 +308,18 @@ const Lane = styled.div<{ $over: boolean }>`
   position: relative;
   min-width: 0;
   border-left: 1px solid var(--border-subtle);
-  background-image: repeating-linear-gradient(to bottom, var(--border-subtle) 0 1px, transparent 1px ${HOUR_PX}px);
   background-color: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'transparent')};
   transition: background-color 120ms ease;
+`;
+
+/* An hour's line across a day (placed on the stretched scale) */
+const HourLine = styled.i`
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--border-subtle);
+  pointer-events: none;
 `;
 
 /* An event or meeting at its time on the day: a quiet block with an accent left rule */
@@ -440,15 +449,20 @@ const Grip = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: 4px; }
 `;
 
+/* The title and, on a short card, its length — which drops under the title when a word won't fit beside it */
 const Line = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px 8px;
 `;
 
 const Text = styled.div`
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: min-content;
+  max-width: 100%;
+  /* The goal line above the title is cut with an ellipsis: it mustn't widen the card */
+  & > ${Kicker} { contain: inline-size; }
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -456,6 +470,8 @@ const Text = styled.div`
 
 const Title = styled(CardTitle)`
   font-size: 15px;
+  /* Words wrap whole; a word breaks only when it can't fit a line on its own */
+  overflow-wrap: break-word;
 `;
 
 const Foot = styled.div`
@@ -561,8 +577,10 @@ function ResizeGrip({ card, resize }: { card: PlannerCard; resize: Resizing }) {
 
 interface CardActions {
   onOpen: (id: number) => void;
-  /** Plan a task for a day ('' = take it off). `overId`: the card it was dropped on; null = land it by priority */
-  onSchedule: (id: number, day: string, overId: number | null) => void;
+  /** Plan a task for a day ('' = take it off). `overId`: the card it was dropped on; null = land it by priority.
+      `at`: the time it was dropped at on the day (minutes from midnight) — it stays there.
+      `keep`: the other cards on the days it left and joined, at the times they show now, so none slides up */
+  onSchedule: (id: number, day: string, overId: number | null, at?: number, keep?: { id: number; at: number }[]) => void;
 }
 
 /* No tick on a planner card: a task is marked done where it lives (its board or the journal); a done one shows struck through.
@@ -595,12 +613,12 @@ function CardBody({ card, onSchedule, compact }: { card: PlannerCard; compact?: 
 }
 
 /* A card: in Unscheduled (in the flow), or on a day at its place (`at`: top and height in px) with the resize grip at its foot */
-function SortableCard({ card, at, resize, ...actions }: { card: PlannerCard; at?: { top: number; height: number }; resize?: Resizing } & CardActions) {
+function SortableCard({ card, at, resize, measure, ...actions }: { card: PlannerCard; at?: { top: number; height: number }; resize?: Resizing; measure?: (el: HTMLElement | null) => void } & CardActions) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   // On a day: placed at its time, as tall as its length, a little tighter inside
   const placed: React.CSSProperties = at ? { position: 'absolute', left: 6, right: 6, top: at.top, height: at.height, zIndex: 2, overflow: 'hidden', padding: '6px 10px 2px', gap: 4 } : {};
   return (
-    <TaskCard ref={setNodeRef} style={{ ...placed, transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging}
+    <TaskCard ref={el => { setNodeRef(el); measure?.(el); }} style={{ ...placed, transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging}
       {...attributes} {...listeners}
       onClick={() => actions.onOpen(card.id)}
       onKeyDown={e => { if (e.key === 'Enter') actions.onOpen(card.id); }}>
@@ -689,6 +707,25 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
   // The card in hand, kept from the start: paging to another week while holding
   // it takes its own day (and the card) off the screen
   const dragCard = useRef<{ card: PlannerCard; from: string } | null>(null);
+  // Each card's / event's natural height, measured after it draws (see the scale below)
+  const [needs, setNeeds] = useState<Record<string, number>>({});
+  const measured = useRef(new Map<string, HTMLElement>());
+  const measureRef = (k: string) => (el: HTMLElement | null) => { if (el) measured.current.set(k, el); else measured.current.delete(k); };
+  useLayoutEffect(() => {
+    const next: Record<string, number> = {};
+    let changed = false;
+    for (const [k, el] of measured.current) {
+      if (!el.isConnected) continue;
+      // Its height with no height set: just what it holds
+      const prev = el.style.height;
+      el.style.height = 'auto';
+      const h = Math.ceil(el.offsetHeight);
+      el.style.height = prev;
+      next[k] = h;
+      if (Math.abs((needs[k] ?? 0) - h) > 1) changed = true;
+    }
+    if (changed) setNeeds(next);
+  });
   const floating = dragging === null ? undefined : (all.find(c => c.id === dragging) ?? dragCard.current?.card);
 
   /* The scale: from 8 AM (or the earliest event) to 10 PM (or as far as the busiest day runs) */
@@ -705,7 +742,64 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
     ...lanes.flatMap(l => l.cards.map(c => (layouts.get(l.day)?.get(c.id) ?? dayStart) + c.hours * 60)),
   );
   const dayEnd = Math.min(24 * 60, Math.ceil(lastEnd / 60) * 60);
-  const height = px(dayEnd - dayStart) + 1;
+
+  /* Nothing overlaps and no card is cut off: each card and event is measured after it draws,
+     ones sharing a time on a day are stacked one under another, and every hour grows (on all
+     the days alike, so the rows stay level) until each day's stretch touching it fits */
+  const GAP = 12; // the room between cards (each is inset 5–6px top and bottom in its slot)
+  const needOf = (k: string) => Math.max(26, needs[k] ?? 0) + GAP;
+  const laneGroups = lanes.map(l => {
+    const at = layouts.get(l.day) ?? new Map<number, number>();
+    const items = [
+      ...l.events.filter(ev => ev.start !== undefined).map(ev => ({ key: `e:${l.day}:${ev.key}`, start: ev.start!, end: ev.end ?? ev.start! + 60 })),
+      ...l.cards.map(c => { const st = at.get(c.id) ?? dayStart; return { key: `t:${c.id}`, start: st, end: st + Math.round(c.hours * 60) }; }),
+    ].sort((a, b) => a.start - b.start);
+    const groups: { start: number; end: number; keys: string[] }[] = [];
+    for (const it of items) {
+      const g = groups[groups.length - 1];
+      if (g && it.start < g.end) { g.keys.push(it.key); g.end = Math.max(g.end, it.end); }
+      else groups.push({ start: it.start, end: it.end, keys: [it.key] });
+    }
+    return { items, groups };
+  });
+  const hourPx = (h: number) => {
+    let v = HOUR_PX;
+    for (const { groups } of laneGroups) for (const g of groups) {
+      if (!(g.start < (h + 1) * 60 && g.end > h * 60)) continue;
+      const room = g.keys.reduce((t, k) => t + needOf(k), 0);
+      v = Math.max(v, HOUR_PX * g.keys.length, (room / Math.max(1, g.end - g.start)) * 60);
+    }
+    return Math.ceil(v);
+  };
+  const hourTops: number[] = [];
+  { let y = 0; for (let h = Math.floor(dayStart / 60); h <= Math.ceil(dayEnd / 60); h++) { hourTops[h] = y; y += hourPx(h); } }
+  const yAt = (mins: number) => {
+    const m = Math.max(dayStart, Math.min(dayEnd, mins));
+    const h = Math.min(Math.floor(m / 60), Math.ceil(dayEnd / 60));
+    return (hourTops[h] ?? 0) - (hourTops[Math.floor(dayStart / 60)] ?? 0) + ((m - h * 60) / 60) * hourPx(h);
+  };
+  // The other way round: the time at a height down a day's lane
+  const minsAt = (y: number) => {
+    const base = hourTops[Math.floor(dayStart / 60)] ?? 0;
+    for (let h = Math.floor(dayStart / 60); h < Math.ceil(dayEnd / 60); h++) {
+      const top = (hourTops[h] ?? 0) - base;
+      if (y < top + hourPx(h)) return h * 60 + Math.max(0, (y - top) / hourPx(h)) * 60;
+    }
+    return dayEnd;
+  };
+  const slot = new Map<string, { top: number; height: number }>();
+  for (const { items, groups } of laneGroups) for (const g of groups) {
+    if (g.keys.length === 1) {
+      const it = items.find(x => x.key === g.keys[0])!;
+      slot.set(it.key, { top: yAt(it.start), height: yAt(it.end) - yAt(it.start) });
+      continue;
+    }
+    const top = yAt(g.start), bottom = yAt(g.end);
+    const total = g.keys.reduce((t, k) => t + needOf(k), 0);
+    let y = top;
+    for (const k of g.keys) { const hgt = ((bottom - top) * needOf(k)) / total; slot.set(k, { top: y, height: hgt }); y += hgt; }
+  }
+  const height = yAt(dayEnd) + 1;
   const hours: number[] = [];
   for (let h = dayStart / 60; h <= dayEnd / 60; h++) hours.push(h);
 
@@ -786,10 +880,35 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
     setDragging(null);
     if (!over) return;
     const id = Number(active.id);
-    const from = placeOf(id) ?? (dragCard.current?.card.id === id ? dragCard.current.from : undefined);
+    const held = dragCard.current;
+    const from = placeOf(id) ?? (held?.card.id === id ? held.from : undefined);
     dragCard.current = null;
     if (from === undefined) return;
     const target = String(over.id);
+    // Onto a day — its free space or a card on it — the card goes to the time where its top was let go
+    // (in 15-minute steps) and stays there
+    const dropDay = typeof over.id === 'number' ? (over.id === active.id ? from : placeOf(over.id)) : target.startsWith('day:') ? target.slice(4) : undefined;
+    const top = active.rect.current.translated?.top;
+    const laneEl = dropDay ? gridRef.current?.querySelector<HTMLElement>(`[data-day="${dropDay}"]`) : null;
+    if (dropDay && top !== undefined && laneEl) {
+      const card = all.find(c => c.id === id) ?? held?.card;
+      const len = Math.round((card?.hours ?? 1) * 60);
+      const y = top - (laneEl.getBoundingClientRect().top + laneEl.clientTop);
+      // Dropped on another card: it takes that card's time and its place in the stack there
+      // (before it dragged up, after it dragged down), so cards sharing a time keep the order they're put in
+      const onCard = typeof over.id === 'number' && over.id !== active.id ? over.id : null;
+      const at = onCard !== null
+        ? (layouts.get(dropDay)?.get(onCard) ?? dayStart)
+        : Math.max(dayStart, Math.min(24 * 60 - len, Math.round(minsAt(y) / 15) * 15));
+      if (onCard === null && dropDay === from && card?.at === at) return;
+      // Cards with no time of their own are packed from the top of the day: give them the times they
+      // show now, or the 8 AM slot would never stay empty (the next card would slide up into it)
+      const keep = lanes.filter(l => l.day === dropDay || l.day === from).flatMap(l => l.cards
+        .filter(c => c.id !== id && c.at === undefined && !c.done)
+        .map(c => ({ id: c.id, at: layouts.get(l.day)?.get(c.id) ?? dayStart })));
+      onSchedule(id, dropDay, onCard, at, keep);
+      return;
+    }
     // Onto a card: it takes that card's place (in that card's day)
     if (typeof over.id === 'number') {
       if (over.id === active.id) return;
@@ -927,7 +1046,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
               {/* The hours down the left */}
               <Scale role="rowheader" aria-label="Hours" style={{ gridRow: 2, gridColumn: 1, height }}>
                 {!labelsFolded && hours.map(h => (
-                  <HourMark key={h} style={{ top: Math.max(8, px(h * 60 - dayStart)) }}>{hourName(h)}</HourMark>
+                  <HourMark key={h} style={{ top: Math.max(8, yAt(h * 60)) }}>{hourName(h)}</HourMark>
                 ))}
               </Scale>
 
@@ -937,12 +1056,14 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
                   <DropZone key={lane.day} id={laneId(lane.day)}>
                     {(over, ref) => (
                       <Lane ref={ref} $over={over} role="cell" aria-label={lane.label} data-day={lane.day}
-                        style={{ gridRow: 2, gridColumn: c + 2, height, backgroundPosition: `0 ${px(Math.ceil(dayStart / 60) * 60 - dayStart)}px` }}>
+                        style={{ gridRow: 2, gridColumn: c + 2, height }}>
+                        {/* The hour lines, at each hour's place on the stretched scale */}
+                        {hours.map(h => <HourLine key={h} aria-hidden="true" style={{ top: yAt(h * 60) }} />)}
                         {lane.events.filter(ev => ev.start !== undefined).map(ev => {
                           const end = ev.end ?? ev.start! + 60;
                           return (
-                            <EventBlock key={ev.key} type="button" onClick={() => onOpenEvent(ev.id)}
-                              style={{ top: px(ev.start! - dayStart) + 1, height: Math.max(22, px(end - ev.start!) - 3) }}>
+                            <EventBlock key={ev.key} type="button" onClick={() => onOpenEvent(ev.id)} ref={measureRef(`e:${lane.day}:${ev.key}`)}
+                              style={(() => { const sl = slot.get(`e:${lane.day}:${ev.key}`) ?? { top: yAt(ev.start!), height: yAt(end) - yAt(ev.start!) }; return { top: sl.top + 5, height: Math.max(22, sl.height - 10) }; })()}>
                               {ev.title}<small>{ev.when}</small>
                             </EventBlock>
                           );
@@ -950,7 +1071,8 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
                         <SortableContext items={lane.cards.map(x => x.id)} strategy={verticalListSortingStrategy}>
                           {lane.cards.map(x => (
                             <SortableCard key={x.id} card={x} resize={onResize ? resize : undefined} {...actions}
-                              at={{ top: px((at.get(x.id) ?? dayStart) - dayStart) + 2, height: Math.max(26, px(x.hours * 60) - 4) }} />
+                              measure={measureRef(`t:${x.id}`)}
+                              at={(() => { const sl = slot.get(`t:${x.id}`) ?? { top: yAt(at.get(x.id) ?? dayStart), height: yAt((at.get(x.id) ?? dayStart) + x.hours * 60) - yAt(at.get(x.id) ?? dayStart) }; return { top: sl.top + 6, height: Math.max(26, sl.height - 12) }; })()} />
                           ))}
                         </SortableContext>
                         {lane.cards.length === 0 && lane.events.length === 0 && <Blank aria-hidden="true">Nothing planned</Blank>}

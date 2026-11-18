@@ -1176,7 +1176,7 @@ async function seedJournal(deps: SeedDeps): Promise<number> {
    week's menu, the doses due so far today, the exercise schedule ticked over the
    last week, this week's habit check-ins and today's wellness check-in. Run it
    again and it adds nothing it already added. */
-export async function seedTodayOnly(deps: SeedDeps): Promise<string> {
+export async function seedTodayOnly(deps: SeedDeps, { mealsOnly = false } = {}): Promise<string> {
   const entries = useEntriesStore.getState().decryptedEntries;
   const meta = (e: { metadata?: unknown }) => (e.metadata ?? {}) as Record<string, unknown>;
   const fieldsOf = (e: { metadata?: unknown }) => (meta(e)._customFields ?? {}) as Record<string, unknown>;
@@ -1208,6 +1208,8 @@ export async function seedTodayOnly(deps: SeedDeps): Promise<string> {
       if (n) done.push(`${n} meals`);
     }
   }
+  // Seed Today's Meals: just the meals, nothing else
+  if (mealsOnly) return done.length ? `Done — added ${done.join(', ')}.` : 'Nothing to add — today already has meals logged.';
 
   // This week's menu (Monday to Sunday), linked to recipes the account has
   if (findTopic(deps.topics, 'Menu Plan')) {

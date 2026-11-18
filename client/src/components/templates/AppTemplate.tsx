@@ -55,7 +55,7 @@ const Layout = styled.div<{ $hideAccentStripe?: boolean; $focusMode?: boolean }>
   padding-top: ${({ $hideAccentStripe }) => $hideAccentStripe ? '0' : '3px'};
 
   ${NAV_COMPACT} {
-    padding-top: ${({ $focusMode }) => $focusMode ? '0' : '56px'};
+    padding-top: ${({ $focusMode }) => $focusMode ? 'env(safe-area-inset-top, 0px)' : 'calc(76px + env(safe-area-inset-top, 0px))'};
   }
   ${onBackdrop}
 `;

@@ -14,7 +14,7 @@ const Layout = styled.div`
   overflow: hidden;
 
   ${NAV_COMPACT} {
-    padding-top: 56px;
+    padding-top: calc(102px + env(safe-area-inset-top, 0px));
   }
   ${onBackdrop}
 `;

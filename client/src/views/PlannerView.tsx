@@ -193,10 +193,20 @@ export function PlannerView() {
   const left = unscheduled(planned.filter(passes), today);
   /* ── Changes ── */
   // `overId`: the card it was dropped on (it takes that place); null = it lands among the day's tasks by priority
-  const schedule = (id: number, day: string, overId: number | null) => {
+  const schedule = (id: number, day: string, overId: number | null, at?: number, keep: { id: number; at: number }[] = []) => {
     const t = planned.find(x => x.id === id);
     if (!t) return;
-    if (t.scheduled !== day) {
+    if (day && at !== undefined) {
+      // Dropped at a time on a day: it keeps that time, and the other cards it passed keep theirs
+      const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      void saveFields(t.entry, { ...t.fields, scheduledDate: day, scheduledTime: hhmm(at) }).then(ok => {
+        if (!ok) showFlash('Couldn’t save that task’s time, so it’s back where it was. Try again.');
+      });
+      for (const k of keep) {
+        const o = planned.find(x => x.id === k.id);
+        if (o && !o.fields.scheduledTime) void saveFields(o.entry, { ...o.fields, scheduledTime: hhmm(k.at) });
+      }
+    } else if (t.scheduled !== day) {
       // Dropped somewhere, a task that was on its deadline's day gets a planned day of its own;
       // taken off its day, it loses its time of day too (or its deadline would put it straight back)
       // …and a time it was dragged to on the dashboard goes: it takes its place in the new day's order

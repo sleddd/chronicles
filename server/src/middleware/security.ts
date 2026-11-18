@@ -48,14 +48,29 @@ export function trustedTypesDirectives(path: string): string {
   return "; require-trusted-types-for 'script'; trusted-types default dompurify 'allow-duplicates'";
 }
 
+/** The pages search engines may index (lower-case, no trailing slash) */
+export const INDEXABLE_PAGES = new Set(['/', '/health-privacy', '/terms', '/license', '/report-a-bug']);
+
+/** A page (not a file or the API) that search engines must not index */
+export function isNoindexPage(path: string): boolean {
+  const p = path.toLowerCase().replace(/\/+$/, '') || '/';
+  if (p.startsWith('/api/') || p === '/api') return false;
+  // A file (has an extension in its last segment): scripts, styles, images, robots.txt, sitemap.xml…
+  if (/\.[a-z0-9]+$/.test(p.split('/').pop() ?? '')) return false;
+  return !INDEXABLE_PAGES.has(p);
+}
+
 export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
   // API responses carry the wrapped master key + salt (/me, /login), encrypted
   // entries and settings — keep them out of the browser's disk cache, where they
   // would outlive sign-out on a shared computer. Routes may override (ICS feed).
   if (req.path?.toLowerCase().startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
-  // Public share and public shelf pages open without signing in; keep search
-  // engines from indexing them (index.html says index, follow for the rest)
-  if (/^\/(share|public-shelf)\//i.test(req.path ?? '')) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  // Search engines index the landing page and the public legal / feedback pages only.
+  // Every other page (the app, sign-in, share links, public shelves) is the same
+  // index.html, which says "index, follow" for the landing page — so those pages get
+  // a noindex header, which wins. Files (scripts, images, robots.txt, the sitemap)
+  // and the API are left alone; robots.txt keeps crawlers out of /api/.
+  if (isNoindexPage(req.path ?? '')) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   // Prevent XSS from stealing in-memory key
   // This runs on every response, including the SPA (index.html and the built
   // assets from client/dist, served after this middleware), so the CSP below

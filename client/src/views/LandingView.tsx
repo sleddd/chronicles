@@ -59,7 +59,7 @@ const FEATURES: Feature[] = [
     label: 'Goals and planning', title: 'From multiyear roadmaps down to your daily plan.',
     body: 'Every task links directly to milestones and goals, giving you seamless movement between list views, Kanban boards, and a draggable Gantt roadmap. Filter instantly by goal or category, drag tasks into your weekly planner to map out your days, and see everything automatically appear on your main calendar next to synced events and bills.',
     points: [],
-    shot: ['planning-tasks', 'planning-roadmap', 'planning-planner'], size: [1268, 900],
+    shot: ['planning-planner', 'planning-tasks', 'planning-roadmap', 'planning-vision'], size: [1268, 900],
     alt: [
       'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
       'The roadmap: goals and their milestones as bars across the year, grouped by category',
@@ -70,7 +70,7 @@ const FEATURES: Feature[] = [
     label: 'Health and wellness', title: 'Health, wellness, and endurance training in one view.',
     body: 'Log daily habits, mood, sleep, hydration, and nutrition with macro and micronutrient targets, alongside scheduled workouts and multi-phase training plans built for big athletic goals like mountaineering. Stay consistent with effortless medication dose tracking, uncover symptom patterns and food triggers through built in reports, and print organized allergy, symptom, and medication lists for your doctor.',
     points: [],
-    shot: ['health-dashboard', 'health-meals', 'health-exercise-history', 'health-reports'],
+    shot: ['health-meals', 'health-dashboard', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
     alt: [
       'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs, today’s doses and a quick symptom log',

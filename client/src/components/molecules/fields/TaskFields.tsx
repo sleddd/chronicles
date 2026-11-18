@@ -88,6 +88,15 @@ const DateHalf = styled.div`
     & + & { border-left: none; border-top: 1px solid var(--border-card); }
   }
 `;
+/* Planned for: the date, then its time, side by side */
+const PlannedWhen = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  & > input { min-width: 0 !important; flex: 1 1 0; }
+`;
+
 interface TaskFieldsProps {
   values: TaskFieldValues;
   onChange: (values: TaskFieldValues) => void;
@@ -268,8 +277,15 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
           </DateHalf>
           <DateHalf>
             <RowLabel as="label" htmlFor={scheduledId}>Planned for</RowLabel>
-            <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
-              onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value || values.deadline ? {} : { scheduledPart: '', scheduledPartEnd: '' }) })} />
+            <PlannedWhen>
+              <BareDate id={scheduledId} type="date" value={values.scheduledDate ?? ''}
+                onChange={e => set({ scheduledDate: e.target.value, ...(e.target.value ? {} : { scheduledTime: '' }), ...(e.target.value || values.deadline ? {} : { scheduledPart: '', scheduledPartEnd: '' }) })} />
+              {/* A time on that day: where it sits in the planner (blank = it follows the day's order) */}
+              {values.scheduledDate ? (
+                <BareDate type="time" aria-label="Planned time" value={values.scheduledTime ?? ''} step={900}
+                  onChange={e => set({ scheduledTime: e.target.value })} />
+              ) : null}
+            </PlannedWhen>
           </DateHalf>
         </DateRow>
 

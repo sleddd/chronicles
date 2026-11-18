@@ -29,7 +29,7 @@ import { firstRun, gettingStarted, showChecklist, toggleTicked, type OnboardingS
 import { usePrivateSettings, type PrivateSettingKey } from '../services/privateSettings.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
-import { NAV_COMPACT_QUERY } from '../styles/breakpoints.js';
+import { NAV_COMPACT, NAV_COMPACT_QUERY } from '../styles/breakpoints.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { goalCategoryOf } from '../utils/goalCategories.js';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
@@ -37,7 +37,7 @@ import { plannerFacts, tasksByDay, parsePlannerOrder, type PlannerOrder } from '
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
-import { NotificationBell, BellBadge } from '../components/organisms/NotificationBell.js';
+import { NotificationBell } from '../components/organisms/NotificationBell.js';
 import { ErrorBoundary } from '../components/atoms/ErrorBoundary.js';
 import { useSaveFields } from '../hooks/useSaveFields.js';
 import { useTodayDoses, DOSES_CHANGED } from '../hooks/useTodayDoses.js';
@@ -202,6 +202,8 @@ const Inner = styled.div`
   margin: 0 auto;
   padding: 40px 32px 104px;
   @media (max-width: 768px) { padding: 28px 20px 72px; }
+  /* Phones / tablets: the greeting close under the top bar (the page already leaves room) */
+  ${NAV_COMPACT} { padding-top: 28px; }
 `;
 
 /* Voice and the sliders at the top right, the date line and greeting under them */
@@ -213,6 +215,7 @@ const Head = styled.div`
   /* The greeting row sits a little lower under the top of the photo (phones keep theirs) */
   margin-top: 25px;
   @media (max-width: 640px) { margin-top: 0; }
+  ${NAV_COMPACT} { margin-top: 0; }
 `;
 
 /* "Good evening, Olivia." (the date and weather are in Your Agenda now),
@@ -368,6 +371,8 @@ const QuickWrap = styled.div<{ $guided?: boolean }>`
   /* Room under it before Stats / the cards (their own 24–28px add to this) */
   margin-bottom: 24px;
   @media (max-width: 640px) { margin-top: 22px; margin-bottom: 16px; }
+  /* Phones / tablets: a little closer under the greeting */
+  ${NAV_COMPACT} { margin-top: 16px; }
   /* Getting started → Write your first entry: ringed in the accent */
   ${({ $guided }) => ($guided ? css`
     & > section { border-radius: 14px; outline: 2px solid var(--color-accent); outline-offset: 12px; }
@@ -2119,22 +2124,30 @@ const StatsHead = styled.div`
   h2 { margin: 0; ${cardLabel} }
 `;
 
-const StatsBar = styled.section<{ $phoneLast: boolean }>`
+const StatsBar = styled.section<{ $phoneLast: boolean; $folded?: boolean }>`
+  position: relative;
   display: flex;
   align-items: center;
   gap: 24px 40px;
   margin-top: 28px;
   padding: 30px 40px;
   ${cardShell}
-  /* The period picker, then a vertical divider before the figures */
+  /* The period picker, then a vertical divider before the figures — its words at the top */
   & > label {
     flex: none;
     box-sizing: content-box;
     width: 104px;
     align-self: stretch;
+    align-items: flex-start;
     padding-right: 32px;
     border-right: 1px solid var(--border-card);
   }
+  /* Folded: just the picker and the chevron (no divider, figures hidden) */
+  ${({ $folded }) => ($folded ? `
+    & > label { border-right: none; align-self: center; }
+    padding-top: 18px;
+    padding-bottom: 18px;
+  ` : '')}
   @media (max-width: 768px) {
     ${({ $phoneLast }) => ($phoneLast ? 'order: 3;' : '')}
     flex-direction: column;
@@ -2151,6 +2164,25 @@ const StatGrid = styled.div`
   gap: 22px 16px;
   min-width: 0;
   @media (max-width: 768px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+`;
+
+/* Folds / opens the Stats bar: a chevron at its end */
+const StatsFold = styled.button`
+  flex: none;
+  align-self: flex-start;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  @media (max-width: 768px) { position: absolute; top: 18px; right: 16px; }
 `;
 
 const StatFig = styled.div`
@@ -2175,7 +2207,7 @@ const STAT_PERIODS: { value: StatsPeriod; label: string }[] = [
   { value: 'all', label: 'All time' },
 ];
 
-function Stats({ meals, meds, exercise, phoneLast }: { meals: boolean; meds: boolean; exercise: boolean; phoneLast: boolean }) {
+function Stats({ meals, meds, exercise, phoneLast, folded, onToggleFold }: { meals: boolean; meds: boolean; exercise: boolean; phoneLast: boolean; folded?: boolean; onToggleFold?: () => void }) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const [period, setPeriod] = useState<StatsPeriod>('month');
@@ -2203,7 +2235,7 @@ function Stats({ meals, meds, exercise, phoneLast }: { meals: boolean; meds: boo
   ];
 
   return (
-    <StatsBar aria-label="Stats" $phoneLast={phoneLast}>
+    <StatsBar aria-label="Stats" $phoneLast={phoneLast} $folded={!!folded}>
       <LabelPick $wrap>
         <span>{STAT_PERIODS.find(p => p.value === period)?.label}</span>
         <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
@@ -2211,11 +2243,18 @@ function Stats({ meals, meds, exercise, phoneLast }: { meals: boolean; meds: boo
           {STAT_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
       </LabelPick>
-      <StatGrid>
-        {figures.filter(f => f.on).map(f => (
-          <StatFig key={f.label}><b>{f.value.toLocaleString()}</b><span>{f.label}</span></StatFig>
-        ))}
-      </StatGrid>
+      {!folded && (
+        <StatGrid>
+          {figures.filter(f => f.on).map(f => (
+            <StatFig key={f.label}><b>{f.value.toLocaleString()}</b><span>{f.label}</span></StatFig>
+          ))}
+        </StatGrid>
+      )}
+      {onToggleFold && (
+        <StatsFold type="button" aria-expanded={!folded} aria-label={folded ? 'Show the stats' : 'Fold the stats'} title={folded ? 'Show' : 'Fold'} onClick={onToggleFold}>
+          <Icon name={folded ? 'chevron-down' : 'chevron-up'} size={18} strokeWidth={1.8} />
+        </StatsFold>
+      )}
     </StatsBar>
   );
 }
@@ -2905,7 +2944,9 @@ export function DashboardView() {
       label: 'daily quote', on: shown('quote'),
       node: (
         <section aria-label="Daily quote">
-          {/* Just the quote — no title row; it keeps clear of the grip and chevron */}
+          {/* Just the quote — no title row; it keeps clear of the grip and chevron.
+              Folded, it's just its title, "Daily quote", like the other folded cards */}
+          {collapsed.has('quote') && <div style={{ display: 'flex' }}><h2>Daily quote</h2></div>}
           <QuoteText>{quote.text}</QuoteText>
           {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
         </section>
@@ -2955,7 +2996,7 @@ export function DashboardView() {
     // The wellness check-in keeps its own look: moved by its grip, never folded
     if (k === 'wellness' || k === 'clocks') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain spaced={k === 'wellness'}>{w.node}</SortableCard>;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote'} wide={wide}>
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote' || collapsed.has(k)} wide={wide}>
         {w.node}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
           aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
@@ -2976,7 +3017,8 @@ export function DashboardView() {
       <DropCol id="right" items={cols.right} dragging={dragging}>{right}</DropCol>
     </Columns>
     {/* Stats: across both columns, at the foot of the widgets */}
-    {shown('stats') && <StatsSpan><Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} /></StatsSpan>}
+    {shown('stats') && <StatsSpan><Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false}
+      folded={collapsed.has('stats')} onToggleFold={() => toggleFold('stats')} /></StatsSpan>}
   </>);
   const sideWidgets = <DropCol id="side" items={cols.side} gap={34} dragging={dragging}>{cols.side.map(k => card(k))}</DropCol>;
 
@@ -3018,8 +3060,7 @@ export function DashboardView() {
                 <ErrorBoundary fallback="none">
                   <NotificationBell variant="corner" trigger={({ count, ...p }) => (
                     <ViewBtn type="button" $on={p['aria-expanded']} title="Reminders" style={{ position: 'relative' }} {...p}>
-                      <MaterialIcon $size={22} aria-hidden="true">notifications</MaterialIcon>
-                      {count > 0 && <BellBadge aria-hidden="true" style={{ top: -2, right: -4 }}>{count}</BellBadge>}
+                      <MaterialIcon $size={22} aria-hidden="true" style={count > 0 ? { color: 'var(--color-accent)' } : undefined}>notifications</MaterialIcon>
                     </ViewBtn>
                   )} />
                 </ErrorBoundary>

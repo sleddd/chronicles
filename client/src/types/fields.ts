@@ -91,6 +91,8 @@ export interface TaskFieldValues {
   parentMilestoneId: number | null;
   /** YYYY-MM-DD the task is planned for (Planning → Planner, the calendar); unset = no day */
   scheduledDate?: string;
+  /** A time on the planned day ("HH:MM") — where it sits in the planner and on Your Agenda; blank = it follows the day's order */
+  scheduledTime?: string;
   /** The part of that day: 'morning' | 'noon' | 'night'; unset = any time */
   scheduledPart?: string;
   /** The last part of the day it covers, when stretched over more than one ('night' from 'morning' = all day) */

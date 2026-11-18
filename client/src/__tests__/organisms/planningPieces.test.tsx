@@ -99,9 +99,12 @@ describe('PlannerBoard', () => {
     expect(thu.textContent).not.toContain('Holiday party');
     expect(screen.getByRole('columnheader', { name: /Thu 12/ }).textContent).toContain('Holiday party');
     // Tasks sit one after another from 8 AM, never over the 9:00 event: 8–10 would cross it, so the FAQ starts at 9:30
-    const at = (title: string) => parseFloat((screen.getByText(title).closest('article') as HTMLElement).style.top);
-    expect(at('Write the FAQ')).toBe(92);   // 1½ h after 8 AM at 60px an hour, +2
-    expect(at('Review PR')).toBe(212);      // straight after the two-hour FAQ
+    // (The hours can stretch so no card is cut off, so check the order and that nothing overlaps)
+    const box = (el: HTMLElement) => ({ top: parseFloat(el.style.top), bottom: parseFloat(el.style.top) + parseFloat(el.style.height) });
+    const card = (title: string) => box(screen.getByText(title).closest('article') as HTMLElement);
+    const standup = box(screen.getByText('Standup').closest('button') as HTMLElement);
+    expect(card('Write the FAQ').top).toBeGreaterThanOrEqual(standup.bottom);           // after the 9:00 event, never over it
+    expect(card('Review PR').top).toBeGreaterThanOrEqual(card('Write the FAQ').bottom); // straight after the two-hour FAQ
     // An empty day says so
     expect(screen.getByRole('cell', { name: 'Fri 13' }).textContent).toBe('Nothing planned');
     // The hours fold away to a slim strip, and come back
@@ -213,7 +216,7 @@ describe('PlannerBoard — a task\'s length', () => {
   it('is as tall as its hours, and its grip\'s arrow keys change it by half an hour', () => {
     const p = props();
     renderWithTheme(<PlannerBoard {...p} lanes={lanes(2)} />);
-    expect((screen.getByText('Deep work').closest('article') as HTMLElement).style.height).toBe('116px');
+    expect((screen.getByText('Deep work').closest('article') as HTMLElement).style.height).toBe('108px'); // 2 h at 60px an hour, less 12px of room between cards
     expect(screen.getByText('2 h')).toBeTruthy();
     const grip = screen.getByRole('button', { name: /^Length of Deep work: 2 h/ });
     fireEvent.keyDown(grip, { key: 'ArrowDown' });

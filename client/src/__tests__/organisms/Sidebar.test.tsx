@@ -22,7 +22,7 @@ vi.mock('@/stores/uiStore', () => ({
 const mockSignOut = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/hooks/useSignOut', () => ({ useSignOut: () => mockSignOut }));
 // The reminders bell has its own tests
-vi.mock('@/components/organisms/NotificationBell', () => ({ NotificationBell: () => null, BellBadge: 'span' }));
+vi.mock('@/components/organisms/NotificationBell', () => ({ NotificationBell: () => null }));
 
 vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>

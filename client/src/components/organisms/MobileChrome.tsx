@@ -18,10 +18,12 @@ const MobileNavBar = styled.div<{ $open: boolean }>`
   display: none;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px 0 16px;
+  /* On an iPad / iPhone the clock and battery sit over the top of the page: the bar starts under them */
+  /* Room above the row (12px) and under it (8px) */
+  padding: calc(12px + env(safe-area-inset-top, 0px)) calc(10px + env(safe-area-inset-right, 0px)) 8px calc(16px + env(safe-area-inset-left, 0px));
   background: var(--bg-app);
   border-bottom: 1px solid ${({ $open }) => ($open ? 'transparent' : 'var(--border-subtle)')};
-  height: 56px;
+  height: calc(76px + env(safe-area-inset-top, 0px));
   position: fixed;
   top: 0;
   left: 0;
@@ -58,7 +60,9 @@ const LogoContainer = styled.button`
 
 const PageName = styled.span`
   font-family: var(--font-sans);
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 200;
+  letter-spacing: 0.02rem;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -75,11 +79,11 @@ const Panel = styled.nav`
   ${NAV_COMPACT} {
     display: block;
     position: fixed;
-    top: 56px;
+    top: calc(76px + env(safe-area-inset-top, 0px));
     left: 0;
     right: 0;
     z-index: 51;
-    max-height: calc(100dvh - 56px);
+    max-height: calc(100dvh - 76px - env(safe-area-inset-top, 0px));
     overflow-y: auto;
     padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
     background: var(--bg-app);
@@ -103,7 +107,8 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 16px;
-  font-weight: ${({ $active }) => ($active ? 600 : 400)};
+  /* Light names (Open Sans's lightest bundled weight is 300), the current page a step heavier */
+  font-weight: ${({ $active }) => ($active ? 400 : 300)};
   color: ${({ $active, $quiet }) => ($active ? 'var(--text-primary)' : $quiet ? 'var(--text-muted)' : 'var(--text-primary)')};
   text-align: left;
   cursor: pointer;
@@ -125,7 +130,7 @@ const Overlay = styled.div<{ $open: boolean }>`
   ${NAV_COMPACT} {
     display: ${({ $open }) => ($open ? 'block' : 'none')};
     position: fixed;
-    inset: 56px 0 0 0;
+    inset: calc(76px + env(safe-area-inset-top, 0px)) 0 0 0;
     background: rgba(0, 0, 0, 0.3);
     z-index: 50;
   }

@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { Chip, Chips } from './fields/formKit.js';
 import { glassControl } from '../../styles/wallpaper.js';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import {
   MEDIA_SORTS, SHELVES, shelfFilterLabel, formatRating,
   type MediaShelf, type MediaSort, type MediaType,
@@ -198,6 +199,7 @@ const ViewBtn = styled.button<{ $active: boolean }>`
 
 const TypeRow = styled(Chips)<{ $phone: boolean }>`
   margin-top: 24px;
+  ${NAV_COMPACT} { margin-top: 34px; }
   ${({ $phone }) => ($phone ? 'flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; &::-webkit-scrollbar { display: none; }' : '')}
   ${Chip} { height: 36px; padding: 0 18px; flex: none; }
   /* The forms' chips are faded on purpose; here they sit on the page (or the

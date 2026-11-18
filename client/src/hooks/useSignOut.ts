@@ -30,14 +30,14 @@ export function useSignOut(): () => Promise<void> {
  * browser stores stays — the encrypted journal cache, sealed drafts, and this
  * browser's trust — for the same person's next sign-in.
  */
-export function useEndSession(): (signInNote: string) => Promise<void> {
+export function useEndSession(): (signInNote?: string) => Promise<void> {
   const { endSession } = useAuth();
   const { clearKey } = useEncryption();
   const navigate = useNavigate();
 
-  return useCallback(async (signInNote: string) => {
+  return useCallback(async (signInNote?: string) => {
     clearKey();
     await endSession();
-    navigate('/login', { replace: true, state: { signInNote } });
+    navigate('/login', { replace: true, state: signInNote ? { signInNote } : undefined });
   }, [clearKey, endSession, navigate]);
 }

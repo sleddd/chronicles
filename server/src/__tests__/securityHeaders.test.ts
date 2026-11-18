@@ -12,15 +12,17 @@ function createMockRes() {
 }
 
 describe('securityHeaders middleware', () => {
-  it('tells search engines not to index public share and public shelf pages, and nothing else', () => {
-    for (const path of ['/share/abc', '/public-shelf/abc123']) {
+  it('lets search engines index the landing and public pages only — the app, sign-in, shares and shelves get noindex', () => {
+    for (const path of ['/share/abc', '/public-shelf/abc123', '/media', '/dashboard', '/journal', '/login', '/sign-up', '/goals/overview']) {
       const res = createMockRes() as any;
       securityHeaders({ path } as any, res, vi.fn());
       expect(res.headers['X-Robots-Tag']).toBe('noindex, nofollow');
     }
-    const res = createMockRes() as any;
-    securityHeaders({ path: '/media' } as any, res, vi.fn());
-    expect(res.headers['X-Robots-Tag']).toBeUndefined();
+    for (const path of ['/', '/terms', '/health-privacy/', '/license', '/report-a-bug', '/robots.txt', '/sitemap.xml', '/assets/index-abc.js', '/api/auth/me']) {
+      const res = createMockRes() as any;
+      securityHeaders({ path } as any, res, vi.fn());
+      expect(res.headers['X-Robots-Tag']).toBeUndefined();
+    }
   });
 
   it('sets Content-Security-Policy header', () => {

@@ -17,7 +17,7 @@ const Layout = styled.div<{ $focusMode?: boolean }>`
   overflow: hidden;
 
   ${NAV_COMPACT} {
-    padding-top: ${({ $focusMode }) => $focusMode ? '0' : '56px'};
+    padding-top: ${({ $focusMode }) => $focusMode ? 'env(safe-area-inset-top, 0px)' : 'calc(76px + env(safe-area-inset-top, 0px))'};
   }
   ${onBackdrop}
 `;
@@ -55,6 +55,8 @@ const Main = styled.main`
   /* Phones: a little more room at the sides on top of each page's own 16px
      gutter, so content never runs close to the screen edge */
   @media (max-width: 768px) { padding-inline: 8px; }
+  /* Phones / tablets: a little room under the top bar, inside the page so the photo still runs up to the bar */
+  ${NAV_COMPACT} { padding-top: 26px; }
 `;
 
 interface ContentTemplateProps {

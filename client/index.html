@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/chronicles-logo.svg?v=11" />
     <link rel="alternate icon" href="/favicon.ico?v=11" />
     <!-- Light until the app starts: main.tsx switches to the remembered theme before it paints -->
@@ -15,6 +15,78 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=10" />
     <!-- All fonts, the Material Symbols icons included, are bundled (src/styles/fonts.css) -->
     <title>Chronicles — Zero-Knowledge Encrypted Journal &amp; Digital Day Planner</title>
+    <meta name="application-name" content="Chronicles" />
+    <meta name="author" content="Chronicles" />
+
+    <!-- Open Graph (Facebook, LinkedIn, iMessage, Slack… link previews) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Chronicles" />
+    <meta property="og:url" content="https://mydailychronicles.com/" />
+    <meta property="og:title" content="Chronicles — Zero-Knowledge Encrypted Journal &amp; Digital Day Planner" />
+    <meta property="og:description" content="A private life dashboard: journal, health, planning, kitchen and finance in one place, encrypted on your device before it's saved." />
+    <meta property="og:image" content="https://mydailychronicles.com/icons/icon-512x512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="The Chronicles book mark" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X cards -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Chronicles — Zero-Knowledge Encrypted Journal &amp; Digital Day Planner" />
+    <meta name="twitter:description" content="A private life dashboard: journal, health, planning, kitchen and finance in one place, encrypted on your device before it's saved." />
+    <meta name="twitter:image" content="https://mydailychronicles.com/icons/icon-512x512.png" />
+    <meta name="twitter:image:alt" content="The Chronicles book mark" />
+
+    <!-- Structured data for search engines and AI assistants: who makes it, the site, and the app -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://mydailychronicles.com/#organization",
+          "name": "Chronicles",
+          "url": "https://mydailychronicles.com/",
+          "logo": "https://mydailychronicles.com/icons/icon-512x512.png",
+          "email": "support@mydailychronicles.com"
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://mydailychronicles.com/#website",
+          "url": "https://mydailychronicles.com/",
+          "name": "Chronicles",
+          "description": "A zero-knowledge encrypted journal and digital day planner.",
+          "publisher": { "@id": "https://mydailychronicles.com/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://mydailychronicles.com/#app",
+          "name": "Chronicles",
+          "url": "https://mydailychronicles.com/",
+          "applicationCategory": "LifestyleApplication",
+          "operatingSystem": "Web browser; installable as an app on iPhone, iPad, Android and desktop",
+          "description": "Chronicles is a private life dashboard. It brings a journal, health tracking, goals and planning, a kitchen, finance and a media journal into one place, and encrypts everything on your own device before it is saved, so the server can't read it.",
+          "featureList": [
+            "Zero-knowledge encryption: entries are encrypted on your device with AES-256 before they are saved",
+            "Journal with rich text, drawing, dictation and photos",
+            "Daily dashboard with an agenda, priorities, wins and quick entry",
+            "Health tracking: meals and nutrition, medications and doses, symptoms, exercise, sleep, mood, water and cycle",
+            "Health reports that look for patterns",
+            "Goals, milestones, tasks, a planner, a roadmap and habits",
+            "Calendar with events and meetings, and optional Google Calendar sync",
+            "Kitchen: recipes, weekly menus and shopping lists",
+            "Optional finance: budget, bills, spending, savings and debts, entered by hand",
+            "Media journal for books, movies, TV and music, with an optional public shelf",
+            "Optional in-app AI using your own provider key",
+            "Passkeys and two-factor sign-in"
+          ],
+          "publisher": { "@id": "https://mydailychronicles.com/#organization" },
+          "isPartOf": { "@id": "https://mydailychronicles.com/#website" }
+        }
+      ]
+    }
+    </script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",

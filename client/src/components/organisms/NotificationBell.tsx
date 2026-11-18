@@ -154,24 +154,6 @@ const Links = styled.div`
   button:hover { text-decoration: underline; }
 `;
 
-/* The count on the bell: a small accent disc */
-export const BellBadge = styled.span`
-  position: absolute;
-  top: -5px;
-  right: -8px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--on-accent, #fff);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-  text-align: center;
-`;
-
 /* Phones / tablets: the bell in the top bar */
 const BarBell = styled.button`
   position: relative;
@@ -386,13 +368,12 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigge
     <>
       {trigger ? trigger(props) : variant === 'corner' ? (
         <CornerBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
-          <MaterialIcon $size={18} aria-hidden="true">notifications</MaterialIcon>
-          {due.length > 0 && <BellBadge aria-hidden="true" style={{ top: -2, right: -4, minWidth: 15, height: 15, padding: '0 4px', fontSize: 10, lineHeight: '15px' }}>{due.length}</BellBadge>}
+          {/* No count: the bell turns the accent while something's due */}
+          <MaterialIcon $size={18} aria-hidden="true" style={due.length > 0 ? { color: 'var(--color-accent)' } : undefined}>notifications</MaterialIcon>
         </CornerBell>
       ) : (
         <BarBell type="button" ref={btnRef} onClick={props.onClick} aria-expanded={!!open} aria-haspopup="dialog" aria-label={label} title="Reminders">
-          <MaterialIcon $size={24} aria-hidden="true">notifications</MaterialIcon>
-          {due.length > 0 && <BellBadge aria-hidden="true" style={{ top: 2, right: 0 }}>{due.length}</BellBadge>}
+          <MaterialIcon $size={24} aria-hidden="true" style={due.length > 0 ? { color: 'var(--color-accent)' } : undefined}>notifications</MaterialIcon>
         </BarBell>
       )}
       {open && createPortal(

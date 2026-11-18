@@ -18,7 +18,7 @@ const Layout = styled.div`
   overflow: hidden;
 
   ${NAV_COMPACT} {
-    padding-top: 56px;
+    padding-top: calc(76px + env(safe-area-inset-top, 0px));
   }
   ${onBackdrop}
 `;
@@ -46,6 +46,8 @@ const Body = styled.div`
   /* The wallpaper (when one's chosen) sits under the content, over this background */
   position: relative;
   isolation: isolate;
+  /* Phones / tablets: a little room under the top bar, inside the page so the photo still runs up to the bar */
+  ${NAV_COMPACT} { padding-top: 26px; }
 `;
 
 const Content = styled.div`

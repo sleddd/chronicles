@@ -1,0 +1,8 @@
+# Chronicles — the landing page and the public pages may be crawled and indexed.
+# The app itself is behind sign-in; its pages answer "X-Robots-Tag: noindex", so they
+# stay out of search results (they aren't disallowed here, or crawlers couldn't see that).
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://mydailychronicles.com/sitemap.xml

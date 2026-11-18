@@ -13,7 +13,7 @@ vi.mock('@/hooks/useSignOut', () => ({ useEndSession: () => endSession }));
 vi.mock('@/services/drafts', () => ({ flushDrafts }));
 vi.mock('@/services/api', () => ({ auth: { me }, lastRequestTime: () => lastRequest.at }));
 
-import { ACTIVITY_STORE_KEY, IDLE_NOTE, IDLE_SIGN_OUT_MS, isIdle, useIdleSignOut } from '@/hooks/useIdleSignOut';
+import { ACTIVITY_STORE_KEY, IDLE_SIGN_OUT_MS, isIdle, useIdleSignOut } from '@/hooks/useIdleSignOut';
 import { ACTIVITY_EVENT, browserIsIdle, markActivity, resetActivityForTests } from '@/services/activity';
 
 const MIN = 60_000;
@@ -51,7 +51,7 @@ describe('useIdleSignOut', () => {
     await settle();
     expect(flushDrafts).toHaveBeenCalledTimes(1);
     expect(endSession).toHaveBeenCalledTimes(1);
-    expect(endSession).toHaveBeenCalledWith(IDLE_NOTE);
+    expect(endSession).toHaveBeenCalledWith(); // no note on the sign-in page
   });
 
   it('someone at the page keeps it going', async () => {

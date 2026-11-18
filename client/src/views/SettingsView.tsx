@@ -681,6 +681,25 @@ export function SettingsView() {
     }
   };
 
+  const [seedingMeals, setSeedingMeals] = useState(false);
+  const [seedMealsResult, setSeedMealsResult] = useState('');
+  const handleSeedMeals = async () => {
+    setSeedingMeals(true); setSeedMealsResult('');
+    try {
+      const freshTopics = await topicsApi.getAll();
+      setSeedMealsResult(await seedTodayOnly({
+        encryptPost: encryptNewPost,
+        topics: freshTopics as { id: number; name: string; icon: string | null; color: string | null }[],
+        addDecryptedEntry,
+        onProgress: (msg) => setSeedMealsResult(msg),
+      }, { mealsOnly: true }));
+    } catch (err) {
+      setSeedMealsResult(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSeedingMeals(false);
+    }
+  };
+
   const [seedingMedia, setSeedingMedia] = useState(false);
   const [seedMediaResult, setSeedMediaResult] = useState('');
   const handleSeedMedia = async () => {
@@ -1493,6 +1512,16 @@ export function SettingsView() {
           }
         />
         {seedTodayResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedTodayResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedTodayResult}</div>}
+        <SettingsRow
+          title="Seed Today's Meals"
+          description="Add only today's meals (with their nutrients, none later than now), when today has none logged yet. Nothing else is touched"
+          action={
+            <ActionButton onClick={() => void handleSeedMeals()} disabled={seedingMeals}>
+              {seedingMeals ? <Spinner size={14} /> : "Seed Today's Meals"}
+            </ActionButton>
+          }
+        />
+        {seedMealsResult && <div style={{ padding: '0 20px 12px', fontSize: 13, color: seedMealsResult.startsWith('Failed') ? '#9B4444' : '#5A8A6A' }}>{seedMealsResult}</div>}
         <SettingsRow
           title="Seed Exercise Schedule"
           description="Add only an exercise schedule — morning yoga, an evening walk, leg strength and an evening stretch, most with several exercises — a week of ticked sessions, and a training plan if there isn’t one. Adds to existing data"
