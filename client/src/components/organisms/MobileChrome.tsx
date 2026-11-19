@@ -273,10 +273,11 @@ export function MobileChrome() {
     // views never takes the grey fill (like the rail) — open, it's on the rail's parent colour (--bg-rail-logo)
     const viewShowing = !!item.views?.some(v => v.active);
     const hasViews = !!item.views?.length;
-    const shown = hasViews && sections.isOpen(item.key, item.active);
+    const shown = hasViews && sections.isOpen(item.key);
     const btn = (
       <NavRow key={item.key} type="button" $active={item.active && !viewShowing && !hasViews} $quiet={quiet} aria-current={item.active && !viewShowing ? 'page' : undefined}
-        onClick={() => { if (hasViews && !shown) sections.toggle(item.key, item.active); go(item.path); }}>
+        // The sheet closes on the way there; the section is open the next time it's shown (until another page)
+        onClick={() => { if (hasViews) sections.openWith(item.key, item.path); go(item.path); }}>
         <MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon>
         <span>{item.label}</span>
       </NavRow>
@@ -288,7 +289,7 @@ export function MobileChrome() {
         <SectionWrap>
           {btn}
           <SectionChevron type="button" $open={shown} aria-expanded={shown} aria-controls={listId}
-            aria-label={`${shown ? 'Hide' : 'Show'} ${item.label} views`} onClick={() => sections.toggle(item.key, item.active)}>
+            aria-label={`${shown ? 'Hide' : 'Show'} ${item.label} views`} onClick={() => sections.toggle(item.key)}>
             <Icon name="chevron-down" size={20} strokeWidth={1.8} aria-hidden="true" />
           </SectionChevron>
         </SectionWrap>

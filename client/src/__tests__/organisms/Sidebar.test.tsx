@@ -169,26 +169,30 @@ describe('Sidebar', () => {
   describe('expanded: each section’s views', () => {
     beforeEach(() => { localStorage.clear(); });
 
-    it('the current section shows its views, the one showing marked; others open from their chevron', () => {
+    it('every section starts closed; its chevron opens its views, the one showing marked, and opening another closes it', () => {
       renderAt('/health/symptoms');
+      expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Show Health views' }));
       const health = screen.getByRole('list', { name: 'Health views' });
       expect(within(health).getAllByRole('button').map(b => b.textContent)).toEqual(
         ['Dashboard', 'Meals', 'Exercise', 'Habits', 'Symptoms', 'Med list', 'Med history', 'Allergies', 'Reports']);
       expect(within(health).getByRole('button', { name: 'Symptoms' })).toHaveAttribute('aria-current', 'page');
-      // Planning is closed until its chevron is pressed
-      expect(screen.queryByRole('list', { name: 'Planning views' })).toBeNull();
+      // One at a time: opening Planning closes Health
       fireEvent.click(screen.getByRole('button', { name: 'Show Planning views' }));
+      expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
       const planning = screen.getByRole('list', { name: 'Planning views' });
       fireEvent.click(within(planning).getByRole('button', { name: 'Roadmap' }));
       expect(mockNavigate).toHaveBeenCalledWith('/goals/roadmap');
     });
 
-    it('leaves out views whose feature is off, and remembers a section closed by hand', () => {
+    it('leaves out views whose feature is off, and remembers nothing: a reload starts closed', () => {
       featureFlags = { medicationEnabled: false, foodEnabled: true, exerciseEnabled: true, allergiesEnabled: true };
+      localStorage.setItem('nav-sections-open-v1', '{"health":true}');
       const { unmount } = renderAt('/health');
-      expect(within(screen.getByRole('list', { name: 'Health views' })).queryByRole('button', { name: 'Med list' })).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'Hide Health views' }));
       expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
+      expect(localStorage.getItem('nav-sections-open-v1')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Show Health views' }));
+      expect(within(screen.getByRole('list', { name: 'Health views' })).queryByRole('button', { name: 'Med list' })).toBeNull();
       unmount();
       renderAt('/health');
       expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();

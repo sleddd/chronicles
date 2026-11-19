@@ -407,20 +407,20 @@ export const Sidebar = memo(function Sidebar() {
   const [lastOpened, setLastOpened] = useState<string | null>(null);
   const accentKey = (() => {
     const last = lastOpened ? items.find(i => i.key === lastOpened) : undefined;
-    if (last && sections.isOpen(last.key, last.active)) return last.key;
+    if (last && sections.isOpen(last.key)) return last.key;
     return items.find(i => i.active)?.key ?? null;
   })();
   const toggleSection = (item: NavItem, shown: boolean) => {
-    sections.toggle(item.key, item.active);
+    sections.toggle(item.key);
     setLastOpened(shown ? (lastOpened === item.key ? null : lastOpened) : item.key);
   };
   const row = (item: NavItem) => {
     const hasViews = open && !!item.views?.length;
-    const shown = hasViews && sections.isOpen(item.key, item.active);
+    const shown = hasViews && sections.isOpen(item.key);
     const btn = (
       <NavIconBtn key={item.key} $active={item.active} $tab={open ? item.key === accentKey : undefined} $fullTab={open}
         // A section's row also opens its views (never closes them — that's the arrow)
-        onClick={() => { if (hasViews && !shown) sections.toggle(item.key, item.active); setLastOpened(hasViews ? item.key : null); navigate(item.path); }}
+        onClick={() => { if (hasViews) sections.openWith(item.key, item.path); setLastOpened(hasViews ? item.key : null); navigate(item.path); }}
         title={open ? undefined : item.label}
         aria-current={item.active && !item.views?.some(v => v.active) ? 'page' : undefined}>
         <IconCell><MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon></IconCell>

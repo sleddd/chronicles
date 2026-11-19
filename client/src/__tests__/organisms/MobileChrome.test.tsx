@@ -48,11 +48,14 @@ describe('MobileChrome drop-down menu', () => {
     expect(screen.getByRole('button', { name: /Journal/, hidden: true })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('a section shows its views under it (the current one open), and a view closes the menu on the way there', () => {
+  it('sections start closed; one opens at a time under its row, and a view closes the menu on the way there', () => {
     renderAt('/goals/planner');
+    expect(screen.queryByRole('list', { name: 'Planning views', hidden: false })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show Planning views', hidden: true }));
     const planning = screen.getByRole('list', { name: 'Planning views', hidden: true });
     expect(within(planning).getByRole('button', { name: 'Planner', hidden: true })).toHaveAttribute('aria-current', 'page');
     fireEvent.click(screen.getByRole('button', { name: 'Show Kitchen views', hidden: true }));
+    expect(screen.getByRole('button', { name: 'Show Planning views', hidden: true })).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(within(screen.getByRole('list', { name: 'Kitchen views', hidden: true })).getByRole('button', { name: 'Recipes', hidden: true }));
     expect(mockNavigate).toHaveBeenCalledWith('/menu/recipes');
     expect(mockSetOpen).toHaveBeenCalledWith(false);
