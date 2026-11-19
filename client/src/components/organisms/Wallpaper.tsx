@@ -10,7 +10,7 @@ import { shownWallpaper, wallpaperById, wallpaperSrc } from '../../utils/wallpap
    over its background. While it shows, <html data-wallpaper> turns the
    cards and controls over it to glass (styles/wallpaper.ts). */
 
-const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $solid?: number; $shade: number; $wash: boolean; $lightY?: string }>`
+const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $solid?: number; $shade: number; $wash: boolean }>`
   position: absolute;
   inset: 0 0 auto 0;
   height: ${({ $height }) => $height};
@@ -101,7 +101,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
   `)}
   /* Light: which part of the picture shows in its box (a higher % = further down the
      picture). Content pages and the dashboard move the picture up; the journal keeps the 55% default */
-  ${({ $lightY }) => ($lightY ? `html[data-theme='light'] &::before { background-position: center ${$lightY}; }` : '')}
+  /* The picture sits where it does in dark (center 55%) in light theme too — no light-only position */
   @media print { display: none; }
 `;
 
@@ -156,20 +156,9 @@ const FADE = 260;
 /** Light theme, the dashboard: how far above the solid mark the fade begins, so it runs
  *  longer and reaches up into the image (the image itself doesn't move or grow) */
 const LIGHT_FADE_UP = 200;
-/** Light theme, the content pages and the dashboard (not the journal): the picture is moved up
- *  in its box (a higher % shows a part further down the picture; the default is 55%) */
-const CONTENT_LIGHT_Y = '84%';
 /** The photo's height on an ordinary page */
 const STANDARD_HEIGHT = 'min(520px, 60vh)';
 
-/** Light theme, the dashboard: its photo box is taller than a content page's, so the same
- *  percentage barely moved the picture. This puts the picture exactly where a content page
- *  has it (the same distance from the top of the page), stopping at the picture's own
- *  bottom edge so no gap opens under it. Light only — dark is never touched. */
-const dashboardLightY = (solid: number): string => {
-  const share = parseFloat(CONTENT_LIGHT_Y) / 100;
-  return `max(100%, calc(${CONTENT_LIGHT_Y} - ${(share * (solid + FADE)).toFixed(1)}px + ${share} * ${STANDARD_HEIGHT}))`;
-};
 
 /** height: how far down the page the photo reaches before it has faded out.
  *  solid: instead, stay solid down to this many px, then fade over FADE px.
@@ -177,7 +166,7 @@ const dashboardLightY = (solid: number): string => {
  *  own (a full-height overflow box), not the element the photo sits in, so the
  *  photo follows that panel's scroll (smaller scrolling boxes — tables, the
  *  menu grid — are ignored). The journal passes false: its title row stays put. */
-export function Wallpaper({ height = STANDARD_HEIGHT, follow = true, solid, wash = true, lightY }: { height?: string; follow?: boolean; solid?: number; wash?: boolean; lightY?: string } = {}) {
+export function Wallpaper({ height = STANDARD_HEIGHT, follow = true, solid, wash = true }: { height?: string; follow?: boolean; solid?: number; wash?: boolean } = {}) {
   const id = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
   const paper = wallpaperById(id);
   const src = paper ? wallpaperSrc(paper.id) : '';
@@ -222,5 +211,5 @@ export function Wallpaper({ height = STANDARD_HEIGHT, follow = true, solid, wash
   }, [src]);
 
   if (!paper) return null;
-  return <Layer ref={layerRef} $src={src} $shown={loaded === src} $height={solid === undefined ? height : `${solid + FADE}px`} $solid={solid} $shade={shade} $wash={wash} $lightY={lightY ?? (solid !== undefined ? dashboardLightY(solid) : wash ? CONTENT_LIGHT_Y : undefined)} aria-hidden="true" data-print-hide />;
+  return <Layer ref={layerRef} $src={src} $shown={loaded === src} $height={solid === undefined ? height : `${solid + FADE}px`} $solid={solid} $shade={shade} $wash={wash} aria-hidden="true" data-print-hide />;
 }

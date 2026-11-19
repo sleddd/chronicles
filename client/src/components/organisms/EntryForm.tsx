@@ -341,6 +341,8 @@ const TaskHead = styled.div`
   z-index: 5; /* the topic menu drops over the rows */
   /* The journal: full screen / close right at the pane's edge (10px in) */
   &[data-journal] { padding-right: 10px; }
+  /* The Quick entry: the topic picker a little further down from the card's top */
+  &:not([data-journal]) { padding-top: 26px; }
   /* Close: a round button with the reminders bell's fill, no outline — the dark smoked glass in
      dark, the panel colour with a light shadow in light */
   && button[aria-label='Close'] {
@@ -377,7 +379,7 @@ const TitleBox = styled.div`
   /* An outline only — no fill */
   background: transparent;
   overflow: clip;
-  &&&& ${EditorArea} { --editor-surface: transparent; margin: 0; padding: 22px 16px 26px 22px; border: none; border-radius: 0; }
+  &&&& ${EditorArea} { --editor-surface: transparent; margin: 0; padding: 22px 16px 36px 22px; border: none; border-radius: 0; }
   /* Typing never lights it up: no accent outline on the box or the writing area */
   && .tiptap:focus, && .tiptap:focus-visible, && [contenteditable]:focus, && [contenteditable]:focus-visible { outline: none; box-shadow: none; }
 `;
@@ -388,18 +390,19 @@ const TitleFoot = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 6px 12px;
-  padding: 10px 10px 10px 16px;
+  padding: 10px 10px 18px 16px;
   border-top: 1px solid var(--border-card);
-  /* A shade darker than the title above it */
-  background: rgba(0, 0, 0, 0.16);
-  html[data-theme='light'] & { background: rgba(20, 24, 32, 0.04); }
+  /* No fill of its own: the box's colour, ruled off by the hairline above */
+  background: transparent;
 `;
 
 const TitleTools = styled.div`
   display: flex;
   align-items: center;
   gap: 2px;
-  & > button, & > div > button { width: 36px; height: 36px; color: var(--text-secondary); }
+  /* A little faded, brightening on hover */
+  & > button, & > div > button { width: 36px; height: 36px; color: color-mix(in srgb, var(--text-secondary) 62%, transparent); }
+  & > button:hover:not(:disabled), & > div > button:hover:not(:disabled) { color: var(--text-primary); }
   & > button[aria-pressed="true"] { color: var(--color-accent); }
 `;
 
@@ -598,6 +601,12 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     @media (max-width: 768px) { margin-top: 18px; }
     /* The title / text box has no outline here (the card is its frame); its tools strip stays */
     && ${TitleBox} { border-color: transparent; border-radius: 0; }
+    /* …so its tools strip starts at the hairline's left end: the Status pill flush with it */
+    && ${TitleFoot} { padding-left: 0; }
+    /* With no Status, the T tool leads: its icon (not its button's padding) on the edge */
+    && ${TitleFoot} > ${TitleTools}:first-child { margin-left: -9px; }
+    /* …and the writing (and its placeholder) starts level with the row's label: its left edge and top */
+    &&&&& ${TitleBox} ${EditorArea} { padding-left: 0; padding-top: 18px; }
   ` : '')}
   /* The writing area is the card's title row; the tools sit at its top right */
   && ${EditorArea} { margin: 0; padding: 28px ${CARD_X} 22px; border: none; border-radius: 0; }
@@ -1657,7 +1666,8 @@ export function EntryForm({
           <TitleBox>
             <EditorArea $quick={quick}>{editorEl}</EditorArea>
             {/* A goal's Status sits here, like a task's; other topics just have the tools */}
-            <TitleFoot style={customType === 'goal' || customType === 'milestone' ? undefined : { justifyContent: 'flex-end' }}>
+            {/* With a Status (goal, milestone) it leads and the tools go right; without one the tools start at the left, together */}
+            <TitleFoot style={customType === 'goal' || customType === 'milestone' ? undefined : { justifyContent: 'flex-start' }}>
               {customType === 'milestone' && (
                 <MilestoneStatusPick values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues}
                   onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />

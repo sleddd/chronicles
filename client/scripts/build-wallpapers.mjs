@@ -14,7 +14,9 @@
  *
  * Our own photos: any other .jpg / .jpeg / .png in that folder (IMG_0456.jpeg)
  * is built the same way under the id own-<file name> and listed with no
- * credit or link. To drop one, add that id to wallpapers-removed.txt.
+ * credit or link. To drop one, add that id to wallpapers-removed.txt. To put some first in the
+ * picker, list their ids in wallpapers-first.txt (in that order); the rest follow A–Z, and
+ * any in wallpapers-last.txt go at the very end.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -101,6 +103,23 @@ const ids = readdirSync(OUT)
   .map(f => f.slice(0, -4))
   .filter(id => (OWN.test(id) || ID.test(id)) && existsSync(join(THUMBS, `${id}.jpg`)))
   .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
+// Pinned to the top of the picker, in the order listed (scripts/wallpapers-first.txt); the rest A–Z
+const firstFile = join(root, 'scripts/wallpapers-first.txt');
+const first = existsSync(firstFile)
+  ? readFileSync(firstFile, 'utf8').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+  : [];
+// …and some sent to the very end, in the order listed (scripts/wallpapers-last.txt)
+const lastFile = join(root, 'scripts/wallpapers-last.txt');
+const last = existsSync(lastFile)
+  ? readFileSync(lastFile, 'utf8').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+  : [];
+const rank = id => {
+  const i = first.indexOf(id);
+  if (i !== -1) return i;
+  const j = last.indexOf(id);
+  return j === -1 ? first.length : first.length + 1 + j;
+};
+ids.sort((a, b) => rank(a) - rank(b));
 
 const rows = ids.map(id => {
   if (OWN.test(id)) return `  { id: '${id}' },`;

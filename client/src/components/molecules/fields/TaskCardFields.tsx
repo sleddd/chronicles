@@ -264,7 +264,7 @@ export const PillPick = styled(Pick)`
   &:hover { border-color: var(--border-default); }
 `;
 
-/* The Status picker in the title box's foot: a dot, "Status" and the choice */
+/* The Status picker in the title box's foot: a dot, "Status" and the choice (no pill) */
 const StatusPick = styled(Pick)`
   gap: 10px;
   font-size: 15px;

@@ -1,0 +1,7 @@
+# Backgrounds shown last in the picker, in this order (full ids)
+europeana-r5F0zmg_BAk
+dennis-yu-4FLmDMG6wQs
+benjamin-voros-phIFdC6lA4E
+behnam-mohsenzadeh-8KZLgOy-xQY
+ashim-d-silva-WeYamle9fDM
+colin-watts-T5g1bLqJego
