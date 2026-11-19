@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import type { WellnessFieldValues } from '../../types/fields.js';
 import { JoinedGroup, JoinedBtn, BoxText } from './fields/formKit.js';
@@ -175,10 +175,7 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
       onChange={v => onChange({ procrastination: v })} />],
     ['Stress level', <RatingRow label="Stress level" value={values.stress || 0} words={STRESS_WORDS} onChange={v => onChange({ stress: v })} />],
   ];
-  const notes = (
-    <BoxText value={values.notes || ''} rows={2} placeholder="Anything else about today?"
-      onChange={e => onChange({ notes: e.target.value })} />
-  );
+  const notes = <NotesBox value={values.notes || ''} onCommit={v => onChange({ notes: v })} />;
 
   return (
     <Box role="region" aria-label="Your day" $inside={inside}>
@@ -198,5 +195,44 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
         </Body>
       )}
     </Box>
+  );
+}
+
+/* The notes box keeps what's typed to itself and hands it on only once typing
+   pauses (or the box is left). Sending every keystroke re-rendered the whole
+   page through the entries store, and a save landing mid-word put back older
+   text, so typing stalled and letters went missing. While the box has focus,
+   the saved value never overwrites the draft. */
+const NOTES_PAUSE_MS = 700;
+
+function NotesBox({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const focused = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sent = useRef(value);
+  const commitRef = useRef(onCommit);
+  commitRef.current = onCommit;
+
+  useEffect(() => { if (!focused.current) { setDraft(value); sent.current = value; } }, [value]);
+
+  const flush = (v: string) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (v !== sent.current) { sent.current = v; commitRef.current(v); }
+  };
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  // Leaving the page mid-pause still keeps what was typed
+  useEffect(() => () => flush(draftRef.current), []);
+
+  return (
+    <BoxText value={draft} rows={2} placeholder="Anything else about today?"
+      onFocus={() => { focused.current = true; }}
+      onBlur={() => { focused.current = false; flush(draftRef.current); }}
+      onChange={e => {
+        const v = e.target.value;
+        setDraft(v);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => flush(v), NOTES_PAUSE_MS);
+      }} />
   );
 }

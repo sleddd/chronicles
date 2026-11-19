@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DAILY_QUOTES, dailyQuote, parseQuoteText } from '@/utils/dailyQuote';
+import { DAILY_QUOTES, dailyQuote, parseQuoteText, quotePool, quotePlaceFor, quoteAt } from '@/utils/dailyQuote';
 
 describe('parseQuoteText', () => {
   it('reads the quote and author from what the Quotes topic writes', () => {
@@ -42,5 +42,42 @@ describe('dailyQuote', () => {
 
   it('uses only the built-in list without quotes of your own', () => {
     expect(DAILY_QUOTES).toContain(dailyQuote(day(2)));
+  });
+});
+
+describe('quote rotation', () => {
+  const now = new Date(2026, 10, 19, 9);
+
+  it('mixes your quotes into the pool once each, dropping repeats', () => {
+    const mine = [
+      { text: 'Be here now.', author: 'Ram Dass' },
+      { text: 'Be here now', author: 'Ram Dass' },
+      { text: DAILY_QUOTES[0].text, author: DAILY_QUOTES[0].author },
+    ];
+    const pool = quotePool(now, mine);
+    expect(pool).toHaveLength(DAILY_QUOTES.length + 1);
+    expect(pool.filter(q => q.text.startsWith('Be here now'))).toHaveLength(1);
+  });
+
+  it('keeps the same place all day and moves one on the next day', () => {
+    const saved = { day: '2026-11-19', pos: 40 };
+    expect(quotePlaceFor('2026-11-19', now, saved)).toEqual(saved);
+    expect(quotePlaceFor('2026-11-20', new Date(2026, 10, 20, 9), saved)).toEqual({ day: '2026-11-20', pos: 41 });
+  });
+
+  it('starts at the day of the year with nothing saved', () => {
+    expect(quotePlaceFor('2026-11-19', now, null).pos).toBe(323);
+  });
+
+  it('goes round the pool both ways, so Next and Previous never run out', () => {
+    const pool = quotePool(now);
+    expect(quoteAt(pool, pool.length)).toBe(pool[0]);
+    expect(quoteAt(pool, -1)).toBe(pool[pool.length - 1]);
+  });
+
+  it('shows a different quote on each of a run of days', () => {
+    const pool = quotePool(now);
+    const seen = new Set(Array.from({ length: pool.length }, (_, i) => quoteAt(pool, 323 + i).text));
+    expect(seen.size).toBe(pool.length);
   });
 });

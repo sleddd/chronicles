@@ -66,7 +66,7 @@ import { getOrCreateTopic } from '../utils/getOrCreateJournalTopic.js';
 import { prioritiesTitle } from '../utils/entrySave.js';
 import { winsContent, winsOf, winsTitle, type WinItem } from '../utils/wins.js';
 import type { ThemePreference } from '../utils/autoTheme.js';
-import { dailyQuote, greeting, parseQuoteText, type Quote } from '../utils/dailyQuote.js';
+import { greeting, parseQuoteText, quoteAt, quotePlaceFor, quotePool, type Quote, type QuotePlace } from '../utils/dailyQuote.js';
 import { currentWeather, describeWeather, findPlace, hoursFromLocal, type CurrentWeather, type Place } from '../utils/weather.js';
 import type { DecryptedPost } from '@shared/crypto/types';
 import type { ShoppingItem } from '../types/fields.js';
@@ -2677,6 +2677,18 @@ function DropCol({ id, items, gap, dragging, children }: { id: ColId; items: Sec
   );
 }
 
+/* Where this browser is in the year's quotes (per browser, like the other view choices) */
+const QUOTE_PLACE_KEY = 'daily-quote-v1';
+function loadQuotePlace(): QuotePlace | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(QUOTE_PLACE_KEY) ?? 'null') as QuotePlace | null;
+    return v && typeof v.day === 'string' && Number.isFinite(v.pos) ? v : null;
+  } catch { return null; }
+}
+function saveQuotePlace(p: QuotePlace) {
+  try { localStorage.setItem(QUOTE_PLACE_KEY, JSON.stringify(p)); } catch { /* the quote just won't be remembered */ }
+}
+
 export function DashboardView() {
   const { isReady, isLoading } = useInitializeData();
   const ff = useEntriesStore(s => s.featureFlags);
@@ -2896,7 +2908,16 @@ export function DashboardView() {
   // "Good evening, Alex" — the display name, else the username
   const helloName = displayName.trim() || user?.username?.trim() || '';
   const hello = `${helloName ? `${greeting(now)}, ${helloName}` : greeting(now)}.`;
-  const quote = dailyQuote(now, myQuotes);
+  const quotes = useMemo(() => quotePool(now, myQuotes), [now.getFullYear(), myQuotes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [quotePlace, setQuotePlace] = useState<QuotePlace>(() => quotePlaceFor(toDateStr(now), now, loadQuotePlace()));
+  // A new day moves on one from where this browser left off
+  useEffect(() => {
+    const today = toDateStr(now);
+    if (quotePlace.day !== today) setQuotePlace(p => quotePlaceFor(today, now, p));
+  }, [now, quotePlace.day]);
+  useEffect(() => { saveQuotePlace(quotePlace); }, [quotePlace]);
+  const quote = quoteAt(quotes, quotePlace.pos);
+  const stepQuote = (by: number) => setQuotePlace(p => ({ ...p, pos: p.pos + by }));
   const kitchenOn = true;
 
   const toggleSection = (k: SectionKey, on: boolean) => {
@@ -2945,6 +2966,16 @@ export function DashboardView() {
           {collapsed.has('quote') && <div style={{ display: 'flex' }}><h2>Daily quote</h2></div>}
           <QuoteText>{quote.text}</QuoteText>
           {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
+          {!collapsed.has('quote') && quotes.length > 1 && (
+            <MantraNav>
+              <button type="button" aria-label="Previous quote" onClick={() => stepQuote(-1)}>
+                <Icon name="chevron-left" size={16} strokeWidth={2} />
+              </button>
+              <button type="button" aria-label="Next quote" onClick={() => stepQuote(1)}>
+                <Icon name="chevron-right" size={16} strokeWidth={2} />
+              </button>
+            </MantraNav>
+          )}
         </section>
       ),
     },

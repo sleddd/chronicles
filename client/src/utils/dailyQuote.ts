@@ -85,15 +85,44 @@ function shuffled<T>(list: T[], seed: number): T[] {
   return out;
 }
 
+/** The year's quotes: your own mixed in with the built-in ones, each once (repeats dropped), in a shuffled order fixed for the year */
+export function quotePool(now: Date, mine: Quote[] = []): Quote[] {
+  const seen = new Set<string>();
+  const unique = [...mine, ...DAILY_QUOTES].filter(q => {
+    const key = q.text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return shuffled(unique, now.getFullYear());
+}
+
+const dayOfYear = (now: Date) => Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+
+/** Where a browser is in the year's quotes: the day it last showed one and which */
+export interface QuotePlace { day: string; pos: number }
+
 /**
- * Today's quote, the same all day: your own quotes (a Quote topic) mixed in
- * with the built-in ones, in a shuffled order that's fixed for the year, one a
- * day. Without quotes of your own it's the built-in list alone.
+ * Today's place in the quotes. The same all day; a new day moves one on from
+ * where this browser left off (so stepping ahead with Next never brings an
+ * old quote back the day after) — or, the first time, the day of the year.
  */
+export function quotePlaceFor(today: string, now: Date, saved: QuotePlace | null): QuotePlace {
+  if (saved && Number.isFinite(saved.pos)) {
+    return saved.day === today ? saved : { day: today, pos: saved.pos + 1 };
+  }
+  return { day: today, pos: dayOfYear(now) };
+}
+
+/** The quote at a place, going round the pool */
+export function quoteAt(pool: Quote[], pos: number): Quote {
+  const n = pool.length;
+  return pool[((Math.trunc(pos) % n) + n) % n];
+}
+
+/** Today's quote with nothing remembered: your quotes mixed with the built-in ones, one a day */
 export function dailyQuote(now = new Date(), mine: Quote[] = []): Quote {
-  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
-  const pool = shuffled([...mine, ...DAILY_QUOTES], now.getFullYear());
-  return pool[dayOfYear % pool.length];
+  return quoteAt(quotePool(now, mine), dayOfYear(now));
 }
 
 export function greeting(now = new Date()): string {

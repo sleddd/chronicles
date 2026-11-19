@@ -143,7 +143,14 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
       };
       if (existingId) {
         await entriesApi.update(existingId, payload);
-        updateDecryptedEntry(existingId, { content: '', metadata });
+        // Changes made while this save was on its way are already in the store
+        // (optimistic) — keep them rather than putting back what was sent
+        const nowMeta = useEntriesStore.getState().decryptedEntries.find(e => e.id === existingId)?.metadata as Record<string, unknown> | undefined;
+        const nowCf = (nowMeta?._customFields as Record<string, unknown> | undefined) ?? {};
+        updateDecryptedEntry(existingId, {
+          content: '',
+          metadata: { ...metadata, _customFields: { ...(metadata._customFields as Record<string, unknown>), ...nowCf } },
+        });
       } else {
         const result = await entriesApi.create(payload);
         const id = result.id as number;

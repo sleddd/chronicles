@@ -18,9 +18,11 @@ export interface Wallpaper {
 export const WALLPAPERS: Wallpaper[] = [
   { id: 'own-2' },
   { id: 'own-starry-night' },
-  { id: 'own-3' },
-  { id: 'own-4' },
+  { id: 'own-green-mountains' },
+  { id: 'own-grains' },
   { id: 'own-beach' },
+  { id: 'own-renaissance-floral' },
+  { id: 'own-yosemite' },
   { id: 'nikolett-harmat-VSTP_kmMpPQ', by: 'Nikolett Harmat', url: 'https://unsplash.com/photos/VSTP_kmMpPQ' },
   { id: 'camille-brodard-kOAU9SG0VX8', by: 'Camille Brodard', url: 'https://unsplash.com/photos/kOAU9SG0VX8' },
   { id: 'curated-lifestyle-kfRDQsx6Oa4', by: 'Curated Lifestyle', url: 'https://unsplash.com/photos/kfRDQsx6Oa4' },
