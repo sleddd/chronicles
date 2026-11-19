@@ -2863,6 +2863,16 @@ export function DashboardView() {
   const [passkeySupported, setPasskeySupported] = useState(false);
   useEffect(() => { void passkeysAvailable().then(setPasskeySupported); }, []);
 
+  // The daily quote's place (above the early return, like every hook here)
+  const quotes = useMemo(() => quotePool(now, myQuotes), [now.getFullYear(), myQuotes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [quotePlace, setQuotePlace] = useState<QuotePlace>(() => quotePlaceFor(toDateStr(now), now, loadQuotePlace()));
+  // A new day moves on one from where this browser left off
+  useEffect(() => {
+    const today = toDateStr(now);
+    if (quotePlace.day !== today) setQuotePlace(p => quotePlaceFor(today, now, p));
+  }, [now, quotePlace.day]);
+  useEffect(() => { saveQuotePlace(quotePlace); }, [quotePlace]);
+
   if (isLoading || !isReady || !configLoaded) return (
     <ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>
   );
@@ -2908,14 +2918,6 @@ export function DashboardView() {
   // "Good evening, Alex" — the display name, else the username
   const helloName = displayName.trim() || user?.username?.trim() || '';
   const hello = `${helloName ? `${greeting(now)}, ${helloName}` : greeting(now)}.`;
-  const quotes = useMemo(() => quotePool(now, myQuotes), [now.getFullYear(), myQuotes]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [quotePlace, setQuotePlace] = useState<QuotePlace>(() => quotePlaceFor(toDateStr(now), now, loadQuotePlace()));
-  // A new day moves on one from where this browser left off
-  useEffect(() => {
-    const today = toDateStr(now);
-    if (quotePlace.day !== today) setQuotePlace(p => quotePlaceFor(today, now, p));
-  }, [now, quotePlace.day]);
-  useEffect(() => { saveQuotePlace(quotePlace); }, [quotePlace]);
   const quote = quoteAt(quotes, quotePlace.pos);
   const stepQuote = (by: number) => setQuotePlace(p => ({ ...p, pos: p.pos + by }));
   const kitchenOn = true;
