@@ -7,7 +7,10 @@ import { PillButton } from '../components/atoms/PillButton.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
-import { renamePublicShelf } from '../hooks/usePublicShelfSync.js';
+import { FollowedShelves } from '../components/organisms/FollowedShelves.js';
+import { FilterTabs } from '../components/molecules/FilterTabs.js';
+import { shelfTokenFrom } from '../utils/followedShelves.js';
+import { renamePublicShelf, turnOnPublicShelfHere } from '../hooks/usePublicShelfSync.js';
 import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
 import { publicShelfUrl } from '../services/publicShelf.js';
 import { showFlash } from '../services/flashNotice.js';
@@ -287,12 +290,33 @@ function OwnerCard({ item, onOpen, onRate, onShelve, onProgress, onBookmark }: {
 
 /* ── View ── */
 
+type MediaSection = 'mine' | 'following';
+const SECTION_KEY = 'media-section-v1';
+function loadSection(): MediaSection {
+  try { return localStorage.getItem(SECTION_KEY) === 'following' ? 'following' : 'mine'; } catch { return 'mine'; }
+}
+function followFromHash(): string | null {
+  const m = typeof location !== 'undefined' ? /^#follow=(.+)$/.exec(location.hash) : null;
+  return m ? shelfTokenFrom(decodeURIComponent(m[1])) : null;
+}
+const SECTIONS: { value: MediaSection; label: string }[] = [
+  { value: 'mine', label: 'My shelf' },
+  { value: 'following', label: 'Following' },
+];
+/* Media Journal on the left, My shelf | Following across from it */
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+`;
+
 export function MediaView() {
   const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const publicShelf = usePublicShelfStore(s => s.publicShelf);
-  const shelfOnHere = usePublicShelfStore(s => s.enabledHere);
   const shelfTitle = usePublicShelfStore(s => s.title);
   const pendingItemId = usePublicShelfStore(s => s.pendingItemId);
   const setPendingItemId = usePublicShelfStore(s => s.setPendingItemId);
@@ -301,6 +325,15 @@ export function MediaView() {
   const saveFields = useSaveFields();
 
   const [saved, setSaved] = useState<Saved>(loadSaved);
+  // My shelf | Following (remembered per browser). A public page's Follow
+  // button lands here as #follow=<token> — after the #, so the token stays
+  // out of the server's logs — and is taken out of the address at once
+  const [section, setSection] = useState<MediaSection>(() => (followFromHash() ? 'following' : loadSection()));
+  const [incoming, setIncoming] = useState<string | null>(followFromHash);
+  useEffect(() => {
+    if (followFromHash()) history.replaceState(history.state, '', location.pathname + location.search);
+  }, []);
+  useEffect(() => { try { localStorage.setItem(SECTION_KEY, section); } catch { /* private mode */ } }, [section]);
   const [query, setQuery] = useState('');
   const [shownCount, setShownCount] = useState(PUBLIC_SHELF_PAGE_SIZE);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -340,19 +373,18 @@ export function MediaView() {
 
   // The bookmark: off the shelf → on it (the first one asks, in the panel); on → off
   const toggleBookmark = useCallback((item: MediaItem, el: HTMLElement | null) => {
+    // With a shelf already on, a bookmark tap is the owner's go-ahead in this
+    // browser too: it turns publishing on here and the page updates at once
     if (isOnPublicShelf(item)) {
+      turnOnPublicShelfHere();
       void patch(item, { [ON_PUBLIC_SHELF]: false });
-      // A shelf this browser doesn't publish to keeps the item until it's turned on here
-      if (publicShelf && !shelfOnHere) showFlash('Taken off here, but your public page won’t change yet: this browser isn’t set to update it. Go to Settings → Features → Public shelf and press Turn on here.');
       return;
     }
-    // Only a browser the owner turned the shelf on in skips the prompt: the
-    // server saying a shelf exists is never enough to publish
-    if (publicShelf && shelfOnHere) { void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
+    if (publicShelf) { turnOnPublicShelfHere(); void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
     setPendingItemId(item.id);
     setAnchor(el);
     setPanelOpen(true);
-  }, [patch, publicShelf, shelfOnHere, setPendingItemId]);
+  }, [patch, publicShelf, setPendingItemId]);
 
   const setPanel = useCallback((open: boolean) => {
     setPanelOpen(open);
@@ -379,7 +411,10 @@ export function MediaView() {
       <Page>
         <Inner>
           <Head>
-            <Title>Media Journal</Title>
+            <TitleRow>
+              <Title>Media Journal</Title>
+              <FilterTabs options={SECTIONS} active={section} onChange={setSection} bordered={false} flush />
+            </TitleRow>
             <MetaRow>
               <Meta>
                 {publicShelf && <ShelfName title={shelfTitle} />}
@@ -404,6 +439,9 @@ export function MediaView() {
             </MetaRow>
           </Head>
 
+          {section === 'following' ? (
+            <FollowedShelves ownToken={publicShelf?.token ?? null} incoming={incoming} onIncomingDone={() => setIncoming(null)} />
+          ) : (<>
           {items.length > 0 && (
             <MediaFilterBar query={query} onQuery={setQuery} filters={{ ...filters, tag, sort }} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone} tags={tags}
               aside={<MediaViewSwitch value={layout} onChange={l => setSaved(v => ({ ...v, layout: l }))} />} />
@@ -441,6 +479,7 @@ export function MediaView() {
               <LoadMore shown={visible.length} total={shown.length} onMore={() => setShownCount(n => n + PUBLIC_SHELF_PAGE_SIZE)} />
             </>
           )}
+          </>)}
         </Inner>
       </Page>
     </ContentTemplate>

@@ -6,7 +6,7 @@ import { buildPublicShelfItems, ON_PUBLIC_SHELF } from '../services/publicShelf.
 import { mediaItems, mediaTopicIds } from '../utils/media.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { showFlash } from '../services/flashNotice.js';
-import { recordPublicShelfChoice, reconcilePublicShelf } from '../services/deviceConsent.js';
+import { recordPublicShelfChoice, reconcilePublicShelf, accountTagForRecords } from '../services/deviceConsent.js';
 import { PUBLIC_SHELF_TITLE_DEFAULT } from '@shared/validation/schemas';
 
 /*
@@ -44,6 +44,13 @@ export function usePublicShelfSync(active: boolean): void {
   // until the shelf changed — the public page stayed as it was
   const [again, setAgain] = useState(0);
 
+  // What the store holds is for another account (a sign-out that didn't clear
+  // it): drop it, so it's asked again below for the one signed in now
+  const heldFor = usePublicShelfStore(s => s.account);
+  useEffect(() => {
+    if (active && loaded && heldFor !== accountTagForRecords()) usePublicShelfStore.getState().reset();
+  }, [active, loaded, heldFor]);
+
   // Ask once per unlock whether this account has a shelf
   useEffect(() => {
     if (!active || loaded) return;
@@ -62,10 +69,24 @@ export function usePublicShelfSync(active: boolean): void {
 
   // The body the server should hold now (cheap: a filter over items already in memory)
   const body = useMemo(() => {
-    if (!active || !shelf || !enabledHere) return null;
+    if (!active || !shelf || !isInitialized) return null;
     const items = buildPublicShelfItems(mediaItems(entries, mediaTopicIds(allTopics), stripHtml));
     return JSON.stringify({ title: title.trim() || PUBLIC_SHELF_TITLE_DEFAULT, items });
-  }, [active, shelf, enabledHere, entries, allTopics, title]);
+  }, [active, shelf, isInitialized, entries, allTopics, title]);
+
+  // A browser the shelf isn't turned on in yet turns it on by itself the
+  // moment the owner changes what the shelf shows here — a bookmarked item's
+  // title, cover or rating edited, a bookmark put on or taken off, the shelf
+  // renamed. That's the owner's own action in this browser, so it counts as
+  // Turn on; what the server says alone still never uploads anything. The
+  // first body seen after loading is the baseline (nothing changed yet).
+  const baselineRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!body) { baselineRef.current = null; return; }
+    if (enabledHere) return;
+    if (baselineRef.current === null) { baselineRef.current = body; return; }
+    if (body !== baselineRef.current) turnOnPublicShelfHere();
+  }, [body, enabledHere]);
 
   useEffect(() => {
     if (!active || !loaded || !shelf || !enabledHere || !isInitialized || !body || body === lastSentBody) return;
@@ -130,6 +151,14 @@ export async function enablePublicShelf(title: string): Promise<OwnedPublicShelf
   return saved;
 }
 
+/** This browser publishes the shelf from now on (the owner acted on it here) */
+export function turnOnPublicShelfHere(): void {
+  const store = usePublicShelfStore.getState();
+  if (!store.publicShelf || store.enabledHere) return;
+  recordPublicShelfChoice(true);
+  store.setEnabledHere(true);
+}
+
 /** Turn the shelf off: the row is deleted; the bookmarks stay on the entries */
 export async function disablePublicShelf(): Promise<void> {
   // This browser stops publishing first, whatever the server then answers: a
@@ -154,6 +183,7 @@ export async function resetPublicShelfLink(): Promise<OwnedPublicShelf> {
 /** The title shown on the public page (the sync publishes it) */
 export function renamePublicShelf(title: string): void {
   usePublicShelfStore.getState().setTitle(title.trim() || PUBLIC_SHELF_TITLE_DEFAULT);
+  turnOnPublicShelfHere();
 }
 
 export { ON_PUBLIC_SHELF };

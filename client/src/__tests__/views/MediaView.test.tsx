@@ -8,6 +8,7 @@ import { ON_PUBLIC_SHELF } from '@/services/publicShelf';
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => vi.fn()),
   useLocation: vi.fn(() => ({ pathname: '/media', search: '', state: null })),
+  Link: ({ children, to, ...rest }: any) => <a href={to} {...rest}>{children}</a>,
 }));
 
 vi.mock('@/hooks/useInitializeData', () => ({
@@ -92,12 +93,22 @@ describe('MediaView', () => {
     expect(mockSave).not.toHaveBeenCalled();
   });
 
-  it('a shelf the server reports but this browser never turned on still asks first, and saves nothing', () => {
-    usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My shelf', itemCount: 1, createdAt: '', updatedAt: '' });
+  it('with no shelf yet, the first bookmark asks first and saves nothing', () => {
+    usePublicShelfStore.getState().setLoaded(null);
     renderWithTheme(<MediaView />);
     fireEvent.click(screen.getByRole('button', { name: 'Add Title 1 to your public shelf' }));
     expect(screen.getByRole('dialog', { name: 'Public shelf' })).toBeInTheDocument();
     expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('a shelf on but not turned on in this browser: a bookmark tap turns it on here and saves', () => {
+    usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My shelf', itemCount: 1, createdAt: '', updatedAt: '' });
+    expect(usePublicShelfStore.getState().enabledHere).toBe(false);
+    renderWithTheme(<MediaView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Title 1 to your public shelf' }));
+    expect(screen.queryByRole('dialog', { name: 'Public shelf' })).not.toBeInTheDocument();
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(usePublicShelfStore.getState().enabledHere).toBe(true);
   });
 
   it('with a shelf turned on here, the bookmark flags the entry and leaves the journal bookmark alone; again takes it off', () => {

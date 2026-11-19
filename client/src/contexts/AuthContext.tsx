@@ -192,9 +192,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearMemory = useCallback(async () => {
     setUser(null);
     setPending2FA(null);
+    // The public shelf on its own, first: a failure in the steps below used to
+    // skip it, and the next person kept the last one's shelf as "yours"
+    try {
+      const { usePublicShelfStore } = await import('../stores/publicShelfStore.js');
+      usePublicShelfStore.getState().reset();
+    } catch { /* not loaded */ }
     try {
       const { useEntriesStore } = await import('../stores/entriesStore.js');
-      const { usePublicShelfStore } = await import('../stores/publicShelfStore.js');
       const { useUIStore } = await import('../stores/uiStore.js');
       const { resetCalendarSyncSession } = await import('../services/calendarSync.js');
       const { setAiConfig } = await import('../services/aiAssistant.js');
@@ -207,7 +212,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       useEntriesStore.getState().clearAll();
       useUIStore.getState().clearSearch();
       useUIStore.getState().clearPrivateState();
-      usePublicShelfStore.getState().reset();
       resetCalendarSyncSession();
       // The app-wide copies of the last person's sealed settings
       (await import('../hooks/useEncryptedSetting.js')).clearEncryptedSettings();

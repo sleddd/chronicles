@@ -1135,6 +1135,17 @@ export const publicShelf = {
     if (query.sort && query.sort !== 'newest') p.set('sort', query.sort);
     return request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?${p.toString()}`);
   },
+  /**
+   * The first page of a shelf someone follows, fetched WITHOUT cookies: the
+   * request carries no session, so the server can't tie the follower's account
+   * to the shelves they look at (their follow list is sealed in a setting).
+   */
+  peek: async (token: string): Promise<PublicShelfPage> => {
+    if (!SHARE_TOKEN.test(token)) throw new Error('Invalid public shelf link');
+    const res = await fetch(`${BASE_URL}/public-shelf/${encodeURIComponent(token)}?page=1`, { credentials: 'omit', cache: 'no-cache' });
+    if (!res.ok) throw new ApiError(res.status, res.status === 404 ? 'This shelf isn’t available' : 'Couldn’t load that shelf');
+    return res.json() as Promise<PublicShelfPage>;
+  },
   mine: () => request<{ publicShelf: OwnedPublicShelf | null }>('/public-shelf'),
   put: (data: PutPublicShelf) => request<OwnedPublicShelf>('/public-shelf', { method: 'PUT', body: data }),
   reset: () => request<OwnedPublicShelf>('/public-shelf/reset', { method: 'POST' }),

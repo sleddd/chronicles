@@ -43,6 +43,17 @@ const BackToApp = styled(Link)`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+
+/* Follow: the accent outline pill (PillButton's look), beside Back to Chronicles */
+const FollowLink = styled(BackToApp)`
+  && {
+    flex: none;
+    border-color: var(--color-accent-line);
+    color: var(--color-accent-soft, var(--color-accent-line));
+  }
+  &&:hover { background: var(--color-accent-subtle); }
+`;
+
 /* A list row whose item has a link: the whole row opens it in a new tab */
 const RowLink = styled.a`
   display: block;
@@ -53,13 +64,22 @@ const RowLink = styled.a`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
 `;
 
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 40px 0 48px;
+`;
+
 const Title = styled.h1`
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 200;
   line-height: 1;
   color: var(--text-primary);
-  margin: 40px 0 48px;
+  margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
   @media (max-width: 480px) { font-size: 34px; }
 `;
@@ -200,7 +220,17 @@ export function PublicShelfView() {
       <BackToApp to="/media"><Icon name="arrow-left" size={14} strokeWidth={2.5} />Back to Chronicles</BackToApp>
     ) : undefined}>
       {state.status === 'error' && <Message>This shelf isn’t available.</Message>}
-      {state.status !== 'error' && knownTitle && <Title>{knownTitle}</Title>}
+      {state.status !== 'error' && knownTitle && (
+        <TitleRow>
+          <Title>{knownTitle}</Title>
+          {/* Whenever signed in. This page holds no key, so following happens
+              in the app: the token rides after the # (never sent to the
+              server) and Media adds it to the sealed list */}
+          {signedIn && (
+            <FollowLink to={`/media#follow=${encodeURIComponent(token)}`}>Follow</FollowLink>
+          )}
+        </TitleRow>
+      )}
       {state.status !== 'error' && hasAny && (
         <Filters><MediaFilterBar query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} phone={phone} searchPlaceholder="Search this shelf"
           aside={<MediaViewSwitch value={layout} onChange={setLayout} />} /></Filters>

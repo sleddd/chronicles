@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { OwnedPublicShelf } from '../services/api.js';
 import { PUBLIC_SHELF_TITLE_DEFAULT } from '@shared/validation/schemas';
-import { publicShelfOnHere } from '../services/deviceConsent.js';
+import { publicShelfOnHere, accountTagForRecords } from '../services/deviceConsent.js';
 
 /*
  * The owner's view of their public shelf: whether one exists (its token,
@@ -17,6 +17,8 @@ export type PublicShelfStatus = 'idle' | 'saving' | 'offline' | 'error';
 interface PublicShelfState {
   /** The server has been asked whether this account has a shelf */
   loaded: boolean;
+  /** Whose answer it is (the master-key tag at the time) — another account's is asked again */
+  account: string | null;
   publicShelf: OwnedPublicShelf | null;
   /**
    * This browser may publish: the owner pressed Turn on here (a per-browser
@@ -42,6 +44,7 @@ interface PublicShelfState {
 
 const initial = {
   loaded: false,
+  account: null as string | null,
   publicShelf: null,
   enabledHere: false,
   title: PUBLIC_SHELF_TITLE_DEFAULT,
@@ -52,7 +55,7 @@ const initial = {
 
 export const usePublicShelfStore = create<PublicShelfState>((set) => ({
   ...initial,
-  setLoaded: (publicShelf) => set({ loaded: true, publicShelf, enabledHere: publicShelfOnHere(), title: publicShelf?.title ?? PUBLIC_SHELF_TITLE_DEFAULT }),
+  setLoaded: (publicShelf) => set({ loaded: true, account: accountTagForRecords(), publicShelf, enabledHere: publicShelfOnHere(), title: publicShelf?.title ?? PUBLIC_SHELF_TITLE_DEFAULT }),
   setPublicShelf: (publicShelf) => set({ publicShelf }),
   setEnabledHere: (enabledHere) => set({ enabledHere }),
   setTitle: (title) => set({ title }),

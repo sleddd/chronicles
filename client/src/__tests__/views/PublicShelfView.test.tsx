@@ -8,6 +8,9 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children, to }: any) => <a href={to}>{children}</a>,
 }));
 
+const auth = vi.hoisted(() => ({ value: null as null | { isAuthenticated: boolean } }));
+vi.mock('@/contexts/AuthContext', () => ({ useOptionalAuth: () => auth.value }));
+
 const mockGetPage = vi.hoisted(() => vi.fn());
 vi.mock('@/services/api', () => ({ publicShelf: { getPage: mockGetPage } }));
 
@@ -18,7 +21,25 @@ const page = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('PublicShelfView', () => {
-  beforeEach(() => { mockGetPage.mockReset(); document.head.innerHTML = '<meta name="robots" content="index, follow">'; });
+  beforeEach(() => { auth.value = null; mockGetPage.mockReset(); document.head.innerHTML = '<meta name="robots" content="index, follow">'; });
+
+  it('signed out: no Follow and no Back to Chronicles', async () => {
+    mockGetPage.mockResolvedValue(page());
+    renderWithTheme(<PublicShelfView />);
+    await screen.findByText('Claudette’s shelf');
+    expect(screen.queryByText('Follow')).not.toBeInTheDocument();
+    expect(screen.queryByText('Back to Chronicles')).not.toBeInTheDocument();
+  });
+
+  it('signed in: Follow sits in the title row and links into Media with the shelf after the #', async () => {
+    auth.value = { isAuthenticated: true };
+    mockGetPage.mockResolvedValue(page());
+    renderWithTheme(<PublicShelfView />);
+    const follow = await screen.findByText('Follow');
+    expect(follow.closest('a')).toHaveAttribute('href', '/media#follow=abcdefghijklmnopqrstuvwxyz012345');
+    expect(follow.closest('a')?.parentElement).toContainElement(screen.getByRole('heading', { name: 'Claudette’s shelf' }));
+  });
+
 
   it('shows the title and the posters read-only, with the filters, then fetches the next page on Show more', async () => {
     mockGetPage.mockResolvedValueOnce(page()).mockResolvedValueOnce(page({ page: 2, items: [{ title: 'Blue', creator: 'Joni Mitchell', year: '1971', type: 'music', rating: 5, shelf: 'done' }] }));

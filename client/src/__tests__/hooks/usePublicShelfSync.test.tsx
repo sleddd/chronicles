@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { usePublicShelfSync, enablePublicShelf, disablePublicShelf } from '@/hooks/usePublicShelfSync';
+import { usePublicShelfSync, enablePublicShelf, disablePublicShelf, renamePublicShelf } from '@/hooks/usePublicShelfSync';
 import { usePublicShelfStore } from '@/stores/publicShelfStore';
 import { setEgressAccount, publicShelfOnHere } from '@/services/deviceConsent';
 
@@ -51,6 +51,36 @@ describe('usePublicShelfSync', () => {
     await act(async () => { await disablePublicShelf(); });
     expect(publicShelfOnHere()).toBe(false);
     expect(usePublicShelfStore.getState().enabledHere).toBe(false);
+  });
+
+  it('a change the owner makes here turns it on in this browser and publishes', async () => {
+    api.mine.mockResolvedValue({ publicShelf: shelf });
+    api.put.mockResolvedValue(shelf);
+    renderHook(() => usePublicShelfSync(true));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(api.put).not.toHaveBeenCalled();
+    act(() => { renamePublicShelf('Olivia’s shelf'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(publicShelfOnHere()).toBe(true);
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][0].title).toBe('Olivia’s shelf');
+  });
+
+  it('nothing turns on by itself when there is no shelf', () => {
+    renamePublicShelf('Anything');
+    expect(publicShelfOnHere()).toBe(false);
+  });
+
+  it('a shelf held for another account is dropped and asked again', async () => {
+    const other = { ...shelf, token: 'o'.repeat(32) };
+    setEgressAccount('demo');
+    usePublicShelfStore.getState().setLoaded(shelf);
+    setEgressAccount('acct');
+    api.mine.mockResolvedValue({ publicShelf: other });
+    renderHook(() => usePublicShelfSync(true));
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(api.mine).toHaveBeenCalled();
+    expect(usePublicShelfStore.getState().publicShelf?.token).toBe(other.token);
   });
 
   it('another account on this browser has no record', async () => {
