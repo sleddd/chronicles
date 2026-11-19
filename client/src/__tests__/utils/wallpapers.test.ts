@@ -50,7 +50,8 @@ describe('wallpapers', () => {
 describe('a default for each theme', () => {
   it('shows the theme\'s default to someone who never picked one, and a pick in both', () => {
     expect(wallpaperById(DEFAULT_WALLPAPERS.light)).toBeDefined();
-    expect(DEFAULT_WALLPAPERS.dark).toBeNull(); // dark: no photo by default
+    expect(DEFAULT_WALLPAPERS.dark).toBe('own-2'); // both themes start on own-2
+    expect(DEFAULT_WALLPAPERS.light).toBe('own-2');
     expect(shownWallpaper(DEFAULT_CHOICE, 'light')).toBe(DEFAULT_WALLPAPERS.light);
     expect(shownWallpaper(DEFAULT_CHOICE, 'dark')).toBe(DEFAULT_WALLPAPERS.dark);
     expect(shownWallpaper('benjamin-voros-phIFdC6lA4E', 'light')).toBe('benjamin-voros-phIFdC6lA4E');
