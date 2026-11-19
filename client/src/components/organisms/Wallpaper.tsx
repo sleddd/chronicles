@@ -99,9 +99,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
         rgba(0, 0, 0, 0.2) 95%, transparent 100%);
     }
   `)}
-  /* Light: which part of the picture shows in its box (a higher % = further down the
-     picture). Content pages and the dashboard move the picture up; the journal keeps the 55% default */
-  /* The picture sits where it does in dark (center 55%) in light theme too — no light-only position */
+  /* The picture sits at center 55% in both themes — there is no light-only position */
   @media print { display: none; }
 `;
 
@@ -158,7 +156,6 @@ const FADE = 260;
 const LIGHT_FADE_UP = 200;
 /** The photo's height on an ordinary page */
 const STANDARD_HEIGHT = 'min(520px, 60vh)';
-
 
 /** height: how far down the page the photo reaches before it has faded out.
  *  solid: instead, stay solid down to this many px, then fade over FADE px.

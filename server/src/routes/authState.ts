@@ -3,12 +3,30 @@ import { sharedState } from '../services/sharedState.js';
 
 /** Shared sign-in state bucket for pending 2FA sign-ins (services/sharedState.ts). */
 export const PENDING_2FA = 'pending_2fa';
-/**
- * A passkey sign-in waiting on its 2FA code: the same pending token, mapped to
- * the passkey's row id (its wrap is what /login/2fa hands back). Only a token
- * still in PENDING_2FA counts, so `cancelSignIns` ends these too.
+/*
+ * A passkey sign-in waiting on its 2FA code: which passkey started it, so the
+ * session made after the code hands back that passkey's wrap. Kept under the
+ * same pending token, and only a token still in PENDING_2FA counts, so
+ * `cancelSignIns` ends these too.
+ *
+ * The shared state's token rows hold one number, normally an account id; here
+ * it is the passkey's row id. Only these three functions touch the bucket —
+ * never `deleteTokensForAccount`, which would read that number as an account.
  */
-export const PENDING_2FA_PASSKEY = 'pending_2fa_passkey';
+const PENDING_2FA_PASSKEY = 'pending_2fa_passkey';
+
+export function rememberPendingPasskey(pendingToken: string, passkeyId: number, ttlMs: number): Promise<void> {
+  return sharedState.putToken(PENDING_2FA_PASSKEY, pendingToken, passkeyId, ttlMs);
+}
+
+/** The passkey row id a pending sign-in started with, or null for a password sign-in. */
+export function pendingPasskeyOf(pendingToken: string): Promise<number | null> {
+  return sharedState.getToken(PENDING_2FA_PASSKEY, pendingToken);
+}
+
+export function forgetPendingPasskey(pendingToken: string): Promise<void> {
+  return sharedState.deleteToken(PENDING_2FA_PASSKEY, pendingToken);
+}
 
 /*
  * Sign-ins in flight. A sign-in checks who is asking, then makes its session a
@@ -29,6 +47,11 @@ export async function beginSignIn(accountId: number): Promise<string> {
   const flight = crypto.randomBytes(32).toString('hex');
   await sharedState.putToken(SIGN_IN_FLIGHT, flight, accountId, FLIGHT_TTL_MS);
   return flight;
+}
+
+/** A sign-in that won't make a session (refused, or handed on to the 2FA code): its flight goes now, not at expiry. */
+export async function endSignIn(flight: string | null): Promise<void> {
+  if (flight) await sharedState.deleteToken(SIGN_IN_FLIGHT, flight);
 }
 
 /** The session exists now: false when the account's sign-ins were cancelled meanwhile. */

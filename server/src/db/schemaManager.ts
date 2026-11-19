@@ -198,9 +198,9 @@ export async function registerTenant(
 
 /** The account row and its beta-list row (name, email, approval) go together:
  *  public.beta_signups has no link to accounts, so nothing cascades to it. */
-async function deleteAccountRow(where: { id: number } | { userId: string }, email: string): Promise<void> {
+async function deleteAccountRow(accountId: number, email: string): Promise<void> {
   await prisma.$transaction([
-    prisma.account.delete({ where: where as { id: number } }),
+    prisma.account.delete({ where: { id: accountId } }),
     prisma.$executeRaw`DELETE FROM public.beta_signups WHERE email = ${email.trim().toLowerCase()}`,
   ]);
 }
@@ -211,7 +211,7 @@ export async function deleteTenant(userId: string): Promise<void> {
   // Drop schema and delete account in sequence — schema drop is DDL (can't be in Prisma transaction)
   // but we delete the account only if schema drop succeeds
   await dropTenantSchema(account.tenantSchemaName);
-  await deleteAccountRow({ userId }, account.email);
+  await deleteAccountRow(account.id, account.email);
 }
 
 /** Delete an account by id: its tenant schema first, then the account row
@@ -220,7 +220,7 @@ export async function deleteAccountById(accountId: number): Promise<void> {
   const account = await prisma.account.findUnique({ where: { id: accountId }, select: { tenantSchemaName: true, email: true } });
   if (!account) throw new Error('Account not found');
   await dropTenantSchema(account.tenantSchemaName);
-  await deleteAccountRow({ id: accountId }, account.email);
+  await deleteAccountRow(accountId, account.email);
 }
 
 export async function getTenantSchema(userId: string): Promise<string | null> {

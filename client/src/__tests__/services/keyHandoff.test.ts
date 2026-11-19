@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { holdKey, keyHolderExists, keylessPage, requestKey } from '@/services/keyHandoff';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { holdKey, keyHolderExists, keylessPage, requestKey, OLD_REQUESTS_UNTIL } from '@/services/keyHandoff';
 
 // An app page: the landing page and the public pages never ask for the key
 beforeEach(() => { window.history.replaceState({}, '', '/dashboard'); });
@@ -31,6 +31,26 @@ describe('a new tab takes the key from one that holds it', () => {
     expect(await requestKey('olivia@example.com', 1000)).not.toBeNull();
     eavesdropper.close();
     expect(heard.some(m => (m as { type?: string }).type === 'key')).toBe(false);
+  });
+
+  it('answers a request from the previous build (no reply channel) only until OLD_REQUESTS_UNTIL', async () => {
+    const key = await makeKey();
+    release = holdKey(() => ({ key, email: 'olivia@example.com' }));
+    // What a tab on the previous build sends: a request with no reply channel
+    const oldRequest = (id: string) => new Promise<string>(resolve => {
+      const ch = new BroadcastChannel('chronicles-key');
+      ch.onmessage = e => { if (e.data?.to === id) { ch.close(); resolve(e.data.type); } };
+      ch.postMessage({ type: 'need', id, email: 'olivia@example.com' });
+    });
+    const clock = vi.spyOn(Date, 'now');
+    try {
+      clock.mockReturnValue(OLD_REQUESTS_UNTIL - 1);
+      expect(await oldRequest(crypto.randomUUID())).toBe('key');
+      clock.mockReturnValue(OLD_REQUESTS_UNTIL);
+      expect(await oldRequest(crypto.randomUUID())).toBe('none');
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('pages that never need the key neither ask for it nor hand it out', async () => {

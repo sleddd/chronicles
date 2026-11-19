@@ -371,6 +371,8 @@ describe('2FA hardening', () => {
       }
       vi.setSystemTime(Date.now() + 30_000);
       expect((await code('192.0.2.1', generateSync({ secret }))).status).toBe(429);
+      // …but not the owner: 198.51.100.x signed in fully above, so it's a known network
+      expect((await code('198.51.100.60', generateSync({ secret }))).status).toBe(200);
     }, 30000);
 
     it("a stranger's wrong codes can't lock the owner's known browser out (it still has to change the password)", async () => {

@@ -49,8 +49,9 @@ interface Pending2FA {
   viaPasskey?: boolean;
 }
 
-/** What the code screen gets back: the password wrap, or (a passkey sign-in) that passkey's wrap */
-export type TwoFAResult = { encryption: EncryptionData; passkey?: undefined } | { passkey: PasskeyWrap; encryption?: undefined };
+/** What the code screen gets back: the password wrap (null when the server sent none — no key to
+ *  open), or, for a passkey sign-in, that passkey's wrap */
+export type TwoFAResult = { encryption: EncryptionData | null; passkey?: undefined } | { passkey: PasskeyWrap; encryption?: undefined };
 
 interface AuthContextValue {
   user: User | null;
@@ -161,8 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearPendingSignOut();
     setUser(result.user);
     if (result.passkey) return { passkey: result.passkey };
-    // No wrap at all reads as "no key to open" to the caller, which ends the session
-    return { encryption: result.encryption ?? { encryptionEnabled: false, kekSalt: null, encryptedMasterKey: null, kekWrapIv: null, kekIterations: 0, recoveryWrappedMK: null, recoveryWrapIv: null } };
+    return { encryption: result.encryption ?? null };
   }, [pending2FA]);
 
   const loginWithPasskey = useCallback(async (opts?: { any?: boolean }): Promise<PasskeySignIn | PasskeyPending2FA> => {

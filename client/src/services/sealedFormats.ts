@@ -17,8 +17,19 @@
 
 export const SEEN_MARKERS_STORE = 'chronicles.sealSeen.v1';
 
-/** After this the older formats never open, marker or not. */
-export const LEGACY_FORMATS_UNTIL = Date.UTC(2026, 10, 19); // ended early (every account migrated); move it back to reopen
+/**
+ * After this the older formats never open, marker or not. Ended early on
+ * 2026-11-19 (every account migrated); move it back to reopen.
+ *
+ * While it is in the past, nothing below this point can do anything: no older
+ * record opens, so there is never anything to re-seal, and the move-over code
+ * (`legacyMigrationAllowed`, its callers in api.ts / entryReseal.ts /
+ * privateSettings.ts / nameIntoText.ts, and the owner-fresh mark in
+ * browserData.ts) sits idle. It is kept on purpose: it is what makes reopening
+ * the window safe, and the tests pin `Date.now` before this date to keep it
+ * working. Delete it all together if the window is never to reopen.
+ */
+export const LEGACY_FORMATS_UNTIL = Date.UTC(2026, 10, 19);
 
 function seenMarkers(): Set<string> {
   try {

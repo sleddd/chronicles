@@ -62,6 +62,23 @@ describe('reserving ids for new entries', () => {
     expect(await reserveEntryId()).toBe(40);
   });
 
+  it('drops held ids before the server forgets their reservations (7 days), so a tab left open never saves under one', async () => {
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      reserveIds.mockResolvedValueOnce({ ids: [5, 6, 7] }).mockResolvedValueOnce({ ids: [90] });
+      expect(await reserveEntryId()).toBe(5);
+      // Still fresh after five days
+      clock.mockReturnValue(start + 5 * 86_400_000);
+      expect(await reserveEntryId()).toBe(6);
+      // Six days and a bit: 7 is left behind and fresh ones come
+      clock.mockReturnValue(start + 6.1 * 86_400_000);
+      expect(await reserveEntryId()).toBe(90);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('shares one request between concurrent callers', async () => {
     reserveIds.mockResolvedValueOnce({ ids: [1, 2] });
     const [a, b] = await Promise.all([reserveEntryId(), reserveEntryId()]);

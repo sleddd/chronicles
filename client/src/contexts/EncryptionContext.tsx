@@ -76,6 +76,8 @@ interface EncryptionContextValue {
    * named action; the source carries the single-use token that confirms it.
    */
   passwordSource: (password: string, email: string, action: ConfirmAction, code?: string) => Promise<KeySource & { kind: 'password'; confirmToken: string }>;
+  /** The page this tab shows changed (KeylessPageWatch in App.tsx): a keyless page doesn't ask other tabs for the key */
+  notePage: (pathname: string) => void;
   /** Does this source open the key? Throws when it doesn't (a wrong password) — checked before anything is made with it. */
   verifyKeySource: (source: KeySource) => Promise<void>;
   /** A new password wrap of the master key. */
@@ -334,14 +336,9 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   // doesn't end the session either: the question waits until the tab moves to
   // a page that does (isRestoring stays true meanwhile, so an app page shows
   // its spinner rather than sign-in). The router lives under this provider, so
-  // the address is looked at every half second while waiting
+  // KeylessPageWatch (App.tsx, inside the router) reports each page via notePage
   const [onKeylessPage, setOnKeylessPage] = useState(() => keylessPage());
-  const waitingForPage = onKeylessPage && !!auth?.user && !askedRef.current;
-  useEffect(() => {
-    if (!waitingForPage) return;
-    const timer = setInterval(() => { if (!keylessPage()) setOnKeylessPage(false); }, 500);
-    return () => clearInterval(timer);
-  }, [waitingForPage]);
+  const notePage = useCallback((pathname: string) => setOnKeylessPage(keylessPage(pathname)), []);
   useEffect(() => {
     if (!auth) { setIsRestoring(false); return; }
     if (authLoading || askedRef.current) return;
@@ -404,6 +401,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       recoveryKeyWith,
       passkeyWrapWith,
       recoverAndRewrap,
+      notePage,
     }}>
       {children}
     </EncryptionContext.Provider>
