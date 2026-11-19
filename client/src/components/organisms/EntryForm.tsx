@@ -202,7 +202,7 @@ const CustomFieldsBody = styled.div<{ $nameInText?: boolean }>`
   ${({ $nameInText }) => ($nameInText ? `& ${TitleField} { display: none; } & ${TitleField} + * { margin-top: 0 !important; } & section:has(> ${TitleField}:only-child) { display: none; } & section:has(> ${TitleField}:only-child) + * { margin-top: 0 !important; }` : '')}
 `;
 
-const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: boolean; $roomy?: boolean }>`
+const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: boolean; $roomy?: boolean; $journalTitle?: boolean }>`
   /* One look in the journal and the Quick entry: the formatting bar on the card's
      colour, no rule above it, room under it before the text */
   & ${ToolbarRow} { margin-bottom: 28px; padding-top: 0; border-top: none; background: var(--editor-surface); }
@@ -215,6 +215,26 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: b
       line-height: 1.75;
     }
     .tiptap > :first-child { margin-bottom: 0.5em; }
+  ` : '')}
+  /* A journal entry in the journal: its first line is its title — larger, with a
+     hairline under it — and a little room between its paragraphs */
+  ${({ $journalTitle }) => ($journalTitle ? `
+    .tiptap > :first-child, .tiptap > p.is-editor-empty:first-child::before {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 300;
+      line-height: 1.35;
+    }
+    .tiptap > :first-child:not(:only-child) {
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .tiptap > p + p { margin-top: 1em; }
+    /* A readable line length: about two thirds of a wide editor, never the full width.
+       In px, not em: an em here is each block's own font size, so the 28px title
+       ran far wider than the 16px text under it */
+    .tiptap > * { max-width: 672px; }
   ` : '')}
   display: ${({ $hidden }) => ($hidden ? 'none' : 'flex')};
   flex-direction: column;
@@ -1043,10 +1063,9 @@ function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof 
 /** The Quick entry's question, now the writing area's placeholder (the topic picker sits alone on the card's first line) */
 const QUICK_QUESTION = 'What would you like to write down?';
 
-/** The prompt's words for a topic: "a journal entry", "an exercise entry" */
+/** The topic picker's words for a topic: its name in lower case ("journal", "exercise") */
 export function quickTopicPhrase(name: string): string {
-  const n = name.trim().toLowerCase() || 'journal';
-  return `${/^[aeiou]/.test(n) ? 'an' : 'a'} ${n}`;
+  return name.trim().toLowerCase() || 'journal';
 }
 
 /* ── Helpers ── */
@@ -1659,7 +1678,7 @@ export function EntryForm({
         <EditorArea $hidden $quick={quick}>{editorEl}</EditorArea>
       ) : textOnly ? (
         // Only text: no label or box, the tools go to the foot
-        <PlainText><EditorArea $quick={quick} $roomy={quick}>{editorEl}</EditorArea></PlainText>
+        <PlainText><EditorArea $quick={quick} $roomy={quick} $journalTitle={!quick && isJournalTopic}>{editorEl}</EditorArea></PlainText>
       ) : (
         <TextRow>
           <div>{nameTarget ? 'Title' : 'Text'}</div>
@@ -1681,7 +1700,7 @@ export function EntryForm({
           </TitleBox>
         </TextRow>
       )) : (
-        <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $roomy={quick && !customType && userFieldDefs.length === 0}>
+        <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $journalTitle={!quick && !nameTarget && isJournalTopic} $roomy={quick && !customType && userFieldDefs.length === 0}>
           {editorEl}
         </EditorArea>
       )}

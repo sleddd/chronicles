@@ -262,7 +262,7 @@ export function HealthDashboardView() {
 
   /* The widgets, and which of them show */
   const widgets: Record<HealthWidget, ReactNode> = {
-    wellness: <WellnessCheckIn title="Wellness check-in" quad foldable />,
+    wellness: <WellnessCheckIn title="Wellness check-in" strip foldable />,
     quickLog: <QuickLog meal={food} exercise={exercise} />,
     symptom: <QuickSymptom />,
     // Only once a medication has scheduled times

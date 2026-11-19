@@ -498,7 +498,7 @@ describe('EntryForm', () => {
     expect(screen.getByText('choose a topic')).toBeInTheDocument();
     unmount2();
     renderWithTheme(<EntryForm {...defaultProps} entryId={4} topicId={1} isEditing />);
-    expect(screen.getByText('a journal')).toBeInTheDocument();
+    expect(screen.getByText('journal')).toBeInTheDocument();
   });
 
   describe('Quick entry', () => {

@@ -214,16 +214,26 @@ describe('Sidebar', () => {
       expect(screen.getByRole('list', { name: 'Planning views' })).toBeInTheDocument();
     });
 
-    it('a second click on an open section’s row closes it, without leaving the page', () => {
-      renderAt('/dashboard');
+    it('a second click on an open section’s row closes it, on that section’s page', () => {
+      renderAt('/kitchen');
       const row = screen.getByRole('button', { name: 'Kitchen' });
       fireEvent.click(within(row).getByText('fork_spoon'));
-      expect(mockNavigate).toHaveBeenCalledWith('/kitchen');
       expect(screen.getByRole('list', { name: 'Kitchen views' })).toBeInTheDocument();
       mockNavigate.mockClear();
       fireEvent.click(within(row).getByText('Kitchen'));
       expect(screen.queryByRole('list', { name: 'Kitchen views' })).toBeNull();
       expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('from another page, an open section’s row still goes to the section', () => {
+      renderAt('/dashboard');
+      const row = screen.getByRole('button', { name: 'Kitchen' });
+      fireEvent.click(within(row).getByText('fork_spoon'));
+      expect(screen.getByRole('list', { name: 'Kitchen views' })).toBeInTheDocument();
+      mockNavigate.mockClear();
+      fireEvent.click(within(row).getByText('Kitchen'));
+      expect(mockNavigate).toHaveBeenCalledWith('/kitchen');
+      expect(screen.getByRole('list', { name: 'Kitchen views' })).toBeInTheDocument();
     });
 
     it('collapsed, no views show (icons only)', () => {

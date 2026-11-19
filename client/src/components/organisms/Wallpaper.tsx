@@ -22,7 +22,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
     content: '';
     position: absolute;
     inset: 0;
-    background: url(${({ $src }) => $src}) center 55% / cover no-repeat;
+    background: url(${({ $src }) => $src}) center 65% / cover no-repeat;
   }
   /* Light theme: the photo itself is never dimmed or darkened */
   transition: opacity 0.4s ease;
@@ -99,7 +99,7 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
         rgba(0, 0, 0, 0.2) 95%, transparent 100%);
     }
   `)}
-  /* The picture sits at center 55% in both themes — there is no light-only position */
+  /* The picture sits at center 65% in both themes (55% before — lifted a little) — there is no light-only position */
   @media print { display: none; }
 `;
 

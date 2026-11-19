@@ -60,17 +60,27 @@ describe('Public shelf routes', () => {
       // kept by the browser, but asked about every time: a change shows at the next look
       expect(res.headers['cache-control']).toBe('private, no-cache');
       expect(res.headers['etag']).toMatch(/^"[A-Za-z0-9_-]+"$/);
-      expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 2, { type: null, shelf: null, minRating: null, q: null, sort: null });
+      expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 2, { type: null, shelf: null, minRating: null, q: null, sort: null }, 24);
     });
 
     it('passes whitelisted filters, a rounded rating and a trimmed search; junk is dropped', async () => {
       vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'x', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date() });
       await request(app).get(`/api/public-shelf/${TOKEN}?type=book&shelf=done&rating=4.3&q=%20joni%20&sort=rating`);
-      expect(getPublicShelfPage).toHaveBeenLastCalledWith(TOKEN, 1, { type: 'book', shelf: 'done', minRating: 4.5, q: 'joni', sort: 'rating' });
+      expect(getPublicShelfPage).toHaveBeenLastCalledWith(TOKEN, 1, { type: 'book', shelf: 'done', minRating: 4.5, q: 'joni', sort: 'rating' }, 24);
       await request(app).get(`/api/public-shelf/${TOKEN}?type=game&shelf=maybe&rating=9&sort=random&q=${'x'.repeat(300)}`);
       const [, , q] = vi.mocked(getPublicShelfPage).mock.calls.at(-1)!;
       expect(q).toMatchObject({ type: null, shelf: null, minRating: null, sort: null });
       expect(q.q).toHaveLength(100);
+    });
+
+    it('takes a smaller page with ?limit, and ignores one that is not', async () => {
+      vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'x', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date() });
+      await request(app).get(`/api/public-shelf/${TOKEN}?limit=5`);
+      expect(vi.mocked(getPublicShelfPage).mock.calls.at(-1)![3]).toBe(5);
+      for (const bad of ['0', '-3', '500', 'abc']) {
+        await request(app).get(`/api/public-shelf/${TOKEN}?limit=${bad}`);
+        expect(vi.mocked(getPublicShelfPage).mock.calls.at(-1)![3]).toBe(24);
+      }
     });
 
     it('keys the ETag on the filters too', async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { usePublicShelfSync, enablePublicShelf, disablePublicShelf, renamePublicShelf } from '@/hooks/usePublicShelfSync';
+import { usePublicShelfSync, enablePublicShelf, disablePublicShelf, renamePublicShelf, turnOnPublicShelfHere } from '@/hooks/usePublicShelfSync';
 import { usePublicShelfStore } from '@/stores/publicShelfStore';
 import { setEgressAccount, publicShelfOnHere } from '@/services/deviceConsent';
 
@@ -64,6 +64,29 @@ describe('usePublicShelfSync', () => {
     expect(publicShelfOnHere()).toBe(true);
     expect(api.put).toHaveBeenCalledTimes(1);
     expect(api.put.mock.calls[0][0].title).toBe('Olivia’s shelf');
+  });
+
+  it('after Turn off here, a shelf the server brings back is never published to by a change', async () => {
+    api.put.mockResolvedValue(shelf);
+    api.remove.mockResolvedValue({ success: true });
+    await enablePublicShelf('My shelf');
+    await act(async () => { await disablePublicShelf(); });
+    api.put.mockClear();
+
+    // The server (or whoever writes its database) says the shelf is back
+    usePublicShelfStore.getState().reset();
+    api.mine.mockResolvedValue({ publicShelf: shelf });
+    renderHook(() => usePublicShelfSync(true));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    act(() => { renamePublicShelf('Changed'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(turnOnPublicShelfHere()).toBe(false);
+    expect(publicShelfOnHere()).toBe(false);
+    expect(api.put).not.toHaveBeenCalled();
+
+    // Turn on, pressed again, is what brings it back
+    await act(async () => { await enablePublicShelf('My shelf'); });
+    expect(publicShelfOnHere()).toBe(true);
   });
 
   it('nothing turns on by itself when there is no shelf', () => {

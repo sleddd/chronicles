@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DAILY_QUOTES, dailyQuote, parseQuoteText, quotePool, quotePlaceFor, quoteAt } from '@/utils/dailyQuote';
+import { DAILY_QUOTES, dailyQuote, parseQuoteText, quotePool, quotePlaceFor, quoteAt, settleQuotePlace } from '@/utils/dailyQuote';
 
 describe('parseQuoteText', () => {
   it('reads the quote and author from what the Quotes topic writes', () => {
@@ -79,5 +79,26 @@ describe('quote rotation', () => {
     const pool = quotePool(now);
     const seen = new Set(Array.from({ length: pool.length }, (_, i) => quoteAt(pool, 323 + i).text));
     expect(seen.size).toBe(pool.length);
+  });
+});
+
+describe('settleQuotePlace', () => {
+  const pool = [{ text: 'A', author: '' }, { text: 'B', author: '' }, { text: 'C', author: '' }];
+
+  it('remembers the quote a new place lands on', () => {
+    expect(settleQuotePlace(pool, { day: 'd', pos: 4 })).toEqual({ day: 'd', pos: 4, text: 'B' });
+  });
+
+  it('follows its quote when the pool is reordered', () => {
+    expect(settleQuotePlace(pool, { day: 'd', pos: 0, text: 'C' })).toEqual({ day: 'd', pos: 2, text: 'C' });
+  });
+
+  it('takes the quote it lands on when its own is gone', () => {
+    expect(settleQuotePlace(pool, { day: 'd', pos: 1, text: 'Z' })).toEqual({ day: 'd', pos: 1, text: 'B' });
+  });
+
+  it('gives the same object back when nothing changed', () => {
+    const place = { day: 'd', pos: 1, text: 'B' };
+    expect(settleQuotePlace(pool, place)).toBe(place);
   });
 });

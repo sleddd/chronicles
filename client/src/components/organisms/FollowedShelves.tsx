@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { EmptyState } from '../atoms/EmptyState.js';
+import { LoadMore } from '../molecules/LoadMore.js';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
 import { publicShelf as publicShelfApi, ApiError, type PublicShelfPage } from '../../services/api.js';
 import { publishableCover } from '../../services/publicShelf.js';
 import { mediaTypeInfo } from '../../utils/media.js';
 import { glassCard } from '../../styles/wallpaper.js';
 import {
-  followedShelvesOf, isFollowing, shelfTokenFrom, withFollowed, withTitle, withoutFollowed,
+  followedShelvesOf, shelfTokenFrom, withFollowed, withTitle, withoutFollowed,
   FOLLOWED_SHELVES_MAX, type FollowedShelf,
 } from '../../utils/followedShelves.js';
 
@@ -21,12 +22,16 @@ import {
  * `followedShelves`, so the server never learns who follows whom, and each
  * shelf is read with `publicShelf.peek` — no cookies, so those reads aren't
  * tied to the account either. `incoming` is a shelf to follow handed over by
- * the public page's Follow button (`/media#follow=<token>`).
+ * the public page's Follow button (`/media#follow=<token>`). Anyone can make
+ * such a link, so it only ever asks ("Follow Sam's shelf?") — it never follows
+ * by itself.
  */
 
 const SETTING = 'followedShelves';
 const FRESH_MS = 5 * 60_000;
 const AT_ONCE = 4; // the public read is limited per IP: never fire the whole list at once
+const COVERS_SHOWN = 5;
+const CARDS_PER_PAGE = 24; // cards drawn (and shelves read) at a time; more as the foot scrolls into view
 
 type Peek = { status: 'done'; data: PublicShelfPage } | { status: 'gone' } | { status: 'error' };
 // Kept across visits to the Following view for a few minutes
@@ -37,15 +42,13 @@ async function peekShelf(token: string): Promise<Peek> {
   if (hit && Date.now() - hit.at < FRESH_MS) return hit.peek;
   let peek: Peek;
   try {
-    peek = { status: 'done', data: await publicShelfApi.peek(token) };
+    peek = { status: 'done', data: await publicShelfApi.peek(token, COVERS_SHOWN) };
   } catch (err) {
     peek = err instanceof ApiError && err.status === 404 ? { status: 'gone' } : { status: 'error' };
   }
   if (peek.status !== 'error') peeks.set(token, { at: Date.now(), peek });
   return peek;
 }
-
-const COVERS_SHOWN = 5;
 
 const AddRow = styled.form`
   display: flex;
@@ -164,6 +167,32 @@ const OpenLink = styled(Link)`
   &:hover { text-decoration: underline; }
 `;
 
+/* The question a Follow link asks, with its two answers */
+const Ask = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 4px 0 12px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  span { margin-right: 4px; overflow-wrap: anywhere; }
+`;
+
+/* "Try again" on a shelf that didn't load: a link-styled button */
+const TextBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--color-accent-link);
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+`;
+
 const Quiet = styled.p`
   margin: 0;
   font-family: var(--font-sans);
@@ -171,61 +200,79 @@ const Quiet = styled.p`
   color: var(--text-muted);
 `;
 
+type NoteText = { text: string; error?: boolean };
+
 export function FollowedShelves({ ownToken, incoming, onIncomingDone }: {
   /** This account's own shelf — it can't be followed */
   ownToken?: string | null;
-  /** A shelf to follow, from the public page's Follow button */
+  /** A shelf a Follow link asked to follow: looked up, then offered — never followed unasked */
   incoming?: string | null;
   onIncomingDone?: () => void;
 }) {
   const [stored, save, loaded] = useEncryptedSetting<unknown>(SETTING, []);
   const list = followedShelvesOf(stored);
-  const listRef = useRef(list);
-  listRef.current = list;
   const [draft, setDraft] = useState('');
-  const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
+  const [note, setNote] = useState<NoteText | null>(null);
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<Record<string, Peek>>({});
+  const [asking, setAsking] = useState<{ token: string; peek: Extract<Peek, { status: 'done' }> } | null>(null);
+  const [shownCount, setShownCount] = useState(CARDS_PER_PAGE);
 
-  const follow = async (token: string): Promise<void> => {
+  // The latest of each, for effects and handlers that run later than the render that made them
+  const latest = useRef({ list, save, ownToken, onIncomingDone });
+  latest.current = { list, save, ownToken, onIncomingDone };
+
+  /** Whether this shelf can be followed: the shelf as it reads now, or null with the reason in the note */
+  const lookUp = useCallback(async (token: string): Promise<Extract<Peek, { status: 'done' }> | null> => {
     // Which shelf is yours, asked now with the session (the page's copy is
     // only the fallback when the server can't be reached)
-    const mine = await publicShelfApi.mine().then(r => r.publicShelf?.token ?? null, () => ownToken ?? null);
-    if (mine && token === mine) { setNote({ text: 'That’s your own shelf.' }); return; }
-    const already = listRef.current.find(s => s.token === token);
-    if (already) { setNote({ text: `You already follow ${already.title || 'that shelf'}.` }); return; }
-    if (listRef.current.length >= FOLLOWED_SHELVES_MAX) { setNote({ text: `You can follow up to ${FOLLOWED_SHELVES_MAX} shelves. Unfollow one first.`, error: true }); return; }
-    setBusy(true);
-    const peek = await peekShelf(token);
-    if (peek.status !== 'done') {
-      setBusy(false);
-      setNote({ text: peek.status === 'gone' ? 'That shelf isn’t available. The link may have been reset or turned off.' : 'Couldn’t reach that shelf. Try again.', error: true });
-      return;
+    const mine = await publicShelfApi.mine().then(r => r.publicShelf?.token ?? null, () => latest.current.ownToken ?? null);
+    if (mine && token === mine) { setNote({ text: 'That’s your own shelf.' }); return null; }
+    const followed = latest.current.list;
+    const already = followed.find(s => s.token === token);
+    if (already) { setNote({ text: `You already follow ${already.title || 'that shelf'}.` }); return null; }
+    if (followed.length >= FOLLOWED_SHELVES_MAX) {
+      setNote({ text: `You can follow up to ${FOLLOWED_SHELVES_MAX} shelves. Unfollow one first.`, error: true });
+      return null;
     }
+    const peek = await peekShelf(token);
+    if (peek.status === 'done') return peek;
+    setNote({
+      text: peek.status === 'gone' ? 'That shelf isn’t available. The link may have been reset or turned off.' : 'Couldn’t reach that shelf. Try again.',
+      error: true,
+    });
+    return null;
+  }, []);
+
+  const add = useCallback(async (token: string, peek: Extract<Peek, { status: 'done' }>): Promise<void> => {
     try {
-      await save(withFollowed(listRef.current, token, peek.data.title));
+      await latest.current.save(withFollowed(latest.current.list, token, peek.data.title));
       setFound(f => ({ ...f, [token]: peek }));
       setNote({ text: `Following ${peek.data.title}.` });
       setDraft('');
     } catch {
       setNote({ text: 'Couldn’t save that. Try again.', error: true });
-    } finally {
-      setBusy(false);
     }
-  };
+  }, []);
 
-  // The public page's Follow button
+  // A Follow link: look the shelf up and ask
   useEffect(() => {
     if (!incoming || !loaded) return;
-    void follow(incoming).finally(() => onIncomingDone?.());
-  }, [incoming, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Read each followed shelf, a few at a time
-  const tokens = list.map(s => s.token).join(' ');
-  useEffect(() => {
-    if (!loaded) return;
     let cancelled = false;
-    const queue = list.map(s => s.token).filter(t => !found[t]);
+    setBusy(true);
+    void lookUp(incoming)
+      .then(peek => { if (peek && !cancelled) setAsking({ token: incoming, peek }); })
+      .finally(() => { setBusy(false); latest.current.onIncomingDone?.(); });
+    return () => { cancelled = true; };
+  }, [incoming, loaded, lookUp]);
+
+  // Read each shelf on show, a few at a time
+  const visible = list.slice(0, shownCount);
+  const unread = visible.map(s => s.token).filter(t => !found[t]).join(' ');
+  useEffect(() => {
+    if (!loaded || !unread) return;
+    let cancelled = false;
+    const queue = unread.split(' ');
     const work = async () => {
       while (queue.length && !cancelled) {
         const token = queue.shift()!;
@@ -236,34 +283,50 @@ export function FollowedShelves({ ownToken, incoming, onIncomingDone }: {
     };
     void Promise.all(Array.from({ length: Math.min(AT_ONCE, queue.length) }, work));
     return () => { cancelled = true; };
-  }, [tokens, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [unread, loaded]);
 
   // A shelf renamed by its owner: remember the new title (one save for all of them)
   useEffect(() => {
     if (!loaded) return;
-    let next = listRef.current;
+    const before = latest.current.list;
+    let next = before;
     for (const [token, peek] of Object.entries(found)) {
       if (peek.status === 'done') next = withTitle(next, token, peek.data.title);
     }
-    if (next !== listRef.current) void save(next).catch(() => { /* tried again next visit */ });
-  }, [found, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (next !== before) void latest.current.save(next).catch(() => { /* tried again next visit */ });
+  }, [found, loaded]);
 
   const unfollow = (s: FollowedShelf) => {
-    void save(withoutFollowed(listRef.current, s.token))
+    void save(withoutFollowed(list, s.token))
       .then(() => setNote({ text: `Unfollowed ${s.title || 'that shelf'}.` }))
       .catch(() => setNote({ text: 'Couldn’t save that. Try again.', error: true }));
   };
 
-  const submit = (e: React.FormEvent) => {
+  // A shelf that didn't load: forget the failed read, and the effect above reads it again
+  const retry = (token: string) => setFound(({ [token]: _failed, ...rest }) => rest);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = shelfTokenFrom(draft);
     if (!token) { setNote({ text: 'That doesn’t look like a public shelf link. It ends in /public-shelf/ and a code.', error: true }); return; }
-    void follow(token);
+    setBusy(true);
+    const peek = await lookUp(token);
+    if (peek) await add(token, peek);
+    setBusy(false);
+  };
+
+  const answer = async (yes: boolean) => {
+    const asked = asking;
+    setAsking(null);
+    if (!asked || !yes) return;
+    setBusy(true);
+    await add(asked.token, asked.peek);
+    setBusy(false);
   };
 
   return (
     <div>
-      <AddRow onSubmit={submit}>
+      <AddRow onSubmit={e => { void submit(e); }}>
         <LinkBox>
           <Icon name="link" size={16} strokeWidth={2} />
           <input value={draft} onChange={e => { setDraft(e.target.value); setNote(null); }}
@@ -273,15 +336,22 @@ export function FollowedShelves({ ownToken, incoming, onIncomingDone }: {
           <Icon name="plus" size={14} strokeWidth={2.5} />Follow
         </PillButton>
       </AddRow>
+      {asking && (
+        <Ask role="group" aria-label="Follow this shelf?">
+          <span>Follow {asking.peek.data.title || 'this shelf'}?</span>
+          <PillButton type="button" disabled={busy} onClick={() => { void answer(true); }}>Follow shelf</PillButton>
+          <PillButton type="button" $variant="neutral" onClick={() => { void answer(false); }}>Not now</PillButton>
+        </Ask>
+      )}
       {note && <Note $error={note.error} role="status">{note.text}</Note>}
       <Note>Only you can see who you follow. The shelves’ owners aren’t told.</Note>
 
       {loaded && list.length === 0 ? (
         <EmptyState message="You’re not following any shelves yet."
           submessage="Open a shelf someone shared with you and press Follow, or paste its link above." />
-      ) : (
+      ) : (<>
         <Grid>
-          {list.map(s => {
+          {visible.map(s => {
             const peek = found[s.token];
             const data = peek?.status === 'done' ? peek.data : null;
             const title = data?.title || s.title || 'Public shelf';
@@ -295,7 +365,7 @@ export function FollowedShelves({ ownToken, incoming, onIncomingDone }: {
                 {peek?.status === 'gone' ? (
                   <Quiet>This shelf isn’t available any more. Its owner may have reset the link or turned it off.</Quiet>
                 ) : peek?.status === 'error' ? (
-                  <Quiet>Couldn’t load this shelf right now.</Quiet>
+                  <Quiet>Couldn’t load this shelf right now. <TextBtn type="button" onClick={() => retry(s.token)}>Try again</TextBtn></Quiet>
                 ) : data && data.items.length === 0 ? (
                   <Quiet>Nothing on this shelf yet.</Quiet>
                 ) : (
@@ -320,7 +390,8 @@ export function FollowedShelves({ ownToken, incoming, onIncomingDone }: {
             );
           })}
         </Grid>
-      )}
+        <LoadMore shown={visible.length} total={list.length} onMore={() => setShownCount(n => n + CARDS_PER_PAGE)} />
+      </>)}
     </div>
   );
 }

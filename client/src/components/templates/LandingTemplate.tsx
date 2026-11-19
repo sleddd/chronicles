@@ -42,8 +42,8 @@ export const SKY_GRADIENT = `
 /** The app's default accent, Taupe, deepened for text and fills on white (× 0.68) — the page's ink now */
 export const TAUPE_INK = '#6f6257';
 export const TAUPE_INK_HOVER = '#5c5148';
-export const PAGE_INK = TAUPE_INK;
-export const PAGE_INK_HOVER = TAUPE_INK_HOVER;
+export const PAGE_INK = TEAL_INK; // Taupe (TAUPE_INK) for a while
+export const PAGE_INK_HOVER = TEAL_INK_HOVER;
 export const BAND_GRADIENT = TEAL_GRADIENT;
 
 /** The hero's photo (served from public/wallpapers, like the app's backgrounds):
@@ -57,6 +57,8 @@ export const HERO_PHOTO_STARS = '/wallpapers/benjamin-voros-phIFdC6lA4E.jpg';
 export const HERO_PHOTO = '/wallpapers/justin-fisher-qrga71KYbgM.jpg';
 export const HERO_PHOTO_BEACH = '/wallpapers/frank-van-hulst-0h3McHB_eCc.jpg';
 export const HERO_PHOTO_RIVER = '/wallpapers/madison-kuhn-aV7_rCZpvGY.jpg';
+/** The hero's photo, and the privacy band's: Philipp Torres's LNYdZutqsi0 (`HERO_PHOTO`, Justin Fisher's, before it) */
+export const HERO_PHOTO_TORRES = '/wallpapers/philipp-torres-LNYdZutqsi0.jpg';
 
 /** The hero's background: 'mountains' is Madison Kuhn's river valley (the app's
     default wallpaper) under a dark shade, fading into the page at its foot;
@@ -71,10 +73,7 @@ const heroMountains = css`
     linear-gradient(180deg, transparent 78%, var(--bg-app) 98%),
     /* The shade over the photo, light enough to let it show (0.65 before) */
     linear-gradient(rgba(10, 12, 17, 0.48), rgba(10, 12, 17, 0.48)),
-    #141a2e url(${HERO_PHOTO}) center 100% / auto 120% no-repeat;
-  /* Drawn a fifth taller than the band and anchored at its foot, so the photo sits
-     higher and more of its lower part shows; very wide screens fill by width instead */
-  @media (min-aspect-ratio: 16/9) { background-size: auto, auto, cover; background-position: 0 0, 0 0, center 70%; }
+    #141a2e url(${HERO_PHOTO_TORRES}) center 30% / cover no-repeat;
 `;
 
 /* The privacy band's background, layer for layer, stopping partway down the
@@ -135,10 +134,12 @@ const HeroBand = styled.div`
   @media (max-width: 768px) { --hero-light: 110px; }
   color: var(--text-secondary);
 
-  /* Pills on the photo: the primary turns white with deep teal text, the neutral one a white glass outline */
-  --pill-primary-bg: #ffffff;
-  --pill-primary-fg: #4a4038;
-  --pill-primary-hover: #f1ece7;
+  /* Pills on the photo: the primary (Join the beta) a white outline — no fill, white text
+     (white filled with dark text before), the neutral one a white glass outline */
+  --pill-primary-bg: transparent;
+  --pill-primary-border: #ffffff;
+  --pill-primary-fg: #ffffff;
+  --pill-primary-hover: rgba(255, 255, 255, 0.14);
   --pill-neutral-bg: rgba(255, 255, 255, 0.14);
   --pill-neutral-border: rgba(255, 255, 255, 0.7);
   --pill-neutral-fg: #ffffff;
@@ -208,8 +209,8 @@ export const ActionPill = styled(PillButton)<{ $primary?: boolean }>`
   }
   /* Colours come from --pill-* when a band sets them (the teal hero) */
   ${({ $primary }) => $primary ? `
-    && { background: var(--pill-primary-bg, var(--color-accent-line)); border-color: var(--pill-primary-bg, var(--color-accent-line)); color: var(--pill-primary-fg, #fff); }
-    &&:hover:not(:disabled) { background: var(--pill-primary-hover, var(--color-accent-hover)); border-color: var(--pill-primary-hover, var(--color-accent-hover)); }
+    && { background: var(--pill-primary-bg, var(--color-accent-line)); border-color: var(--pill-primary-border, var(--pill-primary-bg, var(--color-accent-line))); color: var(--pill-primary-fg, #fff); }
+    &&:hover:not(:disabled) { background: var(--pill-primary-hover, var(--color-accent-hover)); border-color: var(--pill-primary-border, var(--pill-primary-hover, var(--color-accent-hover))); }
   ` : `
     && { background: var(--pill-neutral-bg, var(--bg-control)); border-color: var(--pill-neutral-border, var(--border-pill)); color: var(--pill-neutral-fg, var(--text-secondary)); }
     &&:hover:not(:disabled) { background: var(--pill-neutral-hover, var(--bg-hover)); }
@@ -231,17 +232,18 @@ const HeaderRow = styled(Container)`
 `;
 
 /* The app icon (the rounded teal tile) beside the name in Work Sans */
-/* The logo: the book mark in a taupe gradient (pale at the top to the accent at the
-   foot; the dusk colours, lavender to teal, before it) beside "Chronicles"
+/* The logo: the book mark in a pale teal gradient (pale at the top to the accent at the
+   foot; pale taupe for a while, the dusk colours before that) beside "Chronicles"
    in thin Work Sans — no tile; the tile is the app icon, for the home screen only */
 function DuskMark({ id }: { id: string }) {
   return (
     <svg viewBox="0 -960 960 960" aria-hidden="true">
       <defs>
         <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="480" y1="-928" x2="480" y2="-80">
-          <stop offset="0" stopColor="#efe8e1" />
-          <stop offset="0.5" stopColor="#d2c4b7" />
-          <stop offset="1" stopColor="#a89482" />
+          {/* Pale teal (pale taupe #efe8e1 → #d2c4b7 → #a89482 for a while) */}
+          <stop offset="0" stopColor="#e1f3f2" />
+          <stop offset="0.5" stopColor="#a6dedb" />
+          <stop offset="1" stopColor="#5cb6b2" />
         </linearGradient>
       </defs>
       <path d={BOOK_5} fill={`url(#${id})`} />
@@ -469,7 +471,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <a href="#privacy" data-section-link>Privacy</a>
             <a href="#faq" data-section-link>FAQ</a>
             {signedIn ? <Link to="/dashboard" data-sign-in>Open Chronicles</Link> : <Link to="/login" data-sign-in>Sign in</Link>}
-            {!signedIn && <HeaderPill as="a" href="#beta" $primary data-button>Join the beta</HeaderPill>}
+            {!signedIn && <HeaderPill as="a" href="#beta" $primary data-button>Join the Beta</HeaderPill>}
             <MenuBtn ref={menuBtnRef} type="button" aria-expanded={menuOpen} aria-controls="landing-menu"
               aria-label={menuOpen ? 'Close the menu' : 'Open the menu'} onClick={() => setMenuOpen(o => !o)}>
               <span /><span /><span />
@@ -500,7 +502,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <ul>
               <li><a href="#features">Features</a></li>
               <li><a href="#how">How it works</a></li>
-              <li><a href="#beta">Join the beta</a></li>
+              <li><a href="#beta">Join the Beta</a></li>
             </ul>
           </nav>
           <nav aria-labelledby="foot-trust">

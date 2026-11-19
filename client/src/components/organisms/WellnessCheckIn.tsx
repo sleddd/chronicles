@@ -89,7 +89,17 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   useEffect(() => { if (entry) entryIdRef.current = entry.id; }, [entry]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+  // Leaving the page with a change still waiting (a tap less than 600ms ago) saves
+  // it now. Deferred a tick: the notes box hands over what's typed in its own
+  // unmount, which runs after this one, and both go in the one save
+  useEffect(() => () => {
+    setTimeout(() => {
+      if (!debounceRef.current) return;
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+      void doSaveRef.current();
+    }, 0);
+  }, []);
   const latestRef = useRef({ water: 0, sleep: 0, flow: '' as Flow, mood: 0, extra: {} as Partial<DayInventoryValues> });
 
   const wellnessTopicId = useMemo(
@@ -166,7 +176,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   const scheduleSave = (next: Partial<{ water: number; sleep: number; flow: Flow; mood: number; extra: Partial<DayInventoryValues> }>) => {
     latestRef.current = { water, sleep, flow, mood, ...next, extra: { ...(entry ? {} : pendingDay), ...latestRef.current.extra, ...next.extra } };
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { void doSaveRef.current(); }, 600);
+    debounceRef.current = setTimeout(() => { debounceRef.current = null; void doSaveRef.current(); }, 600);
   };
 
   const optimistic = (updates: Record<string, unknown>) => {
@@ -204,7 +214,10 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   };
 
   const nextPeriod = prediction
-    ? `${strip ? 'Next est.' : 'Next period est.'} ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
+    ? (strip
+      // The strip (both dashboards): short, beside the word Cycle
+      ? `Estimated: ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`
+      : `Next period est. ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`)
     : 'Log a period day to estimate the next';
 
   const panel = (
@@ -214,6 +227,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
       cycleNote={nextPeriod}
       compact={!quad && !strip}
       strip={strip}
+      flat={strip && foldable}
       quad={!strip && quad && (bare || foldable || !title)}
       row={!strip && !!title && !bare && !foldable}
       smallFaces={bare}

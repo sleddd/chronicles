@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { Icon } from '../atoms/core/Icon.jsx';
 import { glassCard } from '../../styles/wallpaper.js';
 
 /* The wellness check-in, one look everywhere (Health dashboard card + the
@@ -423,6 +424,32 @@ const Minus = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
+/* − / + beside the figure (the home dashboard's strip, in place of the slider):
+   round outline buttons like the app's other round controls */
+const Steps = styled.div`
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+  flex: none;
+`;
+
+const StepBtn = styled.button`
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-pill, var(--border-card));
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms;
+  &:hover:not(:disabled) { border-color: var(--color-accent-line, var(--color-accent)); color: var(--text-primary); }
+  &:disabled { opacity: 0.4; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+`;
+
 const Quad = styled.div`
   background: var(--bg-tracker, var(--bg-panel)); /* the dashboards' cards' panel colour */
   display: grid;
@@ -449,30 +476,36 @@ const Quad = styled.div`
    across one lifted card, rules between; under 860px Water | Sleep share a
    row and Mood, then Cycle, take a row each */
 const StripWrapper = styled(CompactWrapper)`
-  && ${Label} { font-size: 16px; color: var(--text-secondary); }
-  && ${Head} { margin-bottom: 18px; align-items: center; }
-  && ${Meter} > ${Label} { margin-bottom: 16px; }
+  /* The cell titles (Water, Sleep, Mood, Cycle) a little faded */
+  && ${Label} { font-size: 16px; color: color-mix(in srgb, var(--text-secondary) 70%, transparent); }
+  /* Every cell on the same two lines: the labels one height, then the figures,
+     faces and drops one row height, centred — so all four line up across */
+  && ${Head}, && ${Meter} > ${Label} { display: flex; align-items: center; height: 24px; margin: 0 0 18px; }
+  && ${MeterMain}, && ${Faces}, && ${TwoUp} { min-height: 44px; align-items: center; }
   && ${MeterMain} { gap: 14px; }
   && ${Badge} { width: 38px; height: 38px; & > span { font-size: 21px; } }
   && ${Fig} { font-size: 40px; font-weight: 300; color: var(--text-primary); }
   && ${Unit} { font-size: 15px; color: var(--text-muted); }
   && ${Slider} { margin-top: 18px; }
   && ${MoodName} { font-size: 15px; font-weight: 600; }
-  /* Three faces to a row, a little smaller */
-  && ${Faces} { display: grid; grid-template-columns: repeat(3, max-content); gap: 10px 16px; }
-  && ${FaceBtn} { width: 32px; height: 32px; & > span { font-size: 38px; } }
-  /* Stacked (Mood on a row of its own): all five faces in one row, from the left */
-  @container (max-width: 860px) {
-    && ${Faces} { grid-template-columns: repeat(5, max-content); justify-content: start; }
-  }
-  /* A little more room under the word Cycle, above its drops */
-  && ${Head}.cycle-head { margin-bottom: 26px; }
+  /* All five faces on one row, sized to the cell: 30px at most, shrinking with a
+     narrow cell (the glyph is 1.2× its box and reaches a little past it) */
+  && ${Faces} { display: flex; flex-wrap: nowrap; container-type: inline-size; gap: min(12px, 3cqi); }
+  && ${FaceBtn} { flex: none; width: min(30px, 16cqi); height: min(30px, 16cqi); & > span { font-size: min(36px, 19.2cqi); } }
+  /* "Next: Nov 14" right beside the word Cycle, in italics, centred on it */
+  && ${Head}.cycle-head { justify-content: flex-start; gap: 10px; }
+  && ${Head}.cycle-head ${CycleNote} { font-style: italic; }
   && ${CycleNote} { font-size: 13px; }
   && ${Chips} { gap: 10px 8px; }
+  /* The cycle chips on one row too: smaller drops, snugger chips */
+  && ${TwoUp} { flex-wrap: nowrap; gap: 6px; }
+  && ${FlowBtn} { flex: none; min-width: 32px; height: 30px; padding: 0 7px; }
+  && ${FlowBtn} .drops { height: 16px; }
+  && ${FlowBtn} .drops > span { font-size: 15px; }
   && ${Chip} { height: 34px; padding: 0 16px; font-size: 15px; font-weight: 400; }
 `;
 
-const Strip = styled.div`
+const Strip = styled.div<{ $flat?: boolean }>`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   /* A card: the panel colour with a light shadow, the rules between cells
@@ -493,6 +526,15 @@ const Strip = styled.div`
     & > :nth-child(3), & > :nth-child(4) { grid-column: 1 / -1; }
   }
   @container (max-width: 480px) { --cell-x: 22px; & > * { padding: 22px var(--cell-x) 24px; } }
+  /* Inside a panel of its own (the Health dashboard): no card of its own, only the
+     rules between cells; the outer cells' padding hangs outside so the first lines up
+     with the panel's title */
+  ${({ $flat }) => ($flat ? `
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0 calc(-1 * var(--cell-x));
+  ` : '')}
 `;
 
 interface MeterProps {
@@ -511,9 +553,11 @@ interface MeterProps {
   minus?: boolean;
   /** No round icon (the strip): the figure and the rule only */
   noBadge?: boolean;
+  /** − / + buttons beside the figure, and no slider (the strip) */
+  stepper?: boolean;
 }
 
-function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange, minus, noBadge }: MeterProps) {
+function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onChange, minus, noBadge, stepper }: MeterProps) {
   const pct = Math.min(100, (value / goal) * 100);
   return (
     <Meter>
@@ -531,15 +575,27 @@ function MeterTile({ label, icon, color, value, goal, max, unit, noun, one, onCh
           <Minus type="button" aria-label={`Take away one ${one}`} title={`Take away one ${one}`}
             disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 1))}>−</Minus>
         )}
+        {stepper && (
+          <Steps>
+            <StepBtn type="button" aria-label={`Take away one ${one}`} title={`Take away one ${one}`}
+              disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 1))}>
+              <Icon name="minus" size={16} strokeWidth={2} aria-hidden="true" />
+            </StepBtn>
+            <StepBtn type="button" aria-label={`Add one ${one}`} title={`Add one ${one}`}
+              disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>
+              <Icon name="plus" size={16} strokeWidth={2} aria-hidden="true" />
+            </StepBtn>
+          </Steps>
+        )}
       </MeterMain>
-      <Slider>
+      {!stepper && <Slider>
         <Track><Fill $pct={pct} $color={color} /></Track>
         {/* Spans 0 to the goal; past it, tap the icon */}
         <Range type="range" min={0} max={goal} step={1} value={Math.min(value, goal)}
           aria-label={label} aria-valuetext={`${value} ${noun}`}
           onChange={e => onChange(Number(e.target.value))} />
         <Thumb $pct={pct} aria-hidden="true" />
-      </Slider>
+      </Slider>}
     </Meter>
   );
 }
@@ -570,6 +626,8 @@ interface WellnessPanelProps {
   /** Strip: Water | Sleep | Mood | Cycle across one lifted card (home dashboard), no icon
    *  badges; its footer (Your day) as a full-width last row */
   strip?: boolean;
+  /** The strip without a card of its own (it sits in a panel) */
+  flat?: boolean;
   /** A full-width last row inside the box (row, quad and strip layouts) — Your day */
   footer?: React.ReactNode;
 }
@@ -577,17 +635,17 @@ interface WellnessPanelProps {
 
 export function WellnessPanel({
   water, waterGoal = WATER_GOAL, sleep, mood, flow,
-  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces, row, strip, footer,
+  onWater, onSleep, onMood, onFlow, showCycle = true, cycleNote, compact, quad, smallFaces, row, strip, flat, footer,
 }: WellnessPanelProps) {
   // One colour throughout: the accent (no per-metric blues, violets or mood hues)
   const accent = 'var(--color-accent)';
   const water$ = (
     <MeterTile label="Water" icon="water_drop" color={accent} value={water} goal={waterGoal}
-      max={WATER_MAX} unit={row ? `/ ${waterGoal}` : `of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} minus={row} noBadge={strip} />
+      max={WATER_MAX} unit={row ? `/ ${waterGoal}` : `of ${waterGoal} glasses`} noun="glasses of water" one="glass of water" onChange={onWater} minus={row} noBadge={strip} stepper={strip} />
   );
   const sleep$ = (
     <MeterTile label="Sleep" icon="dark_mode" color={accent} value={sleep} goal={SLEEP_GOAL}
-      max={SLEEP_MAX} unit={row ? 'h' : 'hours'} noun="hours of sleep" one="hour of sleep" onChange={onSleep} minus={row} noBadge={strip} />
+      max={SLEEP_MAX} unit={row ? 'h' : 'hours'} noun="hours of sleep" one="hour of sleep" onChange={onSleep} minus={row} noBadge={strip} stepper={strip} />
   );
   const mood$ = (
     <Cell>
@@ -608,7 +666,7 @@ export function WellnessPanel({
   );
   const cycleIcons$ = showCycle && (
     <Cell>
-      <Head className="cycle-head"><Label>Cycle</Label></Head>
+      <Head className="cycle-head"><Label>Cycle</Label>{cycleNote && <CycleNote>{cycleNote}</CycleNote>}</Head>
       <TwoUp role="group" aria-label="Cycle">
         {/* None, one drop, two drops, three drops (a day logged as Spotting shows as one drop) */}
         {(['', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(f => {
@@ -626,8 +684,6 @@ export function WellnessPanel({
           );
         })}
       </TwoUp>
-      {/* The next period's estimate as its own row under the icons */}
-      {cycleNote && <CycleNote style={{ display: 'block', marginTop: 22, textAlign: 'left' }}>{cycleNote}</CycleNote>}
     </Cell>
   );
   const cycle$ = showCycle && (
@@ -644,7 +700,7 @@ export function WellnessPanel({
   );
 
   if (strip) {
-    return <StripWrapper><Strip>{water$}{sleep$}{mood$}{cycleIcons$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
+    return <StripWrapper><Strip $flat={flat}>{water$}{sleep$}{mood$}{cycleIcons$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
   }
 
   if (row) {

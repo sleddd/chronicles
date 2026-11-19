@@ -129,9 +129,13 @@ describe('API client CSRF protection', () => {
     expect(content).toContain("'X-Requested-With': 'XMLHttpRequest'");
   });
 
-  it('always sends credentials', () => {
+  it('sends credentials by default, and leaves them out only for public shelf reads', () => {
     const content = readSrc('services/api.ts');
-    expect(content).toContain("credentials: 'include'");
+    expect(content).toContain("credentials = 'include'");
+    // A public shelf's token never travels beside the session (getPage and peek)
+    const omitted = content.split('\n').filter(line => line.includes("credentials: 'omit'"));
+    expect(omitted).toHaveLength(2);
+    for (const line of omitted) expect(line).toContain('/public-shelf/${encodeURIComponent(token)}');
   });
 
   it('register payload includes recoveryKeySalt', () => {

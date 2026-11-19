@@ -298,7 +298,9 @@ function loadSection(): MediaSection {
 }
 function followFromHash(): string | null {
   const m = typeof location !== 'undefined' ? /^#follow=(.+)$/.exec(location.hash) : null;
-  return m ? shelfTokenFrom(decodeURIComponent(m[1])) : null;
+  if (!m) return null;
+  // A hand-made link can hold a broken escape ("%"), which decodeURIComponent throws on
+  try { return shelfTokenFrom(decodeURIComponent(m[1])); } catch { return null; }
 }
 const SECTIONS: { value: MediaSection; label: string }[] = [
   { value: 'mine', label: 'My shelf' },
@@ -332,7 +334,7 @@ export function MediaView() {
   const [section, setSection] = useState<MediaSection>(() => (followFromHash() ? 'following' : loadSection()));
   const [incoming, setIncoming] = useState<string | null>(followFromHash);
   useEffect(() => {
-    if (followFromHash()) history.replaceState(history.state, '', location.pathname + location.search);
+    if (location.hash.startsWith('#follow=')) history.replaceState(history.state, '', location.pathname + location.search);
   }, []);
   useEffect(() => { try { localStorage.setItem(SECTION_KEY, section); } catch { /* private mode */ } }, [section]);
   const [query, setQuery] = useState('');
@@ -374,14 +376,15 @@ export function MediaView() {
 
   // The bookmark: off the shelf → on it (the first one asks, in the panel); on → off
   const toggleBookmark = useCallback((item: MediaItem, el: HTMLElement | null) => {
-    // With a shelf already on, a bookmark tap is the owner's go-ahead in this
-    // browser too: it turns publishing on here and the page updates at once
     if (isOnPublicShelf(item)) {
       turnOnPublicShelfHere();
       void patch(item, { [ON_PUBLIC_SHELF]: false });
       return;
     }
-    if (publicShelf) { turnOnPublicShelfHere(); void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
+    // With a shelf already on, a bookmark tap is the owner's go-ahead in this
+    // browser too: it turns publishing on here and the page updates at once.
+    // Not after Turn off was pressed here — then the prompt asks again
+    if (publicShelf && turnOnPublicShelfHere()) { void patch(item, { [ON_PUBLIC_SHELF]: true }); return; }
     setPendingItemId(item.id);
     setAnchor(el);
     setPanelOpen(true);

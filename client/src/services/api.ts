@@ -17,6 +17,8 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   params?: Record<string, string>;
+  /** 'omit' for public reads that must not carry the session (a public shelf) */
+  credentials?: RequestCredentials;
 }
 
 /* The session this browser holds was ended by the server (revoked — signed out
@@ -131,7 +133,7 @@ async function retryWrite<T>(write: () => Promise<T>, retryNetwork: boolean): Pr
 }
 
 async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, params } = options;
+  const { method = 'GET', body, params, credentials = 'include' } = options;
 
   let url = `${BASE_URL}${path}`;
   if (params) {
@@ -153,7 +155,7 @@ async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const res = await fetch(url, {
     method,
     headers,
-    credentials: 'include', // Send cookies
+    credentials, // cookies, unless the caller asked for none
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   // Development only: name any request that keeps a page waiting
@@ -1124,7 +1126,12 @@ export interface PublicShelfQuery {
 }
 
 export const publicShelf = {
-  /** One page of a public shelf, narrowed and ordered on the server — no sign-in */
+  /**
+   * One page of a public shelf, narrowed and ordered on the server. Always sent
+   * WITHOUT cookies, signed in or not: a public shelf's token must never travel
+   * beside a session, or the server could tie an account to the shelves it
+   * looks at (the follow list itself is sealed in a setting).
+   */
   getPage: (token: string, page = 1, query: PublicShelfQuery = {}) => {
     if (!SHARE_TOKEN.test(token)) return Promise.reject(new Error('Invalid public shelf link'));
     const p = new URLSearchParams({ page: String(Math.max(1, Math.floor(page) || 1)) });
@@ -1133,18 +1140,12 @@ export const publicShelf = {
     if (query.rating) p.set('rating', String(query.rating));
     if (query.q?.trim()) p.set('q', query.q.trim().slice(0, 100));
     if (query.sort && query.sort !== 'newest') p.set('sort', query.sort);
-    return request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?${p.toString()}`);
+    return request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?${p.toString()}`, { credentials: 'omit' });
   },
-  /**
-   * The first page of a shelf someone follows, fetched WITHOUT cookies: the
-   * request carries no session, so the server can't tie the follower's account
-   * to the shelves they look at (their follow list is sealed in a setting).
-   */
-  peek: async (token: string): Promise<PublicShelfPage> => {
-    if (!SHARE_TOKEN.test(token)) throw new Error('Invalid public shelf link');
-    const res = await fetch(`${BASE_URL}/public-shelf/${encodeURIComponent(token)}?page=1`, { credentials: 'omit', cache: 'no-cache' });
-    if (!res.ok) throw new ApiError(res.status, res.status === 404 ? 'This shelf isn’t available' : 'Couldn’t load that shelf');
-    return res.json() as Promise<PublicShelfPage>;
+  /** The first few items of a shelf someone follows (its title, count and `limit` covers), also without cookies */
+  peek: (token: string, limit: number): Promise<PublicShelfPage> => {
+    if (!SHARE_TOKEN.test(token)) return Promise.reject(new Error('Invalid public shelf link'));
+    return request<PublicShelfPage>(`/public-shelf/${encodeURIComponent(token)}?page=1&limit=${Math.max(1, Math.floor(limit))}`, { credentials: 'omit' });
   },
   mine: () => request<{ publicShelf: OwnedPublicShelf | null }>('/public-shelf'),
   put: (data: PutPublicShelf) => request<OwnedPublicShelf>('/public-shelf', { method: 'PUT', body: data }),

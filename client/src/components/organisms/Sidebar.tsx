@@ -420,9 +420,10 @@ export const Sidebar = memo(function Sidebar() {
     const btn = (
       <NavIconBtn key={item.key} $active={item.active} $tab={open ? item.key === accentKey : undefined} $fullTab={open}
         // A section's row (its name, icon or anywhere on it) opens its page and drops its views open;
-        // clicked again while they're open, it closes them
+        // clicked again on that page while they're open, it closes them. From another page (the
+        // arrow opened them) it still goes to the section
         onClick={() => {
-          if (shown) { toggleSection(item, shown); return; }
+          if (shown && (item.active || item.views?.some(v => v.active))) { toggleSection(item, shown); return; }
           if (hasViews) sections.openWith(item.key, item.path);
           setLastOpened(hasViews ? item.key : null);
           navigate(item.path);

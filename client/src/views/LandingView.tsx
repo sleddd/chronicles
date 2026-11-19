@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
-import { LandingTemplate, Container, DarkBand, ActionPill, HERO_PHOTO, PAGE_INK } from '../components/templates/LandingTemplate.js';
+import { LandingTemplate, Container, DarkBand, ActionPill, HERO_PHOTO_TORRES, PAGE_INK } from '../components/templates/LandingTemplate.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlides.js';
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
+import HEADLINE_SVG from '../assets/landing/headline.svg?url';
 import { BetaSignup } from '../components/organisms/landing/BetaSignup.js';
 import { useScrollReveal } from '../hooks/useScrollReveal.js';
 
@@ -40,6 +41,8 @@ interface Feature {
   title: string;
   body: string;
   points: string[];
+  /** Label rows under the text: a small tracked-caps label beside a line (the mockup's STREAM / SEARCH / MEDIA) */
+  facts?: { label: string; text: string }[];
   note?: string;
   /** One screenshot key, or several for a slideshow */
   shot: string | string[];
@@ -50,15 +53,26 @@ interface Feature {
 const FEATURES: Feature[] = [
   {
     label: 'Journal', title: 'A journal that keeps up with you.',
-    body: 'Everything you capture on your home dashboard flows into your main journal, where you can search, review, and edit every note, wellness check, and media entry in one chronological stream. Switch to the media journal view to organize books, movies, TV shows, and music with ratings and progress tracking, using separate public and private shelves so you share only what you choose with others.',
+    body: 'Everything you capture on your dashboard lands here, in one stream you can search, review and edit.',
     points: [],
+    facts: [
+      { label: 'Stream', text: 'Notes, wellness checks and meals, newest first.' },
+      { label: 'Search', text: 'Find any entry by word, topic or date.' },
+      { label: 'Write', text: 'Write for any topic in any form you like - dictation, pen, or just type in your entry.' },
+    ],
     shot: 'journal', size: [1268, 1000],
     alt: 'The journal with everyday entries by month and a Sunday entry open',
   },
   {
-    label: 'Media journal', title: 'Your books, films, shows, and albums, all in one spot.',
-    body: 'Keep track of what you are reading, watching, and listening to at your own pace. Drag a progress bar as you go, rate in half stars, and sort things with custom tags and shelves for active, wanted, finished, paused, or set aside. Find cover and details brings in the cover, creator, year, and genre from trusted catalogues for you. Bookmark your favourites to share them on a public shelf with its own link while keeping your notes and progress private, and paste a public shelf link to follow along quietly with zero pressure.',
+    label: 'Media journal', title: 'One shelf for everything you read, watch and hear.',
+    body: 'Keep track of your books, films, shows and albums at your own pace.',
     points: [],
+    facts: [
+      { label: 'Track', text: 'Drag a progress bar as you go, and rate in half stars.' },
+      { label: 'Add', text: 'Search a title and the cover, creator, year and genre fill in for you.' },
+      // Share and Follow in one row; the Follow sentence is the earlier media copy's wording (the pasted line was cut off)
+      { label: 'Share', text: 'Bookmark favourites onto a public shelf with its own link. Your notes and progress stay private. Paste a public shelf link to follow along quietly with zero pressure.' },
+    ],
     shot: ['media', 'media-entry', 'media-public', 'media-following'], size: [1268, 910],
     alt: [
       'The media journal shelf of covers with ratings, progress and shelf status under each',
@@ -68,9 +82,14 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    label: 'Goals and planning', title: 'From multiyear roadmaps down to your daily plan.',
-    body: 'Every task links directly to milestones and goals, giving you seamless movement between list views, Kanban boards, and a draggable Gantt roadmap. Filter instantly by goal or category, drag tasks into your weekly planner to map out your days, and see everything automatically appear on your main calendar next to synced events and bills.',
+    label: 'Goals and planning', title: 'Plan the decade.\nThen plan Thursday.',
+    body: 'Every task ties back to a milestone and a goal, so the small things you do each day add up to the big ones.',
     points: [],
+    facts: [
+      { label: 'Goals', text: 'Set a vision, then break it into goals and milestones on a draggable roadmap.' },
+      { label: 'Tasks', text: 'Work as a list or a Kanban board, filtered by goal or category.' },
+      { label: 'Planner', text: 'Drag tasks into your week and see them on your calendar beside events and bills.' },
+    ],
     shot: ['planning-planner', 'planning-tasks', 'planning-roadmap', 'planning-vision'], size: [1268, 900],
     alt: [
       'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
@@ -79,9 +98,14 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    label: 'Health and wellness', title: 'Health, wellness, and endurance training in one view.',
-    body: 'Log daily habits, mood, sleep, hydration, and nutrition with macro and micronutrient targets, alongside scheduled workouts and multi-phase training plans built for big athletic goals like mountaineering. Stay consistent with effortless medication dose tracking, uncover symptom patterns and food triggers through built in reports, and print organized allergy, symptom, and medication lists for your doctor.',
+    label: 'Health and wellness', title: 'Your health,\nday by day.',
+    body: 'Track what you eat, how you feel and what you take, then see how they connect.',
     points: [],
+    facts: [
+      { label: 'Wellness', text: 'Mood, sleep, water and meals, with calorie and nutrient targets.' },
+      { label: 'Medication', text: 'A dose schedule you check off, with a full history behind it.' },
+      { label: 'Reports', text: 'Spot symptom patterns and food triggers, and print allergy, symptom and medication lists for your doctor.' },
+    ],
     shot: ['health-meals', 'health-dashboard', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
     alt: [
@@ -92,9 +116,15 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    label: 'Budget and finance', title: 'Private budgeting to keep your finances on track.',
-    body: 'Set monthly category budgets, track recurring bills and subscriptions, and watch your running balance update automatically as you log spending or mark bills paid. Build dedicated savings funds and compare planned versus actual spending in clear reports, all powered by your own entries with zero bank logins required.',
+    // The pasted headline began "now what’s left": read as "Know" with its first letter lost
+    label: 'Budget and finance', title: 'Know what’s left\nbefore you spend it.',
+    body: 'Plan the month, log what you spend, and your balance keeps itself current.',
     points: [],
+    facts: [
+      { label: 'Budget', text: 'Set category budgets and recurring bills, then mark them paid as you go.' },
+      { label: 'Savings', text: 'Build funds for the things you’re working toward, and pay debts down beside them.' },
+      { label: 'Reports', text: 'Compare planned against actual, and see where the money went.' },
+    ],
     shot: ['finance', 'finance-bills', 'finance-savings'], size: [1268, 1440],
     alt: [
       'The budget with planned, bills, spending and what’s left, and where the money goes by category',
@@ -105,10 +135,10 @@ const FEATURES: Feature[] = [
 ];
 
 const MODULES = [
-  { title: 'Calendar', body: 'View events, deadlines, and bills by day, week, or month, complete with two-way Google Calendar sync and a private Apple Calendar feed.', shot: 'calendar-dark', alt: 'The month calendar with events and bills on their days' },
-  { title: 'Meal planning', body: 'Build a weekly menu, save recipes with checkable ingredients, and turn your meal plan into a shopping list in one tap.', shot: 'kitchen-dark', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
-  { title: 'Budget and finance', body: 'Manage a manual budget, bills, subscriptions, and savings goals. Off by default, and never linked to a bank.', shot: 'finance-dark', alt: 'The budget with planned, bills, spending and what’s left' },
-  { title: 'Media journal', body: 'Keep books, movies, shows, and music on one shelf with half-star ratings, progress tracking, notes, and an optional public shelf to share.', shot: 'media-dark', alt: 'The media journal shelf of book covers' },
+  { title: 'Calendar', body: 'Events, deadlines and bills by day, week or month, in sync with Google and Apple Calendar.', shot: 'calendar-dark', alt: 'The month calendar with events and bills on their days' },
+  { title: 'Meal planning', body: 'Plan the week, save recipes, and turn the menu into a shopping list.', shot: 'kitchen-dark', alt: 'The kitchen dashboard with today’s meals and the shopping list' },
+  { title: 'Budget and finance', body: 'Budgets, bills, subscriptions and savings goals, entered by you.', shot: 'finance-dark', alt: 'The budget with planned, bills, spending and what’s left' },
+  { title: 'Media journal', body: 'Books, films, shows and music on your shelf, with ratings and progress.', shot: 'media-dark', alt: 'The media journal shelf of book covers' },
 ];
 
 const EXTRAS = [
@@ -127,7 +157,7 @@ const PRIVACY = [
   { icon: 'download', title: 'Your data leaves with you', body: 'Export full JSON backups, download entries and finance data as CSV, or print clean medical summaries anytime. Start fresh or load built-in seed data for wellness, topics, and finance to test out the app instantly.' },
 ];
 
-const BETA_POINTS = ['Free access for the whole beta', 'A direct say in what gets built next', 'After release, no more than $20 a month'];
+const BETA_POINTS = ['Free for the whole beta', 'A say in what gets built next', '$20 a month or less after release'];
 
 const QUESTIONS = [
   { q: 'Why did you build Chronicles?', a: 'Chronicles was born out of personal necessity during illness to serve as a private daily anchor. Because commercial alternatives often lack true zero knowledge privacy or lock essential features behind expensive subscriptions, the source code remains completely public and free to run yourself. Only the managed hosted version and future native mobile apps will carry a post beta price to cover ongoing infrastructure, maintenance, and project sustainability.' },
@@ -186,10 +216,11 @@ function TickList({ items }: { items: string[] }) {
   );
 }
 
-const Band = styled.section<{ $tone: 'page' | 'white' }>`
-  padding: 128px 0;
+const Band = styled.section<{ $tone: 'page' | 'white'; $flush?: boolean }>`
+  /* $flush: no padding of its own (the feature rows are bands themselves) */
+  padding: ${({ $flush }) => ($flush ? 0 : '128px 0')};
   background: ${({ $tone }) => ($tone === 'white' ? '#ffffff' : 'var(--bg-app)')};
-  @media (max-width: 768px) { padding: 80px 0; }
+  @media (max-width: 768px) { padding: ${({ $flush }) => ($flush ? 0 : '80px 0')}; }
 `;
 
 /* ——— Hero ——— */
@@ -197,27 +228,47 @@ const Band = styled.section<{ $tone: 'page' | 'white' }>`
 const Hero = styled.div`
   max-width: 1180px;
   margin: 0 auto;
-  padding: 60px 24px 72px;
+  padding: 72px 24px 36px; /* 72px under before (with the buttons) */
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 18px rgba(0, 0, 0, 0.55);
-  @media (max-width: 768px) { padding: 34px 32px 48px; }
+  @media (max-width: 768px) { padding: 40px 32px 28px; }
 `;
 
 const H1 = styled.h1`
-  margin: 0 auto 48px;
+  margin: 0 auto 18px; /* 48px before */
   font-family: var(--font-display);
   font-size: 78px;
   font-weight: 200;
   line-height: 1.06;
   color: var(--text-primary);
-  /* Two lines on wide screens: "A life dashboard for / people too busy to plan." */
-  br { @media (max-width: 768px) { display: none; } }
-  /* The second half in a pale taupe (pale teal #b6dbd9 before), the page's one coloured phrase */
-  em { font-style: normal; color: #ddd2c7; }
+  /* Its words are drawn by HeadlineArt below; the sizes here set that drawing's width */
   /* Tablets and phones: a little bigger than before (the intro under it a little smaller) */
-  @media (max-width: 1024px) { font-size: 72px; margin-bottom: 24px; }
+  @media (max-width: 1024px) { font-size: 72px; margin-bottom: 14px; }
   @media (max-width: 768px) { font-size: 58px; }
   @media (max-width: 400px) { font-size: 50px; }
+`;
+
+/* The headline, "Your life dashboard", drawn as an SVG of its letters in Pairland
+   (src/assets/landing/headline.svg, traced from src/assets/fonts/pairland.ttf) so it
+   looks the same on every device and no font has to load. The words themselves stay in
+   the heading, visually hidden, for screen readers and search. 591 × 91 at the
+   headline's 78px, so its width is set in em and follows the heading's sizes */
+const HeadlineArt = styled.img`
+  display: block;
+  width: 7.58em;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+`;
+
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 `;
 
 const HeroText = styled.p`
@@ -229,21 +280,8 @@ const HeroText = styled.p`
   color: var(--text-soft);
   @media (max-width: 1024px) { font-size: 18px; }
   @media (max-width: 768px) { font-size: 17px; }
-`;
-
-/* The hero's two buttons, under the intro */
-const HeroActions = styled.div`
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 40px;
-  @media (max-width: 1024px) { margin-top: 56px; }
-  a { text-shadow: none; }
-`;
-
-const BigPill = styled(ActionPill)`
-  && { min-height: 48px; padding: 10px 26px; font-size: 16px; font-weight: 600; }
+  /* "Encrypted…" starts the second line on wider screens; phones wrap it naturally */
+  br { @media (max-width: 768px) { display: none; } }
 `;
 
 /* The hero's slideshow of the app, no frame */
@@ -254,12 +292,28 @@ const Showcase = styled.div`
   @media (max-width: 768px) { padding: 0 20px; }
 `;
 
+/* "Join the Beta" under How it works: the page's pill (ActionPill) as an accent
+   outline — no fill — centred */
+const HowCta = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 64px;
+  --pill-neutral-bg: transparent;
+  --pill-neutral-border: var(--color-accent-line);
+  --pill-neutral-fg: var(--color-accent-line);
+  --pill-neutral-hover: var(--color-accent-subtle);
+`;
+
+const BigPill = styled(ActionPill)`
+  && { min-height: 48px; padding: 10px 28px; font-size: 16px; font-weight: 600; }
+`;
+
 /* ——— How it works (the original timeline) ——— */
 
 const STEPS = [
   { title: 'Choose or create a topic', body: 'Pick an existing topic or build your own with custom fields.' },
   { title: 'Capture it in seconds', body: 'Log a meal, medication dose, expense, or thought in under 15 seconds.' },
-  { title: 'View your big picture', body: 'Chronicles sorts your entries by topic so you can track, plan, and organize your days effortlessly.' },
+  { title: 'Check the views', body: 'Everything is sorted by topic into views that let you track, plan, and organize your days effortlessly.' },
 ];
 
 /* More room above and below than the other bands */
@@ -277,14 +331,6 @@ const HowTitle = styled(H2)`
   text-transform: capitalize;
   max-width: none;
   @media (max-width: 768px) { font-size: 42px; }
-`;
-
-/* The intro: centred, at most 860px wide */
-const WideLede = styled(Lede)`
-  max-width: 860px;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: center;
 `;
 
 /* A timeline: a teal ring with a centre dot above each step, a hairline
@@ -334,32 +380,64 @@ const Marker = styled.span`
 /* ——— Feature rows ——— */
 
 const FeatureRows = styled.div`
-  /* A little wider than the page's 1184px column, so the text and screenshots have more room */
-  width: min(1360px, calc(100vw - 48px));
-  margin-left: 50%;
-  transform: translateX(-50%);
+  /* In the page's own column, lined up with the rest of the content (it used to break
+     out to 1360px, which made the screenshots huge) */
+  /* The mockup's proportions: about 360px of text beside a 590px screenshot */
+  max-width: 1100px; /* 1040 before: widened with the gap, so the columns keep their size */
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 136px;
-  @media (max-width: 900px) { gap: 80px; width: auto; margin-left: 0; transform: none; }
 `;
 
+/* Each row its own full-width band, alternating white and the page grey (the band's
+   colour runs edge to edge; the content stays in the column) */
 const FeatureRow = styled.article`
+  padding: 112px 0;
+  background: #ffffff;
+  box-shadow: 0 0 0 100vmax #ffffff;
+  clip-path: inset(0 -100vmax);
+  &:nth-child(even) { background: var(--bg-app); box-shadow: 0 0 0 100vmax var(--bg-app); }
+  @media (max-width: 768px) { padding: 72px 0; }
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 120px;
+  /* Text and screenshot share the column evenly (the screenshot had the bigger share) */
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr); /* 0.62fr before */
+  gap: 128px; /* 72px before */
   @media (max-width: 1200px) { gap: 88px; }
   align-items: center;
-  &:nth-child(even) { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
-  &:nth-child(even) > :first-child { order: 2; }
-  h3 { margin: 0 0 22px; font-family: var(--font-display); font-size: 50px; font-weight: 200; line-height: 1.1; color: var(--text-primary); text-wrap: balance; }
-  p { margin: 0; font-size: 18px; line-height: 1.7; color: var(--text-soft); }
+  /* Every row the same way round: text on the left, screenshot on the right (they alternated before) */
+  h3 { margin: 0 0 22px; font-family: var(--font-display); font-size: 46px; font-weight: 200; line-height: 1.08; color: var(--text-primary); text-wrap: balance; }
+  p { margin: 0; font-size: 18px; line-height: 1.6; color: var(--text-soft); }
   em { display: block; margin-top: 10px; font-size: 17px; color: var(--text-soft); }
   @media (max-width: 900px) {
-    &, &:nth-child(even) { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-    &:nth-child(even) > :first-child { order: 0; }
+    grid-template-columns: minmax(0, 1fr); gap: 36px;
     h3 { font-size: 38px; }
   }
+`;
+
+/* A feature's label rows: a small tracked-caps label beside its line, hairlines above
+   each row (none under the last) (the mockup's STREAM / SEARCH / MEDIA) */
+const Facts = styled.dl`
+  margin: 30px 0 0;
+  padding: 0;
+  /* No rule under the last row */
+  & > div {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px 0;
+    border-top: 1px solid var(--border-default);
+  }
+  dt {
+    padding-top: 3px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+  }
+  dd { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-soft); }
+  @media (max-width: 560px) { & > div { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
 `;
 
 /* A screenshot in a light device bezel, lifted off the page */
@@ -398,12 +476,13 @@ const Extras = styled.ul`
 
 /* ——— Privacy (the dark band over the night sky) ——— */
 
-/* The app's dark page colour over the mountain photo (the river valley, the
-   hero's), faint. (`BAND_GRADIENT`, the teal band, is kept for going back.) */
+/* The app's dark page colour over the hero's photo (Philipp Torres's leaves —
+   Justin Fisher's beach grass, `HERO_PHOTO`, before), faint. (`BAND_GRADIENT`, the
+   teal band, is kept for going back.) */
 const PrivacyBand = styled(DarkBand)`
   background:
     linear-gradient(180deg, rgba(31, 34, 41, 0.9) 0%, rgba(31, 34, 41, 0.84) 45%, rgba(31, 34, 41, 0.92) 100%),
-    #1f2229 url(${HERO_PHOTO}) center 55% / cover no-repeat;
+    #1f2229 url(${HERO_PHOTO_TORRES}) center 55% / cover no-repeat;
   --text-secondary: rgba(255, 255, 255, 0.88);
   --text-muted: rgba(255, 255, 255, 0.7);
   padding: 128px 0 96px;
@@ -465,9 +544,9 @@ const BetaLayout = styled(Container)`
 const FaqBand = styled(DarkBand)`
   --border-default: rgba(255, 255, 255, 0.22);
   --border-subtle: rgba(255, 255, 255, 0.12);
-  /* A light taupe on the dark band */
-  --color-accent-line: #c9b8a8;
-  --shadow-ring: 0 0 0 3px rgba(163, 144, 128, 0.5);
+  /* A pale teal on the dark band (a light taupe, #c9b8a8, for a while) */
+  --color-accent-line: #a6dedb;
+  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.5);
   padding: 120px 0 120px;
   @media (max-width: 768px) { padding: 72px 0 80px; }
 `;
@@ -570,16 +649,11 @@ export function LandingView() {
       hero={(
         <section aria-labelledby="hero-title">
           <Hero>
-            <H1 id="hero-title">A life dashboard for<br /> people <em>too busy to plan.</em></H1>
+            <H1 id="hero-title"><HeadlineArt src={HEADLINE_SVG} alt="" aria-hidden="true" /><VisuallyHidden>Your life dashboard</VisuallyHidden></H1>
             <HeroText>
-              Chronicles is a private zero knowledge life dashboard and day planner that automatically organizes your
-              notes, habits, and tasks into one secure workspace where your data stays entirely on your device with zero
-              corporate tracking.
+              Your journal, plans, habits, budget, books, and media, all together at last.<br /> Encrypted, untracked,
+              and yours alone.
             </HeroText>
-            <HeroActions>
-              <BigPill as="a" href="#beta" $primary>Join the beta</BigPill>
-              <BigPill as="a" href="#how">See how it works</BigPill>
-            </HeroActions>
           </Hero>
           <Showcase>
             <ScreenSlideshow />
@@ -592,12 +666,6 @@ export function LandingView() {
           <Container>
             <div data-reveal>
               <HowTitle id="how-title">How it works</HowTitle>
-              <WideLede>
-                Configure your custom topics once with essentials like medications, allergies, bills, and roadmap goals,
-                and maintain everything in under fifteen minutes a day. Your continuous stream of entries is automatically
-                sorted into custom views, creating a centralized digital hub that brings your metrics, tasks, goals, and
-                routines into one clear view.
-              </WideLede>
             </div>
             <Steps>
               {STEPS.map((st, i) => (
@@ -608,18 +676,26 @@ export function LandingView() {
                 </li>
               ))}
             </Steps>
+            <HowCta data-reveal style={delay(3)}><BigPill as="a" href="#beta">Join the Beta</BigPill></HowCta>
           </Container>
         </HowBand>
 
-        <Band $tone="white" id="features" aria-label="Features">
+        <Band $tone="white" id="features" aria-label="Features" $flush>
           <Container>
             <FeatureRows>
               {FEATURES.map((f, i) => (
                 <FeatureRow key={f.label}>
                   <div data-reveal>
-                    <h3>{f.title}</h3>
+                    <h3>{f.title.split('\n').map((line, n) => <span key={n}>{n > 0 && <br />}{line}</span>)}</h3>
                     <p>{f.body}</p>
                     {f.points.length > 0 && <TickList items={f.points} />}
+                    {f.facts && f.facts.length > 0 && (
+                      <Facts>
+                        {f.facts.map(x => (
+                          <div key={x.label}><dt>{x.label}</dt><dd>{x.text}</dd></div>
+                        ))}
+                      </Facts>
+                    )}
                     {f.note && <em>{f.note}</em>}
                   </div>
                   <div data-reveal style={delay(1.5)}>
@@ -634,8 +710,8 @@ export function LandingView() {
         <Band $tone="page" aria-labelledby="more-title">
           <Container>
             <div data-reveal>
-              <H2 id="more-title">Everything else your days touch.</H2>
-              <Lede>Modules switch on and off, so your workspace stays clean and you only keep what you use.</Lede>
+              <H2 id="more-title">Everything your days touch.</H2>
+              <Lede>Switch modules on and off, and keep only what you use.</Lede>
             </div>
             <Modules>
               {MODULES.map((m, i) => (
@@ -687,9 +763,9 @@ export function LandingView() {
         <Band $tone="page" id="beta" aria-labelledby="beta-title">
           <BetaLayout>
             <div data-reveal>
-              <H2 id="beta-title">Help shape your new life dashboard.</H2>
+              <H2 id="beta-title">Help shape Chronicles.</H2>
               <Lede>
-                Chronicles is in active development with limited seats to ensure every tester gets direct attention.
+                The beta is small on purpose, so every tester gets a direct line to the person building it.
               </Lede>
               <TickList items={BETA_POINTS} />
             </div>

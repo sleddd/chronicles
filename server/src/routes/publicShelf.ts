@@ -8,7 +8,7 @@ import {
   PUBLIC_SHELF_SORTS, type OwnedPublicShelf, type PublicShelfQuery,
 } from '../db/publicShelfQueries.js';
 import { PUBLIC_SHELF_STORAGE_LIMIT_BYTES } from '../utils/storageLimits.js';
-import { putPublicShelfSchema } from '@chronicles/shared';
+import { putPublicShelfSchema, PUBLIC_SHELF_PAGE_SIZE } from '@chronicles/shared';
 
 /*
  * The public shelf (see db/publicShelfQueries.ts): the public GET serves one
@@ -79,14 +79,17 @@ router.get('/:token', publicShelfLimiter, async (req, res) => {
     releaseWhenSettled(res, release);
     const page = Number.parseInt(String(req.query.page ?? '1'), 10);
     const query = readQuery(req.query as Record<string, unknown>);
-    const result = await getPublicShelfPage(token, Number.isFinite(page) ? page : 1, query);
+    // ?limit=N: a smaller page (a follower's card shows a handful of covers, not 24)
+    const asked = Number.parseInt(String(req.query.limit ?? ''), 10);
+    const pageSize = Number.isFinite(asked) && asked >= 1 && asked < PUBLIC_SHELF_PAGE_SIZE ? asked : PUBLIC_SHELF_PAGE_SIZE;
+    const result = await getPublicShelfPage(token, Number.isFinite(page) ? page : 1, query, pageSize);
     if (!result) {
       res.status(404).json({ error: 'Public shelf not found' });
       return;
     }
     // A link opened by many people: a minute of shared cache and a 304 for a
     // page the browser already holds. Nothing private is in this response.
-    const etag = `"${crypto.createHash('sha256').update(`${result.updatedAt.toISOString()}|${result.page}|${result.total}|${JSON.stringify(query)}`).digest('base64url').slice(0, 24)}"`;
+    const etag = `"${crypto.createHash('sha256').update(`${result.updatedAt.toISOString()}|${result.page}|${result.total}|${pageSize}|${JSON.stringify(query)}`).digest('base64url').slice(0, 24)}"`;
     // private: a shared cache (CDN) must not keep serving a shelf after Turn off or Reset link.
     // no-cache: the browser keeps its copy but asks every time (a 304 when
     // nothing changed). With max-age=60 a change — above all taking something

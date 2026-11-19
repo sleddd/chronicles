@@ -53,7 +53,7 @@ function records(): Record<string, true> {
   }
 }
 
-type RecordName = EgressKey | typeof PUBLIC_SHELF_RECORD | typeof AI_RECORD | typeof AI_GRANDFATHER_RECORD;
+type RecordName = EgressKey | typeof PUBLIC_SHELF_RECORD | typeof PUBLIC_SHELF_OFF_RECORD | typeof AI_RECORD | typeof AI_GRANDFATHER_RECORD;
 const recordKey = (key: RecordName) => `${account}|${key}`;
 
 // A switch turned on a moment ago: its save may not have reached the server
@@ -102,6 +102,9 @@ export function recordEgressChoice(key: EgressKey, on: boolean): void {
  * no sealed setting — the record alone decides, and it can't be replayed.
  */
 const PUBLIC_SHELF_RECORD = 'publicShelf';
+// The owner pressed Turn off in this browser: nothing short of pressing Turn on
+// again publishes from here (see `publicShelfTurnedOffHere`)
+const PUBLIC_SHELF_OFF_RECORD = 'publicShelfOff';
 
 /*
  * In-App AI sends what is logged (meals, exercise, symptoms, chat messages)
@@ -151,9 +154,20 @@ export function grandfatherAi(hadSeenRevision: boolean): void {
   setRecord(AI_GRANDFATHER_RECORD, true);
 }
 
-/** The owner turned the public shelf on (Turn on) or off in this browser. */
+/** The owner turned the public shelf on (Turn on) or off (Turn off) in this browser. */
 export function recordPublicShelfChoice(on: boolean): void {
   setRecord(PUBLIC_SHELF_RECORD, on);
+  setRecord(PUBLIC_SHELF_OFF_RECORD, !on);
+}
+
+/**
+ * Turn off was pressed in this browser and Turn on hasn't been since. A shelf
+ * the server then says exists must not start publishing again from an edit or
+ * a bookmark tap (the bookmarks stay on the entries after Turn off) — only
+ * from the owner pressing Turn on, which asks first.
+ */
+export function publicShelfTurnedOffHere(): boolean {
+  return account !== null && records()[recordKey(PUBLIC_SHELF_OFF_RECORD)] === true;
 }
 
 /** Whether this browser may publish the shelf: only after its own Turn on. */

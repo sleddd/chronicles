@@ -12,8 +12,8 @@ import { PAGE_INK } from '../../templates/LandingTemplate.js';
    pointed at or focused, and doesn't advance at all for reduced motion. Swipe sideways, the ‹ › arrows or the arrow keys move it by hand. */
 
 export const SLIDES = [
-  { key: 'dashboard-dark-v2', name: 'Dashboard', caption: 'Your day at a glance' },
-  // The earlier dashboard shot, kept to switch back to: { key: 'dashboard-dark', … }
+  { key: 'dashboard-dark-v3', name: 'Dashboard', caption: 'Your day at a glance' },
+  // The earlier dashboard shots, kept to switch back to: { key: 'dashboard-dark-v2', … }, { key: 'dashboard-dark', … }
   { key: 'journal-dark', name: 'Journal', caption: 'Every entry, with fields for each topic' },
   { key: 'health-dark', name: 'Health', caption: 'Nutrition, the wellness check-in and today’s doses' },
   { key: 'reports-dark', name: 'Health reports', caption: 'How water, mood and sleep change over time' },
@@ -52,7 +52,7 @@ const Stage = styled.div`
 
 const Viewport = styled.div`
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 1600 / 1150; /* the shots are 1600 × 1150 (16:10 before — a little taller now, so more of each page shows) */
   overflow: hidden;
   border: 8px solid #2b2e36;
   border-radius: 16px;
@@ -175,8 +175,8 @@ export function ScreenSlideshow() {
             aria-hidden={i !== index}
             loading={i === 0 ? 'eager' : 'lazy'}
             decoding="async"
-            width={1440}
-            height={900}
+            width={1600}
+            height={1150}
           />
         ))}
       </Viewport>

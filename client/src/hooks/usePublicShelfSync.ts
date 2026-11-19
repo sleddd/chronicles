@@ -6,7 +6,7 @@ import { buildPublicShelfItems, ON_PUBLIC_SHELF } from '../services/publicShelf.
 import { mediaItems, mediaTopicIds } from '../utils/media.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { showFlash } from '../services/flashNotice.js';
-import { recordPublicShelfChoice, reconcilePublicShelf, accountTagForRecords } from '../services/deviceConsent.js';
+import { recordPublicShelfChoice, reconcilePublicShelf, accountTagForRecords, publicShelfTurnedOffHere } from '../services/deviceConsent.js';
 import { PUBLIC_SHELF_TITLE_DEFAULT } from '@shared/validation/schemas';
 
 /*
@@ -151,12 +151,20 @@ export async function enablePublicShelf(title: string): Promise<OwnedPublicShelf
   return saved;
 }
 
-/** This browser publishes the shelf from now on (the owner acted on it here) */
-export function turnOnPublicShelfHere(): void {
+/**
+ * This browser publishes the shelf from now on, because the owner acted on it
+ * here. True when it publishes (now or already). False when there's no shelf,
+ * or when Turn off was pressed in this browser — then only Turn on, which asks
+ * first, brings it back, whatever the server says exists.
+ */
+export function turnOnPublicShelfHere(): boolean {
   const store = usePublicShelfStore.getState();
-  if (!store.publicShelf || store.enabledHere) return;
+  if (!store.publicShelf) return false;
+  if (store.enabledHere) return true;
+  if (publicShelfTurnedOffHere()) return false;
   recordPublicShelfChoice(true);
   store.setEnabledHere(true);
+  return true;
 }
 
 /** Turn the shelf off: the row is deleted; the bookmarks stay on the entries */

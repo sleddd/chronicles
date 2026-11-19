@@ -99,8 +99,13 @@ export function quotePool(now: Date, mine: Quote[] = []): Quote[] {
 
 const dayOfYear = (now: Date) => Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
 
-/** Where a browser is in the year's quotes: the day it last showed one and which */
-export interface QuotePlace { day: string; pos: number }
+/** Where a browser is in the year's quotes: the day it last showed one, which, and its words */
+export interface QuotePlace {
+  day: string;
+  pos: number;
+  /** The quote shown at `pos`, so it can be found again when the pool's order changes */
+  text?: string;
+}
 
 /**
  * Today's place in the quotes. The same all day; a new day moves one on from
@@ -112,6 +117,23 @@ export function quotePlaceFor(today: string, now: Date, saved: QuotePlace | null
     return saved.day === today ? saved : { day: today, pos: saved.pos + 1 };
   }
   return { day: today, pos: dayOfYear(now) };
+}
+
+/**
+ * The place, settled on a pool: adding or removing a quote of your own
+ * reshuffles the year's order, so the same position would show a different
+ * quote mid-day. A place that remembers its quote moves to wherever that quote
+ * is now; one that doesn't (a new day, an older record) takes the quote it
+ * lands on. The same object back when nothing changes.
+ */
+export function settleQuotePlace(pool: Quote[], place: QuotePlace): QuotePlace {
+  const landed = quoteAt(pool, place.pos);
+  if (place.text === landed.text) return place;
+  if (place.text !== undefined) {
+    const at = pool.findIndex(q => q.text === place.text);
+    if (at >= 0) return { ...place, pos: at };
+  }
+  return { ...place, text: landed.text };
 }
 
 /** The quote at a place, going round the pool */

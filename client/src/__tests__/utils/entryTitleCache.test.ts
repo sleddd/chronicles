@@ -13,3 +13,13 @@ describe('entry title cache', () => {
     expect(clearKey).toContain('clearEntryTitleCache()');
   });
 });
+
+import { entryTitleText as titleOf } from '@/utils/entryTitle';
+import { it as it2, expect as expect2 } from 'vitest';
+
+it2('a long entry is titled by its first paragraph, never its paragraphs run together', () => {
+  expect2(titleOf('<p>Slow morning by the river</p><p>Walked the long way round.</p>')).toBe('Slow morning by the river');
+  expect2(titleOf('<p></p><p>Second line first</p>')).toBe('Second line first');
+  expect2(titleOf('<p>One line<br>then another</p>')).toBe('One line');
+  expect2(titleOf('<h2>A heading</h2><p>text</p>')).toBe('A heading');
+});

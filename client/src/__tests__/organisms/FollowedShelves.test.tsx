@@ -7,6 +7,7 @@ import { FollowedShelves } from '@/components/organisms/FollowedShelves';
 const T = 'abcdefghijklmnopqrstuvwxyz012345';
 const MINE = 'ZYXWVUTSRQPONMLKJIHGFEDCBA_-9876';
 const DEMO = 'demoshelfdemoshelfdemoshelf12345';
+const FRESH = 'freshshelffreshshelffreshshelf12';
 
 const setting = vi.hoisted(() => ({ value: [] as unknown, save: vi.fn() }));
 vi.mock('@/hooks/useEncryptedSetting', () => ({
@@ -59,8 +60,36 @@ describe('FollowedShelves', () => {
     api.mine.mockResolvedValue({ publicShelf: { token: MINE } });
     api.peek.mockResolvedValue(page('Demo shelf'));
     render({ ownToken: DEMO, incoming: DEMO });
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow shelf' }));
     expect(await screen.findByText('Following Demo shelf.')).toBeInTheDocument();
     expect(setting.save.mock.calls[0][0]).toEqual([expect.objectContaining({ token: DEMO })]);
+  });
+
+  it('a Follow link asks first, and Not now follows nothing', async () => {
+    api.peek.mockResolvedValue(page('Sam’s shelf'));
+    render({ incoming: T });
+    expect(await screen.findByText('Follow Sam’s shelf?')).toBeInTheDocument();
+    expect(setting.save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByText('Follow Sam’s shelf?')).not.toBeInTheDocument();
+    expect(setting.save).not.toHaveBeenCalled();
+  });
+
+  it('asks for only the covers a card shows', async () => {
+    setting.value = [{ token: FRESH, title: 'Demo', followedAt: '' }];
+    api.peek.mockResolvedValue(page('Demo'));
+    render();
+    await waitFor(() => expect(api.peek).toHaveBeenCalledWith(FRESH, 5));
+  });
+
+  it('a shelf that didn’t load can be tried again', async () => {
+    const OTHER = 'othershelfothershelfothershelf12';
+    setting.value = [{ token: OTHER, title: 'Other', followedAt: '' }];
+    api.peek.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(page('Other'));
+    render();
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(api.peek).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Couldn’t load this shelf/)).not.toBeInTheDocument();
   });
 
   it('lists followed shelves and unfollows one', async () => {

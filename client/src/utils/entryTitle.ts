@@ -14,10 +14,14 @@ function compute(html: string): string {
     const text = stripHtml(headingMatch[1]).trim();
     if (text) return text;
   }
-  return stripHtml(html).trim().slice(0, 70);
+  // The first paragraph (or line) only: block ends become line breaks first, so a
+  // long entry's paragraphs no longer run together ("…the riverWalked the long…")
+  const lined = html.replace(/<\/(p|div|h[1-6]|li|blockquote|pre)>|<br\s*\/?>/gi, '$&\n');
+  const first = stripHtml(lined).split('\n').map(l => l.trim()).find(Boolean) ?? '';
+  return first.slice(0, 70);
 }
 
-/** First heading, else the first 70 characters of text; '' when there's no text. */
+/** First heading, else the first paragraph's first 70 characters; '' when there's no text. */
 export function entryTitleText(html: string): string {
   const hit = cache.get(html);
   if (hit !== undefined) return hit;

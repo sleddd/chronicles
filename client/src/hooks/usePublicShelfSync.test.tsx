@@ -11,7 +11,7 @@ vi.mock('../services/api.js', async () => {
   };
 });
 vi.mock('../services/flashNotice.js', () => ({ showFlash: vi.fn() }));
-vi.mock('../services/deviceConsent.js', () => ({ recordPublicShelfChoice: vi.fn(), reconcilePublicShelf: vi.fn(), publicShelfOnHere: () => true }));
+vi.mock('../services/deviceConsent.js', () => ({ recordPublicShelfChoice: vi.fn(), reconcilePublicShelf: vi.fn(), publicShelfOnHere: () => true, publicShelfTurnedOffHere: () => false, accountTagForRecords: () => null }));
 
 import { usePublicShelfSync } from './usePublicShelfSync.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
