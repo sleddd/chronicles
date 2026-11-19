@@ -12,6 +12,18 @@ import {
   DEFAULT_AI_CONFIG,
   type AiConfig,
 } from '../../services/aiAssistant.js';
+import { setEgressAccount, recordAiChoice } from '../../services/deviceConsent.js';
+import { isAiOnButNotHere, loadAiConfig, encryptAiConfig, chatReply } from '../../services/aiAssistant.js';
+import { encryptBytes as rawEncryptBytes, decryptBytes as rawDecryptBytes, generateMasterKey } from '@shared/crypto/primitives.js';
+import { SETTING_REVS_STORE } from '../../services/settingCipher.js';
+import { beforeEach } from 'vitest';
+
+// AI is used only where this browser turned it on (deviceConsent.ts)
+beforeEach(() => {
+  localStorage.clear();
+  setEgressAccount('tag-a');
+  recordAiChoice(true);
+});
 
 const openai: AiConfig = { ...DEFAULT_AI_CONFIG, enabled: true, provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' };
 
@@ -174,5 +186,52 @@ describe('food nutrition', () => {
     expect(() => parseNutrients('{"calories": 100}', ['calories', 'iron'])).toThrow(/iron/);
     expect(parseNutrients('```json\n{"calories": 99.6, "vitaminB12": 0.234}\n```', ['calories', 'vitaminB12']))
       .toEqual({ calories: 100, vitaminB12: 0.23 });
+  });
+});
+
+describe('AI is used only where this browser turned it on (a sealed config can be replayed)', () => {
+  async function sealedConfig(cfg: AiConfig) {
+    const key = await generateMasterKey();
+    const encrypted = await encryptAiConfig(cfg, (d, aad) => rawEncryptBytes(key, d, aad));
+    return { encrypted, decrypt: (ct: ArrayBuffer, iv: string, aad?: string) => rawDecryptBytes(key, ct, iv, aad) };
+  }
+
+  it('a config opened on a browser that never chose AI sends nothing', async () => {
+    localStorage.clear();
+    setEgressAccount('tag-b');
+    const { encrypted, decrypt } = await sealedConfig(openai);
+    localStorage.removeItem(SETTING_REVS_STORE); // the seal noted nothing seen: a fresh browser
+    await loadAiConfig(encrypted, decrypt);
+    const spy = mockOpenAI(100);
+    expect(isAiReady()).toBe(false);
+    expect(isAiOnButNotHere()).toBe(true);
+    expect(await autoCaloriesOnSave('food', 'An apple', {})).toBeNull();
+    expect(await autoNutritionOnSave('An apple', {})).toBeNull();
+    await expect(chatReply('sys', [{ role: 'user', content: 'hi' }])).rejects.toThrow(/this browser/);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('a browser that had already seen a revision of the config before the upgrade counts as having chosen, once', async () => {
+    localStorage.clear();
+    setEgressAccount('tag-c');
+    const { encrypted, decrypt } = await sealedConfig(openai);
+    localStorage.setItem(SETTING_REVS_STORE, JSON.stringify({ 'tag-c|aiConfig': 1 }));
+    await loadAiConfig(encrypted, decrypt);
+    expect(isAiReady()).toBe(true);
+  });
+
+  it('a read that finds AI off or missing ends this browser’s choice, so a replayed config later finds none', async () => {
+    localStorage.clear();
+    setEgressAccount('tag-d');
+    const { encrypted, decrypt } = await sealedConfig({ ...openai, enabled: false });
+    await loadAiConfig(encrypted, decrypt);
+    // recorded a moment ago (just turned on): kept through a read answered before its save landed
+    recordAiChoice(true);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000);
+    await loadAiConfig(undefined, decrypt);
+    vi.restoreAllMocks();
+    const on = await sealedConfig(openai);
+    await loadAiConfig(on.encrypted, on.decrypt);
+    expect(isAiReady()).toBe(false);
   });
 });

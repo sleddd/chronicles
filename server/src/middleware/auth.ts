@@ -53,6 +53,17 @@ function sessionCookie(req: Request): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/** Requests whose session check must not move the session's lastActiveAt —
+    the anonymous analytics counter: a session row written in the same moment
+    as a count would tie the two together. */
+const quietRequests = new WeakSet<Request>();
+
+/** authMiddleware without the lastActiveAt write. */
+export function quietAuthMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+  quietRequests.add(req);
+  return authMiddleware(req, res, next);
+}
+
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;
 
@@ -118,7 +129,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   // Debounced lastActiveAt update (fire-and-forget)
   const timeSinceActive = Date.now() - session.lastActiveAt.getTime();
-  if (timeSinceActive > ACTIVITY_DEBOUNCE_MS) {
+  if (timeSinceActive > ACTIVITY_DEBOUNCE_MS && !quietRequests.has(req)) {
     prisma.session.update({
       where: { id: session.id },
       data: { lastActiveAt: new Date() },

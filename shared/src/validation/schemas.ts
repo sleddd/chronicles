@@ -230,6 +230,9 @@ export const confirmOptionsSchema = z.object({ action: z.enum(CONFIRM_ACTIONS) }
 export const confirmVerifySchema = z.object({
   action: z.enum(CONFIRM_ACTIONS),
   response: passkeyAssertionSchema,
+  // With 2FA on, a passkey stands in for the password only: the authenticator
+  // or backup code is still required, checked with the touch
+  code: codeSchema.optional(),
 }).strict();
 
 // Shares validation — shared content is stored as plaintext by design; the
@@ -484,6 +487,18 @@ export const crisisCardEventSchema = z.object({
   rating: z.enum(RISK_RATINGS),
   kind: z.enum(RISK_KINDS).nullable(),
 }).strict();
+
+/** One generic analytics event (POST /api/analytics/event): the event is in
+    the body, never the address, so access logs can't say which happened. */
+export const analyticsEventSchema = z.discriminatedUnion('event', [
+  z.object({
+    event: z.literal('crisis_card_shown'),
+    rating: z.enum(RISK_RATINGS),
+    kind: z.enum(RISK_KINDS).nullable(),
+  }).strict(),
+  z.object({ event: z.literal('minor_detected') }).strict(),
+]);
+export type AnalyticsEvent = z.infer<typeof analyticsEventSchema>;
 
 export const aiChatConsentSchema = z.object({
   version: z.number().int().min(1).max(1000),

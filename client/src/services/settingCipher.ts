@@ -69,6 +69,11 @@ function seenRev(key: string): number {
   return tag ? (revs()[`${tag}|${key}`] ?? 0) : 0;
 }
 
+/** The newest revision of a rollback-guarded setting this browser has seen for the unlocked account (0 = none). */
+export function seenRevision(key: string): number {
+  return seenRev(key);
+}
+
 function noteRev(key: string, rev: number): void {
   const tag = accountTagForRecords();
   if (!tag) return;

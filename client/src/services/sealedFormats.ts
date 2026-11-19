@@ -49,3 +49,28 @@ export function sealMarkerHeld(key: string, onServer: boolean, now = Date.now())
   }
   return now >= LEGACY_FORMATS_UNTIL || seenMarkers().has(key);
 }
+
+/*
+ * Who may MOVE older records over (re-seal them in the current format and
+ * write a marker). Re-sealing launders whatever it opened: an older record
+ * isn't bound to its id (or, before AAD, its halves to each other), so if the
+ * server left a marker out and served records it shuffled, re-sealing would
+ * make the shuffle permanent, under ids the server chose. So the move runs
+ * only on a browser that knew this account before the current sign-in (the
+ * owner mark in browserData.ts was already there — set by an earlier sign-in,
+ * which would also have noted any marker the server had then). A browser
+ * meeting the account for the first time opens the older records to show
+ * them, read-only, and leaves the move to a later sign-in (or another browser
+ * that knew the account). Set on every key install; false when locked.
+ */
+let migrationAllowed = false;
+
+/** Set when the master key is installed: did this browser know the account before this sign-in? */
+export function setLegacyMigrationAllowed(allowed: boolean): void {
+  migrationAllowed = allowed;
+}
+
+/** Whether older records may be re-sealed (and their marker written) from this browser now. */
+export function legacyMigrationAllowed(): boolean {
+  return migrationAllowed;
+}

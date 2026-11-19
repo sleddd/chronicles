@@ -101,6 +101,12 @@ export async function removeAllPasskeys(accountId: number): Promise<number> {
   return prisma.$executeRaw`DELETE FROM public.passkeys WHERE account_id = ${accountId}`;
 }
 
+/** One of the account's passkeys by its row id (a passkey sign-in waiting on its 2FA code). */
+export async function findAccountPasskey(id: number, accountId: number): Promise<StoredPasskey | null> {
+  const rows = await prisma.$queryRaw<Row[]>`SELECT * FROM public.passkeys WHERE id = ${id} AND account_id = ${accountId}`;
+  return rows[0] ? fromRow(rows[0]) : null;
+}
+
 /** Still there? Checked once a passkey sign-in's session exists (it may have been removed meanwhile). */
 export async function passkeyExists(id: number, accountId: number): Promise<boolean> {
   const rows = await prisma.$queryRaw<{ n: number }[]>`SELECT 1 AS n FROM public.passkeys WHERE id = ${id} AND account_id = ${accountId}`;

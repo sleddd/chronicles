@@ -5,7 +5,7 @@ vi.mock('@/services/entryCache', () => ({ clearEntryCache: vi.fn().mockResolvedV
 import { claimBrowserFor, ownerMark, wipeBrowserData } from '@/services/browserData';
 import { clearEntryCache } from '@/services/entryCache';
 import { EGRESS_STORE } from '@/services/deviceConsent';
-import { SEEN_MARKERS_STORE } from '@/services/sealedFormats';
+import { SEEN_MARKERS_STORE, legacyMigrationAllowed } from '@/services/sealedFormats';
 import { SETTING_REVS_STORE } from '@/services/settingCipher';
 
 describe('whose browser is this? (the same person keeps what it stores, anyone else gets a clean one)', () => {
@@ -67,5 +67,29 @@ describe('whose browser is this? (the same person keeps what it stores, anyone e
     // Whose it was goes with the rest: the next sign-in starts clean
     expect(localStorage.getItem('chronicles.owner-v1')).toBeNull();
     expect(localStorage.getItem('chronicles.wallpaper-v1')).toBeNull();
+  });
+
+  describe('may this browser move older records over? (only if it knew the account before this sign-in)', () => {
+    it('a browser claimed in this sign-in may not — nor may a second tab taking the key in it', async () => {
+      await claimBrowserFor('tag-a', true);
+      expect(legacyMigrationAllowed()).toBe(false);
+      await claimBrowserFor('tag-a', false);
+      expect(legacyMigrationAllowed()).toBe(false);
+    });
+
+    it('the next real sign-in finds the mark: from then on it may, tabs included', async () => {
+      await claimBrowserFor('tag-a', true);
+      await claimBrowserFor('tag-a', true);
+      expect(legacyMigrationAllowed()).toBe(true);
+      await claimBrowserFor('tag-a', false);
+      expect(legacyMigrationAllowed()).toBe(true);
+    });
+
+    it('another person signing in starts over', async () => {
+      await claimBrowserFor('tag-a', true);
+      await claimBrowserFor('tag-a', true);
+      await claimBrowserFor('tag-b', true);
+      expect(legacyMigrationAllowed()).toBe(false);
+    });
   });
 });

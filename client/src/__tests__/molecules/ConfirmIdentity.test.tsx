@@ -21,9 +21,20 @@ describe('ConfirmIdentity', () => {
     const onUsePasskey = vi.fn();
     rerender(<ConfirmIdentity password="" onPassword={vi.fn()} showCode code="" onCode={vi.fn()} onUsePasskey={onUsePasskey} />);
     expect(screen.getByLabelText('2FA code')).toBeInTheDocument();
+    // With 2FA on, a passkey stands in for the password only: it waits for the code
+    expect(screen.getByRole('button', { name: 'Use a passkey' })).toBeDisabled();
+    expect(screen.getByText('with the code below, or your password and the code')).toBeInTheDocument();
+    rerender(<ConfirmIdentity password="" onPassword={vi.fn()} showCode code="123456" onCode={vi.fn()} onUsePasskey={onUsePasskey} />);
     fireEvent.click(screen.getByRole('button', { name: 'Use a passkey' }));
     expect(onUsePasskey).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('or your password and a code')).toBeInTheDocument();
+  });
+
+  it('without 2FA, a passkey alone confirms', () => {
+    const onUsePasskey = vi.fn();
+    renderWithTheme(<ConfirmIdentity password="" onPassword={vi.fn()} onUsePasskey={onUsePasskey} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use a passkey' }));
+    expect(onUsePasskey).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('or your password')).toBeInTheDocument();
   });
 
   it('passes what is typed and Enter', () => {

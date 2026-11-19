@@ -2,7 +2,8 @@
  * Delete an account for someone who can't do it in the app (locked out, or an
  * account believed to belong to someone under 18). Revokes Google Calendar
  * access at Google first, then drops the tenant schema and the account row
- * (sessions, shares, calendar integration and AI consent cascade).
+ * (sessions, shares, calendar integration and AI consent cascade) with the
+ * account's beta-list row.
  * Verify the request by replying to the account's email address first.
  *
  *   npm run account:delete -- person@example.com          # dry run

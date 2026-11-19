@@ -4,7 +4,8 @@ import { deriveAuthSecret } from '@chronicles/shared';
 import { announceLocalReset, announceSigningIn, onRemoteReset } from '../services/signOutBroadcast.js';
 import { setEgressAccount } from '../services/deviceConsent.js';
 import { wipeBrowserData } from '../services/browserData.js';
-import { signInWithPasskey, type PasskeySignIn } from '../services/passkeys.js';
+import { signInWithPasskey, type PasskeySignIn, type PasskeyPending2FA } from '../services/passkeys.js';
+import type { PasskeyWrap } from '../services/api.js';
 
 /** Set when sign-out couldn't reach the server: the session cookie may still be good, so the
  *  next load ends it before trusting /me (never signs the last person back in) */
@@ -44,7 +45,12 @@ interface EncryptionData {
 
 interface Pending2FA {
   pendingToken: string;
+  /** Started with a passkey: the code finishes it with that passkey's wrap */
+  viaPasskey?: boolean;
 }
+
+/** What the code screen gets back: the password wrap, or (a passkey sign-in) that passkey's wrap */
+export type TwoFAResult = { encryption: EncryptionData; passkey?: undefined } | { passkey: PasskeyWrap; encryption?: undefined };
 
 interface AuthContextValue {
   user: User | null;
@@ -54,9 +60,10 @@ interface AuthContextValue {
   /** Password sign-in. The key wrap it returns is handed straight to the unlock — it is not kept here. */
   login: (email: string, password: string) => Promise<EncryptionData | null>;
   /** `trustBrowser`: don't ask this browser for a code for 30 days */
-  submitTotpCode: (code: string, trustBrowser?: boolean) => Promise<EncryptionData>;
-  /** Sign in with a passkey: one touch. Returns its wrap and the secret that opens it. */
-  loginWithPasskey: (opts?: { any?: boolean }) => Promise<PasskeySignIn>;
+  submitTotpCode: (code: string, trustBrowser?: boolean) => Promise<TwoFAResult>;
+  /** Sign in with a passkey: one touch. Returns its wrap and the secret that opens it — or,
+   *  with 2FA on, a pending sign-in (the code screen shows) and the secret to hold until the code is in */
+  loginWithPasskey: (opts?: { any?: boolean }) => Promise<PasskeySignIn | PasskeyPending2FA>;
   /** Leave the 2FA code screen and go back to the sign-in form */
   cancel2FA: () => void;
   /** Recovery signed this browser in (the server set its session): this tab now shows that person */
@@ -145,17 +152,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result.encryption;
   }, []);
 
-  const submitTotpCode = useCallback(async (code: string, trustBrowser = false): Promise<EncryptionData> => {
+  const submitTotpCode = useCallback(async (code: string, trustBrowser = false): Promise<TwoFAResult> => {
     if (!pending2FA) throw new Error('No pending 2FA session');
     const result = await authApi.submit2FA({ pendingToken: pending2FA.pendingToken, code, ...(trustBrowser ? { trustBrowser: true } : {}) });
     setPending2FA(null);
+    // A passkey sign-in learns whose account it is only now: a tab showing anyone else lets go
+    if (pending2FA.viaPasskey) announceSigningIn(result.user.email);
     clearPendingSignOut();
     setUser(result.user);
-    return result.encryption;
+    if (result.passkey) return { passkey: result.passkey };
+    // No wrap at all reads as "no key to open" to the caller, which ends the session
+    return { encryption: result.encryption ?? { encryptionEnabled: false, kekSalt: null, encryptedMasterKey: null, kekWrapIv: null, kekIterations: 0, recoveryWrappedMK: null, recoveryWrapIv: null } };
   }, [pending2FA]);
 
-  const loginWithPasskey = useCallback(async (opts?: { any?: boolean }): Promise<PasskeySignIn> => {
+  const loginWithPasskey = useCallback(async (opts?: { any?: boolean }): Promise<PasskeySignIn | PasskeyPending2FA> => {
     const result = await signInWithPasskey(opts);
+    if (result.requires2FA) {
+      // The touch stood in for the password; the code screen finishes it
+      setPending2FA({ pendingToken: result.pendingToken, viaPasskey: true });
+      return result;
+    }
     // The browser's session is this person's now: a tab showing anyone else lets go
     announceSigningIn(result.user.email);
     clearPendingSignOut();

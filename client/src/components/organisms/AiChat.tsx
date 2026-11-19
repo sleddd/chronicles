@@ -10,7 +10,8 @@ import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { useSaveCommand, JOURNAL_PLACEHOLDER_ID } from '../../hooks/useSaveCommand.js';
-import { entries as entriesApi, analytics as analyticsApi } from '../../services/api.js';
+import { entries as entriesApi } from '../../services/api.js';
+import { queueAnalyticsEvent } from '../../services/analyticsQueue.js';
 import { chatReply, classifyReply, classifyRisk, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { chatSaveFormats } from '../../utils/chatSaveFields.js';
@@ -454,7 +455,7 @@ export function AiChat() {
   const showCrisis = (risk: RiskResult, opts: { withheld?: boolean } = {}) => {
     const rating = risk.rating === 'none' ? 'concern' : risk.rating;
     const kind = risk.kind;
-    void analyticsApi.crisisCard(rating, kind).catch(() => { /* counting never blocks the chat */ });
+    queueAnalyticsEvent({ event: 'crisis_card_shown', rating, kind }); // sent later, at a random moment
     markRisk({ rating, kind });
     if (rating === 'urgent') {
       setPinned({ kind });
@@ -468,7 +469,7 @@ export function AiChat() {
   const lockForMinor = () => {
     setMinorLocked(true);
     setPaused(null);
-    void analyticsApi.minorDetected().catch(() => { /* counting never blocks the chat */ });
+    queueAnalyticsEvent({ event: 'minor_detected' }); // sent later, at a random moment
   };
 
   /** A reply from the model, kept to the house style (one quiet rewrite, then scrubbed). */

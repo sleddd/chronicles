@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { auth, entries, topics, settings, sessions, doses, shares, ApiError, clearSealMarkers } from '../services/api.js';
+import { auth, entries, topics, settings, sessions, doses, shares, ApiError, clearSealMarkers, ENTRY_ID_REFUSED } from '../services/api.js';
 import { setRecordCipherForTests } from '../services/recordCipher.js';
+import { setLegacyMigrationAllowed } from '../services/sealedFormats.js';
 import { DEFAULT_TOPICS } from '../utils/defaultTopics.js';
 
 /* A stand-in cipher: "encrypts" to base64 JSON bound to kind + id, so a
@@ -51,6 +52,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchSpy);
   clearSealMarkers();
   localStorage.clear();
+  // A browser that knew the account before this sign-in (browserData.ts)
+  setLegacyMigrationAllowed(true);
 });
 
 /** GET /api/settings answering with the given seal markers present */
@@ -338,6 +341,18 @@ describe('entries', () => {
     expect(JSON.parse(init.body)).toEqual({ ...data, format: 3 });
   });
 
+  it('a create refused for its id (409) tells the id pool to drop what it holds', async () => {
+    const refused = vi.fn();
+    window.addEventListener(ENTRY_ID_REFUSED, refused);
+    vi.stubGlobal('fetch', mockFetchResponse({ error: 'That entry id was not reserved or is taken' }, { status: 409 }));
+    await expect(entries.create({ id: 9, contentEncrypted: 'c' })).rejects.toBeInstanceOf(ApiError);
+    expect(refused).toHaveBeenCalledTimes(1);
+    vi.stubGlobal('fetch', mockFetchResponse({ error: 'full' }, { status: 413 }));
+    await expect(entries.create({ id: 10, contentEncrypted: 'c' })).rejects.toBeInstanceOf(ApiError);
+    expect(refused).toHaveBeenCalledTimes(1);
+    window.removeEventListener(ENTRY_ID_REFUSED, refused);
+  });
+
   it('update sends PUT to /entries/:id', async () => {
     fetchSpy = mockFetchResponse({ id: 3 });
     vi.stubGlobal('fetch', fetchSpy);
@@ -392,6 +407,27 @@ describe('topics', () => {
     expect(t).toMatchObject({ id: 41, name: 'Work', icon: 'briefcase' });
   });
 
+  it('create reserves a fresh id and seals again, once, when the server has no reservation for the first', async () => {
+    setRecordCipherForTests(fakeCipher);
+    const ids = [51, 52];
+    let posts = 0;
+    fetchSpy = vi.fn(async (url: string, init: { method?: string; body?: string } = {}) => {
+      const json = (status: number, body: unknown) => ({ ok: status < 300, status, headers: { get: () => 'application/json' }, json: async () => body });
+      if (url === '/api/topics/ids') return json(200, { ids: [ids.shift()] });
+      posts++;
+      const sent = JSON.parse(init.body!);
+      if (sent.id === 51) return json(409, { error: 'That topic id was not reserved or is taken' });
+      return json(201, { id: sent.id, name: null, icon: null, color: null, payload: sent.payload, iv: 'iv' });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const t = await topics.create({ name: 'Work' });
+    expect(t.id).toBe(52);
+    expect(posts).toBe(2);
+    const second = JSON.parse(fetchSpy.mock.calls.filter((c: any[]) => c[0] === '/api/topics')[1][1].body);
+    expect(await fakeCipher.decrypt('topic', '52', second.payload)).toEqual({ name: 'Work', icon: null });
+  });
+
   it('update re-seals name and icon together, bound to the topic, filling in the one not given', async () => {
     setRecordCipherForTests(fakeCipher);
     fetchSpy = routeFetch({
@@ -433,6 +469,22 @@ describe('topics', () => {
     expect(created).toBe(1);
     expect(a.map(t => t.name)).toContain(DEFAULT_TOPICS[0].name);
     expect(b.map(t => t.name)).toContain(DEFAULT_TOPICS[1].name);
+  });
+
+  it('on a browser meeting the account for the first time, older topics are shown but never re-sealed or marked', async () => {
+    setRecordCipherForTests(fakeCipher);
+    setLegacyMigrationAllowed(false);
+    const writes: string[] = [];
+    fetchSpy = routeFetch({
+      'GET /api/settings': () => [],
+      'PUT /api/settings': b => { writes.push(b.key); return b; },
+      'GET /api/topics': () => DEFAULT_TOPICS.map((t, i) => ({ id: 30 + i, name: null, icon: null, color: null, payload: seal('topic', 'v1', t), iv: 'iv' })),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const list = await topics.getAll();
+    expect(list.map(t => t.name)).toContain(DEFAULT_TOPICS[0].name);
+    expect(fetchSpy.mock.calls.some(c => c[1]?.method === 'PUT')).toBe(false);
+    expect(writes).toEqual([]);
   });
 
   it('after the marker, an older (unbound) payload or a plaintext name is never shown', async () => {
@@ -641,6 +693,18 @@ describe('doses', () => {
     expect(resealed.map(r => r.id)).toEqual([O1]);
     expect(await fakeCipher.decrypt('dose', `${O1}|2026-01-02`, resealed[0].payload)).toEqual(dose);
     expect(markerWritten).toBe(true);
+  });
+
+  it('resealOlder does nothing on a browser meeting the account for the first time (older records stay read-only)', async () => {
+    setRecordCipherForTests(fakeCipher);
+    setLegacyMigrationAllowed(false);
+    fetchSpy = routeFetch({
+      'GET /api/settings': () => [],
+      'GET /api/doses/all': () => ({ records: [{ id: O1, date: '2026-01-02', payload: seal('dose', O1, dose), iv: 'iv', createdAt: 'c', updatedAt: 'u' }] }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    expect(await doses.resealOlder()).toBe(0);
+    expect(fetchSpy.mock.calls.some(c => c[1]?.method === 'PUT')).toBe(false);
   });
 
   it('resealOlder does nothing once the marker exists', async () => {

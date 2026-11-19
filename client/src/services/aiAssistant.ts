@@ -11,7 +11,8 @@
 
 import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
-import { isSealed, openSetting, sealSetting } from './settingCipher.js';
+import { isSealed, openSetting, sealSetting, seenRevision } from './settingCipher.js';
+import { aiChosenHere, grandfatherAi, reconcileAi, recordAiChoice } from './deviceConsent.js';
 import {
   bedrockConverse,
   fallbackBedrockModels,
@@ -143,14 +144,33 @@ export function hasCredentials(cfg: AiConfig): boolean {
   return missingCredentials(cfg).length === 0;
 }
 
-/** AI is switched on, unlocked, and fully configured. */
-export function isAiReady(): boolean {
-  return !!aiConfig && aiConfig.enabled && hasCredentials(aiConfig);
+/*
+ * Whether AI is on is the sealed aiConfig's word AND this browser's own
+ * choice (deviceConsent.ts): a sealed config can be replayed by the server —
+ * one the user removed, or one with AI on — and nothing would tell a browser
+ * that never saw a newer one. So nothing is sent to a provider from a browser
+ * where AI wasn't turned on (Settings → In-App AI), whatever the config says.
+ */
+
+/** AI is on in the saved config but not chosen in this browser (Settings offers "Turn on here"). */
+export function isAiOnButNotHere(): boolean {
+  return !!aiConfig && aiConfig.enabled && !aiChosenHere();
 }
 
-/** The AI is on and its chat switched on — the chat bubble shows (setup may still be unfinished). */
+/** The user turned AI on or off in this browser (Settings). */
+export function chooseAiHere(on: boolean): void {
+  recordAiChoice(on);
+  notify();
+}
+
+/** AI is switched on (and chosen in this browser), unlocked, and fully configured. */
+export function isAiReady(): boolean {
+  return !!aiConfig && aiConfig.enabled && aiChosenHere() && hasCredentials(aiConfig);
+}
+
+/** The AI is on (here) and its chat switched on — the chat bubble shows (setup may still be unfinished). */
 export function isAiChatEnabled(): boolean {
-  return !!aiConfig && aiConfig.enabled && aiConfig.chatEnabled === true;
+  return !!aiConfig && aiConfig.enabled && aiConfig.chatEnabled === true && aiChosenHere();
 }
 
 /** Latest stored config for the Settings form (null when none / locked). */
@@ -162,6 +182,9 @@ export function getAiConfigValue(): AiConfig | null {
 export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn): Promise<void> {
   aiConfig = null;
   encryptedConfig = null;
+  // Before anything is opened (opening notes its revision as seen): a browser
+  // that had already seen one counts as having chosen AI, once
+  grandfatherAi(seenRevision('aiConfig') > 0);
   try {
     if (!value || typeof value !== 'object') return;
     if (!isSealed(value)) return;
@@ -180,6 +203,9 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
       console.warn('AI settings could not be decrypted:', err);
     }
   } finally {
+    // Off, missing or unopenable: this browser's choice goes with it, so a
+    // config replayed later finds no record here
+    reconcileAi(!!aiConfig && aiConfig.enabled);
     notify();
   }
 }
@@ -201,7 +227,7 @@ export function ensureAiConfig(decryptBytes: DecryptBytesFn, loadSettings: () =>
       const row = (await loadSettings()).find(r => r.key === 'aiConfig');
       if (row && !aiConfig) await loadAiConfig(row.value, decryptBytes);
     }
-    if (!aiConfig) checkedNone = true;
+    if (!aiConfig) { checkedNone = true; reconcileAi(false); }
   })().catch(err => console.warn('AI settings could not be reloaded:', err)).finally(() => { reloading = null; });
   return reloading;
 }
@@ -395,6 +421,7 @@ export function parseCalories(text: string): number {
 
 function requireReady(): AiConfig {
   if (!aiConfig || !aiConfig.enabled) throw new Error('In-App AI is off');
+  if (!aiChosenHere()) throw new Error('In-App AI isn’t turned on in this browser');
   const missing = missingCredentials(aiConfig);
   if (missing.length) throw new Error(`In-App AI needs: ${missing.join(', ')}`);
   return aiConfig;

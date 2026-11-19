@@ -10,6 +10,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   deleteTaxonomy: vi.fn(),
   reorderTaxonomies: vi.fn(),
   ensureTopicEncryptionColumns: vi.fn().mockResolvedValue(undefined),
+  ensureTaxonomyReservations: vi.fn().mockResolvedValue(undefined),
   reserveTaxonomyIds: vi.fn(),
   taxonomyCount: vi.fn().mockResolvedValue(0),
   withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),

@@ -167,3 +167,19 @@ describe('readGate', () => {
     for (const r of [b, c, other, someone]) r.closed();
   });
 });
+
+describe('icsFeedLimiter', () => {
+  it('limits per feed token, not per address', async () => {
+    const express = (await import('express')).default;
+    const request = (await import('supertest')).default;
+    const { icsFeedLimiter } = await import('../middleware/rateLimiter.js');
+    const app = express();
+    app.get('/feed/:token', icsFeedLimiter, (_req, res) => { res.send('ok'); });
+    const a = 'a'.repeat(64);
+    const b = 'b'.repeat(64);
+    for (let i = 0; i < 60; i++) expect((await request(app).get(`/feed/${a}.ics`)).status).toBe(200);
+    expect((await request(app).get(`/feed/${a}`)).status).toBe(429);
+    // Another feed fetched from the same address isn't held back
+    expect((await request(app).get(`/feed/${b}.ics`)).status).toBe(200);
+  });
+});

@@ -276,18 +276,71 @@ export async function ensureTopicEncryptionColumns(schemaName: string): Promise<
   topicColumnsReady.add(s);
 }
 
-/** Reserve ids for new topics (a topic's payload is bound to its id, so it's needed first). */
+/**
+ * Topic id reservations, the same design as entries' (reservePostIds): every
+ * id handed out is written down, and creating a topic uses that row up in the
+ * same statement, so a topic id is created at most once — a deleted topic's id
+ * can't be taken again by a new topic (whose payload would then be valid under
+ * the old one's id). Reservations nobody used go after RESERVATION_DAYS, and an
+ * account holds at most MAX_TOPIC_RESERVATIONS (the oldest go first).
+ */
+export const MAX_TOPIC_RESERVATIONS = 200;
+
+/** The topic reservations table (new schemas get it at creation). */
+export function taxonomyReservationStatements(s: string): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS ${s}.taxonomy_id_reservations (id INTEGER PRIMARY KEY, reserved_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS idx_${s}_tax_reserved_at ON ${s}.taxonomy_id_reservations (reserved_at)`,
+  ];
+}
+
+const taxonomyReservationsReady = new Set<string>();
+
+/**
+ * JIT migration for topic id reservations: one catalog read once it's in
+ * place (never a CREATE before reading). Nothing is seeded: the browser
+ * reserves a topic's id right before creating it (never a pool kept for
+ * later), so the only save that can miss is one whose reserve and create
+ * straddle the deploy — refused once, and the browser reserves again.
+ */
+export async function ensureTaxonomyReservations(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  if (taxonomyReservationsReady.has(s)) return;
+  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = $1 AND t.relname = 'taxonomy_id_reservations') AS ready`,
+    s
+  );
+  if (!ready) {
+    await db.$transaction(taxonomyReservationStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  }
+  taxonomyReservationsReady.add(s);
+}
+
+/** Reserve ids for new topics (a topic's payload is bound to its id, so it's needed first). Needs ensureTaxonomyReservations. */
 export async function reserveTaxonomyIds(schemaName: string, count: number): Promise<number[]> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const rows = await db.$queryRawUnsafe<{ id: number }[]>(
-    `SELECT nextval('${s}.taxonomies_id_seq')::int AS id FROM generate_series(1, $1)`,
-    count
+    `WITH expired AS (
+       DELETE FROM ${s}.taxonomy_id_reservations WHERE reserved_at < NOW() - make_interval(days => ${RESERVATION_DAYS})
+     ), overflow AS (
+       DELETE FROM ${s}.taxonomy_id_reservations WHERE id IN (
+         SELECT id FROM ${s}.taxonomy_id_reservations ORDER BY reserved_at DESC, id DESC OFFSET $2)
+     ), fresh AS (
+       INSERT INTO ${s}.taxonomy_id_reservations (id)
+       SELECT nextval('${s}.taxonomies_id_seq')::int FROM generate_series(1, $1)
+       RETURNING id
+     )
+     SELECT id FROM fresh ORDER BY id`,
+    count,
+    Math.max(0, MAX_TOPIC_RESERVATIONS - count)
   );
   return rows.map(r => r.id);
 }
 
-/** Create a topic under a reserved id. Null when the id was never handed out or is taken. */
+/** Create a topic under a reserved id, using the reservation up. Null when the id was never reserved, its reservation is gone, or it is taken. */
 export async function createTaxonomy(
   schemaName: string,
   data: { id: number; payload: string; iv: string; color?: string },
@@ -301,11 +354,11 @@ export async function createTaxonomy(
   );
   const nextOrder = (maxResult[0]?.max_order ?? -1) + 1;
   const result = await db.$queryRawUnsafe<TaxonomyRow[]>(
-    `INSERT INTO ${s}.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)
-     SELECT $1, $2, $3, $4, $5
-     -- only an id the sequence has handed out: a sequence never used reports
-     -- last_value 1 with is_called false, which would let id 1 in unreserved
-     WHERE EXISTS (SELECT 1 FROM ${s}.taxonomies_id_seq q WHERE q.is_called AND $1 <= q.last_value)
+    `WITH reservation AS (
+       DELETE FROM ${s}.taxonomy_id_reservations WHERE id = $1 RETURNING id
+     )
+     INSERT INTO ${s}.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)
+     SELECT reservation.id, $2, $3, $4, $5 FROM reservation
      ON CONFLICT (id) DO NOTHING
      RETURNING ${TAXONOMY_COLUMNS}`,
     data.id,
@@ -830,29 +883,20 @@ export function postReservationStatements(s: string): string[] {
   ];
 }
 
-/** How far back the one-time seed looks for ids handed out before reservations were recorded. */
-export const RESERVATION_SEED_WINDOW = 500;
-
-/**
- * For an account from before reservations were recorded: an open tab may still
- * hold ids it was handed (a few batches of 20, always the newest). Seed the
- * newest RESERVATION_SEED_WINDOW ids the sequence gave out that no entry has
- * and no deletion names, so those saves still go through. Older ids — and every
- * deleted one — can't be created again.
+/*
+ * No seed for accounts from before reservations were recorded. It used to
+ * reserve the newest 500 ids the sequence had handed out that no entry has
+ * and deleted_posts doesn't name — but deletions from before change tracking
+ * were never recorded there, so it could hand a deleted entry's id out again.
+ * A tab still holding ids from before has its first create refused (409); the
+ * browser then drops every id it holds and reserves fresh ones
+ * (ENTRY_ID_REFUSED in client/src/services/api.ts → entryReseal.ts), so at most that one save
+ * is refused, and the editor's autosave or a second Save goes through.
  */
-function seedReservationsSql(s: string): string {
-  return `INSERT INTO ${s}.post_id_reservations (id)
-     SELECT g.id FROM (SELECT last_value, is_called FROM ${s}.posts_id_seq) q,
-       LATERAL generate_series(GREATEST(1, q.last_value - ${RESERVATION_SEED_WINDOW - 1}), q.last_value) AS g(id)
-     WHERE q.is_called
-       AND NOT EXISTS (SELECT 1 FROM ${s}.posts p WHERE p.id = g.id)
-       AND NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = g.id)
-     ON CONFLICT (id) DO NOTHING`;
-}
 
 const reservationsReady = new Set<string>();
 
-/** JIT migration for id reservations: one catalog read once it's in place. Needs ensurePostSync first (deleted_posts). */
+/** JIT migration for id reservations: one catalog read once it's in place, nothing seeded. */
 export async function ensurePostReservations(schemaName: string): Promise<void> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
@@ -863,7 +907,7 @@ export async function ensurePostReservations(schemaName: string): Promise<void> 
     s
   );
   if (!ready) {
-    await db.$transaction([...postReservationStatements(s), seedReservationsSql(s)].map(sql => db.$executeRawUnsafe(sql)));
+    await db.$transaction(postReservationStatements(s).map(sql => db.$executeRawUnsafe(sql)));
   }
   reservationsReady.add(s);
 }

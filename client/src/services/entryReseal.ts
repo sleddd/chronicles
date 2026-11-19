@@ -1,7 +1,7 @@
 import type { DecryptedPost, EncryptedPostData } from '@shared/crypto/types.js';
 import { entries as entriesApi, settings as settingsApi } from './api.js';
 import { sealSetting, type EncryptBytes } from './settingCipher.js';
-import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
+import { sealMarkerHeld, noteSealMarker, legacyMigrationAllowed } from './sealedFormats.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 
 /*
@@ -73,6 +73,12 @@ export async function reserveEntryId(): Promise<number> {
   return reserved.shift()!;
 }
 
+// A create refused for its id: the rest of the pool may be just as stale, so
+// it goes (the ids stay in `issued`, never used again) and the next save
+// reserves fresh ones. (The name is api.ts's ENTRY_ID_REFUSED, written out:
+// importing it would break the many tests that mock api.ts)
+if (typeof window !== 'undefined') window.addEventListener('chronicles:entry-id-refused', () => { reserved = []; });
+
 /** On lock / sign-out: the next account must never get this one's ids. */
 export function clearReservedEntryIds(): void {
   reserved = [];
@@ -91,6 +97,10 @@ type EncryptPost = (id: number, content: string, metadata: Record<string, unknow
  * format, then write the marker. A failure, or any entry skipped, leaves the
  * marker unwritten, so the next load tries again (entries already moved
  * simply open as v3). Returns how many entries were re-saved.
+ *
+ * Only on a browser that knew the account before this sign-in
+ * (`legacyMigrationAllowed`, sealedFormats.ts): elsewhere the older entries
+ * are shown as they are and nothing is re-saved or marked.
  */
 export async function resealOlderEntries(
   decrypted: DecryptedPost[],
@@ -98,6 +108,7 @@ export async function resealOlderEntries(
   encryptBytes: EncryptBytes,
 ): Promise<number> {
   const older = decrypted.filter(e => e.needsReseal);
+  if (older.length && !legacyMigrationAllowed()) return 0;
   let batch: Parameters<typeof entriesApi.reseal>[0] = [];
   let bytes = 0;
   let skipped = 0;

@@ -348,6 +348,31 @@ describe('2FA hardening', () => {
       expect(open.status).toBe(200);
     }, 30000);
 
+    it('a stranger locking one network’s codes leaves the owner on another network free, until 5 networks have locked', async () => {
+      const proxied = buildApp();
+      proxied.set('trust proxy', true);
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const wrong = () => generateSync({ secret }) === '000000' ? '111111' : '000000';
+      const pending = async (ip: string) => {
+        (prisma.account.findUnique as any).mockResolvedValue(account);
+        return (await request(proxied).post('/api/auth/login').set('X-Forwarded-For', ip).send({ email: account.email, authSecret: SECRET })).body.pendingToken;
+      };
+      const code = async (ip: string, c: string) => request(proxied).post('/api/auth/login/2fa').set('X-Forwarded-For', ip)
+        .send({ pendingToken: await pending(ip), code: c });
+
+      for (let i = 0; i < 10; i++) expect((await code('203.0.113.9', wrong())).status).toBe(401);
+      expect((await code('203.0.113.77', generateSync({ secret }))).status).toBe(429);
+      expect((await code('198.51.100.1', generateSync({ secret }))).status).toBe(200);
+
+      // Four more networks each lock theirs: now every stranger waits
+      for (let n = 1; n <= 4; n++) {
+        for (let i = 0; i < 10; i++) await code(`10.${n}.0.1`, wrong());
+      }
+      vi.setSystemTime(Date.now() + 30_000);
+      expect((await code('192.0.2.1', generateSync({ secret }))).status).toBe(429);
+    }, 30000);
+
     it("a stranger's wrong codes can't lock the owner's known browser out (it still has to change the password)", async () => {
       const secret = generateSecret();
       const account = twoFAAccount(secret);
@@ -514,6 +539,20 @@ describe('2FA hardening', () => {
 
       expect(res.status).toBe(200);
       expect(tx.account.update).toHaveBeenCalled();
+    }, 30000);
+
+    it('has its own code bucket: strangers locking sign-in codes can’t block recovery', async () => {
+      const secret = generateSecret();
+      const account = recoverableAccount(secret);
+      const wrong = () => generateSync({ secret }) === '000000' ? '111111' : '000000';
+      // Someone with the phished password fills the strangers’ bucket at sign-in
+      for (let i = 0; i < 10; i++) {
+        await request(app).post('/api/auth/login/2fa').send({ pendingToken: await pendingTokenFor(app, account), code: wrong() });
+      }
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      mockTransaction(recoveryKeyHash);
+      const res = await request(app).post('/api/auth/recover').send({ ...body, code: generateSync({ secret }) });
+      expect(res.status).toBe(200);
     }, 30000);
 
     it('loses a race to a concurrent recovery that already replaced the key', async () => {

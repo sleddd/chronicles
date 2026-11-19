@@ -1,4 +1,4 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { bugReportSchema, type BugReportInput } from '@chronicles/shared';
 import { bugReportLimiter } from '../middleware/rateLimiter.js';
 import { sendEmail } from '../services/resend.js';
@@ -42,7 +42,7 @@ export function bugReportEmail(r: BugReportInput): { subject: string; text: stri
   return { subject: `${feedback ? 'Feedback' : 'Bug report'}: ${r.area}`, text: lines.join('\n') };
 }
 
-router.post('/', requireXhr, bugReportLimiter, async (req, res) => {
+router.post('/', requireXhr, bugReportLimiter, express.json({ limit: '64kb' }), async (req, res) => {
   const parsed = bugReportSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the form and try again' });

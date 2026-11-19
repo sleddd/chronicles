@@ -18,7 +18,7 @@ router.use(async (req, res, next) => {
     await ensurePostReservations(req.auth!.tenantSchemaName);
     next();
   } catch (err) {
-    console.error('Entry sync setup error:', err);
+    console.error('Entry sync setup error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to load entries' });
   }
 });
@@ -73,7 +73,7 @@ router.get('/', listGate, async (req, res) => {
     const entries = page.posts.map(p => serializePost(p as unknown as Record<string, unknown>));
     res.json(req.query.v === '2' ? { entries, more: page.more } : entries);
   } catch (err) {
-    console.error('Get entries error:', err);
+    console.error('Get entries error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -84,7 +84,7 @@ router.get('/cursor', async (req, res) => {
   try {
     res.json({ cursor: await getSyncCursor(req.auth!.tenantSchemaName), scope: syncScope(req.auth!.tenantSchemaName) });
   } catch (err) {
-    console.error('Entry cursor error:', err);
+    console.error('Entry cursor error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to load entries' });
   }
 });
@@ -96,7 +96,7 @@ router.get('/fingerprint', async (req, res) => {
   try {
     res.json(await getPostFingerprint(req.auth!.tenantSchemaName));
   } catch (err) {
-    console.error('Entry fingerprint error:', err);
+    console.error('Entry fingerprint error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to load entries' });
   }
 });
@@ -124,7 +124,7 @@ router.get('/changes', listGate, async (req, res) => {
       deleted: changes.deleted,
     });
   } catch (err) {
-    console.error('Entry changes error:', err);
+    console.error('Entry changes error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to load entries' });
   }
 });
@@ -140,7 +140,7 @@ router.post('/ids', async (req, res) => {
     }
     res.json({ ids: await reservePostIds(req.auth!.tenantSchemaName, parsed.data.count) });
   } catch (err) {
-    console.error('Reserve entry ids error:', err);
+    console.error('Reserve entry ids error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to reserve entry ids' });
   }
 });
@@ -179,7 +179,7 @@ router.put('/reseal', async (req, res) => {
     }
     res.json({ resealed });
   } catch (err) {
-    console.error('Reseal entries error:', err);
+    console.error('Reseal entries error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to re-save entries' });
   }
 });
@@ -224,7 +224,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
-    console.error('Create entry error:', err);
+    console.error('Create entry error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to create entry' });
   }
 });
@@ -260,7 +260,7 @@ router.post('/batch', async (req, res) => {
 
     res.status(201).json(posts.map(p => serializePost(p as unknown as Record<string, unknown>)));
   } catch (err) {
-    console.error('Create entries error:', err);
+    console.error('Create entries error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to create entries' });
   }
 });
@@ -279,7 +279,7 @@ router.get('/:id', readGate('entry', 6), async (req, res) => {
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
-    console.error('Get entry error:', err);
+    console.error('Get entry error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch entry' });
   }
 });
@@ -322,7 +322,7 @@ router.put('/:id', async (req, res) => {
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
-    console.error('Update entry error:', err);
+    console.error('Update entry error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to update entry' });
   }
 });
@@ -341,7 +341,7 @@ router.delete('/:id', async (req, res) => {
     await deleteSharesForEntry(req.auth!.accountId, id);
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete entry error:', err);
+    console.error('Delete entry error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to delete entry' });
   }
 });

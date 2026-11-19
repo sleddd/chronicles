@@ -19,7 +19,7 @@ import { sharedState } from '../services/sharedState.js';
 import { issueConfirmToken } from '../services/confirmTokens.js';
 import { passkeyUserHandle, webauthnConfig } from '../services/webauthn.js';
 import { logSecurityEvent } from '../utils/securityLogger.js';
-import { confirmGate, confirmIdentity, countConfirmFailure, rememberKnownDevice, sendIfHasherBusy, setSessionCookie } from './auth.js';
+import { beginPending2FA, confirmGate, confirmIdentity, countConfirmFailure, rememberKnownDevice, secondFactorGate, sendIfHasherBusy, setSessionCookie, trustedForSignIn } from './auth.js';
 import { beginSignIn, cancelSignIns, signInStillWanted } from './authState.js';
 import { previewField } from '../services/previews.js';
 
@@ -140,14 +140,22 @@ router.post('/passkey/options', authLimiter, async (_req, res) => {
 // =============================================================================
 // POST /api/auth/passkey/verify — sign in with a passkey
 // =============================================================================
-// One touch is both factors (the device, and its fingerprint / face / PIN), so
-// no 2FA code is asked. Every failure answers the same.
+// On an account without 2FA, one touch signs in (the device, and its
+// fingerprint / face / PIN). With 2FA on, a passkey stands in for the password
+// only: the answer is a pending token, like /login's, and /login/2fa makes the
+// session once the authenticator or backup code is given — handing back this
+// passkey's wrap — unless this browser is trusted to skip the code (checked
+// after the touch, again once the session exists). Every failure answers the same.
 router.post('/passkey/verify', authLimiter, async (req, res) => {
   const refuse = () => { res.status(401).json({ error: 'That passkey didn’t work. Try again, or sign in with your password.' }); };
   try {
     const parsed = passkeyLoginSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
+    // Held from before the check until the session exists: "Sign out
+    // everywhere" landing in between cancels this sign-in (routes/authState.ts)
+    const candidate = await findPasskey(parsed.data.response.id).catch(() => null);
+    const flight = candidate ? await beginSignIn(candidate.accountId) : null;
     const passkey = await checkAssertion(parsed.data.response, LOGIN_CHALLENGES, null);
     if (!passkey) {
       // A passkey this server has never stored: one made on the device whose
@@ -155,7 +163,7 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
       // over half way). Saying so lets the browser drop it from the device
       // (signalUnknownCredential) instead of offering it at every sign-in. It
       // tells nothing about any account: the id is one the caller already holds
-      const unknown = !(await findPasskey(parsed.data.response.id).catch(() => null));
+      const unknown = !candidate;
       logSecurityEvent('passkey_login_failed', { ip: req.ip, details: { reason: unknown ? 'unknown_credential' : 'verification' } });
       if (unknown) {
         res.status(401).json({ error: 'That passkey didn’t work because it isn’t on your account. Sign in with your password, then add it again in Settings.', unknownCredential: true });
@@ -164,21 +172,31 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
       refuse();
       return;
     }
+    if (!flight || !candidate || candidate.accountId !== passkey.accountId) { refuse(); return; }
     const account = await prisma.account.findUnique({ where: { id: passkey.accountId } });
     if (!account) { refuse(); return; }
 
-    // Held until the session exists: "Sign out everywhere" landing in between
-    // cancels this sign-in (routes/authState.ts)
-    const flight = await beginSignIn(account.id);
+    // With 2FA on, the code is still needed — unless this browser is trusted
+    const twoFA = !!(account.totpEnabled && account.totpSecret);
+    const trusted = twoFA && await trustedForSignIn(req, account.id);
+    if (twoFA && !trusted) {
+      const pendingToken = await beginPending2FA(account.id, passkey.id);
+      logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip, details: { method: 'passkey' } });
+      res.json({ requires2FA: true, pendingToken });
+      return;
+    }
+    if (trusted) logSecurityEvent('login_trusted_browser', { accountId: account.id, ip: req.ip, details: { method: 'passkey' } });
+
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       deviceInfo: 'passkey',
     });
     // Removed while this request was in flight ("Remove all passkeys" after a
-    // lost device), or every session signed out: the session it just earned
-    // must not outlive that
-    if (!(await passkeyExists(passkey.id, account.id)) || !(await signInStillWanted(account.id, flight))) {
+    // lost device), every session signed out, or the browser's trust ended:
+    // the session it just earned must not outlive that
+    if (!(await passkeyExists(passkey.id, account.id)) || !(await signInStillWanted(account.id, flight))
+      || (trusted && !(await trustedForSignIn(req, account.id)))) {
       try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
       logSecurityEvent('login_superseded', { accountId: account.id });
       refuse();
@@ -400,12 +418,24 @@ router.post('/confirm/options', authLimiter, authMiddleware, async (req, res) =>
 // Answers with a single-use token the action's own request spends, and with
 // that passkey's wrap, which the page needs to make a new wrap of the key (a
 // new password, a recovery key, another passkey). Wrong answers count in the
-// session's confirm lockout, like wrong passwords.
+// session's confirm lockout, like wrong passwords. With 2FA on, the touch
+// stands in for the password only: an authenticator or backup code comes with
+// it (counted in the session's 2FA bucket), and no token is issued without it.
 router.post('/confirm/verify', strictLimiter, authMiddleware, confirmGate, async (req, res) => {
   try {
     const parsed = confirmVerifySchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
-    const { action, response } = parsed.data;
+    const { action, response, code } = parsed.data;
+    const account = await prisma.account.findUnique({
+      where: { id: req.auth!.accountId },
+      select: { id: true, totpEnabled: true, totpSecret: true, totpBackupCodes: true },
+    });
+    if (!account) { res.status(404).json({ error: 'Account not found' }); return; }
+    const twoFA = !!(account.totpEnabled && account.totpSecret);
+    if (twoFA && !code) {
+      res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
+      return;
+    }
     const passkey = await checkAssertion(response, confirmChallenges(action, req.auth!.selector), req.auth!.accountId);
     if (!passkey) {
       await countConfirmFailure(req);
@@ -413,6 +443,7 @@ router.post('/confirm/verify', strictLimiter, authMiddleware, confirmGate, async
       res.status(401).json({ error: 'That passkey didn’t work. Try again, or enter your account password.' });
       return;
     }
+    if (twoFA && !(await secondFactorGate({ ...account, totpEnabled: true }, code, req, res, 'passkey_confirm_failed'))) return;
     const confirmToken = await issueConfirmToken(action, req.auth!.selector, req.auth!.accountId);
     logSecurityEvent('passkey_confirmed', { accountId: req.auth!.accountId, ip: req.ip, details: { action } });
     res.json({ confirmToken, passkey: wrapOf(passkey) });

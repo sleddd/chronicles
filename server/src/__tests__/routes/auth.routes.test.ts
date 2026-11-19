@@ -507,6 +507,44 @@ describe('Auth Routes', () => {
       }
     }, 20000);
 
+    describe('strangers count per network', () => {
+      // Behind a proxy, so each request can come from its own address
+      const proxied = () => { const a = buildApp(); a.set('trust proxy', true); return a; };
+      const from = (a: express.Express, ip: string) => request(a).post('/api/auth/login').set('X-Forwarded-For', ip).send(validLoginBody);
+
+      it('one IP filling the email’s bucket can’t lock the owner out from another network', async () => {
+        const a = proxied();
+        (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+        (bcrypt.compare as any).mockResolvedValue(false);
+        for (let i = 0; i < 10; i++) expect((await from(a, '203.0.113.7')).status).toBe(401);
+        // That network is locked — every address in its /24 with it…
+        expect((await from(a, '203.0.113.200')).status).toBe(429);
+        // …but the owner on another network still gets to try, and in
+        (bcrypt.compare as any).mockResolvedValue(true);
+        expect((await from(a, '198.51.100.4')).status).toBe(200);
+      });
+
+      it('an IPv6 /48 is one network', async () => {
+        const a = proxied();
+        (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+        (bcrypt.compare as any).mockResolvedValue(false);
+        for (let i = 0; i < 10; i++) expect((await from(a, `2001:db8:1:${i}::1`)).status).toBe(401);
+        expect((await from(a, '2001:db8:1:ffff::9')).status).toBe(429);
+        (bcrypt.compare as any).mockResolvedValue(true);
+        expect((await from(a, '2001:db8:2::1')).status).toBe(200);
+      });
+
+      it('once 20 networks have each locked the email today, every stranger waits', async () => {
+        const a = proxied();
+        (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+        (bcrypt.compare as any).mockResolvedValue(false);
+        await Promise.all(Array.from({ length: 20 }, (_, n) =>
+          Promise.all(Array.from({ length: 10 }, () => from(a, `10.0.${n}.1`)))));
+        (bcrypt.compare as any).mockResolvedValue(true);
+        expect((await from(a, '192.0.2.50')).status).toBe(429);
+      }, 20000);
+    });
+
     it('counts parallel wrong passwords before checking them, so a burst cannot pass the cap', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
       (bcrypt.compare as any).mockImplementation(() => new Promise(r => setTimeout(() => r(false), 20)));

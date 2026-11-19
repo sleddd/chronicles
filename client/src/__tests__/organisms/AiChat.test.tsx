@@ -23,9 +23,9 @@ vi.mock('@/services/aiAssistant', () => ({
   getAiConfigValue: () => ({ chatNotes: '' }),
   autoNutritionOnSave: vi.fn(),
 }));
+vi.mock('@/services/analyticsQueue', () => ({ queueAnalyticsEvent: vi.fn() }));
 vi.mock('@/services/api', () => ({
   entries: { create: vi.fn() },
-  analytics: { crisisCard: vi.fn().mockResolvedValue({ ok: true }), minorDetected: vi.fn().mockResolvedValue({ ok: true }) },
   aiChat: {
     status: vi.fn(async () => state.status),
     consent: vi.fn(async () => {
@@ -38,7 +38,10 @@ vi.mock('@/services/api', () => ({
 
 import { AiChat } from '@/components/organisms/AiChat';
 import { chatReply, classifyRisk, classifyReply } from '@/services/aiAssistant';
-import { analytics, aiChat } from '@/services/api';
+import { aiChat } from '@/services/api';
+import { queueAnalyticsEvent } from '@/services/analyticsQueue';
+
+const queued = (event: string) => (queueAnalyticsEvent as any).mock.calls.filter((c: any[]) => c[0].event === event);
 import { useAiChatStore } from '@/stores/aiChatStore';
 
 const NONE = { rating: 'none', kind: null };
@@ -88,7 +91,7 @@ describe('AiChat safety', () => {
     await send('What should I cook tonight?');
     expect(await screen.findByText('Here to help.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Crisis resources')).not.toBeInTheDocument();
-    expect(analytics.crisisCard).not.toHaveBeenCalled();
+    expect(queued('crisis_card_shown')).toHaveLength(0);
   });
 
   it('concern: shows the card above a reply written under the safe rules', async () => {
@@ -97,8 +100,8 @@ describe('AiChat safety', () => {
     await send('I feel bad about my body lately');
     expect(await screen.findByText('Here to help.')).toBeInTheDocument();
     expect(screen.getByLabelText('Crisis resources')).toBeInTheDocument();
-    expect(analytics.crisisCard).toHaveBeenCalledTimes(1);
-    expect(analytics.crisisCard).toHaveBeenCalledWith('concern', 'eating_disorder');
+    expect(queued('crisis_card_shown')).toHaveLength(1);
+    expect(queueAnalyticsEvent).toHaveBeenCalledWith({ event: 'crisis_card_shown', rating: 'concern', kind: 'eating_disorder' });
     const lastSystem = (chatReply as any).mock.calls.at(-1)[0] as string;
     expect(lastSystem).toContain('SAFETY MODE');
   });
@@ -112,7 +115,7 @@ describe('AiChat safety', () => {
     expect(notice.textContent).toContain('If you or someone you know is having a difficult time, support is available.');
     expect(screen.queryByRole('button', { name: 'Keep talking' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Message')).not.toBeDisabled();
-    expect(analytics.crisisCard).toHaveBeenCalledWith('elevated', 'suicide');
+    expect(queueAnalyticsEvent).toHaveBeenCalledWith({ event: 'crisis_card_shown', rating: 'elevated', kind: 'suicide' });
     expect((chatReply as any).mock.calls.at(-1)[0]).toContain('SAFETY MODE');
   });
 
@@ -135,7 +138,7 @@ describe('AiChat safety', () => {
     await send('I have a plan');
     const card = await screen.findByLabelText('Crisis resources');
     expect(card.textContent?.indexOf('In danger right now')).toBeLessThan(card.textContent!.indexOf('988'));
-    expect(analytics.crisisCard).toHaveBeenCalledWith('urgent', 'suicide');
+    expect(queueAnalyticsEvent).toHaveBeenCalledWith({ event: 'crisis_card_shown', rating: 'urgent', kind: 'suicide' });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Keep talking' })); });
     await screen.findByText('Here to help.');
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
@@ -150,7 +153,7 @@ describe('AiChat safety', () => {
     expect(await screen.findByLabelText('Crisis resources')).toBeInTheDocument();
     expect(screen.queryByText('Some talk about self-harm.')).not.toBeInTheDocument();
     expect(screen.getByText(/withheld because it wasn’t safe/)).toBeInTheDocument();
-    expect(analytics.crisisCard).toHaveBeenCalledTimes(1);
+    expect(queued('crisis_card_shown')).toHaveLength(1);
   });
 
   it('skips the reply review for ordinary replies', async () => {
@@ -189,7 +192,7 @@ describe('AiChat safety', () => {
     (classifyRisk as any).mockRejectedValue(new Error('offline'));
     openChat();
     await send('I wish I didn’t wake up');
-    await waitFor(() => expect(analytics.crisisCard).toHaveBeenCalledWith('concern', 'suicide'));
+    await waitFor(() => expect(queueAnalyticsEvent).toHaveBeenCalledWith({ event: 'crisis_card_shown', rating: 'concern', kind: 'suicide' }));
   });
 
   it('minor (local check): shows the tagged reply without the tag and pauses for good', async () => {
@@ -200,7 +203,7 @@ describe('AiChat safety', () => {
     expect(screen.queryByText(/\[\[MINOR\]\]/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
     expect(screen.getByText('This chat is for adults. The account owner can resume it by signing in again.')).toBeInTheDocument();
-    expect(analytics.minorDetected).toHaveBeenCalledTimes(1);
+    expect(queued('minor_detected')).toHaveLength(1);
     // The under-18 stop ends the session: the owner signs in again to a fresh chat
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(endSessionFn).toHaveBeenCalledWith('Signed out. Sign in again to carry on.');
@@ -222,7 +225,7 @@ describe('AiChat safety', () => {
     await send('i just want to chat');
     expect(await screen.findByText('This chat is only for grown-ups, though.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Message')).not.toBeInTheDocument();
-    expect(analytics.minorDetected).toHaveBeenCalledTimes(1);
+    expect(queued('minor_detected')).toHaveLength(1);
   });
 
   it('tells a blocked account the chat is off', async () => {

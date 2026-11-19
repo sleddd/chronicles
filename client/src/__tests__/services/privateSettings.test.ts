@@ -15,6 +15,7 @@ import {
 import { openForExport } from '../../services/settingCipher.js';
 import { setEgressAccount, recordEgressChoice } from '../../services/deviceConsent.js';
 import { featureFlagsFrom } from '../../utils/featureFlags.js';
+import { setLegacyMigrationAllowed } from '../../services/sealedFormats.js';
 import { encrypt, generateMasterKey } from '@shared/crypto/primitives.js';
 import { encryptBytes as rawEncryptBytes, decryptBytes as rawDecryptBytes } from '@shared/crypto/primitives.js';
 import { arrayBufferToBase64 } from '@shared/crypto/encoding.js';
@@ -35,6 +36,8 @@ beforeEach(async () => {
   getStatus.mockClear();
   localStorage.clear();
   setEgressAccount(null);
+  // A browser that knew the account before this sign-in (browserData.ts)
+  setLegacyMigrationAllowed(true);
 });
 
 describe('settings sealing', () => {
@@ -88,6 +91,15 @@ describe('the one-time move to v2', () => {
     expect(getStatus).not.toHaveBeenCalled();
     // The marker is written last
     expect(upsert.mock.calls.at(-1)?.[0]).toBe(SEAL_MARKER_KEY);
+  });
+
+  it('a browser meeting the account for the first time uses unbound values read-only: nothing re-sealed, no marker', async () => {
+    setLegacyMigrationAllowed(false);
+    const map: Record<string, unknown> = { nutritionGoals: await unbound({ iron: 18 }) };
+    const opened = await openSettingsMap(map, decryptBytes);
+    expect(map.nutritionGoals).toEqual({ iron: 18 });
+    expect(await migrateSettings(map, opened, encryptBytes)).toEqual({});
+    expect(upsert).not.toHaveBeenCalled();
   });
 
   it('a server that leaves out the marker can\'t make the client upload the calendar (downgrade)', async () => {

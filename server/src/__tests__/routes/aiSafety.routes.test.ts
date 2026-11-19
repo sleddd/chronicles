@@ -22,36 +22,49 @@ const aiChatApp = createTestApp('/api/ai-chat', aiChatRouter);
 
 const open = { consentAt: null, consentVersion: null, blocked: false };
 
-describe('POST /api/analytics/crisis-card', () => {
+describe('POST /api/analytics/event', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('records only the rating and kind — never the account', async () => {
-    const res = await request(analyticsApp).post('/api/analytics/crisis-card').send({ rating: 'urgent', kind: 'suicide' });
+    const res = await request(analyticsApp).post('/api/analytics/event').send({ event: 'crisis_card_shown', rating: 'urgent', kind: 'suicide' });
     expect(res.status).toBe(200);
     expect(recordCrisisCard).toHaveBeenCalledWith('urgent', 'suicide');
     expect((recordCrisisCard as any).mock.calls[0]).toHaveLength(2);
   });
 
   it('accepts an unknown kind as null', async () => {
-    const res = await request(analyticsApp).post('/api/analytics/crisis-card').send({ rating: 'concern', kind: null });
+    const res = await request(analyticsApp).post('/api/analytics/event').send({ event: 'crisis_card_shown', rating: 'concern', kind: null });
     expect(res.status).toBe(200);
     expect(recordCrisisCard).toHaveBeenCalledWith('concern', null);
   });
 
-  it('rejects unknown ratings, kinds and extra fields', async () => {
-    for (const body of [{ rating: 'none', kind: 'suicide' }, { rating: 'urgent', kind: 'other' }, { rating: 'concern', kind: 'self_harm', text: 'x' }]) {
-      const res = await request(analyticsApp).post('/api/analytics/crisis-card').send(body);
+  it('records a likely minor with nothing else', async () => {
+    const res = await request(analyticsApp).post('/api/analytics/event').send({ event: 'minor_detected' });
+    expect(res.status).toBe(200);
+    expect(recordMinorDetected).toHaveBeenCalledWith();
+  });
+
+  it('rejects unknown events, ratings, kinds and extra fields', async () => {
+    for (const body of [
+      { event: 'crisis_card_shown', rating: 'none', kind: 'suicide' },
+      { event: 'crisis_card_shown', rating: 'urgent', kind: 'other' },
+      { event: 'crisis_card_shown', rating: 'concern', kind: 'self_harm', text: 'x' },
+      { event: 'minor_detected', text: 'x' },
+      { event: 'other' },
+      { rating: 'urgent', kind: null },
+    ]) {
+      const res = await request(analyticsApp).post('/api/analytics/event').send(body);
       expect(res.status).toBe(400);
     }
     expect(recordCrisisCard).not.toHaveBeenCalled();
+    expect(recordMinorDetected).not.toHaveBeenCalled();
   });
-});
 
-describe('POST /api/analytics/minor-detected', () => {
-  it('records the event with nothing else', async () => {
-    const res = await request(analyticsApp).post('/api/analytics/minor-detected').send({ text: 'ignored' });
-    expect(res.status).toBe(200);
-    expect(recordMinorDetected).toHaveBeenCalledWith();
+  it('the old per-event addresses are gone', async () => {
+    expect((await request(analyticsApp).post('/api/analytics/crisis-card').send({ rating: 'urgent', kind: null })).status).toBe(410);
+    expect((await request(analyticsApp).post('/api/analytics/minor-detected')).status).toBe(410);
+    expect(recordCrisisCard).not.toHaveBeenCalled();
+    expect(recordMinorDetected).not.toHaveBeenCalled();
   });
 });
 

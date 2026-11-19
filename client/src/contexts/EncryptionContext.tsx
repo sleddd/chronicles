@@ -18,7 +18,8 @@ import { forgetPlannerKeyword, forgetPlanningTypeFilter } from '../types/planner
 import { useTimeStore } from '../stores/timeStore.js';
 import { announceLocalReset, onRemoteReset } from '../services/signOutBroadcast.js';
 import { claimBrowserFor } from '../services/browserData.js';
-import { holdKey, keyHolderExists, requestKey } from '../services/keyHandoff.js';
+import { setLegacyMigrationAllowed } from '../services/sealedFormats.js';
+import { holdKey, keyHolderExists, keylessPage, requestKey } from '../services/keyHandoff.js';
 import { browserIsIdle, markActivity } from '../services/activity.js';
 import type { ConfirmAction } from '../services/api.js';
 import { auth as authApi, type PasskeyWrap } from '../services/api.js';
@@ -125,7 +126,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     const tag = await encryptionService.accountTag(key, 'egress');
     // What this browser has stored is kept for the same person and wiped for
     // anyone else — decided by the key, before any of it is read
-    if (await claimBrowserFor(tag)) {
+    if (await claimBrowserFor(tag, signedIn)) {
       announceLocalReset();
       // The wipe took the shared "someone is here" record with it. Without it a
       // second tab (which takes the key but has seen nobody itself) read the
@@ -193,6 +194,8 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearReservedEntryIds();
     clearIssuedTopicIds();
     clearSealMarkers();
+    // The next install decides again whether this browser may move older records
+    setLegacyMigrationAllowed(false);
     // Entry list titles are cached keyed by the decrypted entry HTML
     clearEntryTitleCache();
     // Time-tracking sessions (which entries, when) — TimeSync reopens them at the next sign-in
@@ -326,12 +329,26 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   // such tab, the session is nobody's any more and it ends here, on to sign-in
   const askedRef = useRef(false);
   const authLoading = auth?.isLoading ?? false;
+  // A page that never needs the key (the landing page, a share, a public
+  // shelf, the legal pages — services/keyHandoff.ts) doesn't ask for it, and
+  // doesn't end the session either: the question waits until the tab moves to
+  // a page that does (isRestoring stays true meanwhile, so an app page shows
+  // its spinner rather than sign-in). The router lives under this provider, so
+  // the address is looked at every half second while waiting
+  const [onKeylessPage, setOnKeylessPage] = useState(() => keylessPage());
+  const waitingForPage = onKeylessPage && !!auth?.user && !askedRef.current;
+  useEffect(() => {
+    if (!waitingForPage) return;
+    const timer = setInterval(() => { if (!keylessPage()) setOnKeylessPage(false); }, 500);
+    return () => clearInterval(timer);
+  }, [waitingForPage]);
   useEffect(() => {
     if (!auth) { setIsRestoring(false); return; }
     if (authLoading || askedRef.current) return;
-    askedRef.current = true;
     const email = auth.user?.email;
-    if (!email || masterKeyRef.current) { setIsRestoring(false); return; }
+    if (!email || masterKeyRef.current) { askedRef.current = true; setIsRestoring(false); return; }
+    if (onKeylessPage) return;
+    askedRef.current = true;
     void (async () => {
       const holder = await keyHolderExists();
       const key = holder === false ? null : await requestKey(email);
@@ -346,7 +363,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       }
       setIsRestoring(false);
     })();
-  }, [authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authLoading, onKeylessPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Another tab wiped this browser (Sign out, a different person signing in):
   // drop the key here too — a second window must never keep the last person's

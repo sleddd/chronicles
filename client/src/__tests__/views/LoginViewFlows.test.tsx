@@ -5,7 +5,7 @@ import { renderWithTheme } from '../testUtils';
 const navigate = vi.hoisted(() => vi.fn());
 const auth = vi.hoisted(() => ({
   login: vi.fn(), submitTotpCode: vi.fn(), loginWithPasskey: vi.fn(), cancel2FA: vi.fn(), endSession: vi.fn(),
-  pending2FA: null as { pendingToken: string } | null,
+  pending2FA: null as { pendingToken: string; viaPasskey?: boolean } | null,
 }));
 const enc = vi.hoisted(() => ({ unlock: vi.fn(), unlockWithPasskey: vi.fn(), clearKey: vi.fn() }));
 const freshSignIn = vi.hoisted(() => vi.fn());
@@ -133,11 +133,57 @@ describe('LoginView – passkey', () => {
   });
 });
 
+describe('LoginView – a passkey on a 2FA account', () => {
+  it('holds the touch’s secret until the code is accepted, then opens that passkey’s wrap and zeroes it', async () => {
+    const prf = new Uint8Array(32).fill(6);
+    auth.loginWithPasskey.mockImplementation(async () => {
+      auth.pending2FA = { pendingToken: 'p', viaPasskey: true };
+      return { requires2FA: true, pendingToken: 'p', prf };
+    });
+    const wrap = { credentialId: 'c', wrappedMK: 'w', wrapIv: 'i' };
+    auth.submitTotpCode.mockResolvedValue({ passkey: wrap });
+    let seenAtUnlock: number[] = [];
+    enc.unlockWithPasskey.mockImplementation(async (given: Uint8Array) => { seenAtUnlock = Array.from(given); });
+    const { rerender } = renderWithTheme(<LoginView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in with a passkey' }));
+    await waitFor(() => expect(auth.loginWithPasskey).toHaveBeenCalled());
+    // Not signed in yet: no unlock, the secret still held
+    expect(enc.unlockWithPasskey).not.toHaveBeenCalled();
+    expect(Array.from(prf).every(b => b === 6)).toBe(true);
+    rerender(<LoginView />);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(screen.getByPlaceholderText('000000'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/dashboard'));
+    // "Don’t ask again" works the same as after a password
+    expect(auth.submitTotpCode).toHaveBeenCalledWith('123456', true);
+    expect(enc.unlockWithPasskey).toHaveBeenCalledWith(prf, wrap);
+    expect(seenAtUnlock.every(b => b === 6)).toBe(true);
+    expect(Array.from(prf).every(b => b === 0)).toBe(true);
+    expect(enc.unlock).not.toHaveBeenCalled();
+  });
+
+  it('Back to sign in zeroes the held secret', async () => {
+    const prf = new Uint8Array(32).fill(6);
+    auth.loginWithPasskey.mockImplementation(async () => {
+      auth.pending2FA = { pendingToken: 'p', viaPasskey: true };
+      return { requires2FA: true, pendingToken: 'p', prf };
+    });
+    const { rerender } = renderWithTheme(<LoginView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in with a passkey' }));
+    await waitFor(() => expect(auth.loginWithPasskey).toHaveBeenCalled());
+    rerender(<LoginView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
+    expect(auth.cancel2FA).toHaveBeenCalled();
+    expect(Array.from(prf).every(b => b === 0)).toBe(true);
+  });
+});
+
 describe('LoginView – the 2FA code screen', () => {
   beforeEach(() => { auth.pending2FA = { pendingToken: 'p' }; });
 
   it('offers "Don’t ask for a code on this browser for 30 days", off to start, and sends it only when ticked', async () => {
-    auth.submitTotpCode.mockResolvedValue(WRAP);
+    auth.submitTotpCode.mockResolvedValue({ encryption: WRAP });
     enc.unlock.mockResolvedValue(undefined);
     renderWithTheme(<LoginView />);
     const box = screen.getByRole('checkbox');
@@ -148,7 +194,7 @@ describe('LoginView – the 2FA code screen', () => {
   });
 
   it('ticked, it is sent with the authenticator code', async () => {
-    auth.submitTotpCode.mockResolvedValue(WRAP);
+    auth.submitTotpCode.mockResolvedValue({ encryption: WRAP });
     enc.unlock.mockResolvedValue(undefined);
     renderWithTheme(<LoginView />);
     fireEvent.click(screen.getByRole('checkbox'));
@@ -158,7 +204,7 @@ describe('LoginView – the 2FA code screen', () => {
   });
 
   it('is not offered with a backup code, and never sent with one', async () => {
-    auth.submitTotpCode.mockResolvedValue(WRAP);
+    auth.submitTotpCode.mockResolvedValue({ encryption: WRAP });
     enc.unlock.mockResolvedValue(undefined);
     renderWithTheme(<LoginView />);
     fireEvent.click(screen.getByRole('checkbox'));

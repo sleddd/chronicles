@@ -3,7 +3,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { settings as settingsApi } from './api.js';
 import { isSealed, isBound, sealSetting, openSetting, openUnbound, trackGuardedSave, type SealedValue, type EncryptBytes, type DecryptBytes } from './settingCipher.js';
 import { PRIVATE_SETTING_KEYS } from '@shared/validation/sealedSettings.js';
-import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
+import { sealMarkerHeld, noteSealMarker, legacyMigrationAllowed } from './sealedFormats.js';
 import { EGRESS_KEYS, egressOn, reconcileEgress, type EgressKey } from './deviceConsent.js';
 
 /**
@@ -109,6 +109,11 @@ export async function migrateSettings(
 ): Promise<Record<string, SealedValue>> {
   const resealed: Record<string, SealedValue> = {};
   if (opened.migrated) return resealed;
+  // Only on a browser that knew the account before this sign-in
+  // (sealedFormats.ts): elsewhere the unbound values are used as they are,
+  // read-only, and nothing is re-sealed or marked (with nothing to re-seal,
+  // writing the marker launders nothing and only closes the older readers)
+  if (opened.toReseal.length && !legacyMigrationAllowed()) return resealed;
   for (const key of opened.toReseal) {
     resealed[key] = await sealSetting(key, map[key], encryptBytes);
     await settingsApi.upsert(key, resealed[key]);

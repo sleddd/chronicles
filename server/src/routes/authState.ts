@@ -3,6 +3,12 @@ import { sharedState } from '../services/sharedState.js';
 
 /** Shared sign-in state bucket for pending 2FA sign-ins (services/sharedState.ts). */
 export const PENDING_2FA = 'pending_2fa';
+/**
+ * A passkey sign-in waiting on its 2FA code: the same pending token, mapped to
+ * the passkey's row id (its wrap is what /login/2fa hands back). Only a token
+ * still in PENDING_2FA counts, so `cancelSignIns` ends these too.
+ */
+export const PENDING_2FA_PASSKEY = 'pending_2fa_passkey';
 
 /*
  * Sign-ins in flight. A sign-in checks who is asking, then makes its session a

@@ -60,7 +60,22 @@ describe('signing in with a passkey', () => {
     expect(asked.allowCredentials).toBeUndefined();
     expect(new Uint8Array(asked.extensions.prf.eval.first).byteLength).toBe(32);
     expect(Array.from(result.prf)).toEqual(Array.from(SECRET));
-    expect(result.wrap.credentialId).toBe('Y3JlZA');
+    expect(result.requires2FA).toBeUndefined();
+    if (!result.requires2FA) expect(result.wrap.credentialId).toBe('Y3JlZA');
+  });
+
+  it('with 2FA on, hands back the pending sign-in and keeps the secret in memory only', async () => {
+    api.passkeyLoginOptions.mockResolvedValue({ options: OPTIONS });
+    api.passkeyLogin.mockResolvedValue({ requires2FA: true, pendingToken: 'p'.repeat(64) });
+    get.mockResolvedValue(assertionCred({ results: { first: SECRET.buffer } }));
+
+    const result = await signInWithPasskey();
+
+    expect(result).toEqual({ requires2FA: true, pendingToken: 'p'.repeat(64), prf: expect.any(Uint8Array) });
+    expect(Array.from(result.prf)).toEqual(Array.from(SECRET));
+    // Nothing about the secret went with the answer
+    expect(JSON.stringify(api.passkeyLogin.mock.calls[0][0])).not.toContain('BQUFBQUF');
+    expect(knownPasskeys()).toEqual(['Y3JlZA']);
   });
 
   it('asks for the passkeys that worked here before, so a password manager has nothing to answer with', async () => {
@@ -157,6 +172,15 @@ describe('confirming an action with a passkey', () => {
     expect(get.mock.calls[0][0].publicKey.allowCredentials).toHaveLength(1);
     expect(c.confirmToken).toBe('t'.repeat(64));
     expect(c.prf.byteLength).toBe(32);
+    expect(api.confirmVerify.mock.calls[0][2]).toBeUndefined();
+  });
+
+  it('sends the 2FA code with the touch when there is one', async () => {
+    api.confirmOptions.mockResolvedValue({ options: OPTIONS });
+    api.confirmVerify.mockResolvedValue({ confirmToken: 't'.repeat(64), passkey: { credentialId: 'Y3JlZA', wrappedMK: 'w', wrapIv: 'i' } });
+    get.mockResolvedValue(assertionCred({ results: { first: SECRET.buffer } }));
+    await confirmWithPasskey('delete-account', ' 123456 ');
+    expect(api.confirmVerify.mock.calls[0][2]).toBe('123456');
   });
 });
 
