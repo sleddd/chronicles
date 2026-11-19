@@ -512,7 +512,16 @@ const PrivacyGrid = styled.ul`
     border-radius: 14px;
     background: rgba(31, 34, 41, 0.55);
   }
-  li > span { display: block; margin-bottom: 26px; color: #d5c6b8; }
+  /* The icons: thin (the CSS weight and 'wght' must agree, for Safari) and white like
+     the text, faded back into the band */
+  li > span {
+    display: block;
+    margin-bottom: 26px;
+    color: var(--text-primary);
+    opacity: 0.5;
+    font-weight: 200;
+    font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+  }
   h3 { margin: 0 0 12px; font-family: var(--font-display); font-size: 22px; font-weight: 300; color: var(--text-primary); }
   p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--text-secondary); }
   @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -746,7 +755,7 @@ export function LandingView() {
             <PrivacyGrid>
               {PRIVACY.map((p, i) => (
                 <li key={p.title} data-reveal style={delay(i % 3)}>
-                  <MaterialIcon aria-hidden $size={22}>{p.icon}</MaterialIcon>
+                  <MaterialIcon aria-hidden $size={34}>{p.icon}</MaterialIcon>
                   <h3>{p.title}</h3>
                   <p>{p.body}</p>
                 </li>
