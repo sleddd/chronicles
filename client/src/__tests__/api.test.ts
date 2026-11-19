@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LEGACY_FORMATS_UNTIL } from '../services/sealedFormats.js';
 import { auth, entries, topics, settings, sessions, doses, shares, ApiError, clearSealMarkers, ENTRY_ID_REFUSED } from '../services/api.js';
 import { setRecordCipherForTests } from '../services/recordCipher.js';
 import { setLegacyMigrationAllowed } from '../services/sealedFormats.js';
@@ -381,6 +382,11 @@ describe('entries', () => {
 // ---------------------------------------------------------------------------
 
 describe('topics', () => {
+  // The legacy window is closed in the app; these keep the migration path tested
+  // in case it's ever reopened (LEGACY_FORMATS_UNTIL in sealedFormats.ts)
+  let clock: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => { clock = vi.spyOn(Date, 'now').mockReturnValue(LEGACY_FORMATS_UNTIL - 86_400_000); });
+  afterEach(() => { clock.mockRestore(); });
   it('getAll fetches /topics', async () => {
     setRecordCipherForTests(fakeCipher);
     fetchSpy = routeFetch({ ...markers('topicsSealV2'), 'GET /api/topics': () => DEFAULT_TOPICS.map((t, i) => ({ id: i + 1, name: null, icon: null, color: null, payload: seal('topic', String(i + 1), t), iv: 'iv' })) });
@@ -595,6 +601,11 @@ describe('sessions', () => {
 // ---------------------------------------------------------------------------
 
 describe('doses', () => {
+  // The legacy window is closed in the app; these keep the migration path tested
+  // in case it's ever reopened (LEGACY_FORMATS_UNTIL in sealedFormats.ts)
+  let clock: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => { clock = vi.spyOn(Date, 'now').mockReturnValue(LEGACY_FORMATS_UNTIL - 86_400_000); });
+  afterEach(() => { clock.mockRestore(); });
   // Dose ids are UUIDs (anything else is refused before opening)
   const A = '00000001-0000-4000-8000-000000000000';
   const OLD = '00000002-0000-4000-8000-000000000000';

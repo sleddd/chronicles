@@ -366,7 +366,7 @@ Markers: the seal markers (`settingsSealV2`, `entriesSealV3`, `topicsSealV2`,
          `dosesSealV2`) live on the server, which could leave one out to reopen the
          older readers. `services/sealedFormats.ts` backs them: once a browser has
          seen a marker it keeps counting it (localStorage, kept through sign-out),
-         and from `LEGACY_FORMATS_UNTIL` (2027-01-01) the older forms never open.
+         and from `LEGACY_FORMATS_UNTIL` the older forms never open — **ended early on 2026-11-19** (every account migrated; move the date back in `sealedFormats.ts` to reopen; the migration tests pin `Date.now` before it so the path stays tested).
          **Re-sealing older records and writing their marker happen only on a browser
          that knew the account before this sign-in** (`legacyMigrationAllowed` in
          `sealedFormats.ts`, decided by `claimBrowserFor`: the owner mark already there and
@@ -820,7 +820,8 @@ These supersede any older wording above that disagrees.
 - **Media links** (`allowedMediaLink`): never a redirect endpoint (`/redirect`, `/url`, `/out`, `/gp/redirect.html`…) or a link carrying another http(s) address in its query or fragment
 - **Import Entries** also leaves out `tags`, `linkedrecipeids`, `linkedshoppinglistids`, `payments`, `sessions`, `areas`; `MediaFields` reads tags through `mediaTags`
 - `media-view-v1` no longer remembers the chosen (private) tag; the chunk-reload mark falls back to `window.name`, and with nowhere to keep it there's no reload
-- **Known residuals**: older formats still open read-only on new browsers until `LEGACY_FORMATS_UNTIL`; old images keep a no-AAD fallback (harmless — the IV comes from authenticated metadata); `/entries/cursor` exposes a database-wide transaction counter
+- **Legacy window closed** (`LEGACY_FORMATS_UNTIL` = 2026-11-19): older formats never open now, marker or not.
+- **Known residuals**: old images keep a no-AAD fallback (harmless — the IV comes from authenticated metadata); `/entries/cursor` exposes a database-wide transaction counter
 
 ### Rate limiting
 - `failedAuthLimiter` (first on `/api`, per IP, in memory): only requests answered 401 count, 200 / 15 min, then 429 before any session lookup — a flood of made-up tokens can't keep the connection pool busy

@@ -18,7 +18,7 @@
 export const SEEN_MARKERS_STORE = 'chronicles.sealSeen.v1';
 
 /** After this the older formats never open, marker or not. */
-export const LEGACY_FORMATS_UNTIL = Date.UTC(2027, 0, 1);
+export const LEGACY_FORMATS_UNTIL = Date.UTC(2026, 10, 19); // ended early (every account migrated); move it back to reopen
 
 function seenMarkers(): Set<string> {
   try {

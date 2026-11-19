@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LEGACY_FORMATS_UNTIL } from '../../services/sealedFormats.js';
 
 const reserveIds = vi.fn();
 const reseal = vi.fn();
@@ -80,6 +81,14 @@ describe('reserving ids for new entries', () => {
 });
 
 describe('the one-time move to id-bound entries', () => {
+  // The legacy window is closed in the app; these keep the migration path tested
+  // in case it's ever reopened (LEGACY_FORMATS_UNTIL in sealedFormats.ts)
+  let clock: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    clock = vi.spyOn(Date, 'now').mockReturnValue(LEGACY_FORMATS_UNTIL - 86_400_000);
+    setOlderEntriesFromMarker(false);
+  });
+  afterEach(() => { clock.mockRestore(); });
   it('re-saves only older entries, bound to their id, then writes the marker and stops allowing older formats', async () => {
     reseal.mockImplementation(async (batch: unknown[]) => ({ resealed: batch.length }));
     const n = await resealOlderEntries([entry(1), entry(2, false), entry(3)], encryptPost, encryptBytes);

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LEGACY_FORMATS_UNTIL } from '../../services/sealedFormats.js';
 
 const upsert = vi.fn().mockResolvedValue({});
 const getStatus = vi.fn().mockResolvedValue({ icsEnabled: false });
@@ -68,6 +69,11 @@ describe('settings sealing', () => {
 });
 
 describe('the one-time move to v2', () => {
+  // The legacy window is closed in the app; these keep the migration path tested
+  // in case it's ever reopened (LEGACY_FORMATS_UNTIL in sealedFormats.ts)
+  let clock: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => { clock = vi.spyOn(Date, 'now').mockReturnValue(LEGACY_FORMATS_UNTIL - 86_400_000); });
+  afterEach(() => { clock.mockRestore(); });
   it('before the marker: opens unbound values, re-seals them bound, starts the feed switch off, then writes the marker', async () => {
     getStatus.mockResolvedValue({ icsEnabled: true });
     const map: Record<string, unknown> = {
