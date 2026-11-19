@@ -6,7 +6,8 @@ import { RowPill } from './SettingsGroup.js';
 /**
  * How a sensitive action is confirmed: the account password (and, with 2FA on,
  * an authenticator or backup code) — or, for an account with a passkey, one
- * touch in place of both.
+ * touch in place of the password. A passkey never stands in for the code: with
+ * 2FA on the code box shows for either way, and Use a passkey waits for it.
  *
  * The field always says "Enter your account password", never just "Confirm":
  * someone who signed in with a touch would otherwise wait for a passkey sheet
@@ -26,7 +27,7 @@ const Or = styled.div`
 interface ConfirmIdentityProps {
   password: string;
   onPassword: (value: string) => void;
-  /** With 2FA on: the code box */
+  /** With 2FA on: the code box (needed with the password or a passkey) */
   showCode?: boolean;
   code?: string;
   onCode?: (value: string) => void;
@@ -42,8 +43,8 @@ export function ConfirmIdentity({ password, onPassword, showCode, code = '', onC
     <>
       {onUsePasskey && (
         <Or>
-          <RowPill type="button" onClick={onUsePasskey} disabled={busy}>Use a passkey</RowPill>
-          <span>or your password{showCode ? ' and a code' : ''}</span>
+          <RowPill type="button" onClick={onUsePasskey} disabled={busy || (showCode && !code.trim())}>Use a passkey</RowPill>
+          <span>{showCode ? 'with the code below, or your password and the code' : 'or your password'}</span>
         </Or>
       )}
       <PasswordInput

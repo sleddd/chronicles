@@ -6,6 +6,10 @@ describe('isReservedImportColumn', () => {
     for (const name of ['_doseLink', '_importKey', '__proto__', 'onPublicShelf', ' ONPUBLICSHELF ', 'constructor', 'prototype']) {
       expect(isReservedImportColumn(name)).toBe(true);
     }
+    // List-valued fields: a column of text there would crash the form that reads it
+    for (const name of ['tags', 'Tags', 'items', 'linkedRecipeIds', 'checklist']) {
+      expect(isReservedImportColumn(name)).toBe(true);
+    }
     for (const name of ['Author', 'Rating', 'notes', 'On shelf']) {
       expect(isReservedImportColumn(name)).toBe(false);
     }

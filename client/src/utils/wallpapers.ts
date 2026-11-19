@@ -78,13 +78,14 @@ const KEY = 'chronicles.wallpaper-v1';
  *  briefly, Madison Kuhn's river valley (aV7_rCZpvGY) before it — still the landing
  *  page's hero photo (HERO_PHOTO in LandingTemplate) — and Justin Fisher's
  *  qrga71KYbgM for a while; all stay in the list */
-export const DEFAULT_WALLPAPER = 'justin-fisher-qrga71KYbgM';
+export const DEFAULT_WALLPAPER = 'own-2';
 
 /** The default background for each theme — shown to anyone who hasn't picked one.
- *  Dark has none by default (null): just the lit page */
+ *  Both themes start on our own photo `own-2` (light was Justin Fisher's
+ *  qrga71KYbgM and dark had none before) */
 export const DEFAULT_WALLPAPERS: Record<'light' | 'dark', string | null> = {
-  light: 'justin-fisher-qrga71KYbgM',
-  dark: null,
+  light: 'own-2',
+  dark: 'own-2',
 };
 
 /** The choice "never picked one": the theme's default, which changes with the theme */

@@ -162,6 +162,19 @@ export interface PasskeySignIn {
   wrap: PasskeyWrap;
   /** The secret that opens `wrap` — the caller zeroes it once the key is open */
   prf: Uint8Array;
+  requires2FA?: undefined;
+}
+
+/**
+ * A passkey sign-in on an account with 2FA: the touch stood in for the
+ * password, and the code is still needed. `prf` stays in memory (never sent)
+ * until the code is accepted and the wrap comes back — the caller zeroes it
+ * then, or when the code screen is left.
+ */
+export interface PasskeyPending2FA {
+  requires2FA: true;
+  pendingToken: string;
+  prf: Uint8Array;
 }
 
 /**
@@ -171,7 +184,7 @@ export interface PasskeySignIn {
  * any, which takes a password manager's passkeys out of the running. `any`
  * asks for whichever passkey the person picks (a new phone, someone else's).
  */
-export async function signInWithPasskey({ any = false }: { any?: boolean } = {}): Promise<PasskeySignIn> {
+export async function signInWithPasskey({ any = false }: { any?: boolean } = {}): Promise<PasskeySignIn | PasskeyPending2FA> {
   const { options } = await authApi.passkeyLoginOptions();
   const known = any ? [] : knownPasskeys();
   const { response, prf, credentialId } = await assert(known.length
@@ -179,9 +192,10 @@ export async function signInWithPasskey({ any = false }: { any?: boolean } = {})
     : options);
   if (!prf) throw new PasskeyCannotUnlock();
   try {
-    const { user, passkey } = await authApi.passkeyLogin(response);
+    const answer = await authApi.passkeyLogin(response);
     rememberPasskey(credentialId);
-    return { user, wrap: passkey, prf };
+    if (answer.requires2FA) return { requires2FA: true, pendingToken: answer.pendingToken, prf };
+    return { user: answer.user, wrap: answer.passkey, prf };
   } catch (err) {
     prf.fill(0);
     // The server has never stored this passkey (its adding never finished):
@@ -200,13 +214,17 @@ export interface PasskeyConfirmation {
   prf: Uint8Array;
 }
 
-/** Confirm one sensitive action with a touch, in place of the password and the 2FA code. */
-export async function confirmWithPasskey(action: ConfirmAction): Promise<PasskeyConfirmation> {
+/**
+ * Confirm one sensitive action with a touch, in place of the password. With
+ * 2FA on, the authenticator or backup code (`code`) goes with it: a passkey
+ * never stands in for the second factor.
+ */
+export async function confirmWithPasskey(action: ConfirmAction, code?: string): Promise<PasskeyConfirmation> {
   const { options } = await authApi.confirmOptions(action);
   const { response, prf } = await assert(options);
   if (!prf) throw new PasskeyCannotUnlock();
   try {
-    const { confirmToken, passkey } = await authApi.confirmVerify(action, response);
+    const { confirmToken, passkey } = await authApi.confirmVerify(action, response, code?.trim() || undefined);
     return { confirmToken, wrap: passkey, prf };
   } catch (err) {
     prf.fill(0);

@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext.js';
 const mockLogin = vi.fn();
 const mockRegister = vi.fn();
 const mockLogout = vi.fn();
+const mockSubmit2FA = vi.fn();
 
 const mockWipe = vi.fn().mockResolvedValue(undefined);
 vi.mock('../services/browserData.js', () => ({ wipeBrowserData: (...args: unknown[]) => mockWipe(...args) }));
@@ -22,6 +23,7 @@ vi.mock('../services/api.js', () => ({
     login: (...args: unknown[]) => mockLogin(...args),
     register: (...args: unknown[]) => mockRegister(...args),
     logout: (...args: unknown[]) => mockLogout(...args),
+    submit2FA: (...args: unknown[]) => mockSubmit2FA(...args),
   },
   ApiError: class ApiError extends Error {
     status: number;
@@ -363,7 +365,28 @@ describe('AuthProvider – passkey sign-in', () => {
     await act(async () => { got = await result.current.loginWithPasskey(); });
     expect(result.current.isAuthenticated).toBe(true);
     expect((got as { prf: Uint8Array }).prf).toBe(prf);
-    // No 2FA code screen after a passkey: one touch is both factors
+    // No code screen: no 2FA, or this browser is trusted to skip it
+    expect(result.current.pending2FA).toBeNull();
+  });
+
+  it('with 2FA on, the touch stands in for the password only: the code screen shows, and the code brings the passkey’s wrap', async () => {
+    const prf = new Uint8Array(32).fill(3);
+    mockPasskeySignIn.mockResolvedValue({ requires2FA: true, pendingToken: 'p'.repeat(64), prf });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let got: unknown;
+    await act(async () => { got = await result.current.loginWithPasskey(); });
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.pending2FA).toEqual({ pendingToken: 'p'.repeat(64), viaPasskey: true });
+    expect((got as { prf: Uint8Array }).prf).toBe(prf);
+
+    const wrap = { credentialId: 'c', wrappedMK: 'w', wrapIv: 'i' };
+    mockSubmit2FA.mockResolvedValue({ user: { email: 'a@b.com', username: 'alice', totpEnabled: true }, passkey: wrap });
+    let done: unknown;
+    await act(async () => { done = await result.current.submitTotpCode('123456', true); });
+    expect(mockSubmit2FA).toHaveBeenCalledWith({ pendingToken: 'p'.repeat(64), code: '123456', trustBrowser: true });
+    expect(done).toEqual({ passkey: wrap });
+    expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.pending2FA).toBeNull();
   });
 });

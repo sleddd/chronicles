@@ -9,7 +9,10 @@ const CONNECT_SRC = [
   "'self'",
   'https://api.open-meteo.com',
   'https://geocoding-api.open-meteo.com',
-  'https://www.googleapis.com',
+  // Google Calendar's API only (client/src/services/calendarSync.ts): a path,
+  // so the rest of www.googleapis.com — Cloud Storage uploads among it — isn't
+  // a way out for an injected script. The OAuth code exchange runs on the server
+  'https://www.googleapis.com/calendar/v3/',
   'https://*.r2.cloudflarestorage.com',
   'https://api.anthropic.com',
   'https://api.openai.com',
@@ -19,6 +22,13 @@ const CONNECT_SRC = [
   // mzstatic.com), TVmaze and Wikipedia — fixed catalogues, never a typed address
   'https://openlibrary.org',
   'https://covers.openlibrary.org',
+  // archive.org stays a wildcard on purpose: covers.openlibrary.org redirects
+  // to archive.org/download/…, which redirects again to whichever storage node
+  // holds the file (ia800123.us.archive.org and the like — hundreds of them,
+  // changing), and CSP checks every hop's host. That wildcard also takes in
+  // archive.org's upload endpoint (s3.us.archive.org), so it can't be narrowed
+  // to "read-only" in CSP; the client's own allowlist (isAllowedCoverUrl) only
+  // ever fetches cover images, and only after Find cover is pressed
   'https://archive.org',
   'https://*.archive.org',
   'https://itunes.apple.com',

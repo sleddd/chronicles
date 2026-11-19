@@ -37,7 +37,9 @@ import {
   postReservationStatements,
   RESERVATION_DAYS,
   MAX_RESERVATIONS,
-  RESERVATION_SEED_WINDOW,
+  ensureTaxonomyReservations,
+  reserveTaxonomyIds,
+  MAX_TOPIC_RESERVATIONS,
   resealPosts,
   createPost,
   getPost,
@@ -175,6 +177,30 @@ describe('Taxonomy queries', () => {
     payload_encrypted: Buffer.from('sealed'), payload_iv: Buffer.from('iv'), ...over,
   });
 
+  describe('topic id reservations', () => {
+    it('records each id handed out, dropping expired and overflowing ones', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ id: 7 }]);
+      expect(await reserveTaxonomyIds(SCHEMA, 1)).toEqual([7]);
+      const [sql, count, keep] = mockQueryRawUnsafe.mock.calls[0];
+      expect(sql).toContain('INSERT INTO usr_1_abc123.taxonomy_id_reservations (id)');
+      expect(sql).toContain("nextval('usr_1_abc123.taxonomies_id_seq')");
+      expect(sql).toContain(`make_interval(days => ${RESERVATION_DAYS})`);
+      expect([count, keep]).toEqual([1, MAX_TOPIC_RESERVATIONS - 1]);
+    });
+
+    it('creates the table once after reading the catalog, with nothing seeded', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: false }]);
+      mockExecuteRawUnsafe.mockResolvedValue(0);
+      mockTransaction.mockResolvedValue([]);
+      await ensureTaxonomyReservations('usr_8_dddddd');
+      const sqls = mockExecuteRawUnsafe.mock.calls.map(c => c[0] as string);
+      expect(sqls[0]).toContain('CREATE TABLE IF NOT EXISTS usr_8_dddddd.taxonomy_id_reservations');
+      expect(sqls.some(q => q.startsWith('INSERT'))).toBe(false);
+      await ensureTaxonomyReservations('usr_8_dddddd');
+      expect(mockQueryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('createTaxonomy', () => {
     it('stores only the encrypted payload and colour under its reserved id, with the next sort order', async () => {
       mockQueryRawUnsafe
@@ -185,7 +211,9 @@ describe('Taxonomy queries', () => {
 
       const [sql, id, color, order, payload] = mockQueryRawUnsafe.mock.calls[1];
       expect(sql).toContain('INSERT INTO usr_1_abc123.taxonomies (id, color, sort_order, payload_encrypted, payload_iv)');
-      expect(sql).toContain('WHERE EXISTS (SELECT 1 FROM usr_1_abc123.taxonomies_id_seq q WHERE q.is_called AND $1 <= q.last_value)');
+      // only under a reservation, used up by the same statement
+      expect(sql).toContain('DELETE FROM usr_1_abc123.taxonomy_id_reservations WHERE id = $1 RETURNING id');
+      expect(sql).toContain('FROM reservation');
       expect([id, color, order]).toEqual([1, '#333', 3]);
       expect(Buffer.isBuffer(payload)).toBe(true);
       expect(result).toEqual({ id: 1, name: null, icon: null, color: '#333', sort_order: 3, payload: Buffer.from('sealed').toString('base64'), iv: Buffer.from('iv').toString('base64') });
@@ -328,19 +356,14 @@ describe('Post queries', () => {
   });
 
   describe('ensurePostReservations', () => {
-    it('creates the table and seeds the recent unused ids once, then only remembers', async () => {
+    it('creates the table once — no seed, so no deleted id can come back — then only remembers', async () => {
       mockQueryRawUnsafe.mockResolvedValueOnce([{ ready: false }]);
       mockExecuteRawUnsafe.mockResolvedValue(0);
       mockTransaction.mockResolvedValue([]);
       await ensurePostReservations('usr_9_cccccc');
       const sqls = mockExecuteRawUnsafe.mock.calls.map(c => c[0] as string);
       expect(sqls[0]).toContain('CREATE TABLE IF NOT EXISTS usr_9_cccccc.post_id_reservations');
-      const seed = sqls.find(q => q.startsWith('INSERT INTO usr_9_cccccc.post_id_reservations'))!;
-      expect(seed).toContain(`q.last_value - ${RESERVATION_SEED_WINDOW - 1}`);
-      expect(seed).toContain('WHERE q.is_called');
-      // never an id an entry has, or a deleted one
-      expect(seed).toContain('NOT EXISTS (SELECT 1 FROM usr_9_cccccc.posts p WHERE p.id = g.id)');
-      expect(seed).toContain('NOT EXISTS (SELECT 1 FROM usr_9_cccccc.deleted_posts d WHERE d.id = g.id)');
+      expect(sqls.some(q => q.startsWith('INSERT'))).toBe(false);
       expect(mockTransaction).toHaveBeenCalledTimes(1);
       await ensurePostReservations('usr_9_cccccc');
       expect(mockQueryRawUnsafe).toHaveBeenCalledTimes(1);

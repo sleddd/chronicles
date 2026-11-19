@@ -59,7 +59,10 @@ function loadSaved(): Saved {
       shelf: SHELVES.some(s => s.value === v.shelf) ? v.shelf as MediaShelf : '',
       minRating: typeof v.minRating === 'number' ? v.minRating : 0,
       sort: MEDIA_SORTS.some(s => s.value === v.sort) ? v.sort as MediaSort : 'newest',
-      tag: typeof v.tag === 'string' ? v.tag.slice(0, 40) : '',
+      // The chosen tag is never remembered: a tag is private (it names what the
+      // person is reading or watching) and this record outlives the session.
+      // One stored by an older build is ignored here and dropped on the next write
+      tag: '',
       layout: v.layout === 'list' ? 'list' : 'grid',
     };
   } catch { return EMPTY_SAVED; }
@@ -309,7 +312,10 @@ export function MediaView() {
     if (await copyText(shelfUrl)) { setCopied(true); setTimeout(() => setCopied(false), 2000); }
     else showFlash('Couldn’t copy the link — select it and copy by hand.');
   };
-  useEffect(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ } }, [saved]);
+  useEffect(() => {
+    const { tag: _private, ...remembered } = saved; // eslint-disable-line @typescript-eslint/no-unused-vars
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(remembered)); } catch { /* private mode */ }
+  }, [saved]);
   // A new search, filter or sort starts from the top again
   useEffect(() => { setShownCount(PUBLIC_SHELF_PAGE_SIZE); }, [query, saved.type, saved.shelf, saved.minRating, saved.sort, saved.tag]);
 

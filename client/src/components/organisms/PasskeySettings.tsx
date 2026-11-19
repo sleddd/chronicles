@@ -126,7 +126,7 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
       let source: KeySource;
       let confirmToken: string;
       if (via === 'passkey') {
-        const c = await confirmWithPasskey('passkey-add');
+        const c = await confirmWithPasskey('passkey-add', totpEnabled ? code : undefined);
         sourcePrf = c.prf;
         source = { kind: 'passkey', prf: c.prf, wrap: c.wrap };
         confirmToken = c.confirmToken;
@@ -157,7 +157,7 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
     try {
       let confirmation: { currentAuthSecret: string; code?: string } | { confirmToken: string };
       if (via === 'passkey') {
-        const c = await confirmWithPasskey('passkey-remove');
+        const c = await confirmWithPasskey('passkey-remove', totpEnabled ? code : undefined);
         touched = c.prf;
         confirmation = { confirmToken: c.confirmToken };
       } else {
@@ -177,7 +177,7 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
     } finally {
       touched?.fill(0);
     }
-  }, [open, password, email, withCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, password, email, withCode, code, totpEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rename = async (id: number) => {
     const next = name.trim();

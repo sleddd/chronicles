@@ -1,4 +1,4 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { betaApplicationSchema } from '@chronicles/shared';
 import { applyForBeta } from '../db/betaQueries.js';
 import { betaLimiter } from '../middleware/rateLimiter.js';
@@ -20,7 +20,7 @@ function requireXhr(req: Request, res: Response, next: NextFunction) {
 }
 
 // POST /api/beta/apply — a seat while one is open, else the waitlist
-router.post('/apply', requireXhr, betaLimiter, async (req, res) => {
+router.post('/apply', requireXhr, betaLimiter, express.json({ limit: '16kb' }), async (req, res) => {
   const parsed = betaApplicationSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the form and try again' });

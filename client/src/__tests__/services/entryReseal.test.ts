@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LEGACY_FORMATS_UNTIL } from '../../services/sealedFormats.js';
 
 const reserveIds = vi.fn();
 const reseal = vi.fn();
@@ -12,6 +13,7 @@ import {
   reserveEntryId, clearReservedEntryIds, resealOlderEntries, olderEntriesAllowed, setOlderEntriesFromMarker, ENTRIES_SEAL_MARKER,
 } from '../../services/entryReseal.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
+import { setLegacyMigrationAllowed } from '../../services/sealedFormats.js';
 import type { DecryptedPost } from '@shared/crypto/types.js';
 
 const encryptPost = vi.fn(async (id: number) => ({ contentEncrypted: `c${id}`, contentIv: 'i', metadataEncrypted: 'm', metadataIv: 'mi' }));
@@ -27,6 +29,8 @@ beforeEach(() => {
   clearReservedEntryIds();
   localStorage.clear();
   setOlderEntriesFromMarker(false);
+  // A browser that knew the account before this sign-in (browserData.ts)
+  setLegacyMigrationAllowed(true);
 });
 
 describe('reserving ids for new entries', () => {
@@ -77,6 +81,14 @@ describe('reserving ids for new entries', () => {
 });
 
 describe('the one-time move to id-bound entries', () => {
+  // The legacy window is closed in the app; these keep the migration path tested
+  // in case it's ever reopened (LEGACY_FORMATS_UNTIL in sealedFormats.ts)
+  let clock: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    clock = vi.spyOn(Date, 'now').mockReturnValue(LEGACY_FORMATS_UNTIL - 86_400_000);
+    setOlderEntriesFromMarker(false);
+  });
+  afterEach(() => { clock.mockRestore(); });
   it('re-saves only older entries, bound to their id, then writes the marker and stops allowing older formats', async () => {
     reseal.mockImplementation(async (batch: unknown[]) => ({ resealed: batch.length }));
     const n = await resealOlderEntries([entry(1), entry(2, false), entry(3)], encryptPost, encryptBytes);
@@ -107,6 +119,18 @@ describe('the one-time move to id-bound entries', () => {
     reseal.mockRejectedValue(new Error('offline'));
     await expect(resealOlderEntries([entry(1)], encryptPost, encryptBytes)).rejects.toThrow('offline');
     expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('a browser meeting the account for the first time shows older entries but never re-saves or marks them', async () => {
+    // A server that left the marker out could have paired older halves under
+    // other ids: re-saving here would make that permanent (sealedFormats.ts)
+    setLegacyMigrationAllowed(false);
+    setOlderEntriesFromMarker(false);
+    expect(await resealOlderEntries([entry(1), entry(2, false)], encryptPost, encryptBytes)).toBe(0);
+    expect(encryptPost).not.toHaveBeenCalled();
+    expect(reseal).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(olderEntriesAllowed()).toBe(true);
   });
 
   it('a new account (nothing older) is marked straight away', async () => {

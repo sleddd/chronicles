@@ -411,9 +411,9 @@ export function SettingsView() {
       const newAuthSecret = await deriveAuthSecret(newPw, email);
       let wrap: { salt: string; wrappedMK: string; wrapIv: string };
       if (via === 'passkey') {
-        // One touch stands in for the current password and the 2FA code, and
-        // opens the key for the new wrap
-        const c = await confirmWithPasskey('change-password');
+        // One touch stands in for the current password (the 2FA code still
+        // goes with it), and opens the key for the new wrap
+        const c = await confirmWithPasskey('change-password', totpEnabled ? pwCode : undefined);
         touched = c.prf;
         wrap = await rewrapWith({ kind: 'passkey', prf: c.prf, wrap: c.wrap }, newPw);
         await authApi.changePassword({ confirmToken: c.confirmToken, newAuthSecret, newEncryptedMasterKey: wrap.wrappedMK, newKekSalt: wrap.salt, newKekWrapIv: wrap.wrapIv });
@@ -443,7 +443,7 @@ export function SettingsView() {
       let made: { recoveryKey: string; recoveryWrappedMK: string; recoveryWrapIv: string };
       let confirmation: { confirmToken: string };
       if (via === 'passkey') {
-        const c = await confirmWithPasskey('recovery-key');
+        const c = await confirmWithPasskey('recovery-key', totpEnabled ? recoveryCode : undefined);
         touched = c.prf;
         made = await recoveryKeyWith({ kind: 'passkey', prf: c.prf, wrap: c.wrap });
         confirmation = { confirmToken: c.confirmToken };
@@ -466,8 +466,9 @@ export function SettingsView() {
   };
 
   /** A passkey touch for an action that needs no new wrap: just its single-use token */
-  const passkeyToken = async (action: 'delete-account' | '2fa-enable' | '2fa-disable'): Promise<string> => {
-    const c = await confirmWithPasskey(action);
+  const passkeyToken = async (action: 'delete-account' | '2fa-enable' | '2fa-disable', code?: string): Promise<string> => {
+    // With 2FA on, the code goes with the touch (a passkey stands in for the password only)
+    const c = await confirmWithPasskey(action, code);
     c.prf.fill(0);
     return c.confirmToken;
   };
@@ -533,7 +534,7 @@ export function SettingsView() {
     setTwoFALoading(true);
     setDisable2FAError('');
     try {
-      if (via === 'passkey') await authApi.disable2FA({ confirmToken: await passkeyToken('2fa-disable') });
+      if (via === 'passkey') await authApi.disable2FA({ confirmToken: await passkeyToken('2fa-disable', disable2FACode) });
       else await authApi.disable2FA({ authSecret: await deriveAuthSecret(disable2FAPassword, user?.email ?? ''), code: disable2FACode.trim() });
       setTotpEnabled(false);
       setDisabling2FA(false);
@@ -960,7 +961,7 @@ export function SettingsView() {
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      if (via === 'passkey') await authApi.deleteAccount({ confirmToken: await passkeyToken('delete-account') });
+      if (via === 'passkey') await authApi.deleteAccount({ confirmToken: await passkeyToken('delete-account', totpEnabled ? deleteCode : undefined) });
       else await authApi.deleteAccount({ authSecret: await deriveAuthSecret(deletePassword, user?.email ?? ''), ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
       clearKey(); clearAll(); await logout(); navigate('/login');
     } catch (err) {

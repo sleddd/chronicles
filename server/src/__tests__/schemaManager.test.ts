@@ -4,6 +4,8 @@ vi.mock('../db/prisma.js', () => ({
   prisma: {
     $queryRaw: vi.fn(),
     $executeRawUnsafe: vi.fn(),
+    $executeRaw: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join('?'), values })),
+    $transaction: vi.fn(async (ops: unknown[]) => ops),
     account: {
       create: vi.fn(),
       delete: vi.fn(),
@@ -123,15 +125,28 @@ describe('schemaManager', () => {
 
   describe('deleteAccountById', () => {
     it('drops the schema before deleting the account row', async () => {
-      (prisma.account.findUnique as any).mockResolvedValue({ tenantSchemaName: 'usr_4_abcdef' });
+      (prisma.account.findUnique as any).mockResolvedValue({ tenantSchemaName: 'usr_4_abcdef', email: 'a@b.co' });
       const order: string[] = [];
       (prisma.$executeRawUnsafe as any).mockImplementation(async (sql: string) => { order.push(sql); return 0; });
-      (prisma.account.delete as any).mockImplementation(async () => { order.push('delete account'); });
+      (prisma.account.delete as any).mockImplementation(() => { order.push('delete account'); return 'account-op'; });
 
       await deleteAccountById(4);
 
       expect(order).toEqual(['DROP SCHEMA IF EXISTS usr_4_abcdef CASCADE', 'delete account']);
       expect(prisma.account.delete).toHaveBeenCalledWith({ where: { id: 4 } });
+    });
+
+    it('deletes the beta-list row with the account row, in one transaction', async () => {
+      (prisma.account.findUnique as any).mockResolvedValue({ tenantSchemaName: 'usr_4_abcdef', email: 'A@B.co' });
+      (prisma.$executeRawUnsafe as any).mockResolvedValue(0);
+      (prisma.account.delete as any).mockReturnValue('account-op');
+
+      await deleteAccountById(4);
+
+      const ops = (prisma.$transaction as any).mock.calls[0][0];
+      expect(ops[0]).toBe('account-op');
+      expect(ops[1].sql).toMatch(/DELETE FROM public\.beta_signups WHERE email = \?/);
+      expect(ops[1].values).toEqual(['a@b.co']);
     });
 
     it('keeps the account when dropping the schema fails', async () => {

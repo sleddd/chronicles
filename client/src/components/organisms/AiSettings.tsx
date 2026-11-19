@@ -21,6 +21,8 @@ import {
   AI_MODEL_PRESETS,
   AI_PROVIDER_LABELS,
   DEFAULT_AI_CONFIG,
+  chooseAiHere,
+  isAiOnButNotHere,
   encryptAiConfig,
   estimateMealCalories,
   getAiConfigValue,
@@ -60,6 +62,10 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
   const [forgetArmed, setForgetArmed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchedRef = useRef(false);
+  // AI is on in the saved config, but this browser never turned it on: nothing
+  // is sent to the provider from here until it does (deviceConsent.ts)
+  const [notHere, setNotHere] = useState(isAiOnButNotHere);
+  useEffect(() => subscribeAi(() => setNotHere(isAiOnButNotHere())), []);
 
   // Prefill once the config finishes decrypting (init/unlock are async)
   useEffect(() => {
@@ -74,13 +80,16 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
-  const persist = async (next: AiConfig) => {
+  const persist = async (next: AiConfig, byHand = true) => {
     setSaveState('saving');
     setSaveError('');
     try {
       const encrypted = await encryptAiConfig(next, encryptBytes);
       await trackGuardedSave('aiConfig', () => settingsApi.upsert('aiConfig', encrypted));
       setAiConfig(next, encrypted);
+      // Saving here is the choice made in this browser: on with the switch on, off with it off
+      // (Not for the form's own fills — a model picked for a blank one)
+      if (byHand) chooseAiHere(next.enabled);
       setSaveState('saved');
     } catch (err) {
       setSaveState('error');
@@ -89,15 +98,15 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
   };
 
   /** Update fields; the toggle saves at once, typing saves on a short debounce. */
-  const update = (patch: Partial<AiConfig>, immediate = false) => {
+  const update = (patch: Partial<AiConfig>, immediate = false, byHand = true) => {
     touchedRef.current = true;
     const next = { ...cfg, ...patch };
     setCfg(next);
     setTestState('idle');
     setTestMessage('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (immediate) void persist(next);
-    else debounceRef.current = setTimeout(() => { void persist(next); }, 500);
+    if (immediate) void persist(next, byHand);
+    else debounceRef.current = setTimeout(() => { void persist(next, byHand); }, 500);
   };
 
   const handleProviderChange = (provider: AiProvider) => {
@@ -115,7 +124,8 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
     : '';
   const bedrockCredsComplete = cfg.provider === 'bedrock' && hasCredentials({ ...cfg, bedrockAuth: 'iam', model: cfg.model || 'x' });
   useEffect(() => {
-    if (!cfg.enabled || !bedrockCredsComplete) { setBedrockModels(null); setModelsState('idle'); return; }
+    // Not from a browser where AI isn't turned on: the keys would go to AWS
+    if (!cfg.enabled || !bedrockCredsComplete || notHere) { setBedrockModels(null); setModelsState('idle'); return; }
     let cancelled = false;
     const timer = setTimeout(async () => {
       setModelsState('loading');
@@ -126,7 +136,7 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
         setBedrockModels(models);
         setModelsState('loaded');
         const autoPicked = !cfg.model || suggestedBedrockModels(cfg.bedrockRegion).some(m => m.id === cfg.model);
-        if (models.length && autoPicked && !models.some(m => m.id === cfg.model)) update({ model: models[0].id }, true);
+        if (models.length && autoPicked && !models.some(m => m.id === cfg.model)) update({ model: models[0].id }, true, false);
       } catch (err) {
         if (cancelled) return;
         setBedrockModels(null);
@@ -136,7 +146,7 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
     }, 600);
     return () => { cancelled = true; clearTimeout(timer); };
     // cfg is read through bedrockCredKey — the list only depends on region + credentials
-  }, [cfg.enabled, bedrockCredsComplete, bedrockCredKey, modelsReloadTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cfg.enabled, bedrockCredsComplete, bedrockCredKey, modelsReloadTick, notHere]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleModelSelect = (value: string) => {
     if (value === CUSTOM) { setCustomModel(true); return; }
@@ -182,6 +192,7 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
     setBedrockModels(null);
     setTestState('idle'); setTestMessage(''); setSaveState('idle');
     setAiConfig(null, null);
+    chooseAiHere(false);
   };
 
   const ready = hasCredentials(cfg);
@@ -201,9 +212,9 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
   // Never leave the model blank: the menu would show its first entry while
   // nothing is saved, which silently blocks every AI request
   useEffect(() => {
-    if (!cfg.enabled || cfg.model || customModel || modelsState === 'loading' || modelOptions.length === 0) return;
-    update({ model: modelOptions[0].id }, true);
-  }, [cfg.enabled, cfg.model, customModel, modelsState, modelOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!cfg.enabled || notHere || cfg.model || customModel || modelsState === 'loading' || modelOptions.length === 0) return;
+    update({ model: modelOptions[0].id }, true, false);
+  }, [cfg.enabled, notHere, cfg.model, customModel, modelsState, modelOptions]); // eslint-disable-line react-hooks/exhaustive-deps
   const providerName = AI_PROVIDER_LABELS[cfg.provider];
 
   const chatStatus = useAiChatStore(st => st.status);
@@ -226,6 +237,13 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
           title="Use AI in Chronicles"
           action={<Toggle checked={cfg.enabled} onChange={v => update({ enabled: v }, true)} aria-label="Use AI in Chronicles" />}
         />
+        {cfg.enabled && notHere && (
+          <SettingsActionRow
+            title="This browser"
+            description="On, but not used from this browser. Estimates and the chat stay off here until you turn it on here."
+            action={<RowPill type="button" $tone="accent" onClick={() => chooseAiHere(true)}>Turn on here</RowPill>}
+          />
+        )}
         {/* The chat is separate from the estimates: off, there's no chat bubble */}
         {cfg.enabled && (
           <SettingsActionRow

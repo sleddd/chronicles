@@ -1,6 +1,7 @@
 import type { DecryptedPost, EncryptedPostData } from '@shared/crypto/types.js';
 import { entries as entriesApi, settings as settingsApi } from './api.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { legacyMigrationAllowed } from './sealedFormats.js';
 import { NAME_FIELD_BY_TOPIC } from '../utils/entryText.js';
 import { contentWithName } from '../utils/nameFields.js';
 import { isTimeTrackingTopic } from '../utils/timeTracking.js';
@@ -58,13 +59,19 @@ export async function moveNamesIntoText(
   topicFields: TopicCustomFields,
   encryptPost: EncryptPost,
 ): Promise<number> {
-  const todo = decrypted
+  // An entry still in a format from before id binding is left alone unless
+  // this browser may move older records (sealedFormats.ts): re-saving it would
+  // seal whatever the server paired under that id. Left out, the marker waits
+  const mayMoveOlder = legacyMigrationAllowed();
+  const wanted = decrypted
     .map(e => ({ entry: e, name: nameToMove(e, topics, topicFields) }))
     .filter((x): x is { entry: DecryptedPost; name: string } => x.name !== null);
+  const todo = mayMoveOlder ? wanted : wanted.filter(x => !x.entry.needsReseal);
+  const held = wanted.length - todo.length;
   let batch: Parameters<typeof entriesApi.reseal>[0] = [];
   let changed: { id: number; content: string }[] = [];
   let bytes = 0;
-  let skipped = 0;
+  let skipped = held;
   let moved = 0;
   const flush = async () => {
     if (!batch.length) return;

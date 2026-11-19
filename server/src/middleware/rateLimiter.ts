@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response, NextFunction } from 'express';
 import { sharedRateLimitStore } from '../services/sharedState.js';
@@ -92,17 +93,39 @@ export const failedAuthLimiter = rateLimit({
 });
 
 /**
- * ICS feed rate limiter — public calendar feed fetches
- * 60 requests per 15-minute window per IP (calendar apps poll periodically)
+ * ICS feed rate limiter — public calendar feed fetches. Apple fetches every
+ * subscriber's feed from a few shared servers, so a per-IP limit meant one busy
+ * fetcher locked everyone's feed out. The real limit is per feed: 60 fetches /
+ * 15 min per token (a calendar polls every few minutes), keyed by the token's
+ * SHA-256 so the shared store never holds the token itself. A generous per-IP
+ * backstop (3000 / 15 min) still stops one address hammering many tokens — a
+ * token is 256 random bits, so guessing one isn't the concern.
  */
-export const icsFeedLimiter = rateLimit({
+const icsFeedIpLimiter = rateLimit({
+  store: sharedRateLimitStore('ics-ip'),
+  windowMs: 15 * 60 * 1000,
+  max: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+const icsFeedTokenLimiter = rateLimit({
   store: sharedRateLimitStore('ics'),
   windowMs: 15 * 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => crypto.createHash('sha256')
+    .update(String(req.params.token ?? '').replace(/\.ics$/i, '').toLowerCase()).digest('hex'),
   message: { error: 'Too many requests, please try again later' },
 });
+/** Per-IP backstop, then per feed token. Mount on a route with a `:token` param. */
+export function icsFeedLimiter(req: Request, res: Response, next: NextFunction): void {
+  icsFeedIpLimiter(req, res, (err?: unknown) => {
+    if (err) { next(err); return; }
+    void icsFeedTokenLimiter(req, res, next);
+  });
+}
 
 /**
  * Public shelf page lookups — a shelf is meant to be opened by many people

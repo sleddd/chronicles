@@ -1,5 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { holdKey, keyHolderExists, requestKey } from '@/services/keyHandoff';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { holdKey, keyHolderExists, keylessPage, requestKey } from '@/services/keyHandoff';
+
+// An app page: the landing page and the public pages never ask for the key
+beforeEach(() => { window.history.replaceState({}, '', '/dashboard'); });
 
 const makeKey = (extractable = false) =>
   crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, extractable, ['encrypt', 'decrypt']) as Promise<CryptoKey>;
@@ -17,6 +20,31 @@ describe('a new tab takes the key from one that holds it', () => {
     const iv = new Uint8Array(12);
     const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode('same key'));
     expect(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, got!, sealed))).toBe('same key');
+  });
+
+  it('sends the key on the request’s own channel, never on the one every tab listens to', async () => {
+    const key = await makeKey();
+    release = holdKey(() => ({ key, email: 'olivia@example.com' }));
+    const eavesdropper = new BroadcastChannel('chronicles-key');
+    const heard: unknown[] = [];
+    eavesdropper.onmessage = e => { heard.push(e.data); };
+    expect(await requestKey('olivia@example.com', 1000)).not.toBeNull();
+    eavesdropper.close();
+    expect(heard.some(m => (m as { type?: string }).type === 'key')).toBe(false);
+  });
+
+  it('pages that never need the key neither ask for it nor hand it out', async () => {
+    expect(keylessPage('/')).toBe(true);
+    expect(keylessPage('/share/abc')).toBe(true);
+    expect(keylessPage('/public-shelf/tok')).toBe(true);
+    expect(keylessPage('/terms')).toBe(true);
+    expect(keylessPage('/dashboard')).toBe(false);
+    expect(keylessPage('/login')).toBe(false);
+    expect(keylessPage('/sharegarden')).toBe(false);
+    const key = await makeKey();
+    release = holdKey(() => ({ key, email: 'olivia@example.com' }));
+    window.history.replaceState({}, '', '/public-shelf/tok');
+    expect(await requestKey('olivia@example.com', 300)).toBeNull();
   });
 
   it('never hands a key to a tab the server says is someone else', async () => {

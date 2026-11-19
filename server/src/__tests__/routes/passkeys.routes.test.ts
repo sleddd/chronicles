@@ -20,7 +20,7 @@ vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAcc
 vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn() }));
 vi.mock('../../db/betaQueries.js', () => ({ isApproved: async () => false, hasPendingInvite: async () => false, spendInvite: async () => undefined }));
 vi.mock('../../db/trustedDeviceQueries.js', () => ({
-  TRUST_DAYS: 30, trustDevice: async () => 't'.repeat(43), useTrustedDevice: async () => false, forgetTrustToken: async () => undefined,
+  TRUST_DAYS: 30, trustDevice: vi.fn(async () => 't'.repeat(43)), useTrustedDevice: vi.fn(async () => false), forgetTrustToken: async () => undefined,
   forgetAllTrustedDevices: async () => undefined, listTrustedDevices: async () => [], forgetTrustedDevice: async () => true,
 }));
 
@@ -59,6 +59,7 @@ vi.mock('../../db/passkeyQueries.js', () => {
       return n - rows.length;
     },
     passkeyExists: async (id: number, accountId: number) => rows.some(x => x.id === id && x.accountId === accountId),
+    findAccountPasskey: async (id: number, accountId: number) => rows.find(x => x.id === id && x.accountId === accountId) ?? null,
   };
 });
 
@@ -86,13 +87,22 @@ import passkeyRouter from '../../routes/passkeys.js';
 import authRouter, { resetAuthStateForTests } from '../../routes/auth.js';
 import * as passkeyDb from '../../db/passkeyQueries.js';
 import * as authMw from '../../middleware/auth.js';
+import * as trustDb from '../../db/trustedDeviceQueries.js';
 import { softPasskey } from './softAuthenticator.js';
+import { generateSync } from 'otplib';
 
 const RP = 'chronicles.test';
 const ORIGIN = 'https://chronicles.test';
 const GOOD = 'a'.repeat(64);
 const WRONG = 'b'.repeat(64);
 const WRAP = { wrappedMK: 'A'.repeat(64), wrapIv: 'B'.repeat(16) };
+const TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+const totp = () => generateSync({ secret: TOTP_SECRET });
+/** Turn 2FA on for the test account (after its passkeys were added with the password alone). */
+function withTwoFA() {
+  ACCOUNT.totpEnabled = true;
+  (ACCOUNT as any).totpSecret = TOTP_SECRET;
+}
 
 function makeApp() {
   const app = express();
@@ -119,6 +129,9 @@ describe('passkeys', () => {
     resetAuthStateForTests();
     selector = 'aabbccddee11';
     ACCOUNT.totpEnabled = false;
+    (ACCOUNT as any).totpSecret = null;
+    vi.mocked(trustDb.useTrustedDevice).mockResolvedValue(false);
+    vi.mocked(trustDb.trustDevice).mockClear();
     vi.mocked(authMw.createSession).mockClear();
     vi.mocked(authMw.revokeSession).mockClear();
     app = makeApp();
@@ -304,6 +317,86 @@ describe('passkeys', () => {
       expect(res.headers['set-cookie']).toBeUndefined();
     });
 
+    describe('on an account with 2FA', () => {
+      const signIn = async (key: ReturnType<typeof softPasskey>) => {
+        const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;
+        return request(app).post('/api/auth/passkey/verify').send({ response: key.assertion(c) });
+      };
+
+      it('the touch stands in for the password only: no session or wrap until the code', async () => {
+        const { key } = await addPasskey(app);
+        withTwoFA();
+        const res = await signIn(key);
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ requires2FA: true, pendingToken: expect.stringMatching(/^[a-f0-9]{64}$/) });
+        expect(res.headers['set-cookie']).toBeUndefined();
+        expect(authMw.createSession).not.toHaveBeenCalled();
+
+        // A wrong code: still no session
+        expect((await request(app).post('/api/auth/login/2fa').send({ pendingToken: res.body.pendingToken, code: '000000' })).status).toBe(401);
+
+        const done = await request(app).post('/api/auth/login/2fa').send({ pendingToken: res.body.pendingToken, code: totp() });
+        expect(done.status).toBe(200);
+        // That passkey's wrap — never the password wrap
+        expect(done.body.passkey).toEqual({ credentialId: key.credentialId, ...WRAP });
+        expect(done.body.encryption).toBeUndefined();
+        expect(String(done.headers['set-cookie'])).toContain('chronicle_session=');
+        expect(vi.mocked(authMw.createSession).mock.calls[0][2]).toMatchObject({ deviceInfo: 'passkey' });
+        // The pending token is spent
+        expect((await request(app).post('/api/auth/login/2fa').send({ pendingToken: res.body.pendingToken, code: totp() })).status).toBe(401);
+      });
+
+      it('"Don’t ask again" after an authenticator code trusts the browser, whichever way the sign-in began', async () => {
+        const { key } = await addPasskey(app);
+        withTwoFA();
+        const res = await signIn(key);
+        const done = await request(app).post('/api/auth/login/2fa').send({ pendingToken: res.body.pendingToken, code: totp(), trustBrowser: true });
+        expect(done.status).toBe(200);
+        expect(trustDb.trustDevice).toHaveBeenCalled();
+        expect(String(done.headers['set-cookie'])).toContain('chronicle_trust=');
+      });
+
+      it('a trusted browser skips the code on the passkey path too', async () => {
+        const { key } = await addPasskey(app);
+        withTwoFA();
+        vi.mocked(trustDb.useTrustedDevice).mockResolvedValue(true);
+        const res = await signIn(key);
+        expect(res.status).toBe(200);
+        expect(res.body.passkey).toEqual({ credentialId: key.credentialId, ...WRAP });
+        expect(res.body.requires2FA).toBeUndefined();
+        expect(vi.mocked(authMw.createSession).mock.calls[0][2]).toMatchObject({ deviceInfo: 'passkey' });
+      });
+
+      it('a trust ended while the sign-in was in flight leaves no session behind', async () => {
+        const { key } = await addPasskey(app);
+        withTwoFA();
+        vi.mocked(trustDb.useTrustedDevice).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+        const res = await signIn(key);
+        expect(res.status).toBe(401);
+        expect(authMw.revokeSession).toHaveBeenCalledWith('aabbccddee11', 'credentials_changed');
+        expect(res.headers['set-cookie']).toBeUndefined();
+      });
+
+      it('a passkey removed while the code was awaited gives no session', async () => {
+        const { key } = await addPasskey(app);
+        withTwoFA();
+        const res = await signIn(key);
+        await (passkeyDb as any).removeAllPasskeys(1);
+        const done = await request(app).post('/api/auth/login/2fa').send({ pendingToken: res.body.pendingToken, code: totp() });
+        expect(done.status).toBe(401);
+        expect(done.body.passkey).toBeUndefined();
+        expect(authMw.revokeSession).toHaveBeenCalledWith('aabbccddee11', 'credentials_changed');
+      });
+
+      it('"Sign out everywhere" cancels a passkey sign-in waiting on its code', async () => {
+        const { key } = await addPasskey(app);
+        withTwoFA();
+        const res = await signIn(key);
+        await (await import('../../routes/authState.js')).cancelSignIns(1);
+        expect((await request(app).post('/api/auth/login/2fa').send({ pendingToken: res.body.pendingToken, code: totp() })).status).toBe(401);
+      });
+    });
+
     it('never keeps what the browser says about extensions (the PRF secret must not reach the server)', async () => {
       const { key } = await addPasskey(app);
       const c = (await request(app).post('/api/auth/passkey/options').send({})).body.options.challenge;
@@ -363,21 +456,33 @@ describe('passkeys', () => {
       expect(res.status).toBe(401);
     });
 
-    it('stands in for the password and the 2FA code at change password', async () => {
+    it('with 2FA on, stands in for the password only: the code comes with the touch', async () => {
       const { key } = await addPasskey(app);
-      ACCOUNT.totpEnabled = true;
-      (ACCOUNT as any).totpSecret = 'JBSWY3DPEHPK3PXP';
+      withTwoFA();
       const { prisma } = await import('../../db/prisma.js');
       (prisma as any).$transaction = vi.fn().mockResolvedValue([]);
       (prisma as any).account.update = vi.fn();
       (prisma as any).session = { updateMany: vi.fn() };
-      const token = (await confirm(key, 'change-password')).body.confirmToken;
+      // No code: no token
+      const bare = await confirm(key, 'change-password');
+      expect(bare.status).toBe(401);
+      expect(bare.body.requires2FA).toBe(true);
+      expect(bare.body.confirmToken).toBeUndefined();
+      // A wrong code: no token either
+      const { body: opts } = await request(app).post('/api/auth/confirm/options').send({ action: 'change-password' });
+      const wrong = await request(app).post('/api/auth/confirm/verify').send({ action: 'change-password', response: key.assertion(opts.options.challenge), code: '000000' });
+      expect(wrong.status).toBe(401);
+      expect(wrong.body.confirmToken).toBeUndefined();
+
+      const { body: opts2 } = await request(app).post('/api/auth/confirm/options').send({ action: 'change-password' });
+      const ok = await request(app).post('/api/auth/confirm/verify').send({ action: 'change-password', response: key.assertion(opts2.options.challenge), code: totp() });
+      expect(ok.status).toBe(200);
+      const token = ok.body.confirmToken;
       const res = await request(app).post('/api/auth/change-password').send({
         confirmToken: token, newAuthSecret: 'c'.repeat(64), newEncryptedMasterKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         newKekSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', newKekWrapIv: 'AAAAAAAAAAAAAAAA',
       });
       expect(res.status).toBe(200);
-      (ACCOUNT as any).totpSecret = null;
     });
 
     it('wrong touches count like wrong passwords: ten lock confirmations for this session', async () => {

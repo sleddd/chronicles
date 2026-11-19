@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { LEGACY_FORMATS_UNTIL } from '../../services/sealedFormats.js';
 
 const upsert = vi.fn().mockResolvedValue({});
 const getStatus = vi.fn().mockResolvedValue({ icsEnabled: false });
@@ -15,6 +16,7 @@ import {
 import { openForExport } from '../../services/settingCipher.js';
 import { setEgressAccount, recordEgressChoice } from '../../services/deviceConsent.js';
 import { featureFlagsFrom } from '../../utils/featureFlags.js';
+import { setLegacyMigrationAllowed } from '../../services/sealedFormats.js';
 import { encrypt, generateMasterKey } from '@shared/crypto/primitives.js';
 import { encryptBytes as rawEncryptBytes, decryptBytes as rawDecryptBytes } from '@shared/crypto/primitives.js';
 import { arrayBufferToBase64 } from '@shared/crypto/encoding.js';
@@ -35,6 +37,8 @@ beforeEach(async () => {
   getStatus.mockClear();
   localStorage.clear();
   setEgressAccount(null);
+  // A browser that knew the account before this sign-in (browserData.ts)
+  setLegacyMigrationAllowed(true);
 });
 
 describe('settings sealing', () => {
@@ -65,6 +69,11 @@ describe('settings sealing', () => {
 });
 
 describe('the one-time move to v2', () => {
+  // The legacy window is closed in the app; these keep the migration path tested
+  // in case it's ever reopened (LEGACY_FORMATS_UNTIL in sealedFormats.ts)
+  let clock: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => { clock = vi.spyOn(Date, 'now').mockReturnValue(LEGACY_FORMATS_UNTIL - 86_400_000); });
+  afterEach(() => { clock.mockRestore(); });
   it('before the marker: opens unbound values, re-seals them bound, starts the feed switch off, then writes the marker', async () => {
     getStatus.mockResolvedValue({ icsEnabled: true });
     const map: Record<string, unknown> = {
@@ -88,6 +97,15 @@ describe('the one-time move to v2', () => {
     expect(getStatus).not.toHaveBeenCalled();
     // The marker is written last
     expect(upsert.mock.calls.at(-1)?.[0]).toBe(SEAL_MARKER_KEY);
+  });
+
+  it('a browser meeting the account for the first time uses unbound values read-only: nothing re-sealed, no marker', async () => {
+    setLegacyMigrationAllowed(false);
+    const map: Record<string, unknown> = { nutritionGoals: await unbound({ iron: 18 }) };
+    const opened = await openSettingsMap(map, decryptBytes);
+    expect(map.nutritionGoals).toEqual({ iron: 18 });
+    expect(await migrateSettings(map, opened, encryptBytes)).toEqual({});
+    expect(upsert).not.toHaveBeenCalled();
   });
 
   it('a server that leaves out the marker can\'t make the client upload the calendar (downgrade)', async () => {

@@ -130,15 +130,18 @@ describe('PasskeySettings', () => {
     expect(forget).toHaveBeenCalledTimes(1);
   });
 
-  it('with a passkey already, another can be added by a touch: its token, no password', async () => {
+  it('with a passkey already, another can be added by a touch: its token, no password (with 2FA on, the code goes with the touch)', async () => {
     api.passkeys.mockResolvedValue(ONE);
     api.passkeyRegister.mockResolvedValue({ passkeys: [...ONE, { ...ONE[0], id: 8, name: 'Phone' }] });
     svc.confirmWithPasskey.mockResolvedValue({ confirmToken: 't'.repeat(64), wrap: { credentialId: 'old', wrappedMK: 'w', wrapIv: 'i' }, prf: new Uint8Array(32).fill(2) });
     renderWithTheme(<PasskeySettings email="o@example.com" totpEnabled />);
     await openAdd();
+    // A passkey stands in for the password only: it waits for the code
+    expect(screen.getByRole('button', { name: 'Use a passkey' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('2FA code'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Use a passkey' }));
     await waitFor(() => expect(api.passkeyRegister).toHaveBeenCalled());
-    expect(svc.confirmWithPasskey).toHaveBeenCalledWith('passkey-add');
+    expect(svc.confirmWithPasskey).toHaveBeenCalledWith('passkey-add', '123456');
     const sent = api.passkeyRegister.mock.calls[0][0];
     expect(sent.confirmToken).toBe('t'.repeat(64));
     expect(sent.currentAuthSecret).toBeUndefined();

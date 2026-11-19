@@ -304,7 +304,7 @@ describe('EncryptionProvider – no lock screen', () => {
     mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
     const { result } = renderHook(() => useEncryption(), { wrapper });
     await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
-    expect(mockClaimBrowserFor).toHaveBeenCalledWith('test-account-tag');
+    expect(mockClaimBrowserFor).toHaveBeenCalledWith('test-account-tag', true);
   });
 });
 

@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
-import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, reserveTaxonomyIds, taxonomyCount, withTenantLock } from '../db/tenantQueries.js';
+import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, ensureTaxonomyReservations, reserveTaxonomyIds, taxonomyCount, withTenantLock } from '../db/tenantQueries.js';
 import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite, reservePostIdsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 
 /* Topic names and icons are encrypted in the browser, bound to the topic's id;
    the server stores the payload and never sees them. Default topics are
    seeded by the browser, encrypted. A new topic is created under an id
-   reserved first (/ids), since its payload is bound to it. */
+   reserved first (/ids), since its payload is bound to it; each reservation is
+   recorded and used up by the create, so a topic id is created at most once. */
 
 const OUTDATED = { error: 'Update Chronicles to continue — topic names are now encrypted. Reload the page.' };
 
@@ -28,7 +29,7 @@ router.get('/', readGate('topics', 3), async (req, res) => {
     const taxonomies = await getAllTaxonomies(req.auth!.tenantSchemaName);
     res.json(taxonomies);
   } catch (err) {
-    console.error('Get topics error:', err);
+    console.error('Get topics error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch topics' });
   }
 });
@@ -52,7 +53,7 @@ router.post('/reorder', async (req, res) => {
     await reorderTaxonomies(req.auth!.tenantSchemaName, topicIds);
     res.json({ success: true });
   } catch (err) {
-    console.error('Reorder topics error:', err);
+    console.error('Reorder topics error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to reorder topics' });
   }
 });
@@ -66,6 +67,8 @@ router.post('/ids', async (req, res) => {
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
+    // Each id handed out is recorded, and used up when its topic is created
+    await ensureTaxonomyReservations(req.auth!.tenantSchemaName);
     // No ids for an account that couldn't create a topic with them anyway
     if (await taxonomyCount(req.auth!.tenantSchemaName) >= TOPIC_LIMIT) {
       res.status(413).json(TOPICS_FULL);
@@ -73,7 +76,7 @@ router.post('/ids', async (req, res) => {
     }
     res.json({ ids: await reserveTaxonomyIds(req.auth!.tenantSchemaName, parsed.data.count) });
   } catch (err) {
-    console.error('Reserve topic ids error:', err);
+    console.error('Reserve topic ids error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to reserve topic ids' });
   }
 });
@@ -88,6 +91,7 @@ router.post('/', async (req, res) => {
       return;
     }
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
+    await ensureTaxonomyReservations(req.auth!.tenantSchemaName);
     const { format: _v2, ...data } = parsed.data;
     const schema = req.auth!.tenantSchemaName;
     // Count and insert under the account's lock, so parallel creates can't pass the cap
@@ -105,7 +109,7 @@ router.post('/', async (req, res) => {
     }
     res.status(201).json(taxonomy);
   } catch (err) {
-    console.error('Create topic error:', err);
+    console.error('Create topic error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to create topic' });
   }
 });
@@ -122,7 +126,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(taxonomy);
   } catch (err) {
-    console.error('Get topic error:', err);
+    console.error('Get topic error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch topic' });
   }
 });
@@ -147,7 +151,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json(taxonomy);
   } catch (err) {
-    console.error('Update topic error:', err);
+    console.error('Update topic error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to update topic' });
   }
 });
@@ -160,7 +164,7 @@ router.delete('/:id', async (req, res) => {
     await deleteTaxonomy(req.auth!.tenantSchemaName, id);
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete topic error:', err);
+    console.error('Delete topic error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to delete topic' });
   }
 });

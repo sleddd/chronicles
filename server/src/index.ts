@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { securityHeaders, corsOriginFor, trustProxySetting, SERVICE_WORKER_PATH } from './middleware/security.js';
-import { authMiddleware, cleanupSessions } from './middleware/auth.js';
+import { authMiddleware, quietAuthMiddleware, cleanupSessions } from './middleware/auth.js';
 import { apiLimiter, writeGate, failedAuthLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes, { checkStoredCredentials, sealStoredTotpSecrets } from './routes/auth.js';
@@ -118,7 +118,15 @@ app.use('/api/entries', authMiddleware, apiLimiter, writeGate, express.json({ li
 // The public shelf's PUT carries up to 1,000 items with small JPEG covers:
 // its own 8 MB parser, mounted inside the route after the session check
 app.use('/api/public-shelf', publicShelfRoutes); // public GET by token; the rest use authMiddleware inline
-app.use(express.json({ limit: '1mb' }));
+// The public landing-page posts read their (small) bodies themselves, only
+// after the X-Requested-With check and their per-IP limiter: mounted before
+// the parser below, so a stranger can't make the server buffer a megabyte
+app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist (16 KB bodies)
+app.use('/api/bug-report', bugReportRoutes); // public: sent on to support by email (Resend), never stored (64 KB bodies)
+// Nothing else under them: answered before any body is read
+app.use(['/api/beta', '/api/bug-report'], (_req, res) => { res.status(404).json({ error: 'Not found' }); });
+// Bodies are only ever read on /api — never for the app's pages or files
+app.use('/api', express.json({ limit: '1mb' }));
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -136,9 +144,8 @@ app.use('/api/finance', authMiddleware, apiLimiter, writeGate, financeRoutes);
 app.use('/api/ai-chat', authMiddleware, apiLimiter, aiChatRoutes);
 app.use('/api/consent', authMiddleware, apiLimiter, consentRoutes);
 app.use('/api/notice', authMiddleware, apiLimiter, noticeRoutes);
-app.use('/api/analytics', authMiddleware, apiLimiter, analyticsRoutes); // never tied to the account
-app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist
-app.use('/api/bug-report', bugReportRoutes); // public: sent on to support by email (Resend), never stored
+// Never tied to the account: the session check skips its lastActiveAt write
+app.use('/api/analytics', quietAuthMiddleware, apiLimiter, analyticsRoutes);
 app.use('/api/shares', sharesRoutes); // public GET by token; POST/DELETE use authMiddleware inline
 app.use('/api/calendar', calendarRoutes); // public OAuth callback + ICS feed; rest use authMiddleware inline
 

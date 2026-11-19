@@ -11,7 +11,7 @@ import { PillPick } from './TaskCardFields.js';
 import { ProgressSlider } from '../ProgressSlider.js';
 import {
   MEDIA_TYPES, SHELVES, mediaTypeInfo, shelfLabel, clampRating, clampProgress, progressLabel,
-  mediaLinkUrl, mediaLinkHost, type MediaFieldValues, type MediaType, type MediaShelf, type MediaCover,
+  mediaLinkUrl, mediaLinkHost, mediaTags, type MediaFieldValues, type MediaType, type MediaShelf, type MediaCover,
 } from '../../../utils/media.js';
 import { searchCovers, fetchCover, type CoverCandidate } from '../../../services/coverLookup.js';
 import { applyLookupDetails, blankDetailKeys, type DetailKey, type MediaDetails } from '../../../services/mediaDetails.js';
@@ -427,17 +427,17 @@ export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTa
 
       <Section style={{ marginTop: 30 }}>
         <SectionHead><SectionLabel>Tags</SectionLabel></SectionHead>
-        <TagChips value={values.tags ?? []} options={allTags ?? []} onChange={tags => set({ tags })}
+        <TagChips value={mediaTags(values.tags)} options={allTags ?? []} onChange={tags => set({ tags })}
           onRename={onRenameTag ? (from, to) => {
             // The others first (all or nothing), then this item in the form
             void onRenameTag(from, to).then(ok => {
-              const cur = latest.current.tags ?? [];
+              const cur = mediaTags(latest.current.tags);
               if (ok && cur.some(t => t.toLowerCase() === from.toLowerCase())) set({ tags: [...new Set(cur.map(t => (t.toLowerCase() === from.toLowerCase() ? to : t)))] });
             });
           } : undefined}
           onRemove={onRemoveTag ? tag => {
             void onRemoveTag(tag).then(ok => {
-              const cur = latest.current.tags ?? [];
+              const cur = mediaTags(latest.current.tags);
               if (ok && cur.some(t => t.toLowerCase() === tag.toLowerCase())) set({ tags: cur.filter(t => t.toLowerCase() !== tag.toLowerCase()) });
             });
           } : undefined} />

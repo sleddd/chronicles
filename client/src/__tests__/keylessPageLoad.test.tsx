@@ -8,7 +8,7 @@ const auth = vi.hoisted(() => ({
   endSession: vi.fn(async () => undefined),
   dropUser: vi.fn(),
 }));
-const handoff = vi.hoisted(() => ({ keyHolderExists: vi.fn(), requestKey: vi.fn(), holdKey: vi.fn(() => () => undefined) }));
+const handoff = vi.hoisted(() => ({ keyHolderExists: vi.fn(), requestKey: vi.fn(), holdKey: vi.fn(() => () => undefined), keylessPage: vi.fn(() => false) }));
 
 vi.mock('../contexts/AuthContext.js', () => ({ useOptionalAuth: () => auth }));
 vi.mock('../services/keyHandoff.js', () => handoff);

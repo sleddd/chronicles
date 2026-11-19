@@ -3,11 +3,11 @@
  * Always sends X-Requested-With header for CSRF protection on cookie-based auth
  */
 
-import type { CrisisRating, RiskKind, PublicShelfItem, PutPublicShelf } from '@shared/validation/schemas.js';
+import type { AnalyticsEvent, PublicShelfItem, PutPublicShelf } from '@shared/validation/schemas.js';
 import { entryCacheAvailable, readCache, replaceCache, applyToCache, type WireEntry } from './entryCache.js';
 import { recordCipher } from './recordCipher.js';
 import { sealSetting } from './settingCipher.js';
-import { sealMarkerHeld, noteSealMarker } from './sealedFormats.js';
+import { sealMarkerHeld, noteSealMarker, legacyMigrationAllowed } from './sealedFormats.js';
 import { missingDefaultTopics } from '../utils/defaultTopics.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 
@@ -114,6 +114,11 @@ async function sendWhenFree<T>(path: string, options: RequestOptions): Promise<T
  * the write was rolled back, so a repeat is safe; a lost connection is retried
  * only when repeating it can't make a copy (`retryNetwork`: updates, not creates).
  */
+/** Fired on window when the server refuses a new entry's id (409):
+ *  services/entryReseal.ts drops the ids this tab holds. An event, not an
+ *  import, since entryReseal imports this module. */
+export const ENTRY_ID_REFUSED = 'chronicles:entry-id-refused';
+
 async function retryWrite<T>(write: () => Promise<T>, retryNetwork: boolean): Promise<T> {
   try {
     return await write();
@@ -259,10 +264,13 @@ export const auth = {
         }
     >('/auth/login', { method: 'POST', body: data }),
 
+  /** Finishes a password sign-in (the password wrap in `encryption`) or a
+   *  passkey sign-in on a 2FA account (that passkey's wrap in `passkey`) */
   submit2FA: (data: { pendingToken: string; code: string; trustBrowser?: boolean }) =>
     request<{
       user: { email: string; username: string; totpEnabled: boolean };
-      encryption: {
+      passkey?: PasskeyWrap;
+      encryption?: {
         encryptionEnabled: boolean;
         kekSalt: string | null;
         encryptedMasterKey: string | null;
@@ -297,9 +305,13 @@ export const auth = {
 
   // --- Passkeys ------------------------------------------------------------
   passkeyLoginOptions: () => request<{ options: PasskeyRequestOptions }>('/auth/passkey/options', { method: 'POST' }),
+  /** With 2FA on (and this browser not trusted) the answer is a pending token
+   *  for the code, like a password sign-in's; the wrap comes from submit2FA */
   passkeyLogin: (response: unknown) =>
-    request<{ user: { email: string; username: string; totpEnabled: boolean }; passkey: PasskeyWrap }>(
-      '/auth/passkey/verify', { method: 'POST', body: { response } }),
+    request<
+      | { user: { email: string; username: string; totpEnabled: boolean }; passkey: PasskeyWrap; requires2FA?: undefined }
+      | { requires2FA: true; pendingToken: string }
+    >('/auth/passkey/verify', { method: 'POST', body: { response } }),
   passkeys: () => request<PasskeyInfo[]>('/auth/passkeys'),
   passkeyRegisterOptions: () => request<{ options: PasskeyCreationOptions }>('/auth/passkeys/register/options', { method: 'POST' }),
   passkeyRegister: (data: { response: unknown; wrappedMK: string; wrapIv: string; name: string; code?: string } & PasswordOrToken<'currentAuthSecret'>) =>
@@ -313,8 +325,9 @@ export const auth = {
   /** Confirm one sensitive action with a passkey touch: a challenge, then a single-use token */
   confirmOptions: (action: ConfirmAction) =>
     request<{ options: PasskeyRequestOptions }>('/auth/confirm/options', { method: 'POST', body: { action } }),
-  confirmVerify: (action: ConfirmAction, response: unknown) =>
-    request<{ confirmToken: string; passkey: PasskeyWrap }>('/auth/confirm/verify', { method: 'POST', body: { action, response } }),
+  /** `code`: with 2FA on, the authenticator or backup code goes with the touch */
+  confirmVerify: (action: ConfirmAction, response: unknown, code?: string) =>
+    request<{ confirmToken: string; passkey: PasskeyWrap }>('/auth/confirm/verify', { method: 'POST', body: { action, response, ...(code ? { code } : {}) } }),
 
   // --- Trusted browsers (skip the 2FA code at sign-in) -----------------------
   trustedBrowsers: () => request<TrustedBrowserInfo[]>('/auth/trusted-browsers'),
@@ -468,8 +481,17 @@ export const entries = {
   // entries are, say, Medication or Symptom.
   // Entries are encrypted bound to their id (format 3): a new entry is created
   // under the id it was encrypted for (`encryptNewPost` reserves it).
-  create: (data: Record<string, unknown> & { id: number }) =>
-    retryWrite(() => request<Record<string, unknown>>('/entries', { method: 'POST', body: { ...withoutTopicLink(data), format: 3 } }), false),
+  // A 409 is an id the server holds no reservation for: every id this tab
+  // still holds may be as stale (handed out before reservations were
+  // recorded, or expired), so they're dropped and the next save reserves fresh
+  create: async (data: Record<string, unknown> & { id: number }) => {
+    try {
+      return await retryWrite(() => request<Record<string, unknown>>('/entries', { method: 'POST', body: { ...withoutTopicLink(data), format: 3 } }), false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && typeof window !== 'undefined') window.dispatchEvent(new Event(ENTRY_ID_REFUSED));
+      throw err;
+    }
+  },
 
   /**
    * Create many entries (imports) in as few requests as possible: one per 50
@@ -629,7 +651,11 @@ async function loadTopics(seed: boolean): Promise<TopicRecord[]> {
     return true;
   });
   const opened = await Promise.all(wires.map(w => openTopic(w, !migrated)));
-  if (!migrated) {
+  // Re-sealing launders what the server served, so only a browser that knew
+  // the account before this sign-in does it (sealedFormats.ts); elsewhere the
+  // older topics are shown as they are (with none, the marker is written:
+  // that launders nothing)
+  if (!migrated && (legacyMigrationAllowed() || !opened.some(o => o.older))) {
     // Re-seal topics still in the older form, then mark the account done
     const results = await Promise.all(opened.filter(o => o.older).map(async o => {
       try { await request(`/topics/${o.topic.id}`, { method: 'PUT', body: await sealTopic(o.topic.id, o.topic.name, o.topic.icon) }); return true; }
@@ -655,15 +681,32 @@ function sameTopic(w: TopicWire, id: number): TopicWire {
   return w;
 }
 
+/** The server's "update Chronicles" 409 (a plaintext write), never worth a retry */
+function isOutdatedTopicAnswer(err: ApiError): boolean {
+  return /update chronicles/i.test(err.message);
+}
+
 export const topics = {
   getAll: () => loadTopics(true),
 
   create: async (data: { name: string; icon?: string | null; color?: string }): Promise<TopicRecord> => {
-    const id = await reserveTopicId();
-    const sealed = await sealTopic(id, data.name, data.icon);
-    // The answer must be for the id the name was sealed to: another topic's id
-    // here would put the new name on that topic in this session
-    const w = sameTopic(await request<TopicWire>('/topics', { method: 'POST', body: { id, ...sealed, ...(data.color ? { color: data.color } : {}) } }), id);
+    const attempt = async () => {
+      const id = await reserveTopicId();
+      const sealed = await sealTopic(id, data.name, data.icon);
+      // The answer must be for the id the name was sealed to: another topic's id
+      // here would put the new name on that topic in this session
+      return sameTopic(await request<TopicWire>('/topics', { method: 'POST', body: { id, ...sealed, ...(data.color ? { color: data.color } : {}) } }), id);
+    };
+    let w: TopicWire;
+    try {
+      w = await attempt();
+    } catch (err) {
+      // 409: the server has no reservation for that id (its reservation
+      // expired, or it was handed out before reservations were recorded) —
+      // reserve a fresh one and seal again, once
+      if (!(err instanceof ApiError && err.status === 409 && !isOutdatedTopicAnswer(err))) throw err;
+      w = await attempt();
+    }
     return { id: w.id, name: data.name, icon: data.icon ?? null, color: w.color, sort_order: w.sort_order };
   },
 
@@ -768,10 +811,12 @@ export const bugReports = {
   send: (r: BugReportBody) => request<{ ok: true }>('/bug-report', { method: 'POST', body: r }),
 };
 
+/** One address for every analytics event — the event is in the body, never
+    the URL. Send through services/analyticsQueue.ts, which holds each one back
+    a random while, never straight from the moment it happened. */
 export const analytics = {
-  crisisCard: (rating: CrisisRating, kind: RiskKind | null) =>
-    request<{ ok: true }>('/analytics/crisis-card', { method: 'POST', body: { rating, kind } }),
-  minorDetected: () => request<{ ok: true }>('/analytics/minor-detected', { method: 'POST' }),
+  send: (event: AnalyticsEvent) =>
+    request<{ ok: true }>('/analytics/event', { method: 'POST', body: event }),
 };
 
 // =============================================================================
@@ -962,6 +1007,9 @@ export const doses = {
         const o = await openDose(w, true);
         if (o?.older) older.push({ id: w.id, date: w.date, ...(await sealDose(w.id, w.date, o.payload)) });
       }
+      // Only a browser that knew the account before this sign-in re-seals
+      // older records (sealedFormats.ts); with none, the marker launders nothing
+      if (older.length && !legacyMigrationAllowed()) return 0;
       let moved = 0;
       if (older.length) forgetAllDoses();
       for (let i = 0; i < older.length; i += 200) {

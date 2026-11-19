@@ -46,6 +46,9 @@ describe('securityHeaders middleware', () => {
       expect(connect.split(' ')).toContain(host);
     }
     expect(connect).not.toContain('*.amazonaws.com');
+    // Google Calendar's API path only — never all of www.googleapis.com (Cloud Storage uploads)
+    expect(connect.split(' ')).toContain('https://www.googleapis.com/calendar/v3/');
+    expect(connect.split(' ')).not.toContain('https://www.googleapis.com');
     expect(res.headers['Content-Security-Policy']).toContain("frame-ancestors 'none'");
     expect(res.headers['Content-Security-Policy']).toContain("base-uri 'self'");
     expect(res.headers['Content-Security-Policy']).toContain("form-action 'self'");

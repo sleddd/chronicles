@@ -20,13 +20,32 @@ import { setUpdateAvailable } from './services/appUpdate.js';
 
 // After a deploy, a page still running the previous build can ask for a chunk
 // that no longer exists (its hash changed). Load the new build instead —
-// once: a second failure within a minute is left to show its error
-window.addEventListener('vite:preloadError', event => {
+// once: a second failure within a minute is left to show its error. The time
+// of the last reload is kept in sessionStorage, else window.name (which
+// survives a reload in the same tab); when neither can hold it, no reload at
+// all — reloading without a mark could loop forever
+const CHUNK_RELOAD_KEY = 'chronicles.chunk-reload';
+const CHUNK_NAME_MARK = /(?:^|;)chronicles-chunk-reload=(\d+)/;
+function lastChunkReload(): number {
+  try { const v = sessionStorage.getItem(CHUNK_RELOAD_KEY); if (v) return Number(v) || 0; } catch { /* refused */ }
+  try { const m = CHUNK_NAME_MARK.exec(window.name); if (m) return Number(m[1]) || 0; } catch { /* refused */ }
+  return 0;
+}
+function markChunkReload(now: number): boolean {
   try {
-    const last = Number(sessionStorage.getItem('chronicles.chunk-reload') ?? 0);
-    if (Date.now() - last < 60_000) return;
-    sessionStorage.setItem('chronicles.chunk-reload', String(Date.now()));
-  } catch { /* storage refused: still try one reload */ }
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+    if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === String(now)) return true;
+  } catch { /* refused: try window.name */ }
+  try {
+    const rest = window.name.replace(CHUNK_NAME_MARK, '').replace(/^;/, '');
+    window.name = `chronicles-chunk-reload=${now}${rest ? `;${rest}` : ''}`;
+    return CHUNK_NAME_MARK.exec(window.name)?.[1] === String(now);
+  } catch { return false; }
+}
+window.addEventListener('vite:preloadError', event => {
+  const now = Date.now();
+  if (now - lastChunkReload() < 60_000) return;
+  if (!markChunkReload(now)) return; // nowhere to note it: show the error rather than risk a loop
   event.preventDefault();
   window.location.reload();
 });

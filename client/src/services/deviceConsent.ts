@@ -53,14 +53,15 @@ function records(): Record<string, true> {
   }
 }
 
-const recordKey = (key: EgressKey | typeof PUBLIC_SHELF_RECORD) => `${account}|${key}`;
+type RecordName = EgressKey | typeof PUBLIC_SHELF_RECORD | typeof AI_RECORD | typeof AI_GRANDFATHER_RECORD;
+const recordKey = (key: RecordName) => `${account}|${key}`;
 
 // A switch turned on a moment ago: its save may not have reached the server
 // yet, so a settings read answered just before it must not drop the record
 const JUST_ON_MS = 60_000;
 const turnedOnAt = new Map<string, number>();
 
-function setRecord(key: EgressKey | typeof PUBLIC_SHELF_RECORD, on: boolean): void {
+function setRecord(key: RecordName, on: boolean): void {
   if (!account) return;
   const all = records();
   const k = recordKey(key);
@@ -69,7 +70,7 @@ function setRecord(key: EgressKey | typeof PUBLIC_SHELF_RECORD, on: boolean): vo
   try { localStorage.setItem(EGRESS_STORE, JSON.stringify(all)); } catch { /* private mode */ }
 }
 
-function dropIfStale(key: EgressKey | typeof PUBLIC_SHELF_RECORD): void {
+function dropIfStale(key: RecordName): void {
   if (!account) return;
   const k = recordKey(key);
   if (records()[k] !== true) return;
@@ -101,6 +102,54 @@ export function recordEgressChoice(key: EgressKey, on: boolean): void {
  * no sealed setting — the record alone decides, and it can't be replayed.
  */
 const PUBLIC_SHELF_RECORD = 'publicShelf';
+
+/*
+ * In-App AI sends what is logged (meals, exercise, symptoms, chat messages)
+ * to the provider named in the sealed `aiConfig`. A sealed value can be
+ * replayed: on a browser that has never seen a revision of it, the rollback
+ * guard (settingCipher.ts) has nothing to compare with, so a server could
+ * serve an aiConfig the user removed, or one with AI switched on. So AI is
+ * used only on a browser that turned it on itself (Settings → In-App AI),
+ * like the off-device switches; whenever the settings are read and AI is
+ * off, missing or unopenable, this browser's record goes (`reconcileAi`).
+ *
+ * Browsers that already used AI before this record existed are let through
+ * once (`grandfatherAi`): one whose rollback guard had already seen a
+ * revision of aiConfig for this account had opened a config the user saved.
+ */
+const AI_RECORD = 'aiConfig';
+const AI_GRANDFATHER_RECORD = 'aiConfig:checked';
+
+/** The user turned AI on (or off) in this browser. */
+export function recordAiChoice(on: boolean): void {
+  setRecord(AI_RECORD, on);
+}
+
+/** Whether AI may be used from this browser: only after its own choice. */
+export function aiChosenHere(): boolean {
+  return account !== null && records()[recordKey(AI_RECORD)] === true;
+}
+
+/** The settings were read: AI off, missing or unopenable there ends this browser's record. */
+export function reconcileAi(onThere: boolean): void {
+  if (!onThere) dropIfStale(AI_RECORD);
+}
+
+/**
+ * Once per account in this browser, before the first aiConfig is opened
+ * under this rule: a browser that had already seen a revision of it counts
+ * as having chosen AI. Never again after that (a revision seen later proves
+ * nothing — the guard notes whatever it opens).
+ */
+export function grandfatherAi(hadSeenRevision: boolean): void {
+  if (!account || records()[recordKey(AI_GRANDFATHER_RECORD)] === true) return;
+  if (hadSeenRevision) {
+    setRecord(AI_RECORD, true);
+    // Not "just turned on": a read that finds AI off may drop it at once
+    turnedOnAt.delete(recordKey(AI_RECORD));
+  }
+  setRecord(AI_GRANDFATHER_RECORD, true);
+}
 
 /** The owner turned the public shelf on (Turn on) or off in this browser. */
 export function recordPublicShelfChoice(on: boolean): void {

@@ -99,8 +99,13 @@ export function LoginView() {
   // soon as it's used, the code screen is left, or the 5-minute code window ends
   const savedPasswordRef = useRef('');
   const forgetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A passkey sign-in on a 2FA account: the touch's secret, held the same way
+  // until the code is accepted — never sent, zeroed when used or abandoned
+  const savedPrfRef = useRef<Uint8Array | null>(null);
   const forgetPassword = () => {
     savedPasswordRef.current = '';
+    savedPrfRef.current?.fill(0);
+    savedPrfRef.current = null;
     if (forgetTimerRef.current) { clearTimeout(forgetTimerRef.current); forgetTimerRef.current = null; }
   };
   useEffect(() => forgetPassword, []);
@@ -181,6 +186,14 @@ export function LoginView() {
     let signedIn = false;
     try {
       const result = await loginWithPasskey({ any });
+      if (result.requires2FA) {
+        // 2FA on: the touch stood in for the password; hold its secret for the
+        // unlock once the code is in (the code screen shows now)
+        forgetPassword();
+        savedPrfRef.current = result.prf;
+        forgetTimerRef.current = setTimeout(forgetPassword, 5 * 60 * 1000);
+        return;
+      }
       signedIn = true;
       try {
         await unlockWithPasskey(result.prf, result.wrap);
@@ -202,7 +215,28 @@ export function LoginView() {
     setOtpLoading(true);
     setOtpError('');
     try {
-      const encryptionData = await submitTotpCode(code, trustBrowser && !useBackup);
+      const result = await submitTotpCode(code, trustBrowser && !useBackup);
+      if (result.passkey) {
+        // A passkey sign-in: its held secret opens that passkey's wrap
+        const prf = savedPrfRef.current;
+        if (!prf) {
+          await abandon();
+          leave2FA('Your verification timed out. Sign in again.');
+          return;
+        }
+        try {
+          await unlockWithPasskey(prf, result.passkey);
+        } catch {
+          await abandon();
+          leave2FA('Your journal couldn’t be opened. Sign in again.');
+          return;
+        } finally {
+          forgetPassword();
+        }
+        navigate('/dashboard');
+        return;
+      }
+      const encryptionData = result.encryption;
       if (!encryptionData.kekSalt || !encryptionData.encryptedMasterKey || !encryptionData.kekWrapIv) {
         await abandon();
         leave2FA('This account has no key to open. Use your recovery key.');

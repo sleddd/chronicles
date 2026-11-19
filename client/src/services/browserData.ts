@@ -1,7 +1,7 @@
 import { clearEntryCache } from './entryCache.js';
 import { EGRESS_STORE } from './deviceConsent.js';
 import { SETTING_REVS_STORE } from './settingCipher.js';
-import { SEEN_MARKERS_STORE } from './sealedFormats.js';
+import { SEEN_MARKERS_STORE, setLegacyMigrationAllowed } from './sealedFormats.js';
 import { KNOWN_PASSKEYS_STORE } from './passkeys.js';
 
 /*
@@ -21,6 +21,13 @@ import { KNOWN_PASSKEYS_STORE } from './passkeys.js';
 // the device for its own passkey ahead of a password manager's)
 const KEPT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE, KNOWN_PASSKEYS_STORE];
 const OWNER_STORE = 'chronicles.owner-v1';
+// Set (to the mark) when this browser was claimed for the account in the
+// current sign-in — a wipe, or a browser that had no mark. Taken away at the
+// next real sign-in that finds the mark already there. While it stands, the
+// browser has no evidence of the account from before this sign-in (a second
+// tab taking the key reads it, so it can't count the first tab's claim as
+// history). Not kept through a wipe: a wipe always comes with a fresh claim.
+const FRESH_STORE = 'chronicles.owner-fresh-v1';
 
 /** A mark for the account, from a tag only its master key can make (never the email). */
 export async function ownerMark(accountTag: string): Promise<string> {
@@ -75,13 +82,35 @@ export async function wipeBrowserData(): Promise<void> {
  * someone else's — or nobody's mark at all (a browser from before marks, whose
  * leftovers can't be told apart) — it is wiped before anything loads. Returns
  * true when a wipe happened.
+ *
+ * It also decides whether this browser may move the account's older records to
+ * the current format (`setLegacyMigrationAllowed`, sealedFormats.ts): only when
+ * it knew the account before this sign-in. `signedIn` is false for a key taken
+ * from another tab, which is part of that tab's sign-in, not a new one.
  */
-export async function claimBrowserFor(accountTag: string): Promise<boolean> {
+export async function claimBrowserFor(accountTag: string, signedIn = true): Promise<boolean> {
+  setLegacyMigrationAllowed(false);
   const mark = await ownerMark(accountTag);
   let stored: string | null = null;
-  try { stored = localStorage.getItem(OWNER_STORE); } catch { return false; }
-  if (stored === mark) return false;
+  let fresh: string | null = null;
+  try {
+    stored = localStorage.getItem(OWNER_STORE);
+    fresh = localStorage.getItem(FRESH_STORE);
+  } catch { return false; }
+  if (stored === mark) {
+    if (signedIn) {
+      // A real sign-in that found the mark: it was made by an earlier one
+      try { localStorage.removeItem(FRESH_STORE); } catch { /* storage unavailable */ }
+      setLegacyMigrationAllowed(true);
+    } else {
+      setLegacyMigrationAllowed(fresh !== mark);
+    }
+    return false;
+  }
   await wipeBrowserData();
-  try { localStorage.setItem(OWNER_STORE, mark); } catch { /* storage unavailable: next sign-in wipes again */ }
+  try {
+    localStorage.setItem(OWNER_STORE, mark);
+    localStorage.setItem(FRESH_STORE, mark);
+  } catch { /* storage unavailable: next sign-in wipes again */ }
   return true;
 }

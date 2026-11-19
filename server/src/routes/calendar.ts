@@ -154,7 +154,8 @@ router.get('/google/callback', async (req, res) => {
       }),
     });
     if (!tokenRes.ok) {
-      console.error('Google token exchange failed:', tokenRes.status, await tokenRes.text().catch(() => ''));
+      // Status only: Google's body is never logged
+      console.error('Google token exchange failed:', tokenRes.status);
       fail();
       return;
     }
@@ -184,7 +185,7 @@ router.get('/google/callback', async (req, res) => {
 
     res.redirect(302, `${settingsUrl}?googleCalendar=connected`);
   } catch (err) {
-    console.error('Google OAuth callback error:', err);
+    console.error('Google OAuth callback error:', err instanceof Error ? err.message : 'Unknown error');
     fail();
   }
 });
@@ -237,7 +238,7 @@ router.post('/google/token', authMiddleware, apiLimiter, async (req, res) => {
         res.status(401).json({ error: 'google_disconnected' });
         return;
       }
-      console.error('Google token refresh failed:', tokenRes.status, body);
+      console.error('Google token refresh failed:', tokenRes.status, typeof body.error === 'string' ? body.error.slice(0, 64) : '');
       res.status(502).json({ error: 'Failed to refresh Google access token' });
       return;
     }
@@ -245,7 +246,7 @@ router.post('/google/token', authMiddleware, apiLimiter, async (req, res) => {
     const tokens = await tokenRes.json() as { access_token: string; expires_in: number };
     res.json({ accessToken: tokens.access_token, expiresInSeconds: tokens.expires_in });
   } catch (err) {
-    console.error('Google token refresh error:', err);
+    console.error('Google token refresh error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to refresh Google access token' });
   }
 });
@@ -263,7 +264,7 @@ router.get('/status', authMiddleware, apiLimiter, async (req, res) => {
       icsToken: integration?.icsToken || null,
     });
   } catch (err) {
-    console.error('Calendar status error:', err);
+    console.error('Calendar status error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch calendar status' });
   }
 });
@@ -286,7 +287,7 @@ router.delete('/google', authMiddleware, apiLimiter, async (req, res) => {
           body: new URLSearchParams({ token: refreshToken }),
         });
       } catch (err) {
-        console.error('Google token revocation failed (continuing):', err);
+        console.error('Google token revocation failed (continuing):', err instanceof Error ? err.message : 'Unknown error');
       }
       await prisma.calendarIntegration.update({
         where: { accountId: req.auth!.accountId },
@@ -295,7 +296,7 @@ router.delete('/google', authMiddleware, apiLimiter, async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('Google disconnect error:', err);
+    console.error('Google disconnect error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to disconnect Google Calendar' });
   }
 });
@@ -324,7 +325,7 @@ router.post('/ics/enable', authMiddleware, apiLimiter, async (req, res) => {
     });
     res.json({ icsToken });
   } catch (err) {
-    console.error('ICS enable error:', err);
+    console.error('ICS enable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to enable calendar feed' });
   }
 });
@@ -340,7 +341,7 @@ router.post('/ics/regenerate', authMiddleware, apiLimiter, async (req, res) => {
     });
     res.json({ icsToken });
   } catch (err) {
-    console.error('ICS regenerate error:', err);
+    console.error('ICS regenerate error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to regenerate calendar feed' });
   }
 });
@@ -354,7 +355,7 @@ router.delete('/ics', authMiddleware, apiLimiter, async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error('ICS disable error:', err);
+    console.error('ICS disable error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to disable calendar feed' });
   }
 });
@@ -380,7 +381,7 @@ router.put('/ics', authMiddleware, apiLimiter, async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error('ICS upload error:', err);
+    console.error('ICS upload error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to update calendar feed' });
   }
 });
@@ -407,7 +408,7 @@ router.get('/feed/:token', icsFeedLimiter, async (req, res) => {
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.send(body);
   } catch (err) {
-    console.error('ICS feed error:', err);
+    console.error('ICS feed error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to serve calendar feed' });
   }
 });

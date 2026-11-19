@@ -14,7 +14,7 @@
 import './scriptEnv.js';
 import { prisma } from './prisma.js';
 import {
-  ensureTopicEncryptionColumns, ensureFinanceTables, ensureDoseRecordsTable, ensurePostSync, ensurePostSyncFunction, ensurePostReservations,
+  ensureTopicEncryptionColumns, ensureFinanceTables, ensureDoseRecordsTable, ensurePostSync, ensurePostSyncFunction, ensurePostReservations, ensureTaxonomyReservations,
 } from './tenantQueries.js';
 import { shardIds, shardClient, disconnectShards } from './shards.js';
 
@@ -23,8 +23,8 @@ const STEPS: Record<string, (schemaName: string) => Promise<void>> = {
   'finance': ensureFinanceTables,
   'dose-records': ensureDoseRecordsTable,
   'entry-sync': ensurePostSync,
-  // after entry-sync: the seed reads deleted_posts
   'entry-ids': ensurePostReservations,
+  'topic-ids': ensureTaxonomyReservations,
 };
 
 async function main(): Promise<void> {
